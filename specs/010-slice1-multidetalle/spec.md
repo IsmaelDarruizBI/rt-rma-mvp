@@ -114,7 +114,8 @@ yo cual empezar en vez de que el sistema me imponga uno.
 Detalle trabajar".
 
 **Independent Test**:
-`tests/test_multidetalle.py::test_multidetalle_dos_detalles_end_to_end_por_http`.
+`tests/test_multidetalle.py::test_multidetalle_dos_detalles_end_to_end_por_http`,
+`tests/test_detalle_bloqueado_guard.py`.
 
 **Acceptance Scenarios**:
 
@@ -127,45 +128,81 @@ Detalle trabajar".
    aparece una unica accion `INICIAR_DETALLE`, con el `detalle_id` del
    que sigue pendiente.
 
+**Correccion de revision - guard de backend**: "Detalle trabajable" es
+`DEFINIDO + SIN_BLOQUEO` (Foundation, `application/acciones.py`), pero
+antes de esta correccion solo `acciones_disponibles` respetaba la
+condicion: una llamada directa de API a `seleccionar_detalle`,
+`validar_estacion_trabajo` o `reservar_insumos_e_iniciar_ejecucion`
+con un `detalle_id` bloqueado (`BLOQUEADO_POR_RECURSOS` o
+`REQUIERE_DEFINICION`) no la exigia. Los tres services ahora la
+rechazan tambien (`PrecondicionInvalidaError`), sin que la UI necesite
+ocultar el boton para que la regla se cumpla:
+
+3. **Given** un Detalle `DEFINIDO + BLOQUEADO_POR_RECURSOS` o
+   `DEFINIDO + REQUIERE_DEFINICION`, **When** se llama directamente a
+   `seleccionar_detalle` o `reservar_insumos_e_iniciar_ejecucion` con
+   su `detalle_id` -sin pasar por `acciones_disponibles`-, **Then** se
+   rechaza.
+4. **Given** una Orden EN_COLA cuyo unico Detalle esta bloqueado,
+   **When** se llama a `validar_estacion_trabajo`, **Then** devuelve
+   invalido ("la Orden no tiene ningun Detalle trabajable"), igual que
+   si no hubiera ningun Detalle.
+
 ---
 
-### User Story `US-REP-006`\* — Continuar con otro Detalle o liberar la Orden (Priority: P1)
+### User Story `US-REP-006`\* — ¿Iniciar un Detalle de reparacion, o liberar la Orden? (Priority: P1)
 
-Como **Tecnico**, con la Orden tomada y un Detalle recien terminado,
-quiero poder seguir trabajando otro Detalle sin volver a tomar la
-Orden, o liberarla explicitamente si no voy a seguir ahora, para que
-otro tecnico (o yo mismo mas tarde) pueda tomarla.
+Como **Tecnico**, con la Orden tomada y sin ninguna Ejecucion en curso
+-recien tomada, o con un Detalle recien terminado-, quiero que el
+sistema me pregunte si quiero iniciar un Detalle o liberar la Orden,
+para poder seguir trabajando sin volver a tomarla, o liberarla
+explicitamente si no voy a seguir ahora.
 
 \* Amplia `US-REP-006` (`FEAT-REP-004`), que declaraba explicitamente
 `slice_note: "Sin liberacion explicita"` antes de este slice.
 
+**Correccion de revision**: `PROC-REP-212` se renombro de "¿Tecnico
+desea continuar trabajando esta Orden?" a "¿Iniciar un Detalle de
+reparacion?", y el grafo del proceso se corrigio para que se alcance
+SIEMPRE que hay toma activa y ninguna Ejecucion en curso -no solo
+despues de completar un Detalle-: `PROC-REP-180` (tomar) ya no va
+directo a `PROC-REP-181` (seleccionar), pasa por `PROC-REP-212`
+primero. Ver `business/processes/repair-management-v1.3.yaml` (nodo y
+edges) y `business/rules/business-rules-v1.3.yaml` (`BR-REP-018`).
+
 **Independent Test**:
-`tests/test_multidetalle.py::test_multidetalle_dos_detalles_end_to_end_por_http`,
-`tests/test_multidetalle.py::test_liberar_orden_devuelve_la_orden_a_en_cola`.
+`tests/test_multidetalle.py::test_multidetalle_dos_detalles_end_to_end_por_http`
+(Casos B y C, con aserciones de historial),
+`tests/test_multidetalle.py::test_liberar_orden_devuelve_la_orden_a_en_cola`
+(Caso A).
 
 **Acceptance Scenarios**:
 
-1. **Given** una Orden con 2 Detalles, tomada, **When** el tecnico
-   completa la Ejecucion del primer Detalle, **Then** el resolver
-   (PROC-REP-211) da `ABIERTA_TRABAJABLE`, la toma sigue ACTIVA (no se
-   cierra ni se crea una nueva) y el tecnico puede seleccionar el
-   segundo Detalle sin tomar la Orden de nuevo (BR-REP-018).
-2. **Given** esa misma situacion, **When** el tecnico decide liberar la
-   Orden en vez de continuar (`POST /release`, PROC-REP-212 "No" ->
-   213), **Then** la toma activa se cierra con fecha de fin y la Orden
-   vuelve a EN_COLA, disponible para el mismo u otro tecnico.
-3. **Given** una Orden recien tomada, sin haber seleccionado ni
-   iniciado todavia ningun Detalle, **When** se consulta
-   `acciones_disponibles`, **Then** `LIBERAR_ORDEN` ya aparece -la
-   regla general es *toma activa Y ausencia de Ejecucion activa*, no
-   "despues de completar un Detalle": liberar no depende de haber
-   trabajado nada todavia (ampliacion de BR-REP-018/PROC-REP-213, ver
-   `business/rules/business-rules-v1.3.yaml`).
+1. **Caso A - liberar inmediatamente despues de tomar**: **Given** una
+   Orden recien tomada, sin haber seleccionado ni iniciado ningun
+   Detalle, **When** el tecnico libera (`POST /release`), **Then** el
+   historial registra exactamente `180 -> 212 [No] -> 213 -> 170`, la
+   toma queda CERRADA, `estado_workflow = EN_COLA` y
+   `current_process = PROC-REP-170`.
+2. **Caso B - iniciar el primer Detalle**: **Given** esa misma Orden
+   recien tomada, **When** el tecnico inicia un Detalle
+   (`POST /details/{id}/start`), **Then** el historial registra
+   `180 -> 212 [Si] -> 181 -> 174 -> 185`.
+3. **Caso C - completar DET-001 y continuar con DET-002**: **Given**
+   una Orden con 2 Detalles tomada, **When** el tecnico completa la
+   Ejecucion del primer Detalle y el resolver (`PROC-REP-211`) da
+   `ABIERTA_TRABAJABLE`, **Then** la toma sigue ACTIVA (no se cierra ni
+   se crea una nueva) y, al iniciar el segundo Detalle, el historial
+   registra `211 [ABIERTA_TRABAJABLE] -> 212 [Si] -> 181 -> 174 -> 185`,
+   sin volver a pasar por `180`.
 4. **Given** una Orden con el ultimo Detalle recien completado
    (resolver = `COMPLETA`), **When** se consulta `acciones_disponibles`,
    **Then** `LIBERAR_ORDEN` ya no aparece: `evaluar_situacion_orden` ya
    cerro la toma automaticamente (comportamiento de Slice 0, sin
-   cambios).
+   cambios) y ese camino nunca pasa por `PROC-REP-212`.
+
+No se persiste ningun estado tipo `DECIDIO_CONTINUAR`: la decision
+queda representada unicamente en el historial (BR-REP-018).
 
 ---
 
@@ -183,6 +220,15 @@ cambia es que, a partir de ahi, cada Detalle se aprueba por separado.
 Detalle. El MVP implementa solo la aprobacion total" -este slice
 completa esa brecha.
 
+**Correccion de revision (BR-REP-009/PROC-REP-245)**: aprobar un
+Detalle no solo cambia su `control_estado`: tambien hace que su
+puntaje empiece a aportar a `puntaje_total` de inmediato (computed
+field, Slice 0), sin esperar a que el resto de los Detalles se
+aprueben. `PROC-REP-245` ("Consolidar puntaje de la reparacion", antes
+"Calcular puntaje de la reparacion") no crea ese puntaje: solo
+consolida/registra el total en el historial cuando el control completo
+de la Orden termina.
+
 **Independent Test**:
 `tests/test_multidetalle.py::test_multidetalle_dos_detalles_end_to_end_por_http`,
 `tests/test_multidetalle.py::test_control_tecnico_rechaza_si_algun_detalle_no_es_terminal`.
@@ -198,23 +244,33 @@ completa esa brecha.
    `APROBAR_CONTROL` en ese estado.
 2. **Given** esa Orden con DET-002 tambien COMPLETO, **When** Recepcion
    aprueba el control con `detalle_id=DET-001`, **Then** solo DET-001
-   queda `control_estado APROBADO`, la Orden NO pasa a
-   REPARACION_LISTA todavia (DET-002 sigue PENDIENTE).
+   queda `control_estado APROBADO`, `puntaje_total` ya refleja
+   unicamente el puntaje de DET-001 (aunque DET-002 siga sin aprobar),
+   la Orden NO pasa a REPARACION_LISTA todavia (DET-002 sigue
+   PENDIENTE) y el historial registra UNICAMENTE `PROC-REP-220` -NO
+   `PROC-REP-230`, que significaria "algun Detalle RECHAZADO" (fuera de
+   scope), no "todavia falta aprobar otro"-.
 3. **Given** esa misma Orden, **When** Recepcion aprueba
-   `detalle_id=DET-002`, **Then** con los 2 Detalles APROBADO recien
-   ahi se ejecuta PROC-REP-245 (puntaje) y PROC-REP-240
-   (REPARACION_LISTA).
+   `detalle_id=DET-002`, **Then** con los 2 Detalles APROBADO el
+   historial encadena `PROC-REP-220 -> PROC-REP-230 [Si] ->
+   PROC-REP-245 -> PROC-REP-240` (REPARACION_LISTA) en esa misma
+   llamada.
 4. **Given** una Orden con un unico Detalle COMPLETO, **When** Recepcion
    aprueba el control sin pasar `detalle_id` (compatibilidad), **Then**
    el comportamiento es identico al de antes de este slice: aprueba
-   ese unico Detalle y pasa a REPARACION_LISTA en el mismo paso.
+   ese unico Detalle y encadena `220 -> 230 [Si] -> 245 -> 240` en el
+   mismo paso.
 
 ### Edge Cases
 
 - **Rechazo de control (`RECHAZADO`)**: fuera de scope (EXC-REP-005).
-  `EstadoControl` sigue teniendo solo `PENDIENTE`/`APROBADO`; el
-  resolver de PROC-REP-230 solo distingue "todos aprobados" (Si) de
-  "todavia no" (No), nunca "alguno rechazado".
+  `EstadoControl` sigue teniendo solo `PENDIENTE`/`APROBADO`.
+  **Correccion de revision**: `PROC-REP-230` se registra UNICAMENTE
+  cuando esa aprobacion deja TODOS los Detalles APROBADO, y siempre con
+  observacion "Si" -"No" significaria que algun Detalle fue RECHAZADO
+  (fuera de scope), nunca "todavia falta aprobar otro". Una aprobacion
+  parcial no registra `PROC-REP-230` en absoluto (ni "Si" ni "No"), solo
+  `PROC-REP-220`.
 - **Recursos insuficientes, interrupcion, EN_REVISION, control
   rechazado, devolucion RT, RT_INTERNO / RMA_GARANTIA_REPARACION**:
   explicitamente fuera de scope de este slice (ver `NO tocar` en el
@@ -225,7 +281,12 @@ completa esa brecha.
 - **`LIBERAR_ORDEN` con un unico Detalle**: sigue apareciendo mientras
   haya una toma activa y ninguna Ejecucion en curso (por ejemplo, entre
   tomar la Orden y empezar a trabajarla), consistente con PROC-REP-211
-  siendo el unico punto que cierra la toma automaticamente.
+  siendo el unico punto que cierra la toma automaticamente sin pasar
+  por PROC-REP-212.
+- **`seleccionar_detalle` sobre un Detalle bloqueado**: rechazado
+  (`PrecondicionInvalidaError`) aunque el caller no haya consultado
+  `acciones_disponibles` antes -el guard de backend no confia en que la
+  UI ya filtro (ver `test_detalle_bloqueado_guard.py`).
 
 ## Requirements *(mandatory)*
 
@@ -233,7 +294,7 @@ completa esa brecha.
 
 Los identificadores amplian FR existentes de `traceability/hp-rep-001.yaml`
 (ver "Por que no hay IDs nuevos de US/ACC" en `traceability.md`), mas
-cuatro nuevos que cuelgan de System Actions ya existentes:
+cinco nuevos que cuelgan de System Actions ya existentes:
 
 - **FR-REP-067** *(nuevo)*: permitir definir mas de un Detalle sobre la
   misma Orden antes de habilitarla, mediante un parametro aditivo
@@ -242,13 +303,21 @@ cuatro nuevos que cuelgan de System Actions ya existentes:
 - **FR-REP-068** *(nuevo)*: ofrecer una accion `INICIAR_DETALLE` por
   cada Detalle DEFINIDO y SIN_BLOQUEO, sin elegir arbitrariamente uno
   solo cuando hay varios trabajables.
-- **FR-REP-069** *(nuevo)*: permitir que el tecnico continue trabajando
-  la misma toma con otro Detalle trabajable, o la libere explicitamente,
-  devolviendo la Orden a EN_COLA sin cerrar la toma automaticamente
-  mientras quede trabajo.
+- **FR-REP-069** *(nuevo)*: preguntar siempre -con toma activa y sin
+  Ejecucion en curso- si el tecnico quiere iniciar un Detalle
+  (`PROC-REP-212`) o liberar la Orden (`PROC-REP-213`), tanto
+  inmediatamente despues de tomarla como despues de completar un
+  Detalle con otro todavia trabajable; devolver la Orden a EN_COLA sin
+  cerrar la toma automaticamente mientras quede trabajo.
 - **FR-REP-070** *(nuevo)*: aprobar el control tecnico Detalle por
-  Detalle (`detalle_id` opcional), marcando REPARACION_LISTA solo
-  cuando todos los Detalles de la Orden quedan con control APROBADO.
+  Detalle (`detalle_id` opcional) solo cuando la Orden entera es
+  terminal, marcando REPARACION_LISTA (y registrando PROC-REP-230/245/
+  240) unicamente cuando esa aprobacion deja todos los Detalles con
+  control APROBADO -nunca en una aprobacion parcial.
+- **FR-REP-071** *(nuevo)*: rechazar, a nivel backend y no solo en la
+  UI, la seleccion o el inicio de un Detalle DEFINIDO pero bloqueado
+  (`BLOQUEADO_POR_RECURSOS` o `REQUIERE_DEFINICION`): solo
+  DEFINIDO+SIN_BLOQUEO es trabajable.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -261,7 +330,9 @@ desde Slice 0 -este slice es enteramente capa de aplicacion y servicio.
 ### Measurable Outcomes
 
 - **SC-032**: los 316 tests de la baseline (Foundation) siguen en
-  verde, mas 4 tests nuevos de Multi-Detalle -320 en total-, sin ningun
+  verde, mas 13 tests nuevos de Multi-Detalle (4 en `test_multidetalle.py`
+  + 4 funciones/7 casos en `test_detalle_bloqueado_guard.py` + 2 en
+  `test_proc212_registro_condicional.py`) -329 en total-, sin ningun
   cambio de expectativa salvo los dos documentados en
   `test_caracterizacion_hp1.py` (`detalle_id` de `APROBAR_CONTROL` y la
   nueva accion `LIBERAR_ORDEN`).
@@ -272,8 +343,29 @@ desde Slice 0 -este slice es enteramente capa de aplicacion y servicio.
 - **SC-034**: HP-REP-001 con 1 Detalle no cambia de comportamiento
   observable para el usuario: una unica llamada a `POST /details` sigue
   agregando el Detalle y habilitando la Orden en el mismo paso.
-- **SC-035**: el control tecnico puede aprobarse Detalle por Detalle, y
-  `REPARACION_LISTA` no se alcanza hasta que todos estan APROBADO.
+- **SC-035**: el control tecnico puede aprobarse Detalle por Detalle;
+  ni `PROC-REP-230`/`245`/`240` se registran en una aprobacion parcial,
+  ni `REPARACION_LISTA` se alcanza hasta que todos estan APROBADO.
+- **SC-036**: `PROC-REP-212` ("¿Iniciar un Detalle de reparacion?") se
+  alcanza siempre que hay toma activa y ninguna Ejecucion en curso -el
+  grafo real (`business/processes/repair-management-v1.3.yaml`) lo
+  conecta desde `PROC-REP-180`, no solo desde `PROC-REP-211`-, y el
+  historial permite reconstruir `212 [No] -> 213 -> 170` o
+  `212 [Si] -> 181` en cualquiera de los dos casos. `seleccionar_detalle`
+  solo registra `212 [Si]` cuando `current_process` realmente viene de
+  esa decision (`PROC-REP-180` o `PROC-REP-211`); una reentrada sin
+  pasar de nuevo por ahi no duplica `212`.
+- **SC-037**: un Detalle `DEFINIDO` pero bloqueado
+  (`BLOQUEADO_POR_RECURSOS` o `REQUIERE_DEFINICION`) es rechazado por
+  `seleccionar_detalle`, `validar_estacion_trabajo` y
+  `reservar_insumos_e_iniciar_ejecucion`, no solo ocultado por
+  `acciones_disponibles`.
+- **SC-038** *(correccion de revision, BR-REP-009/PROC-REP-245)*: al
+  aprobar un Detalle, `puntaje_total` refleja su aporte de inmediato
+  -es un computed field, no algo que `PROC-REP-245` "cree"-.
+  `PROC-REP-245` ("Consolidar puntaje de la reparacion") solo se
+  registra en el historial junto con la aprobacion que deja TODOS los
+  Detalles APROBADO, nunca antes.
 
 ## Assumptions
 

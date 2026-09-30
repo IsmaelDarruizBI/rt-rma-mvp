@@ -106,13 +106,19 @@ rules:
   - id: BR-REP-009
     name: Puntaje por Detalle
     description: >
-      El puntaje se calcula por Detalle aprobado, segun la ponderacion
-      configurada de su Tipo de Reparacion, en el momento de su propia
-      aprobacion (no se espera a que el resto de los Detalles de la Orden
-      tambien esten aprobados). El puntaje total de la Orden es la suma
-      de los puntajes de sus Detalles. La distribucion/acreditacion entre
-      distintos tecnicos que participaron de un mismo Detalle sigue
-      pendiente de definicion funcional.
+      Cada Detalle aprobado aporta su puntaje desde el momento de su
+      propia aprobacion (PROC-REP-230 sobre ESE Detalle), segun la
+      ponderacion configurada de su Tipo de Reparacion: no se espera a
+      que el resto de los Detalles de la Orden tambien esten aprobados.
+      El puntaje_total de la Orden es siempre derivable como la suma de
+      los puntajes de sus Detalles aprobados -es un valor calculado, no
+      algo que un paso del proceso "cree" en un momento puntual-.
+      PROC-REP-245 no calcula el puntaje de cada Detalle por primera
+      vez: consolida/registra el puntaje total de la Orden recien
+      cuando el control tecnico completo termina satisfactoriamente
+      (todos los Detalles aprobados). La distribucion/acreditacion
+      entre distintos tecnicos que participaron de un mismo Detalle
+      sigue pendiente de definicion funcional.
     status: draft
 
   - id: BR-REP-010
@@ -363,35 +369,35 @@ rules:
   - id: BR-REP-018
     name: Toma y liberacion de Orden (participacion activa)
     description: >
-      Cuando un tecnico toma una Orden de Reparacion (PROC-REP-180), toma
-      la Orden completa, no solo un Detalle: queda registrada una
-      toma/participacion activa (Orden + tecnico + estacion + fecha/hora
-      de inicio). Como maximo puede existir UNA toma/participacion activa
-      por Orden en simultaneo -distinto pero complementario de BR-REP-007
-      (maximo una Ejecucion activa por Orden)-. Mientras la toma este
-      activa, el tecnico puede seleccionar y trabajar distintos Detalles
-      trabajables de la misma Orden sin volver a tomarla (PROC-REP-181 ->
-      ... -> PROC-REP-211 -> PROC-REP-212). Terminado o interrumpido un
-      Detalle, si el resolver determina que sigue existiendo al menos un
-      Detalle trabajable, la decision de continuar trabajando esa Orden o
-      liberarla es una accion explicita del tecnico (PROC-REP-212): no se
+      Una toma activa representa la participacion actual del tecnico
+      sobre la Orden. Se abre completa, no sobre un Detalle (PROC-REP-180:
+      Orden + tecnico + estacion + fecha/hora de inicio). Como maximo
+      puede existir UNA toma/participacion activa por Orden en simultaneo
+      -distinto pero complementario de BR-REP-007 (maximo una Ejecucion
+      activa por Orden)-.
+
+      Mientras exista una toma activa y NO exista una Ejecucion activa,
+      el tecnico debe decidir si desea iniciar un Detalle de reparacion
+      o liberar la Orden (PROC-REP-212). Esta decision aplica tanto
+      inmediatamente despues de tomar la Orden como despues de finalizar
+      una Ejecucion cuando el resolver determina que todavia existe al
+      menos un Detalle trabajable (PROC-REP-211 -> PROC-REP-212): no se
       libera automaticamente una Orden trabajable solo porque termino un
-      Detalle. La liberacion explicita no depende de haber completado
-      antes ningun Detalle: la regla general es toma activa Y ausencia
-      de Ejecucion activa -eso alcanza para liberar, ya sea
-      inmediatamente despues de tomar la Orden (PROC-REP-180), antes de
-      seleccionar o iniciar un Detalle, o despues de completar uno con
-      otros todavia trabajables-. Si el tecnico decide liberar
-      (PROC-REP-212 = No ->
+      Detalle.
+
+      Si el tecnico decide iniciar un Detalle (PROC-REP-212 = Si),
+      continua con la misma toma sin volver a tomarla (PROC-REP-181 ->
+      ... -> PROC-REP-211 -> PROC-REP-212, tantas veces como Detalles
+      trabajables queden). Si decide liberar (PROC-REP-212 = No ->
       PROC-REP-213), o si el resolver determina que ya no queda ningun
       Detalle trabajable (la Orden paso a COMPLETA, PENDIENTE_RECURSOS,
       REQUIERE_REVISION o TODO_CANCELADO), la participacion activa se
       cierra -explicitamente o automaticamente segun corresponda-
-      registrando fecha/hora de cierre, y la Orden vuelve a EN_COLA cuando
-      corresponde (si sigue habiendo algun Detalle trabajable disponible
-      para otro tecnico). El historial completo de participaciones
-      (quien tomo, cuando, desde que estacion, cuando la libero) se
-      conserva siempre; nunca se sobrescribe.
+      registrando fecha/hora de cierre, y la Orden vuelve a EN_COLA
+      cuando corresponde (si sigue habiendo algun Detalle trabajable
+      disponible para otro tecnico). El historial completo de
+      participaciones (quien tomo, cuando, desde que estacion, cuando la
+      libero) se conserva siempre; nunca se sobrescribe.
     status: draft
 
   - id: BR-REP-019

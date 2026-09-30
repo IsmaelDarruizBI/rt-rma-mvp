@@ -1,18 +1,29 @@
 """Toma de la Orden y seleccion del Detalle a trabajar.
 
 Nodos cubiertos: PROC-REP-172 (validar estacion), PROC-REP-180 (tomar
-Orden), PROC-REP-181 (seleccionar Detalle) y PROC-REP-174 (compatibilidad
-del Detalle seleccionado).
+Orden), PROC-REP-212 (¿iniciar un Detalle de reparacion?), PROC-REP-181
+(seleccionar Detalle), PROC-REP-174 (compatibilidad del Detalle
+seleccionado) y PROC-REP-213 (liberar la Orden).
+
+PROC-REP-212 es la decision que se alcanza siempre que hay una toma
+activa y ninguna Ejecucion en curso -tanto inmediatamente despues de
+tomar la Orden (PROC-REP-180) como despues de completar un Detalle,
+cuando el resolver determina que sigue existiendo otro trabajable
+(PROC-REP-211 = ABIERTA_TRABAJABLE)-. "Si" lleva a PROC-REP-181
+(``seleccionar_detalle``); "No" lleva a PROC-REP-213
+(``liberar_orden``). No existe un estado persistido para esta decision:
+queda representada unicamente en el historial (BR-REP-018).
 
 Reglas: BR-REP-011 (compatibilidad de estacion), BR-REP-018 (una sola
-toma activa por Orden) y BR-REP-007 (una sola Ejecucion activa).
-Feature: FEAT-REP-004.
+toma activa por Orden, y la decision de iniciar un Detalle o liberar)
+y BR-REP-007 (una sola Ejecucion activa). Feature: FEAT-REP-004.
 """
 
 from collections.abc import Sequence
 from datetime import datetime
 
 from app.domain.models import (
+    CondicionReparacionDetail,
     EstacionTrabajo,
     EstadoEjecucion,
     EstadoReparacionDetail,
@@ -123,6 +134,7 @@ def validar_estacion_trabajo(
         detalle
         for detalle in orden.reparaciones_detail
         if detalle.estado is EstadoReparacionDetail.DEFINIDO
+        and detalle.condicion is CondicionReparacionDetail.SIN_BLOQUEO
     ]
     if not trabajables:
         motivo = "La Orden no tiene ningun Detalle trabajable"
@@ -207,6 +219,43 @@ def tomar_orden(
     return nueva_orden
 
 
+def _registrar_decision_iniciar_detalle(
+    orden: OrdenReparacion,
+    *,
+    respuesta: str,
+    usuario: Usuario,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """PROC-REP-212: ¿el tecnico quiere iniciar un Detalle de reparacion?
+
+    Se alcanza con la toma activa y ninguna Ejecucion en curso, tanto
+    inmediatamente despues de tomar la Orden como despues de completar
+    un Detalle con otro todavia trabajable (BR-REP-018). ``respuesta``
+    es ``"Si"`` (-> PROC-REP-181, ver ``seleccionar_detalle``) o ``"No"``
+    (-> PROC-REP-213, ver ``liberar_orden``). No persiste ningun estado
+    propio: la decision queda representada solo en el historial.
+    """
+    return registrar_paso(
+        orden,
+        process_id="PROC-REP-212",
+        accion="INICIAR_DETALLE_DE_REPARACION",
+        fecha=fecha,
+        usuario_id=usuario.id,
+        observacion=respuesta,
+    )
+
+
+# current_process desde los que PROC-REP-181 realmente viene de la
+# decision PROC-REP-212 ("¿Iniciar un Detalle de reparacion?"): recien
+# tomada (PROC-REP-180) o tras completar otro Detalle con la Orden
+# todavia trabajable (PROC-REP-211 = ABIERTA_TRABAJABLE). Caminos
+# futuros que puedan reentrar a PROC-REP-181 sin pasar por esa decision
+# -incompatibilidad de estacion (PROC-REP-176/178/179) o reserva
+# fallida (PROC-REP-186), ninguno implementado en este slice- no deben
+# inventar una segunda 212 que el tecnico no volvio a decidir.
+_ORIGENES_DE_LA_DECISION_212 = ("PROC-REP-180", "PROC-REP-211")
+
+
 def seleccionar_detalle(
     orden: OrdenReparacion,
     *,
@@ -214,11 +263,26 @@ def seleccionar_detalle(
     usuario: Usuario,
     fecha: datetime,
 ) -> OrdenReparacion:
-    """PROC-REP-181: el tecnico elige que Detalle trabajar ahora.
+    """PROC-REP-212 ("Si") -> PROC-REP-181: elige que Detalle trabajar.
 
     La seleccion es una accion de workflow, no un estado: no se persiste
     ningun ``detalle_seleccionado``. El ``detalle_id`` lo usan las
     operaciones siguientes (PROC-REP-174 y PROC-REP-185).
+
+    PROC-REP-212 se registra antes de PROC-REP-181 SOLO cuando la Orden
+    realmente viene de esa decision -``current_process`` en
+    ``_ORIGENES_DE_LA_DECISION_212``-. Si en el futuro este service se
+    invoca desde otro punto del proceso (por ejemplo, un reintento tras
+    una incompatibilidad de estacion), no vuelve a inventar una 212 que
+    el tecnico no tomo: por eso el guard mira el estado real de la
+    Orden, no un Scenario ni un flag nuevo.
+
+    Solo un Detalle DEFINIDO y SIN_BLOQUEO es trabajable, consistente
+    con ``services.resolucion._es_trabajable`` y con
+    ``application.acciones.detalles_trabajables``: un Detalle bloqueado
+    (``REQUIERE_DEFINICION`` o ``BLOQUEADO_POR_RECURSOS``) se rechaza
+    aca tambien, aunque el caller no haya consultado antes las acciones
+    disponibles.
     """
     validar_actor(usuario, RolUsuario.TECNICO)
 
@@ -228,13 +292,24 @@ def seleccionar_detalle(
             f"El Detalle {detalle_id} no es trabajable "
             f"(estado {detalle.estado.value})."
         )
+    if detalle.condicion is not CondicionReparacionDetail.SIN_BLOQUEO:
+        raise PrecondicionInvalidaError(
+            f"El Detalle {detalle_id} no es trabajable "
+            f"(condicion {detalle.condicion.value})."
+        )
     if toma_activa(orden) is None:
         raise PrecondicionInvalidaError(
             "Hay que tomar la Orden antes de seleccionar un Detalle."
         )
 
+    nueva_orden = orden
+    if orden.current_process in _ORIGENES_DE_LA_DECISION_212:
+        nueva_orden = _registrar_decision_iniciar_detalle(
+            nueva_orden, respuesta="Si", usuario=usuario, fecha=fecha
+        )
+
     return registrar_paso(
-        orden,
+        nueva_orden,
         process_id="PROC-REP-181",
         accion="SELECCIONAR_DETALLE",
         fecha=fecha,
@@ -249,15 +324,15 @@ def liberar_orden(
     usuario: Usuario,
     fecha: datetime,
 ) -> OrdenReparacion:
-    """PROC-REP-213: el tecnico libera la Orden sin terminarla.
+    """PROC-REP-212 ("No") -> PROC-REP-213 -> PROC-REP-170: libera la Orden.
 
-    BR-REP-018 / PROC-REP-212 ("No"): con la toma activa todavia hay al
-    menos un Detalle trabajable -si no, ``evaluar_situacion_orden`` ya la
-    habria cerrado sola-, pero el tecnico elige no seguir ahora. Cierra
-    la participacion activa (fecha de fin) y devuelve la Orden a
-    EN_COLA, disponible para que el mismo u otro tecnico la tome de
-    nuevo. Nunca se sobrescribe el historial de participaciones
-    anteriores.
+    BR-REP-018: con la toma activa y ninguna Ejecucion en curso, el
+    tecnico elige no iniciar un Detalle ahora -sea inmediatamente
+    despues de tomar la Orden, sea con otro Detalle todavia trabajable
+    despues de completar uno-. Cierra la participacion activa (fecha de
+    fin), registra el regreso a la cola (PROC-REP-170, ACT-SYSTEM) y
+    deja la Orden EN_COLA. Nunca se sobrescribe el historial de
+    participaciones anteriores.
     """
     validar_actor(usuario, RolUsuario.TECNICO)
 
@@ -271,8 +346,11 @@ def liberar_orden(
             "No se puede liberar la Orden con una Ejecucion activa."
         )
 
+    nueva_orden = _registrar_decision_iniciar_detalle(
+        orden, respuesta="No", usuario=usuario, fecha=fecha
+    )
     nueva_orden = registrar_paso(
-        orden,
+        nueva_orden,
         process_id="PROC-REP-213",
         accion="LIBERAR_ORDEN",
         fecha=fecha,
@@ -282,6 +360,13 @@ def liberar_orden(
         if toma_de_la_orden.estado is EstadoTomaOrden.ACTIVA:
             toma_de_la_orden.estado = EstadoTomaOrden.CERRADA
             toma_de_la_orden.fin = fecha
+
+    nueva_orden = registrar_paso(
+        nueva_orden,
+        process_id="PROC-REP-170",
+        accion="INGRESAR_A_COLA",
+        fecha=fecha,
+    )
     nueva_orden.estado_workflow = EstadoWorkflow.EN_COLA
     return nueva_orden
 

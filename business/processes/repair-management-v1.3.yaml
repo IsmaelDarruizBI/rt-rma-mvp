@@ -816,7 +816,7 @@ nodes:
 
   - id: PROC-REP-212
     type: decision
-    name: Tecnico desea continuar trabajando esta Orden
+    name: "¿Iniciar un Detalle de reparacion?"
     description: >
       Nodo nuevo en V1.3. Se alcanza cuando la Orden tiene una
       toma/participacion activa del tecnico actual (PROC-REP-180,
@@ -897,19 +897,23 @@ nodes:
 
   - id: PROC-REP-245
     type: activity
-    name: Calcular puntaje de la reparacion
+    name: Consolidar puntaje de la reparacion
     actor: ACT-SYSTEM
     description: >
-      Cada Detalle aprobado tiene una ponderacion configurable segun su
-      Tipo de Reparacion. El puntaje se calcula por Detalle en el momento
-      de su aprobacion (no se espera a que el resto de los Detalles de la
-      Orden tambien esten aprobados). El puntaje total de la Orden es la
-      suma de los puntajes de sus Detalles. Todavia no esta definida la
-      distribucion o acreditacion de ese puntaje entre los distintos
-      tecnicos que participaron de un mismo Detalle: no debe asumirse que
-      se asigna automaticamente a un unico tecnico.
+      NO calcula el puntaje de cada Detalle por primera vez: ese puntaje
+      ya existe desde el momento en que ESE Detalle fue aprobado
+      (PROC-REP-230 sobre el, BR-REP-009), y el puntaje_total de la
+      Orden ya lo refleja -como suma derivada de los Detalles
+      aprobados- incluso antes de que la Orden entera termine su
+      control. Este nodo registra/consolida el puntaje total de la
+      Orden cuando el control tecnico completo termina
+      satisfactoriamente (todos los Detalles aprobados, PROC-REP-230
+      "Si"), inmediatamente antes de PROC-REP-240. Todavia no esta
+      definida la distribucion o acreditacion de ese puntaje entre los
+      distintos tecnicos que participaron de un mismo Detalle: no debe
+      asumirse que se asigna automaticamente a un unico tecnico.
     outputs:
-      - Puntaje de la reparacion (por Detalle y total de Orden)
+      - Puntaje consolidado de la Orden (suma de los Detalles aprobados)
     rules:
       - BR-REP-009
 
@@ -1278,7 +1282,7 @@ edges:
     condition: Sin Detalle compatible
 
   - from: PROC-REP-180
-    to: PROC-REP-181
+    to: PROC-REP-212
 
   - from: PROC-REP-181
     to: PROC-REP-174

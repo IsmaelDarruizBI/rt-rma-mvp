@@ -14,6 +14,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from app.domain.models import (
+    CondicionReparacionDetail,
     EjecucionReparacion,
     EstadoEjecucion,
     EstadoReparacionDetail,
@@ -93,6 +94,11 @@ def reservar_insumos_e_iniciar_ejecucion(
         raise PrecondicionInvalidaError(
             f"El Detalle {detalle_id} no esta disponible para ejecutarse "
             f"(estado {detalle.estado.value})."
+        )
+    if detalle.condicion is not CondicionReparacionDetail.SIN_BLOQUEO:
+        raise PrecondicionInvalidaError(
+            f"El Detalle {detalle_id} no esta disponible para ejecutarse "
+            f"(condicion {detalle.condicion.value})."
         )
 
     toma = toma_activa(orden)

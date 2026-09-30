@@ -198,10 +198,15 @@ def aprobar_control_tecnico(
     No cambia el estado tecnico del Detalle: sigue COMPLETO. La
     aprobacion es otra dimension y vive en ``control_estado``.
 
-    PROC-REP-230 ("todos los Detalles fueron aprobados") se evalua sobre
-    la Orden completa despues de cada llamada: el caller
-    (``application.cierre.aprobar_control``) solo avanza a
-    PROC-REP-245/240 cuando esa evaluacion da "Si".
+    PROC-REP-230 ("todos los Detalles fueron aprobados") solo se
+    registra cuando, despues de esta aprobacion, TODOS los Detalles de
+    la Orden quedan APROBADO -en ese caso, siempre con observacion
+    "Si": "No" significaria que un Detalle fue RECHAZADO, y el rechazo
+    esta fuera de scope (EXC-REP-005). Una aprobacion parcial (todavia
+    queda otro Detalle PENDIENTE) NO registra PROC-REP-230: eso no es
+    "No", es simplemente que la decision todavia no se tomo. El caller
+    (``application.cierre.aprobar_control``) sigue el mismo criterio
+    para PROC-REP-245/240.
 
     PROC-REP-220 es ACT-RECEP: el control lo hace Recepcion, no el
     tecnico que ejecuto el trabajo.
@@ -265,13 +270,20 @@ def aprobar_control_tecnico(
         detalle.control_estado is EstadoControl.APROBADO
         for detalle in nueva_orden.reparaciones_detail
     )
+    if not todos_aprobados:
+        # Todavia falta aprobar otro Detalle: eso NO es PROC-REP-230 =
+        # "No" -ese resultado significa que un Detalle fue RECHAZADO
+        # (fuera de scope, EXC-REP-005), no "falta controlar otro". No
+        # se registra la decision hasta que de verdad se tome.
+        return nueva_orden
+
     return registrar_paso(
         nueva_orden,
         process_id="PROC-REP-230",
         accion="TODOS_LOS_DETALLES_APROBADOS",
         fecha=fecha,
         usuario_id=usuario.id,
-        observacion="Si" if todos_aprobados else "No",
+        observacion="Si",
     )
 
 
@@ -280,11 +292,17 @@ def calcular_puntaje(
     *,
     fecha: datetime,
 ) -> OrdenReparacion:
-    """PROC-REP-245: se acredita el puntaje de los Detalles aprobados.
+    """PROC-REP-245: consolida el puntaje total de la Orden.
 
-    BR-REP-009. No persiste ningun total: ``OrdenReparacion.puntaje_total``
-    lo deriva de los Detalles con control APROBADO. Este service solo
-    registra que el paso ocurrio.
+    NO acredita el puntaje de cada Detalle por primera vez: ese puntaje
+    ya existe desde que ESE Detalle fue aprobado (PROC-REP-230,
+    BR-REP-009), y ``OrdenReparacion.puntaje_total`` ya lo refleja -es
+    un computed field que suma los Detalles con control APROBADO,
+    incluso antes de que la Orden entera complete su control-. Este
+    service solo registra que la consolidacion final ocurrio, llamado
+    unicamente cuando el control tecnico completo de la Orden ya
+    termino (``application.cierre.aprobar_control``), justo antes de
+    ``marcar_reparacion_lista``. No persiste ningun total propio.
 
     La distribucion del puntaje entre varios tecnicos sigue pendiente en
     V1.3 y no se asume aqui.
@@ -302,7 +320,7 @@ def calcular_puntaje(
     return registrar_paso(
         orden,
         process_id="PROC-REP-245",
-        accion="CALCULAR_PUNTAJE",
+        accion="CONSOLIDAR_PUNTAJE",
         fecha=fecha,
         observacion=str(orden.puntaje_total),
     )

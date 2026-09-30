@@ -44,12 +44,20 @@ def aprobar_control(
 ) -> OrdenReparacion:
     """Recepcion aprueba el control -de un Detalle o de la Orden entera.
 
-    Encadena PROC-REP-220 -> 230 (aprobacion, BR-REP-008) y PROC-REP-245
-    (puntaje, BR-REP-009). PROC-REP-240 (marcar REPARACION_LISTA) recien
-    se ejecuta cuando, despues de esta aprobacion, TODOS los Detalles de
-    la Orden quedan con control APROBADO -con Multi-Detalle eso puede
-    requerir varias llamadas, una por Detalle-. No notifica: eso es otra
-    accion humana y otro endpoint.
+    Siempre registra PROC-REP-220. Solo cuando, despues de esa
+    aprobacion, TODOS los Detalles de la Orden quedan con control
+    APROBADO -con Multi-Detalle eso puede requerir varias llamadas, una
+    por Detalle- se encadena PROC-REP-230 ("Si"), PROC-REP-245
+    (puntaje, BR-REP-009) y PROC-REP-240 (REPARACION_LISTA). Una
+    aprobacion parcial NO registra ninguno de esos tres: la Orden sigue
+    EN_REPARACION esperando el resto.
+
+    ``OrdenReparacion.puntaje_total`` es un computed field que ya suma
+    los Detalles con control APROBADO (Slice 0): una aprobacion parcial
+    muestra su puntaje parcial igual, sin necesidad de registrar
+    PROC-REP-245 por adelantado.
+
+    No notifica: eso es otra accion humana y otro endpoint.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
@@ -62,12 +70,12 @@ def aprobar_control(
         detalle_id=detalle_id,
         observaciones=observaciones,
     )
-    orden = calcular_puntaje(orden, fecha=fecha)
 
     if all(
         detalle.control_estado is EstadoControl.APROBADO
         for detalle in orden.reparaciones_detail
     ):
+        orden = calcular_puntaje(orden, fecha=fecha)
         orden = marcar_reparacion_lista(orden, fecha=fecha)
 
     contexto.ordenes.guardar(orden)

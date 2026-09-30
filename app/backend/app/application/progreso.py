@@ -46,7 +46,7 @@ _RUTA_CLIENTE_EXTERNO: tuple[tuple[str, str], ...] = (
     ("PROC-REP-211", "Evaluar situacion de la Orden"),
     ("PROC-REP-220", "Realizar control tecnico"),
     ("PROC-REP-230", "Todos los Detalles aprobados"),
-    ("PROC-REP-245", "Calcular puntaje"),
+    ("PROC-REP-245", "Consolidar puntaje"),
     ("PROC-REP-240", "Marcar reparacion lista"),
     ("PROC-REP-250", "Requiere entrega a cliente"),
     ("PROC-REP-260", "Notificar cliente"),

@@ -142,6 +142,17 @@ def cliente(tmp_path):
         yield test_client
 
 
+def _nuevos_pasos(
+    historial_completo: list[dict], desde: int
+) -> list[dict]:
+    """Los pasos agregados al historial despues del indice ``desde``."""
+    return historial_completo[desde:]
+
+
+def _process_ids(pasos: list[dict]) -> list[str]:
+    return [paso["process_id"] for paso in pasos]
+
+
 def _crear_orden(cliente: TestClient) -> str:
     respuesta = cliente.post(
         "/api/orders",
@@ -246,6 +257,10 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
     ]
 
     # --- Selecciona DET-001, inicia, completa ------------------------------
+    # Caso B: 180 -> 212 [Si] -> 181 (el tecnico decide iniciar un
+    # Detalle apenas toma la Orden, sin haber completado ninguno todavia).
+
+    historial_tras_tomar = len(orden["historial"])
 
     orden = cliente.post(
         f"/api/orders/{orden_id}/details/{det1}/start",
@@ -257,6 +272,18 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
         for e in orden["ejecuciones"]
         if e["reparacion_detail_id"] == det1
     )
+
+    pasos_nuevos = _nuevos_pasos(orden["historial"], historial_tras_tomar)
+    assert _process_ids(pasos_nuevos) == [
+        "PROC-REP-212",
+        "PROC-REP-181",
+        "PROC-REP-174",
+        "PROC-REP-185",
+    ]
+    paso_212 = pasos_nuevos[0]
+    assert paso_212["observacion"] == "Si"
+    paso_181 = pasos_nuevos[1]
+    assert paso_181["reparacion_detail_id"] == det1
 
     orden = cliente.post(
         f"/api/orders/{orden_id}/executions/{ejecucion_1}/complete",
@@ -277,6 +304,13 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
     assert orden["tomas"][0]["estado"] == "ACTIVA"
     assert orden["tomas"][0]["id"] == toma_id
     assert len(orden["tomas"]) == 1
+    paso_211 = next(
+        p
+        for p in reversed(orden["historial"])
+        if p["process_id"] == "PROC-REP-211"
+    )
+    assert paso_211["observacion"] == "ABIERTA_TRABAJABLE"
+    historial_tras_completar_det1 = len(orden["historial"])
 
     # Ahora solo DET-002 ofrece INICIAR_DETALLE.
     inicios = [
@@ -308,11 +342,25 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
 
     # --- Continua con DET-002, sin volver a tomar la Orden -----------------
 
+    # Caso C: 211 [ABIERTA_TRABAJABLE] -> 212 [Si] -> 181, continuando
+    # con la misma toma (sin volver a pasar por 180).
     orden = cliente.post(
         f"/api/orders/{orden_id}/details/{det2}/start",
         json={"usuario_id": TECNICO},
     ).json()
     assert len(orden["tomas"]) == 1
+    pasos_nuevos = _nuevos_pasos(
+        orden["historial"], historial_tras_completar_det1
+    )
+    assert _process_ids(pasos_nuevos) == [
+        "PROC-REP-212",
+        "PROC-REP-181",
+        "PROC-REP-174",
+        "PROC-REP-185",
+    ]
+    assert pasos_nuevos[0]["observacion"] == "Si"
+    assert pasos_nuevos[1]["reparacion_detail_id"] == det2
+
     ejecucion_2 = next(
         e["id"]
         for e in orden["ejecuciones"]
@@ -336,6 +384,8 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
 
     # --- Control tecnico granular, Detalle por Detalle ----------------------
 
+    historial_antes_del_control = len(orden["historial"])
+
     orden = cliente.post(
         f"/api/orders/{orden_id}/control/approve",
         json={"usuario_id": RECEPCION, "detalle_id": det1},
@@ -348,6 +398,20 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
     # aprobados (PROC-REP-240).
     assert orden["estado_workflow"] == "EN_REPARACION"
 
+    # Una aprobacion parcial registra PROC-REP-220, pero NO 230/245/240:
+    # todavia no se "decidio" nada sobre "todos los Detalles aprobados".
+    pasos_primera_aprobacion = _process_ids(
+        _nuevos_pasos(orden["historial"], historial_antes_del_control)
+    )
+    assert pasos_primera_aprobacion == ["PROC-REP-220"]
+
+    # BR-REP-009: DET-001 aporta su puntaje de inmediato, sin esperar a
+    # que se consolide el total con PROC-REP-245 -puntaje_total es un
+    # computed field, no algo que un paso del proceso "cree".
+    assert orden["resumen"]["puntaje_total"] == 10
+
+    historial_tras_primera_aprobacion = len(orden["historial"])
+
     orden = cliente.post(
         f"/api/orders/{orden_id}/control/approve",
         json={"usuario_id": RECEPCION, "detalle_id": det2},
@@ -357,7 +421,23 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
     assert d1["control_estado"] == "APROBADO"
     assert d2["control_estado"] == "APROBADO"
     assert orden["estado_workflow"] == "REPARACION_LISTA"
+    # puntaje_total ya reflejaba el aporte de DET-001 desde su propia
+    # aprobacion (arriba); ahora tambien el de DET-002: la suma no
+    # "aparece" recien en PROC-REP-245, solo se consolida ahi.
     assert orden["resumen"]["puntaje_total"] == 15
+
+    # La ultima aprobacion si encadena 220 -> 230 [Si] -> 245 -> 240.
+    pasos_ultima_aprobacion = _nuevos_pasos(
+        orden["historial"], historial_tras_primera_aprobacion
+    )
+    assert _process_ids(pasos_ultima_aprobacion) == [
+        "PROC-REP-220",
+        "PROC-REP-230",
+        "PROC-REP-245",
+        "PROC-REP-240",
+    ]
+    paso_230 = pasos_ultima_aprobacion[1]
+    assert paso_230["observacion"] == "Si"
 
     # --- Inventario: movimientos vinculados al Detalle correcto -----------
 
@@ -400,7 +480,12 @@ def test_hp_rep_001_un_solo_detalle_sigue_igual(cliente):
 
 
 def test_liberar_orden_devuelve_la_orden_a_en_cola(cliente):
-    """PROC-REP-212 ("No") -> 213: liberar sin terminar el trabajo."""
+    """Caso A: 180 -> 212 [No] -> 213 -> 170, inmediatamente tras tomar.
+
+    El tecnico libera la Orden sin haber seleccionado ni iniciado
+    ningun Detalle todavia -la regla es *toma activa Y sin Ejecucion
+    activa*, no "despues de completar un Detalle" (BR-REP-018).
+    """
     orden_id = _crear_orden(cliente)
     cliente.post(
         f"/api/orders/{orden_id}/details",
@@ -418,10 +503,12 @@ def test_liberar_orden_devuelve_la_orden_a_en_cola(cliente):
         f"/api/orders/{orden_id}/queue",
         json={"usuario_id": COORDINADOR, "prioridad": 1},
     )
-    cliente.post(
+    orden = cliente.post(
         f"/api/orders/{orden_id}/take",
         json={"usuario_id": TECNICO, "estacion_id": ESTACION},
-    )
+    ).json()
+    historial_tras_tomar = len(orden["historial"])
+    assert orden["historial"][-1]["process_id"] == "PROC-REP-180"
 
     orden = cliente.post(
         f"/api/orders/{orden_id}/release",
@@ -429,11 +516,20 @@ def test_liberar_orden_devuelve_la_orden_a_en_cola(cliente):
     ).json()
 
     assert orden["estado_workflow"] == "EN_COLA"
+    assert orden["current_process"] == "PROC-REP-170"
     assert orden["tomas"][0]["estado"] == "CERRADA"
     assert [a["codigo"] for a in orden["acciones_disponibles"]] == [
         "TOMAR",
         "REGISTRAR_PAGO",
     ]
+
+    pasos_nuevos = _nuevos_pasos(orden["historial"], historial_tras_tomar)
+    assert _process_ids(pasos_nuevos) == [
+        "PROC-REP-212",
+        "PROC-REP-213",
+        "PROC-REP-170",
+    ]
+    assert pasos_nuevos[0]["observacion"] == "No"
 
 
 def test_control_tecnico_rechaza_si_algun_detalle_no_es_terminal(cliente):

@@ -641,10 +641,18 @@ check("Recursos insuficientes es DELIBERADAMENTE 2 Scenarios (espera vs. overrid
 });
 
 check("mecanica multi-Detalle (CAND-REP-028/029/030) sigue sin convertirse en Scenario real", () => {
+  // PROC-REP-212 ("¿Iniciar un Detalle de reparacion?") paso a ser parte
+  // del recorrido base de todo Happy Path -se alcanza siempre desde
+  // PROC-REP-180, no solo en una continuacion multi-Detalle-, asi que
+  // 212::Si::181 ya no es un mecanismo exclusivo de Multi-Detalle: es la
+  // rama que cualquier Happy Path toma para seguir adelante. Lo que sigue
+  // siendo exclusivamente mecanico (nunca declarado como steps[] de un
+  // Scenario real) es: llegar a 212 DESDE 211 (continuar tras completar
+  // un Detalle con otro pendiente) y decidir liberar (212::No::213) en
+  // vez de seguir.
   const mechanismEdges = new Set([
     "PROC-REP-211::Existe Detalle trabajable, sin toma activa::PROC-REP-170",
     "PROC-REP-211::Existe Detalle trabajable, toma activa::PROC-REP-212",
-    "PROC-REP-212::Si::PROC-REP-181",
     "PROC-REP-212::No::PROC-REP-213",
   ]);
   for (const scenario of scenariosModel.scenarios) {
