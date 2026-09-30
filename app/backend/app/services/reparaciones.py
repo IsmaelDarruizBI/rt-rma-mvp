@@ -27,7 +27,7 @@ from app.domain.models import (
 )
 
 from .autorizacion import validar_actor
-from .exceptions import PrecondicionInvalidaError
+from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .inventario import buscar_insumo, insumos_previstos_de, stock_disponible
 from .workflow import registrar_paso
 
@@ -176,16 +176,37 @@ def aprobar_control_tecnico(
     *,
     usuario: Usuario,
     fecha: datetime,
+    detalle_id: str | None = None,
     observaciones: str | None = None,
 ) -> OrdenReparacion:
-    """PROC-REP-220 -> PROC-REP-230 ("Si"): Recepcion aprueba (BR-REP-008).
+    """PROC-REP-220 -> PROC-REP-230: Recepcion aprueba (BR-REP-008).
+
+    PROC-REP-220 solo se alcanza cuando la Orden entera es terminal
+    (todos sus Detalles COMPLETO): es el mismo requisito que
+    ``resolver_situacion_orden`` exige para clasificar ``COMPLETA``
+    (BR-REP-012). Por eso esta precondicion se exige siempre, con o sin
+    ``detalle_id`` -no alcanza con que el Detalle puntual este COMPLETO
+    si todavia queda otro DEFINIDO o EN_PROGRESO-.
 
     Recepcion controla la Orden completa pero aprueba Detalle por
-    Detalle. El MVP implementa solo la aprobacion total: el rechazo y el
-    retrabajo (PROC-REP-235) no estan implementados.
+    Detalle (Multi-Detalle): con ``detalle_id`` aprueba unicamente ese
+    Detalle; sin ``detalle_id`` preserva el comportamiento anterior
+    (aprueba todos los Detalles de una vez). El MVP implementa solo la
+    aprobacion: el rechazo y el retrabajo (PROC-REP-235) no estan
+    implementados.
 
     No cambia el estado tecnico del Detalle: sigue COMPLETO. La
     aprobacion es otra dimension y vive en ``control_estado``.
+
+    PROC-REP-230 ("todos los Detalles fueron aprobados") solo se
+    registra cuando, despues de esta aprobacion, TODOS los Detalles de
+    la Orden quedan APROBADO -en ese caso, siempre con observacion
+    "Si": "No" significaria que un Detalle fue RECHAZADO, y el rechazo
+    esta fuera de scope (EXC-REP-005). Una aprobacion parcial (todavia
+    queda otro Detalle PENDIENTE) NO registra PROC-REP-230: eso no es
+    "No", es simplemente que la decision todavia no se tomo. El caller
+    (``application.cierre.aprobar_control``) sigue el mismo criterio
+    para PROC-REP-245/240.
 
     PROC-REP-220 es ACT-RECEP: el control lo hace Recepcion, no el
     tecnico que ejecuto el trabajo.
@@ -197,19 +218,37 @@ def aprobar_control_tecnico(
             "No hay Detalles que controlar."
         )
     if any(
-        detalle.estado is not EstadoReparacionDetail.COMPLETO
-        for detalle in orden.reparaciones_detail
-    ):
-        raise PrecondicionInvalidaError(
-            "El control tecnico requiere todos los Detalles COMPLETO."
-        )
-    if any(
         ejecucion.estado is EstadoEjecucion.EN_PROGRESO
         for ejecucion in orden.ejecuciones
     ):
         raise PrecondicionInvalidaError(
             "No se puede controlar con una Ejecucion activa."
         )
+    if any(
+        detalle.estado is not EstadoReparacionDetail.COMPLETO
+        for detalle in orden.reparaciones_detail
+    ):
+        raise PrecondicionInvalidaError(
+            "El control tecnico (PROC-REP-220) solo se alcanza cuando "
+            "todos los Detalles de la Orden estan COMPLETO."
+        )
+
+    if detalle_id is not None:
+        detalle_objetivo = next(
+            (
+                detalle
+                for detalle in orden.reparaciones_detail
+                if detalle.id == detalle_id
+            ),
+            None,
+        )
+        if detalle_objetivo is None:
+            raise EntidadNoEncontradaError(
+                f"La Orden no tiene el Detalle {detalle_id}"
+            )
+        objetivo_ids = {detalle_id}
+    else:
+        objetivo_ids = {detalle.id for detalle in orden.reparaciones_detail}
 
     nueva_orden = registrar_paso(
         orden,
@@ -217,13 +256,26 @@ def aprobar_control_tecnico(
         accion="REALIZAR_CONTROL_TECNICO",
         fecha=fecha,
         usuario_id=usuario.id,
+        reparacion_detail_id=detalle_id,
         observacion=observaciones,
     )
     for detalle in nueva_orden.reparaciones_detail:
-        detalle.control_estado = EstadoControl.APROBADO
-        detalle.control_usuario_id = usuario.id
-        detalle.control_fecha = fecha
-        detalle.control_observaciones = observaciones
+        if detalle.id in objetivo_ids:
+            detalle.control_estado = EstadoControl.APROBADO
+            detalle.control_usuario_id = usuario.id
+            detalle.control_fecha = fecha
+            detalle.control_observaciones = observaciones
+
+    todos_aprobados = all(
+        detalle.control_estado is EstadoControl.APROBADO
+        for detalle in nueva_orden.reparaciones_detail
+    )
+    if not todos_aprobados:
+        # Todavia falta aprobar otro Detalle: eso NO es PROC-REP-230 =
+        # "No" -ese resultado significa que un Detalle fue RECHAZADO
+        # (fuera de scope, EXC-REP-005), no "falta controlar otro". No
+        # se registra la decision hasta que de verdad se tome.
+        return nueva_orden
 
     return registrar_paso(
         nueva_orden,
@@ -240,11 +292,18 @@ def calcular_puntaje(
     *,
     fecha: datetime,
 ) -> OrdenReparacion:
-    """PROC-REP-245: se acredita el puntaje de los Detalles aprobados.
+    """PROC-REP-245: consolida el puntaje total de la Orden.
 
-    BR-REP-009. No persiste ningun total: ``OrdenReparacion.puntaje_total``
-    lo deriva de los Detalles con control APROBADO. Este service solo
-    registra que el paso ocurrio.
+    NO acredita el puntaje de cada Detalle por primera vez: ese puntaje
+    ya existe desde que ESE Detalle fue aprobado en el control tecnico
+    (PROC-REP-220, BR-REP-009), y ``OrdenReparacion.puntaje_total`` ya
+    lo refleja -es un computed field que suma los Detalles con control
+    APROBADO, incluso antes de que la Orden entera complete su
+    control-. Este
+    service solo registra que la consolidacion final ocurrio, llamado
+    unicamente cuando el control tecnico completo de la Orden ya
+    termino (``application.cierre.aprobar_control``), justo antes de
+    ``marcar_reparacion_lista``. No persiste ningun total propio.
 
     La distribucion del puntaje entre varios tecnicos sigue pendiente en
     V1.3 y no se asume aqui.
@@ -262,7 +321,7 @@ def calcular_puntaje(
     return registrar_paso(
         orden,
         process_id="PROC-REP-245",
-        accion="CALCULAR_PUNTAJE",
+        accion="CONSOLIDAR_PUNTAJE",
         fecha=fecha,
         observacion=str(orden.puntaje_total),
     )

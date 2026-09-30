@@ -34,6 +34,9 @@ from app.services import (
     validar_compatibilidad_detalle,
     validar_estacion_trabajo,
 )
+from app.services import (
+    liberar_orden as liberar_orden_servicio,
+)
 
 from .concurrencia import seccion_critica_inventario
 from .contexto import ApplicationContext
@@ -156,6 +159,27 @@ def iniciar_detalle(
 
         contexto.ordenes.guardar(orden)
 
+    return orden
+
+
+def liberar_orden(
+    contexto: ApplicationContext,
+    *,
+    orden_id: str,
+    usuario_id: str,
+) -> OrdenReparacion:
+    """El tecnico libera la Orden sin terminarla (PROC-REP-212 "No" -> 213).
+
+    Cierra la toma activa y devuelve la Orden a EN_COLA. No requiere la
+    seccion critica de inventario: no reserva ni consume stock.
+    """
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    orden = contexto.ordenes.obtener(orden_id)
+    orden = liberar_orden_servicio(orden, usuario=usuario, fecha=fecha)
+
+    contexto.ordenes.guardar(orden)
     return orden
 
 

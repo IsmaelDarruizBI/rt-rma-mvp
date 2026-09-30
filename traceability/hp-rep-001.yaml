@@ -106,7 +106,7 @@ items:
   - {id: PROC-REP-211, type: process_node, name: Evaluar situacion de la Orden, node_type: decision, status: draft, in_scenario: true, implemented: partial, shared_by: [FEAT-REP-005, FEAT-REP-006, FEAT-REP-009]}
   - {id: PROC-REP-220, type: process_node, name: Realizar control tecnico, node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: true, implemented: true}
   - {id: PROC-REP-230, type: process_node, name: Todos los Detalles fueron aprobados, node_type: decision, status: draft, in_scenario: true, implemented: partial}
-  - {id: PROC-REP-245, type: process_node, name: Calcular puntaje de la reparacion, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-245, type: process_node, name: Consolidar puntaje de la reparacion, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
   - {id: PROC-REP-240, type: process_node, name: Marcar reparacion lista, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
   - {id: PROC-REP-250, type: process_node, name: Requiere entrega a cliente, node_type: decision, status: draft, in_scenario: true, implemented: partial}
   - {id: PROC-REP-260, type: process_node, name: Notificar cliente, node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: true, implemented: true}
@@ -139,8 +139,8 @@ items:
   - {id: PROC-REP-178, type: process_node, name: Usuario autorizado fuerza continuidad (Detalle), node_type: decision, status: draft, in_scenario: false, implemented: false}
   - {id: PROC-REP-179, type: process_node, name: Registrar override de estacion (Detalle), node_type: activity, actor: ACT-COORD, status: draft, in_scenario: false, implemented: false}
   - {id: PROC-REP-186, type: process_node, name: Registrar reserva fallida (Detalle bloqueado por recursos), node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: false}
-  - {id: PROC-REP-212, type: process_node, name: Tecnico desea continuar trabajando esta Orden, node_type: decision, status: draft, in_scenario: false, implemented: false}
-  - {id: PROC-REP-213, type: process_node, name: Liberar Orden de Reparacion, node_type: activity, actor: ACT-TECH, status: draft, in_scenario: false, implemented: false}
+  - {id: PROC-REP-212, type: process_node, name: "¿Iniciar un Detalle de reparacion?", node_type: decision, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-213, type: process_node, name: Liberar Orden de Reparacion, node_type: activity, actor: ACT-TECH, status: draft, in_scenario: false, implemented: true}
   - {id: PROC-REP-235, type: process_node, name: Identificar Detalle(s) a retrabajar, node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: false, implemented: false}
   - {id: PROC-REP-290, type: process_node, name: Informar resultado al sistema RT, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: false}
   - {id: PROC-REP-300, type: process_node, name: Cancelar Detalle, node_type: activity, status: draft, in_scenario: false, implemented: false}
@@ -293,6 +293,13 @@ items:
   # --- Slice 0 (MVP v2 - Foundation). spec: 009-mvp2-foundation ------ #
   - {id: FR-REP-066, type: functional_requirement, name: Representar en el dominio los origenes de MVP v2 (RT_INTERNO, RMA_GARANTIA_REPARACION) y la politica de proceso/comercial de cada Origen, sin habilitar todavia su creacion por API, status: PARTIAL, gap: "Solo CLIENTE_EXTERNO tiene un comando de creacion; RT_INTERNO y RMA_GARANTIA_REPARACION llegan con los slices que conectan HP-REP-002 y HP-REP-003 (TASK-REP-013/015)."}
 
+  # --- Slice 1 (Multi-Detalle operativo). spec: 010-slice1-multidetalle #
+  - {id: FR-REP-067, type: functional_requirement, name: Permitir definir mas de un Detalle sobre la misma Orden antes de habilitarla, mediante un parametro aditivo que pospone comprobante factibilidad y habilitacion hasta el ultimo Detalle, status: IMPLEMENTED}
+  - {id: FR-REP-068, type: functional_requirement, name: Ofrecer una accion INICIAR_DETALLE por cada Detalle DEFINIDO y SIN_BLOQUEO de la Orden sin elegir arbitrariamente uno solo cuando hay varios trabajables, status: IMPLEMENTED}
+  - {id: FR-REP-069, type: functional_requirement, name: "Preguntar siempre -con toma activa y sin Ejecucion en curso- si el tecnico quiere iniciar un Detalle (PROC-REP-212) o liberar la Orden (PROC-REP-213), tanto inmediatamente despues de tomarla como despues de completar un Detalle con otro todavia trabajable; devolver la Orden a EN_COLA sin cerrar la toma automaticamente mientras quede trabajo", status: IMPLEMENTED}
+  - {id: FR-REP-070, type: functional_requirement, name: "Aprobar el control tecnico Detalle por Detalle (detalle_id opcional) solo cuando la Orden entera es terminal, marcando REPARACION_LISTA (PROC-REP-230/245/240) unicamente cuando esa aprobacion deja todos los Detalles con control APROBADO -nunca en una aprobacion parcial", status: IMPLEMENTED}
+  - {id: FR-REP-071, type: functional_requirement, name: "Rechazar a nivel backend -no solo ocultar en la UI- la seleccion o el inicio de un Detalle DEFINIDO pero bloqueado (BLOQUEADO_POR_RECURSOS o REQUIERE_DEFINICION): solo DEFINIDO+SIN_BLOQUEO es trabajable", status: IMPLEMENTED}
+
   # ================================================================== #
   # Technical Requirements (reconstruidos desde la arquitectura real)  #
   # ================================================================== #
@@ -363,6 +370,13 @@ items:
   - {id: TR-REP-062, type: technical_requirement, name: acciones_disponibles (application/acciones.py) consulta politica_de(orden.origen) para decidir Notificar Registrar-Pago y Entregar en vez de un condicional fijo por CLIENTE_EXTERNO, status: IMPLEMENTED}
   - {id: TR-REP-063, type: technical_requirement, name: progreso() (application/progreso.py) resuelve la ruta esperada desde un mapping por Origen extensible con CLIENTE_EXTERNO como fallback, status: IMPLEMENTED}
   - {id: TR-REP-064, type: technical_requirement, name: ROLES_PAGO (services/pagos.py) es la fuente unica de roles autorizados para Registrar Pago consumida por el backend y por acciones_disponibles, status: IMPLEMENTED}
+
+  # --- Slice 1 (Multi-Detalle operativo). spec: 010-slice1-multidetalle #
+  - {id: TR-REP-065, type: technical_requirement, name: application.ingreso.definir_reparacion acepta finalizar_definicion (bool, default True, aditivo) agrega el Detalle siempre y solo genera comprobante valida factibilidad y habilita la Orden cuando es verdadero, status: IMPLEMENTED}
+  - {id: TR-REP-066, type: technical_requirement, name: application.acciones.detalles_trabajables enumera todos los Detalles DEFINIDO y SIN_BLOQUEO acciones_disponibles emite un AccionDisponible INICIAR_DETALLE por cada uno en vez de elegir el primero, status: IMPLEMENTED}
+  - {id: TR-REP-067, type: technical_requirement, name: "PROC-REP-212 (¿iniciar un Detalle de reparacion?) se registra en seleccionar_detalle/liberar_orden SOLO cuando la Orden realmente viene de esa decision -current_process en {PROC-REP-180, PROC-REP-211}-: seleccionar_detalle encadena 212 [Si] -> 181 unicamente en ese caso (una reentrada a 181 sin volver a pasar por 180/211 no duplica 212); liberar_orden encadena 212 [No] -> 213 -> 170 (ACT-SYSTEM), cierra la toma con fecha/hora y deja estado_workflow=EN_COLA y current_process=PROC-REP-170. Ninguna decision queda como estado persistido: solo el historial la representa (BR-REP-018)", status: IMPLEMENTED}
+  - {id: TR-REP-068, type: technical_requirement, name: "services.reparaciones.aprobar_control_tecnico exige que TODOS los Detalles de la Orden esten COMPLETO antes de aprobar ninguno (PROC-REP-220 solo se alcanza con la Orden terminal); con detalle_id opcional aprueba solo ese Detalle, que aporta su puntaje a OrdenReparacion.puntaje_total de inmediato (BR-REP-009, computed field). Una aprobacion parcial registra UNICAMENTE PROC-REP-220 -nunca PROC-REP-230, que solo se registra (observacion Si) cuando esa aprobacion deja TODOS los Detalles APROBADO-: PROC-REP-230=No significaria un Detalle RECHAZADO (fuera de scope), no 'todavia falta aprobar otro'. application.cierre.aprobar_control solo encadena PROC-REP-245 (consolidacion final, no crea el puntaje por Detalle) y PROC-REP-240 en ese mismo caso", status: IMPLEMENTED}
+  - {id: TR-REP-069, type: technical_requirement, name: "services.tomas.seleccionar_detalle, services.tomas.validar_estacion_trabajo y services.ejecuciones.reservar_insumos_e_iniciar_ejecucion rechazan un Detalle DEFINIDO pero bloqueado (REQUIERE_DEFINICION o BLOQUEADO_POR_RECURSOS): solo DEFINIDO+SIN_BLOQUEO es trabajable, exigido en el backend y no solo ocultado por acciones_disponibles", status: IMPLEMENTED}
 
   # ================================================================== #
   # Modelo de datos / arquitectura — artefacto TRANSVERSAL N:M         #
@@ -449,8 +463,8 @@ items:
   - {id: TASK-REP-058, type: task, name: "[US-REP-006] Implementar tomar_orden (PROC-REP-180) abriendo la participacion activa con tecnico, estacion y fecha/hora, exigiendo Orden EN_COLA", status: DONE, spec: 004-feat-rep-004-hp-slice}
   - {id: TASK-REP-059, type: task, name: "[US-REP-006] Exigir actor ACT-TECH activo en la validacion de estacion y en la toma", status: DONE, spec: 004-feat-rep-004-hp-slice}
   - {id: TASK-REP-060, type: task, name: "[US-REP-006] Garantizar que tomar la Orden no inicia ninguna Ejecucion", status: DONE, spec: 004-feat-rep-004-hp-slice}
-  - {id: TASK-REP-061, type: task, name: "Implementar PROC-REP-212 (decision explicita del tecnico: continuar con otro Detalle o liberar la Orden, BR-REP-018)", status: NOT_IMPLEMENTED, spec: 004-feat-rep-004-hp-slice}
-  - {id: TASK-REP-062, type: task, name: "Implementar PROC-REP-213 (liberar Orden: cerrar la participacion con fecha/hora de fin y devolver la Orden a EN_COLA)", status: NOT_IMPLEMENTED, spec: 004-feat-rep-004-hp-slice}
+  - {id: TASK-REP-061, type: task, name: "Implementar PROC-REP-212 (decision explicita del tecnico: continuar con otro Detalle o liberar la Orden, BR-REP-018)", status: DONE, spec: 004-feat-rep-004-hp-slice, note: "Implementado en Slice 1 (spec 010-slice1-multidetalle): PROC-REP-212 no persiste estado propio -es la decision implicita del tecnico entre seguir seleccionando otro Detalle (PROC-REP-181) o liberar (PROC-REP-213, ver TASK-REP-062)-, ambas ya ofrecidas por acciones_disponibles mientras la toma sigue activa."}
+  - {id: TASK-REP-062, type: task, name: "Implementar PROC-REP-213 (liberar Orden: cerrar la participacion con fecha/hora de fin y devolver la Orden a EN_COLA)", status: DONE, spec: 004-feat-rep-004-hp-slice, note: "Implementado en Slice 1 (spec 010-slice1-multidetalle): services/tomas.py::liberar_orden."}
   - {id: TASK-REP-063, type: task, name: "Implementar la gestion de sesion del tecnico, para cubrir la validacion (1) de BR-REP-011-A tal como esta redactada", status: NOT_IMPLEMENTED, spec: 004-feat-rep-004-hp-slice}
   - {id: TASK-REP-064, type: task, name: "Implementar el catalogo definitivo de prioridades (hoy la prioridad es un entero no negativo sin catalogo)", status: NOT_IMPLEMENTED, spec: 004-feat-rep-004-hp-slice}
   - {id: TASK-REP-065, type: task, name: "Ejercitar una Orden con varios Detalles donde solo algunos son compatibles con la Estacion (BR-REP-011-A: basta uno)", status: NOT_IMPLEMENTED, spec: 004-feat-rep-004-hp-slice}
@@ -548,6 +562,12 @@ items:
   - {id: TASK-REP-155, type: task, name: "[US-REP-009] Refactorizar evaluar_situacion_orden para delegar en el resolver y cerrar la toma solo en resultados terminales, eliminando el riesgo de persistencia parcial de completar_ejecucion", status: DONE, spec: 009-mvp2-foundation}
   - {id: TASK-REP-156, type: task, name: "[US-REP-001] Separar acciones_disponibles y progreso de application/happy_path.py hacia application/acciones.py y application/progreso.py, consultando la politica del Origen; happy_path.py queda como fachada de compatibilidad. Verificado por tests de caracterizacion que congelan el comportamiento previo (salvo el fix de BR-REP-017)", status: DONE, spec: 009-mvp2-foundation}
   - {id: TASK-REP-157, type: task, name: "[US-REP-012] Centralizar ROLES_PAGO en services/pagos.py y exigirlo tanto en registrar_pago como en la accion REGISTRAR_PAGO publicada por acciones_disponibles", status: DONE, spec: 009-mvp2-foundation}
+
+  # --- Slice 1 (Multi-Detalle operativo). spec: 010-slice1-multidetalle #
+  - {id: TASK-REP-158, type: task, name: "[US-REP-003] Permitir multiples llamadas a definir_reparacion_detail antes de habilitar, agregando finalizar_definicion aditivo a application.ingreso.definir_reparacion", status: DONE, spec: 010-slice1-multidetalle}
+  - {id: TASK-REP-159, type: task, name: "[US-REP-007] Enumerar todos los Detalles trabajables en acciones_disponibles (detalles_trabajables) en vez de elegir el primero", status: DONE, spec: 010-slice1-multidetalle}
+  - {id: TASK-REP-160, type: task, name: "[US-REP-010] Aprobar control tecnico por Detalle (detalle_id opcional) y marcar REPARACION_LISTA solo cuando todos quedan APROBADO", status: DONE, spec: 010-slice1-multidetalle}
+  - {id: TASK-REP-161, type: task, name: "[US-REP-007] Alinear los guards de backend (seleccionar_detalle, validar_estacion_trabajo, reservar_insumos_e_iniciar_ejecucion) con la definicion de Detalle trabajable (DEFINIDO+SIN_BLOQUEO), para que un intento directo de API no pueda saltear lo que acciones_disponibles ya oculta", status: DONE, spec: 010-slice1-multidetalle}
 
   # ================================================================== #
   # Code / Artifact. Unidad: archivo + simbolo (no linea).             #
@@ -683,6 +703,17 @@ items:
   - {id: CODE-REP-118, type: code_artifact, name: "app/backend/app/application/acciones.py::acciones_disponibles", status: IMPLEMENTED, source: "app/backend/app/application/acciones.py::acciones_disponibles"}
   - {id: CODE-REP-119, type: code_artifact, name: "app/backend/app/application/progreso.py::progreso", status: IMPLEMENTED, source: "app/backend/app/application/progreso.py::progreso"}
   - {id: CODE-REP-120, type: code_artifact, name: "app/backend/app/services/pagos.py::ROLES_PAGO", status: IMPLEMENTED, source: "app/backend/app/services/pagos.py::ROLES_PAGO"}
+
+  # --- Slice 1 (Multi-Detalle operativo). spec: 010-slice1-multidetalle #
+  - {id: CODE-REP-121, type: code_artifact, name: "app/backend/app/application/ingreso.py::definir_reparacion", status: IMPLEMENTED, source: "app/backend/app/application/ingreso.py::definir_reparacion"}
+  - {id: CODE-REP-122, type: code_artifact, name: "app/backend/app/application/acciones.py::detalles_trabajables", status: IMPLEMENTED, source: "app/backend/app/application/acciones.py::detalles_trabajables"}
+  - {id: CODE-REP-123, type: code_artifact, name: "app/backend/app/services/tomas.py::liberar_orden", status: IMPLEMENTED, source: "app/backend/app/services/tomas.py::liberar_orden"}
+  - {id: CODE-REP-124, type: code_artifact, name: "app/backend/app/application/taller.py::liberar_orden", status: IMPLEMENTED, source: "app/backend/app/application/taller.py::liberar_orden"}
+  - {id: CODE-REP-125, type: code_artifact, name: "app/backend/app/services/reparaciones.py::aprobar_control_tecnico", status: IMPLEMENTED, source: "app/backend/app/services/reparaciones.py::aprobar_control_tecnico"}
+  - {id: CODE-REP-126, type: code_artifact, name: "app/backend/app/application/cierre.py::aprobar_control", status: IMPLEMENTED, source: "app/backend/app/application/cierre.py::aprobar_control"}
+  - {id: CODE-REP-127, type: code_artifact, name: "app/backend/app/services/tomas.py::seleccionar_detalle", status: IMPLEMENTED, source: "app/backend/app/services/tomas.py::seleccionar_detalle"}
+  - {id: CODE-REP-128, type: code_artifact, name: "app/backend/app/services/tomas.py::validar_estacion_trabajo", status: IMPLEMENTED, source: "app/backend/app/services/tomas.py::validar_estacion_trabajo"}
+  - {id: CODE-REP-129, type: code_artifact, name: "app/backend/app/services/ejecuciones.py::reservar_insumos_e_iniciar_ejecucion", status: IMPLEMENTED, source: "app/backend/app/services/ejecuciones.py::reservar_insumos_e_iniciar_ejecucion"}
 
   # ================================================================== #
   # UAT. NINGUNO aprobado: no ha ocurrido UAT formal sobre esta        #
@@ -939,6 +970,14 @@ items:
   - {id: TEST-REP-220, type: internal_test, name: "test_registrar_pago_rechaza_al_tecnico", status: PASSING, source: "app/backend/tests/test_services_autorizacion.py::test_registrar_pago_rechaza_al_tecnico"}
   - {id: TEST-REP-221, type: internal_test, name: "test_un_tecnico_no_puede_registrar_un_pago_por_http", status: PASSING, source: "app/backend/tests/test_api_reconcile.py::test_un_tecnico_no_puede_registrar_un_pago_por_http"}
   - {id: TEST-REP-222, type: internal_test, name: "test_caracterizacion_hp1 (10 funciones)", status: PASSING, source: "app/backend/tests/test_caracterizacion_hp1.py", note: "Caracteriza progreso()/acciones_disponibles() para los 10 estados principales de HP-REP-001 antes y despues del refactor de Slice 0; unica excepcion deliberada: roles de REGISTRAR_PAGO."}
+
+  # --- Slice 1 (Multi-Detalle operativo). spec: 010-slice1-multidetalle #
+  - {id: TEST-REP-223, type: internal_test, name: "test_multidetalle_dos_detalles_end_to_end_por_http", status: PASSING, source: "app/backend/tests/test_multidetalle.py::test_multidetalle_dos_detalles_end_to_end_por_http"}
+  - {id: TEST-REP-224, type: internal_test, name: "test_hp_rep_001_un_solo_detalle_sigue_igual", status: PASSING, source: "app/backend/tests/test_multidetalle.py::test_hp_rep_001_un_solo_detalle_sigue_igual"}
+  - {id: TEST-REP-225, type: internal_test, name: "test_liberar_orden_devuelve_la_orden_a_en_cola", status: PASSING, source: "app/backend/tests/test_multidetalle.py::test_liberar_orden_devuelve_la_orden_a_en_cola"}
+  - {id: TEST-REP-226, type: internal_test, name: "test_control_tecnico_rechaza_si_algun_detalle_no_es_terminal", status: PASSING, source: "app/backend/tests/test_multidetalle.py::test_control_tecnico_rechaza_si_algun_detalle_no_es_terminal"}
+  - {id: TEST-REP-227, type: internal_test, name: "test_detalle_bloqueado_guard.py (4 funciones, 7 casos)", status: PASSING, source: "app/backend/tests/test_detalle_bloqueado_guard.py", note: "seleccionar_detalle, validar_estacion_trabajo y reservar_insumos_e_iniciar_ejecucion rechazan BLOQUEADO_POR_RECURSOS y REQUIERE_DEFINICION; solo DEFINIDO+SIN_BLOQUEO se acepta."}
+  - {id: TEST-REP-228, type: internal_test, name: "test_proc212_registro_condicional.py (2 funciones)", status: PASSING, source: "app/backend/tests/test_proc212_registro_condicional.py", note: "212 [Si] se registra desde PROC-REP-180; una reentrada a seleccionar_detalle sin volver a pasar por 180/211 no duplica PROC-REP-212."}
 
 links:
 
@@ -2500,3 +2539,82 @@ links:
   - {from: TEST-REP-222, to: CODE-REP-118, relationship: exercises}
   - {from: TEST-REP-222, to: CODE-REP-119, relationship: exercises}
   - {from: TEST-REP-222, to: FR-REP-066, relationship: verifies}
+
+  # --- Slice 1 (Multi-Detalle operativo). spec: 010-slice1-multidetalle #
+  # Cadena funcional: ningun User Story, System Action ni Feature nuevo.
+  # FR-REP-067 amplia ACC-REP-004 (US-REP-003, FEAT-REP-002): definir mas
+  # de un Detalle antes de habilitar. FR-REP-068 amplia ACC-REP-011
+  # (US-REP-007, FEAT-REP-005): elegir cual Detalle trabajar entre varios
+  # trabajables. FR-REP-069 amplia ACC-REP-010 (US-REP-006,
+  # FEAT-REP-004): PROC-REP-212/213, ya previstos como NOT_IMPLEMENTED
+  # por TASK-REP-061/062 -PROC-REP-212 se renombro a "¿Iniciar un
+  # Detalle de reparacion?" y ahora se alcanza siempre desde
+  # PROC-REP-180, no solo desde una continuacion multi-Detalle-.
+  # FR-REP-070 amplia ACC-REP-017 (US-REP-010, FEAT-REP-006): control
+  # tecnico granular por Detalle, sin registrar PROC-REP-230/245/240 en
+  # una aprobacion parcial. FR-REP-071 (nuevo) tambien amplia
+  # ACC-REP-011 (misma System Action que FR-REP-068, "seleccionar el
+  # Detalle a trabajar"): el guard de backend en seleccionar_detalle,
+  # validar_estacion_trabajo y reservar_insumos_e_iniciar_ejecucion.
+  - {from: FR-REP-067, to: ACC-REP-004, relationship: derives_from}
+  - {from: FR-REP-068, to: ACC-REP-011, relationship: derives_from}
+  - {from: FR-REP-069, to: ACC-REP-010, relationship: derives_from}
+  - {from: FR-REP-070, to: ACC-REP-017, relationship: derives_from}
+  - {from: FR-REP-071, to: ACC-REP-011, relationship: derives_from}
+  - {from: ACC-REP-010, to: PROC-REP-213, relationship: covers}
+
+  - {from: TR-REP-065, to: FR-REP-067, relationship: satisfies}
+  - {from: TR-REP-066, to: FR-REP-068, relationship: satisfies}
+  - {from: TR-REP-067, to: FR-REP-069, relationship: satisfies}
+  - {from: TR-REP-068, to: FR-REP-070, relationship: satisfies}
+  - {from: TR-REP-069, to: FR-REP-071, relationship: satisfies}
+
+  - {from: TASK-REP-158, to: TR-REP-065, relationship: implements}
+  - {from: TASK-REP-159, to: TR-REP-066, relationship: implements}
+  - {from: TASK-REP-061, to: TR-REP-067, relationship: implements}
+  - {from: TASK-REP-062, to: TR-REP-067, relationship: implements}
+  - {from: TASK-REP-160, to: TR-REP-068, relationship: implements}
+  - {from: TASK-REP-161, to: TR-REP-069, relationship: implements}
+
+  - {from: CODE-REP-121, to: TASK-REP-158, relationship: produced_by}
+  - {from: CODE-REP-121, to: TR-REP-065, relationship: implements}
+  - {from: CODE-REP-122, to: TASK-REP-159, relationship: produced_by}
+  - {from: CODE-REP-122, to: TR-REP-066, relationship: implements}
+  - {from: CODE-REP-123, to: TASK-REP-061, relationship: produced_by}
+  - {from: CODE-REP-123, to: TR-REP-067, relationship: implements}
+  - {from: CODE-REP-124, to: TASK-REP-062, relationship: produced_by}
+  - {from: CODE-REP-124, to: TR-REP-067, relationship: implements}
+  - {from: CODE-REP-125, to: TASK-REP-160, relationship: produced_by}
+  - {from: CODE-REP-125, to: TR-REP-068, relationship: implements}
+  - {from: CODE-REP-126, to: TASK-REP-160, relationship: produced_by}
+  - {from: CODE-REP-126, to: TR-REP-068, relationship: implements}
+  - {from: CODE-REP-127, to: TASK-REP-161, relationship: produced_by}
+  - {from: CODE-REP-127, to: TR-REP-067, relationship: implements}
+  - {from: CODE-REP-127, to: TR-REP-069, relationship: implements}
+  - {from: CODE-REP-128, to: TASK-REP-161, relationship: produced_by}
+  - {from: CODE-REP-128, to: TR-REP-069, relationship: implements}
+  - {from: CODE-REP-129, to: TASK-REP-161, relationship: produced_by}
+  - {from: CODE-REP-129, to: TR-REP-069, relationship: implements}
+
+  - {from: TEST-REP-223, to: CODE-REP-121, relationship: exercises}
+  - {from: TEST-REP-223, to: CODE-REP-122, relationship: exercises}
+  - {from: TEST-REP-223, to: CODE-REP-123, relationship: exercises}
+  - {from: TEST-REP-223, to: CODE-REP-125, relationship: exercises}
+  - {from: TEST-REP-223, to: CODE-REP-126, relationship: exercises}
+  - {from: TEST-REP-223, to: CODE-REP-127, relationship: exercises}
+  - {from: TEST-REP-223, to: FR-REP-067, relationship: verifies}
+  - {from: TEST-REP-223, to: FR-REP-068, relationship: verifies}
+  - {from: TEST-REP-223, to: FR-REP-070, relationship: verifies}
+  - {from: TEST-REP-224, to: CODE-REP-121, relationship: exercises}
+  - {from: TEST-REP-224, to: FR-REP-067, relationship: verifies}
+  - {from: TEST-REP-225, to: CODE-REP-123, relationship: exercises}
+  - {from: TEST-REP-225, to: CODE-REP-124, relationship: exercises}
+  - {from: TEST-REP-225, to: FR-REP-069, relationship: verifies}
+  - {from: TEST-REP-226, to: CODE-REP-125, relationship: exercises}
+  - {from: TEST-REP-226, to: FR-REP-070, relationship: verifies}
+  - {from: TEST-REP-227, to: CODE-REP-127, relationship: exercises}
+  - {from: TEST-REP-227, to: CODE-REP-128, relationship: exercises}
+  - {from: TEST-REP-227, to: CODE-REP-129, relationship: exercises}
+  - {from: TEST-REP-227, to: TR-REP-069, relationship: verifies}
+  - {from: TEST-REP-228, to: CODE-REP-127, relationship: exercises}
+  - {from: TEST-REP-228, to: TR-REP-067, relationship: verifies}

@@ -29,7 +29,10 @@ import type {
 } from "../../types/api";
 
 export interface EjecutorAcciones {
-  definirReparacion: (tipoReparacionId: string) => void;
+  definirReparacion: (
+    tipoReparacionId: string,
+    finalizarDefinicion: boolean,
+  ) => void;
   encolar: (prioridad: number) => void;
   tomar: (estacionId: string) => void;
   iniciarDetalle: (detalleId: string) => void;
@@ -38,7 +41,8 @@ export interface EjecutorAcciones {
     insumosUtilizados: InsumoUtilizado[],
     observaciones: string,
   ) => void;
-  aprobarControl: (observaciones: string) => void;
+  aprobarControl: (detalleId: string | null, observaciones: string) => void;
+  liberarOrden: () => void;
   notificar: () => void;
   registrarPago: (monto: string, metodo: string) => void;
   entregar: () => void;
@@ -162,12 +166,9 @@ function FormularioAccion({
   switch (accion.codigo) {
     case "DEFINIR_REPARACION":
       return (
-        <SelectorSimple
-          etiqueta="Tipo de reparación"
-          opciones={tipos.map((tipo) => ({
-            valor: tipo.id,
-            texto: `${tipo.nombre} — ${tipo.precio}`,
-          }))}
+        <FormularioDefinirReparacion
+          tipos={tipos}
+          cantidadDetallesActual={orden.reparaciones_detail.length}
           deshabilitado={deshabilitado}
           onConfirmar={ejecutar.definirReparacion}
         />
@@ -226,9 +227,22 @@ function FormularioAccion({
       return (
         <FormularioObservaciones
           deshabilitado={deshabilitado}
-          textoBoton="Aprobar control"
-          onConfirmar={ejecutar.aprobarControl}
+          textoBoton={
+            accion.detalle_id
+              ? `Aprobar control del Detalle ${accion.detalle_id}`
+              : "Aprobar control"
+          }
+          onConfirmar={(observaciones) =>
+            ejecutar.aprobarControl(accion.detalle_id, observaciones)
+          }
         />
+      );
+
+    case "LIBERAR_ORDEN":
+      return (
+        <Boton disabled={deshabilitado} onClick={ejecutar.liberarOrden}>
+          Liberar la Orden
+        </Boton>
       );
 
     case "NOTIFICAR":
@@ -264,6 +278,83 @@ function FormularioAccion({
 }
 
 // --- Formularios --------------------------------------------------------
+
+/**
+ * Definir Detalles de la reparación (Multi-Detalle).
+ *
+ * "Finalizar la definición" viene tildado por defecto: con un solo
+ * Detalle, confirmar se comporta exactamente como antes (agrega el
+ * Detalle Y habilita la Orden en el mismo paso). Para cargar más de
+ * uno, Recepción destilda la casilla en los Detalles que no son el
+ * último — la Orden sigue en REQUERIMIENTO y el formulario se vuelve a
+ * mostrar para el siguiente.
+ */
+function FormularioDefinirReparacion({
+  tipos,
+  cantidadDetallesActual,
+  deshabilitado,
+  onConfirmar,
+}: {
+  tipos: TipoReparacion[];
+  cantidadDetallesActual: number;
+  deshabilitado: boolean;
+  onConfirmar: (tipoReparacionId: string, finalizarDefinicion: boolean) => void;
+}) {
+  const [tipoId, setTipoId] = useState(tipos[0]?.id ?? "");
+  const [finalizar, setFinalizar] = useState(true);
+
+  return (
+    <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
+      <div style={{ flex: 1 }}>
+        <Campo
+          etiqueta={
+            cantidadDetallesActual > 0
+              ? `Tipo de reparación (Detalle ${cantidadDetallesActual + 1})`
+              : "Tipo de reparación"
+          }
+        >
+          <select
+            value={tipoId}
+            onChange={(evento) => setTipoId(evento.target.value)}
+            disabled={deshabilitado}
+            style={estiloInput}
+          >
+            {tipos.map((tipo) => (
+              <option key={tipo.id} value={tipo.id}>
+                {tipo.nombre} — {tipo.precio}
+              </option>
+            ))}
+          </select>
+        </Campo>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.4rem",
+            fontSize: "0.85rem",
+            marginTop: "0.3rem",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={finalizar}
+            onChange={(evento) => setFinalizar(evento.target.checked)}
+            disabled={deshabilitado}
+          />
+          Finalizar la definición (habilita la Orden)
+        </label>
+      </div>
+      <div style={{ marginBottom: "0.6rem" }}>
+        <Boton
+          disabled={deshabilitado || !tipoId}
+          onClick={() => onConfirmar(tipoId, finalizar)}
+        >
+          Confirmar
+        </Boton>
+      </div>
+    </div>
+  );
+}
 
 function SelectorSimple({
   etiqueta,

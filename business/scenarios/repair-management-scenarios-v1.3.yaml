@@ -215,7 +215,12 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-180
+        to: PROC-REP-212
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-212
         to: PROC-REP-181
+        condition: Si
 
       - kind: PROCESS_EDGE
         from: PROC-REP-181
@@ -492,7 +497,12 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-180
+        to: PROC-REP-212
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-212
         to: PROC-REP-181
+        condition: Si
 
       - kind: PROCESS_EDGE
         from: PROC-REP-181
@@ -759,7 +769,12 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-180
+        to: PROC-REP-212
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-212
         to: PROC-REP-181
+        condition: Si
 
       - kind: PROCESS_EDGE
         from: PROC-REP-181

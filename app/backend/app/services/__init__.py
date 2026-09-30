@@ -82,6 +82,7 @@ from .reparaciones import (
 from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
 from .tomas import (
     hay_ejecucion_activa,
+    liberar_orden,
     seleccionar_detalle,
     toma_activa,
     tomar_orden,
@@ -124,6 +125,7 @@ __all__ = [
     "validar_factibilidad_detalles",
     # Toma y seleccion
     "hay_ejecucion_activa",
+    "liberar_orden",
     "seleccionar_detalle",
     "toma_activa",
     "tomar_orden",

@@ -143,8 +143,13 @@ def test_en_cola():
 def test_toma_activa_sin_ejecucion():
     orden = flujo_mvp.orden_tomada()
 
+    # Multi-Detalle (Slice 1): con una toma activa y ninguna Ejecucion en
+    # curso, PROC-REP-212/213 ya estan implementados, asi que
+    # LIBERAR_ORDEN pasa a ser una accion disponible mas -antes de este
+    # slice no existia ningun comando que la produjera-.
     assert _codigos_y_roles(orden) == [
         ("INICIAR_DETALLE", (RolUsuario.TECNICO,), flujo_mvp.DETALLE_ID),
+        ("LIBERAR_ORDEN", (RolUsuario.TECNICO,), None),
         ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None),
     ]
     assert _alcanzados(orden) == [
@@ -209,8 +214,16 @@ def test_en_reparacion():
 def test_espera_control():
     orden = flujo_mvp.orden_evaluada()
 
+    # Multi-Detalle (Slice 1): el control tecnico ahora es granular por
+    # Detalle (PROC-REP-230), asi que APROBAR_CONTROL declara el
+    # detalle_id que aprobaria -antes, con la aprobacion en bloque, este
+    # campo siempre viajaba en None-.
     assert _codigos_y_roles(orden) == [
-        ("APROBAR_CONTROL", (RolUsuario.RECEPCION,), None),
+        (
+            "APROBAR_CONTROL",
+            (RolUsuario.RECEPCION,),
+            flujo_mvp.DETALLE_ID,
+        ),
         ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None),
     ]
     assert _alcanzados(orden) == [
