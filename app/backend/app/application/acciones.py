@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from app.domain.models import (
+    CondicionReparacionDetail,
     EstadoControl,
     EstadoReparacionDetail,
     EstadoWorkflow,
@@ -68,9 +69,17 @@ class AccionDisponible:
 
 
 def detalle_trabajable(orden: OrdenReparacion) -> str | None:
-    """Primer Detalle DEFINIDO, que es el que se puede iniciar."""
+    """Primer Detalle DEFINIDO y SIN_BLOQUEO, que es el que se puede iniciar.
+
+    Consistente con ``services.resolucion._es_trabajable``: un Detalle
+    DEFINIDO pero bloqueado (``REQUIERE_DEFINICION`` o
+    ``BLOQUEADO_POR_RECURSOS``) no es trabajable.
+    """
     for detalle in orden.reparaciones_detail:
-        if detalle.estado is EstadoReparacionDetail.DEFINIDO:
+        if (
+            detalle.estado is EstadoReparacionDetail.DEFINIDO
+            and detalle.condicion is CondicionReparacionDetail.SIN_BLOQUEO
+        ):
             return detalle.id
     return None
 
@@ -175,7 +184,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             )
         )
 
-    es_cobrable = politica.condicion_comercial is CondicionComercial.COBRABLE
+    es_cobrable = politica.condicion_comercial == CondicionComercial.COBRABLE
     if orden.reparaciones_detail and es_cobrable and orden.saldo > CERO:
         acciones.append(
             AccionDisponible(
