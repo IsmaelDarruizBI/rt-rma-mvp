@@ -28,29 +28,28 @@ la nota de cabecera del YAML para el detalle de esta decision).
 
 | ACC | FR | TR | Que hace |
 |---|---|---|---|
-| `ACC-REP-027` | `FR-REP-067`, `FR-REP-073` | `TR-REP-065`, `TR-REP-071` | Crear Orden RT sin Cliente; ruta de progreso propia |
-| `ACC-REP-028` | `FR-REP-068` | `TR-REP-066` | Comprobante de recepcion por `PoliticaOrigen`, no hardcodeado |
-| `ACC-REP-029` | `FR-REP-069` | `TR-REP-067`, `TR-REP-072` | No ofrecer Pago/Notificar/Entregar; `requiere_actor` en la UI |
-| `ACC-REP-030` | `FR-REP-070` | `TR-REP-068` | Informar a Gestion RT (PROC-REP-290, `ACT-SYSTEM`) |
-| `ACC-REP-031` | `FR-REP-071`, `FR-REP-072` | `TR-REP-069`, `TR-REP-070` | Devolver equipo sin asentar `ENTREGADA` |
-| `ACC-REP-032` | `FR-REP-074` | `TR-REP-073` | Rechazar Registrar Pago en el service para Origen no `COBRABLE` |
+| `ACC-REP-027` | `FR-REP-072`, `FR-REP-078` | `TR-REP-070`, `TR-REP-076` | Crear Orden RT sin Cliente; ruta de progreso propia |
+| `ACC-REP-028` | `FR-REP-073` | `TR-REP-071` | Comprobante de recepcion por `PoliticaOrigen`, no hardcodeado |
+| `ACC-REP-029` | `FR-REP-074` | `TR-REP-072`, `TR-REP-077` | No ofrecer Pago/Notificar/Entregar; `requiere_actor` en la UI |
+| `ACC-REP-030` | `FR-REP-075` | `TR-REP-073` | Informar a Gestion RT (PROC-REP-290, `ACT-SYSTEM`) |
+| `ACC-REP-031` | `FR-REP-076`, `FR-REP-077` | `TR-REP-074`, `TR-REP-075` | Devolver equipo sin asentar `ENTREGADA` |
+| `ACC-REP-032` | `FR-REP-079` | `TR-REP-078` | Rechazar Registrar Pago en el service para Origen no `COBRABLE` |
 
-`ACC-REP-032`/`FR-REP-074`/`TR-REP-073` se agregaron en la revision del
+`ACC-REP-032`/`FR-REP-079`/`TR-REP-078` se agregaron en la revision del
 slice (ver `tasks.md`, Fase 7): la version inicial solo omitia
 `REGISTRAR_PAGO` en `acciones_disponibles`, lo cual no bastaba -BR-REP-017
 exige que el backend lo garantice, no solo la UI-.
 
 ## Decisiones que el grafo no puede expresar por si solo
 
-- **PROC-REP-290 es `actor: ACT-SYSTEM`, no "rol humano sin definir"**:
+- **PROC-REP-290 es `actor: ACT-SYSTEM`, no una accion humana**:
   `informar_resultado_rt` no recibe `Usuario`; el historial de ese paso
   queda con `usuario_id: null`. Esto exigio una dimension nueva en
   `AccionDisponible`/`AccionOut` (`requiere_actor: bool`, default
   `true`) para no seguir usando `roles: ()` con dos significados
-  distintos: "el negocio no definio el rol" (Registrar Pago antes de
-  BR-REP-017, sigue siendo una accion humana) vs. "no hay ningun actor
-  humano que autorizar" (un nodo `ACT-SYSTEM`). `TR-REP-067` y
-  `TR-REP-068` documentan esta distincion; `TR-REP-072` la propaga al
+  distintos: "accion humana" (con roles) vs. "no hay ningun actor
+  humano que autorizar" (un nodo `ACT-SYSTEM`). `TR-REP-072` y
+  `TR-REP-073` documentan esta distincion; `TR-REP-077` la propaga al
   frontend.
 - **Estado terminal `PENDIENTE_DE_DEFINIR`**: `devolver_equipo_rt` fija
   `current_process = "EVT-REP-999"` pero NO `estado_workflow =
@@ -58,14 +57,14 @@ exige que el backend lo garantice, no solo la UI-.
   (`business/scenarios/repair-management-scenarios-v1.3.yaml`,
   `HP-REP-002.expected.terminal_state`). `acciones_disponibles` detecta
   el fin de proceso por `current_process == "EVT-REP-999"` ademas de
-  `estado_workflow == ENTREGADA` (`TR-REP-070`), para no dejar acciones
+  `estado_workflow == ENTREGADA` (`TR-REP-075`), para no dejar acciones
   abiertas sobre una Orden terminada.
 - **Registrar Pago rechazado en el service, no solo omitido en la UI**:
   `PoliticaOrigen.condicion_comercial != COBRABLE` hace que
   `registrar_pago` lance `PrecondicionInvalidaError` (409) sin importar
   quien lo invoque -service directo, comando de aplicacion o HTTP-. La
   UI seguia sin ofrecer el boton desde la implementacion inicial, pero
-  eso por si solo no era una garantia de backend (`TR-REP-073`).
+  eso por si solo no era una garantia de backend (`TR-REP-078`).
 - **PROC-REP-270 SI exige un actor humano real**: a diferencia de
   PROC-REP-290, el Business Process declara `actor: ACT-ADMIN` con
   `actores_alternativos: [ACT-RECEP]`. `devolver_equipo_rt` ya lo
@@ -74,11 +73,11 @@ exige que el backend lo garantice, no solo la UI-.
   historial); la verificacion posterior a la Fase 7 (ver `tasks.md`,
   Fase 8) confirmo que la correccion de PROC-REP-290 no se le habia
   aplicado por error, y agrego la cobertura de test que faltaba
-  (`TEST-REP-251`..`TEST-REP-255`) sin cambiar codigo de produccion.
+  (`TEST-REP-257`..`TEST-REP-261`) sin cambiar codigo de produccion.
 
 ## Internal Tests (33 nuevos: 19 de la implementacion inicial + 9 de la revision + 5 de la verificacion de actores)
 
-Ver `traceability/hp-rep-002.yaml` (`TEST-REP-223`..`TEST-REP-255`) para
+Ver `traceability/hp-rep-002.yaml` (`TEST-REP-229`..`TEST-REP-261`) para
 el mapeo completo `test -> FR/TR/Code`. Resumen por archivo:
 
 | Archivo | Tests | Verifica |

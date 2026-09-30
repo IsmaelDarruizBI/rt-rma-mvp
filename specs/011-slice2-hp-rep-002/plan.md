@@ -15,8 +15,7 @@ exclusivamente a traves de `PoliticaOrigen`**, nunca mediante un
 condicional sobre el Origen o el Scenario en `application/acciones.py`,
 `services/documentos.py` o `services/pagos.py`. Un segundo eje, agregado
 tras la revision del slice: distinguir explicitamente en
-`AccionDisponible`/`AccionOut` un rol humano *todavia sin definir*
-(`roles: []`, `requiere_actor: true`) de un nodo `actor: ACT-SYSTEM`
+`AccionDisponible`/`AccionOut` una accion humana (`requiere_actor: true`) de un nodo `actor: ACT-SYSTEM`
 *sin ningun actor humano* (`roles: []`, `requiere_actor: false`), en vez
 de conflacionar ambos casos bajo `roles: []`.
 
@@ -129,12 +128,12 @@ consistente con la decision de Foundation de separar
 |---|---|---|
 | `OrdenReparacion.cliente` | `app/backend/app/domain/models/orden_reparacion.py` | `Optional`, `None` para `RT_INTERNO` |
 | `OrdenReparacion.referencia_rt` | `app/backend/app/domain/models/orden_reparacion.py` | Contexto minimo de PROC-REP-020 |
-| `AccionDisponible.requiere_actor` / `AccionOut.requiere_actor` | `application/acciones.py`, `api/schemas.py` | Distingue rol humano sin definir de nodo `ACT-SYSTEM` sin actor |
+| `AccionDisponible.requiere_actor` / `AccionOut.requiere_actor` | `application/acciones.py`, `api/schemas.py` | Distingue accion humana de nodo `ACT-SYSTEM` sin actor |
 | `ResumenComercialOut.condicion_comercial` | `app/backend/app/api/schemas.py` | `PoliticaOrigen.condicion_comercial` expuesta a la API/UI |
 
 ## Technical Requirements
 
-Ver `traceability/hp-rep-002.yaml` (`TR-REP-065`..`TR-REP-073`) y el
+Ver `traceability/hp-rep-002.yaml` (`TR-REP-070`..`TR-REP-078`) y el
 detalle narrativo en [traceability.md](./traceability.md).
 
 ## Dependencies
