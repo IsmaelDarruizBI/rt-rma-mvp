@@ -3,7 +3,12 @@
  * Run: tsx scripts/test-traceability-global.ts
  */
 import assert from "node:assert/strict";
-import { checkGlobalConsistency, type TraceItem } from "./lib/traceability-global";
+import {
+  checkBusinessIdentity,
+  checkGlobalConsistency,
+  type BusinessCatalog,
+  type TraceItem,
+} from "./lib/traceability-global";
 
 const A = "traceability/a.yaml";
 const B = "traceability/b.yaml";
@@ -14,6 +19,16 @@ const proc = (extra: Record<string, unknown> = {}): TraceItem => ({
   ...extra,
 });
 const code = (source: string): TraceItem => ({ id: "CODE-REP-001", type: "code", name: "x", source });
+
+const feat = (extra: Record<string, unknown> = {}): TraceItem => ({
+  id: "FEAT-REP-004",
+  type: "feature",
+  name: "Gestion de prioridad, cola",
+  ...extra,
+});
+const catalog = (): BusinessCatalog => ({
+  feature: new Map([["FEAT-REP-004", "Gestion de prioridad, cola"]]),
+});
 
 const cases: [string, () => void][] = [
   [
@@ -89,6 +104,46 @@ const cases: [string, () => void][] = [
         { file: B, items: [{ id: "CODE-REP-001", type: "code", name: "x" }] },
       ]);
       assert.equal(r.collisions.length, 0);
+    },
+  ],
+  [
+    "G: traceability matching the source of truth passes",
+    () => {
+      const r = checkBusinessIdentity([{ file: A, items: [feat()] }], catalog());
+      assert.equal(r.checked, 1);
+      assert.equal(r.issues.length, 0);
+    },
+  ],
+  [
+    "H: same id, different name vs business fails",
+    () => {
+      const r = checkBusinessIdentity([{ file: A, items: [feat({ name: "Gestion de prioridad cola" })] }], catalog());
+      assert.equal(r.nameMismatches, 1);
+      assert.equal(r.issues[0].businessName, "Gestion de prioridad, cola");
+    },
+  ],
+  [
+    "I: business id missing from the source of truth fails",
+    () => {
+      const r = checkBusinessIdentity([{ file: A, items: [feat({ id: "FEAT-REP-999" })] }], catalog());
+      assert.equal(r.missing, 1);
+    },
+  ],
+  [
+    "J: differing contextual fields pass",
+    () => {
+      const r = checkBusinessIdentity(
+        [{ file: A, items: [feat({ status: "draft", coverage: "PARTIAL", in_scenario: true })] }],
+        catalog(),
+      );
+      assert.equal(r.issues.length, 0);
+    },
+  ],
+  [
+    "technical artifacts are not looked up in business/",
+    () => {
+      const r = checkBusinessIdentity([{ file: A, items: [code("app/a.py")] }], catalog());
+      assert.equal(r.checked, 0);
     },
   ],
 ];

@@ -72,3 +72,64 @@ export function checkGlobalConsistency(inputs: TraceFileItems[]): GlobalResult {
 
   return { files: inputs.length, uniqueIds: registry.size, sharedIds, collisions };
 }
+
+/**
+ * Business-layer identity: items of these types are references/cache of
+ * the business Source of Truth, never new definitions. Keyed by the
+ * traceability `type`.
+ */
+export const BUSINESS_SOURCES: Record<string, { file: string; listKey: string; idPrefix?: string }> = {
+  feature: { file: "business/features/repair-management-features-v1.3.yaml", listKey: "features" },
+  business_rule: { file: "business/rules/business-rules-v1.3.yaml", listKey: "rules" },
+  process_node: { file: "business/processes/repair-management-v1.3.yaml", listKey: "nodes", idPrefix: "PROC-" },
+  business_event: { file: "business/processes/repair-management-v1.3.yaml", listKey: "nodes", idPrefix: "EVT-" },
+  scenario: { file: "business/scenarios/repair-management-scenarios-v1.3.yaml", listKey: "scenarios" },
+};
+
+/** type -> (id -> name) as declared by the Source of Truth. */
+export type BusinessCatalog = Record<string, Map<string, string>>;
+
+export type BusinessIssue = {
+  kind: "missing" | "name-mismatch";
+  id: string;
+  type: string;
+  file: string;
+  traceabilityName?: string;
+  businessName?: string;
+  expectedSource: string;
+};
+
+export type BusinessResult = { checked: number; missing: number; nameMismatches: number; issues: BusinessIssue[] };
+
+export function checkBusinessIdentity(inputs: TraceFileItems[], catalog: BusinessCatalog): BusinessResult {
+  const issues: BusinessIssue[] = [];
+  let checked = 0;
+  for (const { file, items } of inputs) {
+    for (const item of items) {
+      const type = item.type ?? "";
+      const source = BUSINESS_SOURCES[type];
+      if (!source) continue;
+      checked++;
+      const businessName = catalog[type]?.get(item.id);
+      if (businessName === undefined) {
+        issues.push({ kind: "missing", id: item.id, type, file, expectedSource: source.file });
+      } else if (businessName !== item.name) {
+        issues.push({
+          kind: "name-mismatch",
+          id: item.id,
+          type,
+          file,
+          traceabilityName: item.name,
+          businessName,
+          expectedSource: source.file,
+        });
+      }
+    }
+  }
+  return {
+    checked,
+    missing: issues.filter((i) => i.kind === "missing").length,
+    nameMismatches: issues.filter((i) => i.kind === "name-mismatch").length,
+    issues,
+  };
+}
