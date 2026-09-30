@@ -25,8 +25,13 @@ class OrdenReparacion(BaseModel):
 
     La situacion comercial (``total``, ``saldo``, ``estado_pago``) es
     siempre derivada: nada que deba sincronizarse a mano. El alcance del
-    MVP es el de HP-REP-001, sin descuentos, cortesias, cancelaciones,
-    impuestos, ajustes ni garantias no cobrables.
+    MVP cubre HP-REP-001 (CLIENTE_EXTERNO) y HP-REP-002 (RT_INTERNO), sin
+    descuentos, cortesias, cancelaciones, impuestos ni ajustes.
+
+    ``cliente`` es ``None`` para RT_INTERNO (BR-REP-016): el equipo es de
+    Rosario Tecno, no hay un Cliente externo que lo deje. ``referencia_rt``
+    es el contexto minimo que PROC-REP-020 recibe de Gestion RT para ese
+    origen; queda ``None`` para los demas.
 
     Es el aggregate que mas adelante se persistira como un unico JSON.
     """
@@ -37,8 +42,10 @@ class OrdenReparacion(BaseModel):
     estado_workflow: EstadoWorkflow
     current_process: str
 
-    cliente: Cliente
+    cliente: Cliente | None = None
     equipo: Equipo
+
+    referencia_rt: str | None = None
 
     prioridad: int = Field(default=0, ge=0)
 

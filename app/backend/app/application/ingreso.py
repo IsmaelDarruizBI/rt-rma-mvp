@@ -18,6 +18,7 @@ from app.services import (
     RecursoNoDisponibleError,
     cargar_reservas_externas,
     crear_orden_cliente_externo,
+    crear_orden_rt_interno,
     definir_reparacion_detail,
     generar_comprobante_recepcion,
     habilitar_orden,
@@ -53,6 +54,37 @@ def crear_orden(
             orden_id=siguiente_orden_id(contexto.ordenes),
             cliente=cliente,
             equipo=equipo,
+            usuario=usuario,
+            fecha=fecha,
+        )
+        contexto.ordenes.guardar(orden)
+
+    return orden
+
+
+def crear_orden_rt(
+    contexto: ApplicationContext,
+    *,
+    usuario_id: str,
+    equipo: Equipo,
+    referencia_rt: str,
+) -> OrdenReparacion:
+    """Ingreso de un equipo RT_INTERNO (PROC-REP-010/020/040, HP-REP-002).
+
+    Analoga a ``crear_orden`` pero sin Cliente: el equipo es de Rosario
+    Tecno. El resto del recorrido -definir la reparacion, factibilidad,
+    habilitar- es exactamente el mismo comando (``definir_reparacion``):
+    la diferencia por Origen queda contenida en los services, no
+    duplicada aqui.
+    """
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    with seccion_critica_inventario():
+        orden = crear_orden_rt_interno(
+            orden_id=siguiente_orden_id(contexto.ordenes),
+            equipo=equipo,
+            referencia_rt=referencia_rt,
             usuario=usuario,
             fecha=fecha,
         )

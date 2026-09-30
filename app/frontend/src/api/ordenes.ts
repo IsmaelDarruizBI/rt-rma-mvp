@@ -53,6 +53,17 @@ export function crearOrden(datos: DatosNuevaOrden): Promise<Orden> {
   return post<Orden>("/api/orders", datos);
 }
 
+export interface DatosNuevaOrdenRt {
+  usuario_id: string;
+  equipo: { marca: string; modelo: string; falla_reportada: string };
+  referencia_rt: string;
+}
+
+/** PROC-REP-010 -> 020 -> 040 (Recepción, HP-REP-002). Sin Cliente. */
+export function crearOrdenRt(datos: DatosNuevaOrdenRt): Promise<Orden> {
+  return post<Orden>("/api/orders/rt-interno", datos);
+}
+
 /** PROC-REP-045 -> 070 -> 050 -> 060 -> 080 -> 090 -> 140 (Recepción). */
 export function definirReparacion(
   ordenId: string,
@@ -160,6 +171,26 @@ export function entregar(
   usuarioId: string,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/deliver`, {
+    usuario_id: usuarioId,
+  });
+}
+
+/**
+ * PROC-REP-250 -> 290 (HP-REP-002, RT_INTERNO).
+ *
+ * PROC-REP-290 es `actor: ACT-SYSTEM`: no hay actor humano que
+ * autorizar, así que este comando no envía `usuario_id`.
+ */
+export function informarRt(ordenId: string): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/inform-rt`, {});
+}
+
+/** PROC-REP-270 reutilizado (HP-REP-002, RT_INTERNO -> EVT-REP-999). */
+export function devolverRt(
+  ordenId: string,
+  usuarioId: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/return-rt`, {
     usuario_id: usuarioId,
   });
 }
