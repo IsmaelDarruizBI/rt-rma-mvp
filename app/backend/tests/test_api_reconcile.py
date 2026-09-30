@@ -186,6 +186,27 @@ def test_anticipo_y_pago_conviven_en_la_misma_orden(cliente):  # noqa: F811
     assert orden["puede_entregar"] is True
 
 
+def test_un_tecnico_no_puede_registrar_un_pago_por_http(cliente):  # noqa: F811
+    """BR-REP-017: usuario ACTIVO AND rol != TECNICO, exigido en la API."""
+    orden_id = _crear_orden(cliente)
+    cliente.post(
+        f"/api/orders/{orden_id}/details",
+        json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
+    )
+
+    respuesta = cliente.post(
+        f"/api/orders/{orden_id}/payments",
+        json={
+            "usuario_id": TECNICO,
+            "monto": "1000",
+            "metodo": "EFECTIVO",
+        },
+    )
+
+    assert respuesta.status_code == 409
+    assert respuesta.json()["error"]["codigo"] == "PRECONDICION_INVALIDA"
+
+
 def test_el_anticipo_habilita_la_accion_de_pago_temprano(cliente):  # noqa: F811
     """Con saldo > 0 la UI debe poder ofrecer REGISTRAR_PAGO."""
     orden_id = _crear_orden(cliente)
@@ -202,8 +223,8 @@ def test_el_anticipo_habilita_la_accion_de_pago_temprano(cliente):  # noqa: F811
         for accion in orden["acciones_disponibles"]
         if accion["codigo"] == "REGISTRAR_PAGO"
     )
-    # BR-REP-017 no define rol: la accion no exige ninguno.
-    assert pago["roles"] == []
+    # BR-REP-017: usuario ACTIVO AND rol != TECNICO.
+    assert pago["roles"] == ["ADMINISTRADOR", "RECEPCION", "COORDINADOR_RMA"]
 
 
 # --- Ingreso a cola: ACT-COORD o ACT-RECEP ------------------------------

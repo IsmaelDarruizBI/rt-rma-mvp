@@ -1,0 +1,394 @@
+"""Caracterizacion de ``progreso()`` y ``acciones_disponibles()``.
+
+Congela el comportamiento observable de HP-REP-001 ANTES del refactor de
+Slice 0 (MVP v2 Foundation), que separa esas dos funciones de
+``application/happy_path.py`` -acoplado a HP-REP-001- hacia un resolver
+de acciones y un progreso generalizables por Origen (ver
+``application/acciones.py`` y ``application/progreso.py``).
+
+Se importa desde ``app.application`` (el paquete), no desde el modulo
+interno: as[i] el test no le importa donde vive la implementacion, solo
+le importa lo que devuelve. Eso es lo que permite mover el codigo sin
+romper esta red de seguridad.
+
+Unica excepcion deliberada: ``REGISTRAR_PAGO`` deja de tener ``roles=()``
+y pasa a exigir ``ROLES_PAGO`` = (ADMINISTRADOR, RECEPCION,
+COORDINADOR_RMA), porque BR-REP-017 ya define que un Tecnico no puede
+registrar un Pago. Los tests que cubren un estado con saldo pendiente
+declaran el valor NUEVO esperado, no ``roles=()``.
+
+No se caracteriza ``ejecucion_id``: es un ID generado (no determinista
+entre corridas), asi que se compara contra la Ejecucion real de la
+Orden en lugar de un valor hardcodeado.
+"""
+
+from app.application import acciones_disponibles, progreso
+from app.domain.models import RolUsuario
+from app.services import (
+    habilitar_orden,
+    marcar_reparacion_lista,
+    validar_factibilidad_detalles,
+)
+
+from .fixtures import flujo_mvp
+from .fixtures.catalogos_mvp import INSUMOS, INSUMOS_PREVISTOS, t
+
+# Corregido BR-REP-017: este era el ``()`` viejo (sin rol definido) con
+# el que se corrio este test la primera vez, contra la implementacion
+# sin tocar (paso 2 del orden obligatorio de Slice 0). Ahora que el fix
+# de Registrar Pago aterrizo (paso 11), esta es la unica excepcion
+# deliberada del caracterizado: el resto de las aserciones son
+# identicas a las de antes del refactor.
+ROLES_PAGO_ANTES_DEL_FIX = (
+    RolUsuario.ADMINISTRADOR,
+    RolUsuario.RECEPCION,
+    RolUsuario.COORDINADOR_RMA,
+)
+
+# Los 32 nodos de HP-REP-001, en el orden en que el recorrido los expone
+# hoy. El refactor de Slice 0 no cambia esta ruta para CLIENTE_EXTERNO.
+_TOTAL_NODOS_HP1 = 32
+
+
+def _orden_habilitada():
+    """Entre PROC-REP-140 y PROC-REP-150: HABILITADA, todavia sin cola."""
+    orden, _ = validar_factibilidad_detalles(
+        flujo_mvp.orden_con_detalle(),
+        insumos=INSUMOS,
+        insumos_previstos=INSUMOS_PREVISTOS,
+        fecha=t(15),
+    )
+    return habilitar_orden(orden, fecha=t(20))
+
+
+def _orden_reparacion_lista_sin_notificar():
+    """Entre PROC-REP-240 y PROC-REP-250: lista, cliente sin avisar."""
+    return marcar_reparacion_lista(flujo_mvp.orden_controlada(), fecha=t(170))
+
+
+def _codigos_y_roles(orden):
+    return [
+        (accion.codigo, accion.roles, accion.detalle_id)
+        for accion in acciones_disponibles(orden)
+    ]
+
+
+def _alcanzados(orden):
+    pasos = progreso(orden)
+    assert len(pasos) == _TOTAL_NODOS_HP1
+    return [paso.process_id for paso in pasos if paso.alcanzado]
+
+
+def test_requerimiento_sin_detalles():
+    orden = flujo_mvp.orden_creada()
+
+    assert _codigos_y_roles(orden) == [
+        ("DEFINIR_REPARACION", (RolUsuario.RECEPCION,), None),
+    ]
+    assert _alcanzados(orden) == [
+        "PROC-REP-010",
+        "PROC-REP-030",
+        "PROC-REP-040",
+    ]
+
+
+def test_habilitada():
+    orden = _orden_habilitada()
+
+    assert _codigos_y_roles(orden) == [
+        (
+            "ENCOLAR",
+            (RolUsuario.COORDINADOR_RMA, RolUsuario.RECEPCION),
+            None,
+        ),
+        ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None),
+    ]
+    assert _alcanzados(orden) == [
+        "PROC-REP-010",
+        "PROC-REP-030",
+        "PROC-REP-040",
+        "PROC-REP-045",
+        "PROC-REP-070",
+        "PROC-REP-050",
+        "PROC-REP-060",
+        "PROC-REP-080",
+        "PROC-REP-090",
+        "PROC-REP-140",
+    ]
+
+
+def test_en_cola():
+    orden = flujo_mvp.orden_en_cola()
+
+    assert _codigos_y_roles(orden) == [
+        ("TOMAR", (RolUsuario.TECNICO,), None),
+        ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None),
+    ]
+    assert _alcanzados(orden) == [
+        "PROC-REP-010",
+        "PROC-REP-030",
+        "PROC-REP-040",
+        "PROC-REP-045",
+        "PROC-REP-070",
+        "PROC-REP-050",
+        "PROC-REP-060",
+        "PROC-REP-080",
+        "PROC-REP-090",
+        "PROC-REP-140",
+        "PROC-REP-150",
+        "PROC-REP-170",
+    ]
+
+
+def test_toma_activa_sin_ejecucion():
+    orden = flujo_mvp.orden_tomada()
+
+    assert _codigos_y_roles(orden) == [
+        ("INICIAR_DETALLE", (RolUsuario.TECNICO,), flujo_mvp.DETALLE_ID),
+        ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None),
+    ]
+    assert _alcanzados(orden) == [
+        "PROC-REP-010",
+        "PROC-REP-030",
+        "PROC-REP-040",
+        "PROC-REP-045",
+        "PROC-REP-070",
+        "PROC-REP-050",
+        "PROC-REP-060",
+        "PROC-REP-080",
+        "PROC-REP-090",
+        "PROC-REP-140",
+        "PROC-REP-150",
+        "PROC-REP-170",
+        "PROC-REP-172",
+        "PROC-REP-180",
+        "PROC-REP-181",
+        "PROC-REP-174",
+    ]
+
+
+def test_en_reparacion():
+    orden = flujo_mvp.orden_con_ejecucion_iniciada()
+    ejecucion_id = orden.ejecuciones[0].id
+
+    acciones = acciones_disponibles(orden)
+    assert [
+        (accion.codigo, accion.roles, accion.detalle_id, accion.ejecucion_id)
+        for accion in acciones
+    ] == [
+        (
+            "COMPLETAR_EJECUCION",
+            (RolUsuario.TECNICO,),
+            flujo_mvp.DETALLE_ID,
+            ejecucion_id,
+        ),
+        ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None, None),
+    ]
+    assert _alcanzados(orden) == [
+        "PROC-REP-010",
+        "PROC-REP-030",
+        "PROC-REP-040",
+        "PROC-REP-045",
+        "PROC-REP-070",
+        "PROC-REP-050",
+        "PROC-REP-060",
+        "PROC-REP-080",
+        "PROC-REP-090",
+        "PROC-REP-140",
+        "PROC-REP-150",
+        "PROC-REP-170",
+        "PROC-REP-172",
+        "PROC-REP-180",
+        "PROC-REP-181",
+        "PROC-REP-174",
+        "PROC-REP-185",
+        "PROC-REP-190",
+    ]
+
+
+def test_espera_control():
+    orden = flujo_mvp.orden_evaluada()
+
+    assert _codigos_y_roles(orden) == [
+        ("APROBAR_CONTROL", (RolUsuario.RECEPCION,), None),
+        ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None),
+    ]
+    assert _alcanzados(orden) == [
+        "PROC-REP-010",
+        "PROC-REP-030",
+        "PROC-REP-040",
+        "PROC-REP-045",
+        "PROC-REP-070",
+        "PROC-REP-050",
+        "PROC-REP-060",
+        "PROC-REP-080",
+        "PROC-REP-090",
+        "PROC-REP-140",
+        "PROC-REP-150",
+        "PROC-REP-170",
+        "PROC-REP-172",
+        "PROC-REP-180",
+        "PROC-REP-181",
+        "PROC-REP-174",
+        "PROC-REP-185",
+        "PROC-REP-190",
+        "PROC-REP-200",
+        "PROC-REP-210",
+        "PROC-REP-211",
+    ]
+
+
+def test_reparacion_lista_sin_notificar():
+    orden = _orden_reparacion_lista_sin_notificar()
+
+    assert _codigos_y_roles(orden) == [
+        ("NOTIFICAR", (RolUsuario.RECEPCION,), None),
+        ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None),
+    ]
+    assert _alcanzados(orden) == [
+        "PROC-REP-010",
+        "PROC-REP-030",
+        "PROC-REP-040",
+        "PROC-REP-045",
+        "PROC-REP-070",
+        "PROC-REP-050",
+        "PROC-REP-060",
+        "PROC-REP-080",
+        "PROC-REP-090",
+        "PROC-REP-140",
+        "PROC-REP-150",
+        "PROC-REP-170",
+        "PROC-REP-172",
+        "PROC-REP-180",
+        "PROC-REP-181",
+        "PROC-REP-174",
+        "PROC-REP-185",
+        "PROC-REP-190",
+        "PROC-REP-200",
+        "PROC-REP-210",
+        "PROC-REP-211",
+        "PROC-REP-220",
+        "PROC-REP-230",
+        "PROC-REP-245",
+        "PROC-REP-240",
+    ]
+
+
+def test_reparacion_lista_con_saldo():
+    orden = flujo_mvp.orden_reparacion_lista()
+
+    assert _codigos_y_roles(orden) == [
+        ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None),
+    ]
+    assert _alcanzados(orden) == [
+        "PROC-REP-010",
+        "PROC-REP-030",
+        "PROC-REP-040",
+        "PROC-REP-045",
+        "PROC-REP-070",
+        "PROC-REP-050",
+        "PROC-REP-060",
+        "PROC-REP-080",
+        "PROC-REP-090",
+        "PROC-REP-140",
+        "PROC-REP-150",
+        "PROC-REP-170",
+        "PROC-REP-172",
+        "PROC-REP-180",
+        "PROC-REP-181",
+        "PROC-REP-174",
+        "PROC-REP-185",
+        "PROC-REP-190",
+        "PROC-REP-200",
+        "PROC-REP-210",
+        "PROC-REP-211",
+        "PROC-REP-220",
+        "PROC-REP-230",
+        "PROC-REP-245",
+        "PROC-REP-240",
+        "PROC-REP-250",
+        "PROC-REP-260",
+    ]
+
+
+def test_reparacion_lista_sin_saldo():
+    orden = flujo_mvp.orden_pagada()
+
+    assert _codigos_y_roles(orden) == [
+        (
+            "ENTREGAR",
+            (RolUsuario.ADMINISTRADOR, RolUsuario.RECEPCION),
+            None,
+        ),
+    ]
+    assert _alcanzados(orden) == [
+        "PROC-REP-010",
+        "PROC-REP-030",
+        "PROC-REP-040",
+        "PROC-REP-045",
+        "PROC-REP-070",
+        "PROC-REP-050",
+        "PROC-REP-060",
+        "PROC-REP-080",
+        "PROC-REP-090",
+        "PROC-REP-140",
+        "PROC-REP-150",
+        "PROC-REP-170",
+        "PROC-REP-172",
+        "PROC-REP-180",
+        "PROC-REP-181",
+        "PROC-REP-174",
+        "PROC-REP-185",
+        "PROC-REP-190",
+        "PROC-REP-200",
+        "PROC-REP-210",
+        "PROC-REP-211",
+        "PROC-REP-220",
+        "PROC-REP-230",
+        "PROC-REP-245",
+        "PROC-REP-240",
+        "PROC-REP-250",
+        "PROC-REP-260",
+        "PROC-REP-265",
+        "PROC-REP-266",
+    ]
+
+
+def test_entregada():
+    orden = flujo_mvp.orden_entregada()
+
+    assert _codigos_y_roles(orden) == []
+    assert _alcanzados(orden) == [
+        "PROC-REP-010",
+        "PROC-REP-030",
+        "PROC-REP-040",
+        "PROC-REP-045",
+        "PROC-REP-070",
+        "PROC-REP-050",
+        "PROC-REP-060",
+        "PROC-REP-080",
+        "PROC-REP-090",
+        "PROC-REP-140",
+        "PROC-REP-150",
+        "PROC-REP-170",
+        "PROC-REP-172",
+        "PROC-REP-180",
+        "PROC-REP-181",
+        "PROC-REP-174",
+        "PROC-REP-185",
+        "PROC-REP-190",
+        "PROC-REP-200",
+        "PROC-REP-210",
+        "PROC-REP-211",
+        "PROC-REP-220",
+        "PROC-REP-230",
+        "PROC-REP-245",
+        "PROC-REP-240",
+        "PROC-REP-250",
+        "PROC-REP-260",
+        "PROC-REP-265",
+        "PROC-REP-266",
+        "PROC-REP-280",
+        "PROC-REP-270",
+        "EVT-REP-999",
+    ]

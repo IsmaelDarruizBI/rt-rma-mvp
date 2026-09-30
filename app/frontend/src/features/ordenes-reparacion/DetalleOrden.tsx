@@ -254,7 +254,7 @@ export function DetallesOrden({ orden }: { orden: Orden }) {
 
 export function ProgresoHappyPath({ orden }: { orden: Orden }) {
   return (
-    <Panel titulo="Progreso HP-REP-001">
+    <Panel titulo="Progreso de la orden">
       <ol
         style={{
           margin: 0,

@@ -16,6 +16,7 @@ from .catalogos import (
 )
 from .documentos import Documento, DocumentosOrden
 from .enums import (
+    CondicionReparacionDetail,
     EstadoControl,
     EstadoEjecucion,
     EstadoPago,
@@ -38,6 +39,7 @@ from .workflow import HistorialWorkflow
 
 __all__ = [
     # Enums
+    "CondicionReparacionDetail",
     "EstadoControl",
     "EstadoEjecucion",
     "EstadoPago",

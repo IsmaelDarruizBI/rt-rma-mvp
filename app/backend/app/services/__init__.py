@@ -57,7 +57,6 @@ from .inventario_global import (
     stock_disponible_por_insumo,
 )
 from .ordenes import (
-    ResultadoEvaluacionOrden,
     crear_orden_cliente_externo,
     definir_prioridad,
     entregar_equipo,
@@ -68,6 +67,7 @@ from .ordenes import (
     notificar_cliente,
 )
 from .pagos import (
+    ROLES_PAGO,
     registrar_pago,
     registrar_saldo_pendiente,
     tipo_de_pago_para,
@@ -79,6 +79,7 @@ from .reparaciones import (
     definir_reparacion_detail,
     validar_factibilidad_detalles,
 )
+from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
 from .tomas import (
     hay_ejecucion_activa,
     seleccionar_detalle,
@@ -105,7 +106,6 @@ __all__ = [
     "registrar_accion_funcional",
     "registrar_paso",
     # Ciclo de vida de la Orden
-    "ResultadoEvaluacionOrden",
     "crear_orden_cliente_externo",
     "definir_prioridad",
     "entregar_equipo",
@@ -114,6 +114,9 @@ __all__ = [
     "ingresar_a_cola",
     "marcar_reparacion_lista",
     "notificar_cliente",
+    # Resolver puro de BR-REP-012
+    "ResultadoEvaluacionOrden",
+    "resolver_situacion_orden",
     # Detalles de Reparacion
     "aprobar_control_tecnico",
     "calcular_puntaje",
@@ -148,6 +151,7 @@ __all__ = [
     "stock_disponible_global",
     "stock_disponible_por_insumo",
     # Pagos
+    "ROLES_PAGO",
     "registrar_pago",
     "tipo_de_pago_para",
     "registrar_saldo_pendiente",

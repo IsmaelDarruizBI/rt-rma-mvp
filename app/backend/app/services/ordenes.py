@@ -13,7 +13,6 @@ modifica.
 """
 
 from datetime import datetime
-from enum import Enum
 
 from app.domain.models import (
     Cliente,
@@ -21,7 +20,6 @@ from app.domain.models import (
     Equipo,
     EstadoControl,
     EstadoEjecucion,
-    EstadoReparacionDetail,
     EstadoTomaOrden,
     EstadoWorkflow,
     OrdenReparacion,
@@ -34,6 +32,7 @@ from app.domain.models import (
 from .autorizacion import validar_actor, validar_alguno_de
 from .exceptions import PrecondicionInvalidaError
 from .inventario import hay_reservas_activas
+from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
 from .workflow import registrar_paso
 
 # Nodos que PROC-REP V1.3 declara con ``actores_alternativos``:
@@ -48,19 +47,16 @@ ROLES_ENTREGA = (
     RolUsuario.RECEPCION,
 )
 
-
-class ResultadoEvaluacionOrden(str, Enum):
-    """Resultado agregado de PROC-REP-211 que el MVP sabe calcular.
-
-    BR-REP-012 define una matriz de prioridad completa
-    (SIN_DETALLES / TODO_CANCELADO / COMPLETA / EN_EJECUCION /
-    ABIERTA_TRABAJABLE / REQUIERE_REVISION / PENDIENTE_RECURSOS). El MVP
-    implementa unicamente COMPLETA, que es el unico resultado que
-    HP-REP-001 atraviesa; el resolver completo llegara con los Scenarios
-    que lo necesiten.
-    """
-
-    COMPLETA = "COMPLETA"
+# Resultados de BR-REP-012 en los que ya no queda ningun Detalle
+# trabajable ni en ejecucion: cerrar la toma activa es correcto en
+# ambos (BR-REP-018). Los demas resultados (ABIERTA_TRABAJABLE,
+# EN_EJECUCION, REQUIERE_REVISION, PENDIENTE_RECURSOS) preservan la
+# toma: si continuar, liberarla o volver a la cola es una decision que
+# PROC-REP-212/213 todavia no implementa.
+_RESULTADOS_QUE_CIERRAN_LA_TOMA = (
+    ResultadoEvaluacionOrden.COMPLETA,
+    ResultadoEvaluacionOrden.TODO_CANCELADO,
+)
 
 
 def crear_orden_cliente_externo(
@@ -226,45 +222,40 @@ def evaluar_situacion_orden(
 ) -> tuple[OrdenReparacion, ResultadoEvaluacionOrden]:
     """PROC-REP-211: recalcula la situacion de la Orden (BR-REP-012).
 
-    El MVP resuelve unicamente el caso de HP-REP-001: todos los Detalles
-    COMPLETO y al menos uno completo -> COMPLETA. Cualquier otra
-    combinacion sale del Happy Path y falla explicitamente en vez de
-    inventar un estado.
+    Separa clasificacion de efectos: la clasificacion la hace
+    ``resolver_situacion_orden`` (funcion pura, sin excepciones para
+    ningun resultado de negocio legitimo); este service solo aplica lo
+    que ese resultado implica sobre la Orden -registrar el paso y, si ya
+    no queda nada trabajable ni en ejecucion, cerrar la toma activa
+    (BR-REP-018)-.
 
-    Al quedar COMPLETA ya no existe ningun Detalle trabajable, asi que
-    la toma activa se cierra automaticamente (BR-REP-018): no se le
-    pregunta al tecnico si desea continuar (PROC-REP-212/213 no aplican).
+    El MVP de HP-REP-001 solo alcanza COMPLETA de punta a punta. Los
+    demas resultados ya estan clasificados y testeados (ver
+    ``tests/test_resolucion_orden.py``), pero los caminos que los
+    producen -recursos insuficientes, revision, cancelacion- todavia no
+    estan conectados a ningun comando de la API: llegaran con los
+    Scenarios que los necesiten.
 
     No cambia ``estado_workflow``: REPARACION_LISTA se fija recien en
     PROC-REP-240, tras el control tecnico.
     """
-    if not orden.reparaciones_detail:
-        raise PrecondicionInvalidaError(
-            "No se puede evaluar una Orden sin Detalles de Reparacion."
-        )
-    if any(
-        detalle.estado is not EstadoReparacionDetail.COMPLETO
-        for detalle in orden.reparaciones_detail
-    ):
-        raise PrecondicionInvalidaError(
-            "El MVP solo resuelve PROC-REP-211 cuando todos los Detalles "
-            "estan COMPLETO."
-        )
+    resultado = resolver_situacion_orden(orden.reparaciones_detail)
 
     nueva_orden = registrar_paso(
         orden,
         process_id="PROC-REP-211",
         accion="EVALUAR_SITUACION_ORDEN",
         fecha=fecha,
-        observacion=ResultadoEvaluacionOrden.COMPLETA.value,
+        observacion=resultado.value,
     )
 
-    for toma in nueva_orden.tomas:
-        if toma.estado is EstadoTomaOrden.ACTIVA:
-            toma.estado = EstadoTomaOrden.CERRADA
-            toma.fin = fecha
+    if resultado in _RESULTADOS_QUE_CIERRAN_LA_TOMA:
+        for toma in nueva_orden.tomas:
+            if toma.estado is EstadoTomaOrden.ACTIVA:
+                toma.estado = EstadoTomaOrden.CERRADA
+                toma.fin = fecha
 
-    return nueva_orden, ResultadoEvaluacionOrden.COMPLETA
+    return nueva_orden, resultado
 
 
 def marcar_reparacion_lista(

@@ -261,7 +261,7 @@ items:
   - {id: FR-REP-034, type: functional_requirement, name: Solo el consumo descuenta stock fisico la liberacion no lo modifica, status: IMPLEMENTED}
   - {id: FR-REP-035, type: functional_requirement, name: La generacion de movimientos de inventario de una Ejecucion es idempotente, status: IMPLEMENTED}
   - {id: FR-REP-036, type: functional_requirement, name: Un movimiento registrado no se modifica ni se elimina el cierre se representa con movimientos nuevos, status: IMPLEMENTED}
-  - {id: FR-REP-037, type: functional_requirement, name: Calcular la situacion agregada de la Orden con una politica centralizada y fallar explicitamente fuera de ella, status: PARTIAL, gap: "Solo la regla de prioridad 2 de BR-REP-012"}
+  - {id: FR-REP-037, type: functional_requirement, name: Calcular la situacion agregada de la Orden con la matriz de prioridad completa de BR-REP-012 sin lanzar para ningun resultado de negocio legitimo, status: IMPLEMENTED, note: "Slice 0 (MVP v2 Foundation): resolver total (8 resultados). Los flujos que producen resultados distintos de COMPLETA -recursos, revision, cancelacion- siguen sin comando de API; ver TASK-REP-085/086/087/101."}
   - {id: FR-REP-038, type: functional_requirement, name: Cerrar automaticamente la participacion activa cuando no queda Detalle trabajable, status: IMPLEMENTED}
   - {id: FR-REP-039, type: functional_requirement, name: Los movimientos generados por el sistema no registran usuario humano, status: IMPLEMENTED}
   - {id: FR-REP-040, type: functional_requirement, name: Realizar el control tecnico solo con Detalles terminales al menos uno completo y sin Ejecucion activa, status: IMPLEMENTED}
@@ -272,7 +272,7 @@ items:
   - {id: FR-REP-045, type: functional_requirement, name: Permitir registrar cero o mas pagos en cualquier momento de la vida de la Orden, status: IMPLEMENTED}
   - {id: FR-REP-046, type: functional_requirement, name: Registrar un pago no altera el punto del proceso en el que esta la Orden, status: IMPLEMENTED}
   - {id: FR-REP-047, type: functional_requirement, name: Exigir que el importe de un pago sea mayor a cero, status: IMPLEMENTED}
-  - {id: FR-REP-048, type: functional_requirement, name: Registrar un pago no exige rol especifico pero si usuario activo, status: IMPLEMENTED, gap: "BR-REP-017 no define el rol; pendiente de negocio"}
+  - {id: FR-REP-048, type: functional_requirement, name: Registrar un pago exige usuario activo y rol distinto de Tecnico (BR-REP-017), status: IMPLEMENTED, note: "Slice 0 (MVP v2 Foundation): corrige el bug del MVP anterior, donde cualquier usuario activo -un Tecnico incluido- podia registrar un Pago."}
   - {id: FR-REP-049, type: functional_requirement, name: Derivar siempre importe a cobrar pagado saldo y estado de cobro de los Detalles y los pagos, status: IMPLEMENTED}
   - {id: FR-REP-050, type: functional_requirement, name: Distinguir una Orden sin nada que cobrar de una Orden cuyo importe es cero, status: IMPLEMENTED}
   - {id: FR-REP-051, type: functional_requirement, name: Calcular el saldo y validar la condicion de entrega antes de habilitarla, status: IMPLEMENTED}
@@ -289,6 +289,9 @@ items:
   - {id: FR-REP-062, type: functional_requirement, name: Clasificar cada Pago como ANTICIPO o PAGO derivandolo del estado de la Orden, status: IMPLEMENTED}
   - {id: FR-REP-063, type: functional_requirement, name: Permitir registrar Pagos antes de REPARACION_LISTA sin evaluar la condicion de entrega, status: IMPLEMENTED}
   - {id: FR-REP-065, type: functional_requirement, name: Registrar en el historial de la Orden cada capacidad transversal ejecutada sin alterar el recorrido, status: IMPLEMENTED}
+
+  # --- Slice 0 (MVP v2 - Foundation). spec: 009-mvp2-foundation ------ #
+  - {id: FR-REP-066, type: functional_requirement, name: Representar en el dominio los origenes de MVP v2 (RT_INTERNO, RMA_GARANTIA_REPARACION) y la politica de proceso/comercial de cada Origen, sin habilitar todavia su creacion por API, status: PARTIAL, gap: "Solo CLIENTE_EXTERNO tiene un comando de creacion; RT_INTERNO y RMA_GARANTIA_REPARACION llegan con los slices que conectan HP-REP-002 y HP-REP-003 (TASK-REP-013/015)."}
 
   # ================================================================== #
   # Technical Requirements (reconstruidos desde la arquitectura real)  #
@@ -315,7 +318,7 @@ items:
   - {id: TR-REP-019, type: technical_requirement, name: Los enums del dominio cubren solo los valores que HP-REP-001 recorre, status: IMPLEMENTED}
   - {id: TR-REP-020, type: technical_requirement, name: Errores de dominio tipados y separados de los errores de persistencia, status: IMPLEMENTED}
   - {id: TR-REP-021, type: technical_requirement, name: Los IDs funcionales de negocio se citan en los docstrings como anclaje de trazabilidad, status: IMPLEMENTED}
-  - {id: TR-REP-022, type: technical_requirement, name: evaluar_situacion_orden implementa solo el subconjunto recorrido de BR-REP-012 y falla explicitamente fuera de el, status: IMPLEMENTED}
+  - {id: TR-REP-022, type: technical_requirement, name: evaluar_situacion_orden separa clasificacion (resolver_situacion_orden, funcion pura) de efectos (registrar el paso y cerrar la toma solo en resultados terminales), status: IMPLEMENTED}
   - {id: TR-REP-023, type: technical_requirement, name: Python 3.11+ con Ruff line-length 79 reglas E W F I y pytest como runner, status: IMPLEMENTED, cross_cutting: true}
   - {id: TR-REP-024, type: technical_requirement, name: Los identificadores de entidades transaccionales se generan con un unico helper centralizado, status: IMPLEMENTED}
   - {id: TR-REP-025, type: technical_requirement, name: La reserva y la aprobacion de control no son estados tecnicos del Detalle, status: IMPLEMENTED}
@@ -338,7 +341,7 @@ items:
   - {id: TR-REP-042, type: technical_requirement, name: estado_pago distingue Orden sin Detalles de Orden con total cero, status: IMPLEMENTED}
   - {id: TR-REP-043, type: technical_requirement, name: validar_condicion_entrega devuelve (Orden bool) y registra PROC-REP-265 en cada evaluacion, status: IMPLEMENTED}
   - {id: TR-REP-044, type: technical_requirement, name: registrar_saldo_pendiente no agrega estado nuevo a la Orden solo deja constancia del bloqueo, status: IMPLEMENTED}
-  - {id: TR-REP-045, type: technical_requirement, name: registrar_pago valida solo usuario activo sin rol por pendiente funcional declarado, status: IMPLEMENTED}
+  - {id: TR-REP-045, type: technical_requirement, name: registrar_pago valida usuario activo y rol distinto de Tecnico con validar_alguno_de(usuario, ROLES_PAGO), status: IMPLEMENTED}
   - {id: TR-REP-046, type: technical_requirement, name: generar_comprobante_final exige la condicion de entrega ya cumplida, status: IMPLEMENTED}
   - {id: TR-REP-047, type: technical_requirement, name: entregar_equipo concentra cuatro precondiciones acumulativas sin override, status: IMPLEMENTED}
   - {id: TR-REP-048, type: technical_requirement, name: La ausencia de reservas activas se verifica contra el ledger no contra un flag, status: IMPLEMENTED}
@@ -350,6 +353,16 @@ items:
   - {id: TR-REP-054, type: technical_requirement, name: AccionDisponible expone la lista completa de roles autorizados, status: IMPLEMENTED}
   - {id: TR-REP-055, type: technical_requirement, name: HistorialWorkflow discrimina PROCESS_NODE de FUNCTIONAL_ACTION y acepta el alias historico process_id al cargar, status: IMPLEMENTED}
   - {id: TR-REP-056, type: technical_requirement, name: registrar_accion_funcional agrega historial sin tocar current_process y es distinto de registrar_paso, status: IMPLEMENTED}
+
+  # --- Slice 0 (MVP v2 - Foundation). spec: 009-mvp2-foundation ------ #
+  - {id: TR-REP-057, type: technical_requirement, name: OrigenOrden y EstadoWorkflow se amplian de forma aditiva para MVP v2 (RT_INTERNO, RMA_GARANTIA_REPARACION, EN_REVISION) sin comando de creacion ni flujo que los alcance en Slice 0, status: IMPLEMENTED}
+  - {id: TR-REP-058, type: technical_requirement, name: domain.politicas.politica_de(origen) es un mapping de PoliticaOrigen (frozen dataclass) con la condicion comercial y los requerimientos de proceso -comprobante, notificacion, entrega a cliente, informar RT- de cada Origen, status: IMPLEMENTED}
+  - {id: TR-REP-059, type: technical_requirement, name: resolver_situacion_orden (services/resolucion.py) es una funcion pura que clasifica los ocho resultados de BR-REP-012 sin excepciones para ningun resultado de negocio legitimo, status: IMPLEMENTED}
+  - {id: TR-REP-060, type: technical_requirement, name: ReparacionDetail.condicion (CondicionReparacionDetail) separa el bloqueo del estado tecnico del Detalle, con SIN_BLOQUEO como default compatible con el JSON persistido antes de Slice 0, status: IMPLEMENTED}
+  - {id: TR-REP-061, type: technical_requirement, name: completar_ejecucion ya no puede fallar despues de persistir el inventario para ningun resultado de negocio legitimo porque evaluar_situacion_orden delega en el resolver total, status: IMPLEMENTED}
+  - {id: TR-REP-062, type: technical_requirement, name: acciones_disponibles (application/acciones.py) consulta politica_de(orden.origen) para decidir Notificar Registrar-Pago y Entregar en vez de un condicional fijo por CLIENTE_EXTERNO, status: IMPLEMENTED}
+  - {id: TR-REP-063, type: technical_requirement, name: progreso() (application/progreso.py) resuelve la ruta esperada desde un mapping por Origen extensible con CLIENTE_EXTERNO como fallback, status: IMPLEMENTED}
+  - {id: TR-REP-064, type: technical_requirement, name: ROLES_PAGO (services/pagos.py) es la fuente unica de roles autorizados para Registrar Pago consumida por el backend y por acciones_disponibles, status: IMPLEMENTED}
 
   # ================================================================== #
   # Modelo de datos / arquitectura — artefacto TRANSVERSAL N:M         #
@@ -377,7 +390,7 @@ items:
   # ================================================================== #
 
   - {id: TASK-REP-001, type: task, name: "Crear el scaffold del backend con las cuatro capas (api, services, repositories, storage) y domain aislado, con pyproject.toml, Ruff (line-length =...", status: DONE, spec: 001-feat-rep-001-hp-slice}
-  - {id: TASK-REP-002, type: task, name: "[P] Definir los enums cerrados del dominio limitados al alcance de HP-REP-001 (OrigenOrden con unico valor CLIENTE_EXTERNO, EstadoWorkflow sin CANC...", status: DONE, spec: 001-feat-rep-001-hp-slice}
+  - {id: TASK-REP-002, type: task, name: "[P] Definir los enums cerrados del dominio limitados al alcance de HP-REP-001 (OrigenOrden con unico valor CLIENTE_EXTERNO, EstadoWorkflow sin CANC...", status: DONE, spec: 001-feat-rep-001-hp-slice, note: "OrigenOrden y EstadoWorkflow ampliados de forma aditiva en Slice 0 (spec 009-mvp2-foundation); ver TASK-REP-151."}
   - {id: TASK-REP-003, type: task, name: "Modelar el aggregate raiz OrdenReparacion con sus colecciones transaccionales y referencias por ID a catalogos", status: DONE, spec: 001-feat-rep-001-hp-slice}
   - {id: TASK-REP-004, type: task, name: "[P] Modelar Cliente, Usuario y Equipo con validacion declarativa de campos obligatorios", status: DONE, spec: 001-feat-rep-001-hp-slice}
   - {id: TASK-REP-005, type: task, name: "[P] Modelar HistorialWorkflow e implementar registrar_paso como unico mecanismo de registro de recorrido", status: DONE, spec: 001-feat-rep-001-hp-slice}
@@ -463,7 +476,7 @@ items:
   - {id: TASK-REP-085, type: task, name: "Implementar la rama No de PROC-REP-174 y los nodos PROC-REP-176 / 178 / 179 (advertencia y override de estacion por Detalle, BR-REP-011-B)", status: NOT_IMPLEMENTED, spec: 005-feat-rep-005-hp-slice}
   - {id: TASK-REP-086, type: task, name: "Implementar PROC-REP-186 (registrar reserva fallida: Detalle BLOQUEADO_POR_RECURSOS y recalculo de la Orden). Hoy la reserva insuficiente lanza un...", status: NOT_IMPLEMENTED, spec: 005-feat-rep-005-hp-slice}
   - {id: TASK-REP-087, type: task, name: "Implementar el resultado Interrumpido de PROC-REP-200 (BR-REP-004): la Ejecucion queda como historia y el Detalle vuelve a PENDIENTE", status: NOT_IMPLEMENTED, spec: 005-feat-rep-005-hp-slice}
-  - {id: TASK-REP-088, type: task, name: "Implementar las ramas (a), (b), (d), (e) y (f) del resolver PROC-REP-211 (BR-REP-012), incluyendo TODO_CANCELADO, PENDIENTE_RECURSOS y REQUIERE_REV...", status: NOT_IMPLEMENTED, spec: 005-feat-rep-005-hp-slice}
+  - {id: TASK-REP-088, type: task, name: "Implementar las ramas (a), (b), (d), (e) y (f) del resolver PROC-REP-211 (BR-REP-012), incluyendo TODO_CANCELADO, PENDIENTE_RECURSOS y REQUIERE_REVISION", status: DONE, spec: 009-mvp2-foundation, note: "La CLASIFICACION esta completa y testeada (resolver_situacion_orden); TODO_CANCELADO queda formalmente correcta pero inalcanzable hasta que exista Cancelacion (FEAT-REP-009). Los COMANDOS que producen PENDIENTE_RECURSOS/REQUIERE_REVISION via API siguen NOT_IMPLEMENTED (ver TASK-REP-086/101)."}
   - {id: TASK-REP-089, type: task, name: "Reconciliar el catalogo TipoMovimientoInsumo con PROC-REP V1.3: DEVOLUCION viene del modelado tecnico inicial y no esta respaldado por el Business Process; DESPERDICIO esta en PROC-REP-210/BR-REP-005 y falta en el enum. Decision de negocio, no implementacion.", status: NOT_IMPLEMENTED, spec: 005-feat-rep-005-hp-slice}
   - {id: TASK-REP-090, type: task, name: "Implementar el registro de desperdicio (PROC-REP-210 / BR-REP-005 lo contemplan; fuera del slice de HP-REP-001). Depende de TASK-REP-089.", status: NOT_IMPLEMENTED, spec: 005-feat-rep-005-hp-slice}
   - {id: TASK-REP-091, type: task, name: "Ejercitar varias Ejecuciones historicas sobre el mismo Detalle (el modelo lo soporta; no esta probado)", status: NOT_IMPLEMENTED, spec: 005-feat-rep-005-hp-slice}
@@ -485,7 +498,7 @@ items:
   - {id: TASK-REP-107, type: task, name: "[P] Definir EstadoPago con los tres estados derivados", status: DONE, spec: 007-feat-rep-007-hp-slice}
   - {id: TASK-REP-108, type: task, name: "Implementar saldo y estado_pago como computed_field, distinguiendo 'sin Detalles' de 'total cero'", status: DONE, spec: 007-feat-rep-007-hp-slice}
   - {id: TASK-REP-109, type: task, name: "[US-REP-012] Implementar registrar_pago como capacidad **transversal**: sin registrar_paso, sin tocar current_process, sin historial de workflow", status: DONE, spec: 007-feat-rep-007-hp-slice}
-  - {id: TASK-REP-110, type: task, name: "[US-REP-012] Validar importe positivo y usuario activo, **sin** exigir rol (pendiente funcional de BR-REP-017)", status: DONE, spec: 007-feat-rep-007-hp-slice}
+  - {id: TASK-REP-110, type: task, name: "[US-REP-012] Validar importe positivo, usuario activo y rol distinto de Tecnico (BR-REP-017)", status: DONE, spec: 007-feat-rep-007-hp-slice, note: "Rol agregado en Slice 0 (spec 009-mvp2-foundation); antes solo validaba usuario activo."}
   - {id: TASK-REP-111, type: task, name: "[US-REP-013] Implementar validar_condicion_entrega (PROC-REP-265) devolviendo (Orden, bool) y registrando el paso en cada evaluacion", status: DONE, spec: 007-feat-rep-007-hp-slice}
   - {id: TASK-REP-112, type: task, name: "[US-REP-013] Implementar registrar_saldo_pendiente (PROC-REP-266) sin agregar estado nuevo a la Orden", status: DONE, spec: 007-feat-rep-007-hp-slice}
   - {id: TASK-REP-113, type: task, name: "[US-REP-013] Impedir la entrega con saldo pendiente, sin override", status: DONE, spec: 007-feat-rep-007-hp-slice}
@@ -498,7 +511,7 @@ items:
   - {id: TASK-REP-120, type: task, name: "Implementar las condiciones de entrega alternativas de BR-REP-017-B: cortesia total y condicion no cobrable por origen", status: NOT_IMPLEMENTED, spec: 007-feat-rep-007-hp-slice}
   - {id: TASK-REP-121, type: task, name: "Implementar el catalogo configurable de medios de pago (hoy metodo es texto libre)", status: NOT_IMPLEMENTED, spec: 007-feat-rep-007-hp-slice}
   - {id: TASK-REP-122, type: task, name: "Implementar la referencia/comprobante del pago (BR-REP-017-A)", status: NOT_IMPLEMENTED, spec: 007-feat-rep-007-hp-slice}
-  - {id: TASK-REP-123, type: task, name: "Definir e implementar que rol puede registrar un pago (pendiente funcional declarado en el codigo)", status: NOT_IMPLEMENTED, spec: 007-feat-rep-007-hp-slice}
+  - {id: TASK-REP-123, type: task, name: "Definir e implementar que rol puede registrar un pago (pendiente funcional declarado en el codigo)", status: DONE, spec: 009-mvp2-foundation, note: "BR-REP-017: usuario ACTIVO AND rol != TECNICO. Ver ROLES_PAGO en services/pagos.py."}
   - {id: TASK-REP-124, type: task, name: "Implementar la exclusion de los Detalles CANCELADO del Subtotal (BR-REP-015); requiere FEAT-REP-009", status: NOT_IMPLEMENTED, spec: 007-feat-rep-007-hp-slice}
   - {id: TASK-REP-125, type: task, name: "Implementar impuestos, recargos y descuentos entre Base Comercial y Total Cobrable (fuera de V1.3)", status: NOT_IMPLEMENTED, spec: 007-feat-rep-007-hp-slice}
   - {id: TASK-REP-126, type: task, name: "Implementar multi-moneda y reembolsos (fuera de V1.3)", status: NOT_IMPLEMENTED, spec: 007-feat-rep-007-hp-slice}
@@ -526,6 +539,15 @@ items:
   - {id: TASK-REP-148, type: task, name: "[US-REP-012] Registrar ACC-REP-020 en el historial al cobrar, con pago_id y observacion legible, sin mover current_process", status: DONE, spec: 007-feat-rep-007-hp-slice}
   - {id: TASK-REP-149, type: task, name: "[US-REP-012] Evolucionar HistorialWorkflow a tipo_referencia + referencia_id manteniendo compatibilidad con process_id", status: DONE, spec: 007-feat-rep-007-hp-slice}
   - {id: TASK-REP-150, type: task, name: "Subir el stock DEMO de INS-001 de 2 a 6 unidades para facilitar pruebas manuales", status: DONE, spec: 005-feat-rep-005-hp-slice}
+
+  # --- Slice 0 (MVP v2 - Foundation). spec: 009-mvp2-foundation ------ #
+  - {id: TASK-REP-151, type: task, name: "[US-REP-001] Extender OrigenOrden con RT_INTERNO y RMA_GARANTIA_REPARACION y EstadoWorkflow con EN_REVISION, de forma aditiva y sin nuevo comando de creacion", status: DONE, spec: 009-mvp2-foundation}
+  - {id: TASK-REP-152, type: task, name: "[US-REP-001] Implementar domain/politicas.py con PoliticaOrigen y politica_de() para los tres origenes de MVP v2", status: DONE, spec: 009-mvp2-foundation}
+  - {id: TASK-REP-153, type: task, name: "[US-REP-009] Implementar resolver_situacion_orden puro (BR-REP-012 completo) en services/resolucion.py", status: DONE, spec: 009-mvp2-foundation}
+  - {id: TASK-REP-154, type: task, name: "[US-REP-009] Agregar CondicionReparacionDetail y el campo condicion a ReparacionDetail, compatible con el JSON persistido antes de Slice 0", status: DONE, spec: 009-mvp2-foundation}
+  - {id: TASK-REP-155, type: task, name: "[US-REP-009] Refactorizar evaluar_situacion_orden para delegar en el resolver y cerrar la toma solo en resultados terminales, eliminando el riesgo de persistencia parcial de completar_ejecucion", status: DONE, spec: 009-mvp2-foundation}
+  - {id: TASK-REP-156, type: task, name: "[US-REP-001] Separar acciones_disponibles y progreso de application/happy_path.py hacia application/acciones.py y application/progreso.py, consultando la politica del Origen; happy_path.py queda como fachada de compatibilidad. Verificado por tests de caracterizacion que congelan el comportamiento previo (salvo el fix de BR-REP-017)", status: DONE, spec: 009-mvp2-foundation}
+  - {id: TASK-REP-157, type: task, name: "[US-REP-012] Centralizar ROLES_PAGO en services/pagos.py y exigirlo tanto en registrar_pago como en la accion REGISTRAR_PAGO publicada por acciones_disponibles", status: DONE, spec: 009-mvp2-foundation}
 
   # ================================================================== #
   # Code / Artifact. Unidad: archivo + simbolo (no linea).             #
@@ -616,7 +638,7 @@ items:
   - {id: CODE-REP-079, type: code_artifact, name: "services/inventario_global.py::aplicar_movimientos_inventario", status: IMPLEMENTED, source: "app/backend/app/services/inventario_global.py::aplicar_movimientos_inventario"}
   - {id: CODE-REP-080, type: code_artifact, name: "services/inventario_global.py::_consumos_de_la_ejecucion", status: IMPLEMENTED, source: "app/backend/app/services/inventario_global.py::_consumos_de_la_ejecucion"}
   - {id: CODE-REP-081, type: code_artifact, name: "services/inventario_global.py::stock_disponible_por_insumo", status: IMPLEMENTED, source: "app/backend/app/services/inventario_global.py::stock_disponible_por_insumo"}
-  - {id: CODE-REP-082, type: code_artifact, name: "services/ordenes.py::ResultadoEvaluacionOrden", status: IMPLEMENTED, source: "app/backend/app/services/ordenes.py::ResultadoEvaluacionOrden"}
+  - {id: CODE-REP-082, type: code_artifact, name: "services/resolucion.py::ResultadoEvaluacionOrden", status: IMPLEMENTED, source: "app/backend/app/services/resolucion.py::ResultadoEvaluacionOrden", note: "Movido desde services/ordenes.py en Slice 0; re-exportado desde ahi por compatibilidad."}
   - {id: CODE-REP-083, type: code_artifact, name: "services/ordenes.py::evaluar_situacion_orden", status: IMPLEMENTED, source: "app/backend/app/services/ordenes.py::evaluar_situacion_orden"}
   - {id: CODE-REP-084, type: code_artifact, name: "services/reparaciones.py::aprobar_control_tecnico", status: IMPLEMENTED, source: "app/backend/app/services/reparaciones.py::aprobar_control_tecnico"}
   - {id: CODE-REP-085, type: code_artifact, name: "services/reparaciones.py::calcular_puntaje", status: IMPLEMENTED, source: "app/backend/app/services/reparaciones.py::calcular_puntaje"}
@@ -653,6 +675,14 @@ items:
   - {id: CODE-REP-112, type: code_artifact, name: "app/backend/app/services/workflow.py::registrar_accion_funcional", status: IMPLEMENTED}
   - {id: CODE-REP-113, type: code_artifact, name: "app/backend/app/services/pagos.py::descripcion_de_pago", status: IMPLEMENTED}
   - {id: CODE-REP-114, type: code_artifact, name: "app/backend/app/domain/models/workflow.py::HistorialWorkflow", status: IMPLEMENTED}
+
+  # --- Slice 0 (MVP v2 - Foundation). spec: 009-mvp2-foundation ------ #
+  - {id: CODE-REP-115, type: code_artifact, name: "app/backend/app/domain/politicas.py::politica_de", status: IMPLEMENTED, source: "app/backend/app/domain/politicas.py::politica_de"}
+  - {id: CODE-REP-116, type: code_artifact, name: "app/backend/app/services/resolucion.py::resolver_situacion_orden", status: IMPLEMENTED, source: "app/backend/app/services/resolucion.py::resolver_situacion_orden"}
+  - {id: CODE-REP-117, type: code_artifact, name: "app/backend/app/domain/models/enums.py::CondicionReparacionDetail", status: IMPLEMENTED, source: "app/backend/app/domain/models/enums.py::CondicionReparacionDetail"}
+  - {id: CODE-REP-118, type: code_artifact, name: "app/backend/app/application/acciones.py::acciones_disponibles", status: IMPLEMENTED, source: "app/backend/app/application/acciones.py::acciones_disponibles"}
+  - {id: CODE-REP-119, type: code_artifact, name: "app/backend/app/application/progreso.py::progreso", status: IMPLEMENTED, source: "app/backend/app/application/progreso.py::progreso"}
+  - {id: CODE-REP-120, type: code_artifact, name: "app/backend/app/services/pagos.py::ROLES_PAGO", status: IMPLEMENTED, source: "app/backend/app/services/pagos.py::ROLES_PAGO"}
 
   # ================================================================== #
   # UAT. NINGUNO aprobado: no ha ocurrido UAT formal sobre esta        #
@@ -821,7 +851,7 @@ items:
   - {id: TEST-REP-134, type: internal_test, name: "test_los_nodos_de_sistema_no_reciben_usuario", status: PASSING, source: "app/backend/tests/test_services_autorizacion.py::test_los_nodos_de_sistema_no_reciben_usuario"}
   - {id: TEST-REP-135, type: internal_test, name: "test_los_nodos_de_sistema_corren_sin_actor_humano", status: PASSING, source: "app/backend/tests/test_services_autorizacion.py::test_los_nodos_de_sistema_corren_sin_actor_humano"}
   - {id: TEST-REP-136, type: internal_test, name: "test_el_historial_de_los_nodos_de_sistema_no_tiene_usuario", status: PASSING, source: "app/backend/tests/test_services_autorizacion.py::test_el_historial_de_los_nodos_de_sistema_no_tiene_usuario"}
-  - {id: TEST-REP-137, type: internal_test, name: "test_registrar_pago_no_exige_un_rol_concreto", status: PASSING, source: "app/backend/tests/test_services_autorizacion.py::test_registrar_pago_no_exige_un_rol_concreto"}
+  - {id: TEST-REP-137, type: internal_test, name: "test_registrar_pago_permite_administrador_recepcion_y_coordinador", status: PASSING, source: "app/backend/tests/test_services_autorizacion.py::test_registrar_pago_permite_administrador_recepcion_y_coordinador", note: "Renombrado en Slice 0: antes 'test_registrar_pago_no_exige_un_rol_concreto', incluia TECNICO esperando exito (el bug de BR-REP-017)."}
   - {id: TEST-REP-138, type: internal_test, name: "test_registrar_pago_rechaza_un_usuario_inactivo", status: PASSING, source: "app/backend/tests/test_services_autorizacion.py::test_registrar_pago_rechaza_un_usuario_inactivo"}
   - {id: TEST-REP-139, type: internal_test, name: "test_una_autorizacion_fallida_no_modifica_la_orden", status: PASSING, source: "app/backend/tests/test_services_autorizacion.py::test_una_autorizacion_fallida_no_modifica_la_orden"}
   - {id: TEST-REP-140, type: internal_test, name: "test_un_control_rechazado_por_rol_no_aprueba_nada", status: PASSING, source: "app/backend/tests/test_services_autorizacion.py::test_un_control_rechazado_por_rol_no_aprueba_nada"}
@@ -892,6 +922,23 @@ items:
   - {id: TEST-REP-205, type: internal_test, name: "tests/test_historial_transversal.py::test_la_accion_transversal_no_marca_progreso", status: PASSING, source: "app/backend/tests/test_historial_transversal.py"}
   - {id: TEST-REP-206, type: internal_test, name: "tests/test_historial_transversal.py::test_el_historial_enlaza_con_el_pago_que_lo_origino", status: PASSING, source: "app/backend/tests/test_historial_transversal.py"}
   - {id: TEST-REP-207, type: internal_test, name: "tests/test_historial_transversal.py::test_el_stock_demo_alcanza_para_varias_pruebas", status: PASSING, source: "app/backend/tests/test_historial_transversal.py"}
+
+  # --- Slice 0 (MVP v2 - Foundation). spec: 009-mvp2-foundation ------ #
+  - {id: TEST-REP-208, type: internal_test, name: "test_sin_detalles", status: PASSING, source: "app/backend/tests/test_resolucion_orden.py::test_sin_detalles"}
+  - {id: TEST-REP-209, type: internal_test, name: "test_varios_detalles_todos_completos", status: PASSING, source: "app/backend/tests/test_resolucion_orden.py::test_varios_detalles_todos_completos"}
+  - {id: TEST-REP-210, type: internal_test, name: "test_un_detalle_en_ejecucion", status: PASSING, source: "app/backend/tests/test_resolucion_orden.py::test_un_detalle_en_ejecucion"}
+  - {id: TEST-REP-211, type: internal_test, name: "test_un_detalle_trabajable", status: PASSING, source: "app/backend/tests/test_resolucion_orden.py::test_un_detalle_trabajable"}
+  - {id: TEST-REP-212, type: internal_test, name: "test_un_detalle_requiere_revision", status: PASSING, source: "app/backend/tests/test_resolucion_orden.py::test_un_detalle_requiere_revision"}
+  - {id: TEST-REP-213, type: internal_test, name: "test_un_detalle_bloqueado_por_recursos", status: PASSING, source: "app/backend/tests/test_resolucion_orden.py::test_un_detalle_bloqueado_por_recursos"}
+  - {id: TEST-REP-214, type: internal_test, name: "test_contexto_inconsistente_es_el_fail_safe_sin_lanzar", status: PASSING, source: "app/backend/tests/test_resolucion_orden.py::test_contexto_inconsistente_es_el_fail_safe_sin_lanzar"}
+  - {id: TEST-REP-215, type: internal_test, name: "test_completar_un_detalle_con_otro_pendiente_no_lanza", status: PASSING, source: "app/backend/tests/test_completar_ejecucion_consistencia.py::test_completar_un_detalle_con_otro_pendiente_no_lanza"}
+  - {id: TEST-REP-216, type: internal_test, name: "test_cliente_externo_es_cobrable_y_pasa_por_todo_el_cierre_normal", status: PASSING, source: "app/backend/tests/test_politica_origen.py::test_cliente_externo_es_cobrable_y_pasa_por_todo_el_cierre_normal"}
+  - {id: TEST-REP-217, type: internal_test, name: "test_rt_interno_es_no_cobrable_al_cliente_y_se_devuelve_a_gestion_rt", status: PASSING, source: "app/backend/tests/test_politica_origen.py::test_rt_interno_es_no_cobrable_al_cliente_y_se_devuelve_a_gestion_rt"}
+  - {id: TEST-REP-218, type: internal_test, name: "test_rma_garantia_reparacion_es_no_cobrable_pero_se_entrega_igual", status: PASSING, source: "app/backend/tests/test_politica_origen.py::test_rma_garantia_reparacion_es_no_cobrable_pero_se_entrega_igual"}
+  - {id: TEST-REP-219, type: internal_test, name: "test_un_json_anterior_a_slice_0_sigue_cargando", status: PASSING, source: "app/backend/tests/test_hp_rep_001_persistido.py::test_un_json_anterior_a_slice_0_sigue_cargando"}
+  - {id: TEST-REP-220, type: internal_test, name: "test_registrar_pago_rechaza_al_tecnico", status: PASSING, source: "app/backend/tests/test_services_autorizacion.py::test_registrar_pago_rechaza_al_tecnico"}
+  - {id: TEST-REP-221, type: internal_test, name: "test_un_tecnico_no_puede_registrar_un_pago_por_http", status: PASSING, source: "app/backend/tests/test_api_reconcile.py::test_un_tecnico_no_puede_registrar_un_pago_por_http"}
+  - {id: TEST-REP-222, type: internal_test, name: "test_caracterizacion_hp1 (10 funciones)", status: PASSING, source: "app/backend/tests/test_caracterizacion_hp1.py", note: "Caracteriza progreso()/acciones_disponibles() para los 10 estados principales de HP-REP-001 antes y despues del refactor de Slice 0; unica excepcion deliberada: roles de REGISTRAR_PAGO."}
 
 links:
 
@@ -2369,3 +2416,87 @@ links:
   - {from: TEST-REP-205, to: CODE-REP-112, relationship: exercises}
   - {from: TEST-REP-206, to: CODE-REP-113, relationship: exercises}
   - {from: TEST-REP-207, to: CODE-REP-111, relationship: exercises}
+
+  # --- Slice 0 (MVP v2 - Foundation). spec: 009-mvp2-foundation ------ #
+  # Cadena funcional: FR-REP-066 reutiliza el ACC/US/Feature existentes
+  # de "crear la Orden" (ACC-REP-001 -> US-REP-001 -> FEAT-REP-001): el
+  # Origen se establece en ese mismo momento. Los mecanismos de
+  # situacion agregada (resolver, condicion del Detalle, fix de
+  # persistencia) cuelgan de FR-REP-037 / ACC-REP-016 / US-REP-009 /
+  # FEAT-REP-005, ya existentes. El fix de Pago cuelga de FR-REP-048 /
+  # ACC-REP-020 / US-REP-012 / FEAT-REP-007, ya existentes. Ningun
+  # User Story, System Action ni Feature nuevos: Slice 0 es
+  # transversal a los ya declarados, no una capacidad de negocio propia.
+  - {from: FR-REP-066, to: ACC-REP-001, relationship: derives_from}
+  - {from: TR-REP-057, to: FR-REP-066, relationship: satisfies}
+  - {from: TR-REP-058, to: FR-REP-066, relationship: satisfies}
+  - {from: TR-REP-059, to: FR-REP-037, relationship: satisfies}
+  - {from: TR-REP-060, to: FR-REP-037, relationship: satisfies}
+  - {from: TR-REP-061, to: FR-REP-037, relationship: satisfies}
+  - {from: TR-REP-062, to: FR-REP-066, relationship: satisfies}
+  - {from: TR-REP-063, to: FR-REP-066, relationship: satisfies}
+  - {from: TR-REP-064, to: FR-REP-048, relationship: satisfies}
+
+  - {from: TASK-REP-088, to: TR-REP-059, relationship: implements}
+  - {from: TASK-REP-123, to: TR-REP-064, relationship: implements}
+  - {from: TASK-REP-151, to: TR-REP-057, relationship: implements}
+  - {from: TASK-REP-152, to: TR-REP-058, relationship: implements}
+  - {from: TASK-REP-153, to: TR-REP-059, relationship: implements}
+  - {from: TASK-REP-154, to: TR-REP-060, relationship: implements}
+  - {from: TASK-REP-155, to: TR-REP-061, relationship: implements}
+  - {from: TASK-REP-156, to: TR-REP-062, relationship: implements}
+  - {from: TASK-REP-156, to: TR-REP-063, relationship: implements}
+  - {from: TASK-REP-157, to: TR-REP-064, relationship: implements}
+
+  - {from: CODE-REP-001, to: TASK-REP-151, relationship: produced_by}
+  - {from: CODE-REP-001, to: TR-REP-057, relationship: implements}
+  - {from: CODE-REP-002, to: TASK-REP-151, relationship: produced_by}
+  - {from: CODE-REP-002, to: TR-REP-057, relationship: implements}
+  - {from: CODE-REP-021, to: TASK-REP-154, relationship: produced_by}
+  - {from: CODE-REP-021, to: TR-REP-060, relationship: implements}
+  - {from: CODE-REP-082, to: TASK-REP-153, relationship: produced_by}
+  - {from: CODE-REP-083, to: TASK-REP-155, relationship: produced_by}
+  - {from: CODE-REP-083, to: TR-REP-061, relationship: implements}
+  - {from: CODE-REP-115, to: TASK-REP-152, relationship: produced_by}
+  - {from: CODE-REP-115, to: TR-REP-058, relationship: implements}
+  - {from: CODE-REP-116, to: TASK-REP-153, relationship: produced_by}
+  - {from: CODE-REP-116, to: TR-REP-059, relationship: implements}
+  - {from: CODE-REP-117, to: TASK-REP-154, relationship: produced_by}
+  - {from: CODE-REP-117, to: TR-REP-060, relationship: implements}
+  - {from: CODE-REP-118, to: TASK-REP-156, relationship: produced_by}
+  - {from: CODE-REP-118, to: TR-REP-062, relationship: implements}
+  - {from: CODE-REP-119, to: TASK-REP-156, relationship: produced_by}
+  - {from: CODE-REP-119, to: TR-REP-063, relationship: implements}
+  - {from: CODE-REP-120, to: TASK-REP-157, relationship: produced_by}
+  - {from: CODE-REP-120, to: TR-REP-064, relationship: implements}
+
+  - {from: TEST-REP-208, to: CODE-REP-116, relationship: exercises}
+  - {from: TEST-REP-208, to: FR-REP-037, relationship: verifies}
+  - {from: TEST-REP-209, to: CODE-REP-116, relationship: exercises}
+  - {from: TEST-REP-209, to: FR-REP-037, relationship: verifies}
+  - {from: TEST-REP-210, to: CODE-REP-116, relationship: exercises}
+  - {from: TEST-REP-210, to: FR-REP-037, relationship: verifies}
+  - {from: TEST-REP-211, to: CODE-REP-116, relationship: exercises}
+  - {from: TEST-REP-211, to: FR-REP-037, relationship: verifies}
+  - {from: TEST-REP-212, to: CODE-REP-116, relationship: exercises}
+  - {from: TEST-REP-212, to: FR-REP-037, relationship: verifies}
+  - {from: TEST-REP-213, to: CODE-REP-116, relationship: exercises}
+  - {from: TEST-REP-213, to: FR-REP-037, relationship: verifies}
+  - {from: TEST-REP-214, to: CODE-REP-116, relationship: exercises}
+  - {from: TEST-REP-214, to: FR-REP-037, relationship: verifies}
+  - {from: TEST-REP-215, to: CODE-REP-083, relationship: exercises}
+  - {from: TEST-REP-215, to: FR-REP-037, relationship: verifies}
+  - {from: TEST-REP-216, to: CODE-REP-115, relationship: exercises}
+  - {from: TEST-REP-216, to: FR-REP-066, relationship: verifies}
+  - {from: TEST-REP-217, to: CODE-REP-115, relationship: exercises}
+  - {from: TEST-REP-217, to: FR-REP-066, relationship: verifies}
+  - {from: TEST-REP-218, to: CODE-REP-115, relationship: exercises}
+  - {from: TEST-REP-218, to: FR-REP-066, relationship: verifies}
+  - {from: TEST-REP-219, to: CODE-REP-021, relationship: exercises}
+  - {from: TEST-REP-219, to: TR-REP-060, relationship: verifies}
+  - {from: TEST-REP-220, to: CODE-REP-087, relationship: exercises}
+  - {from: TEST-REP-220, to: FR-REP-048, relationship: verifies}
+  - {from: TEST-REP-221, to: FR-REP-048, relationship: verifies}
+  - {from: TEST-REP-222, to: CODE-REP-118, relationship: exercises}
+  - {from: TEST-REP-222, to: CODE-REP-119, relationship: exercises}
+  - {from: TEST-REP-222, to: FR-REP-066, relationship: verifies}

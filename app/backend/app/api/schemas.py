@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from app.application import (
     AccionDisponible,
     InsumoPrevisto,
-    PasoHappyPath,
+    PasoProgreso,
 )
 from app.domain.models import (
     Cliente,
@@ -414,7 +414,7 @@ class PasoProgresoOut(BaseModel):
     alcanzado: bool
 
     @classmethod
-    def desde_dominio(cls, paso: PasoHappyPath) -> "PasoProgresoOut":
+    def desde_dominio(cls, paso: PasoProgreso) -> "PasoProgresoOut":
         return cls(
             process_id=paso.process_id,
             etiqueta=paso.etiqueta,
@@ -511,7 +511,7 @@ class OrdenOut(BaseModel):
         cls,
         orden: OrdenReparacion,
         *,
-        progreso: list[PasoHappyPath],
+        progreso: list[PasoProgreso],
         acciones: list[AccionDisponible],
         insumos_previstos: Mapping[str, Sequence[InsumoPrevisto]]
         | None = None,

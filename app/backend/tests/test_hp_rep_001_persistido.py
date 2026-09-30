@@ -407,3 +407,41 @@ def test_el_archivo_final_es_una_orden_valida(repos, tmp_path):
 
     assert reconstruida.saldo == Decimal("0")
     assert reconstruida.puntaje_total == 10
+
+
+def test_un_json_anterior_a_slice_0_sigue_cargando(repos, tmp_path):
+    """Compatibilidad JSON: ``condicion`` es nueva, con default.
+
+    Simula un archivo escrito ANTES de Slice 0 -sin el campo
+    ``condicion`` en cada Detalle, que no existia todavia- y confirma
+    que ``OrdenReparacion.model_validate`` lo sigue cargando sin
+    tocarlo, con ``condicion`` resuelta a su default (``SIN_BLOQUEO``).
+    """
+    import json
+
+    from app.domain.models import CondicionReparacionDetail
+
+    ordenes_repo, _ = repos
+    test_hp_rep_001_persistido_end_to_end(repos)
+
+    ruta = ordenes_repo.directorio / f"{ORDEN_ID}.json"
+    crudo_v2 = json.loads(ruta.read_text(encoding="utf-8"))
+
+    # El JSON real (post Slice 0) SI tiene "condicion": lo confirma antes
+    # de quitarlo, para no simular una forma que nunca existio.
+    assert "condicion" in crudo_v2["reparaciones_detail"][0]
+
+    crudo_v1 = json.loads(json.dumps(crudo_v2))
+    for detalle in crudo_v1["reparaciones_detail"]:
+        del detalle["condicion"]
+
+    reconstruida = OrdenReparacion.model_validate(crudo_v1)
+
+    assert reconstruida.reparaciones_detail[0].condicion is (
+        CondicionReparacionDetail.SIN_BLOQUEO
+    )
+    # El flujo de HP-REP-001 nunca produce otra condicion: el default
+    # que Pydantic resuelve para el JSON "v1" (sin el campo) coincide
+    # exactamente con lo que el JSON real (post Slice 0) ya tenia, asi
+    # que la Orden reconstruida es identica a la persistida de verdad.
+    assert reconstruida == ordenes_repo.obtener(ORDEN_ID)

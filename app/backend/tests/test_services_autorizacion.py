@@ -499,14 +499,16 @@ def test_el_historial_de_los_nodos_de_sistema_no_tiene_usuario():
         assert por_nodo[process_id] is None, process_id
 
 
-# Registrar Pago: sin rol exigido, pero con usuario activo.
+# Registrar Pago (BR-REP-017): usuario ACTIVO AND rol != TECNICO.
+# Corrige el bug del MVP anterior, donde cualquier usuario activo -un
+# Tecnico incluido- podia registrar un Pago.
 
 
-@pytest.mark.parametrize(
-    "usuario", [ADMINISTRADOR, RECEPCION, COORDINADOR, TECNICO]
-)
-def test_registrar_pago_no_exige_un_rol_concreto(usuario):
-    """BR-REP-017 todavia no define que rol puede cobrar."""
+@pytest.mark.parametrize("usuario", [ADMINISTRADOR, RECEPCION, COORDINADOR])
+def test_registrar_pago_permite_administrador_recepcion_y_coordinador(
+    usuario,
+):
+    """BR-REP-017: los tres roles no-Tecnico pueden cobrar."""
     orden = registrar_pago(
         flujo_mvp.orden_reparacion_lista(),
         monto=Decimal("80000"),
@@ -516,6 +518,18 @@ def test_registrar_pago_no_exige_un_rol_concreto(usuario):
     )
 
     assert orden.saldo == Decimal("0")
+
+
+def test_registrar_pago_rechaza_al_tecnico():
+    """BR-REP-017: un Tecnico nunca puede registrar un Pago."""
+    with pytest.raises(PrecondicionInvalidaError):
+        registrar_pago(
+            flujo_mvp.orden_reparacion_lista(),
+            monto=Decimal("80000"),
+            metodo="EFECTIVO",
+            usuario=TECNICO,
+            fecha=t(185),
+        )
 
 
 def test_registrar_pago_rechaza_un_usuario_inactivo():

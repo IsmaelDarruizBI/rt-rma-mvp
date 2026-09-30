@@ -19,11 +19,12 @@ from app.domain.models import (
     OrdenReparacion,
     OrigenOrden,
     Pago,
+    RolUsuario,
     TipoPago,
     Usuario,
 )
 
-from .autorizacion import validar_usuario_activo
+from .autorizacion import validar_alguno_de
 from .exceptions import PrecondicionInvalidaError
 from .identificadores import nuevo_id
 from .workflow import registrar_accion_funcional, registrar_paso
@@ -31,6 +32,17 @@ from .workflow import registrar_accion_funcional, registrar_paso
 # Capacidad transversal de FEAT-REP-007 / BR-REP-017-A. Tiene ID de
 # trazabilidad propio pero NO un PROC-REP-*: no es un nodo del proceso.
 ACCION_REGISTRAR_PAGO = "ACC-REP-020"
+
+# BR-REP-017: "usuario ACTIVO AND rol != TECNICO -> puede registrar
+# Pago". Fuente unica de los roles autorizados para Registrar Pago: la
+# consume tanto ``registrar_pago`` (autorizacion en backend) como
+# ``app.application.acciones`` (lo que se publica en
+# ``AccionDisponible.roles``). Un Tecnico nunca puede registrar un Pago.
+ROLES_PAGO = (
+    RolUsuario.ADMINISTRADOR,
+    RolUsuario.RECEPCION,
+    RolUsuario.COORDINADOR_RMA,
+)
 
 
 def descripcion_de_pago(pago: Pago) -> str:
@@ -86,12 +98,12 @@ def registrar_pago(
     desde REPARACION_LISTA en adelante es el PAGO del cierre. Es una
     dimension distinta del medio (``metodo``).
 
-    PENDIENTE FUNCIONAL: BR-REP-017 no define que rol puede registrar
-    un Pago, asi que aqui no se exige ninguno. Solo se comprueba que
-    el usuario este activo. Cuando el negocio lo defina, se agrega el
-    ``validar_actor`` correspondiente.
+    BR-REP-017: exige usuario activo y rol distinto de Tecnico
+    (``ROLES_PAGO``). Antes de MVP v2 esto no se validaba -cualquier
+    usuario activo, Tecnico incluido, podia registrar un Pago-; es la
+    correccion obligatoria de esta iteracion.
     """
-    validar_usuario_activo(usuario)
+    validar_alguno_de(usuario, ROLES_PAGO)
 
     if monto <= 0:
         raise PrecondicionInvalidaError(

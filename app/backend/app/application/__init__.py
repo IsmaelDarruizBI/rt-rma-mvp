@@ -20,6 +20,7 @@ generico de workflow: la secuencia de cada comando esta escrita a mano
 porque es una decision funcional, no una configuracion.
 """
 
+from .acciones import AccionDisponible, acciones_disponibles
 from .cierre import (
     aprobar_control,
     entregar,
@@ -39,14 +40,9 @@ from .consultas import (
     obtener_orden,
 )
 from .contexto import ApplicationContext, construir_contexto
-from .happy_path import (
-    AccionDisponible,
-    PasoHappyPath,
-    acciones_disponibles,
-    progreso,
-)
 from .identificadores import siguiente_detalle_id, siguiente_orden_id
 from .ingreso import crear_orden, definir_reparacion
+from .progreso import PasoProgreso, progreso
 from .taller import (
     completar_ejecucion,
     iniciar_detalle,
@@ -70,9 +66,10 @@ __all__ = [
     "listar_usuarios",
     "nombres_de_tipo_por_detalle",
     "obtener_orden",
-    # Avance sobre HP-REP-001
+    # Situacion de la Orden: acciones (por estado real) y progreso
+    # (visualizacion, por Origen)
     "AccionDisponible",
-    "PasoHappyPath",
+    "PasoProgreso",
     "acciones_disponibles",
     "progreso",
     # Comandos

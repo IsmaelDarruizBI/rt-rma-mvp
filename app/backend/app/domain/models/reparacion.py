@@ -11,6 +11,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 from .enums import (
+    CondicionReparacionDetail,
     EstadoControl,
     EstadoEjecucion,
     EstadoReparacionDetail,
@@ -26,6 +27,11 @@ class ReparacionDetail(BaseModel):
     TipoReparacion al crear el Detalle: no se releen del catalogo, para
     que un cambio de precio futuro no altere ordenes ya registradas. Por
     eso solo se guarda ``tipo_reparacion_id``, nunca el objeto.
+
+    ``estado`` y ``condicion`` son dos dimensiones independientes: el
+    avance tecnico del trabajo y si algo lo bloquea. ``condicion`` tiene
+    default ``SIN_BLOQUEO`` para que un JSON persistido antes de Slice 0
+    -que no conoce el campo- siga cargando sin tocarse.
     """
 
     id: str
@@ -36,6 +42,9 @@ class ReparacionDetail(BaseModel):
     garantia_dias: int = Field(ge=0)
 
     estado: EstadoReparacionDetail = EstadoReparacionDetail.DEFINIDO
+    condicion: CondicionReparacionDetail = (
+        CondicionReparacionDetail.SIN_BLOQUEO
+    )
 
     control_estado: EstadoControl = EstadoControl.PENDIENTE
     control_usuario_id: str | None = None
