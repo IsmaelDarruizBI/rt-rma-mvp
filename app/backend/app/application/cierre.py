@@ -18,8 +18,10 @@ from app.services import (
     PrecondicionInvalidaError,
     aprobar_control_tecnico,
     calcular_puntaje,
+    devolver_equipo_rt,
     entregar_equipo,
     generar_comprobante_final,
+    informar_resultado_rt,
     marcar_reparacion_lista,
     notificar_cliente,
     registrar_pago,
@@ -185,6 +187,51 @@ def entregar(
 
     orden = generar_comprobante_final(orden, fecha=fecha)
     orden = entregar_equipo(orden, usuario=usuario, fecha=fecha)
+
+    contexto.ordenes.guardar(orden)
+    return orden
+
+
+def informar_rt(
+    contexto: ApplicationContext,
+    *,
+    orden_id: str,
+) -> OrdenReparacion:
+    """Se informa el resultado a Gestion RT (PROC-REP-250 -> 290).
+
+    Exclusivo de RT_INTERNO (HP-REP-002): no pasa por notificar, cobrar
+    ni entregar a un cliente. PROC-REP-290 es ``actor: ACT-SYSTEM`` en el
+    Business Process V1.3 -no una accion humana con rol pendiente de
+    definir-, asi que este comando no recibe ``usuario_id``: no hay
+    ningun actor que autorizar.
+    """
+    fecha = contexto.ahora()
+
+    orden = contexto.ordenes.obtener(orden_id)
+    orden = informar_resultado_rt(orden, fecha=fecha)
+
+    contexto.ordenes.guardar(orden)
+    return orden
+
+
+def devolver_rt(
+    contexto: ApplicationContext,
+    *,
+    orden_id: str,
+    usuario_id: str,
+) -> OrdenReparacion:
+    """Devuelve el equipo a Gestion RT (PROC-REP-270 reutilizado).
+
+    Compone lo mismo que ``entregar`` en el nodo, pero sin la condicion
+    comercial: RT_INTERNO no pasa por PROC-REP-265/266/280 (HP-REP-002).
+    El rol lo valida ``devolver_equipo_rt``, como el resto de los
+    comandos de este modulo.
+    """
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    orden = contexto.ordenes.obtener(orden_id)
+    orden = devolver_equipo_rt(orden, usuario=usuario, fecha=fecha)
 
     contexto.ordenes.guardar(orden)
     return orden

@@ -46,6 +46,8 @@ export interface EjecutorAcciones {
   notificar: () => void;
   registrarPago: (monto: string, metodo: string) => void;
   entregar: () => void;
+  informarRt: () => void;
+  devolverRt: () => void;
 }
 
 interface Props {
@@ -68,11 +70,14 @@ export function AccionesOrden({
   const acciones = orden.acciones_disponibles;
 
   if (acciones.length === 0) {
+    const terminada =
+      orden.estado_workflow === "ENTREGADA" ||
+      orden.current_process === "EVT-REP-999";
     return (
       <Panel titulo="Acción disponible">
         <p style={{ margin: 0, color: colores.suave, fontSize: "0.9rem" }}>
-          {orden.estado_workflow === "ENTREGADA"
-            ? "La Orden fue entregada. El Happy Path terminó."
+          {terminada
+            ? "La Orden llegó al fin del proceso. El Happy Path terminó."
             : "No hay acciones disponibles para el estado actual."}
         </p>
       </Panel>
@@ -109,9 +114,14 @@ function AccionUnica({
   // El backend manda TODOS los roles autorizados: un nodo puede declarar
   // actores_alternativos. Vacio = el negocio no definio rol (Registrar
   // Pago, BR-REP-017). Ocultar el boton es UX; la autoridad es el backend.
+  //
+  // requiere_actor: false marca un nodo actor: ACT-SYSTEM (p. ej.
+  // Informar a Gestión RT): no hay ningún actor humano que elegir, así
+  // que ni la habilitación ni el mensaje de rol dependen del actor demo.
   const habilitada =
-    actor !== null &&
-    (accion.roles.length === 0 || accion.roles.includes(actor.rol));
+    !accion.requiere_actor ||
+    (actor !== null &&
+      (accion.roles.length === 0 || accion.roles.includes(actor.rol)));
 
   return (
     <div
@@ -124,7 +134,7 @@ function AccionUnica({
       <p style={{ margin: "0 0 0.5rem", fontWeight: 600 }}>
         {accion.etiqueta}
       </p>
-      {!habilitada && (
+      {!habilitada && accion.requiere_actor && (
         <p
           style={{
             margin: "0 0 0.5rem",
@@ -265,6 +275,20 @@ function FormularioAccion({
       return (
         <Boton disabled={deshabilitado} onClick={ejecutar.entregar}>
           Entregar equipo
+        </Boton>
+      );
+
+    case "INFORMAR_RT":
+      return (
+        <Boton disabled={deshabilitado} onClick={ejecutar.informarRt}>
+          Informar resultado a Gestión RT
+        </Boton>
+      );
+
+    case "DEVOLVER_RT":
+      return (
+        <Boton disabled={deshabilitado} onClick={ejecutar.devolverRt}>
+          Devolver equipo a Gestión RT
         </Boton>
       );
 

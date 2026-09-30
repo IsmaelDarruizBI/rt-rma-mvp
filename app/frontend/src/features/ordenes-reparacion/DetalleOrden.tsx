@@ -38,7 +38,9 @@ export function CabeceraOrden({ orden }: { orden: Orden }) {
             {orden.id}
           </h2>
           <p style={{ margin: 0, color: colores.suave }}>
-            {orden.cliente.nombre} · {orden.cliente.telefono}
+            {orden.cliente
+              ? `${orden.cliente.nombre} · ${orden.cliente.telefono}`
+              : `Equipo interno RT · referencia ${orden.referencia_rt ?? "—"}`}
           </p>
           <p style={{ margin: "0.2rem 0 0", color: colores.suave }}>
             {orden.equipo.marca} {orden.equipo.modelo} —{" "}
@@ -46,6 +48,15 @@ export function CabeceraOrden({ orden }: { orden: Orden }) {
           </p>
         </div>
         <div style={{ textAlign: "right" }}>
+          <p
+            style={{
+              margin: "0 0 0.3rem",
+              fontSize: "0.75rem",
+              color: colores.suave,
+            }}
+          >
+            {orden.origen}
+          </p>
           <Etiqueta
             color={COLOR_ESTADO[orden.estado_workflow] ?? colores.suave}
           >
@@ -67,18 +78,37 @@ export function CabeceraOrden({ orden }: { orden: Orden }) {
   );
 }
 
+const ETIQUETA_CONDICION_COMERCIAL: Record<string, string> = {
+  COBRABLE: "Cobrable al cliente",
+  NO_COBRABLE_AL_CLIENTE: "No cobrable (equipo RT interno)",
+  NO_COBRABLE: "No cobrable (garantía)",
+};
+
 export function ResumenComercialOrden({ orden }: { orden: Orden }) {
   const { resumen } = orden;
+  const esCobrable = resumen.condicion_comercial === "COBRABLE";
   const filas: [string, string][] = [
-    ["Total", importe(resumen.total)],
+    [esCobrable ? "Total" : "Total (nominal)", importe(resumen.total)],
     ["Pagado", importe(resumen.pagado)],
-    ["Saldo", importe(resumen.saldo)],
+    [esCobrable ? "Saldo" : "Saldo (nominal)", importe(resumen.saldo)],
     ["Estado de pago", resumen.estado_pago],
     ["Puntaje", String(resumen.puntaje_total)],
   ];
 
   return (
     <Panel titulo="Resumen comercial">
+      <p
+        style={{
+          margin: "0 0 0.6rem",
+          fontSize: "0.8rem",
+          color: colores.suave,
+        }}
+      >
+        {ETIQUETA_CONDICION_COMERCIAL[resumen.condicion_comercial] ??
+          resumen.condicion_comercial}
+        {!esCobrable &&
+          ": el total/saldo son nominales, no una deuda a cobrar."}
+      </p>
       <dl style={{ margin: 0, display: "grid", gap: "0.35rem" }}>
         {filas.map(([etiqueta, valor]) => (
           <div

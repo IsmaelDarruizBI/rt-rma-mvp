@@ -1,0 +1,526 @@
+# Trazabilidad end-to-end del slice implementado — Scenario HP-REP-002.
+#
+# Estructura: **items + links**, la misma decision de diseño que ya usa
+# traceability/hp-rep-001.yaml y que traceability/README.md registra
+# ("la trazabilidad futura debera soportarse mediante una estructura de
+# items + links [...] no mediante anidamiento rigido uno-a-uno").
+#
+# Este archivo NO es una segunda fuente de verdad funcional: los items de
+# la capa de negocio (DOM, PROC, EVT, BR, FEAT, HP) se REFERENCIAN desde
+# business/*.yaml y no se redefinen aqui. Los items de la cadena de
+# implementacion (US, ACC, FR, TR, TASK, CODE, TEST, UAT) se declaran
+# aqui, siguiendo la numeracion global que continua donde la dejo
+# traceability/hp-rep-001.yaml (US-REP-016, ACC-REP-026, FR-REP-066,
+# TR-REP-064, TASK-REP-157, CODE-REP-120, TEST-REP-222, UAT-REP-016), asi
+# los IDs quedan estables y sin colision aunque cada Scenario tenga su
+# propio archivo de trazabilidad.
+#
+# RELACION CON hp-rep-001.yaml — NO SE MODIFICA ese archivo, se mantiene
+# byte a byte igual. HP-REP-002 reutiliza las MISMAS 8 Features que
+# HP-REP-001 activa (FEAT-REP-001..008): no se crean Features nuevas.
+# Decision de representacion: como una Feature ahora esta implementada
+# por DOS Scenarios (HP-REP-001 y HP-REP-002) y cada archivo de
+# trazabilidad es autocontenido (el validador solo ve un archivo por
+# corrida), las 8 Features se REDECLARAN aqui con
+# `implemented_scenario` como LISTA `[HP-REP-001, HP-REP-002]` en lugar
+# del escalar `HP-REP-001` que usa hp-rep-001.yaml. Esta es la opcion
+# menos disruptiva: no cambia el schema (el validador solo exige que el
+# campo exista y sea "truthy" cuando implemented_slice_status es
+# IMPLEMENTED, sin exigir un tipo escalar), no requiere tocar
+# hp-rep-001.yaml, y dentro de ESTE archivo dice la verdad completa (dos
+# Scenarios). El archivo hp-rep-001.yaml sigue siendo la fuente de
+# verdad para lo que HP-REP-001 por si solo activa.
+#
+# ALCANCE — leer antes de interpretar cualquier estado:
+#   Las Features FEAT-REP-001..009 estan en estado `draft` y NINGUNA esta
+#   implementada. Lo implementado son los slices que HP-REP-001 y
+#   HP-REP-002 recorren. FEAT-REP-009 (Cancelacion) sigue sin activarse
+#   en ningun Happy Path.
+#
+#   HP-REP-002 es un delta chico sobre la misma maquinaria tecnica que
+#   HP-REP-001 ya prueba (definir Detalle, factibilidad, toma, ejecucion,
+#   control tecnico, puntaje: sin cambios de comportamiento). Por eso
+#   este archivo NO redeclara ACC/FR/TR/TASK/CODE/TEST para ese tramo
+#   compartido -viven en hp-rep-001.yaml-; aqui solo se declara lo que
+#   HP-REP-002 agrega o cambia: ingreso sin Cliente (origen RT_INTERNO),
+#   el comprobante de recepcion ahora gobernado por politica de Origen,
+#   y el cierre especifico de RT (informar a Gestion RT + devolver el
+#   equipo, sin cobro ni ENTREGADA).
+#
+# Fuera de alcance (no se crean FR/TR/Task que impliquen que esto esta
+# implementado): Detalle multiple (mas de 1 por Orden), HP-REP-003 (RMA
+# garantia), VAR-REP-001/002/003, EXC-REP-001..005, EN_REVISION, override,
+# interrupcion, control rechazado / retrabajo, UI de inventario,
+# PostgreSQL.
+#
+# Validacion: `npx tsx scripts/validate-traceability.ts traceability/hp-rep-002.yaml`
+# (scripts/validate-traceability.ts).
+
+meta:
+  id: TRACE-HP-REP-002
+  name: Trazabilidad del slice implementado de HP-REP-002
+  generated_from: rama mvp-v2-hp2 (worktree), tras implementar HP-REP-002 sobre la base de MVP v2 Foundation
+  date: "2026-09-30"
+  business_domain: DOM-RMA
+  business_process: PROC-REP
+  business_process_version: "1.3"
+  implemented_scenario: HP-REP-002
+  active_features:
+    [FEAT-REP-001, FEAT-REP-002, FEAT-REP-003, FEAT-REP-004, FEAT-REP-005,
+     FEAT-REP-006, FEAT-REP-007, FEAT-REP-008]
+  inactive_features: [FEAT-REP-009]
+  related_trace_files:
+    - traceability/hp-rep-001.yaml (Scenario HP-REP-001, CLIENTE_EXTERNO; no se modifica)
+  sources:
+    process: business/processes/repair-management-v1.3.yaml
+    rules: business/rules/business-rules-v1.3.yaml
+    features: business/features/repair-management-features-v1.3.yaml
+    scenarios: business/scenarios/repair-management-scenarios-v1.3.yaml
+    convention: traceability/README.md
+    constitution: .specify/memory/constitution.md
+    backend: app/backend/
+    frontend: app/frontend/
+  relationship_vocabulary:
+    belongs_to: el origen pertenece al destino (jerarquia)
+    activates: el Scenario activa la Feature
+    realizes: la System Action realiza la User Story
+    covers: la System Action cubre el nodo del Business Process
+    governed_by: el item esta gobernado por la Business Rule
+    derives_from: el Functional Requirement deriva de la System Action
+    satisfies: el Technical Requirement satisface el Functional Requirement
+    supports: el artefacto de modelo de datos sostiene un FR o un TR (N:M)
+    implements: la Task o el Code implementa un Technical Requirement
+    produced_by: el Code fue producido por la Task
+    exercises: el Internal Test ejercita el Code
+    verifies: el Internal Test verifica un FR o un TR
+    accepts: el UAT acepta una User Story o un Functional Requirement
+
+items:
+
+  # ================================================================== #
+  # Capa de negocio (referenciada, NO redefinida)                      #
+  # ================================================================== #
+
+  - {id: DOM-RMA, type: business_domain, name: Area funcional RMA, status: active, source: traceability/README.md}
+  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: draft, version: "1.3", source: business/processes/repair-management-v1.3.yaml}
+  - {id: HP-REP-002, type: scenario, name: Reparacion estandar de equipo RT, status: draft, scenario_type: HAPPY_PATH, scope: E2E, source: business/scenarios/repair-management-scenarios-v1.3.yaml}
+
+  # Features V1.3, reutilizadas de HP-REP-001. `implemented_scenario` es
+  # una LISTA en este archivo (ver nota de cabecera): ambos Scenarios
+  # implementan el mismo conjunto de 8 Features.
+  - {id: FEAT-REP-001, type: feature, name: Ingreso y creacion de Orden de Reparacion, status: draft, feature_status: draft, implemented_scenario: [HP-REP-001, HP-REP-002], implemented_slice_status: IMPLEMENTED, nodes_total: 8, nodes_in_slice: 6, spec: specs/001-feat-rep-001-hp-slice/}
+  - {id: FEAT-REP-002, type: feature, name: Diagnostico y gestion de Detalles de Reparacion, status: draft, feature_status: draft, implemented_scenario: [HP-REP-001, HP-REP-002], implemented_slice_status: IMPLEMENTED, nodes_total: 10, nodes_in_slice: 2, spec: specs/002-feat-rep-002-hp-slice/}
+  - {id: FEAT-REP-003, type: feature, name: Validacion de factibilidad y habilitacion, status: draft, feature_status: draft, implemented_scenario: [HP-REP-001, HP-REP-002], implemented_slice_status: IMPLEMENTED, nodes_total: 7, nodes_in_slice: 3, spec: specs/003-feat-rep-003-hp-slice/}
+  - {id: FEAT-REP-004, type: feature, name: Gestion de prioridad cola toma y liberacion tecnica, status: draft, feature_status: draft, implemented_scenario: [HP-REP-001, HP-REP-002], implemented_slice_status: IMPLEMENTED, nodes_total: 6, nodes_in_slice: 4, spec: specs/004-feat-rep-004-hp-slice/}
+  - {id: FEAT-REP-005, type: feature, name: Ejecucion de Detalles y gestion de insumos, status: draft, feature_status: draft, implemented_scenario: [HP-REP-001, HP-REP-002], implemented_slice_status: IMPLEMENTED, nodes_total: 11, nodes_in_slice: 7, spec: specs/005-feat-rep-005-hp-slice/}
+  - {id: FEAT-REP-006, type: feature, name: Control tecnico retrabajo y evaluacion, status: draft, feature_status: draft, implemented_scenario: [HP-REP-001, HP-REP-002], implemented_slice_status: IMPLEMENTED, nodes_total: 6, nodes_in_slice: 4, spec: specs/006-feat-rep-006-hp-slice/}
+  - {id: FEAT-REP-007, type: feature, name: Gestion comercial y pagos de la Orden, status: draft, feature_status: draft, implemented_scenario: [HP-REP-001, HP-REP-002], implemented_slice_status: IMPLEMENTED, nodes_total: 6, nodes_in_slice: 4, spec: specs/007-feat-rep-007-hp-slice/}
+  - {id: FEAT-REP-008, type: feature, name: "Finalizacion, entrega e integracion del resultado", status: draft, feature_status: draft, implemented_scenario: [HP-REP-001, HP-REP-002], implemented_slice_status: IMPLEMENTED, nodes_total: 5, nodes_in_slice: 5, spec: specs/008-feat-rep-008-hp-slice/}
+  - {id: FEAT-REP-009, type: feature, name: Cancelacion de Detalles y Orden, status: draft, feature_status: draft, implemented_scenario: null, implemented_slice_status: NOT_IMPLEMENTED, nodes_total: 3, nodes_in_slice: 0, spec: null}
+
+  # Eventos y nodos del Business Process que HP-REP-002 recorre. Los
+  # nodos del tramo tecnico compartido con HP-REP-001 (factibilidad,
+  # toma, ejecucion, control, puntaje) se referencian igual que alla:
+  # el comportamiento no cambio, solo lo recorre otro Origen.
+  - {id: EVT-REP-001, type: business_event, name: Surge necesidad de reparacion, status: draft, in_scenario: true}
+  - {id: EVT-REP-999, type: business_event, name: Fin del flujo de Orden de Reparacion, status: draft, in_scenario: true}
+  - {id: PROC-REP-010, type: process_node, name: Cual es el origen de la Orden de Reparacion, node_type: decision, status: draft, in_scenario: true, implemented: partial}
+  - {id: PROC-REP-020, type: process_node, name: Recibir referencia y contexto del equipo RT, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true, note: "En hp-rep-001.yaml este nodo esta fuera de escenario (in_scenario:false); HP-REP-002 lo recorre e implementa."}
+  - {id: PROC-REP-040, type: process_node, name: Crear Orden de Reparacion, node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-045, type: process_node, name: Se conocen los Detalles de reparacion requeridos, node_type: decision, status: draft, in_scenario: true, implemented: partial}
+  - {id: PROC-REP-050, type: process_node, name: Requiere comprobante de recepcion, node_type: decision, status: draft, in_scenario: true, implemented: true, note: "Rama No para RT_INTERNO (PoliticaOrigen.requiere_comprobante_recepcion=false); PROC-REP-060 no se ejecuta."}
+  - {id: PROC-REP-070, type: process_node, name: Definir Detalles de reparacion requeridos, node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: true, implemented: true, shared_by: [FEAT-REP-002, FEAT-REP-007]}
+  - {id: PROC-REP-080, type: process_node, name: Validar factibilidad por Detalle, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-090, type: process_node, name: Existe al menos un Detalle trabajable, node_type: decision, status: draft, in_scenario: true, implemented: partial}
+  - {id: PROC-REP-140, type: process_node, name: Habilitar Orden de Reparacion, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-150, type: process_node, name: Definir prioridad, node_type: activity, actor: ACT-COORD, actores_alternativos: [ACT-RECEP], status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-170, type: process_node, name: Ingresar orden a cola de trabajo, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-172, type: process_node, name: Validar estacion de trabajo, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-180, type: process_node, name: Tomar Orden de Reparacion, node_type: activity, actor: ACT-TECH, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-212, type: process_node, name: "¿Iniciar un Detalle de reparacion?", node_type: decision, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-181, type: process_node, name: Seleccionar Detalle a trabajar, node_type: activity, actor: ACT-TECH, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-174, type: process_node, name: Estacion habilitada para el Detalle seleccionado, node_type: decision, status: draft, in_scenario: true, implemented: partial}
+  - {id: PROC-REP-185, type: process_node, name: Reservar insumos e iniciar Ejecucion del Detalle, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-190, type: process_node, name: Ejecutar Detalle, node_type: activity, actor: ACT-TECH, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-200, type: process_node, name: Registrar ejecucion real del Detalle, node_type: activity, actor: ACT-TECH, status: draft, in_scenario: true, implemented: partial}
+  - {id: PROC-REP-210, type: process_node, name: Generar movimientos de inventario, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-211, type: process_node, name: Evaluar situacion de la Orden, node_type: decision, status: draft, in_scenario: true, implemented: partial, shared_by: [FEAT-REP-005, FEAT-REP-006, FEAT-REP-009]}
+  - {id: PROC-REP-220, type: process_node, name: Realizar control tecnico, node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-230, type: process_node, name: Todos los Detalles fueron aprobados, node_type: decision, status: draft, in_scenario: true, implemented: partial}
+  - {id: PROC-REP-245, type: process_node, name: Consolidar puntaje de la reparacion, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-240, type: process_node, name: Marcar reparacion lista, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-250, type: process_node, name: Requiere entrega a cliente, node_type: decision, status: draft, in_scenario: true, implemented: true, note: "Rama No para RT_INTERNO (PoliticaOrigen.requiere_entrega_cliente=false): sigue a PROC-REP-290 en vez de PROC-REP-260."}
+  - {id: PROC-REP-290, type: process_node, name: Informar resultado al sistema RT, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true, note: "En hp-rep-001.yaml este nodo esta fuera de escenario (in_scenario:false); HP-REP-002 lo recorre e implementa."}
+  - {id: PROC-REP-270, type: process_node, name: Entregar equipo, node_type: activity, actor: ACT-ADMIN, actores_alternativos: [ACT-RECEP], status: draft, in_scenario: true, implemented: true, note: "Reutilizado por HP-REP-002 como devolucion a Gestion RT (no es entrega comercial): NO pasa por 265/266/280 ni fija ENTREGADA."}
+
+  # Nodos que el Scenario declara explicitamente como `skipped_nodes`
+  # (business/scenarios/repair-management-scenarios-v1.3.yaml,
+  # HP-REP-002.skipped_nodes) y que por eso NO se recorren en este
+  # slice, aunque el codigo que los implementa ya exista (via
+  # HP-REP-001). Se declaran con in_scenario:false para que el gap de
+  # ESTE Scenario sea navegable, sin implicar que no esten
+  # implementados en absoluto.
+  - {id: PROC-REP-030, type: process_node, name: Registrar cliente y equipo, node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: false, implemented: true, skipped_reason: "Registro de cliente y equipo propio del origen CLIENTE_EXTERNO. En RT_INTERNO el equipo y su contexto provienen de Gestion RT (PROC-REP-020)."}
+  - {id: PROC-REP-060, type: process_node, name: Generar comprobante de recepcion, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: true, skipped_reason: "Un equipo RT_INTERNO no requiere comprobante de recepcion (PROC-REP-050 rama No)."}
+  - {id: PROC-REP-260, type: process_node, name: Notificar cliente, node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: false, implemented: true, skipped_reason: "No hay cliente a quien notificar el retiro."}
+  - {id: PROC-REP-265, type: process_node, name: Completar cobro - validar condicion de entrega, node_type: decision, status: draft, in_scenario: false, implemented: true, skipped_reason: "No existe validacion de saldo ni cobro para entregar: el origen es NO_COBRABLE_AL_CLIENTE."}
+  - {id: PROC-REP-266, type: process_node, name: Orden con saldo pendiente (entrega bloqueada), node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: true, skipped_reason: "No existe saldo pendiente ni registro de pago de cliente."}
+  - {id: PROC-REP-280, type: process_node, name: Generar comprobante final, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: true, skipped_reason: "No se genera el comprobante final comercial ni la garantia de reparacion al cliente."}
+
+  # Business Rules V1.3 relevantes para HP-REP-002. BR-REP-016 es la
+  # central (gobierna origen -> politica de proceso/comercial); las
+  # demas gobiernan el tramo tecnico compartido con HP-REP-001, sin
+  # cambios de comportamiento propios de este Scenario.
+  - {id: BR-REP-001, type: business_rule, name: Definicion del requerimiento, status: draft, coverage: PARTIAL}
+  - {id: BR-REP-002, type: business_rule, name: Validacion previa de recursos, status: draft, coverage: PARTIAL}
+  - {id: BR-REP-004, type: business_rule, name: Registro de ejecucion real, status: draft, coverage: PARTIAL}
+  - {id: BR-REP-005, type: business_rule, name: Inventario consecuencia de ejecucion, status: draft, coverage: PARTIAL}
+  - {id: BR-REP-006, type: business_rule, name: Reserva de insumos al iniciar Ejecucion del Detalle, status: draft, coverage: PARTIAL}
+  - {id: BR-REP-008, type: business_rule, name: Control tecnico por Recepcion y retrabajo por Detalle, status: draft, coverage: PARTIAL}
+  - {id: BR-REP-009, type: business_rule, name: Puntaje por Detalle, status: draft, coverage: PARTIAL}
+  - {id: BR-REP-012, type: business_rule, name: Estado agregado de la Orden como calculo derivado, status: draft, coverage: PARTIAL}
+  - {id: BR-REP-013, type: business_rule, name: Orden sin Detalles (caso inicial), status: draft, coverage: PARTIAL}
+  - {id: BR-REP-015, type: business_rule, name: Precio snapshot y Subtotal, status: draft, coverage: PARTIAL}
+  - {id: BR-REP-016, type: business_rule, name: Ajustes Comerciales y Cortesia, status: draft, coverage: PARTIAL, note: "HP-REP-002 ejercita la porcion de BR-REP-016 que define la condicion comercial y la politica de proceso por Origen (PoliticaOrigen / politica_de). No ejercita cortesia (CORTESIA_DETALLE/CORTESIA_ORDEN)."}
+  - {id: BR-REP-017, type: business_rule, name: "Registrar Pago (transversal) y Completar Cobro (secuencial)", status: draft, coverage: PARTIAL, note: "HP-REP-002 amplia la porcion de BR-REP-017 que ya HP-REP-001/Slice 0 ejercitaba (rol distinto de Tecnico): ahora registrar_pago tambien exige condicion_comercial=COBRABLE, rechazando el Pago en el service -no solo omitiendolo en acciones_disponibles- para RT_INTERNO (NO_COBRABLE_AL_CLIENTE)."}
+  - {id: BR-REP-018, type: business_rule, name: Toma y liberacion de Orden, status: draft, coverage: PARTIAL}
+
+  # ================================================================== #
+  # User Stories NUEVAS de HP-REP-002 (continua desde US-REP-016)      #
+  # ================================================================== #
+
+  - {id: US-REP-017, type: user_story, name: "Como Recepcionista quiero ingresar un equipo RT_INTERNO con su referencia de contexto sin tener que registrar un Cliente para reflejar que el equipo es propio de Rosario Tecno", status: IMPLEMENTED, priority: P1, actor: ACT-RECEP}
+  - {id: US-REP-018, type: user_story, name: "Como Administrador quiero que una Orden RT_INTERNO no ofrezca cobrar registrar pago notificar ni entregar a un cliente porque no hay ningun cliente involucrado", status: IMPLEMENTED, priority: P1, actor: ACT-ADMIN}
+  - {id: US-REP-019, type: user_story, name: "Como Sistema quiero informar el resultado de la reparacion a Gestion RT antes de que el equipo se devuelva para dejar constancia formal del resultado", status: IMPLEMENTED, priority: P1, actor: ACT-SYSTEM}
+  - {id: US-REP-020, type: user_story, name: "Como Administrador o Recepcionista quiero devolver el equipo a Gestion RT una vez informado el resultado sin que el sistema afirme un estado ENTREGADA que el negocio todavia no definio", status: IMPLEMENTED, priority: P1, actor: ACT-ADMIN, actores_alternativos: [ACT-RECEP]}
+
+  # ================================================================== #
+  # System Actions NUEVAS de HP-REP-002 (continua desde ACC-REP-026)   #
+  # ================================================================== #
+
+  - {id: ACC-REP-027, type: system_action, name: Crear la Orden de origen RT_INTERNO sin Cliente con referencia de contexto RT y equipo en REQUERIMIENTO sin Detalles, status: IMPLEMENTED}
+  - {id: ACC-REP-028, type: system_action, name: Determinar segun la politica del Origen si corresponde comprobante de recepcion y emitirlo solo cuando corresponde, status: IMPLEMENTED}
+  - {id: ACC-REP-029, type: system_action, name: Determinar segun la politica del Origen que RT_INTERNO es NO_COBRABLE_AL_CLIENTE y no ofrecer Registrar Pago Notificar ni Entregar, status: IMPLEMENTED}
+  - {id: ACC-REP-030, type: system_action, name: Informar el resultado de la reparacion a Gestion RT, status: IMPLEMENTED}
+  - {id: ACC-REP-031, type: system_action, name: Registrar la devolucion del equipo a Gestion RT posicionando la Orden en el evento final sin asentar ENTREGADA, status: IMPLEMENTED}
+  - {id: ACC-REP-032, type: system_action, name: Rechazar en el service el registro de un Pago cuando la condicion comercial del Origen no es COBRABLE ademas de no ofrecerlo en acciones_disponibles, status: IMPLEMENTED}
+
+  # ================================================================== #
+  # Functional Requirements NUEVOS (continua desde FR-REP-066)         #
+  # ================================================================== #
+
+  - {id: FR-REP-067, type: functional_requirement, name: Crear la Orden RT_INTERNO sin exigir Cliente conservando el equipo y una referencia de contexto RT con cero Detalles, status: IMPLEMENTED}
+  - {id: FR-REP-068, type: functional_requirement, name: No generar comprobante de recepcion para las Ordenes cuyo Origen no lo requiere segun su politica, status: IMPLEMENTED}
+  - {id: FR-REP-069, type: functional_requirement, name: No ofrecer Registrar Pago Notificar ni Entregar en una Orden cuyo Origen es NO_COBRABLE_AL_CLIENTE y no requiere entrega a cliente, status: IMPLEMENTED}
+  - {id: FR-REP-070, type: functional_requirement, name: Informar el resultado a Gestion RT unicamente con la Orden REPARACION_LISTA y antes de poder devolver el equipo, status: IMPLEMENTED}
+  - {id: FR-REP-071, type: functional_requirement, name: Devolver el equipo a Gestion RT solo despues de informar el resultado sin exigir saldo cero ni comprobante final ni garantia, status: IMPLEMENTED}
+  - {id: FR-REP-072, type: functional_requirement, name: No asentar ENTREGADA al devolver un equipo RT_INTERNO dejando el estado terminal definitivo pendiente de definicion segun V1.3, status: IMPLEMENTED}
+  - {id: FR-REP-073, type: functional_requirement, name: Mantener identificable el punto del proceso de una Orden RT_INTERNO con una ruta de referencia propia distinta de la de CLIENTE_EXTERNO, status: IMPLEMENTED}
+  - {id: FR-REP-074, type: functional_requirement, name: Rechazar Registrar Pago a nivel backend para toda Orden cuyo Origen no sea COBRABLE sin depender de que la UI oculte la accion, status: IMPLEMENTED}
+
+  # ================================================================== #
+  # Technical Requirements NUEVOS (continua desde TR-REP-064)          #
+  # ================================================================== #
+
+  - {id: TR-REP-065, type: technical_requirement, name: "OrdenReparacion.cliente es Optional (Cliente | None = None) y referencia_rt es un campo adicional Optional[str], compatibles con el JSON persistido antes de HP-REP-002", status: IMPLEMENTED}
+  - {id: TR-REP-066, type: technical_requirement, name: generar_comprobante_recepcion consulta politica_de(orden.origen).requiere_comprobante_recepcion en vez de comparar el Origen contra CLIENTE_EXTERNO de forma hardcodeada, status: IMPLEMENTED}
+  - {id: TR-REP-067, type: technical_requirement, name: "acciones_disponibles consulta politica_de(orden.origen) para decidir Registrar Pago Notificar y Entregar y agrega Informar RT / Devolver RT segun requiere_informar_rt; AccionDisponible/AccionOut declaran requiere_actor: bool (default true) para distinguir un rol humano todavia sin definir (roles=(), requiere_actor=true, ej. Registrar Pago pre BR-REP-017) de un nodo actor:ACT-SYSTEM sin ningun actor humano que autorizar (roles=(), requiere_actor=false, Informar RT/PROC-REP-290)", status: IMPLEMENTED}
+  - {id: TR-REP-068, type: technical_requirement, name: "informar_resultado_rt exige Origen RT_INTERNO y estado REPARACION_LISTA y encadena PROC-REP-250 (observacion No) con PROC-REP-290; PROC-REP-290 es actor:ACT-SYSTEM en el Business Process V1.3 asi que el service NO recibe Usuario ni el comando de aplicacion/endpoint reciben usuario_id, y el historial de PROC-REP-290 queda con usuario_id=None", status: IMPLEMENTED}
+  - {id: TR-REP-069, type: technical_requirement, name: devolver_equipo_rt exige Origen RT_INTERNO y current_process en PROC-REP-290 y ausencia de Ejecucion/toma/reservas activas sin exigir saldo comprobante ni garantia y fija current_process en EVT-REP-999 sin tocar estado_workflow, status: IMPLEMENTED}
+  - {id: TR-REP-070, type: technical_requirement, name: acciones_disponibles detecta fin de proceso tambien por current_process igual a EVT-REP-999 ademas de estado_workflow ENTREGADA porque RT_INTERNO no llega a ENTREGADA, status: IMPLEMENTED}
+  - {id: TR-REP-071, type: technical_requirement, name: "progreso() resuelve _RUTA_RT_INTERNO desde el mapping _RUTAS_POR_ORIGEN, una ruta de referencia propia que diverge de CLIENTE_EXTERNO desde el ingreso (020 en vez de 030, sin 060) y en el cierre (290/270 en vez de 260/265/266/280)", status: IMPLEMENTED}
+  - {id: TR-REP-072, type: technical_requirement, name: El frontend consume Cliente nullable referencia_rt condicion_comercial requiere_actor y los comandos Informar/Devolver RT sin logica de negocio propia en la UI, status: IMPLEMENTED}
+  - {id: TR-REP-073, type: technical_requirement, name: "registrar_pago consulta politica_de(orden.origen).condicion_comercial y lanza PrecondicionInvalidaError si no es COBRABLE, antes de validar rol o monto; se aplica aunque el service se invoque directo, no solo cuando la UI ofrece el boton", status: IMPLEMENTED}
+
+  # ================================================================== #
+  # Tasks NUEVAS. status DONE solo con evidencia codigo+test.          #
+  # Continua desde TASK-REP-157.                                       #
+  # ================================================================== #
+
+  - {id: TASK-REP-158, type: task, name: "Ampliar OrdenReparacion con cliente: Cliente | None = None y el campo referencia_rt: str | None, preservando compatibilidad con el JSON persistido antes de HP-REP-002", status: DONE, scenario: HP-REP-002}
+  - {id: TASK-REP-159, type: task, name: "[US-REP-017] Implementar crear_orden_rt_interno (PROC-REP-010 -> 020 -> 040), el comando de aplicacion crear_orden_rt y el endpoint POST /api/orders/rt-interno", status: DONE, scenario: HP-REP-002}
+  - {id: TASK-REP-160, type: task, name: "[US-REP-017] Reescribir generar_comprobante_recepcion para bifurcar segun PoliticaOrigen.requiere_comprobante_recepcion en vez de un chequeo de Origen hardcodeado", status: DONE, scenario: HP-REP-002}
+  - {id: TASK-REP-161, type: task, name: "[US-REP-018] Extender acciones_disponibles con ACCION_INFORMAR_RT / ACCION_DEVOLVER_RT gobernadas por politica_de(...).requiere_informar_rt y el corte de acciones cuando current_process es EVT-REP-999", status: DONE, scenario: HP-REP-002}
+  - {id: TASK-REP-162, type: task, name: "[US-REP-019] Implementar informar_resultado_rt (PROC-REP-250 No -> PROC-REP-290), el comando de aplicacion informar_rt y el endpoint POST /api/orders/{id}/inform-rt", status: DONE, scenario: HP-REP-002}
+  - {id: TASK-REP-163, type: task, name: "[US-REP-020] Implementar devolver_equipo_rt (PROC-REP-270 reutilizado, sin ENTREGADA), el comando de aplicacion devolver_rt y el endpoint POST /api/orders/{id}/return-rt", status: DONE, scenario: HP-REP-002}
+  - {id: TASK-REP-164, type: task, name: "[US-REP-017] Declarar _RUTA_RT_INTERNO en application/progreso.py como ruta de referencia propia de visualizacion para Ordenes RT_INTERNO", status: DONE, scenario: HP-REP-002}
+  - {id: TASK-REP-165, type: task, name: "Adaptar el frontend: formulario de alta RT_INTERNO, acciones INFORMAR_RT/DEVOLVER_RT, render de Cliente nullable y de condicion_comercial en tipos api.ts, api/ordenes.ts y los componentes de ordenes-reparacion", status: DONE, scenario: HP-REP-002}
+  - {id: TASK-REP-166, type: task, name: "[US-REP-018] Rechazar registrar_pago en el service cuando politica_de(orden.origen).condicion_comercial no es COBRABLE (BR-REP-016/017), con tests service+API para RT_INTERNO (rechazo) y CLIENTE_EXTERNO (sin cambio)", status: DONE, scenario: HP-REP-002}
+
+  # ================================================================== #
+  # Code / Artifact NUEVOS. Continua desde CODE-REP-120.               #
+  # Granularidad mas gruesa que hp-rep-001.yaml a proposito: el delta   #
+  # de HP-REP-002 es chico y no amerita un item por funcion.           #
+  # ================================================================== #
+
+  - {id: CODE-REP-121, type: code_artifact, name: "domain/models/orden_reparacion.py::OrdenReparacion (cliente Optional + referencia_rt)", status: IMPLEMENTED, source: "app/backend/app/domain/models/orden_reparacion.py::OrdenReparacion"}
+  - {id: CODE-REP-122, type: code_artifact, name: "services/documentos.py::generar_comprobante_recepcion (ahora gobernada por PoliticaOrigen)", status: IMPLEMENTED, source: "app/backend/app/services/documentos.py::generar_comprobante_recepcion"}
+  - {id: CODE-REP-123, type: code_artifact, name: "services/ordenes.py::crear_orden_rt_interno", status: IMPLEMENTED, source: "app/backend/app/services/ordenes.py::crear_orden_rt_interno"}
+  - {id: CODE-REP-124, type: code_artifact, name: "services/ordenes.py::informar_resultado_rt", status: IMPLEMENTED, source: "app/backend/app/services/ordenes.py::informar_resultado_rt"}
+  - {id: CODE-REP-125, type: code_artifact, name: "services/ordenes.py::devolver_equipo_rt", status: IMPLEMENTED, source: "app/backend/app/services/ordenes.py::devolver_equipo_rt"}
+  - {id: CODE-REP-126, type: code_artifact, name: "application/ingreso.py::crear_orden_rt", status: IMPLEMENTED, source: "app/backend/app/application/ingreso.py::crear_orden_rt"}
+  - {id: CODE-REP-127, type: code_artifact, name: "application/cierre.py::informar_rt", status: IMPLEMENTED, source: "app/backend/app/application/cierre.py::informar_rt"}
+  - {id: CODE-REP-128, type: code_artifact, name: "application/cierre.py::devolver_rt", status: IMPLEMENTED, source: "app/backend/app/application/cierre.py::devolver_rt"}
+  - {id: CODE-REP-129, type: code_artifact, name: "application/acciones.py::acciones_disponibles (ACCION_INFORMAR_RT / ACCION_DEVOLVER_RT y corte EVT-REP-999)", status: IMPLEMENTED, source: "app/backend/app/application/acciones.py::acciones_disponibles"}
+  - {id: CODE-REP-130, type: code_artifact, name: "application/progreso.py::_RUTA_RT_INTERNO", status: IMPLEMENTED, source: "app/backend/app/application/progreso.py::_RUTA_RT_INTERNO"}
+  - {id: CODE-REP-131, type: code_artifact, name: "api/ordenes.py (POST /rt-interno, /{id}/inform-rt sin body, /{id}/return-rt) + api/schemas.py (CrearOrdenRtIn, DevolverRtIn, cliente/referencia_rt/condicion_comercial/requiere_actor en los Out)", status: IMPLEMENTED, source: "app/backend/app/api/ordenes.py"}
+  - {id: CODE-REP-132, type: code_artifact, name: "frontend ordenes-reparacion: alta RT_INTERNO, acciones INFORMAR_RT/DEVOLVER_RT, Cliente nullable (AccionesOrden.tsx, DetalleOrden.tsx, ListadoOrdenes.tsx, PanelOrdenes.tsx)", status: IMPLEMENTED, source: "app/frontend/src/features/ordenes-reparacion/"}
+  - {id: CODE-REP-133, type: code_artifact, name: "frontend api/ordenes.ts + types/api.ts (tipos y llamadas HTTP para RT_INTERNO, incluido Accion.requiere_actor)", status: IMPLEMENTED, source: "app/frontend/src/api/ordenes.ts"}
+  - {id: CODE-REP-134, type: code_artifact, name: "services/pagos.py::registrar_pago (chequeo de condicion_comercial COBRABLE)", status: IMPLEMENTED, source: "app/backend/app/services/pagos.py::registrar_pago"}
+
+  # ================================================================== #
+  # Internal Tests NUEVOS. Continua desde TEST-REP-222.                #
+  # ================================================================== #
+
+  - {id: TEST-REP-223, type: internal_test, name: "test_orden_rt_nace_sin_cliente_con_referencia_de_contexto", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_orden_rt_nace_sin_cliente_con_referencia_de_contexto"}
+  - {id: TEST-REP-224, type: internal_test, name: "test_ingreso_rt_no_pasa_por_registro_de_cliente_ni_comprobante", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_ingreso_rt_no_pasa_por_registro_de_cliente_ni_comprobante"}
+  - {id: TEST-REP-225, type: internal_test, name: "test_evaluar_situacion_llega_a_completa_igual_que_hp1", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_evaluar_situacion_llega_a_completa_igual_que_hp1"}
+  - {id: TEST-REP-226, type: internal_test, name: "test_control_tecnico_y_puntaje_son_los_mismos_mecanismos_que_hp1", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_control_tecnico_y_puntaje_son_los_mismos_mecanismos_que_hp1"}
+  - {id: TEST-REP-227, type: internal_test, name: "test_reparacion_lista_no_notifica_ni_pasa_por_260", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_reparacion_lista_no_notifica_ni_pasa_por_260"}
+  - {id: TEST-REP-228, type: internal_test, name: "test_informar_rt_registra_250_no_y_290", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_informar_rt_registra_250_no_y_290"}
+  - {id: TEST-REP-229, type: internal_test, name: "test_devolucion_rt_llega_a_evt_999_sin_marcar_entregada", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_devolucion_rt_llega_a_evt_999_sin_marcar_entregada"}
+  - {id: TEST-REP-230, type: internal_test, name: "test_detalle_conserva_snapshots_independientes_de_hp1", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_detalle_conserva_snapshots_independientes_de_hp1"}
+  - {id: TEST-REP-231, type: internal_test, name: "test_movimientos_de_inventario_quedan_vinculados_al_detalle", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_movimientos_de_inventario_quedan_vinculados_al_detalle"}
+  - {id: TEST-REP-232, type: internal_test, name: "test_no_se_genera_ningun_comprobante_para_rt_interno", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_no_se_genera_ningun_comprobante_para_rt_interno"}
+  - {id: TEST-REP-233, type: internal_test, name: "test_rt_interno_no_ofrece_registrar_pago_ni_notificar_ni_entregar", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_rt_interno_no_ofrece_registrar_pago_ni_notificar_ni_entregar"}
+  - {id: TEST-REP-234, type: internal_test, name: "test_rt_interno_no_exige_saldo_cero_para_devolver", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_rt_interno_no_exige_saldo_cero_para_devolver"}
+  - {id: TEST-REP-235, type: internal_test, name: "test_devolver_rt_esta_disponible_recien_despues_de_informar", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_devolver_rt_esta_disponible_recien_despues_de_informar"}
+  - {id: TEST-REP-236, type: internal_test, name: "test_orden_terminada_no_ofrece_ninguna_accion", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_orden_terminada_no_ofrece_ninguna_accion"}
+  - {id: TEST-REP-237, type: internal_test, name: "test_crear_orden_rt_no_pide_ni_devuelve_cliente", status: PASSING, source: "app/backend/tests/test_api_hp_rep_002.py::test_crear_orden_rt_no_pide_ni_devuelve_cliente"}
+  - {id: TEST-REP-238, type: internal_test, name: "test_hp_rep_002_end_to_end_por_http", status: PASSING, source: "app/backend/tests/test_api_hp_rep_002.py::test_hp_rep_002_end_to_end_por_http"}
+  - {id: TEST-REP-239, type: internal_test, name: "test_cliente_externo_sigue_funcionando_igual_junto_a_rt_interno", status: PASSING, source: "app/backend/tests/test_api_hp_rep_002.py::test_cliente_externo_sigue_funcionando_igual_junto_a_rt_interno"}
+  - {id: TEST-REP-240, type: internal_test, name: "test_listado_muestra_referencia_rt_cuando_no_hay_cliente", status: PASSING, source: "app/backend/tests/test_api_hp_rep_002.py::test_listado_muestra_referencia_rt_cuando_no_hay_cliente"}
+  - {id: TEST-REP-241, type: internal_test, name: "test_una_orden_hp1_anterior_a_referencia_rt_sigue_cargando", status: PASSING, source: "app/backend/tests/test_repositories_json.py::test_una_orden_hp1_anterior_a_referencia_rt_sigue_cargando"}
+  - {id: TEST-REP-242, type: internal_test, name: "test_registrar_pago_rechaza_una_orden_rt_interno", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_registrar_pago_rechaza_una_orden_rt_interno"}
+  - {id: TEST-REP-243, type: internal_test, name: "test_registrar_pago_sigue_funcionando_en_cliente_externo", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_registrar_pago_sigue_funcionando_en_cliente_externo"}
+  - {id: TEST-REP-244, type: internal_test, name: "test_informar_rt_no_registra_ningun_actor_humano", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_informar_rt_no_registra_ningun_actor_humano"}
+  - {id: TEST-REP-245, type: internal_test, name: "test_informar_rt_se_publica_como_accion_de_sistema_sin_actor", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_informar_rt_se_publica_como_accion_de_sistema_sin_actor"}
+  - {id: TEST-REP-246, type: internal_test, name: "test_devolver_rt_no_puede_ejecutarse_antes_de_informar", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_devolver_rt_no_puede_ejecutarse_antes_de_informar"}
+  - {id: TEST-REP-247, type: internal_test, name: "test_representacion_comercial_rt_no_es_deuda_pendiente", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_representacion_comercial_rt_no_es_deuda_pendiente"}
+  - {id: TEST-REP-248, type: internal_test, name: "test_registrar_pago_rechaza_rt_interno_con_admin_activo_por_http", status: PASSING, source: "app/backend/tests/test_api_hp_rep_002.py::test_registrar_pago_rechaza_rt_interno_con_admin_activo_por_http"}
+  - {id: TEST-REP-249, type: internal_test, name: "test_registrar_pago_cliente_externo_no_se_ve_afectado", status: PASSING, source: "app/backend/tests/test_api_hp_rep_002.py::test_registrar_pago_cliente_externo_no_se_ve_afectado"}
+  - {id: TEST-REP-250, type: internal_test, name: "test_representacion_comercial_rt_no_es_deuda_pendiente_por_http", status: PASSING, source: "app/backend/tests/test_api_hp_rep_002.py::test_representacion_comercial_rt_no_es_deuda_pendiente_por_http"}
+
+  # Verificacion puntual de que PROC-REP-270 (a diferencia de PROC-REP-290)
+  # SI exige un actor humano real: no crean FR/TR nuevos, verifican los
+  # ya declarados arriba (FR-REP-071/072, TR-REP-069) y ejercitan el
+  # codigo ya declarado (CODE-REP-125, CODE-REP-131).
+  - {id: TEST-REP-251, type: internal_test, name: "test_devolver_rt_con_administrador_registra_su_usuario_id", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_devolver_rt_con_administrador_registra_su_usuario_id"}
+  - {id: TEST-REP-252, type: internal_test, name: "test_devolver_rt_con_recepcion_registra_su_usuario_id", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_devolver_rt_con_recepcion_registra_su_usuario_id"}
+  - {id: TEST-REP-253, type: internal_test, name: "test_devolver_rt_rechaza_tecnico", status: PASSING, source: "app/backend/tests/test_hp_rep_002.py::test_devolver_rt_rechaza_tecnico"}
+  - {id: TEST-REP-254, type: internal_test, name: "test_devolver_rt_rechaza_tecnico_por_http", status: PASSING, source: "app/backend/tests/test_api_hp_rep_002.py::test_devolver_rt_rechaza_tecnico_por_http"}
+  - {id: TEST-REP-255, type: internal_test, name: "test_devolver_rt_con_recepcion_registra_su_usuario_por_http", status: PASSING, source: "app/backend/tests/test_api_hp_rep_002.py::test_devolver_rt_con_recepcion_registra_su_usuario_por_http"}
+
+  # ================================================================== #
+  # UAT NUEVOS. status PENDING: no hubo ronda formal de aceptacion.    #
+  # Continua desde UAT-REP-016.                                        #
+  # ================================================================== #
+
+  - {id: UAT-REP-017, type: uat, name: Recepcion puede dejar formalmente ingresado un equipo RT_INTERNO sin registrar un Cliente, status: PENDING}
+  - {id: UAT-REP-018, type: uat, name: Una Orden RT_INTERNO nunca ofrece cobrar notificar ni entregar a un cliente, status: PENDING}
+  - {id: UAT-REP-019, type: uat, name: Gestion RT recibe el resultado de la reparacion antes de que el equipo se devuelva, status: PENDING}
+  - {id: UAT-REP-020, type: uat, name: El equipo RT_INTERNO queda devuelto a Gestion RT y la Orden finaliza sin que el sistema asuma un estado ENTREGADA que el negocio no definio, status: PENDING}
+
+links:
+
+  # --- Capa de negocio ---------------------------------------------- #
+
+  - {from: PROC-REP, to: DOM-RMA, relationship: belongs_to}
+  - {from: HP-REP-002, to: PROC-REP, relationship: belongs_to}
+  - {from: EVT-REP-001, to: PROC-REP, relationship: belongs_to}
+  - {from: EVT-REP-999, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-010, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-020, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-040, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-045, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-050, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-070, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-080, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-090, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-140, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-150, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-170, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-172, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-180, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-212, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-181, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-174, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-185, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-190, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-200, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-210, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-211, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-220, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-230, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-245, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-240, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-250, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-290, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-270, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-030, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-060, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-260, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-265, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-266, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-280, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-001, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-002, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-003, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-004, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-005, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-006, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-007, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-008, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-009, to: PROC-REP, relationship: belongs_to}
+
+  # HP-REP-002 activa las mismas 8 Features que HP-REP-001. FEAT-REP-009
+  # (Cancelacion) sigue sin activarse.
+  - {from: HP-REP-002, to: FEAT-REP-001, relationship: activates}
+  - {from: HP-REP-002, to: FEAT-REP-002, relationship: activates}
+  - {from: HP-REP-002, to: FEAT-REP-003, relationship: activates}
+  - {from: HP-REP-002, to: FEAT-REP-004, relationship: activates}
+  - {from: HP-REP-002, to: FEAT-REP-005, relationship: activates}
+  - {from: HP-REP-002, to: FEAT-REP-006, relationship: activates}
+  - {from: HP-REP-002, to: FEAT-REP-007, relationship: activates}
+  - {from: HP-REP-002, to: FEAT-REP-008, relationship: activates}
+
+  # --- User Stories -> Feature --------------------------------------- #
+
+  - {from: US-REP-017, to: FEAT-REP-001, relationship: belongs_to}
+  - {from: US-REP-018, to: FEAT-REP-007, relationship: belongs_to}
+  - {from: US-REP-019, to: FEAT-REP-008, relationship: belongs_to}
+  - {from: US-REP-020, to: FEAT-REP-008, relationship: belongs_to}
+
+  # --- System Actions: realizes User Story, covers nodos, governed_by  #
+
+  - {from: ACC-REP-027, to: US-REP-017, relationship: realizes}
+  - {from: ACC-REP-027, to: PROC-REP-010, relationship: covers}
+  - {from: ACC-REP-027, to: PROC-REP-020, relationship: covers}
+  - {from: ACC-REP-027, to: PROC-REP-040, relationship: covers}
+  - {from: ACC-REP-027, to: BR-REP-013, relationship: governed_by}
+  - {from: ACC-REP-027, to: BR-REP-016, relationship: governed_by}
+
+  - {from: ACC-REP-028, to: US-REP-017, relationship: realizes}
+  - {from: ACC-REP-028, to: PROC-REP-050, relationship: covers}
+  - {from: ACC-REP-028, to: PROC-REP-060, relationship: covers}
+  - {from: ACC-REP-028, to: BR-REP-016, relationship: governed_by}
+
+  - {from: ACC-REP-029, to: US-REP-018, relationship: realizes}
+  - {from: ACC-REP-029, to: PROC-REP-250, relationship: covers}
+  - {from: ACC-REP-029, to: BR-REP-016, relationship: governed_by}
+
+  - {from: ACC-REP-030, to: US-REP-019, relationship: realizes}
+  - {from: ACC-REP-030, to: PROC-REP-250, relationship: covers}
+  - {from: ACC-REP-030, to: PROC-REP-290, relationship: covers}
+  - {from: ACC-REP-030, to: BR-REP-016, relationship: governed_by}
+
+  - {from: ACC-REP-031, to: US-REP-020, relationship: realizes}
+  - {from: ACC-REP-031, to: PROC-REP-270, relationship: covers}
+  - {from: ACC-REP-031, to: EVT-REP-999, relationship: covers}
+  - {from: ACC-REP-031, to: BR-REP-016, relationship: governed_by}
+  - {from: ACC-REP-031, to: BR-REP-018, relationship: governed_by}
+
+  - {from: ACC-REP-032, to: US-REP-018, relationship: realizes}
+  - {from: ACC-REP-032, to: BR-REP-016, relationship: governed_by}
+  - {from: ACC-REP-032, to: BR-REP-017, relationship: governed_by}
+
+  # --- Functional Requirements: derives_from System Action ----------- #
+
+  - {from: FR-REP-067, to: ACC-REP-027, relationship: derives_from}
+  - {from: FR-REP-068, to: ACC-REP-028, relationship: derives_from}
+  - {from: FR-REP-069, to: ACC-REP-029, relationship: derives_from}
+  - {from: FR-REP-070, to: ACC-REP-030, relationship: derives_from}
+  - {from: FR-REP-071, to: ACC-REP-031, relationship: derives_from}
+  - {from: FR-REP-072, to: ACC-REP-031, relationship: derives_from}
+  - {from: FR-REP-073, to: ACC-REP-027, relationship: derives_from}
+  - {from: FR-REP-074, to: ACC-REP-032, relationship: derives_from}
+
+  # --- Technical Requirements: satisfies Functional Requirement ------ #
+
+  - {from: TR-REP-065, to: FR-REP-067, relationship: satisfies}
+  - {from: TR-REP-066, to: FR-REP-068, relationship: satisfies}
+  - {from: TR-REP-067, to: FR-REP-069, relationship: satisfies}
+  - {from: TR-REP-068, to: FR-REP-070, relationship: satisfies}
+  - {from: TR-REP-069, to: FR-REP-071, relationship: satisfies}
+  - {from: TR-REP-069, to: FR-REP-072, relationship: satisfies}
+  - {from: TR-REP-070, to: FR-REP-072, relationship: satisfies}
+  - {from: TR-REP-071, to: FR-REP-073, relationship: satisfies}
+  - {from: TR-REP-072, to: FR-REP-073, relationship: satisfies}
+  - {from: TR-REP-073, to: FR-REP-074, relationship: satisfies}
+
+  # --- Tasks: implements Technical Requirement ------------------------ #
+
+  - {from: TASK-REP-158, to: TR-REP-065, relationship: implements}
+  - {from: TASK-REP-159, to: TR-REP-065, relationship: implements}
+  - {from: TASK-REP-160, to: TR-REP-066, relationship: implements}
+  - {from: TASK-REP-161, to: TR-REP-067, relationship: implements}
+  - {from: TASK-REP-161, to: TR-REP-070, relationship: implements}
+  - {from: TASK-REP-162, to: TR-REP-068, relationship: implements}
+  - {from: TASK-REP-163, to: TR-REP-069, relationship: implements}
+  - {from: TASK-REP-164, to: TR-REP-071, relationship: implements}
+  - {from: TASK-REP-165, to: TR-REP-072, relationship: implements}
+  - {from: TASK-REP-166, to: TR-REP-073, relationship: implements}
+
+  # --- Code: produced_by Task ----------------------------------------- #
+
+  - {from: CODE-REP-121, to: TASK-REP-158, relationship: produced_by}
+  - {from: CODE-REP-122, to: TASK-REP-160, relationship: produced_by}
+  - {from: CODE-REP-123, to: TASK-REP-159, relationship: produced_by}
+  - {from: CODE-REP-124, to: TASK-REP-162, relationship: produced_by}
+  - {from: CODE-REP-125, to: TASK-REP-163, relationship: produced_by}
+  - {from: CODE-REP-126, to: TASK-REP-159, relationship: produced_by}
+  - {from: CODE-REP-127, to: TASK-REP-162, relationship: produced_by}
+  - {from: CODE-REP-128, to: TASK-REP-163, relationship: produced_by}
+  - {from: CODE-REP-129, to: TASK-REP-161, relationship: produced_by}
+  - {from: CODE-REP-130, to: TASK-REP-164, relationship: produced_by}
+  - {from: CODE-REP-131, to: TASK-REP-159, relationship: produced_by}
+  - {from: CODE-REP-131, to: TASK-REP-162, relationship: produced_by}
+  - {from: CODE-REP-131, to: TASK-REP-163, relationship: produced_by}
+  - {from: CODE-REP-132, to: TASK-REP-165, relationship: produced_by}
+  - {from: CODE-REP-133, to: TASK-REP-165, relationship: produced_by}
+  - {from: CODE-REP-134, to: TASK-REP-166, relationship: produced_by}
+
+  # --- Internal Tests: exercises Code / verifies FR o TR -------------- #
+
+  - {from: TEST-REP-223, to: FR-REP-067, relationship: verifies}
+  - {from: TEST-REP-224, to: FR-REP-068, relationship: verifies}
+  - {from: TEST-REP-225, to: CODE-REP-123, relationship: exercises}
+  - {from: TEST-REP-226, to: CODE-REP-123, relationship: exercises}
+  - {from: TEST-REP-227, to: FR-REP-069, relationship: verifies}
+  - {from: TEST-REP-228, to: FR-REP-070, relationship: verifies}
+  - {from: TEST-REP-229, to: FR-REP-072, relationship: verifies}
+  - {from: TEST-REP-230, to: CODE-REP-123, relationship: exercises}
+  - {from: TEST-REP-231, to: CODE-REP-123, relationship: exercises}
+  - {from: TEST-REP-232, to: FR-REP-068, relationship: verifies}
+  - {from: TEST-REP-233, to: FR-REP-069, relationship: verifies}
+  - {from: TEST-REP-234, to: FR-REP-071, relationship: verifies}
+  - {from: TEST-REP-235, to: FR-REP-070, relationship: verifies}
+  - {from: TEST-REP-235, to: FR-REP-071, relationship: verifies}
+  - {from: TEST-REP-236, to: TR-REP-070, relationship: verifies}
+  - {from: TEST-REP-237, to: CODE-REP-131, relationship: exercises}
+  - {from: TEST-REP-238, to: CODE-REP-131, relationship: exercises}
+  - {from: TEST-REP-239, to: CODE-REP-131, relationship: exercises}
+  - {from: TEST-REP-240, to: CODE-REP-131, relationship: exercises}
+  - {from: TEST-REP-241, to: TR-REP-065, relationship: verifies}
+  - {from: TEST-REP-242, to: FR-REP-074, relationship: verifies}
+  - {from: TEST-REP-243, to: CODE-REP-134, relationship: exercises}
+  - {from: TEST-REP-244, to: TR-REP-068, relationship: verifies}
+  - {from: TEST-REP-245, to: TR-REP-067, relationship: verifies}
+  - {from: TEST-REP-246, to: FR-REP-071, relationship: verifies}
+  - {from: TEST-REP-247, to: FR-REP-069, relationship: verifies}
+  - {from: TEST-REP-248, to: FR-REP-074, relationship: verifies}
+  - {from: TEST-REP-249, to: CODE-REP-131, relationship: exercises}
+  - {from: TEST-REP-250, to: FR-REP-069, relationship: verifies}
+  - {from: TEST-REP-251, to: CODE-REP-125, relationship: exercises}
+  - {from: TEST-REP-252, to: CODE-REP-125, relationship: exercises}
+  - {from: TEST-REP-253, to: FR-REP-071, relationship: verifies}
+  - {from: TEST-REP-254, to: CODE-REP-131, relationship: exercises}
+  - {from: TEST-REP-255, to: CODE-REP-131, relationship: exercises}
+  - {from: TEST-REP-255, to: FR-REP-072, relationship: verifies}
+
+  # --- UAT: accepts User Story ----------------------------------------- #
+
+  - {from: UAT-REP-017, to: US-REP-017, relationship: accepts}
+  - {from: UAT-REP-018, to: US-REP-018, relationship: accepts}
+  - {from: UAT-REP-019, to: US-REP-019, relationship: accepts}
+  - {from: UAT-REP-020, to: US-REP-020, relationship: accepts}

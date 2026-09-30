@@ -8,11 +8,10 @@ pantalla puede ofrecer para mostrarle al usuario donde esta la Orden
 dentro de su recorrido de referencia.
 
 La ruta de referencia esta declarada por Origen en ``_RUTAS_POR_ORIGEN``:
-un dato explicito, no un interprete del Process Graph. En Slice 0 solo
-``CLIENTE_EXTERNO`` tiene Ordenes reales -es el unico origen que la API
-puede crear-, asi que es la unica ruta poblada; agregar la de
-HP-REP-002 o HP-REP-003 en un slice futuro es agregar una entrada a este
-dict, sin tocar ``progreso()``.
+un dato explicito, no un interprete del Process Graph. CLIENTE_EXTERNO
+(HP-REP-001) y RT_INTERNO (HP-REP-002) tienen su propia ruta poblada;
+agregar la de HP-REP-003 en un slice futuro es agregar una entrada a
+este dict, sin tocar ``progreso()``.
 """
 
 from dataclasses import dataclass
@@ -57,11 +56,47 @@ _RUTA_CLIENTE_EXTERNO: tuple[tuple[str, str], ...] = (
     ("EVT-REP-999", "Proceso finalizado"),
 )
 
-# Ruta de referencia por Origen. Solo CLIENTE_EXTERNO tiene Ordenes
-# reales en Slice 0; RT_INTERNO y RMA_GARANTIA_REPARACION se agregan
-# cuando HP-REP-002 y HP-REP-003 tengan su propio recorrido conectado.
+# Nodos de HP-REP-002 (RT_INTERNO), en el orden en que el escenario los
+# recorre. Diverge de CLIENTE_EXTERNO desde el ingreso (020 en vez de
+# 030, sin comprobante de recepcion) y en el cierre (informar a Gestion
+# RT en vez de notificar/cobrar/entregar a un cliente).
+_RUTA_RT_INTERNO: tuple[tuple[str, str], ...] = (
+    ("PROC-REP-010", "Identificar origen"),
+    ("PROC-REP-020", "Recibir referencia y contexto del equipo RT"),
+    ("PROC-REP-040", "Crear Orden"),
+    ("PROC-REP-045", "Detalles conocidos"),
+    ("PROC-REP-070", "Definir Detalles"),
+    ("PROC-REP-050", "Requiere comprobante de recepcion"),
+    ("PROC-REP-080", "Validar factibilidad"),
+    ("PROC-REP-090", "Existe Detalle trabajable"),
+    ("PROC-REP-140", "Habilitar Orden"),
+    ("PROC-REP-150", "Definir prioridad"),
+    ("PROC-REP-170", "Ingresar a cola"),
+    ("PROC-REP-172", "Validar estacion de trabajo"),
+    ("PROC-REP-180", "Tomar Orden"),
+    ("PROC-REP-212", "Iniciar un Detalle de reparacion"),
+    ("PROC-REP-181", "Seleccionar Detalle"),
+    ("PROC-REP-174", "Estacion habilitada para el Detalle"),
+    ("PROC-REP-185", "Reservar insumos e iniciar Ejecucion"),
+    ("PROC-REP-190", "Ejecutar Detalle"),
+    ("PROC-REP-200", "Registrar ejecucion real"),
+    ("PROC-REP-210", "Aplicar movimientos de inventario"),
+    ("PROC-REP-211", "Evaluar situacion de la Orden"),
+    ("PROC-REP-220", "Realizar control tecnico"),
+    ("PROC-REP-230", "Todos los Detalles aprobados"),
+    ("PROC-REP-245", "Consolidar puntaje"),
+    ("PROC-REP-240", "Marcar reparacion lista"),
+    ("PROC-REP-250", "Requiere entrega a cliente"),
+    ("PROC-REP-290", "Informar resultado a Gestion RT"),
+    ("PROC-REP-270", "Devolver equipo a Gestion RT"),
+    ("EVT-REP-999", "Proceso finalizado"),
+)
+
+# Ruta de referencia por Origen. RMA_GARANTIA_REPARACION se agrega
+# cuando HP-REP-003 tenga su propio recorrido conectado.
 _RUTAS_POR_ORIGEN: dict[OrigenOrden, tuple[tuple[str, str], ...]] = {
     OrigenOrden.CLIENTE_EXTERNO: _RUTA_CLIENTE_EXTERNO,
+    OrigenOrden.RT_INTERNO: _RUTA_RT_INTERNO,
 }
 
 

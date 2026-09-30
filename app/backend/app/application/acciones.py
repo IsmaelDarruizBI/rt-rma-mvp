@@ -13,10 +13,11 @@ Las acciones se derivan de:
     Detalles, toma activa, ejecucion activa, condicion comercial
 
 NUNCA de a que Scenario "pertenece" la Orden: no hay ningun
-``if origen == ...: acciones_de_hp1()`` ni equivalente. Para
-CLIENTE_EXTERNO -el unico origen operativo en Slice 0- el resultado es
-identico al de antes de este refactor, salvo el cambio deliberado de
-BR-REP-017: Registrar Pago ya no queda abierto a cualquier rol.
+``if origen == ...: acciones_de_hp1()`` ni equivalente. La politica
+(``domain.politicas.politica_de``) es lo unico que distingue el
+comportamiento por Origen -CLIENTE_EXTERNO (HP-REP-001) y RT_INTERNO
+(HP-REP-002) comparten esta misma funcion-, nunca un ``if`` sobre el
+Origen o el Scenario.
 """
 
 from dataclasses import dataclass
@@ -49,17 +50,30 @@ ACCION_LIBERAR_ORDEN = "LIBERAR_ORDEN"
 ACCION_NOTIFICAR = "NOTIFICAR"
 ACCION_REGISTRAR_PAGO = "REGISTRAR_PAGO"
 ACCION_ENTREGAR = "ENTREGAR"
+ACCION_INFORMAR_RT = "INFORMAR_RT"
+ACCION_DEVOLVER_RT = "DEVOLVER_RT"
 
 CERO = Decimal("0")
 
 
 @dataclass(frozen=True)
 class AccionDisponible:
-    """Accion humana que la Orden admite ahora mismo.
+    """Un paso que la Orden admite ahora mismo, humano o de sistema.
 
     ``roles`` lista TODOS los actores autorizados: un nodo puede
     declarar ``actores_alternativos`` en PROC-REP V1.3 (por ejemplo
     PROC-REP-150 y PROC-REP-270), y entonces son varios sin jerarquia.
+    ``roles: ()`` con ``requiere_actor: True`` (default) significa que el
+    negocio TODAVIA no definio el rol (por ejemplo Registrar Pago antes
+    de BR-REP-017): sigue siendo una accion humana, solo que cualquier
+    usuario activo puede ejecutarla.
+
+    ``requiere_actor`` es una dimension distinta: ``False`` marca un
+    ``PROC-REP-*`` declarado ``actor: ACT-SYSTEM`` en el Business Process
+    (por ejemplo PROC-REP-290). Ahi NO hay ningun actor humano que
+    autorizar -ni "cualquiera", ni "todavia sin definir"-: no
+    corresponde exigir ``usuario_id`` en el comando. El MVP igual lo
+    expone como paso demostrable en la UI para poder disparar el nodo.
     """
 
     codigo: str
@@ -67,6 +81,7 @@ class AccionDisponible:
     roles: tuple[RolUsuario, ...] = ()
     detalle_id: str | None = None
     ejecucion_id: str | None = None
+    requiere_actor: bool = True
 
 
 def detalle_trabajable(orden: OrdenReparacion) -> str | None:
@@ -134,9 +149,16 @@ def _detalles_en_espera_de_control(orden: OrdenReparacion) -> list[str]:
 def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
     """Acciones humanas que corresponden al estado actual de la Orden.
 
-    Una Orden ENTREGADA no admite ninguna: el proceso termino.
+    Una Orden ENTREGADA no admite ninguna: el proceso termino. Lo mismo
+    vale para RT_INTERNO al llegar a EVT-REP-999: ese origen no pasa por
+    ENTREGADA (el estado terminal sigue pendiente de definicion, ver
+    ``devolver_equipo_rt``), asi que el fin de proceso se detecta por
+    ``current_process`` para no dejar acciones abiertas.
     """
-    if orden.estado_workflow is EstadoWorkflow.ENTREGADA:
+    if (
+        orden.estado_workflow is EstadoWorkflow.ENTREGADA
+        or orden.current_process == "EVT-REP-999"
+    ):
         return []
 
     politica = politica_de(orden.origen)
@@ -245,6 +267,29 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             AccionDisponible(
                 codigo=ACCION_ENTREGAR,
                 etiqueta="Entregar el equipo",
+                roles=ROLES_ENTREGA,
+            )
+        )
+
+    informado_rt = "PROC-REP-290" in alcanzados
+
+    if politica.requiere_informar_rt and lista and not informado_rt:
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_INFORMAR_RT,
+                etiqueta="Informar el resultado a Gestion RT",
+                # PROC-REP-290 es actor: ACT-SYSTEM (no hay actor humano
+                # que autorizar), distinto de "rol todavia sin definir".
+                roles=(),
+                requiere_actor=False,
+            )
+        )
+
+    if politica.requiere_informar_rt and informado_rt:
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_DEVOLVER_RT,
+                etiqueta="Devolver el equipo a Gestion RT",
                 roles=ROLES_ENTREGA,
             )
         )

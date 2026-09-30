@@ -49,6 +49,7 @@ from app.domain.models import (
     TomaOrden,
     Usuario,
 )
+from app.domain.politicas import politica_de
 from app.services import nuevo_id
 
 # --- Catalogos ---------------------------------------------------------
@@ -142,6 +143,18 @@ class CrearOrdenIn(BaseModel):
     usuario_id: str = Field(min_length=1)
     cliente: ClienteIn
     equipo: EquipoIn
+
+
+class CrearOrdenRtIn(BaseModel):
+    """``POST /api/orders/rt-interno`` (ACT-RECEP, HP-REP-002).
+
+    Sin ``cliente``: el equipo es de Rosario Tecno. ``referencia_rt`` es
+    el contexto minimo que PROC-REP-020 recibe de Gestion RT.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    equipo: EquipoIn
+    referencia_rt: str = Field(min_length=1)
 
 
 class DefinirReparacionIn(BaseModel):
@@ -239,6 +252,12 @@ class PagoIn(BaseModel):
 
 class EntregarIn(BaseModel):
     """``POST /api/orders/{id}/deliver`` (ACT-ADMIN)."""
+
+    usuario_id: str = Field(min_length=1)
+
+
+class DevolverRtIn(BaseModel):
+    """``POST /api/orders/{id}/return-rt`` (PROC-REP-270, HP-REP-002)."""
 
     usuario_id: str = Field(min_length=1)
 
@@ -388,13 +407,20 @@ class DocumentosOut(BaseModel):
 
 
 class ResumenComercialOut(BaseModel):
-    """Situacion comercial derivada. Nunca se persiste: se calcula."""
+    """Situacion comercial derivada. Nunca se persiste: se calcula.
+
+    ``condicion_comercial`` (BR-REP-016) es la de ``PoliticaOrigen``:
+    ``NO_COBRABLE_AL_CLIENTE`` (RT_INTERNO) o ``NO_COBRABLE``
+    (RMA_GARANTIA_REPARACION) le dicen al frontend que ``total``/``saldo``
+    son nominales -lo que hubiera costado-, no una deuda real a cobrar.
+    """
 
     total: Decimal
     pagado: Decimal
     saldo: Decimal
     estado_pago: EstadoPago
     puntaje_total: int
+    condicion_comercial: str
 
 
 class HistorialOut(BaseModel):
@@ -447,14 +473,20 @@ class PasoProgresoOut(BaseModel):
 
 
 class AccionOut(BaseModel):
-    """Accion humana que la Orden admite ahora.
+    """Un paso que la Orden admite ahora, humano o de sistema.
 
     ``roles`` lista TODOS los actores autorizados; puede haber mas de uno
     cuando el nodo declara ``actores_alternativos`` en PROC-REP V1.3.
 
-    Una lista vacia significa que el negocio todavia no definio el actor
+    Con ``requiere_actor: true`` (el caso normal), una lista vacia de
+    ``roles`` significa que el negocio todavia no definio el actor
     (Registrar Pago, BR-REP-017), no que cualquiera pueda: el backend
     igual exige usuario activo.
+
+    ``requiere_actor: false`` marca un nodo ``actor: ACT-SYSTEM`` (por
+    ejemplo Informar a Gestion RT, PROC-REP-290): no hay ningun actor
+    humano que autorizar, y el comando correspondiente no recibe
+    ``usuario_id``.
     """
 
     codigo: str
@@ -462,6 +494,7 @@ class AccionOut(BaseModel):
     roles: list[RolUsuario] = Field(default_factory=list)
     detalle_id: str | None = None
     ejecucion_id: str | None = None
+    requiere_actor: bool = True
 
     @classmethod
     def desde_dominio(cls, accion: AccionDisponible) -> "AccionOut":
@@ -471,7 +504,19 @@ class AccionOut(BaseModel):
             roles=list(accion.roles),
             detalle_id=accion.detalle_id,
             ejecucion_id=accion.ejecucion_id,
+            requiere_actor=accion.requiere_actor,
         )
+
+
+def _nombre_para_listado(orden: OrdenReparacion) -> str:
+    """Identificacion legible de la Orden para el listado.
+
+    ``cliente`` es ``None`` en RT_INTERNO (no hay Cliente externo): se
+    identifica por su referencia de Gestion RT en su lugar.
+    """
+    if orden.cliente is not None:
+        return orden.cliente.nombre
+    return f"RT Interno · {orden.referencia_rt or orden.id}"
 
 
 class OrdenResumenOut(BaseModel):
@@ -498,7 +543,7 @@ class OrdenResumenOut(BaseModel):
             estado_workflow=orden.estado_workflow,
             current_process=orden.current_process,
             prioridad=orden.prioridad,
-            cliente_nombre=orden.cliente.nombre,
+            cliente_nombre=_nombre_para_listado(orden),
             equipo=f"{orden.equipo.marca} {orden.equipo.modelo}",
             total=orden.total,
             saldo=orden.saldo,
@@ -516,8 +561,9 @@ class OrdenOut(BaseModel):
     estado_workflow: EstadoWorkflow
     current_process: str
     prioridad: int
-    cliente: ClienteOut
+    cliente: ClienteOut | None
     equipo: EquipoOut
+    referencia_rt: str | None
     reparaciones_detail: list[DetalleOut]
     tomas: list[TomaOut]
     ejecuciones: list[EjecucionOut]
@@ -547,8 +593,13 @@ class OrdenOut(BaseModel):
             estado_workflow=orden.estado_workflow,
             current_process=orden.current_process,
             prioridad=orden.prioridad,
-            cliente=ClienteOut(**orden.cliente.model_dump()),
+            cliente=(
+                ClienteOut(**orden.cliente.model_dump())
+                if orden.cliente is not None
+                else None
+            ),
             equipo=EquipoOut(**orden.equipo.model_dump()),
+            referencia_rt=orden.referencia_rt,
             reparaciones_detail=[
                 DetalleOut.desde_dominio(
                     detalle,
@@ -575,6 +626,9 @@ class OrdenOut(BaseModel):
                 saldo=orden.saldo,
                 estado_pago=orden.estado_pago,
                 puntaje_total=orden.puntaje_total,
+                condicion_comercial=politica_de(
+                    orden.origen
+                ).condicion_comercial,
             ),
             historial=[
                 HistorialOut.desde_dominio(paso) for paso in orden.historial
