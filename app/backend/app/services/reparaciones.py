@@ -295,10 +295,11 @@ def calcular_puntaje(
     """PROC-REP-245: consolida el puntaje total de la Orden.
 
     NO acredita el puntaje de cada Detalle por primera vez: ese puntaje
-    ya existe desde que ESE Detalle fue aprobado (PROC-REP-230,
-    BR-REP-009), y ``OrdenReparacion.puntaje_total`` ya lo refleja -es
-    un computed field que suma los Detalles con control APROBADO,
-    incluso antes de que la Orden entera complete su control-. Este
+    ya existe desde que ESE Detalle fue aprobado en el control tecnico
+    (PROC-REP-220, BR-REP-009), y ``OrdenReparacion.puntaje_total`` ya
+    lo refleja -es un computed field que suma los Detalles con control
+    APROBADO, incluso antes de que la Orden entera complete su
+    control-. Este
     service solo registra que la consolidacion final ocurrio, llamado
     unicamente cuando el control tecnico completo de la Orden ya
     termino (``application.cierre.aprobar_control``), justo antes de

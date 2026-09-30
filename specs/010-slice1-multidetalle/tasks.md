@@ -176,8 +176,9 @@ DET-002 siga PENDIENTE; aprobar el ultimo encadena `220 -> 230 [Si] ->
       reparacion" a **"Consolidar puntaje de la reparacion"**
       (`business/processes/repair-management-v1.3.yaml`) y su
       descripcion aclara que NO crea el puntaje por Detalle -eso ya
-      ocurre en PROC-REP-230 sobre ESE Detalle-, solo consolida el
-      total de la Orden cuando el control completo termina. `BR-REP-009`
+      ocurre en el control tecnico sobre ESE Detalle (PROC-REP-220)-,
+      solo consolida el total de la Orden cuando el control completo
+      termina (PROC-REP-230, a nivel Orden). `BR-REP-009`
       (`business/rules/business-rules-v1.3.yaml`) se reescribio en el
       mismo sentido. Se renombraron tambien, por consistencia, la
       etiqueta de progreso (`application/progreso.py`: "Calcular

@@ -901,9 +901,9 @@ nodes:
     actor: ACT-SYSTEM
     description: >
       NO calcula el puntaje de cada Detalle por primera vez: ese puntaje
-      ya existe desde el momento en que ESE Detalle fue aprobado
-      (PROC-REP-230 sobre el, BR-REP-009), y el puntaje_total de la
-      Orden ya lo refleja -como suma derivada de los Detalles
+      ya existe desde el momento en que ESE Detalle fue aprobado en el
+      control tecnico (PROC-REP-220, BR-REP-009), y el puntaje_total de
+      la Orden ya lo refleja -como suma derivada de los Detalles
       aprobados- incluso antes de que la Orden entera termine su
       control. Este nodo registra/consolida el puntaje total de la
       Orden cuando el control tecnico completo termina

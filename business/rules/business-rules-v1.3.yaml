@@ -107,18 +107,20 @@ rules:
     name: Puntaje por Detalle
     description: >
       Cada Detalle aprobado aporta su puntaje desde el momento de su
-      propia aprobacion (PROC-REP-230 sobre ESE Detalle), segun la
-      ponderacion configurada de su Tipo de Reparacion: no se espera a
-      que el resto de los Detalles de la Orden tambien esten aprobados.
-      El puntaje_total de la Orden es siempre derivable como la suma de
-      los puntajes de sus Detalles aprobados -es un valor calculado, no
-      algo que un paso del proceso "cree" en un momento puntual-.
-      PROC-REP-245 no calcula el puntaje de cada Detalle por primera
-      vez: consolida/registra el puntaje total de la Orden recien
-      cuando el control tecnico completo termina satisfactoriamente
-      (todos los Detalles aprobados). La distribucion/acreditacion
-      entre distintos tecnicos que participaron de un mismo Detalle
-      sigue pendiente de definicion funcional.
+      propia aprobacion durante el control tecnico (PROC-REP-220), segun
+      la ponderacion configurada de su Tipo de Reparacion: no se espera
+      a que el resto de los Detalles de la Orden tambien esten
+      aprobados. El puntaje_total de la Orden es siempre derivable como
+      la suma de los puntajes de sus Detalles aprobados -es un valor
+      calculado, no algo que un paso del proceso "cree" en un momento
+      puntual-. PROC-REP-230 se evalua a nivel Orden una vez finalizado
+      el control de todos los Detalles; PROC-REP-245 no calcula el
+      puntaje de cada Detalle por primera vez: consolida/registra el
+      puntaje total de la Orden recien cuando ese control completo
+      termina satisfactoriamente (todos los Detalles aprobados). La
+      distribucion/acreditacion entre distintos tecnicos que
+      participaron de un mismo Detalle sigue pendiente de definicion
+      funcional.
     status: draft
 
   - id: BR-REP-010
