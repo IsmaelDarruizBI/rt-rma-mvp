@@ -131,19 +131,30 @@
     overflow: auto;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
+    cursor: grab;
     background:
       radial-gradient(circle, #dfe1e7 1px, transparent 1px) 0 0 / 20px 20px,
       var(--bg);
     border-right: 1px solid var(--border);
   }
+  #diagram-pane.panning { cursor: grabbing; user-select: none; }
+  /* Origin top-left (not top-center): scaling from the center pushes the
+     left half of a wide diagram into negative scroll space, which a
+     browser can never scroll back to. With top-left, the scaled content
+     only ever grows right/down, so the whole diagram stays reachable by
+     scrolling/panning at any zoom. */
   #diagram-inner {
-    transform-origin: top center;
-    transition: transform 0.12s ease-out;
+    transform-origin: 0 0;
     padding: 32px;
     width: max-content;
+    flex: 0 0 auto;
   }
-  #diagram-inner svg { max-width: none !important; height: auto !important; }
+  /* The SVG is given its REAL pixel size (viewBox) from JS: Mermaid emits
+     width="100%" plus a max-width, and inside a max-content container
+     that percentage cannot resolve, so the browser collapsed a
+     2868px-wide diagram to ~450px BEFORE any zoom was applied. */
+  #diagram-inner svg { max-width: none !important; }
   .node.selected > * {
     stroke: var(--accent) !important;
     stroke-width: 3px !important;
@@ -413,6 +424,7 @@
     background: var(--accent-soft);
   }
   .nav-card.functional-action .nav-id { color: var(--accent); font-weight: 700; }
+  .nav-card .nav-desc-plain { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
   .nav-card.functional-action .nav-desc { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
 
   #diagram-pane::-webkit-scrollbar, #detail-pane::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -2684,7 +2696,7 @@ Expecting `+Ze.join(", ")+", got '"+(this.terminals_[Ne]||Ne)+"'":Dt="Parse erro
    * precise intersection) travels with the same embedded data for
    * diagnostics but is deliberately never shown here (section 9).
    */
-  function renderScenarioFeatures(featureIds) {
+  function renderScenarioFeatures(featureIds, reasonsById) {
     if (!featureIds || !featureIds.length) {
       return '<div class="field"><div class="field-label">Features involucradas</div>' +
         '<p class="hint">Ninguna Feature funcionalmente activa para este Scenario.</p></div>';
@@ -2692,9 +2704,13 @@ Expecting `+Ze.join(", ")+", got '"+(this.terminals_[Ne]||Ne)+"'":Dt="Parse erro
     var cards = featureIds.map(function (featureId) {
       var feature = FEATURES_BY_ID[featureId];
       var name = feature ? feature.name : featureId;
+      var why = reasonsById && reasonsById[featureId] && reasonsById[featureId].length
+        ? '<div class="nav-desc-plain">Activa por: ' + escapeHtml(reasonsById[featureId].join("; ")) + "</div>"
+        : "";
       return '<button type="button" class="nav-card" data-nav-feature="' + escapeHtml(featureId) + '">' +
         '<div class="nav-name">' + escapeHtml(name) + "</div>" +
         '<div class="nav-id">' + escapeHtml(featureId) + "</div>" +
+        why +
         "</button>";
     }).join("");
     return '<div class="field"><div class="field-label">Features involucradas</div>' +
@@ -2756,6 +2772,23 @@ Expecting `+Ze.join(", ")+", got '"+(this.terminals_[Ne]||Ne)+"'":Dt="Parse erro
     return '<div class="field"><div class="field-label">Recorrido</div><div class="nav-list">' + items + "</div></div>";
   }
 
+  // Nodes this Scenario deliberately does NOT traverse, each with its reason
+  // (documentary: the path itself is always driven by steps).
+  function renderSkippedNodes(skipped) {
+    if (!skipped || !skipped.length) return "";
+    var cards = skipped.map(function (item) {
+      var node = NODES_BY_ID[item.node];
+      var name = node ? node.name : item.node;
+      return '<button type="button" class="nav-card" data-nav-node="' + escapeHtml(item.node) + '">' +
+        '<div class="nav-name">' + escapeHtml(name) + "</div>" +
+        '<div class="nav-id">' + escapeHtml(item.node) + "</div>" +
+        '<div class="nav-desc-plain">' + escapeHtml(item.reason) + "</div>" +
+        "</button>";
+    }).join("");
+    return '<div class="field"><div class="field-label">Nodos omitidos</div>' +
+      '<div class="nav-list">' + cards + "</div></div>";
+  }
+
   // Panel order (section 14, plus a final derived section): ID/Nombre/
   // Tipo/Scope/Status/Descripcion, Condiciones del Happy Path (facts),
   // Recorrido (steps), Resultado esperado (expected), Features
@@ -2777,10 +2810,13 @@ Expecting `+Ze.join(", ")+", got '"+(this.terminals_[Ne]||Ne)+"'":Dt="Parse erro
       renderFacts("Condiciones del Happy Path", scenario.facts) +
       '<hr class="divider">' +
       renderScenarioSteps(scenario.steps) +
+      (scenario.skipped_nodes && scenario.skipped_nodes.length
+        ? '<hr class="divider">' + renderSkippedNodes(scenario.skipped_nodes)
+        : "") +
       '<hr class="divider">' +
       renderFacts("Resultado esperado", scenario.expected) +
       '<hr class="divider">' +
-      renderScenarioFeatures(scenario.active_features);
+      renderScenarioFeatures(scenario.active_features, scenario.activation_reasons);
 
     panelBody().innerHTML = html;
   }
@@ -3307,38 +3343,111 @@ Expecting `+Ze.join(", ")+", got '"+(this.terminals_[Ne]||Ne)+"'":Dt="Parse erro
       .join("");
   }
 
-  function computeInitialScale() {
-    var pane = document.getElementById("diagram-pane");
+  // --- Zoom / pan -----------------------------------------------------------
+  // Design (section 9): the diagram is shown at its natural, readable size
+  // (scale 1 = Mermaid's own font size) instead of being shrunk to fit the
+  // viewport, and the user navigates a large diagram by panning. Zoom is
+  // multiplicative (each step x1.25) because the useful range is very wide:
+  // an additive step is either glacial at 8x or a jump at 0.2x.
+  var ZOOM_MIN = 0.15;
+  var ZOOM_MAX = 8;
+  var ZOOM_STEP = 1.25;
+  var INITIAL_SCALE = 1;
+  var CURRENT_SCALE = 1;
+
+  /** Gives the rendered SVG its real pixel size from its viewBox (see the CSS note on #diagram-inner svg). */
+  function sizeSvgToViewBox() {
     var svg = document.querySelector("#diagram-inner svg");
-    if (!svg) return 1.4;
-    var naturalWidth = svg.getBoundingClientRect().width;
-    var paneWidth = pane.clientWidth;
-    if (!naturalWidth || !paneWidth) return 1.4;
-    var fit = (paneWidth * 0.6) / naturalWidth;
-    return Math.min(1.8, Math.max(1.2, fit));
+    if (!svg) return null;
+    var vb = svg.viewBox && svg.viewBox.baseVal;
+    if (!vb || !vb.width || !vb.height) return null;
+    svg.removeAttribute("width");
+    svg.style.width = vb.width + "px";
+    svg.style.height = vb.height + "px";
+    return { width: vb.width, height: vb.height };
   }
 
-  function initZoom(defaultScale) {
-    var scale = defaultScale;
+  function clampScale(value) {
+    return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
+  }
+
+  /**
+   * Applies a new scale keeping the content point under (anchorX, anchorY)
+   * - pane-relative pixels; defaults to the pane center - fixed on screen.
+   */
+  function setScale(nextScale, anchorX, anchorY) {
+    var pane = document.getElementById("diagram-pane");
     var target = document.getElementById("diagram-inner");
     var resetBtn = document.getElementById("zoom-reset");
-    function apply() {
-      target.style.transform = "scale(" + scale + ")";
-      resetBtn.textContent = Math.round(scale * 100) + "%";
-    }
-    document.getElementById("zoom-in").addEventListener("click", function () {
-      scale = Math.min(scale + 0.15, 3);
-      apply();
+    var next = clampScale(nextScale);
+    var ax = anchorX === undefined ? pane.clientWidth / 2 : anchorX;
+    var ay = anchorY === undefined ? pane.clientHeight / 2 : anchorY;
+    var contentX = (pane.scrollLeft + ax) / CURRENT_SCALE;
+    var contentY = (pane.scrollTop + ay) / CURRENT_SCALE;
+    CURRENT_SCALE = next;
+    target.style.transform = "scale(" + next + ")";
+    pane.scrollLeft = contentX * next - ax;
+    pane.scrollTop = contentY * next - ay;
+    resetBtn.textContent = Math.round(next * 100) + "%";
+  }
+
+  function initZoom() {
+    var pane = document.getElementById("diagram-pane");
+    var size = sizeSvgToViewBox();
+    CURRENT_SCALE = INITIAL_SCALE;
+    document.getElementById("diagram-inner").style.transform = "scale(" + INITIAL_SCALE + ")";
+    document.getElementById("zoom-reset").textContent = Math.round(INITIAL_SCALE * 100) + "%";
+    // Start horizontally centered on the diagram; vertically at its top.
+    if (size) pane.scrollLeft = Math.max(0, (size.width * INITIAL_SCALE + 64 - pane.clientWidth) / 2);
+    pane.scrollTop = 0;
+
+    document.getElementById("zoom-in").addEventListener("click", function () { setScale(CURRENT_SCALE * ZOOM_STEP); });
+    document.getElementById("zoom-out").addEventListener("click", function () { setScale(CURRENT_SCALE / ZOOM_STEP); });
+    document.getElementById("zoom-reset").addEventListener("click", function () { setScale(INITIAL_SCALE); });
+
+    // Ctrl/Cmd + wheel (and trackpad pinch, which browsers report as ctrl+wheel)
+    // zooms around the cursor; a plain wheel keeps scrolling/panning natively.
+    pane.addEventListener("wheel", function (event) {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      var rect = pane.getBoundingClientRect();
+      var factor = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+      setScale(CURRENT_SCALE * factor, event.clientX - rect.left, event.clientY - rect.top);
+    }, { passive: false });
+
+    // Drag-to-pan on the background. A move under 4px is still a click, so
+    // node clicks, toolbar buttons and the legend keep working untouched.
+    var drag = null;
+    var suppressClick = false;
+    pane.addEventListener("mousedown", function (event) {
+      if (event.button !== 0) return;
+      if (event.target.closest("#toolbar, .legend-panel")) return;
+      drag = { x: event.clientX, y: event.clientY, left: pane.scrollLeft, top: pane.scrollTop, moved: false };
     });
-    document.getElementById("zoom-out").addEventListener("click", function () {
-      scale = Math.max(scale - 0.15, 0.3);
-      apply();
+    window.addEventListener("mousemove", function (event) {
+      if (!drag) return;
+      var dx = event.clientX - drag.x;
+      var dy = event.clientY - drag.y;
+      if (!drag.moved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+      drag.moved = true;
+      pane.classList.add("panning");
+      pane.scrollLeft = drag.left - dx;
+      pane.scrollTop = drag.top - dy;
     });
-    resetBtn.addEventListener("click", function () {
-      scale = defaultScale;
-      apply();
+    window.addEventListener("mouseup", function () {
+      if (drag && drag.moved) {
+        suppressClick = true;
+        setTimeout(function () { suppressClick = false; }, 0);
+      }
+      drag = null;
+      pane.classList.remove("panning");
     });
-    apply();
+    pane.addEventListener("click", function (event) {
+      if (suppressClick) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
+    }, true);
   }
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -3347,7 +3456,7 @@ Expecting `+Ze.join(", ")+", got '"+(this.terminals_[Ne]||Ne)+"'":Dt="Parse erro
       var container = document.getElementById("diagram-inner");
       container.innerHTML = result.svg;
       if (result.bindFunctions) result.bindFunctions(container);
-      initZoom(computeInitialScale());
+      initZoom();
     });
     renderProcessSummary();
     renderLegend();

@@ -50,6 +50,17 @@ export interface BusinessRule {
   status?: string;
 }
 
+/**
+ * Identifies a process edge by from + condition + to, never by from/to alone
+ * (several transitions can exist between the same two nodes, and an edge
+ * without a condition never matches one that has one). The single
+ * definition shared by the validators, the Feature mapping and the
+ * scenario-candidate discovery.
+ */
+export function edgeKey(from: string, condition: string | undefined, to: string): string {
+  return `${from}::${condition ?? ""}::${to}`;
+}
+
 export function loadYaml<T>(filePath: string): T {
   return parse(readFileSync(filePath, "utf8")) as T;
 }

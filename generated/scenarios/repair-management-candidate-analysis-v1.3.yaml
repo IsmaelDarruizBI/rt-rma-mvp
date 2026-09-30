@@ -1,0 +1,1213 @@
+# GENERATED / ANALYSIS FILE - DO NOT EDIT BY HAND.
+# NOT A SOURCE OF TRUTH. NOT CONFIRMED BUSINESS SCENARIOS. REQUIRES HUMAN REVIEW.
+#
+# Functional Candidate Analysis - stage 2 of Scenario Discovery.
+#
+# Produced by Claude's functional/business reading of the 40 structural
+# candidates in generated/scenarios/repair-management-candidates-v1.3.yaml
+# (Pass 1: only alternatives that leave a node ON a Happy Path). This file is
+# NOT deterministic code: it is an analytical judgment, cross-checking each
+# candidate against the facts/skipped_nodes of HP-REP-001/002/003, the prose
+# of business/processes/repair-management-v1.3.yaml, the Business Rules and
+# the Features. A future validation tool may check its SHAPE, never its
+# judgment calls automatically.
+#
+# It does NOT create any VARIANT / EXCEPTION / EDGE_CASE, does NOT modify
+# business/scenarios/repair-management-scenarios-v1.3.yaml, the Process
+# Graph, the Business Rules or the Features, and does NOT decide anything:
+# every `suggested_type` and every grouping is a proposal for human review,
+# never an approved classification. A Candidate Scenario (and, even more so,
+# an entry in this file) is NOT an approved Scenario.
+generated:
+  tool: "Claude functional analysis (manual, not scripted)"
+  status: GENERATED_ANALYSIS_NOT_SOURCE_OF_TRUTH_REQUIRES_HUMAN_REVIEW
+  method: >
+    LLM-assisted reading, not a deterministic algorithm. Every conclusion is
+    falsifiable against the cited sources and MUST be re-checked by a human
+    before any real Scenario is created from it.
+  source_candidates_file: generated/scenarios/repair-management-candidates-v1.3.yaml
+  sources_consulted:
+    - business/processes/repair-management-v1.3.yaml
+    - business/scenarios/repair-management-scenarios-v1.3.yaml
+    - business/rules/business-rules-v1.3.yaml
+    - business/features/repair-management-features-v1.3.yaml
+    - docs/discovery/README.md
+  candidates_analyzed: 40
+
+# =====================================================================
+# CANDIDATE-BY-CANDIDATE ANALYSIS
+# =====================================================================
+candidate_analysis:
+
+  # --- PROC-REP-010: origin selection (FG-REP-001 / FG-REP-002) ---
+
+  - candidate: CAND-REP-001
+    happy_path_analysis:
+      HP-REP-002:
+        feasibility: INFEASIBLE
+        reason: >
+          HP-REP-002's origin fact is RT_INTERNO (fixed at PROC-REP-010,
+          which routes RT_INTERNO -> PROC-REP-020 unconditionally). Taking
+          the CLIENTE_EXTERNO edge (-> PROC-REP-030) instead contradicts
+          that fact: an Order's origin is a single choice at intake, not a
+          value that can change mid-scenario.
+    functional_interpretation:
+      proposed_name: Ingreso de cliente externo (bajo la etiqueta de HP-REP-002)
+      description: >
+        Es exactamente el recorrido de PROC-REP-010 -> PROC-REP-030 que ya
+        constituye HP-REP-001, visto desde la baseline de HP-REP-002.
+    scenario_worthiness: DUPLICATE
+    suggested_type: NONE
+    functional_group: FG-REP-001
+    relations:
+      - type: DUPLICATE_FUNCTIONAL_MEANING
+        reference: HP-REP-001
+
+  - candidate: CAND-REP-002
+    happy_path_analysis:
+      HP-REP-001:
+        feasibility: INFEASIBLE
+        reason: >
+          HP-REP-001's origin es CLIENTE_EXTERNO (PROC-REP-010 ->
+          PROC-REP-030). Tomar la rama RMA_GARANTIA_REPARACION (->
+          PROC-REP-035) contradice ese origen; ademas PROC-REP-035 exige
+          "Orden de Reparacion origen finalizada" como input, algo que un
+          HP-REP-001 recien iniciado (EVT-REP-001, sin Orden previa) no
+          tiene.
+    functional_interpretation:
+      proposed_name: Ingreso por garantia RMA (bajo la etiqueta de HP-REP-001)
+      description: >
+        Es el recorrido de entrada alternativa a PROC-REP-035 mencionado en
+        su propia descripcion ("como entrada alternativa, desde
+        PROC-REP-010"), que ya es HP-REP-003 completo.
+    scenario_worthiness: DUPLICATE
+    suggested_type: NONE
+    functional_group: FG-REP-001
+    relations:
+      - type: DUPLICATE_FUNCTIONAL_MEANING
+        reference: HP-REP-003
+
+  - candidate: CAND-REP-003
+    happy_path_analysis:
+      HP-REP-002:
+        feasibility: INFEASIBLE
+        reason: >
+          Mismo razonamiento que CAND-REP-002 pero contra el origen
+          RT_INTERNO de HP-REP-002; ademas PROC-REP-035 exige una Orden
+          origen finalizada que HP-REP-002 (EVT-REP-001) no tiene.
+    functional_interpretation:
+      proposed_name: Ingreso por garantia RMA (bajo la etiqueta de HP-REP-002)
+      description: Igual que CAND-REP-002, ya cubierto por HP-REP-003.
+    scenario_worthiness: DUPLICATE
+    suggested_type: NONE
+    functional_group: FG-REP-001
+    relations:
+      - type: DUPLICATE_FUNCTIONAL_MEANING
+        reference: HP-REP-003
+
+  - candidate: CAND-REP-004
+    happy_path_analysis:
+      HP-REP-001:
+        feasibility: INFEASIBLE
+        reason: >
+          Contradice el origen fijo CLIENTE_EXTERNO de HP-REP-001 (mismo
+          razonamiento estructural que los anteriores: el origen se decide
+          una vez en PROC-REP-010).
+    functional_interpretation:
+      proposed_name: Garantia de Venta RT (RT_GARANTIA_VENTA)
+      description: >
+        A diferencia de CAND-REP-002/003/006, esta rama NO esta cubierta
+        por ningun Happy Path existente: RT_GARANTIA_VENTA solo aparece hoy
+        como "Variant futura" en docs/discovery/README.md, nunca como
+        camino E2E completo.
+    scenario_worthiness: NEEDS_REVIEW
+    suggested_type: NEEDS_REVIEW
+    functional_group: FG-REP-002
+    related_rules:
+      - BR-REP-016
+
+  - candidate: CAND-REP-005
+    happy_path_analysis:
+      HP-REP-002:
+        feasibility: INFEASIBLE
+        reason: Contradice el origen fijo RT_INTERNO de HP-REP-002.
+    functional_interpretation:
+      proposed_name: Garantia de Venta RT (RT_GARANTIA_VENTA)
+      description: >
+        Mismo caso funcional que CAND-REP-004 (RT_GARANTIA_VENTA sin Happy
+        Path propio), alcanzado desde la baseline de HP-REP-002 en vez de
+        HP-REP-001. No se fusiona con CAND-REP-004 porque su baseline_edge
+        difiere (firma distinta), pero es el MISMO caso de negocio.
+    scenario_worthiness: NEEDS_REVIEW
+    suggested_type: NEEDS_REVIEW
+    functional_group: FG-REP-002
+    relations:
+      - type: SAME_BUSINESS_CASE
+        reference: CAND-REP-004
+    related_rules:
+      - BR-REP-016
+
+  - candidate: CAND-REP-006
+    happy_path_analysis:
+      HP-REP-001:
+        feasibility: INFEASIBLE
+        reason: Contradice el origen fijo CLIENTE_EXTERNO de HP-REP-001.
+    functional_interpretation:
+      proposed_name: Ingreso de equipo RT (bajo la etiqueta de HP-REP-001)
+      description: Es el recorrido de HP-REP-002 completo, visto desde HP-REP-001.
+    scenario_worthiness: DUPLICATE
+    suggested_type: NONE
+    functional_group: FG-REP-001
+    relations:
+      - type: DUPLICATE_FUNCTIONAL_MEANING
+        reference: HP-REP-002
+
+  # --- PROC-REP-045/050/060/065/068/069: intake diagnosis (FG-REP-003) ---
+
+  - candidate: CAND-REP-007
+    happy_path_analysis:
+      HP-REP-001:
+        feasibility: POSSIBLE
+        reason: >
+          PROC-REP-045 pregunta si el Detalle se conoce AL INGRESO,
+          independiente del origen. Ningun fact ni BR restringe la rama
+          "No" a un origen en particular.
+      HP-REP-002:
+        feasibility: POSSIBLE
+        reason: Mismo razonamiento; nada ata el origen RT_INTERNO a "Si" en 045.
+      HP-REP-003:
+        feasibility: POSSIBLE
+        reason: >
+          PROC-REP-035 identifica el Detalle origen de la garantia, pero
+          eso no impide que el NUEVO Detalle de garantia, al definirse,
+          todavia no tenga su propio Tipo/alcance resuelto al ingreso.
+    functional_interpretation:
+      proposed_name: Ingreso sin diagnostico conocido (EN_REVISION)
+      description: >
+        Al ingreso no se sabe que Detalle(s) de reparacion necesita el
+        equipo; la Orden se marca EN_REVISION (PROC-REP-055) y converge en
+        PROC-REP-050 (el gate de comprobante) igual que la Orden feliz, solo
+        que sin Detalles aun definidos.
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: VARIANT
+    functional_group: FG-REP-003
+    related_features:
+      - FEAT-REP-002
+
+  - candidate: CAND-REP-008
+    happy_path_analysis:
+      HP-REP-001:
+        feasibility: INFEASIBLE
+        reason: >
+          La descripcion de PROC-REP-050 dice explicitamente que
+          CLIENTE_EXTERNO (junto con RT_GARANTIA_VENTA y
+          RMA_GARANTIA_REPARACION) SI requiere comprobante de recepcion;
+          la rama "No - Detalles definidos" (que omite el comprobante) es,
+          por prosa, exclusiva de RT_INTERNO. Contradice ademas el fact
+          receipt_required=true de HP-REP-001.
+      HP-REP-003:
+        feasibility: INFEASIBLE
+        reason: Mismo razonamiento; receipt_required=true tambien en HP-REP-003.
+    functional_interpretation:
+      proposed_name: (No aplica - combinacion de origen invalida en PROC-REP-050)
+      description: >
+        Ver limitacion "PROC-REP-050/250 no codifican origen en el edge"
+        en la seccion de limitaciones.
+    scenario_worthiness: INFEASIBLE
+    suggested_type: NONE
+
+  - candidate: CAND-REP-009
+    happy_path_analysis:
+      HP-REP-002:
+        feasibility: POSSIBLE
+        reason: >
+          RT_INTERNO no requiere comprobante (receipt_required=false); la
+          rama "No - aun en revision" de PROC-REP-050 es, por prosa, la
+          variante de ESE origen para "todavia no se sabe la reparacion".
+          Nada contradice que un equipo RT llegue sin diagnostico previo.
+    functional_interpretation:
+      proposed_name: Equipo RT ingresado sin diagnostico conocido
+      description: >
+        Analogo de CAND-REP-007 para RT_INTERNO: sin comprobante (no
+        aplica), con revision tecnica posterior (PROC-REP-065/068) que
+        concluye en Detalles definidos (PROC-REP-075).
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: VARIANT
+    functional_group: FG-REP-003
+    relations:
+      - type: SUBCASE_OF
+        reference: CAND-REP-007
+    related_features:
+      - FEAT-REP-002
+
+  - candidate: CAND-REP-010
+    happy_path_analysis:
+      HP-REP-002:
+        feasibility: POSSIBLE
+        reason: >
+          Misma rama de origen ("No - aun en revision") que CAND-REP-009,
+          pero la revision tecnica concluye SIN_REPARACION (PROC-REP-069),
+          que BR-REP-010 documenta como una conclusion valida y normal (no
+          equivale a CANCELADA).
+    functional_interpretation:
+      proposed_name: Equipo RT sin diagnostico, concluye SIN_REPARACION
+      description: >
+        El tecnico revisa el equipo RT y determina que no hay reparacion
+        para realizar; la Orden concluye SIN_REPARACION sin haber pasado
+        nunca por un Detalle definido.
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: VARIANT
+    functional_group: FG-REP-003
+    relations:
+      - type: SUBCASE_OF
+        reference: CAND-REP-007
+    related_features:
+      - FEAT-REP-002
+    related_rules:
+      - BR-REP-010
+
+  - candidate: CAND-REP-011
+    happy_path_analysis:
+      HP-REP-001:
+        feasibility: INFEASIBLE
+        reason: >
+          Misma razon que CAND-REP-008: la rama "No - aun en revision" de
+          PROC-REP-050 es, por prosa, exclusiva de RT_INTERNO; contradice
+          receipt_required=true de HP-REP-001.
+      HP-REP-003:
+        feasibility: INFEASIBLE
+        reason: Idem, receipt_required=true en HP-REP-003.
+    functional_interpretation:
+      proposed_name: (No aplica - combinacion de origen invalida en PROC-REP-050)
+      description: Ver limitacion de PROC-REP-050/250.
+    scenario_worthiness: INFEASIBLE
+    suggested_type: NONE
+
+  - candidate: CAND-REP-012
+    happy_path_analysis:
+      HP-REP-001:
+        feasibility: INFEASIBLE
+        reason: Misma razon que CAND-REP-011.
+      HP-REP-003:
+        feasibility: INFEASIBLE
+        reason: Misma razon que CAND-REP-011.
+    functional_interpretation:
+      proposed_name: (No aplica - combinacion de origen invalida en PROC-REP-050)
+      description: Ver limitacion de PROC-REP-050/250.
+    scenario_worthiness: INFEASIBLE
+    suggested_type: NONE
+
+  - candidate: CAND-REP-013
+    happy_path_analysis:
+      HP-REP-002:
+        feasibility: INFEASIBLE
+        reason: >
+          El edge alternativo es PROC-REP-050 -> PROC-REP-060 [Si], la
+          rama de comprobante REQUERIDO; por prosa de PROC-REP-050 esa
+          rama es de CLIENTE_EXTERNO/RT_GARANTIA_VENTA/
+          RMA_GARANTIA_REPARACION, no de RT_INTERNO (contradice
+          receipt_required=false de HP-REP-002).
+    functional_interpretation:
+      proposed_name: (No aplica - combinacion de origen invalida en PROC-REP-050)
+      description: Ver limitacion de PROC-REP-050/250.
+    scenario_worthiness: INFEASIBLE
+    suggested_type: NONE
+
+  - candidate: CAND-REP-014
+    happy_path_analysis:
+      HP-REP-002:
+        feasibility: INFEASIBLE
+        reason: Misma razon que CAND-REP-013.
+    functional_interpretation:
+      proposed_name: (No aplica - combinacion de origen invalida en PROC-REP-050)
+      description: Ver limitacion de PROC-REP-050/250.
+    scenario_worthiness: INFEASIBLE
+    suggested_type: NONE
+
+  - candidate: CAND-REP-015
+    happy_path_analysis:
+      HP-REP-002:
+        feasibility: INFEASIBLE
+        reason: Misma razon que CAND-REP-013.
+    functional_interpretation:
+      proposed_name: (No aplica - combinacion de origen invalida en PROC-REP-050)
+      description: Ver limitacion de PROC-REP-050/250.
+    scenario_worthiness: INFEASIBLE
+    suggested_type: NONE
+
+  - candidate: CAND-REP-016
+    happy_path_analysis:
+      HP-REP-001:
+        feasibility: POSSIBLE
+        reason: >
+          HP-REP-001/003 SI generan comprobante (PROC-REP-060). Una vez
+          ahi, la propia descripcion de PROC-REP-060 contempla que la
+          Orden siga EN_REVISION ("el comprobante muestra... reparacion
+          pendiente de diagnostico"), habilitando la rama "Aun en
+          revision" -> revision tecnica -> Detalles definidos.
+      HP-REP-003:
+        feasibility: POSSIBLE
+        reason: Mismo razonamiento; nada ata el origen de garantia a "conocido al ingreso".
+    functional_interpretation:
+      proposed_name: Cliente externo/garantia con comprobante pero diagnostico pendiente
+      description: >
+        Se emite el comprobante de recepcion sin conocer aun el Detalle;
+        la revision tecnica posterior (065/068) define los Detalles
+        (075) y converge en PROC-REP-080.
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: VARIANT
+    functional_group: FG-REP-003
+    relations:
+      - type: SUBCASE_OF
+        reference: CAND-REP-007
+    related_features:
+      - FEAT-REP-002
+
+  - candidate: CAND-REP-017
+    happy_path_analysis:
+      HP-REP-001:
+        feasibility: POSSIBLE
+        reason: Igual que CAND-REP-016, pero la revision concluye SIN_REPARACION.
+      HP-REP-003:
+        feasibility: POSSIBLE
+        reason: Igual razonamiento.
+    functional_interpretation:
+      proposed_name: Cliente externo/garantia con comprobante, concluye SIN_REPARACION
+      description: >
+        Se emitio comprobante sin Detalle conocido; la revision tecnica
+        determina que no hay reparacion para realizar (BR-REP-010).
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: VARIANT
+    functional_group: FG-REP-003
+    relations:
+      - type: SUBCASE_OF
+        reference: CAND-REP-007
+      - type: SAME_BUSINESS_CASE
+        reference: CAND-REP-010
+    related_features:
+      - FEAT-REP-002
+    related_rules:
+      - BR-REP-010
+
+  # --- PROC-REP-090/100/110/120: resource blocking (FG-REP-004) ---
+
+  - candidate: CAND-REP-018
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "Nada en los facts fija resources_available=true como condicion inmutable del origen; es solo el valor elegido para la Orden feliz." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Mismo razonamiento; la disponibilidad de insumos es independiente del origen." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Mismo razonamiento." }
+    functional_interpretation:
+      proposed_name: Recursos insuficientes al ingreso (sin override)
+      description: >
+        Ningun Detalle de la Orden es trabajable por falta de recursos
+        (PROC-REP-090/100); sin override, la Orden queda PENDIENTE_RECURSOS
+        (PROC-REP-120) esperando una revalidacion futura.
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: EXCEPTION
+    functional_group: FG-REP-004
+    related_features:
+      - FEAT-REP-003
+    related_rules:
+      - BR-REP-002
+
+  - candidate: CAND-REP-019
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "El override es un mecanismo ya modelado (PROC-REP-110/130, BR-REP-003) para cualquier origen." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Idem." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Recursos insuficientes, resuelto por override
+      description: >
+        Un usuario autorizado fuerza como trabajable un Detalle que no
+        supero la validacion de recursos (PROC-REP-110 Si -> PROC-REP-130);
+        la Orden continua igual que si el recurso hubiera estado disponible.
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: EXCEPTION
+    functional_group: FG-REP-004
+    relations:
+      - type: RESOLUTION_OF
+        reference: CAND-REP-018
+    related_features:
+      - FEAT-REP-003
+    related_rules:
+      - BR-REP-003
+
+  - candidate: CAND-REP-031
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "PROC-REP-211 puede volver a determinar PENDIENTE_RECURSOS despues de una Ejecucion, un rechazo o una cancelacion (prosa del propio nodo)." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Idem." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Recursos insuficientes detectados despues de una Ejecucion
+      description: >
+        Mismo caso de negocio que CAND-REP-018/019 (falta de recursos), pero
+        disparado mas tarde en el ciclo de vida (via el resolver
+        PROC-REP-211) en vez de en la validacion inicial de intake.
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: EXCEPTION
+    functional_group: FG-REP-004
+    relations:
+      - type: SAME_BUSINESS_CASE
+        reference: CAND-REP-018
+    related_features:
+      - FEAT-REP-003
+    related_rules:
+      - BR-REP-012
+
+  # --- PROC-REP-170 -> 300/305: cancellation (FG-REP-005) ---
+
+  - candidate: CAND-REP-020
+    happy_path_analysis:
+      HP-REP-001: { feasibility: NEEDS_BUSINESS_DECISION, reason: "El grafo permite cancelar un Detalle desde EN_COLA (PROC-REP-300, BR-REP-014), pero BR-REP-014/el propio nodo dicen explicitamente que QUIEN esta autorizado a cancelar todavia no fue definido por negocio (por eso el nodo omite `actor`)." }
+      HP-REP-002: { feasibility: NEEDS_BUSINESS_DECISION, reason: "Mismo motivo." }
+      HP-REP-003: { feasibility: NEEDS_BUSINESS_DECISION, reason: "Mismo motivo." }
+    functional_interpretation:
+      proposed_name: Cancelacion de un Detalle en cola
+      description: >
+        Un Detalle PENDIENTE (sin Ejecucion activa) se cancela mientras la
+        Orden esta EN_COLA; el resolver (PROC-REP-211) reevalua la Orden.
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: NEEDS_REVIEW
+    functional_group: FG-REP-005
+    related_features:
+      - FEAT-REP-009
+    related_rules:
+      - BR-REP-014
+
+  - candidate: CAND-REP-021
+    happy_path_analysis:
+      HP-REP-001: { feasibility: NEEDS_BUSINESS_DECISION, reason: "Mismo vacio de autorizacion que CAND-REP-020, ahora a nivel Orden completa (PROC-REP-305)." }
+      HP-REP-002: { feasibility: NEEDS_BUSINESS_DECISION, reason: "Idem." }
+      HP-REP-003: { feasibility: NEEDS_BUSINESS_DECISION, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Cancelacion de la Orden completa en cola
+      description: >
+        Se cancelan todos los Detalles NO TERMINALES de la Orden
+        (PROC-REP-305); los ya COMPLETO se preservan. El resolver decide si
+        la Orden queda CANCELADA o continua con lo ya completado.
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: NEEDS_REVIEW
+    functional_group: FG-REP-005
+    relations:
+      - type: SAME_BUSINESS_CASE
+        reference: CAND-REP-020
+    related_features:
+      - FEAT-REP-009
+    related_rules:
+      - BR-REP-014
+
+  # --- PROC-REP-172: cannot take the Order (FG-REP-006) ---
+
+  - candidate: CAND-REP-022
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "Sesion/estacion invalida es una condicion tecnica del tecnico/estacion, no del origen de la Orden." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Idem." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Sesion o estacion invalida al intentar tomar la Orden
+      description: >
+        Un tecnico intenta tomar una Orden EN_COLA sin sesion activa o con
+        estacion no operativa/no confirmada; la Orden permanece EN_COLA.
+        PROC-REP-172 documenta explicitamente que NO existe override a
+        nivel Orden para este caso (BR-REP-011, alcance A).
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: EXCEPTION
+    functional_group: FG-REP-006
+    related_features:
+      - FEAT-REP-004
+    related_rules:
+      - BR-REP-011
+
+  - candidate: CAND-REP-023
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "Idem CAND-REP-022, causa distinta." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Idem." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Ningun Detalle trabajable compatible con la Estacion
+      description: >
+        La sesion/estacion son validas, pero ningun Detalle trabajable de
+        la Orden tiene su Tipo de Reparacion habilitado para esa Estacion;
+        tampoco aqui existe override a nivel Orden (BR-REP-011).
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: EXCEPTION
+    functional_group: FG-REP-006
+    relations:
+      - type: SAME_BUSINESS_CASE
+        reference: CAND-REP-022
+    related_features:
+      - FEAT-REP-004
+    related_rules:
+      - BR-REP-011
+
+  # --- PROC-REP-174/176/178/179: station not enabled for the Detail (FG-REP-007) ---
+
+  - candidate: CAND-REP-024
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "Compatibilidad de estacion con el Tipo de Reparacion del Detalle es independiente del origen de la Orden." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Idem." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Estacion no habilitada para el Detalle, sin forzar
+      description: >
+        El tecnico selecciono un Detalle cuyo Tipo de Reparacion no esta
+        habilitado en su Estacion; sin override, vuelve a elegir otro
+        Detalle trabajable (PROC-REP-181), sin liberar la Orden.
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: EXCEPTION
+    functional_group: FG-REP-007
+    related_features:
+      - FEAT-REP-005
+    related_rules:
+      - BR-REP-011
+
+  - candidate: CAND-REP-025
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "El override de continuidad (PROC-REP-178/179, BR-REP-011) ya esta modelado para cualquier origen." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Idem." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Estacion no habilitada para el Detalle, forzada
+      description: >
+        Un usuario autorizado fuerza la continuidad de ese Detalle desde
+        una Estacion no configurada para su Tipo de Reparacion; el flujo
+        continua igual que si fuera compatible (PROC-REP-185).
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: EXCEPTION
+    functional_group: FG-REP-007
+    relations:
+      - type: RESOLUTION_OF
+        reference: CAND-REP-024
+    related_features:
+      - FEAT-REP-005
+    related_rules:
+      - BR-REP-011
+
+  # --- PROC-REP-185/186: reservation failure (standalone) ---
+
+  - candidate: CAND-REP-026
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "La reserva real de insumos es una condicion tecnica de inventario en el momento de iniciar la Ejecucion, independiente del origen." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Idem." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Reserva de insumos fallida al iniciar la Ejecucion
+      description: >
+        El insumo dejo de estar disponible entre la validacion de
+        factibilidad (PROC-REP-080) y el intento real de reserva
+        (PROC-REP-185): la Ejecucion no se inicia (PROC-REP-186) y el
+        Detalle queda BLOQUEADO_POR_RECURSOS.
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: EXCEPTION
+    related_features:
+      - FEAT-REP-005
+    related_rules:
+      - BR-REP-006
+
+  # --- PROC-REP-200: interrupted execution (standalone) ---
+
+  - candidate: CAND-REP-027
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "PROC-REP-200 describe 'Interrumpido' como uno de los dos desenlaces normales de una Ejecucion, no un error." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Idem." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Ejecucion interrumpida (Detalle vuelve a PENDIENTE)
+      description: >
+        El tecnico se retira sin terminar; la Ejecucion queda historizada,
+        se reconcilian insumos (PROC-REP-210) y el Detalle vuelve a
+        PENDIENTE para que el mismo u otro tecnico lo continue despues.
+        Rejoin inmediato en el mismo nodo (PROC-REP-210) que la baseline.
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: VARIANT
+    related_features:
+      - FEAT-REP-005
+    related_rules:
+      - BR-REP-004
+
+  # --- PROC-REP-211/212/213: multi-Detail continuation mechanics (FG-REP-008) ---
+
+  - candidate: CAND-REP-028
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "Resultado (b) de PROC-REP-211, explicitamente descrito en su propia prosa." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Idem." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Vuelve a cola sin toma activa (multi-Detalle)
+      description: >
+        Tras terminar un Detalle, existe otro Detalle trabajable pero el
+        tecnico ya no tiene una toma activa (se libero antes); la Orden
+        vuelve directo a PROC-REP-170 para que cualquiera la tome.
+    scenario_worthiness: MECHANISM_ONLY
+    suggested_type: NONE
+    functional_group: FG-REP-008
+    related_rules:
+      - BR-REP-012
+      - BR-REP-018
+
+  - candidate: CAND-REP-029
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "PROC-REP-212=No -> PROC-REP-213, mecanismo ya descrito por BR-REP-018." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Idem." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Tecnico libera la Orden con Detalles trabajables pendientes
+      description: >
+        El tecnico decide no continuar aunque queda trabajo disponible;
+        libera explicitamente la toma (PROC-REP-213) y la Orden vuelve a
+        EN_COLA. Es la contraparte "no continuar" de CAND-REP-030.
+    scenario_worthiness: MECHANISM_ONLY
+    suggested_type: NONE
+    functional_group: FG-REP-008
+    related_rules:
+      - BR-REP-018
+
+  - candidate: CAND-REP-030
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "Ejemplo explicito del enunciado: continuar trabajando otro Detalle sin volver a tomar la Orden." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Idem." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Tecnico continua trabajando otro Detalle (misma toma)
+      description: >
+        Mecanismo normal del bucle PROC-REP-181 -> ... -> PROC-REP-211 ->
+        PROC-REP-212[Si] -> PROC-REP-181 descrito en PROC-REP-180; no
+        aporta una pregunta de negocio nueva.
+    scenario_worthiness: MECHANISM_ONLY
+    suggested_type: NONE
+    functional_group: FG-REP-008
+    related_rules:
+      - BR-REP-018
+
+  # --- PROC-REP-125/126/127: post-execution technical review (standalone) ---
+
+  - candidate: CAND-REP-032
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "Camino nuevo de V1.3, explicitamente distinto de EN_REVISION inicial (prosa de PROC-REP-125)." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Idem." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Detalle requiere revision tecnica posterior (REQUIERE_REVISION)
+      description: >
+        Un Detalle YA EXISTENTE necesita una revision tecnica adicional
+        (PROC-REP-126/127) antes de poder validarse por recursos de nuevo.
+        NO debe fusionarse con FG-REP-003 (EN_REVISION inicial): la propia
+        prosa de PROC-REP-125 dice que son "dos agregados distintos" y que
+        "no reutiliza el circuito inicial de revision de la Orden completa".
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: EXCEPTION
+    related_features:
+      - FEAT-REP-002
+      - FEAT-REP-006
+    related_rules:
+      - BR-REP-012
+
+  # --- PROC-REP-211 -> EVT-REP-999: all details cancelled (standalone, dependent) ---
+
+  - candidate: CAND-REP-033
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "Resultado (d) de PROC-REP-211, explicito en su prosa." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Idem." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Todos los Detalles de la Orden fueron cancelados
+      description: >
+        Es el DESENLACE, no un Scenario aparte: dentro del business case de
+        Cancelacion (FG-REP-005), CAND-REP-020 (cancelar un Detalle) y
+        CAND-REP-021 (cancelar la Orden) son las dos acciones que un
+        usuario puede iniciar; CAND-REP-033 es la consecuencia automatica
+        del resolver (PROC-REP-211, resultado (d)) cuando esas acciones,
+        repetidas, dejan 0 de N Detalles en COMPLETO. No introduce una
+        pregunta de negocio propia (no depende de QUIEN cancela, solo de
+        que ya no quede ningun Detalle sin cancelar): es mecanica de cierre
+        de Cancelacion, no un Scenario independiente.
+    scenario_worthiness: MECHANISM_ONLY
+    suggested_type: NONE
+    functional_group: FG-REP-005
+    relations:
+      - type: RESOLUTION_OF
+        reference: CAND-REP-020
+      - type: RESOLUTION_OF
+        reference: CAND-REP-021
+    related_features:
+      - FEAT-REP-009
+    related_rules:
+      - BR-REP-014
+      - BR-REP-012
+
+  # --- PROC-REP-230/235: technical control rejection (standalone) ---
+
+  - candidate: CAND-REP-034
+    happy_path_analysis:
+      HP-REP-001: { feasibility: POSSIBLE, reason: "BR-REP-008 describe explicitamente el rechazo y retrabajo por Detalle." }
+      HP-REP-002: { feasibility: POSSIBLE, reason: "Idem." }
+      HP-REP-003: { feasibility: POSSIBLE, reason: "Idem." }
+    functional_interpretation:
+      proposed_name: Rechazo de control tecnico y retrabajo por Detalle
+      description: >
+        Al menos un Detalle es rechazado en el control (PROC-REP-230=No);
+        se identifica y reabre para retrabajo (PROC-REP-235), y el
+        resolver (PROC-REP-211) recalcula el estado de la Orden.
+    scenario_worthiness: SCENARIO_CANDIDATE
+    suggested_type: EXCEPTION
+    related_features:
+      - FEAT-REP-006
+    related_rules:
+      - BR-REP-008
+
+  # --- PROC-REP-250: cross-origin leakage at the delivery gate (discarded) ---
+
+  - candidate: CAND-REP-035
+    happy_path_analysis:
+      HP-REP-001:
+        feasibility: INFEASIBLE
+        reason: >
+          PROC-REP-250 documenta que CLIENTE_EXTERNO (junto con
+          RT_GARANTIA_VENTA y RMA_GARANTIA_REPARACION) SI requiere entrega
+          a cliente; la rama "No" (-> PROC-REP-290, circuito de Gestion
+          RT) es, por prosa, exclusiva de RT_INTERNO.
+      HP-REP-003:
+        feasibility: INFEASIBLE
+        reason: Mismo razonamiento para RMA_GARANTIA_REPARACION.
+    functional_interpretation:
+      proposed_name: (No aplica - combinacion de origen invalida en PROC-REP-250)
+      description: Ver limitacion de PROC-REP-050/250.
+    scenario_worthiness: INFEASIBLE
+    suggested_type: NONE
+
+  - candidate: CAND-REP-036
+    happy_path_analysis:
+      HP-REP-002:
+        feasibility: INFEASIBLE
+        reason: >
+          Contradice el fact client_delivery_required=false de HP-REP-002
+          y la prosa de PROC-REP-250 (RT_INTERNO no requiere entrega a
+          cliente). Es exactamente el caso que el usuario senalo como
+          ejemplo motivador de esta etapa.
+    functional_interpretation:
+      proposed_name: (No aplica - combinacion de origen invalida en PROC-REP-250)
+      description: Ver limitacion de PROC-REP-050/250.
+    scenario_worthiness: INFEASIBLE
+    suggested_type: NONE
+
+  - candidate: CAND-REP-037
+    happy_path_analysis:
+      HP-REP-002:
+        feasibility: INFEASIBLE
+        reason: Mismo razonamiento que CAND-REP-036 (llega hasta 280/270 comerciales, que RT_INTERNO no usa).
+    functional_interpretation:
+      proposed_name: (No aplica - combinacion de origen invalida en PROC-REP-250)
+      description: Ver limitacion de PROC-REP-050/250.
+    scenario_worthiness: INFEASIBLE
+    suggested_type: NONE
+
+  # --- PROC-REP-265/266: balance revalidation (FG-REP-009 + one explicit BR violation) ---
+
+  - candidate: CAND-REP-038
+    happy_path_analysis:
+      HP-REP-003:
+        feasibility: INFEASIBLE
+        reason: >
+          STRUCTURALLY_REACHABLE, SEMANTICALLY_INFEASIBLE: el Process Graph
+          es global y correctamente permite PROC-REP-265 -> PROC-REP-266
+          [No] para cualquier Orden que no cumpla la condicion de entrega
+          (esa transicion existe para servir a CLIENTE_EXTERNO). Lo que la
+          hace infeasible AQUI es semantico, no topologico: BR-REP-016/
+          BR-REP-017 y la propia descripcion de PROC-REP-265 restringen esa
+          transicion para RMA_GARANTIA_REPARACION, que aprueba la condicion
+          de entrega por su origen NO_COBRABLE y "nunca entra en
+          PROC-REP-266". No es un defecto del Process Graph (ver SMC-001
+          para el caso, distinto, en que la restriccion SI falta en la
+          fuente).
+    functional_interpretation:
+      proposed_name: (No aplica - contradice BR-REP-016/BR-REP-017)
+      description: >
+        Una garantia RMA nunca puede tener "Saldo pendiente": es
+        NO_COBRABLE por definicion, no por Saldo = 0.
+    scenario_worthiness: INFEASIBLE
+    suggested_type: NONE
+    related_rules:
+      - BR-REP-016
+      - BR-REP-017
+
+  - candidate: CAND-REP-039
+    happy_path_analysis:
+      HP-REP-001:
+        feasibility: POSSIBLE
+        reason: >
+          Topologica y semanticamente posible (un pago parcial insuficiente
+          es real), pero ver scenario_worthiness: no es un Scenario nuevo.
+    functional_interpretation:
+      proposed_name: Pago adicional insuficiente (segundo ciclo de revalidacion)
+      description: >
+        REPEATED-NODE BASELINE BEHAVIOR: PROC-REP-265 aparece DOS VECES en
+        el propio trace de HP-REP-001 (265 -No-> 266 -> [pago] -> 265 -Si->
+        280). El discovery estructural, al comparar "el edge que el HP tomo
+        EN ESTE PASO" contra los demas outgoing de ese nodo, ve en la
+        SEGUNDA aparicion de 265 el edge "-No-> 266" que el HP mismo ya uso
+        en su PRIMERA aparicion. No es una desviacion del Happy Path: es el
+        mismo ciclo de revalidacion de Saldo que HP-REP-001 ya modela
+        explicitamente (BR-REP-017), visto desde el otro extremo. No aporta
+        una pregunta de negocio nueva.
+    scenario_worthiness: MECHANISM_ONLY
+    suggested_type: NONE
+    functional_group: FG-REP-009
+    related_features:
+      - FEAT-REP-007
+    related_rules:
+      - BR-REP-017
+
+  - candidate: CAND-REP-040
+    happy_path_analysis:
+      HP-REP-001:
+        feasibility: POSSIBLE
+        reason: >
+          Topologica y semanticamente posible (pagar todo por adelantado es
+          real), pero ver scenario_worthiness: no es un Scenario nuevo.
+    functional_interpretation:
+      proposed_name: Saldo ya cancelado antes del retiro (sin pago adicional)
+      description: >
+        REPEATED-NODE BASELINE BEHAVIOR, simetrico a CAND-REP-039: en la
+        PRIMERA aparicion de PROC-REP-265, el discovery ve como
+        "alternativo" el edge "-Si-> 280" que el HP mismo usa en su
+        SEGUNDA aparicion (despues del pago). Es el mismo ciclo de
+        revalidacion de Saldo ya modelado por HP-REP-001/BR-REP-017, no un
+        Scenario funcional distinto.
+    scenario_worthiness: MECHANISM_ONLY
+    suggested_type: NONE
+    functional_group: FG-REP-009
+    related_features:
+      - FEAT-REP-007
+    related_rules:
+      - BR-REP-017
+
+# =====================================================================
+# CONSOLIDATED FUNCTIONAL GROUPS
+# =====================================================================
+functional_groups:
+
+  - id: FG-REP-001
+    proposed_name: Seleccion de origen ya cubierta por un Happy Path existente
+    candidates: [CAND-REP-001, CAND-REP-002, CAND-REP-003, CAND-REP-006]
+    applies_to: [HP-REP-001, HP-REP-002, HP-REP-003]
+    proposed_type: NONE
+    description: >
+      Cada candidato es la rama de PROC-REP-010 de un origen distinto al de
+      la baseline, pero esa rama ya ES un Happy Path completo (HP-001,
+      HP-002 o HP-003). No representan un Scenario nuevo: son la misma
+      pregunta ("que origen tiene esta Orden") ya resuelta por el modelo.
+    status: NO_ACTION_NEEDED
+
+  - id: FG-REP-002
+    proposed_name: Origen RT_GARANTIA_VENTA sin Happy Path propio
+    candidates: [CAND-REP-004, CAND-REP-005]
+    applies_to: [HP-REP-001, HP-REP-002]
+    proposed_type: NEEDS_REVIEW
+    description: >
+      A diferencia de FG-REP-001, RT_GARANTIA_VENTA no tiene ningun Happy
+      Path que lo cubra hoy; docs/discovery/README.md lo documenta como
+      "Variant futura sobre HP-REP-001", pero estructuralmente se comporta
+      igual que RMA_GARANTIA_REPARACION, que SI se modelo como Happy Path
+      propio (HP-REP-003). Ver human_review_queue.
+    status: HUMAN_REVIEW_REQUIRED
+
+  - id: FG-REP-003
+    proposed_name: Ingreso sin diagnostico conocido (EN_REVISION) y su resolucion tecnica
+    candidates: [CAND-REP-007, CAND-REP-009, CAND-REP-010, CAND-REP-016, CAND-REP-017]
+    applies_to: [HP-REP-001, HP-REP-002, HP-REP-003]
+    proposed_type: VARIANT
+    description: >
+      Al ingreso no se conoce el Detalle de reparacion requerido; la Orden
+      se marca EN_REVISION (PROC-REP-055) y la revision tecnica posterior
+      (065/068) concluye en Detalles definidos (075) o en SIN_REPARACION
+      (069, BR-REP-010). Aplica a los tres origenes, con o sin comprobante
+      de recepcion segun corresponda. NO incluye a CAND-REP-008/011/012/
+      013/014/015 (mismos nodos, pero combinacion de origen invalida: ver
+      limitaciones) ni a CAND-REP-032 (REQUIERE_REVISION posterior, que la
+      propia fuente distingue explicitamente de este caso).
+    status: HUMAN_REVIEW_REQUIRED
+
+  - id: FG-REP-004
+    proposed_name: Orden sin Detalle trabajable (bloqueo de recursos)
+    candidates: [CAND-REP-018, CAND-REP-019, CAND-REP-031]
+    applies_to: [HP-REP-001, HP-REP-002, HP-REP-003]
+    proposed_type: EXCEPTION
+    description: >
+      No existe (inicialmente, o luego de una Ejecucion/rechazo/
+      cancelacion) ningun Detalle trabajable por falta de recursos. El
+      proceso puede esperar/revalidar (PENDIENTE_RECURSOS) o continuar
+      mediante override cuando corresponda.
+    status: HUMAN_REVIEW_REQUIRED
+
+  - id: FG-REP-005
+    proposed_name: Cancelacion (Detalle, Orden, y su desenlace agregado)
+    candidates: [CAND-REP-020, CAND-REP-021, CAND-REP-033]
+    applies_to: [HP-REP-001, HP-REP-002, HP-REP-003]
+    proposed_type: NEEDS_REVIEW
+    description: >
+      Un unico business case con tres piezas: CAND-REP-020 (cancelar un
+      Detalle, PROC-REP-300) y CAND-REP-021 (cancelar la Orden completa,
+      PROC-REP-305) son las dos ACCIONES que un usuario puede iniciar
+      mientras la Orden esta EN_COLA; CAND-REP-033 (todos los Detalles
+      cancelados -> EVT-REP-999) es la CONSECUENCIA automatica de esas
+      acciones cuando, tras el resolver (PROC-REP-211), no queda ningun
+      Detalle COMPLETO. Solo las dos acciones (020/021) requieren un
+      Scenario/decision de negocio propios (scenario_worthiness:
+      SCENARIO_CANDIDATE); CAND-REP-033 es mecanica de cierre
+      (scenario_worthiness: MECHANISM_ONLY), no se cuenta dos veces. El
+      Process Graph solo representa las acciones como alcanzables desde
+      PROC-REP-170 (limitacion conocida de Pass 1: la cancelacion es
+      conceptualmente transversal, ver docs/discovery/README.md); ademas
+      QUIEN esta autorizado a cancelar no esta definido por negocio
+      (BR-REP-014).
+    status: HUMAN_REVIEW_REQUIRED
+
+  - id: FG-REP-006
+    proposed_name: No se puede tomar la Orden desde esta Estacion
+    candidates: [CAND-REP-022, CAND-REP-023]
+    applies_to: [HP-REP-001, HP-REP-002, HP-REP-003]
+    proposed_type: EXCEPTION
+    description: >
+      Un tecnico no puede tomar una Orden EN_COLA, por sesion/estacion
+      invalida o porque ningun Detalle trabajable es compatible con la
+      Estacion. PROC-REP-172 documenta explicitamente que no existe
+      override a nivel Orden para ninguno de estos casos (BR-REP-011,
+      alcance A); la Orden simplemente permanece EN_COLA.
+    status: HUMAN_REVIEW_REQUIRED
+
+  - id: FG-REP-007
+    proposed_name: Estacion no habilitada para el Detalle seleccionado
+    candidates: [CAND-REP-024, CAND-REP-025]
+    applies_to: [HP-REP-001, HP-REP-002, HP-REP-003]
+    proposed_type: EXCEPTION
+    description: >
+      La Estacion no esta habilitada para el Tipo de Reparacion del
+      Detalle que el tecnico selecciono; puede resolverse eligiendo otro
+      Detalle o mediante override de continuidad (BR-REP-011).
+    status: HUMAN_REVIEW_REQUIRED
+
+  - id: FG-REP-008
+    proposed_name: Mecanica de continuidad multi-Detalle (toma activa)
+    candidates: [CAND-REP-028, CAND-REP-029, CAND-REP-030]
+    applies_to: [HP-REP-001, HP-REP-002, HP-REP-003]
+    proposed_type: NONE
+    description: >
+      Los tres desenlaces de PROC-REP-211/212 cuando existe otro Detalle
+      trabajable (continuar con la misma toma, liberar explicitamente, o
+      volver a cola sin toma activa) ya estan descritos como mecanismo
+      normal por BR-REP-018 y la propia prosa del proceso; ninguno abre una
+      pregunta de negocio nueva.
+    status: NO_ACTION_NEEDED
+
+  - id: FG-REP-009
+    proposed_name: "Revalidacion de Saldo (265 <-> 266): mecanica interna del Happy Path, no Scenario Candidate"
+    candidates: [CAND-REP-039, CAND-REP-040]
+    applies_to: [HP-REP-001]
+    proposed_type: NONE
+    description: >
+      REPEATED-NODE BASELINE BEHAVIOR. PROC-REP-265 aparece dos veces en el
+      propio trace de HP-REP-001 (265 -No-> 266 -> [pago] -> 265 -Si-> 280).
+      El discovery estructural compara, en CADA aparicion del nodo, el edge
+      elegido contra los demas outgoing de ese nodo - y por eso ve, en cada
+      aparicion, el edge que el HP mismo usa en la OTRA aparicion, como si
+      fuera una alternativa nueva. No lo es: es el mismo ciclo de
+      revalidacion de Saldo que HP-REP-001/BR-REP-017 ya modelan
+      explicitamente, visto desde ambos extremos. Se mantiene el grupo solo
+      con fines documentales (explica por que existen CAND-REP-039/040),
+      no como candidatos a Scenario.
+    status: NO_ACTION_NEEDED
+
+# =====================================================================
+# SUMMARY
+# =====================================================================
+summary:
+  structural_candidates: 40
+  functional_analysis:
+    POSSIBLE: 22
+    NEEDS_BUSINESS_DECISION: 2
+    INFEASIBLE: 16
+    CONDITIONAL: 0
+  scenario_worthiness:
+    SCENARIO_CANDIDATE: 18
+    MECHANISM_ONLY: 6
+    DUPLICATE: 4
+    INFEASIBLE: 10
+    NEEDS_REVIEW: 2
+  functional_groups: 9
+  suggested_type:
+    VARIANT: 6
+    EXCEPTION: 10
+    EDGE_CASE: 0
+    NONE: 20
+    NEEDS_REVIEW: 4
+
+# =====================================================================
+# HUMAN REVIEW QUEUE
+# =====================================================================
+human_review_queue:
+
+  - candidate_or_group: FG-REP-002
+    question: >
+      RT_GARANTIA_VENTA (RT_GARANTIA_VENTA) no tiene Happy Path propio y
+      esta documentado como "Variant futura sobre HP-REP-001", pero
+      estructuralmente se comporta igual que RMA_GARANTIA_REPARACION, que
+      se convirtio en su propio Happy Path (HP-REP-003). Deberia
+      RT_GARANTIA_VENTA modelarse tambien como un cuarto Happy Path, o hay
+      una razon de negocio para tratarlo como Variant?
+
+  - candidate_or_group: PROC-REP-050 y PROC-REP-250 (afecta CAND-REP-008/011/012/013/014/015/035/036/037)
+    question: >
+      Ambas decisiones restringen sus ramas por origen solo en la prosa del
+      nodo, sin codificarlo en la condicion del edge (a diferencia de
+      PROC-REP-010, que si lleva el origen en la condicion) ni en una
+      Business Rule dedicada. Conviene formalizar esa restriccion como una
+      Business Rule explicita, o codificar el origen directamente en las
+      condiciones de esos edges?
+
+  - candidate_or_group: FG-REP-005
+    question: >
+      Quien esta autorizado a cancelar un Detalle (PROC-REP-300) o una
+      Orden completa (PROC-REP-305)? BR-REP-014 y la propia definicion del
+      nodo dejan esto explicitamente sin resolver; sin esa definicion no
+      puede redactarse un Scenario real de cancelacion (CAND-REP-020/021).
+      (CAND-REP-033, "todos los Detalles cancelados", es solo la
+      consecuencia automatica de esas acciones y no depende de esta
+      pregunta para su propio comportamiento.)
+
+  - candidate_or_group: FG-REP-004 (en particular CAND-REP-031)
+    question: >
+      El override de recursos insuficientes al ingreso (PROC-REP-110) esta
+      claro. Aplica el mismo criterio de autorizacion cuando la falta de
+      recursos se detecta MAS TARDE, via el resolver (PROC-REP-211 ->
+      PROC-REP-120), o hace falta una autorizacion distinta en ese punto?
+
+  - candidate_or_group: FG-REP-003 (en particular CAND-REP-010/017)
+    question: >
+      Cuando la Orden llega a SIN_REPARACION despues de haber pasado por
+      EN_REVISION (diagnostico no conocido al ingreso), hace falta algun
+      aviso o documentacion adicional distinta de la ya definida en
+      PROC-REP-069 (BR-REP-010), o el comportamiento es identico sea cual
+      sea el origen?
+
+# FG-REP-009 (CAND-REP-039/040, 265 <-> 266) NO genera una pregunta aqui:
+# tras esta revision son MECHANISM_ONLY (mecanica interna de HP-REP-001, no
+# Scenario Candidate), asi que no corresponde una pregunta de negocio. Por
+# defecto se documenta que el ciclo de revalidacion de Saldo puede repetirse
+# N veces hasta cumplir la condicion de entrega (BR-REP-017 no fija un
+# limite de reintentos); no se asume ningun limite sin que negocio lo pida.
+
+# =====================================================================
+# SOURCE MODEL CONFLICTS / LIMITATIONS FOUND DURING THIS ANALYSIS
+# =====================================================================
+source_model_conflicts: []
+
+# No SOURCE_MODEL_CONFLICT survives this revision. The one previously
+# reported here (SMC-002, on CAND-REP-038) was withdrawn: the Process Graph
+# is global and CORRECTLY allows PROC-REP-265 -> PROC-REP-266 [No] for any
+# Order that does not meet the delivery condition (that transition exists to
+# serve CLIENTE_EXTERNO). What makes it infeasible for HP-REP-003 is
+# semantic (BR-REP-016/BR-REP-017 restrict it for RMA_GARANTIA_REPARACION),
+# not a defect in the graph - see CAND-REP-038's own entry
+# (STRUCTURALLY_REACHABLE, SEMANTICALLY_INFEASIBLE). That is not a conflict
+# between sources; it is simply a Business Rule doing its job. The other
+# observation (PROC-REP-050/PROC-REP-250) is real but is not a conflict
+# between sources either - it is a machine-readability gap, tracked below
+# under `modeling_gaps` instead of `source_model_conflicts`.
+
+modeling_gaps:
+  - id: MG-001
+    type: MACHINE_READABLE_MODELING_GAP
+    affected_nodes: [PROC-REP-050, PROC-REP-250]
+    affected_candidates: [CAND-REP-008, CAND-REP-011, CAND-REP-012, CAND-REP-013, CAND-REP-014, CAND-REP-015, CAND-REP-035, CAND-REP-036, CAND-REP-037]
+    description: >
+      PROC-REP-050 ("Requiere comprobante de recepcion") y PROC-REP-250
+      ("Requiere entrega a cliente") documentan en su PROSA que sus ramas
+      dependen del origen de la Orden (CLIENTE_EXTERNO/RT_GARANTIA_VENTA/
+      RMA_GARANTIA_REPARACION vs. RT_INTERNO). Esa restriccion existe y es
+      correcta hoy - no se trata de una contradiccion entre fuentes -, pero
+      a diferencia de PROC-REP-010 (cuyos edges llevan el origen como
+      `condition` explicita), ni PROC-REP-050 ni PROC-REP-250 la expresan
+      de forma suficientemente estructurada (edge condition o Business Rule
+      dedicada) para que un discovery DETERMINISTICO pueda leerla. Por eso
+      el discovery estructural (Pass 1), que solo lee nodes/edges y no
+      prosa, encuentra 9 "candidatos" topologicamente reales pero
+      semanticamente INFEASIBLE por esta razon.
+    not_modified: true
+    note: >
+      Por instruccion explicita, esta iteracion NO modifica el Process
+      Graph ni las Business Rules: se documenta el gap unicamente.
+
+# =====================================================================
+# KNOWN LIMITATIONS OF THIS ANALYSIS
+# =====================================================================
+limitations:
+  - >
+    Esta es una lectura funcional de un analista (LLM), no una prueba
+    formal: cada `feasibility`/`suggested_type` puede estar equivocado y
+    DEBE revisarse contra las fuentes citadas antes de crear un Scenario
+    real.
+  - >
+    Hereda las limitaciones de la Etapa 1 (Pass 1): solo analiza
+    alternativas que salen de un nodo de un Happy Path. Cancelacion
+    transversal, pago anticipado y otras capacidades no secuenciales siguen
+    sin analizarse (Pass 2 futura).
+  - >
+    No se ejecuto ningun Coverage Analyzer; los "candidatos" que quedaron
+    NEEDS_REVIEW o NEEDS_BUSINESS_DECISION siguen solo documentados, no
+    resueltos (ver mvp_v2_confirmations mas abajo para lo que SI se
+    confirmo).
+
+# =====================================================================
+# MVP v2 CONFIRMATIONS - addendum derivado, agregado DESPUES del analisis
+# original de arriba. NO reclasifica ningun candidate (sus valores de
+# feasibility/scenario_worthiness/suggested_type de arriba se mantienen
+# intactos, tal como se calcularon): solo registra que, para el cierre
+# funcional de MVP v2, negocio decidio promover un subconjunto de
+# candidatos SCENARIO_CANDIDATE a Scenarios reales en
+# business/scenarios/repair-management-scenarios-v1.3.yaml. Este bloque
+# sigue siendo GENERATED/ANALYSIS, no fuente de verdad: la fuente de
+# verdad de cada Scenario confirmado es el YAML de scenarios; aqui solo se
+# anota la trazabilidad inversa (Candidate -> Scenario confirmado).
+# =====================================================================
+mvp_v2_confirmations:
+  - candidates: [CAND-REP-007, CAND-REP-016]
+    confirmed_as: VAR-REP-001
+  - candidates: [CAND-REP-007, CAND-REP-009]
+    confirmed_as: VAR-REP-002
+  - candidates: [CAND-REP-027]
+    confirmed_as: VAR-REP-003
+  - candidates: [CAND-REP-018]
+    confirmed_as: EXC-REP-001
+  - candidates: [CAND-REP-019]
+    confirmed_as: EXC-REP-002
+  - candidates: [CAND-REP-026]
+    confirmed_as: EXC-REP-003
+  - candidates: [CAND-REP-032]
+    confirmed_as: EXC-REP-004
+  - candidates: [CAND-REP-034]
+    confirmed_as: EXC-REP-005
+  - candidates: [CAND-REP-010, CAND-REP-017]
+    confirmed_as: null
+    status: DEFERRED
+    reason: >
+      SIN_REPARACION tras EN_REVISION; pendiente decision de negocio sobre
+      aviso/documentacion/cierre adicional.
+  - candidates: [CAND-REP-020, CAND-REP-021, CAND-REP-033]
+    confirmed_as: null
+    status: DEFERRED
+    reason: >
+      Cancelacion (FG-REP-005); BR-REP-014 no define todavia quien esta
+      autorizado a cancelar.
+  - candidates: [CAND-REP-004, CAND-REP-005]
+    confirmed_as: null
+    status: OUT_OF_SCOPE
+    reason: >
+      RT_GARANTIA_VENTA (FG-REP-002); requiere un modelo de dominio nuevo
+      (OrdenRevision, tipo_revision=GARANTIA) todavia no suficientemente
+      disenado. No se crea Scenario ni se modifica el Process Graph.
+  - candidates: [CAND-REP-028, CAND-REP-029, CAND-REP-030]
+    confirmed_as: null
+    status: REMAINS_MECHANISM_ONLY
+    reason: >
+      Mecanica multi-Detalle; sigue sin convertirse en Scenario real
+      (verificado por test en scripts/test-scenarios.ts).

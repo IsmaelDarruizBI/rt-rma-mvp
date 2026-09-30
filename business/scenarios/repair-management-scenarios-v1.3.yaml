@@ -9,19 +9,73 @@
 # FEAT-REP-007/BR-REP-017): nunca agrega una linea nueva al diagrama.
 #
 # Jerarquia conceptual:
-#   Business Process
+#   Business Process (Process Graph)
 #     |- Business Rules
 #     |- Features
 #     `- Scenarios
-#          `- HP-REP-001
+#          |- HP-REP-001   Happy Path - cliente externo
+#          |- HP-REP-002   Happy Path - equipo RT (RT_INTERNO)
+#          |- HP-REP-003   Happy Path - garantia de reparacion RMA
+#          |- VAR-REP-001  Variant - EN_REVISION al ingreso, con comprobante
+#          |- VAR-REP-002  Variant - EN_REVISION al ingreso, sin comprobante (RT)
+#          |- VAR-REP-003  Variant - Ejecucion interrumpida
+#          |- EXC-REP-001  Exception - Recursos insuficientes, en espera
+#          |- EXC-REP-002  Exception - Recursos insuficientes, con override
+#          |- EXC-REP-003  Exception - Reserva de insumos fallida al iniciar
+#          |- EXC-REP-004  Exception - Detalle requiere revision posterior
+#          `- EXC-REP-005  Exception - Rechazo de control tecnico / retrabajo
 #
-# Por ahora solo existe type: HAPPY_PATH y scope: E2E. El modelo
-# (scenario.schema.json, scripts/lib/scenario-model.ts) ya admite
-# VARIANT/EXCEPTION/EDGE_CASE y scope FEATURE/RULE en el enum, pero su
-# comportamiento (por ejemplo Variants como overrides de facts sobre este
-# baseline) no esta implementado ni validado todavia. No hay Coverage
-# Analyzer, generador automatico de escenarios, ni User Stories en esta
-# iteracion.
+# Un Happy Path es un recorrido E2E CANONICO del proceso. Una Variant es
+# una desviacion o condicion alternativa sobre uno o mas puntos de ese
+# recorrido. NO se crea un Happy Path nuevo por cada combinacion de
+# Variants: el modelo es Happy Path base + Variants atomicas + Exceptions +
+# Edge Cases, y una ejecucion futura podra combinar varias Variants.
+# HP-REP-002 SI es un Happy Path propio (y no una Variant de HP-REP-001)
+# porque el origen RT_INTERNO cambia estructuralmente el recorrido E2E:
+# omite el registro de cliente, el comprobante de recepcion y todo el
+# cierre comercial/entrega al cliente (skipped_nodes lo documenta).
+#
+# HP-REP-003 (garantia de reparacion RMA) SI es un Happy Path propio: parte
+# de una Orden ya finalizada (evento EVT-REP-002, no "surge una necesidad
+# nueva"), recupera cliente/equipo de esa Orden en vez de registrarlos,
+# crea una NUEVA Orden vinculada (la origen NO se reabre) cuyos Detalles
+# referencian el Detalle origen (BR-REP-019), y es NO_COBRABLE por origen:
+# converge con HP-REP-001 desde PROC-REP-040 y recorre TAMBIEN PROC-REP-265
+# (mismo gate general de condicion de entrega): la condicion de entrega se
+# aprueba por origen NO_COBRABLE, sin cobro pendiente, y nunca entra en
+# PROC-REP-266 ni registra pagos.
+#
+# Variant FUTURA ya identificada (NO implementada todavia, a proposito; se
+# declarara con los campos opcionales feature/applies_to/trigger/
+# affected_nodes/rules/dependencies del schema, sobre HP-REP-001)
+#   - Garantia de Venta RT (origen RT_GARANTIA_VENTA). Parte del camino de
+#     cliente externo pero con referencia/trazabilidad a la venta RT,
+#     condicion NO_COBRABLE, sin pago del cliente ni bloqueo de entrega por
+#     saldo; sigue existiendo notificacion y entrega al cliente.
+#
+# MVP v2 (alcance funcional cerrado, ver docs/discovery/README.md): a los
+# tres Happy Paths se agregan 3 VARIANT y 5 EXCEPTION reales, surgidos del
+# Scenario Candidate Discovery
+# (generated/scenarios/repair-management-candidates-v1.3.yaml) y su analisis
+# funcional (generated/scenarios/repair-management-candidate-analysis-v1.3.yaml
+# - GENERATED/ANALYSIS, nunca fuente de verdad). Cada VARIANT/EXCEPTION usa
+# `trigger`/`applies_to`/`affected_nodes`/`rules` (campos antes solo
+# admitidos por el schema, nunca poblados) y declara su propio `steps[]`
+# literal (from/to/condition reales del Process Graph) desde el punto de
+# divergencia hasta su rejoin o resultado. Lo que SIGUE sin implementar:
+# combinar varias Variants entre si (`dependencies` solo se valida
+# referencialmente, su semantica de ejecucion no existe), Coverage Analyzer,
+# generador automatico de escenarios y User Stories. EDGE_CASE y scope RULE
+# siguen sin ningun Scenario real todavia.
+#
+# RT_GARANTIA_VENTA sigue explicitamente FUERA de MVP v2 (OUT_OF_SCOPE): el
+# discovery encontro que necesita un modelo de dominio nuevo (entidad
+# OrdenRevision, tipo_revision=GARANTIA, con resoluciones REPARACION /
+# CAMBIO_DIRECTO / NO_APLICA_GARANTIA) que todavia no esta suficientemente
+# disenado; ver docs/discovery/README.md. Tampoco entran en MVP v2:
+# SIN_REPARACION tras un ingreso EN_REVISION (CAND-REP-010/017, pendiente de
+# decision sobre aviso/documentacion), y Cancelacion (CAND-REP-020/021/033,
+# BR-REP-014 no define todavia quien esta autorizado).
 #
 # No existe un Scenario equivalente para V1.2: esta capa nace junto con
 # V1.3.
@@ -277,4 +331,1190 @@ scenarios:
         value: true
       - key: repair_warranty_generated
         label: Garantia de reparacion generada
+        value: true
+
+  # Nota sobre active_features: una Feature esta activa en un Happy Path si
+  # PARTE de su comportamiento funcional participa en ese recorrido; eso no
+  # implica que todos sus nodos, reglas o comportamientos se ejecuten.
+  # FEAT-REP-007 (Comercial/Pagos) esta activa aqui, y es correcto, pero con
+  # comportamiento distinto al de HP-REP-001: sin pago, sin validacion de
+  # saldo, sin cortesia comercial, sin notificacion de retiro (PROC-REP-265/
+  # 266/280/260, en skipped_nodes). Su participacion derivada hoy es por el
+  # registro del price snapshot de cada Detalle (PROC-REP-070, binding
+  # ALWAYS): el precio registrado NO implica pago requerido, y un origen
+  # NO_COBRABLE_AL_CLIENTE sigue teniendo precio de referencia. La entrega/
+  # devolucion del equipo (PROC-REP-270) y el informe a Gestion RT
+  # (PROC-REP-290) pertenecen hoy a FEAT-REP-008 en el modelo de Features.
+  - id: HP-REP-002
+    name: Reparacion estandar de equipo RT
+    type: HAPPY_PATH
+    scope: E2E
+    status: draft
+
+    source_process:
+      id: PROC-REP
+      version: "1.3"
+
+    description: >
+      Camino de referencia para una Orden de origen RT_INTERNO (equipo de
+      Rosario Tecno gestionado en Gestion RT) con un unico Detalle conocido
+      desde el ingreso, sin desvios operativos ni tecnicos. Es un Happy
+      Path distinto de HP-REP-001 porque el origen cambia estructuralmente
+      el recorrido E2E: se recibe el contexto/referencia del equipo RT en
+      vez de registrar un cliente, no se genera comprobante de recepcion, y
+      tras la reparacion lista el resultado se informa a Gestion RT en vez
+      de notificar, cobrar y entregar a un cliente. Tras REPARACION_LISTA se
+      informa el resultado a Gestion RT (PROC-REP-290) y RECIEN DESPUES se
+      registra la entrega/devolucion del equipo a Gestion RT (PROC-REP-270,
+      reutilizado: aqui no es una entrega comercial), y se llega al fin. Se
+      conserva la trazabilidad con el equipo/origen RT. El estado terminal
+      definitivo de una Orden RT_INTERNO sigue pendiente de definicion
+      funcional (no se asume ENTREGADA ni un estado nuevo).
+
+    facts:
+      - key: origin
+        label: Origen
+        value: RT_INTERNO
+      - key: origin_billing_condition
+        label: Condicion comercial por origen
+        value: NO_COBRABLE_AL_CLIENTE
+      - key: detail_count
+        label: Cantidad de Detalles
+        value: 1
+      - key: details_known_at_intake
+        label: Reparacion conocida desde el ingreso
+        value: true
+      - key: receipt_required
+        label: Comprobante de recepcion requerido
+        value: false
+      - key: resources_available
+        label: Recursos disponibles
+        value: true
+      - key: station_valid
+        label: Sesion y Estacion validas
+        value: true
+      - key: station_compatible
+        label: Estacion compatible con el Detalle
+        value: true
+      - key: reservation_success
+        label: Reserva de insumos
+        value: true
+      - key: execution_result
+        label: Resultado de la Ejecucion
+        value: COMPLETADO
+      - key: technical_control
+        label: Control tecnico
+        value: APROBADO
+      - key: client_delivery_required
+        label: Entrega a cliente requerida
+        value: false
+      - key: equipment_return_to_rt_required
+        label: Entrega/devolucion del equipo a Gestion RT
+        value: true
+      - key: price_snapshot_registered
+        label: Precio snapshot registrado en el Detalle
+        value: true
+      - key: payment_required
+        label: Pago requerido
+        value: false
+
+    skipped_nodes:
+      - node: PROC-REP-030
+        reason: Registro de cliente y equipo propio del origen CLIENTE_EXTERNO. En RT_INTERNO el equipo y su contexto provienen de Gestion RT (PROC-REP-020).
+      - node: PROC-REP-060
+        reason: Un equipo RT_INTERNO no requiere comprobante de recepcion (PROC-REP-050 rama No).
+      - node: PROC-REP-260
+        reason: No hay cliente a quien notificar el retiro.
+      - node: PROC-REP-265
+        reason: No existe validacion de saldo ni cobro para entregar, el origen es NO_COBRABLE_AL_CLIENTE.
+      - node: PROC-REP-266
+        reason: No existe saldo pendiente ni registro de pago de cliente.
+      - node: PROC-REP-280
+        reason: No se genera el comprobante final comercial ni la garantia de reparacion al cliente.
+
+    steps:
+      - kind: PROCESS_EDGE
+        from: EVT-REP-001
+        to: PROC-REP-010
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-010
+        to: PROC-REP-020
+        condition: RT_INTERNO
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-020
+        to: PROC-REP-040
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-040
+        to: PROC-REP-045
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-045
+        to: PROC-REP-070
+        condition: Si
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-070
+        to: PROC-REP-050
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-050
+        to: PROC-REP-080
+        condition: No - Detalles definidos
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-080
+        to: PROC-REP-090
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-090
+        to: PROC-REP-140
+        condition: Existe Detalle trabajable
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-140
+        to: PROC-REP-150
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-150
+        to: PROC-REP-170
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-170
+        to: PROC-REP-172
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-172
+        to: PROC-REP-180
+        condition: Valida y compatible
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-180
+        to: PROC-REP-181
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-181
+        to: PROC-REP-174
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-174
+        to: PROC-REP-185
+        condition: Si
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-185
+        to: PROC-REP-190
+        condition: Reserva exitosa
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-190
+        to: PROC-REP-200
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-200
+        to: PROC-REP-210
+        condition: Completado
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-210
+        to: PROC-REP-211
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-211
+        to: PROC-REP-220
+        condition: Todos terminales, existe completo
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-220
+        to: PROC-REP-230
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-230
+        to: PROC-REP-245
+        condition: Si
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-245
+        to: PROC-REP-240
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-240
+        to: PROC-REP-250
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-250
+        to: PROC-REP-290
+        condition: No
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-290
+        to: PROC-REP-270
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-270
+        to: EVT-REP-999
+
+    expected:
+      - key: technical_aggregate
+        label: Agregado tecnico de la Orden
+        value: COMPLETA
+      - key: workflow_state
+        label: Estado de workflow al informar el resultado
+        value: REPARACION_LISTA
+      - key: terminal_state
+        label: Estado terminal definitivo de la Orden RT_INTERNO
+        value: PENDIENTE_DE_DEFINIR
+      - key: active_execution
+        label: Ejecucion activa
+        value: false
+      - key: active_order_take
+        label: Toma/participacion activa
+        value: false
+      - key: active_reservations
+        label: Reservas activas de inventario
+        value: false
+      - key: result_informed_to_rt
+        label: Resultado informado a Gestion RT
+        value: true
+      - key: equipment_returned_to_rt
+        label: Equipo entregado/devuelto a Gestion RT
+        value: true
+      - key: client_notified
+        label: Cliente notificado
+        value: false
+      - key: final_receipt_generated
+        label: Comprobante final generado
+        value: false
+
+  - id: HP-REP-003
+    name: Garantia de reparacion RMA
+    type: HAPPY_PATH
+    scope: E2E
+    status: draft
+
+    source_process:
+      id: PROC-REP
+      version: "1.3"
+
+    description: >
+      Camino de referencia para una garantia de reparacion RMA: un cliente
+      vuelve porque una reparacion realizada previamente por RMA presenta
+      una falla cubierta por garantia. NO comienza como una reparacion
+      nueva comun sino desde una Orden origen ya finalizada (ENTREGADA):
+      el usuario selecciona "Generar garantia" (EVT-REP-002), se identifica
+      la Orden origen y el Detalle que fallo (PROC-REP-035), cliente y
+      equipo se recuperan de esa Orden (no hay alta nueva), y se crea una
+      NUEVA Orden con origen RMA_GARANTIA_REPARACION, condicion comercial
+      NO_COBRABLE y referencia a la Orden origen, cuyos Detalles referencian
+      cada Detalle origen. La Orden origen no se reabre y permanece
+      historicamente inmutable. El circuito tecnico converge con HP-REP-001
+      desde PROC-REP-040 y, como todo origen con entrega a cliente, recorre
+      PROC-REP-265 (validacion de condicion de entrega); a diferencia de
+      HP-REP-001, esa condicion se aprueba directamente por origen
+      NO_COBRABLE (no por Saldo = 0 ni por cortesia), sin cobro pendiente:
+      nunca entra en PROC-REP-266 ni registra pagos. Luego hay notificacion
+      y entrega fisica al cliente. Con un unico Detalle de
+      garantia, sin desvios operativos ni tecnicos.
+
+    facts:
+      - key: origin
+        label: Origen
+        value: RMA_GARANTIA_REPARACION
+      - key: origin_billing_condition
+        label: Condicion comercial por origen
+        value: NO_COBRABLE
+      - key: origin_order_finished
+        label: Orden origen finalizada (ENTREGADA) al iniciar
+        value: true
+      - key: customer_equipment_recovered_from_origin
+        label: Cliente y equipo recuperados de la Orden origen
+        value: true
+      - key: new_customer_equipment_registration
+        label: Alta nueva de cliente/equipo
+        value: false
+      - key: detail_count
+        label: Cantidad de Detalles de garantia
+        value: 1
+      - key: details_known_at_intake
+        label: Detalle conocido desde el ingreso
+        value: true
+      - key: origin_detail_identified
+        label: Detalle origen identificado
+        value: true
+      - key: receipt_required
+        label: Comprobante de recepcion requerido
+        value: true
+      - key: resources_available
+        label: Recursos disponibles
+        value: true
+      - key: station_valid
+        label: Sesion y Estacion validas
+        value: true
+      - key: station_compatible
+        label: Estacion compatible con el Detalle
+        value: true
+      - key: reservation_success
+        label: Reserva de insumos
+        value: true
+      - key: execution_result
+        label: Resultado de la Ejecucion
+        value: COMPLETADO
+      - key: technical_control
+        label: Control tecnico
+        value: APROBADO
+      - key: price_snapshot_registered
+        label: Precio snapshot registrado en el Detalle
+        value: true
+      - key: payment_required
+        label: Pago requerido
+        value: false
+      - key: delivery_condition_gate_traversed
+        label: Recorre la validacion de condicion de entrega (PROC-REP-265)
+        value: true
+      - key: delivery_condition_approved_by
+        label: Aprobacion de la condicion de entrega por
+        value: NO_COBRABLE_POR_ORIGEN
+      - key: balance_via_payments_required
+        label: Saldo = 0 mediante pagos requerido
+        value: false
+      - key: courtesy_used_to_avoid_charge
+        label: Cortesia usada para evitar el cobro
+        value: false
+      - key: client_notification_required
+        label: Notificacion al cliente
+        value: true
+      - key: client_delivery_required
+        label: Entrega al cliente
+        value: true
+
+    skipped_nodes:
+      - node: PROC-REP-010
+        reason: El origen ya es conocido (RMA_GARANTIA_REPARACION) porque el recorrido parte de una Orden finalizada (EVT-REP-002), no de una necesidad nueva.
+      - node: PROC-REP-030
+        reason: Cliente y equipo se recuperan de la Orden origen en PROC-REP-035, no es un alta nueva de cliente/equipo.
+      - node: PROC-REP-266
+        reason: 265 aprueba la condicion de entrega por origen NO_COBRABLE, no hay cobro pendiente ni registro de pago de cliente en una garantia RMA.
+      - node: PROC-REP-290
+        reason: El informe de resultado a Gestion RT es propio de RT_INTERNO, aqui hay cliente externo.
+
+    steps:
+      - kind: PROCESS_EDGE
+        from: EVT-REP-002
+        to: PROC-REP-035
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-035
+        to: PROC-REP-040
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-040
+        to: PROC-REP-045
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-045
+        to: PROC-REP-070
+        condition: Si
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-070
+        to: PROC-REP-050
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-050
+        to: PROC-REP-060
+        condition: Si
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-060
+        to: PROC-REP-080
+        condition: Detalles definidos
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-080
+        to: PROC-REP-090
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-090
+        to: PROC-REP-140
+        condition: Existe Detalle trabajable
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-140
+        to: PROC-REP-150
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-150
+        to: PROC-REP-170
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-170
+        to: PROC-REP-172
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-172
+        to: PROC-REP-180
+        condition: Valida y compatible
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-180
+        to: PROC-REP-181
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-181
+        to: PROC-REP-174
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-174
+        to: PROC-REP-185
+        condition: Si
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-185
+        to: PROC-REP-190
+        condition: Reserva exitosa
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-190
+        to: PROC-REP-200
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-200
+        to: PROC-REP-210
+        condition: Completado
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-210
+        to: PROC-REP-211
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-211
+        to: PROC-REP-220
+        condition: Todos terminales, existe completo
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-220
+        to: PROC-REP-230
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-230
+        to: PROC-REP-245
+        condition: Si
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-245
+        to: PROC-REP-240
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-240
+        to: PROC-REP-250
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-250
+        to: PROC-REP-260
+        condition: Si
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-260
+        to: PROC-REP-265
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-265
+        to: PROC-REP-280
+        condition: Si
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-280
+        to: PROC-REP-270
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-270
+        to: EVT-REP-999
+
+    expected:
+      - key: technical_aggregate
+        label: Agregado tecnico de la Orden nueva
+        value: COMPLETA
+      - key: workflow_state
+        label: Estado de workflow de la Orden nueva
+        value: ENTREGADA
+      - key: origin_order_reopened
+        label: Orden origen reabierta
+        value: false
+      - key: origin_order_state_unchanged
+        label: Estado de la Orden origen sin cambios (ENTREGADA)
+        value: true
+      - key: new_order_linked_to_origin_order
+        label: Orden nueva vinculada a la Orden origen
+        value: true
+      - key: new_detail_linked_to_origin_detail
+        label: Detalle nuevo vinculado al Detalle origen
+        value: true
+      - key: active_execution
+        label: Ejecucion activa
+        value: false
+      - key: active_order_take
+        label: Toma/participacion activa
+        value: false
+      - key: active_reservations
+        label: Reservas activas de inventario
+        value: false
+      - key: payment_registered
+        label: Pago de cliente registrado
+        value: false
+      - key: delivery_condition_approved
+        label: Condicion de entrega aprobada (por origen NO_COBRABLE)
+        value: true
+      - key: client_notified
+        label: Cliente notificado
+        value: true
+      - key: final_receipt_generated
+        label: Comprobante final generado
+        value: true
+      - key: equipment_delivered_to_client
+        label: Equipo entregado al cliente
+        value: true
+
+  - id: VAR-REP-001
+    name: Ingreso sin diagnostico conocido, con comprobante de recepcion
+    type: VARIANT
+    scope: FEATURE
+    status: draft
+
+    source_process:
+      id: PROC-REP
+      version: "1.3"
+
+    feature: FEAT-REP-002
+
+    applies_to:
+      - HP-REP-001
+      - HP-REP-003
+
+    description: >
+      Al momento del ingreso todavia no se conoce que Detalle(s) de
+      reparacion necesita el equipo (PROC-REP-045 = No): la Orden se marca
+      EN_REVISION (PROC-REP-055) en vez de definir Detalles de inmediato.
+      Aplica a origenes que SI requieren comprobante de recepcion
+      (CLIENTE_EXTERNO, RMA_GARANTIA_REPARACION): el comprobante se genera
+      igual (PROC-REP-060), mostrando "reparacion pendiente de
+      diagnostico" en vez de listar Detalles. La revision tecnica
+      posterior (PROC-REP-065/068) define los Detalles (PROC-REP-075) y el
+      recorrido se reincorpora a PROC-REP-080, exactamente donde HP-REP-001
+      y HP-REP-003 ya lo alcanzan desde su propio camino. Origen: analisis
+      estructural CAND-REP-007 (divergencia en PROC-REP-045) y
+      CAND-REP-016 (resolucion con comprobante), confirmados como Scenario
+      real en generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
+      Contraparte sin comprobante: VAR-REP-002 (equipo RT_INTERNO).
+
+    trigger:
+      node: PROC-REP-045
+      edge:
+        from: PROC-REP-045
+        to: PROC-REP-055
+        condition: No
+      condition: No
+
+    affected_nodes:
+      - PROC-REP-055
+      - PROC-REP-050
+      - PROC-REP-060
+      - PROC-REP-065
+      - PROC-REP-068
+      - PROC-REP-075
+      - PROC-REP-080
+
+    rules:
+      - BR-REP-001
+
+    facts:
+      - key: details_known_at_intake
+        label: Reparacion conocida desde el ingreso
+        value: false
+      - key: receipt_required
+        label: Comprobante de recepcion requerido
+        value: true
+
+    steps:
+      - kind: PROCESS_EDGE
+        from: PROC-REP-045
+        to: PROC-REP-055
+        condition: No
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-055
+        to: PROC-REP-050
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-050
+        to: PROC-REP-060
+        condition: Si
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-060
+        to: PROC-REP-065
+        condition: Aun en revision
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-065
+        to: PROC-REP-068
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-068
+        to: PROC-REP-075
+        condition: Si
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-075
+        to: PROC-REP-080
+
+    expected:
+      - key: technical_review_completed
+        label: Revision tecnica realizada antes de definir Detalles
+        value: true
+      - key: details_defined_after_review
+        label: Detalle(s) definidos luego de la revision
+        value: true
+      - key: receipt_generated_before_diagnosis
+        label: Comprobante de recepcion generado sin Detalle conocido
+        value: true
+
+  - id: VAR-REP-002
+    name: Ingreso sin diagnostico conocido, sin comprobante (equipo RT)
+    type: VARIANT
+    scope: FEATURE
+    status: draft
+
+    source_process:
+      id: PROC-REP
+      version: "1.3"
+
+    feature: FEAT-REP-002
+
+    applies_to:
+      - HP-REP-002
+
+    description: >
+      Contraparte de VAR-REP-001 para el origen RT_INTERNO, que no
+      requiere comprobante de recepcion (PROC-REP-050 = No - aun en
+      revision): al ingreso todavia no se conoce el Detalle de reparacion
+      (PROC-REP-045 = No), la Orden pasa por EN_REVISION (PROC-REP-055) y,
+      sin generar comprobante, la revision tecnica (PROC-REP-065/068)
+      define el Detalle (PROC-REP-075), reincorporandose a PROC-REP-080
+      exactamente donde HP-REP-002 ya lo alcanza. Origen: analisis
+      estructural CAND-REP-007 (divergencia en PROC-REP-045) y
+      CAND-REP-009 (resolucion sin comprobante), confirmados como Scenario
+      real en generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
+
+    trigger:
+      node: PROC-REP-045
+      edge:
+        from: PROC-REP-045
+        to: PROC-REP-055
+        condition: No
+      condition: No
+
+    affected_nodes:
+      - PROC-REP-055
+      - PROC-REP-050
+      - PROC-REP-065
+      - PROC-REP-068
+      - PROC-REP-075
+      - PROC-REP-080
+
+    rules:
+      - BR-REP-001
+
+    facts:
+      - key: details_known_at_intake
+        label: Reparacion conocida desde el ingreso
+        value: false
+      - key: receipt_required
+        label: Comprobante de recepcion requerido
+        value: false
+
+    steps:
+      - kind: PROCESS_EDGE
+        from: PROC-REP-045
+        to: PROC-REP-055
+        condition: No
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-055
+        to: PROC-REP-050
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-050
+        to: PROC-REP-065
+        condition: No - aun en revision
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-065
+        to: PROC-REP-068
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-068
+        to: PROC-REP-075
+        condition: Si
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-075
+        to: PROC-REP-080
+
+    expected:
+      - key: technical_review_completed
+        label: Revision tecnica realizada antes de definir el Detalle
+        value: true
+      - key: details_defined_after_review
+        label: Detalle definido luego de la revision
+        value: true
+      - key: receipt_generated_before_diagnosis
+        label: Comprobante de recepcion generado sin Detalle conocido
+        value: false
+
+  - id: VAR-REP-003
+    name: Ejecucion interrumpida
+    type: VARIANT
+    scope: FEATURE
+    status: draft
+
+    source_process:
+      id: PROC-REP
+      version: "1.3"
+
+    feature: FEAT-REP-005
+
+    applies_to:
+      - HP-REP-001
+      - HP-REP-002
+      - HP-REP-003
+
+    description: >
+      El tecnico se retira sin terminar el Detalle que estaba ejecutando
+      (PROC-REP-200, resultado Interrumpido): PROC-REP-210 reconcilia los
+      insumos igual que si hubiera Completado (CONSUMIDO/LIBERADO/
+      DESPERDICIO segun lo efectivamente ocurrido), la Ejecucion queda
+      historizada sin sobrescribirse, y el Detalle vuelve a PENDIENTE,
+      disponible para que el mismo u otro tecnico lo continue mas
+      adelante con una nueva Ejecucion. Reincorpora al mismo nodo
+      (PROC-REP-210) que la baseline: PROC-REP-200 describe ambos
+      desenlaces (Completado/Interrumpido) como igualmente normales, no
+      como un error. Origen: analisis estructural CAND-REP-027, confirmado
+      como Scenario real en
+      generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
+
+    trigger:
+      node: PROC-REP-200
+      edge:
+        from: PROC-REP-200
+        to: PROC-REP-210
+        condition: Interrumpido
+      condition: Interrumpido
+
+    affected_nodes:
+      - PROC-REP-210
+
+    rules:
+      - BR-REP-004
+      - BR-REP-005
+
+    facts:
+      - key: execution_result
+        label: Resultado de la Ejecucion
+        value: INTERRUMPIDO
+
+    steps:
+      - kind: PROCESS_EDGE
+        from: PROC-REP-200
+        to: PROC-REP-210
+        condition: Interrumpido
+
+    expected:
+      - key: detail_state_after_interruption
+        label: Estado del Detalle tras la interrupcion
+        value: PENDIENTE
+      - key: inventory_reconciled
+        label: Insumos reconciliados (consumido/liberado/desperdicio)
+        value: true
+      - key: execution_history_preserved
+        label: Historial de la Ejecucion interrumpida preservado
+        value: true
+
+  - id: EXC-REP-001
+    name: Recursos insuficientes al ingreso, en espera de revalidacion
+    type: EXCEPTION
+    scope: FEATURE
+    status: draft
+
+    source_process:
+      id: PROC-REP
+      version: "1.3"
+
+    feature: FEAT-REP-003
+
+    applies_to:
+      - HP-REP-001
+      - HP-REP-002
+      - HP-REP-003
+
+    description: >
+      Ningun Detalle de la Orden es trabajable por falta de recursos
+      (PROC-REP-090 = Ninguno trabajable): el sistema registra la
+      advertencia de faltante (PROC-REP-100) para el/los Detalle(s)
+      afectados y, sin override, la Orden queda PENDIENTE_RECURSOS
+      (PROC-REP-120), esperando una revalidacion futura (por ejemplo un
+      cambio de disponibilidad de insumos) que dispare nuevamente
+      PROC-REP-080. Contraparte resuelta mediante override: EXC-REP-002.
+      Origen: analisis estructural CAND-REP-018, confirmado como Scenario
+      real en generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
+
+    trigger:
+      node: PROC-REP-090
+      edge:
+        from: PROC-REP-090
+        to: PROC-REP-100
+        condition: Ninguno trabajable
+      condition: Ninguno trabajable
+
+    affected_nodes:
+      - PROC-REP-100
+      - PROC-REP-110
+      - PROC-REP-120
+      - PROC-REP-080
+
+    rules:
+      - BR-REP-002
+
+    facts:
+      - key: resources_available
+        label: Recursos disponibles
+        value: false
+      - key: override_authorized
+        label: Override autorizado
+        value: false
+
+    steps:
+      - kind: PROCESS_EDGE
+        from: PROC-REP-090
+        to: PROC-REP-100
+        condition: Ninguno trabajable
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-100
+        to: PROC-REP-110
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-110
+        to: PROC-REP-120
+        condition: No
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-120
+        to: PROC-REP-080
+        condition: Revalidar
+
+    expected:
+      - key: order_aggregate_state
+        label: Agregado de estado de la Orden
+        value: PENDIENTE_RECURSOS
+      - key: detail_blocked_condition
+        label: Condicion del Detalle bloqueado
+        value: BLOQUEADO_POR_RECURSOS
+
+  - id: EXC-REP-002
+    name: Recursos insuficientes al ingreso, resuelto por override
+    type: EXCEPTION
+    scope: FEATURE
+    status: draft
+
+    source_process:
+      id: PROC-REP
+      version: "1.3"
+
+    feature: FEAT-REP-003
+
+    applies_to:
+      - HP-REP-001
+      - HP-REP-002
+      - HP-REP-003
+
+    description: >
+      Misma situacion inicial que EXC-REP-001 (ningun Detalle trabajable
+      por falta de recursos), pero un usuario autorizado decide forzar
+      igualmente como trabajable el Detalle bloqueado (PROC-REP-110 = Si,
+      BR-REP-003): el override se registra sobre ese Detalle especifico
+      (PROC-REP-130) y la Orden continua el flujo normal hacia
+      PROC-REP-140, igual que si el recurso hubiera estado disponible.
+      Origen: analisis estructural CAND-REP-019, confirmado como Scenario
+      real en generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
+
+    trigger:
+      node: PROC-REP-090
+      edge:
+        from: PROC-REP-090
+        to: PROC-REP-100
+        condition: Ninguno trabajable
+      condition: Ninguno trabajable
+
+    affected_nodes:
+      - PROC-REP-100
+      - PROC-REP-110
+      - PROC-REP-130
+      - PROC-REP-140
+
+    rules:
+      - BR-REP-002
+      - BR-REP-003
+
+    facts:
+      - key: resources_available
+        label: Recursos disponibles
+        value: false
+      - key: override_authorized
+        label: Override autorizado
+        value: true
+
+    steps:
+      - kind: PROCESS_EDGE
+        from: PROC-REP-090
+        to: PROC-REP-100
+        condition: Ninguno trabajable
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-100
+        to: PROC-REP-110
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-110
+        to: PROC-REP-130
+        condition: Si
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-130
+        to: PROC-REP-140
+
+    expected:
+      - key: detail_workable_after_override
+        label: Detalle trabajable tras el override
+        value: true
+      - key: order_continues_normal_flow
+        label: La Orden continua el flujo normal (PROC-REP-140)
+        value: true
+
+  - id: EXC-REP-003
+    name: Reserva de insumos fallida al iniciar la Ejecucion
+    type: EXCEPTION
+    scope: FEATURE
+    status: draft
+
+    source_process:
+      id: PROC-REP
+      version: "1.3"
+
+    feature: FEAT-REP-005
+
+    applies_to:
+      - HP-REP-001
+      - HP-REP-002
+      - HP-REP-003
+
+    description: >
+      La validacion de factibilidad inicial (PROC-REP-080) fue correcta,
+      pero al intentar realmente iniciar la Ejecucion del Detalle
+      seleccionado (PROC-REP-185) el insumo dejo de estar disponible (por
+      ejemplo, otra Orden lo reservo/consumio en el intervalo): la reserva
+      falla, la Ejecucion NO se inicia (PROC-REP-186), el Detalle
+      permanece PENDIENTE con condicion BLOQUEADO_POR_RECURSOS y el estado
+      de la Orden se recalcula (PROC-REP-211) reutilizando el mismo
+      mecanismo que la factibilidad inicial. Origen: analisis estructural
+      CAND-REP-026, confirmado como Scenario real en
+      generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
+
+    trigger:
+      node: PROC-REP-185
+      edge:
+        from: PROC-REP-185
+        to: PROC-REP-186
+        condition: Reserva fallida
+      condition: Reserva fallida
+
+    affected_nodes:
+      - PROC-REP-186
+      - PROC-REP-211
+
+    rules:
+      - BR-REP-006
+
+    facts:
+      - key: reservation_success
+        label: Reserva de insumos
+        value: false
+
+    steps:
+      - kind: PROCESS_EDGE
+        from: PROC-REP-185
+        to: PROC-REP-186
+        condition: Reserva fallida
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-186
+        to: PROC-REP-211
+
+    expected:
+      - key: execution_started
+        label: Ejecucion iniciada
+        value: false
+      - key: detail_state_after_failed_reservation
+        label: Estado del Detalle tras la reserva fallida
+        value: PENDIENTE
+      - key: detail_blocked_condition
+        label: Condicion del Detalle bloqueado
+        value: BLOQUEADO_POR_RECURSOS
+
+  - id: EXC-REP-004
+    name: Detalle requiere revision tecnica posterior (REQUIERE_REVISION)
+    type: EXCEPTION
+    scope: FEATURE
+    status: draft
+
+    source_process:
+      id: PROC-REP
+      version: "1.3"
+
+    feature: FEAT-REP-002
+
+    applies_to:
+      - HP-REP-001
+      - HP-REP-002
+      - HP-REP-003
+
+    description: >
+      Distinto de EN_REVISION inicial (VAR-REP-001/VAR-REP-002): aqui el
+      Detalle YA EXISTE y, durante el ciclo de reparacion, el resolver de
+      estado de la Orden (PROC-REP-211) determina que requiere una nueva
+      revision tecnica (REQUIERE_REVISION, BR-REP-012). El tecnico revisa
+      especificamente ese Detalle (PROC-REP-126) sin crear uno nuevo, se
+      actualiza su Tipo de Reparacion y precio snapshot (PROC-REP-127), y
+      se revalida su factibilidad (PROC-REP-080) - no se reutiliza el
+      circuito inicial de revision de la Orden completa (PROC-REP-050 a
+      069). Origen: analisis estructural CAND-REP-032, confirmado como
+      Scenario real en
+      generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
+
+    trigger:
+      node: PROC-REP-211
+      edge:
+        from: PROC-REP-211
+        to: PROC-REP-125
+        condition: REQUIERE_REVISION
+      condition: REQUIERE_REVISION
+
+    affected_nodes:
+      - PROC-REP-125
+      - PROC-REP-126
+      - PROC-REP-127
+      - PROC-REP-080
+
+    rules:
+      - BR-REP-012
+      - BR-REP-001
+
+    facts:
+      - key: detail_requires_further_technical_review
+        label: Detalle requiere nueva revision tecnica
+        value: true
+
+    steps:
+      - kind: PROCESS_EDGE
+        from: PROC-REP-211
+        to: PROC-REP-125
+        condition: REQUIERE_REVISION
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-125
+        to: PROC-REP-126
+        condition: Revision tecnica
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-126
+        to: PROC-REP-127
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-127
+        to: PROC-REP-080
+
+    expected:
+      - key: same_detail_preserved
+        label: Se actualiza el mismo Detalle (no se crea uno nuevo)
+        value: true
+      - key: requires_definicion_cleared
+        label: Condicion REQUIERE_DEFINICION removida tras la revision
+        value: true
+
+  - id: EXC-REP-005
+    name: Rechazo de control tecnico y retrabajo por Detalle
+    type: EXCEPTION
+    scope: FEATURE
+    status: draft
+
+    source_process:
+      id: PROC-REP
+      version: "1.3"
+
+    feature: FEAT-REP-006
+
+    applies_to:
+      - HP-REP-001
+      - HP-REP-002
+      - HP-REP-003
+
+    description: >
+      Al menos un Detalle es rechazado en el control tecnico
+      (PROC-REP-230 = No): Recepcion identifica el/los Detalle(s)
+      rechazados, registra fecha, usuario, observacion y resultado del
+      control (PROC-REP-235), y esos Detalles vuelven a PENDIENTE
+      (se reabren) conservando el historial de sus Ejecuciones anteriores
+      y de este mismo rechazo. El estado de la Orden se recalcula
+      mediante el resolver (PROC-REP-211), que puede devolverla a
+      EN_COLA si algun Detalle reabierto es trabajable. Origen: analisis
+      estructural CAND-REP-034, confirmado como Scenario real en
+      generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
+
+    trigger:
+      node: PROC-REP-230
+      edge:
+        from: PROC-REP-230
+        to: PROC-REP-235
+        condition: No
+      condition: No
+
+    affected_nodes:
+      - PROC-REP-235
+      - PROC-REP-211
+
+    rules:
+      - BR-REP-008
+
+    facts:
+      - key: technical_control_result
+        label: Resultado del control tecnico
+        value: AL_MENOS_UN_DETALLE_RECHAZADO
+
+    steps:
+      - kind: PROCESS_EDGE
+        from: PROC-REP-230
+        to: PROC-REP-235
+        condition: No
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-235
+        to: PROC-REP-211
+
+    expected:
+      - key: rejected_details_returned_to_pending
+        label: Detalle(s) rechazados vuelven a PENDIENTE
+        value: true
+      - key: control_history_preserved
+        label: Historial del control tecnico y de Ejecuciones preservado
         value: true

@@ -14,10 +14,16 @@
  *    - PROCESS_EDGE continuity: ignoring FUNCTIONAL_ACTION steps (they
  *      never move the "current node"), step[n].to must equal
  *      step[n+1].from;
- *    - a HAPPY_PATH/E2E scenario must start at the process's start/event
- *      node and end at its end node;
+ *    - a HAPPY_PATH/E2E scenario must start at one of the process's entry
+ *      points (a start/event node with no incoming edge, e.g. EVT-REP-001 or
+ *      EVT-REP-002) and end at its end node;
  *    - every FUNCTIONAL_ACTION step's `feature` must exist in the
- *      Features file.
+ *      Features file;
+ *    - skipped_nodes (optional) must exist, be unique and never overlap
+ *      the nodes the same scenario traverses;
+ *    - Variant/Exception/Edge Case scaffolding (optional feature/trigger/
+ *      affected_nodes/applies_to/dependencies) is checked for shape and
+ *      referential integrity only.
  *
  * This script never derives or stores covers_nodes/covers_edges - the
  * viewer computes those on the fly from steps[]. It does print
@@ -37,7 +43,7 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import Ajv from "ajv";
 import { parse } from "yaml";
-import { loadYaml, type ProcessModel } from "./lib/process-model";
+import { edgeKey, loadYaml, type ProcessModel } from "./lib/process-model";
 import type { FeatureModel } from "./lib/feature-model";
 import { deriveScenarioFeatures } from "./lib/feature-scenario-mapping";
 import {
@@ -57,7 +63,7 @@ const SCENARIOS_FILE = cliArgs[0] ?? DEFAULT_SCENARIOS_FILE;
 const PROCESS_FILE = cliArgs[1] ?? DEFAULT_PROCESS_FILE;
 const FEATURES_FILE = cliArgs[2] ?? DEFAULT_FEATURES_FILE;
 
-function findDuplicateIds(scenarios: Scenario[]): string[] {
+export function findDuplicateIds(scenarios: Scenario[]): string[] {
   const seen = new Set<string>();
   const duplicates = new Set<string>();
   for (const scenario of scenarios) {
@@ -67,12 +73,12 @@ function findDuplicateIds(scenarios: Scenario[]): string[] {
   return [...duplicates];
 }
 
-/** Identifies a process edge by from + condition + to, never by from/to alone. */
-function edgeKey(from: string, condition: string | undefined, to: string): string {
-  return `${from}::${condition ?? ""}::${to}`;
-}
-
-function validateScenario(scenario: Scenario, processModel: ProcessModel, featureIds: Set<string>): string[] {
+export function validateScenario(
+  scenario: Scenario,
+  processModel: ProcessModel,
+  featureIds: Set<string>,
+  scenariosById: Map<string, Scenario>
+): string[] {
   const errors: string[] = [];
   const nodeIds = new Set(processModel.nodes.map((node) => node.id));
   const edgeKeys = new Set(processModel.edges.map((edge) => edgeKey(edge.from, edge.condition, edge.to)));
@@ -84,7 +90,9 @@ function validateScenario(scenario: Scenario, processModel: ProcessModel, featur
     edgesByPair.set(pairKey, conditions);
   }
 
-  for (const step of scenario.steps) {
+  // A future Variant has no steps (schema only requires them for HAPPY_PATH).
+  const allSteps = scenario.steps ?? [];
+  for (const step of allSteps) {
     if (isProcessEdgeStep(step)) {
       if (!nodeIds.has(step.from)) {
         errors.push(`step PROCESS_EDGE: from inexistente "${step.from}"`);
@@ -113,7 +121,57 @@ function validateScenario(scenario: Scenario, processModel: ProcessModel, featur
   }
 
   // Continuity: ignoring FUNCTIONAL_ACTION, step[n].to must equal step[n+1].from.
-  const edgeSteps = scenario.steps.filter(isProcessEdgeStep);
+  const edgeSteps = allSteps.filter(isProcessEdgeStep);
+
+  // skipped_nodes: must exist, be unique, and must NOT also be traversed by
+  // this same scenario (a node cannot be both included and skipped).
+  const traversed = new Set<string>();
+  for (const step of edgeSteps) {
+    traversed.add(step.from);
+    traversed.add(step.to);
+  }
+  const seenSkipped = new Set<string>();
+  for (const skipped of scenario.skipped_nodes ?? []) {
+    if (!nodeIds.has(skipped.node)) {
+      errors.push(`skipped_nodes: node inexistente "${skipped.node}"`);
+    }
+    if (seenSkipped.has(skipped.node)) {
+      errors.push(`skipped_nodes: node duplicado "${skipped.node}"`);
+    }
+    seenSkipped.add(skipped.node);
+    if (traversed.has(skipped.node)) {
+      errors.push(`skipped_nodes: "${skipped.node}" figura como omitido pero el recorrido lo atraviesa (included y skipped a la vez)`);
+    }
+  }
+
+  // Variant/Exception/Edge Case scaffolding (all optional): only the SHAPE
+  // and the references are checked, no execution semantics exist yet.
+  if (scenario.feature !== undefined && !featureIds.has(scenario.feature)) {
+    errors.push(`feature inexistente "${scenario.feature}"`);
+  }
+  if (scenario.trigger) {
+    if (!nodeIds.has(scenario.trigger.node)) {
+      errors.push(`trigger.node inexistente "${scenario.trigger.node}"`);
+    }
+    const edge = scenario.trigger.edge;
+    if (edge && !edgeKeys.has(edgeKey(edge.from, edge.condition, edge.to))) {
+      errors.push(`trigger.edge ${edge.from} -> ${edge.to} no existe exactamente en el process`);
+    }
+  }
+  for (const nodeId of scenario.affected_nodes ?? []) {
+    if (!nodeIds.has(nodeId)) errors.push(`affected_nodes: node inexistente "${nodeId}"`);
+  }
+  for (const targetId of scenario.applies_to ?? []) {
+    const target = scenariosById.get(targetId);
+    if (!target) errors.push(`applies_to: scenario inexistente "${targetId}"`);
+    else if (target.type !== "HAPPY_PATH") errors.push(`applies_to: "${targetId}" no es un HAPPY_PATH`);
+  }
+  for (const [relation, ids] of Object.entries(scenario.dependencies ?? {})) {
+    for (const otherId of ids ?? []) {
+      if (otherId === scenario.id) errors.push(`dependencies.${relation}: un scenario no puede depender de si mismo`);
+      else if (!scenariosById.has(otherId)) errors.push(`dependencies.${relation}: scenario inexistente "${otherId}"`);
+    }
+  }
   for (let i = 0; i < edgeSteps.length - 1; i++) {
     if (edgeSteps[i].to !== edgeSteps[i + 1].from) {
       errors.push(
@@ -124,13 +182,22 @@ function validateScenario(scenario: Scenario, processModel: ProcessModel, featur
   }
 
   if (scenario.type === "HAPPY_PATH" && scenario.scope === "E2E") {
-    const startNode = processModel.nodes.find((node) => node.type === "start") ?? processModel.nodes.find((node) => node.type === "event");
+    // A process can have several entry points (e.g. EVT-REP-001 "surge una
+    // necesidad" and EVT-REP-002 "una Orden finalizada requiere garantia"):
+    // a valid start is any start/event node with no incoming edge.
+    const hasIncoming = new Set(processModel.edges.map((edge) => edge.to));
+    const startNodes = processModel.nodes.filter(
+      (node) => (node.type === "start" || node.type === "event") && !hasIncoming.has(node.id)
+    );
     const endNode = processModel.nodes.find((node) => node.type === "end");
     if (edgeSteps.length === 0) {
       errors.push("HAPPY_PATH/E2E sin ningun step PROCESS_EDGE");
     } else {
-      if (startNode && edgeSteps[0].from !== startNode.id) {
-        errors.push(`HAPPY_PATH/E2E debe comenzar en "${startNode.id}", comienza en "${edgeSteps[0].from}"`);
+      if (startNodes.length > 0 && !startNodes.some((node) => node.id === edgeSteps[0].from)) {
+        errors.push(
+          `HAPPY_PATH/E2E debe comenzar en un nodo de inicio (${startNodes.map((node) => node.id).join(", ")}), ` +
+            `comienza en "${edgeSteps[0].from}"`
+        );
       }
       if (endNode && edgeSteps[edgeSteps.length - 1].to !== endNode.id) {
         errors.push(`HAPPY_PATH/E2E debe terminar en "${endNode.id}", termina en "${edgeSteps[edgeSteps.length - 1].to}"`);
@@ -178,26 +245,31 @@ function main(): void {
 
   console.log("=== Validacion referencial de Scenarios ===\n");
 
+  const scenariosById = new Map(data.scenarios.map((scenario) => [scenario.id, scenario]));
   const allErrors: string[] = [];
   for (const scenario of data.scenarios) {
-    const errors = validateScenario(scenario, processModel, featureIds);
-    const edgeStepCount = scenario.steps.filter(isProcessEdgeStep).length;
-    const actionStepCount = scenario.steps.filter(isFunctionalActionStep).length;
+    const errors = validateScenario(scenario, processModel, featureIds, scenariosById);
+    const edgeStepCount = (scenario.steps ?? []).filter(isProcessEdgeStep).length;
+    const actionStepCount = (scenario.steps ?? []).filter(isFunctionalActionStep).length;
     const touchedNodes = new Set<string>();
-    for (const step of scenario.steps) {
+    for (const step of scenario.steps ?? []) {
       if (isProcessEdgeStep(step)) {
         touchedNodes.add(step.from);
         touchedNodes.add(step.to);
       }
     }
-    const { touchedFeatureIds, activeFeatureIds } = deriveScenarioFeatures(featuresModel, scenario);
+    const { touchedFeatureIds, activeFeatureIds, activationReasons } = deriveScenarioFeatures(featuresModel, scenario);
 
     console.log(`${scenario.id} (${scenario.type}/${scenario.scope}): ${scenario.name}`);
     console.log(`  PROCESS_EDGE steps: ${edgeStepCount}`);
     console.log(`  FUNCTIONAL_ACTION steps: ${actionStepCount}`);
     console.log(`  Nodos recorridos: ${touchedNodes.size}`);
+    console.log(`  Nodos omitidos (skipped_nodes): ${(scenario.skipped_nodes ?? []).length}`);
     console.log(`  touched_features (diagnostico, bruto): ${touchedFeatureIds.join(", ") || "(ninguna)"}`);
     console.log(`  active_features: ${activeFeatureIds.join(", ") || "(ninguna)"}`);
+    for (const featureId of activeFeatureIds) {
+      console.log(`    ${featureId} <- ${(activationReasons[featureId] ?? []).join("; ")}`);
+    }
     if (errors.length > 0) {
       console.log(`  ERRORES:`);
       for (const error of errors) console.log(`    - ${error}`);

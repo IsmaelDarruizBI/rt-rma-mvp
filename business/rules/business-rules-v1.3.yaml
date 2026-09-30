@@ -300,7 +300,17 @@ rules:
       determina si es COBRABLE (CLIENTE_EXTERNO, salvo cortesia),
       NO_COBRABLE (RT_GARANTIA_VENTA, RMA_GARANTIA_REPARACION) o
       NO_COBRABLE_AL_CLIENTE (RT_INTERNO); esta condicion de origen nunca
-      se trata como una cortesia.
+      se trata como una cortesia. RMA_GARANTIA_REPARACION (garantia de una
+      reparacion RMA anterior) es NO_COBRABLE como consecuencia de su
+      origen, no por un override ni una cortesia comercial: no registra
+      pago, anticipo ni pago posterior, no requiere Saldo = 0 mediante
+      pagos ni bloquea la entrega por deuda, y sigue existiendo entrega (y
+      notificacion) al cliente. Igual que todo origen con entrega a cliente
+      recorre PROC-REP-265 (validacion de condicion de entrega), pero la
+      aprueba directamente por su condicion NO_COBRABLE, sin entrar en
+      PROC-REP-266. El precio snapshot de sus Detalles
+      existe igual (dato historico, de costo y de valoracion del trabajo):
+      precio registrado no implica pago requerido.
     status: draft
 
   - id: BR-REP-017
@@ -312,7 +322,16 @@ rules:
       medios de pago- registrados en cualquier momento desde que la Orden
       existe, no solo al final. Cada Pago registra importe, medio de
       pago, fecha/hora, usuario y referencia/comprobante cuando
-      corresponda; todos quedan asociados a la misma Orden. (B) Completar
+      corresponda; todos quedan asociados a la misma Orden. Autorizacion
+      para Registrar Pago (corrige un bug funcional detectado en el MVP
+      actual, donde cualquier usuario activo podia registrarlo sin
+      restriccion): puede registrar un Pago todo usuario OPERATIVO ACTIVO
+      EXCEPTO Tecnico (ACT_TECH) -es decir, ACT_ADMIN, ACT_RECEP y
+      ACT_COORD, mientras esten activos-; un Tecnico nunca puede registrar
+      un Pago. No es una decision de frontend: el backend debe hacer
+      cumplir esta autorizacion (usuario activo AND rol != TECNICO), del
+      mismo modo que ya hace cumplir la autorizacion de otros overrides de
+      esta capa (BR-REP-003, BR-REP-011). (B) Completar
       Cobro es una FASE SECUENCIAL del cierre: una vez aprobado el
       control tecnico (REPARACION_LISTA), se determina el Total Cobrable
       (Base Comercial de los Detalles finales, ver BR-REP-015/BR-REP-016)
@@ -320,14 +339,21 @@ rules:
       (PROC-REP-265). Si Saldo > 0, la Orden queda pendiente de completar
       cobro: pueden registrarse uno o mas Pagos adicionales -mediante el
       mismo mecanismo transversal (A)- y el Saldo se recalcula despues de
-      cada uno (PROC-REP-266 -> PROC-REP-265, "Revalidar"). Una Orden de
-      origen CLIENTE_EXTERNO solo puede pasar a ENTREGADA cuando
-      Saldo = 0, o cuando corresponde cortesia total de Orden, o
-      condicion no-cobrable por origen; no existe override para entregar
-      con deuda en V1.3. No modelar los pagos como si ocurrieran
-      unicamente al final (A es transversal), ni la entrega sin el gate
-      final de Saldo (B es secuencial y obligatorio antes de
-      PROC-REP-270). El comprobante final (PROC-REP-280) se genera
+      cada uno (PROC-REP-266 -> PROC-REP-265, "Revalidar"). Todo origen con
+      entrega a cliente pasa por el mismo gate de condicion de entrega
+      (PROC-REP-265) antes de PROC-REP-280 y PROC-REP-270; lo que cambia es
+      como se aprueba: CLIENTE_EXTERNO (COBRABLE) solo puede pasar a
+      ENTREGADA cuando Saldo = 0 o cuando corresponde cortesia total de
+      Orden; RT_GARANTIA_VENTA y RMA_GARANTIA_REPARACION la aprueban por su
+      condicion NO_COBRABLE de origen (no por cortesia), sin registrar pagos
+      ni entrar en PROC-REP-266. No existe override para entregar con deuda
+      en V1.3 ni un bypass nuevo alrededor de PROC-REP-265. No modelar los pagos como si ocurrieran
+      unicamente al final (A es transversal), ni la entrega a cliente sin el
+      gate final de condicion de entrega (B es secuencial y obligatorio
+      antes de PROC-REP-270 para los origenes con entrega a cliente). RT_INTERNO
+      (NO_COBRABLE_AL_CLIENTE) no pasa por (B): tras informar el resultado
+      a Gestion RT (PROC-REP-290) llega a PROC-REP-270 solo como
+      entrega/devolucion del equipo a Gestion RT, sin Saldo ni Pagos. El comprobante final (PROC-REP-280) se genera
       recien despues de que PROC-REP-265 aprueba la condicion de entrega,
       nunca antes: asi refleja siempre el Saldo definitivo al momento de
       la entrega, y no queda desactualizado si luego se registra un pago
@@ -360,4 +386,22 @@ rules:
       para otro tecnico). El historial completo de participaciones
       (quien tomo, cuando, desde que estacion, cuando la libero) se
       conserva siempre; nunca se sobrescribe.
+    status: draft
+
+  - id: BR-REP-019
+    name: Garantia RMA - Orden nueva vinculada y Detalle origen
+    description: >
+      Una Orden de garantia RMA (origen RMA_GARANTIA_REPARACION) debe
+      crearse como una NUEVA Orden vinculada a una Orden origen ya
+      finalizada (ENTREGADA). La Orden origen NO se reabre ni se reutiliza
+      transaccionalmente: permanece historicamente inmutable y conserva su
+      estado; la relacion entre ambas Ordenes resuelve la trazabilidad sin
+      modificarla (no se crean estados como REABIERTA_POR_GARANTIA). Cada
+      Detalle de garantia debe poder identificar el Detalle original que
+      origina el reproceso: la trazabilidad es en ambos niveles (Orden
+      nueva -> Orden origen; Detalle nuevo -> Detalle origen), y resuelve el
+      pendiente de vinculacion Orden vs. Detalle. Cliente y equipo se
+      recuperan de la Orden origen (no es un alta nueva). La condicion
+      comercial de la Orden es NO_COBRABLE (BR-REP-016). Queda pendiente
+      definir las reglas de garantia RMA configurable y de garantia vencida.
     status: draft

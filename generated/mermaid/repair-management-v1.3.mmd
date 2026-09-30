@@ -4,6 +4,7 @@
 
 flowchart TD
     EVT-REP-001{{"Surge necesidad de reparacion"}}
+    EVT-REP-002{{"Una Orden de Reparacion finalizada requiere garantia"}}
     PROC-REP-010{"Cual es el origen de la Orden de Reparacion"}
     PROC-REP-020["Recibir referencia y contexto del equipo RT"]
     PROC-REP-025["Recibir referencia de garantia de venta RT"]
@@ -54,7 +55,7 @@ flowchart TD
     PROC-REP-250{"Requiere entrega a cliente"}
     PROC-REP-260["Notificar cliente"]
     PROC-REP-280["Generar comprobante final"]
-    PROC-REP-265{"Completar cobro - validar condicion de entrega (saldo)"}
+    PROC-REP-265{"Completar cobro - validar condicion de entrega"}
     PROC-REP-266["Orden con saldo pendiente (entrega bloqueada)"]
     PROC-REP-270["Entregar equipo"]
     PROC-REP-290["Informar resultado al sistema RT"]
@@ -70,6 +71,7 @@ flowchart TD
     PROC-REP-020 --> PROC-REP-040
     PROC-REP-025 --> PROC-REP-040
     PROC-REP-030 --> PROC-REP-040
+    EVT-REP-002 --> PROC-REP-035
     PROC-REP-035 --> PROC-REP-040
     PROC-REP-040 --> PROC-REP-045
     PROC-REP-045 -->|Si| PROC-REP-070
@@ -141,7 +143,7 @@ flowchart TD
     PROC-REP-265 -->|No| PROC-REP-266
     PROC-REP-266 -->|Revalidar| PROC-REP-265
     PROC-REP-270 --> EVT-REP-999
-    PROC-REP-290 --> EVT-REP-999
+    PROC-REP-290 --> PROC-REP-270
     PROC-REP-170 -->|Cancelar Detalle| PROC-REP-300
     PROC-REP-300 --> PROC-REP-211
     PROC-REP-170 -->|Cancelar Orden| PROC-REP-305

@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://rosariotecno.local/schemas/scenario.schema.json",
   "title": "Scenario",
-  "description": "Contrato de validacion ESTRUCTURAL para Scenarios (Etapa: Scenario Definition). Un Scenario es una capa sobre el Business Process: no duplica ni reemplaza nodes/edges, solo referencia una secuencia de transiciones (PROCESS_EDGE) y, cuando corresponde, acciones funcionales transversales sin nodo propio (FUNCTIONAL_ACTION). Valida unicamente la forma del YAML: no confirma que from/to/condition existan realmente en el Business Process, ni que feature exista en el archivo de Features real. Esa validacion de integridad REFERENCIAL vive en scripts/validate-scenarios.ts, que corre despues de este schema, no dentro de el. Por ahora solo existe type=HAPPY_PATH; VARIANT/EXCEPTION/EDGE_CASE quedan admitidos por el enum para no requerir un cambio de schema cuando se implementen, pero su comportamiento (por ejemplo overrides de facts) todavia no esta definido ni validado.",
+  "description": "Contrato de validacion ESTRUCTURAL para Scenarios (Etapa: Scenario Definition). Un Scenario es una capa sobre el Business Process: no duplica ni reemplaza nodes/edges, solo referencia una secuencia de transiciones (PROCESS_EDGE) y, cuando corresponde, acciones funcionales transversales sin nodo propio (FUNCTIONAL_ACTION). Valida unicamente la forma del YAML: no confirma que from/to/condition existan realmente en el Business Process, ni que feature exista en el archivo de Features real. Esa validacion de integridad REFERENCIAL vive en scripts/validate-scenarios.ts, que corre despues de este schema, no dentro de el. Por ahora solo existe type=HAPPY_PATH; VARIANT/EXCEPTION/EDGE_CASE quedan admitidos por el enum para no requerir un cambio de schema cuando se implementen. `skipped_nodes` (opcional) documenta, con motivo, nodes del Business Process que este Scenario deliberadamente NO recorre -util cuando un Happy Path alternativo (origen distinto) omite un tramo entero a proposito, no por descuido-. Los campos `feature`/`applies_to`/`trigger`/`affected_nodes`/`rules`/`dependencies` (todos opcionales) son la arquitectura preparada para VARIANT/EXCEPTION/EDGE_CASE: ninguna Variant real se declara todavia con ellos, y su semantica de ejecucion (por ejemplo overrides de facts, o como se combinan `requires`/`enables`/`implies`/`excludes` entre Variants) no esta implementada ni validada mas alla de su forma.",
   "type": "object",
   "required": ["process", "scenarios"],
   "additionalProperties": true,
@@ -32,10 +32,13 @@
         "scope",
         "status",
         "source_process",
-        "description",
-        "facts",
-        "steps",
-        "expected"
+        "description"
+      ],
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "HAPPY_PATH" } } },
+          "then": { "required": ["facts", "steps", "expected"] }
+        }
       ],
       "additionalProperties": true,
       "properties": {
@@ -64,7 +67,68 @@
         "expected": {
           "type": "array",
           "items": { "$ref": "#/definitions/fact" }
-        }
+        },
+        "skipped_nodes": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/skippedNode" }
+        },
+        "feature": { "type": "string" },
+        "applies_to": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "trigger": { "$ref": "#/definitions/trigger" },
+        "affected_nodes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "rules": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "dependencies": { "$ref": "#/definitions/dependencies" }
+      }
+    },
+    "skippedNode": {
+      "type": "object",
+      "required": ["node", "reason"],
+      "additionalProperties": true,
+      "properties": {
+        "node": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "required": ["node"],
+      "additionalProperties": true,
+      "properties": {
+        "node": { "type": "string" },
+        "edge": { "$ref": "#/definitions/edgeRef" },
+        "condition": { "type": "string" }
+      }
+    },
+    "edgeRef": {
+      "type": "object",
+      "required": ["from", "to"],
+      "additionalProperties": true,
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "condition": { "type": "string" }
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "requires": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "enables": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "implies": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "excludes": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
       }
     },
     "sourceProcess": {

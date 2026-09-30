@@ -85,6 +85,7 @@ features:
 
     business_rules:
       - BR-REP-013
+      - BR-REP-019
 
     scope:
       includes:
@@ -171,6 +172,7 @@ features:
       - BR-REP-010
       - BR-REP-012
       - BR-REP-015
+      - BR-REP-019
 
     scope:
       includes:
@@ -622,7 +624,9 @@ features:
           CORTESIA_ORDEN), con autorizacion ACT-ADMIN
         - Registrar Pagos como capacidad transversal (seña, anticipo,
           parciales, multiples medios), en cualquier momento desde que la
-          Orden existe
+          Orden existe, restringido a usuarios operativos activos que no
+          sean Tecnico (BR-REP-017; corrige un bug funcional del MVP
+          actual)
         - Determinar el Total Cobrable y el Total Pagado
         - Calcular el Saldo y completar el cobro despues de
           REPARACION_LISTA (fase secuencial, PROC-REP-265/266)

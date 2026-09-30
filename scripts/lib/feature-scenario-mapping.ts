@@ -29,14 +29,9 @@
  *   Coverage Analyzer (aggregating across many Scenarios) - never conflate
  *   it with "a Scenario happened to pass through this Feature once".
  */
-import type { ProcessModel } from "./process-model";
+import { edgeKey, type ProcessModel } from "./process-model";
 import type { FeatureModel, SharedNodeBinding } from "./feature-model";
 import { isFunctionalActionStep, isProcessEdgeStep, type Scenario } from "./scenario-model";
-
-/** Identifies a process edge by from + condition + to, never by from/to alone (an edge without a condition never matches one that has one). */
-function edgeKey(from: string, condition: string | undefined, to: string): string {
-  return `${from}::${condition ?? ""}::${to}`;
-}
 
 /**
  * Reverse index: process_node id -> Set of Feature ids that declare it in
@@ -201,6 +196,14 @@ export interface ScenarioFeatureDerivation {
   touchedFeatureIds: string[];
   /** touchedFeatureIds refined by ALWAYS/CONTEXTUAL bindings plus FUNCTIONAL_ACTION.feature - the Features genuinely involved. */
   activeFeatureIds: string[];
+  /**
+   * WHY each active Feature is active: one entry per (node or action) that
+   * activated it. A Feature is active when PART of its behavior takes part
+   * in the Scenario - it does NOT mean every node/rule of the Feature runs
+   * (e.g. FEAT-REP-007 is active in both Happy Paths, with different
+   * behavior). Reasons make that explicit instead of implying a single cause.
+   */
+  activationReasons: Record<string, string[]>;
 }
 
 /**
@@ -227,8 +230,9 @@ export function deriveScenarioFeatures(
   featuresModel: FeatureModel,
   scenario: Scenario
 ): ScenarioFeatureDerivation {
+  const steps = scenario.steps ?? []; // a future Variant may declare no steps
   const touchedNodes = new Set<string>();
-  for (const step of scenario.steps) {
+  for (const step of steps) {
     if (isProcessEdgeStep(step)) {
       touchedNodes.add(step.from);
       touchedNodes.add(step.to);
@@ -245,6 +249,13 @@ export function deriveScenarioFeatures(
 
   const touchedFeatureIds = new Set<string>();
   const activeFeatureIds = new Set<string>();
+  const reasons = new Map<string, string[]>();
+  const activate = (featureId: string, reason: string): void => {
+    activeFeatureIds.add(featureId);
+    const list = reasons.get(featureId) ?? [];
+    if (!list.includes(reason)) list.push(reason);
+    reasons.set(featureId, list);
+  };
 
   for (const feature of featuresModel.features) {
     for (const nodeId of feature.process_nodes) {
@@ -253,7 +264,7 @@ export function deriveScenarioFeatures(
 
       const owners = nodeFeatureIndex.get(nodeId) ?? new Set<string>();
       if (owners.size <= 1) {
-        activeFeatureIds.add(feature.id); // (A) exclusive node
+        activate(feature.id, `nodo propio ${nodeId}`); // (A) exclusive node
         continue;
       }
 
@@ -261,10 +272,10 @@ export function deriveScenarioFeatures(
       if (!binding) continue; // missing binding: reported by validateSharedNodeBindings, not guessed here
 
       if (binding.mode === "ALWAYS") {
-        activeFeatureIds.add(feature.id); // (B)
+        activate(feature.id, `nodo compartido ${nodeId} (ALWAYS)`); // (B)
       } else {
         const satisfied = (binding.when?.incoming_edges ?? []).some((ref) =>
-          scenario.steps.some(
+          steps.some(
             (step) =>
               isProcessEdgeStep(step) &&
               step.from === ref.from &&
@@ -272,20 +283,21 @@ export function deriveScenarioFeatures(
               (step.condition ?? "") === (ref.condition ?? "")
           )
         );
-        if (satisfied) activeFeatureIds.add(feature.id); // (C)
+        if (satisfied) activate(feature.id, `nodo compartido ${nodeId} (CONTEXTUAL)`); // (C)
       }
     }
   }
 
-  for (const step of scenario.steps) {
+  for (const step of steps) {
     if (isFunctionalActionStep(step)) {
       touchedFeatureIds.add(step.feature);
-      activeFeatureIds.add(step.feature); // (D)
+      activate(step.feature, `accion funcional "${step.name}"`); // (D)
     }
   }
 
   return {
     touchedFeatureIds: [...touchedFeatureIds].sort(),
     activeFeatureIds: [...activeFeatureIds].sort(),
+    activationReasons: Object.fromEntries([...reasons.entries()].sort(([a], [b]) => a.localeCompare(b))),
   };
 }

@@ -69,8 +69,9 @@
 # Deliberadamente sigue sin definir en V1.3 (igual que en V1.2, mas los
 # temas nuevos que este cambio introdujo): flujo completo de
 # tercerizacion, scrap, devolucion a proveedor, modelo definitivo de
-# reproceso (Orden origen vs. Detalle origen de RMA_GARANTIA_REPARACION),
-# distribucion de puntaje entre multiples tecnicos, catalogo definitivo de
+# reproceso RMA (resuelto: se vincula a Orden origen Y a Detalle origen,
+# BR-REP-019; queda pendiente el modelo tecnico y las reglas de garantia
+# vencida), distribucion de puntaje entre multiples tecnicos, catalogo definitivo de
 # prioridades, reglas de CANCELADA (quien/cuando/motivo), estado terminal
 # definitivo de RT_INTERNO, presupuestacion, consecuencias comerciales de
 # la cancelacion (reembolsos), costo de reparacion (mano de obra + costo
@@ -100,6 +101,21 @@ nodes:
     description: >
       Evento que inicia el proceso cuando un equipo requiere una reparacion.
 
+  - id: EVT-REP-002
+    type: event
+    name: Una Orden de Reparacion finalizada requiere garantia
+    description: >
+      Evento de inicio propio de la garantia de reparacion RMA (Happy Path
+      HP-REP-003). A diferencia de EVT-REP-001 (surge una necesidad de
+      reparacion NUEVA), aqui el disparador es que una reparacion ya
+      realizada por RMA -en una Orden ya finalizada- presenta una falla
+      cubierta por garantia, y el usuario selecciona "Generar garantia"
+      sobre esa Orden. No es un alta de cliente ni de equipo: ambos ya
+      existen en la Orden origen. Converge directamente en PROC-REP-035,
+      sin pasar por PROC-REP-010 (el origen ya es conocido). La Orden
+      origen se considera finalizada cuando llego a ENTREGADA; el modelo
+      no define un estado CERRADA aparte y esta iteracion no lo crea.
+
   - id: PROC-REP-010
     type: decision
     name: Cual es el origen de la Orden de Reparacion
@@ -109,7 +125,10 @@ nodes:
       Rosario Tecno gestionado en la aplicacion de Gestion RT),
       RT_GARANTIA_VENTA (ingreso derivado de una garantia por venta de
       Rosario Tecno) y RMA_GARANTIA_REPARACION (el cliente vuelve porque
-      falla una reparacion RMA anterior). Sin cambios respecto de V1.2.
+      falla una reparacion RMA anterior). Sin cambios respecto de V1.2. La
+      garantia RMA tambien puede iniciarse sin pasar por este nodo, desde
+      EVT-REP-002 (una Orden finalizada requiere garantia) hacia
+      PROC-REP-035.
 
   - id: PROC-REP-020
     type: activity
@@ -167,17 +186,30 @@ nodes:
     actor: ACT-RECEP
     description: >
       Origen RMA_GARANTIA_REPARACION. Representa a un cliente que vuelve
-      porque falla una reparacion realizada anteriormente por RMA. Queda
-      relacionada la nueva Orden de Reparacion con la Orden de Reparacion
-      que origino la garantia (relacion a nivel Orden; si en el futuro se
-      necesita precisar el Detalle especifico que fallo, es una extension
-      pendiente, no resuelta en V1.3). No se define todavia como se
-      registra tecnicamente un reproceso: el modelo definitivo queda
-      pendiente.
+      porque falla una reparacion realizada anteriormente por RMA. Parte
+      de una Orden de Reparacion origen ya finalizada (ENTREGADA), que NO
+      se reabre y permanece historicamente inmutable. Se identifica (1) la
+      Orden origen y (2) el/los Detalle(s) especificos de esa Orden que
+      originan la garantia. Cliente y equipo se RECUPERAN de la Orden origen:
+      funcionalmente no es un nuevo alta de cliente/equipo (por eso no pasa
+      por PROC-REP-030), aunque la nueva Orden pueda copiar/referenciar
+      los datos que necesite para su propia consistencia historica. Es el
+      unico nodo de identificacion de origen para este Happy Path: se
+      alcanza desde EVT-REP-002 (parte de una Orden finalizada) o, como
+      entrada alternativa, desde PROC-REP-010 cuando Recepcion identifica
+      la garantia. La vinculacion es en ambos niveles: la nueva Orden
+      referencia la Orden origen y cada Detalle de garantia referenciara su
+      Detalle origen (BR-REP-019); esa referencia a nivel Detalle se
+      materializa al definir los Detalles en PROC-REP-070.
+    inputs:
+      - Orden de Reparacion origen finalizada
     outputs:
-      - Cliente identificado
-      - Equipo identificado
+      - Cliente identificado (recuperado de la Orden origen)
+      - Equipo identificado (recuperado de la Orden origen)
       - Orden de Reparacion origen identificada
+      - Detalle(s) origen identificado(s)
+    rules:
+      - BR-REP-019
 
   - id: PROC-REP-040
     type: activity
@@ -192,10 +224,16 @@ nodes:
       evento, no algo que decida el resolver tecnico de Detalles (ver
       BR-REP-013): mientras cantidad_detalles = 0, el resolver nunca
       llega a invocarse -PROC-REP-090 y PROC-REP-211 solo son alcanzables
-      despues de que exista al menos un Detalle (PROC-REP-070/075)-.
+      despues de que exista al menos un Detalle (PROC-REP-070/075)-. Para
+      una garantia RMA (RMA_GARANTIA_REPARACION) se crea una NUEVA Orden
+      con origen RMA_GARANTIA_REPARACION, condicion comercial NO_COBRABLE
+      (BR-REP-016) y referencia a la Orden origen (BR-REP-019); la Orden
+      origen no se reabre ni se reutiliza transaccionalmente.
     outputs:
       - Orden de Reparacion
       - Estado REQUERIMIENTO
+    rules:
+      - BR-REP-019
 
   - id: PROC-REP-045
     type: decision
@@ -309,13 +347,20 @@ nodes:
       consecuencia, su precio snapshot vigente (BR-REP-015). Reemplaza a
       la version singular de V1.2 ("definir requerimiento de reparacion"):
       una misma Orden puede tener, por ejemplo, un Detalle de cambio de
-      bateria y otro de cambio de pantalla.
+      bateria y otro de cambio de pantalla. En una garantia RMA, cada
+      Detalle nuevo se genera a partir de un Detalle origen identificado en
+      PROC-REP-035 y lo referencia (BR-REP-019); conserva igualmente su Tipo
+      de Reparacion y su precio snapshot. El precio snapshot existe en
+      todo Detalle, cualquiera sea el origen: precio registrado no implica
+      pago requerido (la condicion NO_COBRABLE del origen determina que no
+      se cobra).
     inputs:
       - Orden de Reparacion
     outputs:
       - Detalle(s) de Reparacion creados, cada uno con Tipo y precio snapshot
     rules:
       - BR-REP-001
+      - BR-REP-019
 
   - id: PROC-REP-075
     type: activity
@@ -881,8 +926,9 @@ nodes:
       como cuando la Orden finalizo SIN_REPARACION (PROC-REP-069). Las
       ordenes que requieren entrega/documentacion al cliente son
       CLIENTE_EXTERNO, RT_GARANTIA_VENTA y RMA_GARANTIA_REPARACION.
-      RT_INTERNO continua hacia informar el resultado al sistema RT. Sin
-      cambios respecto de V1.2.
+      RT_INTERNO continua hacia informar el resultado al sistema RT
+      (PROC-REP-290) y luego a la entrega/devolucion del equipo a Gestion RT
+      (PROC-REP-270).
 
   - id: PROC-REP-260
     type: activity
@@ -894,7 +940,10 @@ nodes:
       SIN_REPARACION segun corresponda; Recepcion confirma y envia. Por
       ahora no se automatiza completamente el envio por WhatsApp; a
       futuro podra integrarse con WhatsApp, chatbot o portal web. Sin
-      cambios respecto de V1.2.
+      cambios respecto de V1.2. En V1.3 todo origen con entrega a cliente
+      (CLIENTE_EXTERNO, RT_GARANTIA_VENTA, RMA_GARANTIA_REPARACION) sigue
+      luego a PROC-REP-265 (validacion de la condicion de entrega): no hay
+      un camino alternativo que la evite.
 
   - id: PROC-REP-280
     type: activity
@@ -904,10 +953,10 @@ nodes:
       Reubicado en V1.3: una version anterior de este borrador lo generaba
       antes de completar el cobro (PROC-REP-265), lo que podia dejarlo
       desactualizado si despues se registraba un pago final. Ahora se
-      genera recien despues de que PROC-REP-265 confirma que la condicion
-      de entrega esta cumplida (Saldo = 0, cortesia total, o condicion no
-      cobrable por origen), de modo que el saldo mostrado sea siempre el
-      definitivo al momento de la entrega. Documento final que informa el
+      genera recien despues de que PROC-REP-265 aprueba la condicion de
+      entrega (Saldo = 0 o cortesia total en una Orden cobrable, o
+      condicion NO_COBRABLE por origen), de modo que el saldo mostrado, si
+      existe, sea siempre el definitivo al momento de la entrega. Documento final que informa el
       trabajo efectivamente realizado, desglosado por Detalle: Tipo de
       Reparacion, precio snapshot, Detalles cancelados (excluidos del
       Subtotal pero trazables), Ajustes Comerciales aplicados (por ejemplo
@@ -924,19 +973,24 @@ nodes:
 
   - id: PROC-REP-265
     type: decision
-    name: Completar cobro - validar condicion de entrega (saldo)
+    name: Completar cobro - validar condicion de entrega
     description: >
-      Nodo nuevo en V1.3. Es la fase secuencial de "Completar Cobro"
-      (BR-REP-017-B): determina el Total Cobrable definitivo a partir de
-      los Detalles finales y calcula Saldo = Total Cobrable - Total
-      Pagado (Total Pagado surge de los Pagos ya registrados en cualquier
-      momento anterior mediante la capacidad transversal de Pago,
-      BR-REP-017-A). Se evalua antes de generar el comprobante final
-      (PROC-REP-280) y de entregar el equipo a un cliente
-      (CLIENTE_EXTERNO): se valida que se cumpla al menos una de: Saldo
-      de la Orden = 0; cortesia total aplicada a la Orden; condicion no
-      cobrable por origen (RT_GARANTIA_VENTA, RMA_GARANTIA_REPARACION).
-      No existe override para entregar con deuda pendiente en V1.3.
+      Nodo nuevo en V1.3. Es el gate general de condicion de entrega de
+      todo origen con entrega a cliente, y la fase secuencial de "Completar
+      Cobro" (BR-REP-017-B) cuando hay algo por cobrar: determina el Total
+      Cobrable definitivo a partir de los Detalles finales y calcula Saldo
+      = Total Cobrable - Total Pagado (Total Pagado surge de los Pagos ya
+      registrados en cualquier momento anterior mediante la capacidad
+      transversal de Pago, BR-REP-017-A). Se evalua antes de generar el
+      comprobante final (PROC-REP-280) y de entregar el equipo al cliente.
+      La condicion de entrega se aprueba segun el origen: CLIENTE_EXTERNO
+      aprueba por Saldo = 0 o cortesia total aplicada a la Orden;
+      RT_GARANTIA_VENTA y RMA_GARANTIA_REPARACION aprueban directamente por
+      su condicion comercial NO_COBRABLE (por origen, no por cortesia), sin
+      cobro pendiente, sin pagos, sin anticipo ni Saldo mediante pagos, y
+      por lo tanto nunca entran en PROC-REP-266. Es el mismo gate para
+      todos: no existe un bypass alrededor de este nodo. No existe
+      override para entregar con deuda pendiente en V1.3.
       Reubicado respecto de una version anterior de este borrador, que
       generaba el comprobante final antes de este gate: eso podia dejarlo
       desactualizado si despues se registraba un pago final; ahora el
@@ -950,8 +1004,10 @@ nodes:
     name: Orden con saldo pendiente (entrega bloqueada)
     actor: ACT-SYSTEM
     description: >
-      La Orden no puede entregarse mientras exista saldo pendiente y no
-      se trate de un caso no-cobrable o de cortesia total. La entrega
+      La Orden (cobrable) no puede entregarse mientras exista saldo
+      pendiente y no se trate de cortesia total; las Ordenes NO_COBRABLES
+      por origen aprueban la condicion de entrega en PROC-REP-265 y nunca
+      llegan aqui. La entrega
       queda bloqueada hasta que se registre uno o mas Pagos adicionales
       -mediante la misma capacidad transversal de Pago usada durante toda
       la vida de la Orden, no un mecanismo aparte- que salden la
@@ -968,18 +1024,17 @@ nodes:
     actores_alternativos:
       - ACT-RECEP
     description: >
-      Se entrega el equipo al cliente junto con el comprobante final
-      (PROC-REP-280), una vez superada la validacion de condicion de
-      entrega (PROC-REP-265); la Orden pasa a ENTREGADA. Sin cambios
-      respecto de V1.2 salvo esa precondicion.
-      Ampliacion posterior a V1.2: la accion admite dos actores
-      equivalentes, ACT-ADMIN y ACT-RECEP, porque es Recepcion quien
-      atiende al cliente en el mostrador al momento del retiro. La
-      condicion comercial NO cambia por esto: sigue exigiendose
-      REPARACION_LISTA y la validacion de PROC-REP-265 (saldo 0, cortesia
-      total o condicion no cobrable). Ningun actor puede saltearla.
-      ACT-ADMIN se conserva como actor principal por continuidad
-      historica y porque es el que recorre HP-REP-001.
+      Entrega del equipo. Para origenes con entrega a cliente
+      (CLIENTE_EXTERNO, RT_GARANTIA_VENTA, RMA_GARANTIA_REPARACION) se
+      entrega al cliente junto con el comprobante final (PROC-REP-280),
+      una vez aprobada la condicion de entrega
+      (PROC-REP-265: Saldo = 0 o cortesia total, o NO_COBRABLE por origen); la Orden pasa a ENTREGADA. Para RT_INTERNO (alcanzado
+      desde PROC-REP-290, despues de informar el resultado a Gestion RT) es
+      la entrega/devolucion del equipo a Gestion RT: no es una entrega
+      comercial, no pasa por PROC-REP-265/266/280, no depende de Saldo ni de
+      Pagos, y NO define el estado terminal de la Orden RT_INTERNO, que sigue
+      pendiente de decision funcional (no se asume ENTREGADA ni ningun
+      estado nuevo).
 
   - id: PROC-REP-290
     type: activity
@@ -990,9 +1045,10 @@ nodes:
       la reparacion realizada o, si corresponde, SIN_REPARACION) debera
       poder informarse a futuro al sistema que gestiona stock y ventas.
       RT_INTERNO es NO_COBRABLE_AL_CLIENTE: no pasa por la validacion de
-      saldo de PROC-REP-265. El estado terminal definitivo para
-      RT_INTERNO queda pendiente de definicion. Sin cambios respecto de
-      V1.2.
+      saldo de PROC-REP-265. Para RT_INTERNO este nodo se ejecuta ANTES de
+      la entrega/devolucion del equipo a Gestion RT (PROC-REP-270): primero
+      se informa el resultado, despues se registra la devolucion. El estado
+      terminal definitivo para RT_INTERNO queda pendiente de definicion.
 
   - id: PROC-REP-300
     type: activity
@@ -1054,8 +1110,9 @@ nodes:
     type: end
     name: Fin del flujo de Orden de Reparacion
     description: >
-      Punto de fin comun a la entrega (PROC-REP-270), la integracion con
-      Gestion RT (PROC-REP-290), y a la Orden CANCELADA que resulta del
+      Punto de fin comun a la entrega (PROC-REP-270, tanto a cliente como
+      la devolucion a Gestion RT de RT_INTERNO, que llega alli despues de
+      PROC-REP-290), y a la Orden CANCELADA que resulta del
       resolver (PROC-REP-211) cuando, tras cancelar un Detalle
       (PROC-REP-300) o cancelar los Detalles no terminales de la Orden
       (PROC-REP-305), todos los Detalles quedan CANCELADO sin ningun
@@ -1093,6 +1150,9 @@ edges:
 
   - from: PROC-REP-030
     to: PROC-REP-040
+
+  - from: EVT-REP-002
+    to: PROC-REP-035
 
   - from: PROC-REP-035
     to: PROC-REP-040
@@ -1349,7 +1409,7 @@ edges:
     to: EVT-REP-999
 
   - from: PROC-REP-290
-    to: EVT-REP-999
+    to: PROC-REP-270
 
   - from: PROC-REP-170
     to: PROC-REP-300

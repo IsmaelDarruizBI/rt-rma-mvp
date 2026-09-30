@@ -443,6 +443,18 @@ Son dos conceptos distintos que no deben confundirse (BR-REP-017):
 No modelar todos los pagos como si ocurrieran unicamente al final de la
 Orden, y no modelar la entrega sin este gate final de Saldo.
 
+**Correccion funcional (MVP v2): autorizacion para Registrar Pago.** El
+MVP actual dejaba registrar un Pago a cualquier usuario activo, sin
+restriccion de rol; es un bug funcional. BR-REP-017 ahora define
+explicitamente que puede registrar un Pago todo usuario OPERATIVO ACTIVO
+EXCEPTO Tecnico (`ACT_ADMIN`, `ACT_RECEP`, `ACT_COORD` si estan activos;
+`ACT_TECH` nunca). No es una decision de frontend: el backend debe hacer
+cumplir `usuario activo AND rol != TECNICO`, trazable hacia
+Business Rule (BR-REP-017) -> Technical Requirement -> autorizacion en el
+backend -> test de API -> accion disponible en el frontend. No se
+implementa el fix en Python en esta etapa: este repositorio cierra
+primero el contrato funcional.
+
 ### Comprobante final despues del cobro
 
 Corregido en este borrador: el comprobante final (PROC-REP-280) se
@@ -753,6 +765,341 @@ lista bajo "Features involucradas", calculada por
 `validate-references.ts` y `validate-scenarios.ts`, para que la semantica
 nunca diverja entre la CLI y el HTML).
 
+### Caminos sobre el Process Graph: Happy Path, Variant, Exception, Edge Case
+
+Vocabulario (todos son capas sobre el Process Graph, nunca copias de el):
+
+- **Process Graph**: los nodes/edges de `repair-management-v1.3.yaml`. Es
+  la unica fuente de verdad de la topologia, de las descripciones, actores,
+  Business Rules y outputs de cada nodo.
+- **Happy Path**: recorrido E2E CANONICO del proceso.
+- **Variant**: desviacion o condicion alternativa sobre uno o mas puntos de
+  un recorrido (por ejemplo una garantia).
+- **Exception**: algo que falla o interrumpe el flujo esperado.
+- **Edge Case**: combinacion o condicion limite poco frecuente.
+
+> Un Happy Path representa un recorrido E2E canonico del proceso. Una
+> Variant representa una desviacion o condicion alternativa sobre uno o
+> mas puntos de ese recorrido. No se crean nuevos Happy Paths para cada
+> combinacion de Variants.
+
+Modelo: **Happy Path base + Variants atomicas + Exceptions + Edge Cases**.
+Una ejecucion futura podra combinar varias Variants; nunca se enumeran las
+combinaciones (Cliente + Garantia + Pago anticipado + Falta de stock ...),
+que crecerian de forma explosiva.
+
+```text
+Process Graph  +  Happy Path (steps sobre edges reales)  =  Recorrido E2E
+```
+
+Hoy existen tres Happy Paths (`business/scenarios/repair-management-scenarios-v1.3.yaml`):
+
+| Happy Path | Origen | Recorrido distintivo |
+|---|---|---|
+| **HP-REP-001** Cliente externo | CLIENTE_EXTERNO | registra cliente/equipo, comprobante de recepcion, cobro (Saldo), notificacion, comprobante final y entrega al cliente |
+| **HP-REP-002** Equipo RT | RT_INTERNO | recibe contexto del equipo RT (PROC-REP-020), sin comprobante de recepcion; tras REPARACION_LISTA informa el resultado a Gestion RT (PROC-REP-290) y RECIEN DESPUES registra la entrega/devolucion del equipo a Gestion RT (PROC-REP-270), luego fin |
+| **HP-REP-003** Garantia RMA | RMA_GARANTIA_REPARACION | parte de una Orden origen finalizada (EVT-REP-002), identifica la Orden y el Detalle origen (PROC-REP-035), recupera cliente/equipo, crea una NUEVA Orden vinculada; NO_COBRABLE: recorre 265 (validacion de condicion de entrega) que aprueba por origen, sin pago ni 266, con notificacion, comprobante final y entrega al cliente |
+
+HP-REP-002 es un Happy Path propio (y no una Variant) porque el origen
+cambia estructuralmente el recorrido E2E. NO tiene pago/anticipo de
+cliente, validacion de saldo, cortesia comercial, notificacion de retiro
+ni entrega comercial a cliente: esos nodos (030, 060, 260, 265, 266, 280)
+se declaran en `skipped_nodes` con su motivo. La entrega/devolucion del
+equipo a Gestion RT SI ocurre (`PROC-REP-270`, ver abajo). Se conserva la trazabilidad con
+el equipo/origen RT y el resultado se informa a Gestion RT. El estado
+terminal definitivo de RT_INTERNO sigue pendiente (ver Pendientes).
+Orden final de HP-REP-002: `REPARACION_LISTA` (PROC-REP-240) -> `PROC-REP-250`
+(no requiere entrega a cliente) -> `PROC-REP-290` informar resultado a
+Gestion RT -> `PROC-REP-270` entrega/devolucion del equipo a Gestion RT ->
+fin (`EVT-REP-999`). Nunca se entrega primero y se informa despues. Para
+esto se reutilizo `PROC-REP-270` (no se creo un nodo) y el unico cambio de
+topologia fue reemplazar el edge `PROC-REP-290 -> EVT-REP-999` por
+`PROC-REP-290 -> PROC-REP-270` (`270 -> EVT-REP-999` ya existia); el camino
+de cliente (`265 -> 280 -> 270`) no cambia. Para RT_INTERNO, `270` es una
+devolucion a Gestion RT, no una entrega comercial: no usa Saldo ni Pagos y
+NO define el estado terminal de la Orden (sigue `PENDIENTE_DE_DEFINIR`; no
+se asume ENTREGADA ni un estado nuevo). No existe un nodo "Cerrar Orden"
+aparte: el cierre es el fin `EVT-REP-999`.
+
+**Feature activa no significa "todos sus comportamientos aplican".** Una
+Feature esta activa en un Happy Path si PARTE de su comportamiento
+funcional participa en ese recorrido; no implica que todos sus nodos,
+reglas o comportamientos se ejecuten. FEAT-REP-007 esta activa tanto en
+HP-REP-001 como en HP-REP-002, y es correcto, pero con comportamientos
+distintos: en HP-REP-001 recorre pago, saldo y cierre comercial
+(PROC-REP-265/266/280); en HP-REP-002 no hay pago, ni validacion de saldo,
+ni cortesia comercial, ni notificacion de retiro. Su participacion hoy
+derivada en HP-REP-002 es el registro del precio snapshot de cada Detalle
+(PROC-REP-070, binding ALWAYS). Precio registrado no es pago requerido:
+todo Detalle, de cualquier origen, puede tener precio snapshot, y luego la
+condicion comercial (RT_INTERNO = NO_COBRABLE_AL_CLIENTE) determina si se
+cobra; NO_COBRABLE tampoco significa "sin precio de referencia". La
+derivacion (`deriveScenarioFeatures`) ahora devuelve `activationReasons`:
+por que esta activa cada Feature (nodo propio, nodo compartido ALWAYS/
+CONTEXTUAL o accion funcional), para no atribuir la activacion a una unica
+causa; el viewer la muestra como "Activa por". Nota de modelo: la
+entrega/devolucion (PROC-REP-270) y el informe a Gestion RT (PROC-REP-290)
+pertenecen hoy a FEAT-REP-008, no a FEAT-REP-007; no se movieron Features
+en esta iteracion.
+
+**included / skipped / conditional.** *included* = nodo atravesado por
+`steps[]` (se deriva, no se repite); *skipped* = nodo listado en
+`skipped_nodes[]` con `reason` (documental; el validador exige que exista y
+que el mismo Scenario no lo atraviese); *conditional* es un concepto de las
+Variants (su `trigger`/condicion de activacion), no de un Happy Path, que
+es determinista. Se eligio `steps[]` sobre edges (from + condition + to) en
+vez de un mapa nodo->estado porque tambien dice QUE transicion se tomo en
+nodos con varias entradas (por ejemplo PROC-REP-211) y se valida con
+continuidad.
+
+**Arquitectura preparada para Variants** (ninguna real declarada todavia).
+Un Scenario de tipo VARIANT/EXCEPTION/EDGE_CASE puede indicar, todos
+opcionales: `feature` (Feature donde se origina), `applies_to` (Happy Paths
+a los que aplica), `trigger` (node/edge y condicion de activacion),
+`affected_nodes`, `rules` (Business Rules) y `dependencies`
+(`requires`/`enables`/`implies`/`excludes` hacia otros Scenarios). Solo se
+valida la forma y la integridad referencial; como se combinan esas
+relaciones al ejecutar NO esta implementado. Una Variant se define UNA vez
+y puede impactar nodos de varias Features (`affected_nodes`), sin
+duplicarse por Feature. Steps/facts/expected solo son obligatorios para un
+HAPPY_PATH.
+
+**HP-REP-003 - Garantia de reparacion RMA.** Es un Happy Path propio (no una
+Variant local) porque cambia estructuralmente el recorrido E2E, igual que
+HP-REP-002:
+
+```text
+HP-REP-001: necesidad nueva -> registrar cliente/equipo -> crear OR -> ... -> cobro -> saldo -> entrega
+HP-REP-003: OR origen finalizada -> generar garantia -> recuperar cliente/equipo/origen
+            -> crear NUEVA OR vinculada -> ... -> (sin cobro, sin saldo) -> entrega
+```
+
+- **Evento inicial propio**: `EVT-REP-002` "Una Orden de Reparacion finalizada
+  requiere garantia" (nuevo, unico nodo agregado). Forzar `EVT-REP-001`
+  ("surge una necesidad de reparacion") habria borrado la diferencia
+  funcional. Converge en `PROC-REP-035`; la entrada por `PROC-REP-010` se
+  conserva como alternativa.
+- **`PROC-REP-035` reutilizado y ampliado**: toma como entrada la Orden
+  origen finalizada, la identifica junto con el/los Detalle(s) origen que
+  fallaron, y recupera cliente y equipo de ella (no hay alta nueva, por eso
+  no pasa por `PROC-REP-030`). `PROC-REP-040` crea una NUEVA Orden con origen
+  RMA_GARANTIA_REPARACION, condicion NO_COBRABLE y referencia a la Orden
+  origen; `PROC-REP-070` crea cada Detalle nuevo referenciando su Detalle
+  origen. La Orden origen NO se reabre y conserva su estado: no se crearon
+  estados como REABIERTA_POR_GARANTIA.
+- **Trazabilidad en ambos niveles** (`BR-REP-019`): Orden nueva -> Orden
+  origen y Detalle nuevo -> Detalle origen. Esto RESUELVE el pendiente
+  "Orden origen vs. Detalle origen". Sigue pendiente el modelo tecnico
+  (sin base de datos aqui) y las reglas de garantia RMA configurable/vencida.
+- **Sin estado CERRADA**: el modelo no lo tiene (V1.2 lo excluye). La
+  precondicion se define como "Orden origen finalizada (ENTREGADA)"; si
+  negocio quiere otra definicion es una decision aparte.
+- **Convergencia y gate general de condicion de entrega**: desde
+  `PROC-REP-040` hasta `PROC-REP-260` es el mismo circuito tecnico de
+  HP-REP-001, y luego HP-REP-003 recorre `PROC-REP-265` igual que
+  HP-REP-001: es el mismo gate general de condicion de entrega para todo
+  origen con entrega a cliente, y NO se creo ningun bypass alrededor de el
+  (`260 -> 265` sin condicion, `265 -> 280 [Si]`; no hay edge
+  `260 -> 280`). Lo que cambia es COMO se aprueba:
+
+  ```text
+  CLIENTE_EXTERNO          -> aprueba por Saldo = 0 o cortesia total
+  RT_GARANTIA_VENTA        -> aprueba por condicion NO_COBRABLE
+  RMA_GARANTIA_REPARACION  -> aprueba por condicion NO_COBRABLE
+  ```
+
+  HP-REP-003 recorre `PROC-REP-265` como validacion de condicion de
+  entrega, pero nunca entra en `PROC-REP-266` ni registra pagos porque la
+  condicion NO_COBRABLE aprueba directamente la entrega: no hay cobro
+  pendiente, ni anticipo, ni Saldo = 0 mediante pagos, ni cortesia usada
+  para evitar el cobro. Los edges de HP-REP-001 no cambian. Business
+  Rules: `BR-REP-016` y `BR-REP-017` extendidas y `BR-REP-019` nueva.
+- **Omitidos** (`skipped_nodes`): 010 (origen ya conocido), 030 (cliente/
+  equipo se recuperan), 266 (no hay cobro pendiente ni registro de pago) y
+  290 (informe a Gestion RT, propio de RT_INTERNO). `PROC-REP-265` NO esta
+  omitido. El pago no tiene nodo propio (es una capacidad transversal):
+  simplemente no hay ninguna accion funcional de pago.
+- **Features activas**: FEAT-REP-001 a 008 (no 009). FEAT-REP-007 esta
+  activa por su nodo propio `PROC-REP-265` (validacion de condicion de
+  entrega) y por los nodos compartidos ALWAYS 070 (precio snapshot) y 280
+  (comprobante final), pero no por `PROC-REP-266`: activa no significa
+  que se ejecute el cobro. Precio registrado no implica pago requerido.
+
+**Variants futuras ya identificadas sobre HP-REP-001** (documentadas, no
+implementadas):
+
+- *Garantia de Venta RT* (RT_GARANTIA_VENTA): hay cliente y el equipo vuelve
+  a el; debe existir referencia/trazabilidad con la venta RT; la reparacion
+  es NO_COBRABLE, sin pago del cliente ni bloqueo de entrega por saldo; sigue
+  existiendo notificacion y entrega al cliente.
+- *(La garantia de reparacion RMA ya no es una Variant futura: es el Happy
+  Path HP-REP-003, ver arriba.)*
+
+**Viewer.** El selector "Happy Path" ofrece "Proceso completo",
+HP-REP-001, HP-REP-002 y HP-REP-003: resalta los nodes y los edges exactos del camino
+(no elimina los demas del DOM, los atenua) y muestra los `skipped_nodes`
+con su motivo. Ademas, el diagrama ahora se muestra a su tamano real y
+legible (100% = tamano natural de Mermaid): antes el SVG se colapsaba a ~16%
+de su tamano (`width="100%"` dentro de un contenedor `max-content`) antes de
+aplicar cualquier zoom. Zoom de 15% a 800% con paso multiplicativo,
+Ctrl/Cmd+rueda (o pellizco) con zoom sobre el cursor, y arrastre del fondo
+para desplazarse; el diagrama completo es siempre alcanzable por scroll.
+
+### Scenario Candidate Discovery
+
+Herramienta de descubrimiento **estructural y deterministico** de caminos
+alternativos. Compara el Process Graph con cada Happy Path y detecta donde
+el grafo ofrece una transicion distinta de la que el Happy Path eligio:
+
+```text
+Process Graph + Happy Paths
+        |
+discover-scenario-candidates.ts
+        |
+Candidate Scenario Inventory   (generated/scenarios/repair-management-candidates-v1.3.yaml)
+        |
+LLM / analisis funcional
+        |
+Human confirmation
+        |
+VARIANT / EXCEPTION / EDGE_CASE
+```
+
+> **Un Candidate Scenario no es un Scenario aprobado.** Es solo una
+> diferencia topologica entre el grafo y un Happy Path. No se clasifica
+> (no dice si es Variant, Exception o Edge Case), no se nombra, no se
+> prioriza y no se agrega a `repair-management-scenarios-v1.3.yaml`. El
+> archivo generado esta marcado como GENERATED / NOT SOURCE OF TRUTH / NOT
+> CONFIRMED BUSINESS SCENARIOS y nunca se edita a mano.
+
+Uso: `npm run discover:scenarios:v1.3` (genera el inventario y muestra un
+resumen; es generacion, por eso NO forma parte de `validate:v1.3`) y
+`npm run test:scenario-discovery` (tests del algoritmo; estos si estan en
+`validate:v1.3`). Codigo: `scripts/lib/scenario-discovery.ts` (funciones
+puras) y `scripts/discover-scenario-candidates.ts` (CLI).
+
+**Algoritmo.**
+
+1. Por cada `PROCESS_EDGE` de un Happy Path (en orden), se toman todos los
+   outgoing edges reales de su nodo `from`; los que no son el edge elegido
+   en ese paso son alternativos. Un edge se identifica por
+   `from + condition + to` (`edgeKey`, compartido), nunca por from/to.
+2. Cada alternativa inicia una BFS acotada que corta cada rama en el primer
+   desenlace estructural: `END` (llega a un nodo `end`; tiene precedencia
+   porque el fin esta en todo Happy Path), `REJOIN_FORWARD` (vuelve a un
+   nodo del Happy Path ubicado DESPUES del punto de divergencia),
+   `LOOP_TO_BASELINE` (vuelve a un nodo del Happy Path ANTES o EN el punto
+   de divergencia: reintentos/revalidaciones), `CYCLE` (revisita un nodo de
+   su propio recorrido sin haber tocado el Happy Path), `MAX_DEPTH` (limite
+   de seguridad, `DEFAULT_MAX_DEPTH = 30` centralizado) y `DEAD_END`
+   (nodo sin salidas que no es `end`; red de seguridad, no ocurre en el
+   grafo validado).
+3. No hay explosion combinatoria: cada nodo se expande una sola vez por
+   desviacion (`visited`), las ramas que reconvergen en un nodo ya explorado
+   se podan y se cuentan, y los loops nunca se despliegan. Una desviacion
+   que se ramifica produce un candidato por desenlace distinto.
+4. Los candidatos se deduplican entre Happy Paths por una firma
+   deterministica: edge baseline + edge alternativo + recorrido explorado +
+   tipo y nodo de terminacion, SIN el id del Happy Path. Un candidato
+   deduplicado acumula `applies_to` y `occurrences` (Happy Path y paso donde
+   ocurre). Los ids `CAND-REP-NNN` se asignan tras ordenar por nodo de
+   divergencia, edge alternativo, baseline y terminacion, asi que dos
+   ejecuciones sin cambios producen exactamente el mismo archivo.
+
+**Limitaciones conocidas (V1).**
+
+- Solo encuentra alternativas que **salen de un nodo del Happy Path**. Las
+  capacidades no secuenciales quedan para una futura Pass 2: cancelacion
+  transversal, pago anticipado y acciones disponibles desde muchos estados.
+- Cycle detection es BFS + `visited` (revisita en el recorrido propio); no
+  usa Tarjan/SCC, que puede incorporarse despues si hace falta analisis de
+  ciclos mas fino.
+- Un candidato es un recorrido hasta el primer desenlace, no un escenario
+  completo: no se explora que pasa despues de reincorporarse, ni se combinan
+  desviaciones entre si.
+- La poda por `visited` implica que, cuando dos ramas de una misma
+  desviacion convergen, solo se reporta el recorrido mas corto.
+- Los `FUNCTIONAL_ACTION` de los Happy Paths se ignoran (no son edges) y
+  no se interpreta ningun nombre, descripcion ni condicion del negocio.
+
+## MVP v2 - Scope funcional cerrado
+
+Cierra el alcance funcional del MVP v2, antes de integrar con el
+repositorio productivo `rt-rma-mvp`. Base: los tres Happy Paths
+(`HP-REP-001/002/003`) mas 3 `VARIANT` y 5 `EXCEPTION` REALES y
+CONFIRMADOS en `business/scenarios/repair-management-scenarios-v1.3.yaml`
+(ya no solo entries de analisis). Son los primeros Scenarios que usan de
+verdad los campos `feature`/`trigger`/`applies_to`/`affected_nodes`/
+`rules` que el schema admitia desde HP-REP-003 pero nadie habia poblado
+todavia.
+
+**Trazabilidad Candidate -> Scenario** (no se amplio el schema con un
+campo `source_candidate`: la relacion queda documentada aqui y en la
+`description` de cada Scenario, que cita sus Candidate IDs de origen):
+
+| Scenario | Tipo | Candidate(s) origen | applies_to |
+|---|---|---|---|
+| `VAR-REP-001` Ingreso sin diagnostico, con comprobante | VARIANT | CAND-REP-007, CAND-REP-016 | HP-REP-001, HP-REP-003 |
+| `VAR-REP-002` Ingreso sin diagnostico, sin comprobante (RT) | VARIANT | CAND-REP-007, CAND-REP-009 | HP-REP-002 |
+| `VAR-REP-003` Ejecucion interrumpida | VARIANT | CAND-REP-027 | HP-REP-001/002/003 |
+| `EXC-REP-001` Recursos insuficientes, en espera | EXCEPTION | CAND-REP-018 | HP-REP-001/002/003 |
+| `EXC-REP-002` Recursos insuficientes, con override | EXCEPTION | CAND-REP-019 | HP-REP-001/002/003 |
+| `EXC-REP-003` Reserva de insumos fallida al iniciar | EXCEPTION | CAND-REP-026 | HP-REP-001/002/003 |
+| `EXC-REP-004` Requiere revision tecnica posterior | EXCEPTION | CAND-REP-032 | HP-REP-001/002/003 |
+| `EXC-REP-005` Rechazo de control tecnico / retrabajo | EXCEPTION | CAND-REP-034 | HP-REP-001/002/003 |
+
+**Por que VAR-REP-001/002 son dos Scenarios y no uno.** El business case
+("al ingreso no se conoce el Detalle") es el mismo (CAND-REP-007), pero
+`steps[]` exige una secuencia LITERAL de edges reales: los origenes con
+comprobante (CLIENTE_EXTERNO/RMA_GARANTIA_REPARACION) pasan por
+PROC-REP-060 y los sin comprobante (RT_INTERNO) van directo de
+PROC-REP-050 a PROC-REP-065; no pueden expresarse en un unico `steps[]`.
+No se fusiono el desenlace SIN_REPARACION (CAND-REP-010/017): sigue fuera
+de MVP v2 (ver mas abajo).
+
+**Por que Recursos insuficientes son 2 Scenarios (EXC-REP-001/002) y no
+uno.** Mismo motivo estructural: `PROC-REP-110` bifurca en dos edges
+reales distintos (`No` -> espera/PENDIENTE_RECURSOS, `Si` -> override
+BR-REP-003), cada uno con su propio `steps[]` y `expected`. El schema no
+admite dos recorridos alternativos dentro de un mismo Scenario, y forzar
+uno solo habria ocultado que la resolucion por override es una decision
+de autorizacion (BR-REP-003), no un detalle menor de redaccion. No se
+crea ninguna Business Rule nueva de autorizacion: EXC-REP-002 cita
+BR-REP-002 y BR-REP-003, ya existentes.
+
+**Mecanica multi-Detalle (CAND-REP-028/029/030): NO son Scenarios.**
+Siguen `MECHANISM_ONLY` (ver
+`generated/scenarios/repair-management-candidate-analysis-v1.3.yaml`):
+que una Orden tenga 1..N Detalles y que, al terminar uno, el tecnico
+pueda continuar con la misma toma o liberar la Orden, es comportamiento
+normal del proceso (BR-REP-018), no una desviacion que necesite su
+propio Scenario. `scripts/test-scenarios.ts` verifica explicitamente que
+ningun Scenario real declare esos edges como propios.
+
+**Explicitamente diferido de MVP v2 (`OUT_OF_SCOPE`):**
+
+- **`RT_GARANTIA_VENTA`**: no se formaliza ningun Scenario. Informacion
+  funcional nueva indica que necesita un modelo de dominio distinto - una
+  entidad generica `OrdenRevision` con `tipo_revision = GARANTIA`, cuya
+  revision resuelve en `REPARACION` / `CAMBIO_DIRECTO` /
+  `NO_APLICA_GARANTIA`, y solo algunas resoluciones derivan en una
+  `OrdenReparacion` - todavia no suficientemente diseñado. El Process
+  Graph V1.3 NO se modifica para anticipar ese modelo en esta iteracion;
+  `RT_GARANTIA_VENTA` permanece como se documenta en `FG-REP-002` del
+  candidate analysis (candidate a Variant de HP-REP-001, sujeto a
+  revision humana), sin decidir todavia si sera una Variant o un Happy
+  Path propio.
+- **`SIN_REPARACION` tras un ingreso `EN_REVISION`** (CAND-REP-010/017):
+  pendiente la decision de negocio sobre aviso/documentacion/cierre
+  adicional (ver Pendientes especificos de V1.3).
+- **Cancelacion** (CAND-REP-020/021/033, grupo `FG-REP-005`): BR-REP-014
+  todavia no define quien esta autorizado a cancelar un Detalle o una
+  Orden; sin esa definicion no se redacta el Scenario real.
+
+**SOURCE_MODEL_CONFLICT durante esta formalizacion: ninguno.** Los 8
+Scenarios de MVP v2 se representan integramente con el Process Graph
+V1.3 existente, sin modificar nodos ni edges.
+
 ## Pendientes especificos de V1.3
 
 Ademas de todos los pendientes de V1.2 listados arriba (que siguen
@@ -775,8 +1122,10 @@ deliberadamente fuera de alcance de esta revision:
   PROC-REP-305 omiten deliberadamente el campo `actor` en el YAML (el
   schema no lo exige para nodos `activity`) en vez de inventar uno sin
   aprobacion de negocio.
-- Si el reproceso de RMA_GARANTIA_REPARACION debe referenciar la Orden
-  origen completa o el Detalle especifico que fallo.
+- (Resuelto en V1.3, BR-REP-019) Vinculacion de la garantia RMA: la Orden
+  nueva referencia la Orden origen y cada Detalle nuevo referencia su
+  Detalle origen. Siguen pendientes las reglas de garantia RMA configurable
+  y de garantia vencida, y el modelo tecnico de esa relacion.
 - Distribucion/acreditacion de puntaje entre multiples tecnicos que
   participaron de un mismo Detalle (ya pendiente en V1.2, ahora ademas
   interactua con multiples Ejecuciones por Detalle).
