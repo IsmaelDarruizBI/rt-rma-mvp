@@ -129,8 +129,9 @@ def _detalles_en_espera_de_control(orden: OrdenReparacion) -> list[str]:
     ``services.reparaciones.aprobar_control_tecnico``): mientras quede
     algun Detalle DEFINIDO o EN_PROGRESO no se ofrece ninguna accion de
     control, ni siquiera para un Detalle que ya este COMPLETO. Una vez
-    ahi, el control SI es granular por Detalle (PROC-REP-230): cada uno
-    se aprueba de forma independiente.
+    ahi, el control SI es granular por Detalle (PROC-REP-220): cada uno
+    se aprueba de forma independiente. PROC-REP-230 es, en cambio, la
+    decision global "todos los Detalles aprobados".
     """
     if ejecucion_activa(orden) is not None:
         return []

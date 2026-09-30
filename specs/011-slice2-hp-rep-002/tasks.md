@@ -17,7 +17,7 @@ description: "Tareas de HP-REP-002 (Equipo RT Interno)"
 
 ## Phase 1: Dominio (aditivo, sin romper JSON existente)
 
-- [x] **TASK-REP-158** [US-REP-017] Ampliar `OrdenReparacion` con
+- [x] **TASK-REP-162** [US-REP-017] Ampliar `OrdenReparacion` con
       `cliente: Cliente | None = None` y el campo `referencia_rt: str |
       None`, preservando compatibilidad con el JSON persistido antes de
       este slice.
@@ -26,7 +26,7 @@ description: "Tareas de HP-REP-002 (Equipo RT Interno)"
 
 ## Phase 2: Ingreso RT (sin Cliente, sin comprobante)
 
-- [x] **TASK-REP-159** [US-REP-017] Implementar `crear_orden_rt_interno`
+- [x] **TASK-REP-163** [US-REP-017] Implementar `crear_orden_rt_interno`
       (PROC-REP-010 -> 020 -> 040), el comando de aplicacion
       `crear_orden_rt` y el endpoint `POST /api/orders/rt-interno`.
       → `app/backend/app/services/ordenes.py::crear_orden_rt_interno`,
@@ -34,7 +34,7 @@ description: "Tareas de HP-REP-002 (Equipo RT Interno)"
         `app/backend/app/api/ordenes.py`
       → test: `tests/test_hp_rep_002.py::test_orden_rt_nace_sin_cliente_con_referencia_de_contexto`,
         `tests/test_api_hp_rep_002.py::test_crear_orden_rt_no_pide_ni_devuelve_cliente`
-- [x] **TASK-REP-160** [US-REP-017] Reescribir `generar_comprobante_recepcion`
+- [x] **TASK-REP-164** [US-REP-017] Reescribir `generar_comprobante_recepcion`
       para bifurcar segun `PoliticaOrigen.requiere_comprobante_recepcion`
       en vez de un chequeo de Origen hardcodeado a `CLIENTE_EXTERNO`.
       → `app/backend/app/services/documentos.py::generar_comprobante_recepcion`
@@ -46,7 +46,7 @@ habilitacion sin cambios.
 
 ## Phase 3: Acciones y progreso generalizados
 
-- [x] **TASK-REP-161** [US-REP-018] Extender `acciones_disponibles` con
+- [x] **TASK-REP-165** [US-REP-018] Extender `acciones_disponibles` con
       `ACCION_INFORMAR_RT` / `ACCION_DEVOLVER_RT` gobernadas por
       `politica_de(...).requiere_informar_rt` y el corte de acciones
       cuando `current_process == "EVT-REP-999"`.
@@ -54,20 +54,20 @@ habilitacion sin cambios.
       → test: `tests/test_hp_rep_002.py::test_rt_interno_no_ofrece_registrar_pago_ni_notificar_ni_entregar`,
         `::test_devolver_rt_esta_disponible_recien_despues_de_informar`,
         `::test_orden_terminada_no_ofrece_ninguna_accion`
-- [x] **TASK-REP-164** [US-REP-017] Declarar `_RUTA_RT_INTERNO` en
+- [x] **TASK-REP-168** [US-REP-017] Declarar `_RUTA_RT_INTERNO` en
       `application/progreso.py` como ruta de referencia propia para
       Ordenes `RT_INTERNO`.
       → `app/backend/app/application/progreso.py::_RUTA_RT_INTERNO`
 
 ## Phase 4: Cierre RT (informar + devolver)
 
-- [x] **TASK-REP-162** [US-REP-019] Implementar `informar_resultado_rt`
+- [x] **TASK-REP-166** [US-REP-019] Implementar `informar_resultado_rt`
       (PROC-REP-250 "No" -> PROC-REP-290), el comando de aplicacion
       `informar_rt` y el endpoint `POST /api/orders/{id}/inform-rt`.
       → `app/backend/app/services/ordenes.py::informar_resultado_rt`,
         `app/backend/app/application/cierre.py::informar_rt`
       → test: `tests/test_hp_rep_002.py::test_informar_rt_registra_250_no_y_290`
-- [x] **TASK-REP-163** [US-REP-020] Implementar `devolver_equipo_rt`
+- [x] **TASK-REP-167** [US-REP-020] Implementar `devolver_equipo_rt`
       (PROC-REP-270 reutilizado, sin `ENTREGADA`), el comando de
       aplicacion `devolver_rt` y el endpoint `POST /api/orders/{id}/return-rt`.
       → `app/backend/app/services/ordenes.py::devolver_equipo_rt`,
@@ -80,7 +80,7 @@ devolver) llega a `EVT-REP-999`.
 
 ## Phase 5: Frontend minimo
 
-- [x] **TASK-REP-165** Adaptar el frontend: formulario de alta
+- [x] **TASK-REP-169** Adaptar el frontend: formulario de alta
       `RT_INTERNO`, acciones `INFORMAR_RT`/`DEVOLVER_RT`, render de
       Cliente nullable y de `condicion_comercial`.
       → `app/frontend/src/types/api.ts`, `app/frontend/src/api/ordenes.ts`,
@@ -103,7 +103,7 @@ devolver) llega a `EVT-REP-999`.
 Tres puntos detectados en la revision funcional del slice, antes de
 cerrarlo.
 
-- [x] **TASK-REP-166** [US-REP-018] Rechazar `registrar_pago` en el
+- [x] **TASK-REP-170** [US-REP-018] Rechazar `registrar_pago` en el
       service cuando `politica_de(orden.origen).condicion_comercial` no
       es `COBRABLE` (BR-REP-016/017): la omision en `acciones_disponibles`
       no alcanzaba -el service seguia siendo invocable directo-.
@@ -117,9 +117,8 @@ cerrarlo.
       `informar_rt` y del endpoint (ya no recibe body); el historial de
       PROC-REP-290 queda con `usuario_id: null`. Agregar
       `AccionDisponible.requiere_actor: bool` (y su espejo en
-      `AccionOut`) para distinguir esto de "rol humano sin definir"
-      (`roles: []` con `requiere_actor: true`, como Registrar Pago antes
-      de BR-REP-017) en vez de sobrecargar `roles: ()`.
+      `AccionOut`) para distinguir esto de una accion humana
+      (`requiere_actor: true`) en vez de sobrecargar `roles: ()`.
       → `app/backend/app/services/ordenes.py::informar_resultado_rt`,
         `app/backend/app/application/cierre.py::informar_rt`,
         `app/backend/app/api/ordenes.py::post_informar_rt`,

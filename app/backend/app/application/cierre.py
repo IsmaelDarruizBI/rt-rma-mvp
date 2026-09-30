@@ -123,8 +123,8 @@ def registrar_pago_de_orden(
 
     Capacidad TRANSVERSAL: no corresponde a ningun ``PROC-REP-*`` y
     puede ocurrir en cualquier momento de la vida de la Orden. Por eso
-    no se exige ningun rol -BR-REP-017 no lo define todavia-, solo que
-    el usuario este activo.
+    el rol se valida contra ``ROLES_PAGO`` (ADMINISTRADOR, RECEPCION y
+    COORDINADOR_RMA); TECNICO no puede registrar Pagos.
 
     Si la Orden ya esta REPARACION_LISTA, el pago puede destrabar la
     entrega, asi que se revalida PROC-REP-265. Si todavia no lo esta, el

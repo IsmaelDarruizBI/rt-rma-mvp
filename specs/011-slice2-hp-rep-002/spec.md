@@ -122,9 +122,8 @@ antes de que el equipo se devuelva, para dejar constancia formal.
    `usuario_id`, y el historial queda con `usuario_id: null`.
 3. **Given** la accion publicada en `acciones_disponibles`, **When** se
    inspecciona `INFORMAR_RT`, **Then** declara `requiere_actor: false` -
-   una dimension distinta de `roles: []`, que significa "rol humano
-   todavia sin definir" (Registrar Pago pre BR-REP-017), no "no hay
-   actor humano en absoluto".
+   una dimension distinta de `roles: []`: indica que no hay actor
+   humano que autorizar (nodo `ACT-SYSTEM`).
 
 ---
 
@@ -183,24 +182,24 @@ estado `ENTREGADA` que el negocio todavia no definio.
 
 ### Functional Requirements
 
-Ver el detalle completo en `traceability/hp-rep-002.yaml` (`FR-REP-067`
-a `FR-REP-074`). Resumen:
+Ver el detalle completo en `traceability/hp-rep-002.yaml` (`FR-REP-072`
+a `FR-REP-079`). Resumen:
 
-- **FR-REP-067**: crear la Orden `RT_INTERNO` sin exigir Cliente,
+- **FR-REP-072**: crear la Orden `RT_INTERNO` sin exigir Cliente,
   conservando el equipo y `referencia_rt`, con cero Detalles.
-- **FR-REP-068**: no generar comprobante de recepcion para un Origen
+- **FR-REP-073**: no generar comprobante de recepcion para un Origen
   cuya politica no lo requiere.
-- **FR-REP-069**: no ofrecer Registrar Pago, Notificar ni Entregar en
+- **FR-REP-074**: no ofrecer Registrar Pago, Notificar ni Entregar en
   una Orden `NO_COBRABLE_AL_CLIENTE` sin entrega a cliente.
-- **FR-REP-070**: informar el resultado a Gestion RT solo con la Orden
+- **FR-REP-075**: informar el resultado a Gestion RT solo con la Orden
   `REPARACION_LISTA`, antes de poder devolver el equipo.
-- **FR-REP-071**: devolver el equipo solo despues de informar, sin
+- **FR-REP-076**: devolver el equipo solo despues de informar, sin
   exigir saldo cero, comprobante final ni garantia.
-- **FR-REP-072**: no asentar `ENTREGADA` al devolver un equipo
+- **FR-REP-077**: no asentar `ENTREGADA` al devolver un equipo
   `RT_INTERNO`.
-- **FR-REP-073**: ruta de progreso propia para `RT_INTERNO`, distinta de
+- **FR-REP-078**: ruta de progreso propia para `RT_INTERNO`, distinta de
   `CLIENTE_EXTERNO`.
-- **FR-REP-074** *(nuevo tras revision)*: rechazar Registrar Pago a
+- **FR-REP-079** *(nuevo tras revision)*: rechazar Registrar Pago a
   nivel backend para toda Orden cuyo Origen no sea `COBRABLE`, sin
   depender de que la UI oculte la accion.
 
@@ -213,8 +212,7 @@ a `FR-REP-074`). Resumen:
 - **`AccionDisponible.requiere_actor`** / **`AccionOut.requiere_actor`**:
   `bool`, default `true`. `false` marca un nodo `actor: ACT-SYSTEM` (hoy
   solo `INFORMAR_RT`/PROC-REP-290): ningun actor humano que autorizar,
-  distinto de `roles: []` con `requiere_actor: true` (rol humano
-  todavia sin definir, ej. Registrar Pago antes de BR-REP-017).
+  distinto de una accion humana con `requiere_actor: true`.
 - **`ResumenComercialOut.condicion_comercial`**: `str`
   (`COBRABLE`/`NO_COBRABLE_AL_CLIENTE`/`NO_COBRABLE`), la
   `PoliticaOrigen.condicion_comercial` de BR-REP-016. Le dice a la
