@@ -23,6 +23,7 @@ from app.domain.models import (
     TipoPago,
     Usuario,
 )
+from app.domain.politicas import CondicionComercial, politica_de
 
 from .autorizacion import validar_alguno_de
 from .exceptions import PrecondicionInvalidaError
@@ -102,8 +103,24 @@ def registrar_pago(
     (``ROLES_PAGO``). Antes de MVP v2 esto no se validaba -cualquier
     usuario activo, Tecnico incluido, podia registrar un Pago-; es la
     correccion obligatoria de esta iteracion.
+
+    BR-REP-016/017: solo se cobra a un Origen ``COBRABLE``
+    (``CLIENTE_EXTERNO``). ``RT_INTERNO`` (``NO_COBRABLE_AL_CLIENTE``) y
+    una eventual garantia (``NO_COBRABLE``) no tienen a quien cobrarle:
+    esto NO es solo una omision de UI -``acciones_disponibles`` ya no
+    ofrece ``REGISTRAR_PAGO`` para esos origenes-, el service lo rechaza
+    aunque se lo invoque directamente.
     """
     validar_alguno_de(usuario, ROLES_PAGO)
+
+    if politica_de(orden.origen).condicion_comercial != (
+        CondicionComercial.COBRABLE
+    ):
+        raise PrecondicionInvalidaError(
+            f"No se puede registrar un Pago sobre una Orden "
+            f"{orden.origen.value}: su condicion comercial no es "
+            f"COBRABLE."
+        )
 
     if monto <= 0:
         raise PrecondicionInvalidaError(

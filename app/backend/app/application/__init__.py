@@ -23,7 +23,9 @@ porque es una decision funcional, no una configuracion.
 from .acciones import AccionDisponible, acciones_disponibles
 from .cierre import (
     aprobar_control,
+    devolver_rt,
     entregar,
+    informar_rt,
     notificar,
     registrar_pago_de_orden,
 )
@@ -41,11 +43,12 @@ from .consultas import (
 )
 from .contexto import ApplicationContext, construir_contexto
 from .identificadores import siguiente_detalle_id, siguiente_orden_id
-from .ingreso import crear_orden, definir_reparacion
+from .ingreso import crear_orden, crear_orden_rt, definir_reparacion
 from .progreso import PasoProgreso, progreso
 from .taller import (
     completar_ejecucion,
     iniciar_detalle,
+    liberar_orden,
     tomar_orden_en_estacion,
 )
 
@@ -74,13 +77,17 @@ __all__ = [
     "progreso",
     # Comandos
     "crear_orden",
+    "crear_orden_rt",
     "definir_reparacion",
     "encolar_orden",
     "tomar_orden_en_estacion",
     "iniciar_detalle",
+    "liberar_orden",
     "completar_ejecucion",
     "aprobar_control",
     "notificar",
     "registrar_pago_de_orden",
     "entregar",
+    "informar_rt",
+    "devolver_rt",
 ]

@@ -45,9 +45,9 @@ ROLES_PAGO_ANTES_DEL_FIX = (
     RolUsuario.COORDINADOR_RMA,
 )
 
-# Los 32 nodos de HP-REP-001, en el orden en que el recorrido los expone
-# hoy. El refactor de Slice 0 no cambia esta ruta para CLIENTE_EXTERNO.
-_TOTAL_NODOS_HP1 = 32
+# Los 33 nodos de HP-REP-001, en el orden en que el recorrido los expone.
+# Incluye PROC-REP-212 (transversal, Slice 1) entre 180 y 181.
+_TOTAL_NODOS_HP1 = 33
 
 
 def _orden_habilitada():
@@ -143,8 +143,13 @@ def test_en_cola():
 def test_toma_activa_sin_ejecucion():
     orden = flujo_mvp.orden_tomada()
 
+    # Multi-Detalle (Slice 1): con una toma activa y ninguna Ejecucion en
+    # curso, PROC-REP-212/213 ya estan implementados, asi que
+    # LIBERAR_ORDEN pasa a ser una accion disponible mas -antes de este
+    # slice no existia ningun comando que la produjera-.
     assert _codigos_y_roles(orden) == [
         ("INICIAR_DETALLE", (RolUsuario.TECNICO,), flujo_mvp.DETALLE_ID),
+        ("LIBERAR_ORDEN", (RolUsuario.TECNICO,), None),
         ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None),
     ]
     assert _alcanzados(orden) == [
@@ -162,6 +167,7 @@ def test_toma_activa_sin_ejecucion():
         "PROC-REP-170",
         "PROC-REP-172",
         "PROC-REP-180",
+        "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
     ]
@@ -199,6 +205,7 @@ def test_en_reparacion():
         "PROC-REP-170",
         "PROC-REP-172",
         "PROC-REP-180",
+        "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
         "PROC-REP-185",
@@ -209,8 +216,16 @@ def test_en_reparacion():
 def test_espera_control():
     orden = flujo_mvp.orden_evaluada()
 
+    # Multi-Detalle (Slice 1): el control tecnico ahora es granular por
+    # Detalle (PROC-REP-230), asi que APROBAR_CONTROL declara el
+    # detalle_id que aprobaria -antes, con la aprobacion en bloque, este
+    # campo siempre viajaba en None-.
     assert _codigos_y_roles(orden) == [
-        ("APROBAR_CONTROL", (RolUsuario.RECEPCION,), None),
+        (
+            "APROBAR_CONTROL",
+            (RolUsuario.RECEPCION,),
+            flujo_mvp.DETALLE_ID,
+        ),
         ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None),
     ]
     assert _alcanzados(orden) == [
@@ -228,6 +243,7 @@ def test_espera_control():
         "PROC-REP-170",
         "PROC-REP-172",
         "PROC-REP-180",
+        "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
         "PROC-REP-185",
@@ -260,6 +276,7 @@ def test_reparacion_lista_sin_notificar():
         "PROC-REP-170",
         "PROC-REP-172",
         "PROC-REP-180",
+        "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
         "PROC-REP-185",
@@ -295,6 +312,7 @@ def test_reparacion_lista_con_saldo():
         "PROC-REP-170",
         "PROC-REP-172",
         "PROC-REP-180",
+        "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
         "PROC-REP-185",
@@ -336,6 +354,7 @@ def test_reparacion_lista_sin_saldo():
         "PROC-REP-170",
         "PROC-REP-172",
         "PROC-REP-180",
+        "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
         "PROC-REP-185",
@@ -373,6 +392,7 @@ def test_entregada():
         "PROC-REP-170",
         "PROC-REP-172",
         "PROC-REP-180",
+        "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
         "PROC-REP-185",
@@ -392,3 +412,10 @@ def test_entregada():
         "PROC-REP-270",
         "EVT-REP-999",
     ]
+
+
+def test_hp1_212_queda_entre_180_y_181():
+    ruta = [paso.process_id for paso in progreso(flujo_mvp.orden_creada())]
+
+    assert ruta.index("PROC-REP-212") == ruta.index("PROC-REP-180") + 1
+    assert ruta.index("PROC-REP-181") == ruta.index("PROC-REP-212") + 1

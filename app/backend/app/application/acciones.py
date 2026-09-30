@@ -13,10 +13,11 @@ Las acciones se derivan de:
     Detalles, toma activa, ejecucion activa, condicion comercial
 
 NUNCA de a que Scenario "pertenece" la Orden: no hay ningun
-``if origen == ...: acciones_de_hp1()`` ni equivalente. Para
-CLIENTE_EXTERNO -el unico origen operativo en Slice 0- el resultado es
-identico al de antes de este refactor, salvo el cambio deliberado de
-BR-REP-017: Registrar Pago ya no queda abierto a cualquier rol.
+``if origen == ...: acciones_de_hp1()`` ni equivalente. La politica
+(``domain.politicas.politica_de``) es lo unico que distingue el
+comportamiento por Origen -CLIENTE_EXTERNO (HP-REP-001) y RT_INTERNO
+(HP-REP-002) comparten esta misma funcion-, nunca un ``if`` sobre el
+Origen o el Scenario.
 """
 
 from dataclasses import dataclass
@@ -45,20 +46,34 @@ ACCION_TOMAR = "TOMAR"
 ACCION_INICIAR_DETALLE = "INICIAR_DETALLE"
 ACCION_COMPLETAR_EJECUCION = "COMPLETAR_EJECUCION"
 ACCION_APROBAR_CONTROL = "APROBAR_CONTROL"
+ACCION_LIBERAR_ORDEN = "LIBERAR_ORDEN"
 ACCION_NOTIFICAR = "NOTIFICAR"
 ACCION_REGISTRAR_PAGO = "REGISTRAR_PAGO"
 ACCION_ENTREGAR = "ENTREGAR"
+ACCION_INFORMAR_RT = "INFORMAR_RT"
+ACCION_DEVOLVER_RT = "DEVOLVER_RT"
 
 CERO = Decimal("0")
 
 
 @dataclass(frozen=True)
 class AccionDisponible:
-    """Accion humana que la Orden admite ahora mismo.
+    """Un paso que la Orden admite ahora mismo, humano o de sistema.
 
     ``roles`` lista TODOS los actores autorizados: un nodo puede
     declarar ``actores_alternativos`` en PROC-REP V1.3 (por ejemplo
     PROC-REP-150 y PROC-REP-270), y entonces son varios sin jerarquia.
+    ``roles: ()`` con ``requiere_actor: True`` (default) significa que el
+    negocio TODAVIA no definio el rol (por ejemplo Registrar Pago antes
+    de BR-REP-017): sigue siendo una accion humana, solo que cualquier
+    usuario activo puede ejecutarla.
+
+    ``requiere_actor`` es una dimension distinta: ``False`` marca un
+    ``PROC-REP-*`` declarado ``actor: ACT-SYSTEM`` en el Business Process
+    (por ejemplo PROC-REP-290). Ahi NO hay ningun actor humano que
+    autorizar -ni "cualquiera", ni "todavia sin definir"-: no
+    corresponde exigir ``usuario_id`` en el comando. El MVP igual lo
+    expone como paso demostrable en la UI para poder disparar el nodo.
     """
 
     codigo: str
@@ -66,6 +81,7 @@ class AccionDisponible:
     roles: tuple[RolUsuario, ...] = ()
     detalle_id: str | None = None
     ejecucion_id: str | None = None
+    requiere_actor: bool = True
 
 
 def detalle_trabajable(orden: OrdenReparacion) -> str | None:
@@ -74,6 +90,12 @@ def detalle_trabajable(orden: OrdenReparacion) -> str | None:
     Consistente con ``services.resolucion._es_trabajable``: un Detalle
     DEFINIDO pero bloqueado (``REQUIERE_DEFINICION`` o
     ``BLOQUEADO_POR_RECURSOS``) no es trabajable.
+
+    Se conserva para compatibilidad (``application.happy_path`` y los
+    tests que ya la importan). ``acciones_disponibles`` usa la version
+    plural, ``detalles_trabajables``: con Multi-Detalle puede haber mas
+    de uno, y no le corresponde a este modulo elegir cual por el
+    tecnico (PROC-REP-181).
     """
     for detalle in orden.reparaciones_detail:
         if (
@@ -84,25 +106,59 @@ def detalle_trabajable(orden: OrdenReparacion) -> str | None:
     return None
 
 
-def _espera_control(orden: OrdenReparacion) -> bool:
-    """Todos los Detalles terminados y ninguno controlado todavia."""
-    if not orden.reparaciones_detail:
-        return False
-    if ejecucion_activa(orden) is not None:
-        return False
-    return all(
-        detalle.estado is EstadoReparacionDetail.COMPLETO
-        and detalle.control_estado is EstadoControl.PENDIENTE
+def detalles_trabajables(orden: OrdenReparacion) -> list[str]:
+    """Todos los Detalles DEFINIDO y SIN_BLOQUEO, en orden de aparicion.
+
+    Con Multi-Detalle puede haber mas de un Detalle trabajable a la vez:
+    la eleccion de cual iniciar ahora es del tecnico (PROC-REP-181), no
+    algo que esta funcion deba decidir.
+    """
+    return [
+        detalle.id
         for detalle in orden.reparaciones_detail
-    )
+        if detalle.estado is EstadoReparacionDetail.DEFINIDO
+        and detalle.condicion is CondicionReparacionDetail.SIN_BLOQUEO
+    ]
+
+
+def _detalles_en_espera_de_control(orden: OrdenReparacion) -> list[str]:
+    """Detalles con control PENDIENTE, aprobables ahora mismo.
+
+    PROC-REP-220 solo se alcanza cuando la Orden ENTERA es terminal
+    (todos sus Detalles COMPLETO, igual que exige
+    ``services.reparaciones.aprobar_control_tecnico``): mientras quede
+    algun Detalle DEFINIDO o EN_PROGRESO no se ofrece ninguna accion de
+    control, ni siquiera para un Detalle que ya este COMPLETO. Una vez
+    ahi, el control SI es granular por Detalle (PROC-REP-230): cada uno
+    se aprueba de forma independiente.
+    """
+    if ejecucion_activa(orden) is not None:
+        return []
+    if any(
+        detalle.estado is not EstadoReparacionDetail.COMPLETO
+        for detalle in orden.reparaciones_detail
+    ):
+        return []
+    return [
+        detalle.id
+        for detalle in orden.reparaciones_detail
+        if detalle.control_estado is EstadoControl.PENDIENTE
+    ]
 
 
 def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
     """Acciones humanas que corresponden al estado actual de la Orden.
 
-    Una Orden ENTREGADA no admite ninguna: el proceso termino.
+    Una Orden ENTREGADA no admite ninguna: el proceso termino. Lo mismo
+    vale para RT_INTERNO al llegar a EVT-REP-999: ese origen no pasa por
+    ENTREGADA (el estado terminal sigue pendiente de definicion, ver
+    ``devolver_equipo_rt``), asi que el fin de proceso se detecta por
+    ``current_process`` para no dejar acciones abiertas.
     """
-    if orden.estado_workflow is EstadoWorkflow.ENTREGADA:
+    if (
+        orden.estado_workflow is EstadoWorkflow.ENTREGADA
+        or orden.current_process == "EVT-REP-999"
+    ):
         return []
 
     politica = politica_de(orden.origen)
@@ -111,8 +167,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
     estado = orden.estado_workflow
     alcanzados = nodos_alcanzados(orden)
 
-    sin_detalles = not orden.reparaciones_detail
-    if estado is EstadoWorkflow.REQUERIMIENTO and sin_detalles:
+    if estado is EstadoWorkflow.REQUERIMIENTO:
         acciones.append(
             AccionDisponible(
                 codigo=ACCION_DEFINIR_REPARACION,
@@ -140,15 +195,23 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
         )
 
     en_curso = ejecucion_activa(orden)
-    trabajable = detalle_trabajable(orden)
+    toma = toma_activa(orden)
 
-    if toma_activa(orden) is not None and en_curso is None and trabajable:
+    if toma is not None and en_curso is None:
+        for trabajable in detalles_trabajables(orden):
+            acciones.append(
+                AccionDisponible(
+                    codigo=ACCION_INICIAR_DETALLE,
+                    etiqueta="Iniciar el Detalle",
+                    roles=(RolUsuario.TECNICO,),
+                    detalle_id=trabajable,
+                )
+            )
         acciones.append(
             AccionDisponible(
-                codigo=ACCION_INICIAR_DETALLE,
-                etiqueta="Iniciar el Detalle",
+                codigo=ACCION_LIBERAR_ORDEN,
+                etiqueta="Liberar la Orden (PROC-REP-212/213)",
                 roles=(RolUsuario.TECNICO,),
-                detalle_id=trabajable,
             )
         )
 
@@ -164,14 +227,16 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
         )
 
     lista = estado is EstadoWorkflow.REPARACION_LISTA
-    if not lista and _espera_control(orden):
-        acciones.append(
-            AccionDisponible(
-                codigo=ACCION_APROBAR_CONTROL,
-                etiqueta="Aprobar el control tecnico",
-                roles=(RolUsuario.RECEPCION,),
+    if not lista:
+        for pendiente in _detalles_en_espera_de_control(orden):
+            acciones.append(
+                AccionDisponible(
+                    codigo=ACCION_APROBAR_CONTROL,
+                    etiqueta="Aprobar el control tecnico",
+                    roles=(RolUsuario.RECEPCION,),
+                    detalle_id=pendiente,
+                )
             )
-        )
 
     notificada = "PROC-REP-260" in alcanzados
 
@@ -202,6 +267,29 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             AccionDisponible(
                 codigo=ACCION_ENTREGAR,
                 etiqueta="Entregar el equipo",
+                roles=ROLES_ENTREGA,
+            )
+        )
+
+    informado_rt = "PROC-REP-290" in alcanzados
+
+    if politica.requiere_informar_rt and lista and not informado_rt:
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_INFORMAR_RT,
+                etiqueta="Informar el resultado a Gestion RT",
+                # PROC-REP-290 es actor: ACT-SYSTEM (no hay actor humano
+                # que autorizar), distinto de "rol todavia sin definir".
+                roles=(),
+                requiere_actor=False,
+            )
+        )
+
+    if politica.requiere_informar_rt and informado_rt:
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_DEVOLVER_RT,
+                etiqueta="Devolver el equipo a Gestion RT",
                 roles=ROLES_ENTREGA,
             )
         )

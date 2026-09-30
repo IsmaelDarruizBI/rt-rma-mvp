@@ -18,11 +18,15 @@ from app.application import (
     aprobar_control,
     completar_ejecucion,
     crear_orden,
+    crear_orden_rt,
     definir_reparacion,
+    devolver_rt,
     encolar_orden,
     entregar,
+    informar_rt,
     iniciar_detalle,
     insumos_previstos_por_detalle,
+    liberar_orden,
     listar_ordenes,
     nombres_de_tipo_por_detalle,
     notificar,
@@ -38,10 +42,13 @@ from .schemas import (
     AprobarControlIn,
     CompletarEjecucionIn,
     CrearOrdenIn,
+    CrearOrdenRtIn,
     DefinirReparacionIn,
+    DevolverRtIn,
     EncolarIn,
     EntregarIn,
     IniciarDetalleIn,
+    LiberarOrdenIn,
     NotificarIn,
     OrdenConEntregaOut,
     OrdenOut,
@@ -121,6 +128,25 @@ def post_crear_orden(
     return _salida(orden, contexto)
 
 
+@router.post("/rt-interno", status_code=status.HTTP_201_CREATED)
+def post_crear_orden_rt(
+    cuerpo: CrearOrdenRtIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Ingreso de un equipo RT_INTERNO (ACT-RECEP, HP-REP-002).
+
+    Compone PROC-REP-010 -> 020 -> 040. Sin Cliente: el equipo es de
+    Rosario Tecno.
+    """
+    orden = crear_orden_rt(
+        contexto,
+        usuario_id=cuerpo.usuario_id,
+        equipo=cuerpo.equipo.a_dominio(),
+        referencia_rt=cuerpo.referencia_rt,
+    )
+    return _salida(orden, contexto)
+
+
 @router.post("/{orden_id}/details")
 def post_definir_reparacion(
     orden_id: str,
@@ -129,10 +155,15 @@ def post_definir_reparacion(
 ) -> OrdenOut:
     """Definir la reparacion requerida (ACT-RECEP).
 
-    Compone PROC-REP-045 -> 070 -> 050 -> 060 -> 080 -> 090 -> 140:
+    Compone PROC-REP-045 -> 070 y, si ``finalizar_definicion`` es
+    verdadero (default), tambien 050 -> 060 -> 080 -> 090 -> 140:
     despues de definir el Detalle, todo lo que sigue hasta HABILITADA es
     automatico y no cruza otra decision humana. La factibilidad (080)
     consulta el stock global y NO reserva.
+
+    Con ``finalizar_definicion=False`` (Multi-Detalle) la Orden sigue en
+    REQUERIMIENTO, lista para recibir otro Detalle con una nueva llamada
+    a este mismo endpoint.
     """
     orden = definir_reparacion(
         contexto,
@@ -140,6 +171,7 @@ def post_definir_reparacion(
         usuario_id=cuerpo.usuario_id,
         tipo_reparacion_id=cuerpo.tipo_reparacion_id,
         observaciones=cuerpo.observaciones,
+        finalizar_definicion=cuerpo.finalizar_definicion,
     )
     return _salida(orden, contexto)
 
@@ -239,14 +271,38 @@ def post_aprobar_control(
 ) -> OrdenOut:
     """Aprobar el control tecnico (ACT-RECEP).
 
-    Compone PROC-REP-220 -> 230 -> 245 -> 240. No notifica: avisar al
-    cliente es otra decision de Recepcion.
+    Compone PROC-REP-220 -> 230, y 245 -> 240 recien cuando, con
+    ``detalle_id`` o sin el, todos los Detalles de la Orden quedan
+    APROBADO. No notifica: avisar al cliente es otra decision de
+    Recepcion.
     """
     orden = aprobar_control(
         contexto,
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
+        detalle_id=cuerpo.detalle_id,
         observaciones=cuerpo.observaciones,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/release")
+def post_liberar_orden(
+    orden_id: str,
+    cuerpo: LiberarOrdenIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Liberar la Orden sin terminarla (ACT-TECH).
+
+    Compone PROC-REP-212 ("No") -> 213: cierra la toma activa y la
+    Orden vuelve a EN_COLA. Solo tiene sentido cuando todavia queda al
+    menos un Detalle trabajable -si no, ``evaluar_situacion_orden`` ya
+    cerro la toma automaticamente al terminar el ultimo-.
+    """
+    orden = liberar_orden(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
     )
     return _salida(orden, contexto)
 
@@ -302,6 +358,41 @@ def post_entregar(
     Compone PROC-REP-280 -> 270 -> EVT-REP-999. La Orden queda ENTREGADA.
     """
     orden = entregar(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/inform-rt")
+def post_informar_rt(
+    orden_id: str,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Informar el resultado a Gestion RT (HP-REP-002).
+
+    Compone PROC-REP-250 -> 290. Exclusivo de RT_INTERNO: no notifica,
+    no cobra y no entrega a un cliente. PROC-REP-290 es ``actor:
+    ACT-SYSTEM`` en el Business Process: no hay un actor humano que
+    autorizar, asi que este endpoint no recibe body.
+    """
+    orden = informar_rt(contexto, orden_id=orden_id)
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/return-rt")
+def post_devolver_rt(
+    orden_id: str,
+    cuerpo: DevolverRtIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Devolver el equipo a Gestion RT (HP-REP-002).
+
+    Compone PROC-REP-270 (reutilizado) -> EVT-REP-999. No es una entrega
+    comercial: no depende de Saldo ni de Pagos.
+    """
+    orden = devolver_rt(
         contexto,
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,

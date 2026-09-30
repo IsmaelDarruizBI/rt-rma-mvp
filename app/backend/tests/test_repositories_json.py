@@ -485,3 +485,32 @@ def test_una_orden_a_medio_flujo_tampoco_guarda_derivados(repo_ordenes):
     assert "saldo" not in crudo
     assert recuperada.saldo == Decimal("80000")
     assert recuperada.estado_pago is EstadoPago.PENDIENTE
+
+
+# --- Compatibilidad con JSON anterior a Slice 2 (RT_INTERNO) ------------
+
+
+def test_una_orden_hp1_anterior_a_referencia_rt_sigue_cargando(repo_ordenes):
+    """``referencia_rt`` es aditivo: un JSON de antes de Slice 2 no lo tiene.
+
+    ``cliente`` tampoco cambio para CLIENTE_EXTERNO -sigue viniendo
+    poblado-, asi que una Orden HP1 persistida antes de que ``cliente``
+    se volviera opcional debe seguir cargando identica.
+    """
+    import json
+
+    orden = flujo_mvp.orden_entregada()
+    repo_ordenes.guardar(orden)
+
+    crudo = _json_crudo(repo_ordenes, "OR-001")
+    del crudo["referencia_rt"]
+    (repo_ordenes.directorio / "OR-001.json").write_text(
+        json.dumps(crudo), encoding="utf-8"
+    )
+
+    recuperada = repo_ordenes.obtener("OR-001")
+
+    assert recuperada.referencia_rt is None
+    assert recuperada.cliente is not None
+    assert recuperada.cliente.id == "CLI-001"
+    assert recuperada == orden

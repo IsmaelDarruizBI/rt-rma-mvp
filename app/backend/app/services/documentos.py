@@ -10,12 +10,8 @@ se genera ningun PDF ni contenido.
 
 from datetime import datetime
 
-from app.domain.models import (
-    Documento,
-    EstadoWorkflow,
-    OrdenReparacion,
-    OrigenOrden,
-)
+from app.domain.models import Documento, EstadoWorkflow, OrdenReparacion
+from app.domain.politicas import politica_de
 
 from .exceptions import PrecondicionInvalidaError
 from .workflow import registrar_paso
@@ -26,32 +22,35 @@ def generar_comprobante_recepcion(
     *,
     fecha: datetime,
 ) -> OrdenReparacion:
-    """PROC-REP-050 ("Si") -> PROC-REP-060 (FEAT-REP-001).
+    """PROC-REP-050 -> PROC-REP-060 si corresponde (FEAT-REP-001).
 
-    Acredita que el cliente dejo el equipo. Lo requieren los origenes
-    CLIENTE_EXTERNO, RT_GARANTIA_VENTA y RMA_GARANTIA_REPARACION; el MVP
-    solo modela el primero.
+    La rama la fija ``PoliticaOrigen.requiere_comprobante_recepcion``
+    (BR-REP-016), no un origen hardcodeado: CLIENTE_EXTERNO y
+    RMA_GARANTIA_REPARACION lo exigen, RT_INTERNO no (HP-REP-002 no
+    acredita que un cliente dejo el equipo, no hay cliente). Cuando la
+    politica dice "No", PROC-REP-050 igual queda registrado -la decision
+    se tomo- pero PROC-REP-060 no se ejecuta.
 
     PROC-REP-060 es ACT-SYSTEM: no lo ejecuta una persona, asi que no
     recibe Usuario y el historial queda sin actor humano.
     """
-    if orden.origen is not OrigenOrden.CLIENTE_EXTERNO:
-        raise PrecondicionInvalidaError(
-            f"El MVP solo emite comprobante de recepcion para "
-            f"CLIENTE_EXTERNO, no para {orden.origen.value}."
-        )
     if orden.documentos.comprobante_recepcion.generado:
         raise PrecondicionInvalidaError(
             "El comprobante de recepcion ya fue generado."
         )
+
+    requiere = politica_de(orden.origen).requiere_comprobante_recepcion
 
     nueva_orden = registrar_paso(
         orden,
         process_id="PROC-REP-050",
         accion="REQUIERE_COMPROBANTE_RECEPCION",
         fecha=fecha,
-        observacion="Si",
+        observacion="Si" if requiere else "No",
     )
+    if not requiere:
+        return nueva_orden
+
     nueva_orden = registrar_paso(
         nueva_orden,
         process_id="PROC-REP-060",

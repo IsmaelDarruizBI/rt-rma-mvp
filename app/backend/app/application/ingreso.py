@@ -18,6 +18,7 @@ from app.services import (
     RecursoNoDisponibleError,
     cargar_reservas_externas,
     crear_orden_cliente_externo,
+    crear_orden_rt_interno,
     definir_reparacion_detail,
     generar_comprobante_recepcion,
     habilitar_orden,
@@ -61,6 +62,37 @@ def crear_orden(
     return orden
 
 
+def crear_orden_rt(
+    contexto: ApplicationContext,
+    *,
+    usuario_id: str,
+    equipo: Equipo,
+    referencia_rt: str,
+) -> OrdenReparacion:
+    """Ingreso de un equipo RT_INTERNO (PROC-REP-010/020/040, HP-REP-002).
+
+    Analoga a ``crear_orden`` pero sin Cliente: el equipo es de Rosario
+    Tecno. El resto del recorrido -definir la reparacion, factibilidad,
+    habilitar- es exactamente el mismo comando (``definir_reparacion``):
+    la diferencia por Origen queda contenida en los services, no
+    duplicada aqui.
+    """
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    with seccion_critica_inventario():
+        orden = crear_orden_rt_interno(
+            orden_id=siguiente_orden_id(contexto.ordenes),
+            equipo=equipo,
+            referencia_rt=referencia_rt,
+            usuario=usuario,
+            fecha=fecha,
+        )
+        contexto.ordenes.guardar(orden)
+
+    return orden
+
+
 def definir_reparacion(
     contexto: ApplicationContext,
     *,
@@ -68,12 +100,23 @@ def definir_reparacion(
     usuario_id: str,
     tipo_reparacion_id: str,
     observaciones: str | None = None,
+    finalizar_definicion: bool = True,
 ) -> OrdenReparacion:
-    """Recepcion define la reparacion y la Orden queda habilitada.
+    """Recepcion define un Detalle de la reparacion (Multi-Detalle).
 
-    Encadena PROC-REP-045 -> 070 (Detalle con precio snapshot),
-    PROC-REP-050 -> 060 (comprobante de recepcion), PROC-REP-080 -> 090
-    (factibilidad) y PROC-REP-140 (habilitar).
+    Encadena PROC-REP-045 -> 070 (Detalle con precio snapshot) y, solo
+    cuando ``finalizar_definicion`` es verdadero, PROC-REP-050 -> 060
+    (comprobante de recepcion), PROC-REP-080 -> 090 (factibilidad) y
+    PROC-REP-140 (habilitar).
+
+    Una Orden puede recibir N Detalles: cada llamada agrega uno nuevo
+    mientras la Orden siga en REQUERIMIENTO. ``finalizar_definicion``
+    (default ``True``, aditivo) es la extension minima que permite
+    seguir agregando Detalles sin habilitar la Orden todavia -Recepcion
+    llama de nuevo con ``finalizar_definicion=False`` por cada Detalle
+    que todavia no es el ultimo, y con ``True`` (o el default) en el
+    ultimo-. Con un unico Detalle el comportamiento es identico al de
+    antes: HP-REP-001 no necesita ningun paso nuevo.
 
     La factibilidad CONSULTA el stock global -lo que las demas Ordenes
     tienen reservado- pero NO reserva nada (BR-REP-006): la reserva real
@@ -99,26 +142,29 @@ def definir_reparacion(
         fecha=fecha,
         observaciones=observaciones,
     )
-    orden = generar_comprobante_recepcion(orden, fecha=fecha)
 
-    orden, factible = validar_factibilidad_detalles(
-        orden,
-        insumos=contexto.catalogos.listar_insumos(),
-        insumos_previstos=(
-            contexto.catalogos.listar_tipo_reparacion_insumos()
-        ),
-        fecha=fecha,
-        reservas_externas=cargar_reservas_externas(
-            orden.id, contexto.ordenes
-        ),
-    )
-    if not factible:
-        raise RecursoNoDisponibleError(
-            "No hay disponibilidad de insumos para la reparacion pedida "
-            "(PROC-REP-090). El MVP no resuelve el camino de faltante, "
-            "asi que la Orden no se modifico."
+    if finalizar_definicion:
+        orden = generar_comprobante_recepcion(orden, fecha=fecha)
+
+        orden, factible = validar_factibilidad_detalles(
+            orden,
+            insumos=contexto.catalogos.listar_insumos(),
+            insumos_previstos=(
+                contexto.catalogos.listar_tipo_reparacion_insumos()
+            ),
+            fecha=fecha,
+            reservas_externas=cargar_reservas_externas(
+                orden.id, contexto.ordenes
+            ),
         )
+        if not factible:
+            raise RecursoNoDisponibleError(
+                "No hay disponibilidad de insumos para la reparacion "
+                "pedida (PROC-REP-090). El MVP no resuelve el camino de "
+                "faltante, asi que la Orden no se modifico."
+            )
 
-    orden = habilitar_orden(orden, fecha=fecha)
+        orden = habilitar_orden(orden, fecha=fecha)
+
     contexto.ordenes.guardar(orden)
     return orden

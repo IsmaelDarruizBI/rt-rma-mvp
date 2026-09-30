@@ -53,15 +53,34 @@ export function crearOrden(datos: DatosNuevaOrden): Promise<Orden> {
   return post<Orden>("/api/orders", datos);
 }
 
-/** PROC-REP-045 -> 070 -> 050 -> 060 -> 080 -> 090 -> 140 (Recepción). */
+export interface DatosNuevaOrdenRt {
+  usuario_id: string;
+  equipo: { marca: string; modelo: string; falla_reportada: string };
+  referencia_rt: string;
+}
+
+/** PROC-REP-010 -> 020 -> 040 (Recepción, HP-REP-002). Sin Cliente. */
+export function crearOrdenRt(datos: DatosNuevaOrdenRt): Promise<Orden> {
+  return post<Orden>("/api/orders/rt-interno", datos);
+}
+
+/**
+ * PROC-REP-045 -> 070 y, si `finalizarDefinicion` (default `true`),
+ * también 050 -> 060 -> 080 -> 090 -> 140 (Recepción).
+ *
+ * Con `finalizarDefinicion=false` (Multi-Detalle) agrega el Detalle sin
+ * habilitar la Orden todavía, para poder definir más de uno.
+ */
 export function definirReparacion(
   ordenId: string,
   usuarioId: string,
   tipoReparacionId: string,
+  finalizarDefinicion = true,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/details`, {
     usuario_id: usuarioId,
     tipo_reparacion_id: tipoReparacionId,
+    finalizar_definicion: finalizarDefinicion,
   });
 }
 
@@ -118,15 +137,31 @@ export function completarEjecucion(
   );
 }
 
-/** PROC-REP-220 -> 230 -> 245 -> 240 (Recepción). */
+/**
+ * PROC-REP-220 -> 230, y 245 -> 240 recién cuando todos los Detalles
+ * quedan APROBADO (Recepción). `detalleId` (Multi-Detalle) aprueba un
+ * único Detalle; `null` preserva la aprobación en bloque.
+ */
 export function aprobarControl(
   ordenId: string,
   usuarioId: string,
+  detalleId: string | null,
   observaciones: string | null,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/control/approve`, {
     usuario_id: usuarioId,
+    detalle_id: detalleId,
     observaciones,
+  });
+}
+
+/** PROC-REP-212 ("No") -> 213: liberar la Orden sin terminarla (Técnico). */
+export function liberarOrden(
+  ordenId: string,
+  usuarioId: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/release`, {
+    usuario_id: usuarioId,
   });
 }
 
@@ -160,6 +195,26 @@ export function entregar(
   usuarioId: string,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/deliver`, {
+    usuario_id: usuarioId,
+  });
+}
+
+/**
+ * PROC-REP-250 -> 290 (HP-REP-002, RT_INTERNO).
+ *
+ * PROC-REP-290 es `actor: ACT-SYSTEM`: no hay actor humano que
+ * autorizar, así que este comando no envía `usuario_id`.
+ */
+export function informarRt(ordenId: string): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/inform-rt`, {});
+}
+
+/** PROC-REP-270 reutilizado (HP-REP-002, RT_INTERNO -> EVT-REP-999). */
+export function devolverRt(
+  ordenId: string,
+  usuarioId: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/return-rt`, {
     usuario_id: usuarioId,
   });
 }

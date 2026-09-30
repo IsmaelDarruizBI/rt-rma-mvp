@@ -58,10 +58,13 @@ from .inventario_global import (
 )
 from .ordenes import (
     crear_orden_cliente_externo,
+    crear_orden_rt_interno,
     definir_prioridad,
+    devolver_equipo_rt,
     entregar_equipo,
     evaluar_situacion_orden,
     habilitar_orden,
+    informar_resultado_rt,
     ingresar_a_cola,
     marcar_reparacion_lista,
     notificar_cliente,
@@ -82,6 +85,7 @@ from .reparaciones import (
 from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
 from .tomas import (
     hay_ejecucion_activa,
+    liberar_orden,
     seleccionar_detalle,
     toma_activa,
     tomar_orden,
@@ -107,10 +111,13 @@ __all__ = [
     "registrar_paso",
     # Ciclo de vida de la Orden
     "crear_orden_cliente_externo",
+    "crear_orden_rt_interno",
     "definir_prioridad",
+    "devolver_equipo_rt",
     "entregar_equipo",
     "evaluar_situacion_orden",
     "habilitar_orden",
+    "informar_resultado_rt",
     "ingresar_a_cola",
     "marcar_reparacion_lista",
     "notificar_cliente",
@@ -124,6 +131,7 @@ __all__ = [
     "validar_factibilidad_detalles",
     # Toma y seleccion
     "hay_ejecucion_activa",
+    "liberar_orden",
     "seleccionar_detalle",
     "toma_activa",
     "tomar_orden",

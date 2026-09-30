@@ -14,6 +14,17 @@ export type EstadoWorkflow =
   | "REPARACION_LISTA"
   | "ENTREGADA";
 
+export type OrigenOrden =
+  | "CLIENTE_EXTERNO"
+  | "RT_INTERNO"
+  | "RMA_GARANTIA_REPARACION";
+
+/** BR-REP-016: condición comercial derivada del Origen, no del Detalle. */
+export type CondicionComercial =
+  | "COBRABLE"
+  | "NO_COBRABLE_AL_CLIENTE"
+  | "NO_COBRABLE";
+
 export type EstadoPago = "PENDIENTE" | "PARCIAL" | "PAGADO";
 
 /** Momento comercial del cobro. Distinto del medio (`metodo`). */
@@ -149,6 +160,8 @@ export interface ResumenComercial {
   saldo: string;
   estado_pago: EstadoPago;
   puntaje_total: number;
+  /** COBRABLE (cliente) / NO_COBRABLE_AL_CLIENTE (RT) / NO_COBRABLE. */
+  condicion_comercial: CondicionComercial;
 }
 
 /**
@@ -188,14 +201,21 @@ export interface Accion {
   roles: RolUsuario[];
   detalle_id: string | null;
   ejecucion_id: string | null;
+  /**
+   * `false` marca un nodo `actor: ACT-SYSTEM` (p. ej. Informar a Gestión
+   * RT): no hay actor humano que autorizar y el comando no recibe
+   * `usuario_id`. `true` (default) es el caso humano normal.
+   */
+  requiere_actor: boolean;
 }
 
 export interface OrdenResumen {
   id: string;
-  origen: string;
+  origen: OrigenOrden;
   estado_workflow: EstadoWorkflow;
   current_process: string;
   prioridad: number;
+  /** Nombre del Cliente, o identificación RT cuando no hay Cliente. */
   cliente_nombre: string;
   equipo: string;
   total: string;
@@ -207,12 +227,15 @@ export interface OrdenResumen {
 
 export interface Orden {
   id: string;
-  origen: string;
+  origen: OrigenOrden;
   estado_workflow: EstadoWorkflow;
   current_process: string;
   prioridad: number;
-  cliente: Cliente;
+  /** `null` en RT_INTERNO: el equipo es de Rosario Tecno, no hay Cliente. */
+  cliente: Cliente | null;
   equipo: Equipo;
+  /** Contexto de Gestion RT (PROC-REP-020). `null` salvo en RT_INTERNO. */
+  referencia_rt: string | null;
   reparaciones_detail: Detalle[];
   tomas: Toma[];
   ejecuciones: Ejecucion[];

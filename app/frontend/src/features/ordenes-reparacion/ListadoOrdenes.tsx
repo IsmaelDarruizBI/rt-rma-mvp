@@ -17,7 +17,7 @@ import {
   importe,
 } from "../../components/ui";
 import type { OrdenResumen, Usuario } from "../../types/api";
-import type { DatosNuevaOrden } from "../../api/ordenes";
+import type { DatosNuevaOrden, DatosNuevaOrdenRt } from "../../api/ordenes";
 
 export function ListadoOrdenes({
   ordenes,
@@ -176,6 +176,85 @@ export function FormularioNuevaOrden({
         }
       >
         Crear Orden
+      </Boton>
+    </Panel>
+  );
+}
+
+export function FormularioNuevaOrdenRt({
+  actor,
+  ocupado,
+  onCrear,
+}: {
+  actor: Usuario | null;
+  ocupado: boolean;
+  onCrear: (datos: DatosNuevaOrdenRt) => void;
+}) {
+  const [marca, setMarca] = useState("Motorola");
+  const [modelo, setModelo] = useState("Moto G84");
+  const [falla, setFalla] = useState("No enciende.");
+  const [referenciaRt, setReferenciaRt] = useState("RT-INGRESO-0001");
+
+  const esRecepcion = actor?.rol === "RECEPCION";
+  const completo = marca && modelo && falla && referenciaRt;
+
+  return (
+    <Panel titulo="Nueva Orden (equipo RT interno)">
+      {!esRecepcion && (
+        <p
+          style={{
+            margin: "0 0 0.6rem",
+            fontSize: "0.8rem",
+            color: colores.alerta,
+          }}
+        >
+          Requiere el rol RECEPCION. Cambiá el actor demo para crearla.
+        </p>
+      )}
+      <Campo etiqueta="Referencia de Gestión RT">
+        <input
+          value={referenciaRt}
+          onChange={(evento) => setReferenciaRt(evento.target.value)}
+          style={estiloInput}
+        />
+      </Campo>
+      <Campo etiqueta="Marca">
+        <input
+          value={marca}
+          onChange={(evento) => setMarca(evento.target.value)}
+          style={estiloInput}
+        />
+      </Campo>
+      <Campo etiqueta="Modelo">
+        <input
+          value={modelo}
+          onChange={(evento) => setModelo(evento.target.value)}
+          style={estiloInput}
+        />
+      </Campo>
+      <Campo etiqueta="Falla reportada">
+        <input
+          value={falla}
+          onChange={(evento) => setFalla(evento.target.value)}
+          style={estiloInput}
+        />
+      </Campo>
+      <Boton
+        disabled={!esRecepcion || ocupado || !completo || !actor}
+        onClick={() =>
+          actor &&
+          onCrear({
+            usuario_id: actor.id,
+            equipo: {
+              marca,
+              modelo,
+              falla_reportada: falla,
+            },
+            referencia_rt: referenciaRt,
+          })
+        }
+      >
+        Crear Orden RT
       </Boton>
     </Panel>
   );

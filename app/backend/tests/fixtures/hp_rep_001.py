@@ -274,7 +274,7 @@ def construir_orden_hp_rep_001() -> OrdenReparacion:
         ),
         HistorialWorkflow(
             process_id="PROC-REP-245",
-            accion="CALCULAR_PUNTAJE",
+            accion="CONSOLIDAR_PUNTAJE",
             fecha=_t(165),
             reparacion_detail_id=detalle.id,
         ),
