@@ -36,6 +36,7 @@ _RUTA_CLIENTE_EXTERNO: tuple[tuple[str, str], ...] = (
     ("PROC-REP-170", "Ingresar a cola"),
     ("PROC-REP-172", "Validar estacion de trabajo"),
     ("PROC-REP-180", "Tomar Orden"),
+    ("PROC-REP-212", "Iniciar un Detalle de reparacion"),
     ("PROC-REP-181", "Seleccionar Detalle"),
     ("PROC-REP-174", "Estacion habilitada para el Detalle"),
     ("PROC-REP-185", "Reservar insumos e iniciar Ejecucion"),

@@ -122,7 +122,8 @@ def test_progreso_rt_incluye_212_entre_180_y_181_y_consolida_puntaje(cliente):
     assert pasos.index("PROC-REP-212") == pasos.index("PROC-REP-180") + 1
     assert pasos.index("PROC-REP-181") == pasos.index("PROC-REP-212") + 1
     etiqueta_245 = next(
-        p["etiqueta"] for p in orden["progreso"]
+        p["etiqueta"]
+        for p in orden["progreso"]
         if p["process_id"] == "PROC-REP-245"
     )
     assert etiqueta_245 == "Consolidar puntaje"

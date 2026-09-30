@@ -52,7 +52,7 @@ ROLES_ENTREGA = (
 # ambos (BR-REP-018). Los demas resultados (ABIERTA_TRABAJABLE,
 # EN_EJECUCION, REQUIERE_REVISION, PENDIENTE_RECURSOS) preservan la
 # toma: si continuar, liberarla o volver a la cola es una decision que
-# PROC-REP-212/213 todavia no implementa.
+# PROC-REP-212/213 (ya implementados) resuelve.
 _RESULTADOS_QUE_CIERRAN_LA_TOMA = (
     ResultadoEvaluacionOrden.COMPLETA,
     ResultadoEvaluacionOrden.TODO_CANCELADO,

@@ -45,9 +45,9 @@ ROLES_PAGO_ANTES_DEL_FIX = (
     RolUsuario.COORDINADOR_RMA,
 )
 
-# Los 32 nodos de HP-REP-001, en el orden en que el recorrido los expone
-# hoy. El refactor de Slice 0 no cambia esta ruta para CLIENTE_EXTERNO.
-_TOTAL_NODOS_HP1 = 32
+# Los 33 nodos de HP-REP-001, en el orden en que el recorrido los expone.
+# Incluye PROC-REP-212 (transversal, Slice 1) entre 180 y 181.
+_TOTAL_NODOS_HP1 = 33
 
 
 def _orden_habilitada():
@@ -167,6 +167,7 @@ def test_toma_activa_sin_ejecucion():
         "PROC-REP-170",
         "PROC-REP-172",
         "PROC-REP-180",
+        "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
     ]
@@ -204,6 +205,7 @@ def test_en_reparacion():
         "PROC-REP-170",
         "PROC-REP-172",
         "PROC-REP-180",
+        "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
         "PROC-REP-185",
@@ -241,6 +243,7 @@ def test_espera_control():
         "PROC-REP-170",
         "PROC-REP-172",
         "PROC-REP-180",
+        "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
         "PROC-REP-185",
@@ -273,6 +276,7 @@ def test_reparacion_lista_sin_notificar():
         "PROC-REP-170",
         "PROC-REP-172",
         "PROC-REP-180",
+        "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
         "PROC-REP-185",
@@ -308,6 +312,7 @@ def test_reparacion_lista_con_saldo():
         "PROC-REP-170",
         "PROC-REP-172",
         "PROC-REP-180",
+        "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
         "PROC-REP-185",
@@ -349,6 +354,7 @@ def test_reparacion_lista_sin_saldo():
         "PROC-REP-170",
         "PROC-REP-172",
         "PROC-REP-180",
+        "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
         "PROC-REP-185",
@@ -386,6 +392,7 @@ def test_entregada():
         "PROC-REP-170",
         "PROC-REP-172",
         "PROC-REP-180",
+        "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
         "PROC-REP-185",
@@ -405,3 +412,10 @@ def test_entregada():
         "PROC-REP-270",
         "EVT-REP-999",
     ]
+
+
+def test_hp1_212_queda_entre_180_y_181():
+    ruta = [paso.process_id for paso in progreso(flujo_mvp.orden_creada())]
+
+    assert ruta.index("PROC-REP-212") == ruta.index("PROC-REP-180") + 1
+    assert ruta.index("PROC-REP-181") == ruta.index("PROC-REP-212") + 1
