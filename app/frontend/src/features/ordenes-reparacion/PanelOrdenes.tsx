@@ -103,9 +103,9 @@ export function PanelOrdenes() {
   const idOrden = orden?.id ?? "";
 
   const ejecutor: EjecutorAcciones = {
-    definirReparacion: (tipoId) =>
+    definirReparacion: (tipoId, finalizarDefinicion) =>
       void ejecutarComando(() =>
-        api.definirReparacion(idOrden, idActor, tipoId),
+        api.definirReparacion(idOrden, idActor, tipoId, finalizarDefinicion),
       ),
     encolar: (prioridad) =>
       void ejecutarComando(() =>
@@ -129,10 +129,12 @@ export function PanelOrdenes() {
           observaciones || null,
         ),
       ),
-    aprobarControl: (observaciones) =>
+    aprobarControl: (detalleId, observaciones) =>
       void ejecutarComando(() =>
-        api.aprobarControl(idOrden, idActor, observaciones || null),
+        api.aprobarControl(idOrden, idActor, detalleId, observaciones || null),
       ),
+    liberarOrden: () =>
+      void ejecutarComando(() => api.liberarOrden(idOrden, idActor)),
     notificar: () =>
       void ejecutarComando(() => api.notificar(idOrden, idActor)),
     registrarPago: (monto, metodo) =>

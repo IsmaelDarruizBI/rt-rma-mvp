@@ -818,12 +818,15 @@ nodes:
     type: decision
     name: Tecnico desea continuar trabajando esta Orden
     description: >
-      Nodo nuevo en V1.3. Solo se alcanza cuando PROC-REP-211 determina
-      que existe al menos un Detalle trabajable Y la Orden todavia tiene
-      una toma/participacion activa del tecnico actual (PROC-REP-180,
-      BR-REP-018). No se libera automaticamente una Orden trabajable solo
-      porque termino un Detalle: la decision de continuar con otro
-      Detalle o liberar la Orden es una accion explicita del tecnico.
+      Nodo nuevo en V1.3. Se alcanza cuando la Orden tiene una
+      toma/participacion activa del tecnico actual (PROC-REP-180,
+      BR-REP-018) y no hay una Ejecucion en curso: tanto inmediatamente
+      despues de tomar la Orden, antes de seleccionar o iniciar un
+      Detalle, como despues de que PROC-REP-211 determina que sigue
+      existiendo al menos un Detalle trabajable tras completar uno. No
+      se libera automaticamente una Orden trabajable solo porque termino
+      un Detalle: la decision de continuar con otro Detalle o liberar la
+      Orden es una accion explicita del tecnico.
     rules:
       - BR-REP-018
 
@@ -835,9 +838,12 @@ nodes:
       Nodo nuevo en V1.3. El tecnico decide no continuar trabajando la
       Orden (PROC-REP-212 = No): se cierra la participacion/toma activa
       registrada en PROC-REP-180, registrando fecha/hora de fin
-      (BR-REP-018). La Orden vuelve a EN_COLA (PROC-REP-170), disponible
-      para que el mismo u otro tecnico la tome nuevamente pasando otra vez
-      por PROC-REP-172/PROC-REP-180. Nunca se sobrescribe el historial de
+      (BR-REP-018). Se puede liberar en cualquier momento con la toma
+      activa y sin una Ejecucion en curso -incluso antes de seleccionar
+      o iniciar el primer Detalle-, no solo despues de completar uno. La
+      Orden vuelve a EN_COLA (PROC-REP-170), disponible para que el mismo
+      u otro tecnico la tome nuevamente pasando otra vez por
+      PROC-REP-172/PROC-REP-180. Nunca se sobrescribe el historial de
       participaciones anteriores.
     outputs:
       - Fecha/hora de fin de participacion

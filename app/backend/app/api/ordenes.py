@@ -23,6 +23,7 @@ from app.application import (
     entregar,
     iniciar_detalle,
     insumos_previstos_por_detalle,
+    liberar_orden,
     listar_ordenes,
     nombres_de_tipo_por_detalle,
     notificar,
@@ -42,6 +43,7 @@ from .schemas import (
     EncolarIn,
     EntregarIn,
     IniciarDetalleIn,
+    LiberarOrdenIn,
     NotificarIn,
     OrdenConEntregaOut,
     OrdenOut,
@@ -129,10 +131,15 @@ def post_definir_reparacion(
 ) -> OrdenOut:
     """Definir la reparacion requerida (ACT-RECEP).
 
-    Compone PROC-REP-045 -> 070 -> 050 -> 060 -> 080 -> 090 -> 140:
+    Compone PROC-REP-045 -> 070 y, si ``finalizar_definicion`` es
+    verdadero (default), tambien 050 -> 060 -> 080 -> 090 -> 140:
     despues de definir el Detalle, todo lo que sigue hasta HABILITADA es
     automatico y no cruza otra decision humana. La factibilidad (080)
     consulta el stock global y NO reserva.
+
+    Con ``finalizar_definicion=False`` (Multi-Detalle) la Orden sigue en
+    REQUERIMIENTO, lista para recibir otro Detalle con una nueva llamada
+    a este mismo endpoint.
     """
     orden = definir_reparacion(
         contexto,
@@ -140,6 +147,7 @@ def post_definir_reparacion(
         usuario_id=cuerpo.usuario_id,
         tipo_reparacion_id=cuerpo.tipo_reparacion_id,
         observaciones=cuerpo.observaciones,
+        finalizar_definicion=cuerpo.finalizar_definicion,
     )
     return _salida(orden, contexto)
 
@@ -239,14 +247,38 @@ def post_aprobar_control(
 ) -> OrdenOut:
     """Aprobar el control tecnico (ACT-RECEP).
 
-    Compone PROC-REP-220 -> 230 -> 245 -> 240. No notifica: avisar al
-    cliente es otra decision de Recepcion.
+    Compone PROC-REP-220 -> 230, y 245 -> 240 recien cuando, con
+    ``detalle_id`` o sin el, todos los Detalles de la Orden quedan
+    APROBADO. No notifica: avisar al cliente es otra decision de
+    Recepcion.
     """
     orden = aprobar_control(
         contexto,
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
+        detalle_id=cuerpo.detalle_id,
         observaciones=cuerpo.observaciones,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/release")
+def post_liberar_orden(
+    orden_id: str,
+    cuerpo: LiberarOrdenIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Liberar la Orden sin terminarla (ACT-TECH).
+
+    Compone PROC-REP-212 ("No") -> 213: cierra la toma activa y la
+    Orden vuelve a EN_COLA. Solo tiene sentido cuando todavia queda al
+    menos un Detalle trabajable -si no, ``evaluar_situacion_orden`` ya
+    cerro la toma automaticamente al terminar el ultimo-.
+    """
+    orden = liberar_orden(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
     )
     return _salida(orden, contexto)
 

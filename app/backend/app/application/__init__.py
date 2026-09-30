@@ -46,6 +46,7 @@ from .progreso import PasoProgreso, progreso
 from .taller import (
     completar_ejecucion,
     iniciar_detalle,
+    liberar_orden,
     tomar_orden_en_estacion,
 )
 
@@ -78,6 +79,7 @@ __all__ = [
     "encolar_orden",
     "tomar_orden_en_estacion",
     "iniciar_detalle",
+    "liberar_orden",
     "completar_ejecucion",
     "aprobar_control",
     "notificar",

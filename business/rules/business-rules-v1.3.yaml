@@ -376,7 +376,13 @@ rules:
       Detalle trabajable, la decision de continuar trabajando esa Orden o
       liberarla es una accion explicita del tecnico (PROC-REP-212): no se
       libera automaticamente una Orden trabajable solo porque termino un
-      Detalle. Si el tecnico decide liberar (PROC-REP-212 = No ->
+      Detalle. La liberacion explicita no depende de haber completado
+      antes ningun Detalle: la regla general es toma activa Y ausencia
+      de Ejecucion activa -eso alcanza para liberar, ya sea
+      inmediatamente despues de tomar la Orden (PROC-REP-180), antes de
+      seleccionar o iniciar un Detalle, o despues de completar uno con
+      otros todavia trabajables-. Si el tecnico decide liberar
+      (PROC-REP-212 = No ->
       PROC-REP-213), o si el resolver determina que ya no queda ningun
       Detalle trabajable (la Orden paso a COMPLETA, PENDIENTE_RECURSOS,
       REQUIERE_REVISION o TODO_CANCELADO), la participacion activa se

@@ -45,6 +45,7 @@ ACCION_TOMAR = "TOMAR"
 ACCION_INICIAR_DETALLE = "INICIAR_DETALLE"
 ACCION_COMPLETAR_EJECUCION = "COMPLETAR_EJECUCION"
 ACCION_APROBAR_CONTROL = "APROBAR_CONTROL"
+ACCION_LIBERAR_ORDEN = "LIBERAR_ORDEN"
 ACCION_NOTIFICAR = "NOTIFICAR"
 ACCION_REGISTRAR_PAGO = "REGISTRAR_PAGO"
 ACCION_ENTREGAR = "ENTREGAR"
@@ -74,6 +75,12 @@ def detalle_trabajable(orden: OrdenReparacion) -> str | None:
     Consistente con ``services.resolucion._es_trabajable``: un Detalle
     DEFINIDO pero bloqueado (``REQUIERE_DEFINICION`` o
     ``BLOQUEADO_POR_RECURSOS``) no es trabajable.
+
+    Se conserva para compatibilidad (``application.happy_path`` y los
+    tests que ya la importan). ``acciones_disponibles`` usa la version
+    plural, ``detalles_trabajables``: con Multi-Detalle puede haber mas
+    de uno, y no le corresponde a este modulo elegir cual por el
+    tecnico (PROC-REP-181).
     """
     for detalle in orden.reparaciones_detail:
         if (
@@ -84,17 +91,44 @@ def detalle_trabajable(orden: OrdenReparacion) -> str | None:
     return None
 
 
-def _espera_control(orden: OrdenReparacion) -> bool:
-    """Todos los Detalles terminados y ninguno controlado todavia."""
-    if not orden.reparaciones_detail:
-        return False
-    if ejecucion_activa(orden) is not None:
-        return False
-    return all(
-        detalle.estado is EstadoReparacionDetail.COMPLETO
-        and detalle.control_estado is EstadoControl.PENDIENTE
+def detalles_trabajables(orden: OrdenReparacion) -> list[str]:
+    """Todos los Detalles DEFINIDO y SIN_BLOQUEO, en orden de aparicion.
+
+    Con Multi-Detalle puede haber mas de un Detalle trabajable a la vez:
+    la eleccion de cual iniciar ahora es del tecnico (PROC-REP-181), no
+    algo que esta funcion deba decidir.
+    """
+    return [
+        detalle.id
         for detalle in orden.reparaciones_detail
-    )
+        if detalle.estado is EstadoReparacionDetail.DEFINIDO
+        and detalle.condicion is CondicionReparacionDetail.SIN_BLOQUEO
+    ]
+
+
+def _detalles_en_espera_de_control(orden: OrdenReparacion) -> list[str]:
+    """Detalles con control PENDIENTE, aprobables ahora mismo.
+
+    PROC-REP-220 solo se alcanza cuando la Orden ENTERA es terminal
+    (todos sus Detalles COMPLETO, igual que exige
+    ``services.reparaciones.aprobar_control_tecnico``): mientras quede
+    algun Detalle DEFINIDO o EN_PROGRESO no se ofrece ninguna accion de
+    control, ni siquiera para un Detalle que ya este COMPLETO. Una vez
+    ahi, el control SI es granular por Detalle (PROC-REP-230): cada uno
+    se aprueba de forma independiente.
+    """
+    if ejecucion_activa(orden) is not None:
+        return []
+    if any(
+        detalle.estado is not EstadoReparacionDetail.COMPLETO
+        for detalle in orden.reparaciones_detail
+    ):
+        return []
+    return [
+        detalle.id
+        for detalle in orden.reparaciones_detail
+        if detalle.control_estado is EstadoControl.PENDIENTE
+    ]
 
 
 def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
@@ -111,8 +145,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
     estado = orden.estado_workflow
     alcanzados = nodos_alcanzados(orden)
 
-    sin_detalles = not orden.reparaciones_detail
-    if estado is EstadoWorkflow.REQUERIMIENTO and sin_detalles:
+    if estado is EstadoWorkflow.REQUERIMIENTO:
         acciones.append(
             AccionDisponible(
                 codigo=ACCION_DEFINIR_REPARACION,
@@ -140,15 +173,23 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
         )
 
     en_curso = ejecucion_activa(orden)
-    trabajable = detalle_trabajable(orden)
+    toma = toma_activa(orden)
 
-    if toma_activa(orden) is not None and en_curso is None and trabajable:
+    if toma is not None and en_curso is None:
+        for trabajable in detalles_trabajables(orden):
+            acciones.append(
+                AccionDisponible(
+                    codigo=ACCION_INICIAR_DETALLE,
+                    etiqueta="Iniciar el Detalle",
+                    roles=(RolUsuario.TECNICO,),
+                    detalle_id=trabajable,
+                )
+            )
         acciones.append(
             AccionDisponible(
-                codigo=ACCION_INICIAR_DETALLE,
-                etiqueta="Iniciar el Detalle",
+                codigo=ACCION_LIBERAR_ORDEN,
+                etiqueta="Liberar la Orden (PROC-REP-212/213)",
                 roles=(RolUsuario.TECNICO,),
-                detalle_id=trabajable,
             )
         )
 
@@ -164,14 +205,16 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
         )
 
     lista = estado is EstadoWorkflow.REPARACION_LISTA
-    if not lista and _espera_control(orden):
-        acciones.append(
-            AccionDisponible(
-                codigo=ACCION_APROBAR_CONTROL,
-                etiqueta="Aprobar el control tecnico",
-                roles=(RolUsuario.RECEPCION,),
+    if not lista:
+        for pendiente in _detalles_en_espera_de_control(orden):
+            acciones.append(
+                AccionDisponible(
+                    codigo=ACCION_APROBAR_CONTROL,
+                    etiqueta="Aprobar el control tecnico",
+                    roles=(RolUsuario.RECEPCION,),
+                    detalle_id=pendiente,
+                )
             )
-        )
 
     notificada = "PROC-REP-260" in alcanzados
 

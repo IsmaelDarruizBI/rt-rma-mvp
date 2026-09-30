@@ -243,6 +243,49 @@ def seleccionar_detalle(
     )
 
 
+def liberar_orden(
+    orden: OrdenReparacion,
+    *,
+    usuario: Usuario,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """PROC-REP-213: el tecnico libera la Orden sin terminarla.
+
+    BR-REP-018 / PROC-REP-212 ("No"): con la toma activa todavia hay al
+    menos un Detalle trabajable -si no, ``evaluar_situacion_orden`` ya la
+    habria cerrado sola-, pero el tecnico elige no seguir ahora. Cierra
+    la participacion activa (fecha de fin) y devuelve la Orden a
+    EN_COLA, disponible para que el mismo u otro tecnico la tome de
+    nuevo. Nunca se sobrescribe el historial de participaciones
+    anteriores.
+    """
+    validar_actor(usuario, RolUsuario.TECNICO)
+
+    toma = toma_activa(orden)
+    if toma is None:
+        raise PrecondicionInvalidaError(
+            "La Orden no tiene una toma activa para liberar."
+        )
+    if hay_ejecucion_activa(orden):
+        raise PrecondicionInvalidaError(
+            "No se puede liberar la Orden con una Ejecucion activa."
+        )
+
+    nueva_orden = registrar_paso(
+        orden,
+        process_id="PROC-REP-213",
+        accion="LIBERAR_ORDEN",
+        fecha=fecha,
+        usuario_id=usuario.id,
+    )
+    for toma_de_la_orden in nueva_orden.tomas:
+        if toma_de_la_orden.estado is EstadoTomaOrden.ACTIVA:
+            toma_de_la_orden.estado = EstadoTomaOrden.CERRADA
+            toma_de_la_orden.fin = fecha
+    nueva_orden.estado_workflow = EstadoWorkflow.EN_COLA
+    return nueva_orden
+
+
 def validar_compatibilidad_detalle(
     orden: OrdenReparacion,
     *,

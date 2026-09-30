@@ -145,11 +145,18 @@ class CrearOrdenIn(BaseModel):
 
 
 class DefinirReparacionIn(BaseModel):
-    """``POST /api/orders/{id}/details`` (ACT-RECEP)."""
+    """``POST /api/orders/{id}/details`` (ACT-RECEP).
+
+    ``finalizar_definicion`` (default ``True``) es aditivo: en ``False``
+    agrega el Detalle sin generar el comprobante, validar factibilidad
+    ni habilitar la Orden todavia, para permitir definir mas de un
+    Detalle (Multi-Detalle) antes de cerrar esa etapa.
+    """
 
     usuario_id: str = Field(min_length=1)
     tipo_reparacion_id: str = Field(min_length=1)
     observaciones: str | None = None
+    finalizar_definicion: bool = True
 
 
 class EncolarIn(BaseModel):
@@ -193,10 +200,27 @@ class CompletarEjecucionIn(BaseModel):
 
 
 class AprobarControlIn(BaseModel):
-    """``POST /api/orders/{id}/control/approve`` (ACT-RECEP)."""
+    """``POST /api/orders/{id}/control/approve`` (ACT-RECEP).
+
+    ``detalle_id`` (opcional, aditivo) aprueba un unico Detalle -control
+    tecnico granular, Multi-Detalle-. Sin ``detalle_id`` preserva el
+    comportamiento anterior: aprueba todos los Detalles de la Orden de
+    una vez.
+    """
 
     usuario_id: str = Field(min_length=1)
+    detalle_id: str | None = None
     observaciones: str | None = None
+
+
+class LiberarOrdenIn(BaseModel):
+    """``POST /api/orders/{id}/release`` (ACT-TECH).
+
+    PROC-REP-212 ("No") -> PROC-REP-213: el tecnico libera la Orden sin
+    terminarla, con la toma activa todavia sobre ella.
+    """
+
+    usuario_id: str = Field(min_length=1)
 
 
 class NotificarIn(BaseModel):

@@ -13,7 +13,7 @@ precondicion del comando y va derecho a PROC-REP-280.
 
 from decimal import Decimal
 
-from app.domain.models import EstadoWorkflow, OrdenReparacion
+from app.domain.models import EstadoControl, EstadoWorkflow, OrdenReparacion
 from app.services import (
     PrecondicionInvalidaError,
     aprobar_control_tecnico,
@@ -39,23 +39,36 @@ def aprobar_control(
     *,
     orden_id: str,
     usuario_id: str,
+    detalle_id: str | None = None,
     observaciones: str | None = None,
 ) -> OrdenReparacion:
-    """Recepcion aprueba el control y la Orden queda lista.
+    """Recepcion aprueba el control -de un Detalle o de la Orden entera.
 
-    Encadena PROC-REP-220 -> 230 (aprobacion, BR-REP-008),
-    PROC-REP-245 (puntaje, BR-REP-009) y PROC-REP-240 (ACT-SYSTEM).
-    No notifica: eso es otra accion humana y otro endpoint.
+    Encadena PROC-REP-220 -> 230 (aprobacion, BR-REP-008) y PROC-REP-245
+    (puntaje, BR-REP-009). PROC-REP-240 (marcar REPARACION_LISTA) recien
+    se ejecuta cuando, despues de esta aprobacion, TODOS los Detalles de
+    la Orden quedan con control APROBADO -con Multi-Detalle eso puede
+    requerir varias llamadas, una por Detalle-. No notifica: eso es otra
+    accion humana y otro endpoint.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
     orden = contexto.ordenes.obtener(orden_id)
     orden = aprobar_control_tecnico(
-        orden, usuario=usuario, fecha=fecha, observaciones=observaciones
+        orden,
+        usuario=usuario,
+        fecha=fecha,
+        detalle_id=detalle_id,
+        observaciones=observaciones,
     )
     orden = calcular_puntaje(orden, fecha=fecha)
-    orden = marcar_reparacion_lista(orden, fecha=fecha)
+
+    if all(
+        detalle.control_estado is EstadoControl.APROBADO
+        for detalle in orden.reparaciones_detail
+    ):
+        orden = marcar_reparacion_lista(orden, fecha=fecha)
 
     contexto.ordenes.guardar(orden)
     return orden
