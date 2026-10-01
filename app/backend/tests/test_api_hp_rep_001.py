@@ -239,9 +239,7 @@ def test_hp_rep_001_end_to_end_por_http(cliente):
         f"/api/orders/{orden_id}/executions/{ejecucion_id}/complete",
         json={
             "usuario_id": TECNICO,
-            "insumos_utilizados": [
-                {"insumo_id": INSUMO, "cantidad": "1"}
-            ],
+            "insumos_utilizados": [{"insumo_id": INSUMO, "cantidad": "1"}],
             "observaciones": "Bateria reemplazada sin novedades.",
         },
     ).json()
@@ -328,9 +326,7 @@ def test_el_historial_llega_al_frontend(cliente):
     ):
         assert process_id in recorridos
 
-    creacion = next(
-        p for p in historial if p["process_id"] == "PROC-REP-040"
-    )
+    creacion = next(p for p in historial if p["process_id"] == "PROC-REP-040")
     assert creacion["usuario_id"] == RECEPCION
     # Los nodos ACT-SYSTEM no llevan actor humano.
     comprobante = next(
@@ -473,7 +469,12 @@ def _hasta_tomada(cliente: TestClient) -> tuple[str, str]:
 
 
 def test_la_factibilidad_bloquea_cuando_el_stock_ya_esta_reservado(tmp_path):
-    """PROC-REP-090 da "No" y el MVP corta: 100/110/120/130 no existen."""
+    """La factibilidad usa el stock GLOBAL: la reserva ajena cuenta.
+
+    EXC-REP-001: ningun Detalle trabajable ya no es un error. La Orden se
+    persiste detenida en PROC-REP-100 con el Detalle BLOQUEADO_POR_RECURSOS
+    (antes respondia 409 y no guardaba nada).
+    """
     with _cliente(tmp_path, stock="1") as cliente:
         _hasta_ejecucion_iniciada(cliente)
 
@@ -483,7 +484,16 @@ def test_la_factibilidad_bloquea_cuando_el_stock_ya_esta_reservado(tmp_path):
             json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
         )
 
-        assert respuesta.status_code == 409
+        assert respuesta.status_code == 200, respuesta.text
+        orden = respuesta.json()
+        assert orden["current_process"] == "PROC-REP-100"
+        assert orden["estado_workflow"] == "REQUERIMIENTO"
+        assert orden["reparaciones_detail"][0]["condicion"] == (
+            "BLOQUEADO_POR_RECURSOS"
+        )
+        assert "PROC-REP-140" not in [
+            p["referencia_id"] for p in orden["historial"]
+        ]
 
 
 def test_stock_insuficiente_al_iniciar_devuelve_409(tmp_path):
@@ -509,9 +519,7 @@ def test_stock_insuficiente_al_iniciar_devuelve_409(tmp_path):
         )
 
         assert respuesta.status_code == 409
-        assert (
-            respuesta.json()["error"]["codigo"] == "RECURSO_NO_DISPONIBLE"
-        )
+        assert respuesta.json()["error"]["codigo"] == "RECURSO_NO_DISPONIBLE"
 
         # La segunda no genero reserva parcial ni Ejecucion.
         sin_reservar = cliente.get(f"/api/orders/{segunda}").json()

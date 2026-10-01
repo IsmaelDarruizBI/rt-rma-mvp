@@ -41,6 +41,8 @@ export interface EjecutorAcciones {
     insumosUtilizados: InsumoUtilizado[],
     observaciones: string,
   ) => void;
+  esperarRecursos: () => void;
+  revalidarRecursos: () => void;
   interrumpirEjecucion: (
     ejecucionId: string,
     insumosUtilizados: InsumoUtilizado[],
@@ -195,6 +197,20 @@ function FormularioAccion({
           deshabilitado={deshabilitado}
           onConfirmar={ejecutar.definirReparacion}
         />
+      );
+
+    case "ESPERAR_RECURSOS":
+      return (
+        <Boton disabled={deshabilitado} onClick={ejecutar.esperarRecursos}>
+          Esperar recursos (no forzar el Detalle)
+        </Boton>
+      );
+
+    case "REVALIDAR_RECURSOS":
+      return (
+        <Boton disabled={deshabilitado} onClick={ejecutar.revalidarRecursos}>
+          Revalidar disponibilidad de recursos
+        </Boton>
       );
 
     case "ENVIAR_A_REVISION":

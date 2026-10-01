@@ -80,6 +80,11 @@ from .pagos import (
     tipo_de_pago_para,
     validar_condicion_entrega,
 )
+from .recursos import (
+    exigir_espera_por_recursos,
+    marcar_pendiente_recursos,
+    registrar_espera_recursos,
+)
 from .reparaciones import (
     aprobar_control_tecnico,
     calcular_puntaje,
@@ -132,6 +137,10 @@ __all__ = [
     # Resolver puro de BR-REP-012
     "ResultadoEvaluacionOrden",
     "resolver_situacion_orden",
+    # Espera de recursos (EXC-REP-001)
+    "exigir_espera_por_recursos",
+    "marcar_pendiente_recursos",
+    "registrar_espera_recursos",
     # Revision tecnica (PROC-REP-065)
     "registrar_revision_tecnica",
     # Detalles de Reparacion

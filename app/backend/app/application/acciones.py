@@ -59,6 +59,8 @@ ACCION_ENVIAR_A_REVISION = "ENVIAR_A_REVISION"
 ACCION_REALIZAR_REVISION = "REALIZAR_REVISION"
 ACCION_DEFINIR_REPARACION_DESDE_REVISION = "DEFINIR_REPARACION_DESDE_REVISION"
 ACCION_GENERAR_GARANTIA_RMA_REVISION = "GENERAR_GARANTIA_RMA_REVISION"
+ACCION_ESPERAR_RECURSOS = "ESPERAR_RECURSOS"
+ACCION_REVALIDAR_RECURSOS = "REVALIDAR_RECURSOS"
 
 CERO = Decimal("0")
 
@@ -203,6 +205,34 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
     acciones: list[AccionDisponible] = []
     estado = orden.estado_workflow
     alcanzados = nodos_alcanzados(orden)
+
+    # EXC-REP-001: en PROC-REP-100/120 el circuito de recursos tiene
+    # prioridad sobre el hito de workflow (REQUERIMIENTO / EN_REVISION
+    # siguen siendo el ultimo hito, pero ya no corresponde definir ni
+    # encolar). Son acciones de sistema (sin actor humano). Las
+    # capacidades transversales (pago) siguen valiendo mas abajo.
+    en_recursos = orden.current_process in (
+        "PROC-REP-100",
+        "PROC-REP-120",
+    )
+    if en_recursos:
+        estado = None
+        acciones.append(
+            AccionDisponible(
+                codigo=(
+                    ACCION_ESPERAR_RECURSOS
+                    if orden.current_process == "PROC-REP-100"
+                    else ACCION_REVALIDAR_RECURSOS
+                ),
+                etiqueta=(
+                    "Esperar recursos (no forzar el Detalle bloqueado)"
+                    if orden.current_process == "PROC-REP-100"
+                    else "Revalidar la disponibilidad de recursos"
+                ),
+                roles=(),
+                requiere_actor=False,
+            )
+        )
 
     if estado is EstadoWorkflow.REQUERIMIENTO:
         acciones.append(

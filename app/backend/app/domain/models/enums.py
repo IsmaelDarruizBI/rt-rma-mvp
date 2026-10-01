@@ -94,12 +94,10 @@ class CondicionReparacionDetail(str, Enum):
     (``app.services.resolucion``) la consulta para derivar
     ``es_trabajable``, ``requiere_revision`` y ``bloqueado_por_recursos``.
 
-    En Slice 0 el flujo operativo de HP-REP-001 solo produce
-    ``SIN_BLOQUEO``: los caminos que producen ``REQUIERE_DEFINICION``
-    (EXC-REP-004) y ``BLOQUEADO_POR_RECURSOS`` (EXC-REP-001/002/003)
-    todavia no estan conectados a ningun comando de la API. El resolver
-    ya sabe clasificarlos -y esta testeado para eso- para que esos
-    slices no tengan que tocarlo.
+    ``BLOQUEADO_POR_RECURSOS`` lo fija PROC-REP-080 por Detalle
+    (EXC-REP-001) y se reevalua en cada revalidacion. ``REQUIERE_DEFINICION``
+    (EXC-REP-004) todavia no esta conectado a ningun comando: PROC-REP-080
+    no lo pisa. El resolver ya sabe clasificar ambos.
     """
 
     SIN_BLOQUEO = "SIN_BLOQUEO"

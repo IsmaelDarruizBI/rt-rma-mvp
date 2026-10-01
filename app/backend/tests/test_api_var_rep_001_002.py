@@ -509,12 +509,13 @@ def test_hp1_no_registra_nodos_de_revision(cliente):
     } & set(_ids(orden))
 
 
-def test_factibilidad_fallida_luego_de_revision_no_habilita(tmp_path):
-    """Sin stock, 090 no aprueba: 409 y NO se llega a PROC-REP-140.
+def test_factibilidad_fallida_luego_de_revision_espera_recursos(tmp_path):
+    """Sin stock, 090 no aprueba: EXC-REP-001 (ya no es un 409).
 
-    No se implementan 100/110/120/130 (EXC-REP-001/002). Como en
-    ``definir_reparacion``, el comando falla antes de persistir: la Orden
-    queda como estaba luego de PROC-REP-065.
+    Slice 4 caracterizaba 409 y nada persistido; Slice 6 lo vuelve
+    obsoleto a proposito: el Detalle se define y persiste BLOQUEADO y la
+    Orden queda en PROC-REP-100, sin llegar a PROC-REP-140. Luego espera
+    (110 No -> 120) sin repetir 065/068/075 ni el comprobante.
     """
     _sembrar_catalogos(tmp_path, stock="0")
     with TestClient(create_app(Settings(data_dir=tmp_path))) as cliente:
@@ -523,11 +524,27 @@ def test_factibilidad_fallida_luego_de_revision_no_habilita(tmp_path):
         _revisar(cliente, orden_id)
 
         respuesta = _definir(cliente, orden_id)
-        assert respuesta.status_code == 409, respuesta.text
+        assert respuesta.status_code == 200, respuesta.text
 
         orden = cliente.get(f"/api/orders/{orden_id}").json()
         assert orden["estado_workflow"] == "EN_REVISION"
-        assert orden["reparaciones_detail"] == []
-        assert _ids(orden)[-1] == "PROC-REP-065"
+        assert orden["current_process"] == "PROC-REP-100"
+        (detalle,) = orden["reparaciones_detail"]
+        assert detalle["condicion"] == "BLOQUEADO_POR_RECURSOS"
+        assert _ids(orden)[-4:] == [
+            "PROC-REP-075",
+            "PROC-REP-080",
+            "PROC-REP-090",
+            "PROC-REP-100",
+        ]
         assert "PROC-REP-140" not in _ids(orden)
-        assert _codigos(orden) == ["DEFINIR_REPARACION_DESDE_REVISION"]
+        assert "DEFINIR_REPARACION_DESDE_REVISION" not in _codigos(orden)
+        assert "ESPERAR_RECURSOS" in _codigos(orden)
+
+        orden = cliente.post(f"/api/orders/{orden_id}/resources/wait").json()
+        assert _ids(orden)[-2:] == ["PROC-REP-110", "PROC-REP-120"]
+        ids = _ids(orden)
+        assert ids.count("PROC-REP-065") == 1
+        assert ids.count("PROC-REP-068") == 1
+        assert ids.count("PROC-REP-075") == 1
+        assert ids.count("PROC-REP-060") == 1

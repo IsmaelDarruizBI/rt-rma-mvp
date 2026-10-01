@@ -13,6 +13,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from app.domain.models import (
+    CondicionReparacionDetail,
     EstadoControl,
     EstadoEjecucion,
     EstadoReparacionDetail,
@@ -240,6 +241,38 @@ def _detalle_origen_para(
     return posibles[0]
 
 
+def _faltantes_del_detalle(
+    detalle: ReparacionDetail,
+    orden: OrdenReparacion,
+    insumos: Sequence[Insumo],
+    insumos_previstos: Sequence[TipoReparacionInsumos],
+    ajenas: Mapping[str, Decimal],
+) -> list[str]:
+    """Insumos previstos de ESE Detalle que hoy no estan disponibles."""
+    faltantes: list[str] = []
+    for previsto in insumos_previstos_de(
+        detalle.tipo_reparacion_id, insumos_previstos
+    ):
+        insumo = buscar_insumo(previsto.insumo_id, insumos)
+        disponible = stock_disponible(
+            insumo,
+            orden.movimientos_insumo,
+            ajenas.get(insumo.id, Decimal("0")),
+        )
+        if disponible < previsto.cantidad:
+            faltantes.append(insumo.id)
+    return sorted(set(faltantes))
+
+
+# Condiciones del circuito de recursos: son las unicas que PROC-REP-080
+# reevalua. Otra causa de bloqueo (REQUIERE_DEFINICION, EXC-REP-004) no se
+# pisa.
+_CONDICIONES_DE_RECURSOS = (
+    CondicionReparacionDetail.SIN_BLOQUEO,
+    CondicionReparacionDetail.BLOQUEADO_POR_RECURSOS,
+)
+
+
 def validar_factibilidad_detalles(
     orden: OrdenReparacion,
     *,
@@ -248,21 +281,24 @@ def validar_factibilidad_detalles(
     fecha: datetime,
     reservas_externas: Mapping[str, Decimal] | None = None,
 ) -> tuple[OrdenReparacion, bool]:
-    """PROC-REP-080 -> PROC-REP-090: hay disponibilidad para trabajar.
+    """PROC-REP-080 -> 090 [-> 100 por Detalle]: factibilidad POR Detalle.
 
-    Recorre ``tipo_reparacion_id -> TipoReparacionInsumos -> Insumo`` y
-    comprueba que cada Detalle DEFINIDO tenga stock suficiente para todos
-    sus insumos previstos.
+    BR-REP-002: cada Detalle DEFINIDO se evalua por separado contra la
+    disponibilidad actual (``stock_fisico`` menos reservas propias y
+    ajenas) y su ``condicion`` pasa a ``SIN_BLOQUEO`` o a
+    ``BLOQUEADO_POR_RECURSOS`` -en cada ejecucion, asi que un Detalle
+    bloqueado puede volver a desbloquearse-. Un Detalle sin recursos NO
+    bloquea a los demas.
+
+    El ``bool`` devuelto significa **hay al menos un Detalle trabajable**
+    (PROC-REP-090), no "todos son factibles". Con uno trabajable 090 es
+    "Si" y la Orden puede habilitarse aunque otros sigan bloqueados. Con
+    ninguno, 090 es "Ninguno trabajable" y se registra PROC-REP-100 por
+    cada Detalle bloqueado con SUS faltantes; la Orden queda en
+    PROC-REP-100 (frontera de EXC-REP-001/002): no se encadena 110/120.
 
     Solo CONSULTA: no reserva, no genera movimientos y no toca el stock.
     La reserva real ocurre recien en PROC-REP-185 (BR-REP-006).
-
-    Los caminos de faltante (PROC-REP-100/110/120/130) no estan
-    implementados: el MVP solo distingue factible / no factible.
-
-    ``reservas_externas`` (insumo_id -> cantidad) permite considerar
-    lo que otras Ordenes ya reservaron. Omitirlo consulta solo contra
-    esta Orden, que es el comportamiento en memoria.
     """
     ajenas = reservas_externas or {}
 
@@ -271,39 +307,66 @@ def validar_factibilidad_detalles(
             "No se puede validar factibilidad sin Detalles de Reparacion."
         )
 
-    faltantes: list[str] = []
+    nueva_orden = orden.model_copy(deep=True)
 
-    for detalle in orden.reparaciones_detail:
-        if detalle.estado is not EstadoReparacionDetail.DEFINIDO:
-            continue
-        for previsto in insumos_previstos_de(
-            detalle.tipo_reparacion_id, insumos_previstos
+    faltantes_por_detalle: dict[str, list[str]] = {}
+    for detalle in nueva_orden.reparaciones_detail:
+        if (
+            detalle.estado is not EstadoReparacionDetail.DEFINIDO
+            or detalle.condicion not in _CONDICIONES_DE_RECURSOS
         ):
-            insumo = buscar_insumo(previsto.insumo_id, insumos)
-            disponible = stock_disponible(
-                insumo,
-                orden.movimientos_insumo,
-                ajenas.get(insumo.id, Decimal("0")),
+            continue
+        faltantes = _faltantes_del_detalle(
+            detalle, nueva_orden, insumos, insumos_previstos, ajenas
+        )
+        if faltantes:
+            detalle.condicion = (
+                CondicionReparacionDetail.BLOQUEADO_POR_RECURSOS
             )
-            if disponible < previsto.cantidad:
-                faltantes.append(insumo.id)
+            faltantes_por_detalle[detalle.id] = faltantes
+        else:
+            detalle.condicion = CondicionReparacionDetail.SIN_BLOQUEO
 
-    es_factible = not faltantes
+    hay_trabajable = any(
+        detalle.estado is EstadoReparacionDetail.DEFINIDO
+        and detalle.condicion is CondicionReparacionDetail.SIN_BLOQUEO
+        for detalle in nueva_orden.reparaciones_detail
+    )
 
+    bloqueados = (
+        "; ".join(
+            f"{detalle_id} [{', '.join(faltantes)}]"
+            for detalle_id, faltantes in faltantes_por_detalle.items()
+        )
+        or None
+    )
     nueva_orden = registrar_paso(
-        orden,
+        nueva_orden,
         process_id="PROC-REP-080",
         accion="VALIDAR_FACTIBILIDAD",
         fecha=fecha,
+        observacion=f"Bloqueados: {bloqueados}" if bloqueados else None,
     )
     nueva_orden = registrar_paso(
         nueva_orden,
         process_id="PROC-REP-090",
         accion="EXISTE_DETALLE_TRABAJABLE",
         fecha=fecha,
-        observacion="Si" if es_factible else f"Faltantes: {sorted(faltantes)}",
+        observacion="Si" if hay_trabajable else "Ninguno trabajable",
     )
-    return nueva_orden, es_factible
+    if hay_trabajable:
+        return nueva_orden, True
+
+    for detalle_id, faltantes in faltantes_por_detalle.items():
+        nueva_orden = registrar_paso(
+            nueva_orden,
+            process_id="PROC-REP-100",
+            accion="REGISTRAR_ADVERTENCIA_DE_FALTANTE",
+            fecha=fecha,
+            reparacion_detail_id=detalle_id,
+            observacion=f"Faltantes: {', '.join(faltantes)}",
+        )
+    return nueva_orden, False
 
 
 def aprobar_control_tecnico(

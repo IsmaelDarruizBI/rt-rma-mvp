@@ -235,6 +235,15 @@ export function DetallesOrden({ orden }: { orden: Orden }) {
               <strong style={{ fontSize: "1rem" }}>
                 {detalle.tipo_reparacion_nombre}
               </strong>
+              {detalle.condicion !== "SIN_BLOQUEO" && (
+                <div style={{ marginTop: "0.15rem" }}>
+                  <Etiqueta color={colores.alerta}>
+                    {detalle.condicion === "BLOQUEADO_POR_RECURSOS"
+                      ? "Bloqueado por recursos"
+                      : "Requiere definición"}
+                  </Etiqueta>
+                </div>
+              )}
               {detalle.detalle_origen_id && (
                 <div style={{ fontSize: "0.75rem", color: colores.suave }}>
                   Origen garantía: {orden.orden_origen_id} /{" "}

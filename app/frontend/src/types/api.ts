@@ -33,6 +33,16 @@ export type TipoPago = "ANTICIPO" | "PAGO";
 
 export type EstadoDetalle = "DEFINIDO" | "EN_PROGRESO" | "COMPLETO";
 
+/**
+ * Condición de bloqueo del Detalle, enviada por el backend. Es una
+ * dimensión independiente del estado: la UI nunca la infiere del stock.
+ * `REQUIERE_DEFINICION` se muestra pero su flujo no está implementado.
+ */
+export type CondicionDetalle =
+  | "SIN_BLOQUEO"
+  | "REQUIERE_DEFINICION"
+  | "BLOQUEADO_POR_RECURSOS";
+
 export type EstadoControl = "PENDIENTE" | "APROBADO";
 
 /** INTERRUMPIDO y COMPLETADO son los resultados terminales de PROC-REP-200. */
@@ -101,6 +111,7 @@ export interface Detalle {
   puntaje: number;
   garantia_dias: number;
   estado: EstadoDetalle;
+  condicion: CondicionDetalle;
   control_estado: EstadoControl;
   control_usuario_id: string | null;
   control_fecha: string | null;

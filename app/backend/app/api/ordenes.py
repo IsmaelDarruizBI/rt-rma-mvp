@@ -27,6 +27,7 @@ from app.application import (
     encolar_orden,
     entregar,
     enviar_a_revision,
+    esperar_recursos,
     informar_rt,
     iniciar_detalle,
     insumos_previstos_por_detalle,
@@ -39,6 +40,7 @@ from app.application import (
     progreso,
     realizar_revision,
     registrar_pago_de_orden,
+    revalidar_recursos,
     tomar_orden_en_estacion,
 )
 from app.domain.models import OrdenReparacion
@@ -293,6 +295,34 @@ def post_definir_reparacion_desde_revision(
         finalizar_definicion=cuerpo.finalizar_definicion,
         detalle_origen_id=cuerpo.detalle_origen_id,
     )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/resources/wait")
+def post_esperar_recursos(
+    orden_id: str,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """La Orden espera por recursos (EXC-REP-001): PROC-REP-110 No -> 120.
+
+    Evento de sistema: sin actor humano ni body. Solo valido desde
+    PROC-REP-100.
+    """
+    orden = esperar_recursos(contexto, orden_id=orden_id)
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/resources/revalidate")
+def post_revalidar_recursos(
+    orden_id: str,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Revalida la factibilidad (EXC-REP-001): PROC-REP-120 -> 080 -> 090.
+
+    Evento de sistema: sin actor humano ni body. Solo valido desde
+    PROC-REP-120; con un Detalle trabajable continua a PROC-REP-140.
+    """
+    orden = revalidar_recursos(contexto, orden_id=orden_id)
     return _salida(orden, contexto)
 
 

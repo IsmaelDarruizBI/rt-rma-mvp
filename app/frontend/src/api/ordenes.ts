@@ -301,6 +301,22 @@ export function definirReparacionDesdeRevision(
   });
 }
 
+/**
+ * PROC-REP-110 (No) -> 120 (EXC-REP-001). Evento de sistema: sin
+ * `usuario_id`. Solo válido desde PROC-REP-100.
+ */
+export function esperarRecursos(ordenId: string): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/resources/wait`, {});
+}
+
+/**
+ * PROC-REP-120 -> 080 -> 090 [-> 140] (EXC-REP-001). Evento de sistema:
+ * sin `usuario_id`. Solo válido desde PROC-REP-120.
+ */
+export function revalidarRecursos(ordenId: string): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/resources/revalidate`, {});
+}
+
 /** PROC-REP-270 reutilizado (HP-REP-002, RT_INTERNO -> EVT-REP-999). */
 export function devolverRt(
   ordenId: string,

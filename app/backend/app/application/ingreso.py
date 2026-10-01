@@ -26,7 +26,6 @@ from datetime import datetime
 
 from app.domain.models import Cliente, Equipo, OrdenReparacion
 from app.services import (
-    RecursoNoDisponibleError,
     cargar_reservas_externas,
     crear_orden_cliente_externo,
     crear_orden_garantia_rma,
@@ -138,9 +137,11 @@ def definir_reparacion(
     comando no entra en la seccion critica de inventario: no escribe
     stock ni compite por el.
 
-    Si no hay disponibilidad, PROC-REP-090 da "No" y el MVP corta: los
-    caminos de faltante (PROC-REP-100/110/120/130) no estan
-    implementados.
+    Si ningun Detalle es trabajable, PROC-REP-090 da "Ninguno trabajable"
+    y la Orden queda detenida en PROC-REP-100 (EXC-REP-001): se persiste
+    con sus Detalles BLOQUEADO_POR_RECURSOS, sin error. Despues se espera y
+    revalida (``application.recursos``). El override (PROC-REP-130,
+    EXC-REP-002) no esta implementado.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     tipo = contexto.catalogos.obtener_tipo_reparacion(tipo_reparacion_id)
@@ -187,8 +188,13 @@ def _validar_y_habilitar(
 ) -> OrdenReparacion:
     """PROC-REP-080 -> 090 -> 140: factibilidad y habilitacion.
 
-    Tambien lo usa el camino de revision (075 -> 080), donde el
-    comprobante ya se genero antes del diagnostico.
+    Tambien lo usa el camino de revision (075 -> 080) y la revalidacion de
+    recursos (120 -> 080); el comprobante ya se genero antes.
+
+    La factibilidad es por Detalle: basta uno trabajable para habilitar.
+    Si ninguno lo es (EXC-REP-001) NO es un error: la Orden queda detenida
+    en PROC-REP-100 -con los Detalles BLOQUEADO_POR_RECURSOS- y el caller
+    la persiste; despues se espera (110 No -> 120) y se revalida.
     """
     orden, factible = validar_factibilidad_detalles(
         orden,
@@ -198,11 +204,7 @@ def _validar_y_habilitar(
         reservas_externas=cargar_reservas_externas(orden.id, contexto.ordenes),
     )
     if not factible:
-        raise RecursoNoDisponibleError(
-            "No hay disponibilidad de insumos para la reparacion "
-            "pedida (PROC-REP-090). El MVP no resuelve el camino de "
-            "faltante, asi que la Orden no se modifico."
-        )
+        return orden
 
     return habilitar_orden(orden, fecha=fecha)
 

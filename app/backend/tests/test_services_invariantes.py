@@ -583,9 +583,14 @@ def test_habilitar_rechaza_090_con_faltantes():
         fecha=t(15),
     )
     assert factible is False
-    assert orden.current_process == "PROC-REP-090"
+    # EXC-REP-001: queda detenida en 100 (frontera), tras 090 "Ninguno".
+    assert orden.current_process == "PROC-REP-100"
     assert orden.historial[-1].observacion.startswith("Faltantes")
 
-    with pytest.raises(PrecondicionInvalidaError, match="no fue aprobada"):
+    with pytest.raises(PrecondicionInvalidaError, match="factibilidad"):
         habilitar_orden(orden, fecha=t(20))
+    # Aun forzando el nodo 090, el resultado "Ninguno trabajable" bloquea.
+    en_090 = orden.model_copy(update={"current_process": "PROC-REP-090"})
+    with pytest.raises(PrecondicionInvalidaError, match="no fue aprobada"):
+        habilitar_orden(en_090, fecha=t(20))
     assert "PROC-REP-140" not in [p.referencia_id for p in orden.historial]

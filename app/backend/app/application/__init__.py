@@ -53,6 +53,7 @@ from .ingreso import (
     enviar_a_revision,
 )
 from .progreso import PasoProgreso, progreso
+from .recursos import esperar_recursos, revalidar_recursos
 from .revision import realizar_revision
 from .taller import (
     completar_ejecucion,
@@ -94,6 +95,8 @@ __all__ = [
     "definir_reparacion_desde_revision",
     "enviar_a_revision",
     "realizar_revision",
+    "esperar_recursos",
+    "revalidar_recursos",
     "encolar_orden",
     "tomar_orden_en_estacion",
     "iniciar_detalle",

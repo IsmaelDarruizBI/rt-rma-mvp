@@ -33,6 +33,7 @@ from .autorizacion import validar_actor, validar_alguno_de
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .inventario import hay_reservas_activas
 from .pagos import condicion_entrega_cumplida
+from .recursos import marcar_pendiente_recursos
 from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
 from .workflow import registrar_paso
 
@@ -48,15 +49,16 @@ ROLES_ENTREGA = (
     RolUsuario.RECEPCION,
 )
 
-# Resultados de BR-REP-012 en los que ya no queda ningun Detalle
-# trabajable ni en ejecucion: cerrar la toma activa es correcto en
-# ambos (BR-REP-018). Los demas resultados (ABIERTA_TRABAJABLE,
-# EN_EJECUCION, REQUIERE_REVISION, PENDIENTE_RECURSOS) preservan la
-# toma: si continuar, liberarla o volver a la cola es una decision que
-# PROC-REP-212/213 (ya implementados) resuelve.
+# Resultados de BR-REP-012 que cierran la toma activa (BR-REP-018): no queda
+# ningun Detalle trabajable ni en ejecucion. COMPLETA y TODO_CANCELADO; y
+# PENDIENTE_RECURSOS (PROC-REP-211 caso e), donde ademas la Orden pasa a
+# esperar en PROC-REP-120. Los demas (ABIERTA_TRABAJABLE, EN_EJECUCION)
+# preservan la toma: si continuar o liberar lo resuelve PROC-REP-212/213.
+# REQUIERE_REVISION cerrara la toma cuando se conecte PROC-REP-125.
 _RESULTADOS_QUE_CIERRAN_LA_TOMA = (
     ResultadoEvaluacionOrden.COMPLETA,
     ResultadoEvaluacionOrden.TODO_CANCELADO,
+    ResultadoEvaluacionOrden.PENDIENTE_RECURSOS,
 )
 
 
@@ -335,10 +337,12 @@ def habilitar_orden(
     if orden.estado_workflow not in (
         EstadoWorkflow.REQUERIMIENTO,
         EstadoWorkflow.EN_REVISION,
+        EstadoWorkflow.EN_REPARACION,
     ):
         raise PrecondicionInvalidaError(
-            f"Solo se habilita una Orden en REQUERIMIENTO o EN_REVISION "
-            f"(con Detalles ya definidos); "
+            f"Solo se habilita una Orden en REQUERIMIENTO, EN_REVISION o "
+            f"EN_REPARACION (esta ultima al revalidar recursos desde "
+            f"PROC-REP-211 -> 120); "
             f"esta en {orden.estado_workflow.value}."
         )
     if orden.current_process != "PROC-REP-090":
@@ -449,15 +453,15 @@ def evaluar_situacion_orden(
     no queda nada trabajable ni en ejecucion, cerrar la toma activa
     (BR-REP-018)-.
 
-    El MVP de HP-REP-001 solo alcanza COMPLETA de punta a punta. Los
-    demas resultados ya estan clasificados y testeados (ver
-    ``tests/test_resolucion_orden.py``), pero los caminos que los
-    producen -recursos insuficientes, revision, cancelacion- todavia no
-    estan conectados a ningun comando de la API: llegaran con los
-    Scenarios que los necesiten.
+    Todos los resultados estan clasificados y testeados (ver
+    ``tests/test_resolucion_orden.py``). Con PENDIENTE_RECURSOS (EXC-REP-001)
+    cierra la toma y continua directo a PROC-REP-120 (sin 100 ni 110). Los
+    caminos de revision (REQUIERE_REVISION) y cancelacion todavia no estan
+    conectados.
 
     No cambia ``estado_workflow``: REPARACION_LISTA se fija recien en
-    PROC-REP-240, tras el control tecnico.
+    PROC-REP-240, tras el control tecnico, y la espera de recursos conserva
+    el ultimo hito (por ejemplo EN_REPARACION).
     """
     resultado = resolver_situacion_orden(orden.reparaciones_detail)
 
@@ -474,6 +478,10 @@ def evaluar_situacion_orden(
             if toma.estado is EstadoTomaOrden.ACTIVA:
                 toma.estado = EstadoTomaOrden.CERRADA
                 toma.fin = fecha
+
+    if resultado is ResultadoEvaluacionOrden.PENDIENTE_RECURSOS:
+        # PROC-REP-211 -> PROC-REP-120 directo (sin 100 ni 110).
+        nueva_orden = marcar_pendiente_recursos(nueva_orden, fecha=fecha)
 
     return nueva_orden, resultado
 

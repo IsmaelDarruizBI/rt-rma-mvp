@@ -325,11 +325,11 @@ items:
   - {id: TR-REP-019, type: technical_requirement, name: Los enums del dominio cubren solo los valores que HP-REP-001 recorre, status: IMPLEMENTED}
   - {id: TR-REP-020, type: technical_requirement, name: Errores de dominio tipados y separados de los errores de persistencia, status: IMPLEMENTED}
   - {id: TR-REP-021, type: technical_requirement, name: Los IDs funcionales de negocio se citan en los docstrings como anclaje de trazabilidad, status: IMPLEMENTED}
-  - {id: TR-REP-022, type: technical_requirement, name: evaluar_situacion_orden separa clasificacion (resolver_situacion_orden, funcion pura) de efectos (registrar el paso y cerrar la toma solo en resultados terminales), status: IMPLEMENTED}
+  - {id: TR-REP-022, type: technical_requirement, name: "evaluar_situacion_orden separa clasificacion (resolver_situacion_orden, funcion pura) de efectos: registra PROC-REP-211 con el resultado del resolver, cierra la toma cuando corresponde (COMPLETA, TODO_CANCELADO y PENDIENTE_RECURSOS, BR-REP-018) y, para PENDIENTE_RECURSOS, continua directamente a PROC-REP-120", status: IMPLEMENTED}
   - {id: TR-REP-023, type: technical_requirement, name: Python 3.11+ con Ruff line-length 79 reglas E W F I y pytest como runner, status: IMPLEMENTED, cross_cutting: true}
   - {id: TR-REP-024, type: technical_requirement, name: Los identificadores de entidades transaccionales se generan con un unico helper centralizado, status: IMPLEMENTED}
   - {id: TR-REP-025, type: technical_requirement, name: La reserva y la aprobacion de control no son estados tecnicos del Detalle, status: IMPLEMENTED}
-  - {id: TR-REP-026, type: technical_requirement, name: validar_factibilidad_detalles devuelve (Orden bool) sin persistir el resultado como estado, status: IMPLEMENTED}
+  - {id: TR-REP-026, type: technical_requirement, name: "validar_factibilidad_detalles evalua por Detalle (fija su condicion SIN_BLOQUEO o BLOQUEADO_POR_RECURSOS en cada ejecucion, tambien al revalidar), devuelve (Orden bool) con bool igual a hay al menos un Detalle trabajable y registra PROC-REP-100 por Detalle cuando no hay ninguno, sin persistir un estado agregado", status: IMPLEMENTED}
   - {id: TR-REP-027, type: technical_requirement, name: "habilitar_orden exige al menos un Detalle, que la Orden venga de PROC-REP-090 con resultado Si (no se puede saltear 080/090 por invocacion directa) y es nodo ACT-SYSTEM", status: IMPLEMENTED}
   - {id: TR-REP-028, type: technical_requirement, name: TomaOrden y EjecucionReparacion son entidades distintas con invariantes separadas, status: IMPLEMENTED}
   - {id: TR-REP-029, type: technical_requirement, name: El historial de participaciones es append-only se cierra con fin y estado CERRADA, status: IMPLEMENTED}
@@ -445,12 +445,12 @@ items:
   - {id: TASK-REP-040, type: task, name: "[US-REP-004] Garantizar que la factibilidad no genera movimientos ni toca el stock fisico", status: DONE, spec: 003-feat-rep-003-hp-slice}
   - {id: TASK-REP-041, type: task, name: "[US-REP-004] Garantizar que una Orden no cuenta sus propias reservas como ajenas", status: DONE, spec: 003-feat-rep-003-hp-slice}
   - {id: TASK-REP-042, type: task, name: "[US-REP-004] Implementar habilitar_orden (PROC-REP-140) como nodo ACT-SYSTEM, con precondicion de al menos un Detalle", status: DONE, spec: 003-feat-rep-003-hp-slice}
-  - {id: TASK-REP-043, type: task, name: "Implementar la rama No de PROC-REP-090 y el agregado PENDIENTE_RECURSOS", status: NOT_IMPLEMENTED, spec: 003-feat-rep-003-hp-slice}
-  - {id: TASK-REP-044, type: task, name: "Implementar PROC-REP-100 (registrar advertencia de faltante, identificando el Detalle especifico afectado)", status: NOT_IMPLEMENTED, spec: 003-feat-rep-003-hp-slice}
+  - {id: TASK-REP-043, type: task, name: "Implementar la rama No de PROC-REP-090 y el agregado PENDIENTE_RECURSOS", status: DONE, spec: 003-feat-rep-003-hp-slice, note: "Implementada en specs/015-slice6-exc-rep-001 (EXC-REP-001); ver traceability/exc-rep-001.yaml."}
+  - {id: TASK-REP-044, type: task, name: "Implementar PROC-REP-100 (registrar advertencia de faltante, identificando el Detalle especifico afectado)", status: DONE, spec: 003-feat-rep-003-hp-slice, note: "Implementada en specs/015-slice6-exc-rep-001 (EXC-REP-001); ver traceability/exc-rep-001.yaml."}
   - {id: TASK-REP-045, type: task, name: "Implementar PROC-REP-110 + PROC-REP-130 (override justificado de Detalle bloqueado, BR-REP-003), con registro de usuario, fecha, Detalle, validacio...", status: NOT_IMPLEMENTED, spec: 003-feat-rep-003-hp-slice}
-  - {id: TASK-REP-046, type: task, name: "Implementar PROC-REP-120 y su circuito de espera/revalidacion por disponibilidad de insumos", status: NOT_IMPLEMENTED, spec: 003-feat-rep-003-hp-slice}
-  - {id: TASK-REP-047, type: task, name: "Modelar la condicion de bloqueo del Detalle (SIN_BLOQUEO / REQUIERE_DEFINICION / BLOQUEADO_POR_RECURSOS) como dimension separada del estado tecnico...", status: NOT_IMPLEMENTED, spec: 003-feat-rep-003-hp-slice}
-  - {id: TASK-REP-048, type: task, name: "Ejercitar una Orden con varios Detalles donde solo algunos son factibles (BR-REP-002: basta uno trabajable)", status: NOT_IMPLEMENTED, spec: 003-feat-rep-003-hp-slice}
+  - {id: TASK-REP-046, type: task, name: "Implementar PROC-REP-120 y su circuito de espera/revalidacion por disponibilidad de insumos", status: DONE, spec: 003-feat-rep-003-hp-slice, note: "Implementada en specs/015-slice6-exc-rep-001 (EXC-REP-001); ver traceability/exc-rep-001.yaml."}
+  - {id: TASK-REP-047, type: task, name: "Modelar la condicion de bloqueo del Detalle (SIN_BLOQUEO / REQUIERE_DEFINICION / BLOQUEADO_POR_RECURSOS) como dimension separada del estado tecnico...", status: DONE, spec: 003-feat-rep-003-hp-slice, note: "Implementada en specs/015-slice6-exc-rep-001 (EXC-REP-001); ver traceability/exc-rep-001.yaml."}
+  - {id: TASK-REP-048, type: task, name: "Ejercitar una Orden con varios Detalles donde solo algunos son factibles (BR-REP-002: basta uno trabajable)", status: DONE, spec: 003-feat-rep-003-hp-slice, note: "Implementada en specs/015-slice6-exc-rep-001 (EXC-REP-001); ver traceability/exc-rep-001.yaml."}
   - {id: TASK-REP-049, type: task, name: "Resolver la concurrencia entre factibilidad y reserva real (control transaccional o de bloqueo). Hoy el MVP no implementa ninguno", status: NOT_IMPLEMENTED, spec: 003-feat-rep-003-hp-slice}
   - {id: TASK-REP-050, type: task, name: "[P] Modelar EstacionTrabajo y TipoReparacionEstacion en el catalogo", status: DONE, spec: 004-feat-rep-004-hp-slice}
   - {id: TASK-REP-051, type: task, name: "[P] Modelar TomaOrden con estado, inicio y fin, y el enum EstadoTomaOrden", status: DONE, spec: 004-feat-rep-004-hp-slice}
@@ -1549,6 +1549,12 @@ links:
   - {from: TASK-REP-110, to: TR-REP-045, relationship: implements}
   - {from: TASK-REP-111, to: TR-REP-043, relationship: implements}
   - {from: TASK-REP-087, to: TR-REP-061, relationship: implements}
+  - {from: TASK-REP-043, to: TR-REP-026, relationship: implements}
+  - {from: TASK-REP-044, to: TR-REP-026, relationship: implements}
+  - {from: TASK-REP-046, to: TR-REP-026, relationship: implements}
+  - {from: TASK-REP-046, to: TR-REP-022, relationship: implements}
+  - {from: TASK-REP-047, to: TR-REP-060, relationship: implements}
+  - {from: TASK-REP-048, to: TR-REP-026, relationship: implements}
   - {from: TASK-REP-091, to: TR-REP-034, relationship: implements}
   - {from: TASK-REP-112, to: TR-REP-044, relationship: implements}
   - {from: TASK-REP-113, to: TR-REP-020, relationship: implements}

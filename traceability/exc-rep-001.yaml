@@ -1,0 +1,383 @@
+# Trazabilidad end-to-end del slice implementado - Scenario EXC-REP-001
+# (Recursos insuficientes al ingreso, en espera de revalidacion).
+#
+# Unidad de implementacion INDEPENDIENTE (archivo propio, ver
+# traceability/README.md). No se agrupa con EXC-REP-002 (override) aunque
+# ambos parten de PROC-REP-090 "Ninguno trabajable": la decision, el actor de
+# la resolucion, el ciclo y el UAT son distintos y se implementan en Slices
+# separados. PROC-REP-100 queda como frontera natural donde luego podran
+# existir las dos salidas (esperar / forzar).
+#
+# PROC-REP-080 evalua por Detalle (BR-REP-002): un Detalle sin recursos queda
+# BLOQUEADO_POR_RECURSOS sin bloquear a los demas. Con al menos uno trabajable
+# 090 es "Si" y la Orden se habilita; con ninguno: 090 "Ninguno trabajable" ->
+# 100 por Detalle (con sus faltantes) y la Orden queda detenida en 100. El
+# agregado PENDIENTE_RECURSOS lo deriva el resolver: NO es un EstadoWorkflow.
+# ESPERAR_RECURSOS = 110 No -> 120; REVALIDAR_RECURSOS = 120 -> 080 (eventos de
+# sistema, sin actor humano).
+#
+# Reutiliza TASK-REP-043/044/046/047/048 de hp-rep-001.yaml (mismos id y name;
+# aqui con el trabajo hecho). TASK-REP-045 (override PROC-REP-110 Si / 130)
+# sigue NOT_IMPLEMENTED en hp-rep-001.yaml: corresponde a EXC-REP-002.
+#
+# Continua la numeracion global: US-REP-028, ACC-REP-043, FR-REP-100,
+# TR-REP-103, TASK-REP-191, CODE-REP-177, TEST-REP-356, UAT-REP-028.
+# PROC-REP-211 con resultado PENDIENTE_RECURSOS tambien conecta directo a 120
+# (sin 100/110) y cierra la toma (BR-REP-018); ver TR-REP-111.
+#
+# Validacion: npx tsx scripts/validate-traceability.ts traceability/exc-rep-001.yaml
+
+meta:
+  id: TRACE-EXC-REP-001
+  name: Trazabilidad del slice implementado de EXC-REP-001
+  generated_from: rama mvp-v2-slice6-exc-rep-001, tras implementar la espera de recursos sobre mvp-v2
+  date: "2026-10-01"
+  business_domain: DOM-RMA
+  business_process: PROC-REP
+  business_process_version: "1.3"
+  implemented_scenario: EXC-REP-001
+  active_features: [FEAT-REP-003]
+  related_trace_files:
+    - traceability/hp-rep-001.yaml (TASK-REP-043/044/046/047/048 y TR-REP-026 se actualizan; TASK-REP-045 no)
+    - traceability/hp-rep-002.yaml (no se modifica)
+    - traceability/hp-rep-003.yaml (no se modifica)
+    - traceability/var-rep-001-002.yaml (no se modifica)
+    - traceability/var-rep-003.yaml (no se modifica)
+  sources:
+    process: business/processes/repair-management-v1.3.yaml
+    rules: business/rules/business-rules-v1.3.yaml
+    features: business/features/repair-management-features-v1.3.yaml
+    scenarios: business/scenarios/repair-management-scenarios-v1.3.yaml
+    convention: traceability/README.md
+    constitution: .specify/memory/constitution.md
+    backend: app/backend/
+    frontend: app/frontend/
+  relationship_vocabulary:
+    belongs_to: el origen pertenece al destino (jerarquia)
+    activates: el Scenario activa la Feature
+    realizes: la System Action realiza la User Story
+    covers: la System Action cubre el nodo del Business Process
+    governed_by: el item esta gobernado por la Business Rule
+    derives_from: el Functional Requirement deriva de la System Action
+    satisfies: el Technical Requirement satisface el Functional Requirement
+    supports: el artefacto de modelo de datos sostiene un FR o un TR (N:M)
+    implements: la Task o el Code implementa un Technical Requirement
+    produced_by: el Code fue producido por la Task
+    exercises: el Internal Test ejercita el Code
+    verifies: el Internal Test verifica un FR o un TR
+    accepts: el UAT acepta una User Story o un Functional Requirement
+
+items:
+
+  - {id: DOM-RMA, type: business_domain, name: Area funcional RMA, status: active, source: traceability/README.md}
+  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: draft, version: "1.3", source: business/processes/repair-management-v1.3.yaml}
+  - {id: EXC-REP-001, type: scenario, name: "Recursos insuficientes al ingreso, en espera de revalidacion", status: draft, scenario_type: EXCEPTION, scope: FEATURE, source: business/scenarios/repair-management-scenarios-v1.3.yaml}
+
+  - {id: FEAT-REP-003, type: feature, name: "Validacion de factibilidad y habilitacion", status: draft, feature_status: draft, implemented_scenario: [EXC-REP-001], implemented_slice_status: IMPLEMENTED, nodes_total: 7, nodes_in_slice: 6, spec: specs/003-feat-rep-003-hp-slice/}
+
+  - {id: PROC-REP-080, type: process_node, name: "Validar factibilidad por Detalle", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-090, type: process_node, name: "Existe al menos un Detalle trabajable", node_type: decision, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-100, type: process_node, name: "Registrar advertencia de faltante", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-110, type: process_node, name: "Usuario autorizado fuerza el Detalle bloqueado", node_type: decision, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-120, type: process_node, name: "Detalle(s) pendientes por recursos", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-140, type: process_node, name: "Habilitar Orden de Reparacion", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+
+  - {id: BR-REP-002, type: business_rule, name: "Validacion previa de recursos", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-006, type: business_rule, name: "Reserva de insumos al iniciar Ejecucion del Detalle", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-012, type: business_rule, name: "Estado agregado de la Orden como calculo derivado", status: draft, coverage: PARTIAL}
+
+  # TASK-REP-043/044/046/047/048 se REUTILIZAN de hp-rep-001.yaml (mismo id, type y name).
+  - {id: TASK-REP-043, type: task, name: "Implementar la rama No de PROC-REP-090 y el agregado PENDIENTE_RECURSOS", status: DONE, note: "Implementada en specs/015-slice6-exc-rep-001 (EXC-REP-001)."}
+  - {id: TASK-REP-044, type: task, name: "Implementar PROC-REP-100 (registrar advertencia de faltante, identificando el Detalle especifico afectado)", status: DONE, note: "Implementada en specs/015-slice6-exc-rep-001 (EXC-REP-001)."}
+  - {id: TASK-REP-046, type: task, name: "Implementar PROC-REP-120 y su circuito de espera/revalidacion por disponibilidad de insumos", status: DONE, note: "Implementada en specs/015-slice6-exc-rep-001 (EXC-REP-001)."}
+  - {id: TASK-REP-047, type: task, name: "Modelar la condicion de bloqueo del Detalle (SIN_BLOQUEO / REQUIERE_DEFINICION / BLOQUEADO_POR_RECURSOS) como dimension separada del estado tecnico...", status: DONE, note: "Implementada en specs/015-slice6-exc-rep-001 (EXC-REP-001)."}
+  - {id: TASK-REP-048, type: task, name: "Ejercitar una Orden con varios Detalles donde solo algunos son factibles (BR-REP-002: basta uno trabajable)", status: DONE, note: "Implementada en specs/015-slice6-exc-rep-001 (EXC-REP-001)."}
+
+  - {id: US-REP-029, type: user_story, name: "Como Recepcionista quiero que una Orden sin ningun Detalle con recursos disponibles quede esperando recursos sin perder el requerimiento ni habilitarse para no prometer un trabajo que no puede empezar", status: IMPLEMENTED, priority: P1, actor: ACT-RECEP}
+  - {id: US-REP-030, type: user_story, name: "Como Recepcionista quiero revalidar la disponibilidad cuando cambian los insumos para que la Orden desbloquee los Detalles con recursos y continue su circuito", status: IMPLEMENTED, priority: P1, actor: ACT-RECEP}
+  - {id: US-REP-031, type: user_story, name: "Como Recepcionista quiero que una Orden con varios Detalles se habilite si al menos uno es trabajable aunque otro siga sin recursos para no frenar el trabajo posible", status: IMPLEMENTED, priority: P1, actor: ACT-RECEP}
+
+  - {id: ACC-REP-044, type: system_action, name: "Evaluar la factibilidad por Detalle (PROC-REP-080 y 090) y, sin ningun Detalle trabajable, registrar PROC-REP-100 por cada Detalle bloqueado con sus faltantes y dejar la Orden persistida en PROC-REP-100 sin habilitarla", status: IMPLEMENTED}
+  - {id: ACC-REP-045, type: system_action, name: "Esperar recursos: registrar PROC-REP-110 No y PROC-REP-120 sin actor humano, y llegar directo a PROC-REP-120 desde PROC-REP-211 con PENDIENTE_RECURSOS cerrando la toma", status: IMPLEMENTED}
+  - {id: ACC-REP-046, type: system_action, name: "Revalidar recursos desde PROC-REP-120 contra el stock global actual (080 y 090) y continuar a PROC-REP-140 o volver a PROC-REP-100", status: IMPLEMENTED}
+  - {id: ACC-REP-047, type: system_action, name: "Publicar ESPERAR_RECURSOS y REVALIDAR_RECURSOS desde el backend y exponer la condicion de cada Detalle", status: IMPLEMENTED}
+  - {id: ACC-REP-048, type: system_action, name: "Habilitar una Orden con factibilidad parcial: PROC-REP-090 Si mientras exista un Detalle trabajable y los demas sigan BLOQUEADO_POR_RECURSOS", status: IMPLEMENTED}
+
+  - {id: FR-REP-101, type: functional_requirement, name: "PROC-REP-080 evalua cada Detalle por separado y fija su condicion SIN_BLOQUEO o BLOQUEADO_POR_RECURSOS en cada ejecucion sin pisar otra causa de bloqueo", status: IMPLEMENTED}
+  - {id: FR-REP-102, type: functional_requirement, name: "Un Detalle sin recursos no bloquea a los demas: con al menos uno trabajable PROC-REP-090 es Si y la Orden se habilita", status: IMPLEMENTED}
+  - {id: FR-REP-103, type: functional_requirement, name: "Sin ningun Detalle trabajable no es un error: la Orden se persiste en PROC-REP-100 con una advertencia por Detalle que identifica sus faltantes y no se habilita", status: IMPLEMENTED}
+  - {id: FR-REP-104, type: functional_requirement, name: "La factibilidad consulta el stock global sin reservar consumir ni modificar el stock fisico y las reservas ajenas cuentan en la disponibilidad", status: IMPLEMENTED}
+  - {id: FR-REP-105, type: functional_requirement, name: "PENDIENTE_RECURSOS es el agregado derivado por el resolver y no un EstadoWorkflow: esperar no modifica el workflow", status: IMPLEMENTED}
+  - {id: FR-REP-106, type: functional_requirement, name: "Esperar recursos registra PROC-REP-110 No y PROC-REP-120 y solo vale desde PROC-REP-100", status: IMPLEMENTED}
+  - {id: FR-REP-107, type: functional_requirement, name: "Revalidar solo vale desde PROC-REP-120 y reejecuta 080 y 090: con un Detalle trabajable habilita (140) y desbloquea los Detalles con recursos y sin ninguno vuelve a PROC-REP-100 conservando cada ciclo del historial", status: IMPLEMENTED}
+  - {id: FR-REP-108, type: functional_requirement, name: "En PROC-REP-100 y PROC-REP-120 el backend publica solo la accion del circuito de recursos (sin actor humano) por encima del hito de workflow y conserva las capacidades transversales", status: IMPLEMENTED}
+  - {id: FR-REP-109, type: functional_requirement, name: "El backend expone la condicion de cada Detalle y la UI muestra el bloqueo por recursos sin inferirlo del stock", status: IMPLEMENTED}
+  - {id: FR-REP-111, type: functional_requirement, name: "PROC-REP-211 con resultado PENDIENTE_RECURSOS cierra la toma activa y continua directo a PROC-REP-120 sin pasar por 100 ni 110 y la Orden conserva su hito de workflow", status: IMPLEMENTED}
+  - {id: FR-REP-110, type: functional_requirement, name: "El progreso muestra 100 110 120 una sola vez cuando la Orden paso por PROC-REP-100", status: IMPLEMENTED}
+
+  - {id: TR-REP-104, type: technical_requirement, name: "services.reparaciones.validar_factibilidad_detalles evalua por Detalle contra la disponibilidad global fija la condicion de recursos solo sobre Detalles DEFINIDO con SIN_BLOQUEO o BLOQUEADO_POR_RECURSOS devuelve (Orden bool) con bool igual a hay al menos un Detalle trabajable y registra 100 por Detalle con sus faltantes cuando no hay ninguno sin reservar ni mutar la entrada", status: IMPLEMENTED}
+  - {id: TR-REP-105, type: technical_requirement, name: "services.recursos.registrar_espera_recursos exige PROC-REP-100 y la situacion PENDIENTE_RECURSOS segun el resolver y registra 110 No y 120 sin usuario ni cambio de estado_workflow", status: IMPLEMENTED}
+  - {id: TR-REP-106, type: technical_requirement, name: "application.ingreso._validar_y_habilitar devuelve la Orden detenida en PROC-REP-100 sin RecursoNoDisponibleError cuando ningun Detalle es trabajable y el caller la persiste", status: IMPLEMENTED}
+  - {id: TR-REP-107, type: technical_requirement, name: "application.recursos.esperar_recursos y revalidar_recursos con POST /resources/wait y /resources/revalidate sin actor humano exigen PROC-REP-100 y PROC-REP-120 respectivamente y revalidar reutiliza el tramo 080 a 140", status: IMPLEMENTED}
+  - {id: TR-REP-108, type: technical_requirement, name: "application.acciones.acciones_disponibles da prioridad al circuito de recursos en PROC-REP-100 y 120 con ESPERAR_RECURSOS y REVALIDAR_RECURSOS (requiere_actor false) sin return prematuro que elimine capacidades transversales", status: IMPLEMENTED}
+  - {id: TR-REP-109, type: technical_requirement, name: "DetalleOut expone condicion y el frontend renderiza ESPERAR_RECURSOS REVALIDAR_RECURSOS y el bloqueo por recursos solo con lo publicado por el backend", status: IMPLEMENTED}
+  - {id: TR-REP-111, type: technical_requirement, name: "services.recursos.marcar_pendiente_recursos (PROC-REP-120, desde 110 o 211, validada por el resolver) es compartida por registrar_espera_recursos y evaluar_situacion_orden, que cierra la toma en PENDIENTE_RECURSOS y continua directo a 120; habilitar_orden acepta EN_REPARACION conservando el gate de 090 Si", status: IMPLEMENTED}
+  - {id: TR-REP-110, type: technical_requirement, name: "application.progreso._con_espera_de_recursos intercala 100 110 120 despues de 090 por evidencia de PROC-REP-100 en el historial y se combina con la ruta de revision", status: IMPLEMENTED}
+
+  - {id: TASK-REP-192, type: task, name: "Publicar ESPERAR_RECURSOS y REVALIDAR_RECURSOS con prioridad sobre el hito de workflow", status: DONE}
+  - {id: TASK-REP-193, type: task, name: "Exponer la condicion del Detalle y soportar las acciones de recursos en el frontend", status: DONE}
+  - {id: TASK-REP-194, type: task, name: "Ruta de progreso con 100 110 120 por evidencia", status: DONE}
+
+  - {id: CODE-REP-178, type: code_artifact, name: "services/reparaciones.py::validar_factibilidad_detalles (por Detalle)", status: IMPLEMENTED, source: "app/backend/app/services/reparaciones.py::validar_factibilidad_detalles"}
+  - {id: CODE-REP-179, type: code_artifact, name: "services/reparaciones.py::_faltantes_del_detalle", status: IMPLEMENTED, source: "app/backend/app/services/reparaciones.py::_faltantes_del_detalle"}
+  - {id: CODE-REP-180, type: code_artifact, name: "services/recursos.py::registrar_espera_recursos", status: IMPLEMENTED, source: "app/backend/app/services/recursos.py::registrar_espera_recursos"}
+  - {id: CODE-REP-181, type: code_artifact, name: "services/recursos.py::exigir_espera_por_recursos", status: IMPLEMENTED, source: "app/backend/app/services/recursos.py::exigir_espera_por_recursos"}
+  - {id: CODE-REP-182, type: code_artifact, name: "application/ingreso.py::_validar_y_habilitar (sin error si ninguno es trabajable)", status: IMPLEMENTED, source: "app/backend/app/application/ingreso.py::_validar_y_habilitar"}
+  - {id: CODE-REP-183, type: code_artifact, name: "application/recursos.py::esperar_recursos", status: IMPLEMENTED, source: "app/backend/app/application/recursos.py::esperar_recursos"}
+  - {id: CODE-REP-184, type: code_artifact, name: "application/recursos.py::revalidar_recursos", status: IMPLEMENTED, source: "app/backend/app/application/recursos.py::revalidar_recursos"}
+  - {id: CODE-REP-185, type: code_artifact, name: "api/ordenes.py::post_esperar_recursos", status: IMPLEMENTED, source: "app/backend/app/api/ordenes.py::post_esperar_recursos"}
+  - {id: CODE-REP-186, type: code_artifact, name: "api/ordenes.py::post_revalidar_recursos", status: IMPLEMENTED, source: "app/backend/app/api/ordenes.py::post_revalidar_recursos"}
+  - {id: CODE-REP-187, type: code_artifact, name: "application/acciones.py::acciones_disponibles (circuito de recursos)", status: IMPLEMENTED, source: "app/backend/app/application/acciones.py::acciones_disponibles"}
+  - {id: CODE-REP-188, type: code_artifact, name: "application/progreso.py::_con_espera_de_recursos", status: IMPLEMENTED, source: "app/backend/app/application/progreso.py::_con_espera_de_recursos"}
+  - {id: CODE-REP-189, type: code_artifact, name: "api/schemas.py::DetalleOut.condicion", status: IMPLEMENTED, source: "app/backend/app/api/schemas.py::DetalleOut"}
+  - {id: CODE-REP-190, type: code_artifact, name: "frontend/src/features/ordenes-reparacion/AccionesOrden.tsx (ESPERAR_RECURSOS / REVALIDAR_RECURSOS)", status: IMPLEMENTED, source: "app/frontend/src/features/ordenes-reparacion/AccionesOrden.tsx"}
+  - {id: CODE-REP-192, type: code_artifact, name: "services/recursos.py::marcar_pendiente_recursos", status: IMPLEMENTED, source: "app/backend/app/services/recursos.py::marcar_pendiente_recursos"}
+  - {id: CODE-REP-193, type: code_artifact, name: "services/ordenes.py::evaluar_situacion_orden (PENDIENTE_RECURSOS -> 120)", status: IMPLEMENTED, source: "app/backend/app/services/ordenes.py::evaluar_situacion_orden"}
+  - {id: CODE-REP-194, type: code_artifact, name: "services/ordenes.py::habilitar_orden (desde EN_REPARACION con gate 090 Si)", status: IMPLEMENTED, source: "app/backend/app/services/ordenes.py::habilitar_orden"}
+  - {id: CODE-REP-191, type: code_artifact, name: "frontend/src/features/ordenes-reparacion/DetalleOrden.tsx (condicion del Detalle)", status: IMPLEMENTED, source: "app/frontend/src/features/ordenes-reparacion/DetalleOrden.tsx"}
+
+  - {id: TEST-REP-357, type: internal_test, name: "test_un_detalle_sin_stock_queda_bloqueado_y_la_orden_en_100", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_un_detalle_sin_stock_queda_bloqueado_y_la_orden_en_100"}
+  - {id: TEST-REP-358, type: internal_test, name: "test_100_identifica_el_detalle_y_sus_faltantes_sin_mezclarlos", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_100_identifica_el_detalle_y_sus_faltantes_sin_mezclarlos"}
+  - {id: TEST-REP-359, type: internal_test, name: "test_la_factibilidad_no_reserva_no_mueve_stock_ni_muta_la_entrada", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_la_factibilidad_no_reserva_no_mueve_stock_ni_muta_la_entrada"}
+  - {id: TEST-REP-360, type: internal_test, name: "test_las_reservas_externas_cuentan_en_la_disponibilidad", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_las_reservas_externas_cuentan_en_la_disponibilidad"}
+  - {id: TEST-REP-361, type: internal_test, name: "test_factibilidad_parcial_un_detalle_bloqueado_no_bloquea_a_los_demas", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_factibilidad_parcial_un_detalle_bloqueado_no_bloquea_a_los_demas"}
+  - {id: TEST-REP-362, type: internal_test, name: "test_otra_causa_de_bloqueo_no_se_pisa", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_otra_causa_de_bloqueo_no_se_pisa"}
+  - {id: TEST-REP-363, type: internal_test, name: "test_esperar_registra_110_no_y_120_sin_usuario_ni_cambiar_el_workflow", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_esperar_registra_110_no_y_120_sin_usuario_ni_cambiar_el_workflow"}
+  - {id: TEST-REP-364, type: internal_test, name: "test_esperar_solo_vale_desde_100", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_esperar_solo_vale_desde_100"}
+  - {id: TEST-REP-365, type: internal_test, name: "test_revalidar_solo_vale_desde_120", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_revalidar_solo_vale_desde_120"}
+  - {id: TEST-REP-366, type: internal_test, name: "test_revalidar_sin_stock_vuelve_a_100_y_conserva_cada_ciclo", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_revalidar_sin_stock_vuelve_a_100_y_conserva_cada_ciclo"}
+  - {id: TEST-REP-367, type: internal_test, name: "test_revalidar_con_stock_habilita_y_desbloquea_el_detalle", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_revalidar_con_stock_habilita_y_desbloquea_el_detalle"}
+  - {id: TEST-REP-368, type: internal_test, name: "test_acciones_en_100_y_120_priorizan_el_circuito_de_recursos", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_acciones_en_100_y_120_priorizan_el_circuito_de_recursos"}
+  - {id: TEST-REP-369, type: internal_test, name: "test_acciones_en_recursos_para_rt_interno_sin_pago", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_acciones_en_recursos_para_rt_interno_sin_pago"}
+  - {id: TEST-REP-370, type: internal_test, name: "test_en_revision_con_recursos_pendientes_no_ofrece_definir", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_en_revision_con_recursos_pendientes_no_ofrece_definir"}
+  - {id: TEST-REP-371, type: internal_test, name: "test_progreso_muestra_100_110_120_una_sola_vez_y_combina_con_la_revision", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_progreso_muestra_100_110_120_una_sola_vez_y_combina_con_la_revision"}
+  - {id: TEST-REP-372, type: internal_test, name: "test_cliente_externo_sin_stock_espera_y_se_habilita_al_revalidar", status: PASSING, source: "app/backend/tests/test_api_exc_rep_001.py::test_cliente_externo_sin_stock_espera_y_se_habilita_al_revalidar"}
+  - {id: TEST-REP-373, type: internal_test, name: "test_los_endpoints_de_recursos_solo_valen_en_su_nodo", status: PASSING, source: "app/backend/tests/test_api_exc_rep_001.py::test_los_endpoints_de_recursos_solo_valen_en_su_nodo"}
+  - {id: TEST-REP-374, type: internal_test, name: "test_ordenes_inexistentes_devuelven_404", status: PASSING, source: "app/backend/tests/test_api_exc_rep_001.py::test_ordenes_inexistentes_devuelven_404"}
+  - {id: TEST-REP-375, type: internal_test, name: "test_una_reserva_ajena_bloquea_y_su_liberacion_desbloquea", status: PASSING, source: "app/backend/tests/test_api_exc_rep_001.py::test_una_reserva_ajena_bloquea_y_su_liberacion_desbloquea"}
+  - {id: TEST-REP-376, type: internal_test, name: "test_rt_interno_sin_stock_espera_sin_comprobante_ni_pagos", status: PASSING, source: "app/backend/tests/test_api_exc_rep_001.py::test_rt_interno_sin_stock_espera_sin_comprobante_ni_pagos"}
+  - {id: TEST-REP-377, type: internal_test, name: "test_garantia_rma_sin_stock_persiste_bloqueada_y_la_origen_no_cambia", status: PASSING, source: "app/backend/tests/test_api_exc_rep_001.py::test_garantia_rma_sin_stock_persiste_bloqueada_y_la_origen_no_cambia"}
+  - {id: TEST-REP-378, type: internal_test, name: "test_garantia_en_revision_sin_stock_no_repite_065_068_075", status: PASSING, source: "app/backend/tests/test_api_exc_rep_001.py::test_garantia_en_revision_sin_stock_no_repite_065_068_075"}
+  - {id: TEST-REP-379, type: internal_test, name: "test_multidetalle_parcial_habilita_y_solo_el_trabajable_se_inicia", status: PASSING, source: "app/backend/tests/test_api_exc_rep_001.py::test_multidetalle_parcial_habilita_y_solo_el_trabajable_se_inicia"}
+  - {id: TEST-REP-380, type: internal_test, name: "test_multidetalle_todos_bloqueados_espera_con_una_advertencia_por_detalle", status: PASSING, source: "app/backend/tests/test_api_exc_rep_001.py::test_multidetalle_todos_bloqueados_espera_con_una_advertencia_por_detalle"}
+  - {id: TEST-REP-381, type: internal_test, name: "test_un_detalle_se_desbloquea_y_otro_sigue_bloqueado_al_revalidar", status: PASSING, source: "app/backend/tests/test_api_exc_rep_001.py::test_un_detalle_se_desbloquea_y_otro_sigue_bloqueado_al_revalidar"}
+  - {id: TEST-REP-382, type: internal_test, name: "test_el_happy_path_con_stock_no_cambia", status: PASSING, source: "app/backend/tests/test_api_exc_rep_001.py::test_el_happy_path_con_stock_no_cambia"}
+  - {id: TEST-REP-383, type: internal_test, name: "test_la_factibilidad_bloquea_cuando_el_stock_ya_esta_reservado", status: PASSING, source: "app/backend/tests/test_api_hp_rep_001.py::test_la_factibilidad_bloquea_cuando_el_stock_ya_esta_reservado"}
+  - {id: TEST-REP-384, type: internal_test, name: "test_factibilidad_fallida_luego_de_revision_espera_recursos", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_factibilidad_fallida_luego_de_revision_espera_recursos"}
+  - {id: TEST-REP-385, type: internal_test, name: "test_211_pendiente_de_recursos_pasa_directo_a_120_y_cierra_la_toma", status: PASSING, source: "app/backend/tests/test_api_exc_rep_001.py::test_211_pendiente_de_recursos_pasa_directo_a_120_y_cierra_la_toma"}
+  - {id: TEST-REP-386, type: internal_test, name: "test_revalidar_sin_stock_desde_211_vuelve_a_100_y_luego_espera", status: PASSING, source: "app/backend/tests/test_api_exc_rep_001.py::test_revalidar_sin_stock_desde_211_vuelve_a_100_y_luego_espera"}
+  - {id: TEST-REP-387, type: internal_test, name: "test_e2e_parcial_espera_stock_revalida_reencola_y_llega_al_control", status: PASSING, source: "app/backend/tests/test_api_exc_rep_001.py::test_e2e_parcial_espera_stock_revalida_reencola_y_llega_al_control"}
+  - {id: TEST-REP-388, type: internal_test, name: "test_211_pendiente_de_recursos_cierra_la_toma_y_va_directo_a_120", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_211_pendiente_de_recursos_cierra_la_toma_y_va_directo_a_120"}
+  - {id: TEST-REP-389, type: internal_test, name: "test_marcar_pendiente_recursos_solo_desde_110_o_211_y_con_el_resolver", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_marcar_pendiente_recursos_solo_desde_110_o_211_y_con_el_resolver"}
+  - {id: TEST-REP-390, type: internal_test, name: "test_en_reparacion_alcanza_140_solo_tras_090_si", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_en_reparacion_alcanza_140_solo_tras_090_si"}
+  - {id: TEST-REP-391, type: internal_test, name: "test_en_reparacion_con_090_ninguno_o_fuera_de_090_no_habilita", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_en_reparacion_con_090_ninguno_o_fuera_de_090_no_habilita"}
+  - {id: TEST-REP-392, type: internal_test, name: "test_otros_estados_siguen_sin_poder_habilitarse", status: PASSING, source: "app/backend/tests/test_exc_rep_001.py::test_otros_estados_siguen_sin_poder_habilitarse"}
+
+  - {id: UAT-REP-029, type: uat, name: "Cuando ningun Detalle tiene recursos disponibles la Orden queda esperando recursos sin perder el requerimiento ni habilitarse", status: PENDING}
+  - {id: UAT-REP-030, type: uat, name: "Cuando el recurso vuelve a estar disponible la revalidacion desbloquea el Detalle y la Orden puede continuar", status: PENDING}
+  - {id: UAT-REP-032, type: uat, name: "Cuando el ultimo Detalle trabajable termina y solo quedan Detalles bloqueados por recursos la Orden espera recursos sin retener la toma y puede revalidarse", status: PENDING}
+  - {id: UAT-REP-031, type: uat, name: "Una Orden con varios Detalles se habilita si al menos uno es trabajable aunque otro siga bloqueado por recursos", status: PENDING}
+
+links:
+
+  - {from: PROC-REP, to: DOM-RMA, relationship: belongs_to}
+  - {from: EXC-REP-001, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-080, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-090, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-100, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-110, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-120, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-140, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-003, to: PROC-REP, relationship: belongs_to}
+  - {from: EXC-REP-001, to: FEAT-REP-003, relationship: activates}
+
+  - {from: US-REP-029, to: FEAT-REP-003, relationship: belongs_to}
+  - {from: US-REP-030, to: FEAT-REP-003, relationship: belongs_to}
+  - {from: US-REP-031, to: FEAT-REP-003, relationship: belongs_to}
+
+  - {from: ACC-REP-044, to: US-REP-029, relationship: realizes}
+  - {from: ACC-REP-044, to: PROC-REP-080, relationship: covers}
+  - {from: ACC-REP-044, to: PROC-REP-090, relationship: covers}
+  - {from: ACC-REP-044, to: PROC-REP-100, relationship: covers}
+  - {from: ACC-REP-044, to: BR-REP-002, relationship: governed_by}
+  - {from: ACC-REP-044, to: BR-REP-006, relationship: governed_by}
+  - {from: ACC-REP-044, to: BR-REP-012, relationship: governed_by}
+
+  - {from: ACC-REP-045, to: US-REP-029, relationship: realizes}
+  - {from: ACC-REP-045, to: PROC-REP-110, relationship: covers}
+  - {from: ACC-REP-045, to: PROC-REP-120, relationship: covers}
+  - {from: ACC-REP-045, to: BR-REP-012, relationship: governed_by}
+
+  - {from: ACC-REP-046, to: US-REP-030, relationship: realizes}
+  - {from: ACC-REP-046, to: PROC-REP-120, relationship: covers}
+  - {from: ACC-REP-046, to: PROC-REP-080, relationship: covers}
+  - {from: ACC-REP-046, to: PROC-REP-090, relationship: covers}
+  - {from: ACC-REP-046, to: PROC-REP-140, relationship: covers}
+  - {from: ACC-REP-046, to: BR-REP-002, relationship: governed_by}
+  - {from: ACC-REP-046, to: BR-REP-012, relationship: governed_by}
+
+  - {from: ACC-REP-047, to: US-REP-029, relationship: realizes}
+  - {from: ACC-REP-047, to: PROC-REP-100, relationship: covers}
+  - {from: ACC-REP-047, to: PROC-REP-120, relationship: covers}
+  - {from: ACC-REP-047, to: BR-REP-012, relationship: governed_by}
+
+  - {from: ACC-REP-048, to: US-REP-031, relationship: realizes}
+  - {from: ACC-REP-048, to: PROC-REP-080, relationship: covers}
+  - {from: ACC-REP-048, to: PROC-REP-090, relationship: covers}
+  - {from: ACC-REP-048, to: PROC-REP-140, relationship: covers}
+  - {from: ACC-REP-048, to: BR-REP-002, relationship: governed_by}
+
+  - {from: FR-REP-101, to: ACC-REP-044, relationship: derives_from}
+  - {from: FR-REP-102, to: ACC-REP-048, relationship: derives_from}
+  - {from: FR-REP-103, to: ACC-REP-044, relationship: derives_from}
+  - {from: FR-REP-104, to: ACC-REP-044, relationship: derives_from}
+  - {from: FR-REP-105, to: ACC-REP-045, relationship: derives_from}
+  - {from: FR-REP-106, to: ACC-REP-045, relationship: derives_from}
+  - {from: FR-REP-107, to: ACC-REP-046, relationship: derives_from}
+  - {from: FR-REP-108, to: ACC-REP-047, relationship: derives_from}
+  - {from: FR-REP-109, to: ACC-REP-047, relationship: derives_from}
+  - {from: FR-REP-111, to: ACC-REP-045, relationship: derives_from}
+  - {from: FR-REP-110, to: ACC-REP-045, relationship: derives_from}
+
+  - {from: TR-REP-104, to: FR-REP-101, relationship: satisfies}
+  - {from: TR-REP-104, to: FR-REP-102, relationship: satisfies}
+  - {from: TR-REP-104, to: FR-REP-103, relationship: satisfies}
+  - {from: TR-REP-104, to: FR-REP-104, relationship: satisfies}
+  - {from: TR-REP-105, to: FR-REP-105, relationship: satisfies}
+  - {from: TR-REP-105, to: FR-REP-106, relationship: satisfies}
+  - {from: TR-REP-106, to: FR-REP-103, relationship: satisfies}
+  - {from: TR-REP-106, to: FR-REP-107, relationship: satisfies}
+  - {from: TR-REP-107, to: FR-REP-106, relationship: satisfies}
+  - {from: TR-REP-107, to: FR-REP-107, relationship: satisfies}
+  - {from: TR-REP-108, to: FR-REP-108, relationship: satisfies}
+  - {from: TR-REP-109, to: FR-REP-109, relationship: satisfies}
+  - {from: TR-REP-111, to: FR-REP-111, relationship: satisfies}
+  - {from: TR-REP-111, to: FR-REP-107, relationship: satisfies}
+  - {from: TR-REP-110, to: FR-REP-110, relationship: satisfies}
+
+  - {from: TASK-REP-192, to: TR-REP-108, relationship: implements}
+  - {from: TASK-REP-193, to: TR-REP-109, relationship: implements}
+  - {from: TASK-REP-194, to: TR-REP-110, relationship: implements}
+  - {from: TASK-REP-043, to: TR-REP-104, relationship: implements}
+  - {from: TASK-REP-043, to: TR-REP-106, relationship: implements}
+  - {from: TASK-REP-044, to: TR-REP-104, relationship: implements}
+  - {from: TASK-REP-046, to: TR-REP-105, relationship: implements}
+  - {from: TASK-REP-046, to: TR-REP-107, relationship: implements}
+  - {from: TASK-REP-046, to: TR-REP-111, relationship: implements}
+  - {from: TASK-REP-047, to: TR-REP-109, relationship: implements}
+  - {from: TASK-REP-048, to: TR-REP-104, relationship: implements}
+
+  - {from: CODE-REP-178, to: TASK-REP-043, relationship: produced_by}
+  - {from: CODE-REP-178, to: TR-REP-104, relationship: implements}
+  - {from: CODE-REP-179, to: TASK-REP-044, relationship: produced_by}
+  - {from: CODE-REP-179, to: TR-REP-104, relationship: implements}
+  - {from: CODE-REP-180, to: TASK-REP-046, relationship: produced_by}
+  - {from: CODE-REP-180, to: TR-REP-105, relationship: implements}
+  - {from: CODE-REP-181, to: TASK-REP-046, relationship: produced_by}
+  - {from: CODE-REP-181, to: TR-REP-107, relationship: implements}
+  - {from: CODE-REP-182, to: TASK-REP-043, relationship: produced_by}
+  - {from: CODE-REP-182, to: TR-REP-106, relationship: implements}
+  - {from: CODE-REP-183, to: TASK-REP-046, relationship: produced_by}
+  - {from: CODE-REP-183, to: TR-REP-107, relationship: implements}
+  - {from: CODE-REP-184, to: TASK-REP-046, relationship: produced_by}
+  - {from: CODE-REP-184, to: TR-REP-107, relationship: implements}
+  - {from: CODE-REP-185, to: TASK-REP-046, relationship: produced_by}
+  - {from: CODE-REP-185, to: TR-REP-107, relationship: implements}
+  - {from: CODE-REP-186, to: TASK-REP-046, relationship: produced_by}
+  - {from: CODE-REP-186, to: TR-REP-107, relationship: implements}
+  - {from: CODE-REP-187, to: TASK-REP-192, relationship: produced_by}
+  - {from: CODE-REP-187, to: TR-REP-108, relationship: implements}
+  - {from: CODE-REP-188, to: TASK-REP-194, relationship: produced_by}
+  - {from: CODE-REP-188, to: TR-REP-110, relationship: implements}
+  - {from: CODE-REP-189, to: TASK-REP-047, relationship: produced_by}
+  - {from: CODE-REP-189, to: TR-REP-109, relationship: implements}
+  - {from: CODE-REP-190, to: TASK-REP-193, relationship: produced_by}
+  - {from: CODE-REP-190, to: TR-REP-109, relationship: implements}
+  - {from: CODE-REP-192, to: TASK-REP-046, relationship: produced_by}
+  - {from: CODE-REP-192, to: TR-REP-111, relationship: implements}
+  - {from: CODE-REP-193, to: TASK-REP-046, relationship: produced_by}
+  - {from: CODE-REP-193, to: TR-REP-111, relationship: implements}
+  - {from: CODE-REP-194, to: TASK-REP-046, relationship: produced_by}
+  - {from: CODE-REP-194, to: TR-REP-111, relationship: implements}
+  - {from: CODE-REP-191, to: TASK-REP-193, relationship: produced_by}
+  - {from: CODE-REP-191, to: TR-REP-109, relationship: implements}
+
+  - {from: TEST-REP-357, to: FR-REP-101, relationship: verifies}
+  - {from: TEST-REP-357, to: FR-REP-103, relationship: verifies}
+  - {from: TEST-REP-357, to: FR-REP-105, relationship: verifies}
+  - {from: TEST-REP-357, to: CODE-REP-178, relationship: exercises}
+  - {from: TEST-REP-358, to: FR-REP-103, relationship: verifies}
+  - {from: TEST-REP-358, to: CODE-REP-179, relationship: exercises}
+  - {from: TEST-REP-359, to: FR-REP-104, relationship: verifies}
+  - {from: TEST-REP-360, to: FR-REP-104, relationship: verifies}
+  - {from: TEST-REP-361, to: FR-REP-102, relationship: verifies}
+  - {from: TEST-REP-362, to: FR-REP-101, relationship: verifies}
+  - {from: TEST-REP-363, to: FR-REP-105, relationship: verifies}
+  - {from: TEST-REP-363, to: FR-REP-106, relationship: verifies}
+  - {from: TEST-REP-363, to: CODE-REP-180, relationship: exercises}
+  - {from: TEST-REP-364, to: FR-REP-106, relationship: verifies}
+  - {from: TEST-REP-365, to: FR-REP-107, relationship: verifies}
+  - {from: TEST-REP-365, to: CODE-REP-181, relationship: exercises}
+  - {from: TEST-REP-366, to: FR-REP-107, relationship: verifies}
+  - {from: TEST-REP-367, to: FR-REP-107, relationship: verifies}
+  - {from: TEST-REP-368, to: FR-REP-108, relationship: verifies}
+  - {from: TEST-REP-368, to: CODE-REP-187, relationship: exercises}
+  - {from: TEST-REP-369, to: TR-REP-108, relationship: verifies}
+  - {from: TEST-REP-370, to: TR-REP-108, relationship: verifies}
+  - {from: TEST-REP-371, to: FR-REP-110, relationship: verifies}
+  - {from: TEST-REP-371, to: CODE-REP-188, relationship: exercises}
+  - {from: TEST-REP-372, to: FR-REP-103, relationship: verifies}
+  - {from: TEST-REP-372, to: FR-REP-107, relationship: verifies}
+  - {from: TEST-REP-372, to: CODE-REP-184, relationship: exercises}
+  - {from: TEST-REP-372, to: CODE-REP-182, relationship: exercises}
+  - {from: TEST-REP-373, to: TR-REP-107, relationship: verifies}
+  - {from: TEST-REP-373, to: CODE-REP-185, relationship: exercises}
+  - {from: TEST-REP-373, to: CODE-REP-186, relationship: exercises}
+  - {from: TEST-REP-374, to: TR-REP-107, relationship: verifies}
+  - {from: TEST-REP-375, to: FR-REP-104, relationship: verifies}
+  - {from: TEST-REP-375, to: FR-REP-107, relationship: verifies}
+  - {from: TEST-REP-376, to: FR-REP-107, relationship: verifies}
+  - {from: TEST-REP-376, to: FR-REP-108, relationship: verifies}
+  - {from: TEST-REP-377, to: FR-REP-103, relationship: verifies}
+  - {from: TEST-REP-378, to: FR-REP-107, relationship: verifies}
+  - {from: TEST-REP-379, to: FR-REP-102, relationship: verifies}
+  - {from: TEST-REP-379, to: FR-REP-109, relationship: verifies}
+  - {from: TEST-REP-379, to: CODE-REP-189, relationship: exercises}
+  - {from: TEST-REP-380, to: FR-REP-103, relationship: verifies}
+  - {from: TEST-REP-381, to: FR-REP-101, relationship: verifies}
+  - {from: TEST-REP-381, to: FR-REP-107, relationship: verifies}
+  - {from: TEST-REP-382, to: TR-REP-106, relationship: verifies}
+  - {from: TEST-REP-383, to: FR-REP-104, relationship: verifies}
+  - {from: TEST-REP-383, to: FR-REP-103, relationship: verifies}
+  - {from: TEST-REP-384, to: FR-REP-103, relationship: verifies}
+  - {from: TEST-REP-385, to: FR-REP-111, relationship: verifies}
+  - {from: TEST-REP-385, to: FR-REP-108, relationship: verifies}
+  - {from: TEST-REP-385, to: CODE-REP-193, relationship: exercises}
+  - {from: TEST-REP-386, to: FR-REP-107, relationship: verifies}
+  - {from: TEST-REP-387, to: FR-REP-102, relationship: verifies}
+  - {from: TEST-REP-387, to: FR-REP-107, relationship: verifies}
+  - {from: TEST-REP-387, to: FR-REP-111, relationship: verifies}
+  - {from: TEST-REP-387, to: CODE-REP-194, relationship: exercises}
+  - {from: TEST-REP-388, to: FR-REP-111, relationship: verifies}
+  - {from: TEST-REP-388, to: CODE-REP-193, relationship: exercises}
+  - {from: TEST-REP-389, to: TR-REP-111, relationship: verifies}
+  - {from: TEST-REP-389, to: CODE-REP-192, relationship: exercises}
+  - {from: TEST-REP-390, to: TR-REP-111, relationship: verifies}
+  - {from: TEST-REP-390, to: CODE-REP-194, relationship: exercises}
+  - {from: TEST-REP-391, to: TR-REP-111, relationship: verifies}
+  - {from: TEST-REP-392, to: TR-REP-111, relationship: verifies}
+
+  - {from: UAT-REP-029, to: US-REP-029, relationship: accepts}
+  - {from: UAT-REP-030, to: US-REP-030, relationship: accepts}
+  - {from: UAT-REP-032, to: US-REP-029, relationship: accepts}
+  - {from: UAT-REP-031, to: US-REP-031, relationship: accepts}

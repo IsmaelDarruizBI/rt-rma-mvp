@@ -28,6 +28,7 @@ from app.application import (
 )
 from app.domain.models import (
     Cliente,
+    CondicionReparacionDetail,
     EjecucionReparacion,
     Equipo,
     EstacionTrabajo,
@@ -367,6 +368,7 @@ class DetalleOut(BaseModel):
     puntaje: int
     garantia_dias: int
     estado: EstadoReparacionDetail
+    condicion: CondicionReparacionDetail
     control_estado: EstadoControl
     control_usuario_id: str | None = None
     control_fecha: datetime | None = None

@@ -149,6 +149,29 @@ class PasoProgreso:
     alcanzado: bool
 
 
+_TRAMO_RECURSOS: tuple[tuple[str, str], ...] = (
+    ("PROC-REP-100", "Registrar advertencia de faltante"),
+    ("PROC-REP-110", "Usuario autorizado fuerza el Detalle bloqueado"),
+    ("PROC-REP-120", "Detalle(s) pendientes por recursos"),
+)
+
+
+def _con_espera_de_recursos(
+    ruta: tuple[tuple[str, str], ...],
+) -> tuple[tuple[str, str], ...]:
+    """Intercala 100 -> 110 -> 120 despues de 090 (EXC-REP-001).
+
+    Se muestra UNA vez aunque el historial tenga varios ciclos
+    (120 -> 080 -> 090 -> 100 ...): el historial conserva cada intento.
+    """
+    resultado: list[tuple[str, str]] = []
+    for nodo in ruta:
+        resultado.append(nodo)
+        if nodo[0] == "PROC-REP-090":
+            resultado.extend(_TRAMO_RECURSOS)
+    return tuple(resultado)
+
+
 def _con_revision(
     ruta: tuple[tuple[str, str], ...],
 ) -> tuple[tuple[str, str], ...]:
@@ -188,8 +211,11 @@ def _ruta_esperada(orden: OrdenReparacion) -> tuple[tuple[str, str], ...]:
     ruta = _RUTAS_POR_ORIGEN.get(orden.origen, _RUTA_CLIENTE_EXTERNO)
     # La variante se reconoce por evidencia real (PROC-REP-055 en el
     # historial), no por un id de Scenario guardado en la Orden.
-    if "PROC-REP-055" in nodos_alcanzados(orden):
-        return _con_revision(ruta)
+    alcanzados = nodos_alcanzados(orden)
+    if "PROC-REP-055" in alcanzados:
+        ruta = _con_revision(ruta)
+    if "PROC-REP-100" in alcanzados:
+        ruta = _con_espera_de_recursos(ruta)
     return ruta
 
 
