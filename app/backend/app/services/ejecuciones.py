@@ -159,9 +159,9 @@ def reservar_insumos_e_iniciar_ejecucion(
     )
     nueva_orden.movimientos_insumo.extend(reservas)
     nueva_orden.ejecuciones.append(ejecucion)
-    buscar_detalle(nueva_orden, detalle_id).estado = (
-        EstadoReparacionDetail.EN_PROGRESO
-    )
+    buscar_detalle(
+        nueva_orden, detalle_id
+    ).estado = EstadoReparacionDetail.EN_PROGRESO
     nueva_orden.estado_workflow = EstadoWorkflow.EN_REPARACION
 
     return nueva_orden
@@ -187,13 +187,10 @@ def _validar_propiedad_de_la_ejecucion(
 
     toma = toma_activa(orden)
     if toma is None:
-        raise PrecondicionInvalidaError(
-            "La Orden no tiene una toma activa."
-        )
+        raise PrecondicionInvalidaError("La Orden no tiene una toma activa.")
     if toma.usuario_id != usuario.id:
         raise PrecondicionInvalidaError(
-            f"La Orden esta tomada por {toma.usuario_id}, "
-            f"no por {usuario.id}."
+            f"La Orden esta tomada por {toma.usuario_id}, no por {usuario.id}."
         )
     if ejecucion.toma_orden_id != toma.id:
         raise PrecondicionInvalidaError(
@@ -262,7 +259,7 @@ def registrar_ejecucion_completada(
     ``insumos_utilizados`` es la fuente de verdad que PROC-REP-210 usa
     despues para consumir y liberar reservas.
 
-    El resultado "Interrumpido" no esta implementado en el MVP.
+    El resultado "Interrumpido" es ``registrar_ejecucion_interrumpida``.
 
     Solo puede registrarla el tecnico que inicio la Ejecucion: esta
     conserva tecnico, estacion, inicio, fin y trabajo realizado. V1.3
@@ -270,6 +267,65 @@ def registrar_ejecucion_completada(
     distintos, pero cada uno con su propia Ejecucion, nunca cerrando la
     del anterior.
     """
+    return _registrar_fin_ejecucion(
+        orden,
+        ejecucion_id=ejecucion_id,
+        insumos_utilizados=insumos_utilizados,
+        usuario=usuario,
+        fecha=fecha,
+        observaciones=observaciones,
+        resultado=EstadoEjecucion.COMPLETADO,
+        estado_del_detalle=EstadoReparacionDetail.COMPLETO,
+        observacion_200="Completado",
+    )
+
+
+def registrar_ejecucion_interrumpida(
+    orden: OrdenReparacion,
+    *,
+    ejecucion_id: str,
+    insumos_utilizados: Sequence[InsumoUtilizado],
+    usuario: Usuario,
+    fecha: datetime,
+    observaciones: str | None = None,
+) -> OrdenReparacion:
+    """PROC-REP-200 con resultado "Interrumpido" (VAR-REP-003).
+
+    Misma validacion que ``registrar_ejecucion_completada``. La Ejecucion
+    pasa a INTERRUMPIDO -terminal: conserva fin, insumos realmente
+    utilizados hasta ese momento y observaciones- y el Detalle vuelve a
+    DEFINIDO (la representacion tecnica de PENDIENTE), sin bloqueo.
+
+    NO cierra la toma: el tecnico puede continuar (una Ejecucion nueva,
+    con reserva nueva) o liberar la Orden con la mecanica de
+    PROC-REP-212/213.
+    """
+    return _registrar_fin_ejecucion(
+        orden,
+        ejecucion_id=ejecucion_id,
+        insumos_utilizados=insumos_utilizados,
+        usuario=usuario,
+        fecha=fecha,
+        observaciones=observaciones,
+        resultado=EstadoEjecucion.INTERRUMPIDO,
+        estado_del_detalle=EstadoReparacionDetail.DEFINIDO,
+        observacion_200="Interrumpido",
+    )
+
+
+def _registrar_fin_ejecucion(
+    orden: OrdenReparacion,
+    *,
+    ejecucion_id: str,
+    insumos_utilizados: Sequence[InsumoUtilizado],
+    usuario: Usuario,
+    fecha: datetime,
+    observaciones: str | None,
+    resultado: EstadoEjecucion,
+    estado_del_detalle: EstadoReparacionDetail,
+    observacion_200: str,
+) -> OrdenReparacion:
+    """Cierre de una Ejecucion en PROC-REP-200, comun a sus dos resultados."""
     validar_actor(usuario, RolUsuario.TECNICO)
 
     ejecucion = next(
@@ -282,8 +338,7 @@ def registrar_ejecucion_completada(
         )
     if ejecucion.estado is not EstadoEjecucion.EN_PROGRESO:
         raise PrecondicionInvalidaError(
-            f"La Ejecucion {ejecucion_id} ya esta "
-            f"{ejecucion.estado.value}."
+            f"La Ejecucion {ejecucion_id} ya esta {ejecucion.estado.value}."
         )
 
     _validar_propiedad_de_la_ejecucion(orden, ejecucion, usuario)
@@ -298,21 +353,19 @@ def registrar_ejecucion_completada(
         usuario_id=usuario.id,
         reparacion_detail_id=detalle_id,
         ejecucion_id=ejecucion_id,
-        observacion="Completado",
+        observacion=observacion_200,
     )
 
     nueva_ejecucion = next(
         e for e in nueva_orden.ejecuciones if e.id == ejecucion_id
     )
-    nueva_ejecucion.estado = EstadoEjecucion.COMPLETADO
+    nueva_ejecucion.estado = resultado
     nueva_ejecucion.fin = fecha
     nueva_ejecucion.insumos_utilizados = [
         utilizado.model_copy(deep=True) for utilizado in insumos_utilizados
     ]
     nueva_ejecucion.observaciones = observaciones
 
-    buscar_detalle(nueva_orden, detalle_id).estado = (
-        EstadoReparacionDetail.COMPLETO
-    )
+    buscar_detalle(nueva_orden, detalle_id).estado = estado_del_detalle
 
     return nueva_orden

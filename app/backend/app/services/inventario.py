@@ -13,6 +13,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from app.domain.models import (
+    EstadoEjecucion,
     Insumo,
     InsumoUtilizado,
     MovimientoInsumo,
@@ -60,8 +61,8 @@ def cantidad_pendiente(
 ) -> Decimal:
     """Cantidad de una reserva que todavia no se consumio ni libero.
 
-        pendiente = RESERVA - CONSUMO relacionado
-                            - LIBERACION_RESERVA relacionada
+    pendiente = RESERVA - CONSUMO relacionado
+                        - LIBERACION_RESERVA relacionada
     """
     if reserva.tipo is not TipoMovimientoInsumo.RESERVA:
         return CERO
@@ -197,6 +198,11 @@ def generar_movimientos_inventario(
         utilizado <  reservado -> CONSUMO (si > 0) + LIBERACION_RESERVA
         utilizado >  reservado -> error de dominio (fuera de HP-REP-001)
 
+    Solo se concilia una Ejecucion terminal (COMPLETADO o INTERRUMPIDO,
+    VAR-REP-003): una EN_PROGRESO se rechaza. Para el inventario ambos
+    resultados son iguales: lo utilizado se consume y lo reservado que no
+    se uso se libera.
+
     La RESERVA original nunca se modifica ni se elimina: los nuevos
     movimientos la referencian por ``movimiento_origen_id``. Todos se
     generan con ``usuario_id=None`` porque el nodo es ACT-SYSTEM.
@@ -215,6 +221,12 @@ def generar_movimientos_inventario(
     if ejecucion is None:
         raise EntidadNoEncontradaError(
             f"La Orden no tiene la Ejecucion {ejecucion_id}"
+        )
+    if ejecucion.estado is EstadoEjecucion.EN_PROGRESO:
+        raise PrecondicionInvalidaError(
+            f"El inventario se concilia desde una Ejecucion terminada "
+            f"(COMPLETADO o INTERRUMPIDO); la Ejecucion {ejecucion_id} "
+            f"sigue EN_PROGRESO."
         )
 
     if inventario_aplicado(orden, ejecucion_id):
@@ -255,9 +267,7 @@ def generar_movimientos_inventario(
     nuevos: list[MovimientoInsumo] = []
 
     for insumo_id in sorted(insumos_involucrados):
-        restante = _cantidad_utilizada(
-            insumo_id, ejecucion.insumos_utilizados
-        )
+        restante = _cantidad_utilizada(insumo_id, ejecucion.insumos_utilizados)
         reservas_del_insumo = [
             reserva for reserva in pendientes if reserva.insumo_id == insumo_id
         ]

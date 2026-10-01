@@ -138,6 +138,27 @@ export function completarEjecucion(
 }
 
 /**
+ * PROC-REP-190 -> 200 (Interrumpido) -> 210 -> 211 (Técnico propietario,
+ * VAR-REP-003). `insumosUtilizados` es lo realmente usado hasta ahora.
+ */
+export function interrumpirEjecucion(
+  ordenId: string,
+  ejecucionId: string,
+  usuarioId: string,
+  insumosUtilizados: InsumoUtilizado[],
+  observaciones: string | null,
+): Promise<Orden> {
+  return post<Orden>(
+    `/api/orders/${ordenId}/executions/${ejecucionId}/interrupt`,
+    {
+      usuario_id: usuarioId,
+      insumos_utilizados: insumosUtilizados,
+      observaciones,
+    },
+  );
+}
+
+/**
  * PROC-REP-220 -> 230, y 245 -> 240 recién cuando todos los Detalles
  * quedan APROBADO (Recepción). `detalleId` (Multi-Detalle) aprueba un
  * único Detalle; `null` preserva la aprobación en bloque.

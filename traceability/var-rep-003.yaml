@@ -1,0 +1,283 @@
+# Trazabilidad end-to-end del slice implementado - Scenario VAR-REP-003 (Ejecucion interrumpida).
+#
+# Unidad de implementacion INDEPENDIENTE de VAR-REP-001/002 (por eso archivo
+# propio, ver traceability/README.md): activa otra Feature (FEAT-REP-005),
+# ocurre en otro punto del proceso (PROC-REP-200, no el ingreso) y agrega
+# otra mecanica tecnica (resultado Interrumpido de la Ejecucion).
+#
+# PROC-REP-190 -> 200 (Interrumpido) -> 210 -> 211. La Ejecucion queda
+# INTERRUMPIDO (terminal, nunca se sobrescribe), el Detalle vuelve a DEFINIDO
+# (la representacion tecnica de PENDIENTE), el inventario se reconcilia con lo
+# realmente utilizado (CONSUMO / LIBERACION_RESERVA) y la toma NO se cierra:
+# el tecnico continua con una Ejecucion nueva o libera la Orden (212/213).
+# Aplica a HP-REP-001/002/003 sin ramas por Origen.
+#
+# Reutiliza TASK-REP-087 y TASK-REP-091 de hp-rep-001.yaml (mismos id y name;
+# aqui con el trabajo ya hecho). TASK-REP-089/090 (DESPERDICIO) siguen
+# NOT_IMPLEMENTED en hp-rep-001.yaml: fuera de alcance de este Slice.
+#
+# Continua la numeracion global: US-REP-026, ACC-REP-040, FR-REP-094,
+# TR-REP-096, TASK-REP-188, CODE-REP-168, TEST-REP-329, UAT-REP-026.
+#
+# Validacion: npx tsx scripts/validate-traceability.ts traceability/var-rep-003.yaml
+
+meta:
+  id: TRACE-VAR-REP-003
+  name: Trazabilidad del slice implementado de VAR-REP-003
+  generated_from: rama mvp-v2-slice5-var-rep-003, tras implementar la ejecucion interrumpida sobre mvp-v2
+  date: "2026-10-01"
+  business_domain: DOM-RMA
+  business_process: PROC-REP
+  business_process_version: "1.3"
+  implemented_scenario: VAR-REP-003
+  active_features: [FEAT-REP-005]
+  related_trace_files:
+    - traceability/hp-rep-001.yaml (HP-REP-001; TASK-REP-087/091 y TR-REP-061 se actualizan)
+    - traceability/hp-rep-002.yaml (no se modifica)
+    - traceability/hp-rep-003.yaml (no se modifica)
+    - traceability/var-rep-001-002.yaml (no se modifica)
+  sources:
+    process: business/processes/repair-management-v1.3.yaml
+    rules: business/rules/business-rules-v1.3.yaml
+    features: business/features/repair-management-features-v1.3.yaml
+    scenarios: business/scenarios/repair-management-scenarios-v1.3.yaml
+    convention: traceability/README.md
+    constitution: .specify/memory/constitution.md
+    backend: app/backend/
+    frontend: app/frontend/
+  relationship_vocabulary:
+    belongs_to: el origen pertenece al destino (jerarquia)
+    activates: el Scenario activa la Feature
+    realizes: la System Action realiza la User Story
+    covers: la System Action cubre el nodo del Business Process
+    governed_by: el item esta gobernado por la Business Rule
+    derives_from: el Functional Requirement deriva de la System Action
+    satisfies: el Technical Requirement satisface el Functional Requirement
+    supports: el artefacto de modelo de datos sostiene un FR o un TR (N:M)
+    implements: la Task o el Code implementa un Technical Requirement
+    produced_by: el Code fue producido por la Task
+    exercises: el Internal Test ejercita el Code
+    verifies: el Internal Test verifica un FR o un TR
+    accepts: el UAT acepta una User Story o un Functional Requirement
+
+items:
+
+  - {id: DOM-RMA, type: business_domain, name: Area funcional RMA, status: active, source: traceability/README.md}
+  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: draft, version: "1.3", source: business/processes/repair-management-v1.3.yaml}
+  - {id: VAR-REP-003, type: scenario, name: "Ejecucion interrumpida", status: draft, scenario_type: VARIANT, scope: FEATURE, source: business/scenarios/repair-management-scenarios-v1.3.yaml}
+
+  - {id: FEAT-REP-005, type: feature, name: "Ejecucion de Detalles y gestion de insumos", status: draft, feature_status: draft, implemented_scenario: [VAR-REP-003], implemented_slice_status: IMPLEMENTED, nodes_total: 11, nodes_in_slice: 6, spec: specs/005-feat-rep-005-hp-slice/}
+
+  - {id: PROC-REP-181, type: process_node, name: "Seleccionar Detalle a trabajar", node_type: activity, actor: ACT-TECH, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-185, type: process_node, name: "Reservar insumos e iniciar Ejecucion del Detalle", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-190, type: process_node, name: "Ejecutar Detalle", node_type: activity, actor: ACT-TECH, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-200, type: process_node, name: "Registrar ejecucion real del Detalle", node_type: activity, actor: ACT-TECH, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-210, type: process_node, name: "Generar movimientos de inventario", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-211, type: process_node, name: "Evaluar situacion de la Orden", node_type: decision, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-212, type: process_node, name: "¿Iniciar un Detalle de reparacion?", node_type: decision, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-213, type: process_node, name: "Liberar Orden de Reparacion", node_type: activity, actor: ACT-TECH, status: draft, in_scenario: true, implemented: true}
+
+  - {id: BR-REP-004, type: business_rule, name: "Registro de ejecucion real", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-005, type: business_rule, name: "Inventario consecuencia de ejecucion", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-007, type: business_rule, name: "Concurrencia de Ejecucion en la Orden", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-012, type: business_rule, name: "Estado agregado de la Orden como calculo derivado", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-018, type: business_rule, name: "Toma y liberacion de Orden (participacion activa)", status: draft, coverage: PARTIAL}
+
+  # TASK-REP-087 y TASK-REP-091 se REUTILIZAN de hp-rep-001.yaml (mismo id, type y name).
+  - {id: TASK-REP-087, type: task, name: "Implementar el resultado Interrumpido de PROC-REP-200 (BR-REP-004): la Ejecucion queda como historia y el Detalle vuelve a PENDIENTE", status: DONE, note: "Implementada en specs/014-slice5-ejecucion-interrumpida (VAR-REP-003)."}
+  - {id: TASK-REP-091, type: task, name: "Ejercitar varias Ejecuciones historicas sobre el mismo Detalle (el modelo lo soporta; no esta probado)", status: DONE, note: "Implementada en specs/014-slice5-ejecucion-interrumpida (VAR-REP-003)."}
+
+  - {id: US-REP-027, type: user_story, name: "Como Tecnico quiero interrumpir una Ejecucion conservando lo realizado y los insumos realmente utilizados para dejar el Detalle disponible para continuar", status: IMPLEMENTED, priority: P1, actor: ACT-TECH}
+  - {id: US-REP-028, type: user_story, name: "Como Tecnico quiero continuar un Detalle interrumpido con una Ejecucion nueva -yo u otro tecnico- sin perder la Ejecucion anterior para completar la reparacion mas adelante", status: IMPLEMENTED, priority: P1, actor: ACT-TECH}
+
+  - {id: ACC-REP-041, type: system_action, name: "Registrar el resultado Interrumpido de PROC-REP-200 y encadenar PROC-REP-210 y PROC-REP-211 sin cerrar la toma", status: IMPLEMENTED}
+  - {id: ACC-REP-042, type: system_action, name: "Publicar INTERRUMPIR_EJECUCION junto a COMPLETAR_EJECUCION mientras exista una Ejecucion activa", status: IMPLEMENTED}
+  - {id: ACC-REP-043, type: system_action, name: "Continuar un Detalle interrumpido iniciando una Ejecucion nueva sobre la mecanica existente de PROC-REP-212/181/185", status: IMPLEMENTED}
+
+  - {id: FR-REP-095, type: functional_requirement, name: "Una Ejecucion interrumpida queda INTERRUMPIDO (terminal) con fin insumos utilizados y observaciones y el Detalle vuelve a DEFINIDO sin bloqueo", status: IMPLEMENTED}
+  - {id: FR-REP-096, type: functional_requirement, name: "El inventario de una Ejecucion interrumpida consume lo utilizado y libera lo reservado que no se uso sin dejar reservas activas (DESPERDICIO queda fuera de alcance)", status: IMPLEMENTED}
+  - {id: FR-REP-097, type: functional_requirement, name: "Solo se concilia el inventario de una Ejecucion terminada (COMPLETADO o INTERRUMPIDO), nunca de una EN_PROGRESO", status: IMPLEMENTED}
+  - {id: FR-REP-098, type: functional_requirement, name: "Tras interrumpir la situacion de la Orden sale del resolver (ABIERTA_TRABAJABLE con un Detalle trabajable) y la toma sigue activa", status: IMPLEMENTED}
+  - {id: FR-REP-099, type: functional_requirement, name: "El backend publica INTERRUMPIR_EJECUCION para el tecnico con Ejecucion activa y la UI solo muestra la publicada", status: IMPLEMENTED}
+  - {id: FR-REP-100, type: functional_requirement, name: "Continuar un Detalle interrumpido crea una Ejecucion nueva con su propio id toma tecnico e insumos sin sobrescribir las anteriores", status: IMPLEMENTED}
+
+  - {id: TR-REP-097, type: technical_requirement, name: "EstadoEjecucion agrega INTERRUMPIDO de forma aditiva: el JSON con EN_PROGRESO o COMPLETADO sigue cargando y una Ejecucion interrumpida hace round-trip con fin insumos y observaciones", status: IMPLEMENTED}
+  - {id: TR-REP-098, type: technical_requirement, name: "services.ejecuciones.registrar_ejecucion_interrumpida comparte con registrar_ejecucion_completada el helper privado _registrar_fin_ejecucion (mismas validaciones de actor propiedad y estado) y registra PROC-REP-200 con observacion Interrumpido", status: IMPLEMENTED}
+  - {id: TR-REP-099, type: technical_requirement, name: "services.inventario.generar_movimientos_inventario rechaza una Ejecucion EN_PROGRESO con PrecondicionInvalidaError y concilia COMPLETADO e INTERRUMPIDO con el mismo mecanismo de CONSUMO y LIBERACION_RESERVA", status: IMPLEMENTED}
+  - {id: TR-REP-100, type: technical_requirement, name: "application.taller.interrumpir_ejecucion y POST /executions/{id}/interrupt componen 190 200 210 211 con el helper _cerrar_ejecucion compartido con completar_ejecucion dentro de la seccion critica de inventario y dejan el resultado de 211 al resolver", status: IMPLEMENTED}
+  - {id: TR-REP-101, type: technical_requirement, name: "application.acciones.acciones_disponibles publica INTERRUMPIR_EJECUCION para TECNICO con detalle_id y ejecucion_id mientras hay una Ejecucion activa", status: IMPLEMENTED}
+  - {id: TR-REP-102, type: technical_requirement, name: "El frontend ejecuta INTERRUMPIR_EJECUCION con el formulario de insumos reales y lista las Ejecuciones con su estado real", status: IMPLEMENTED}
+  - {id: TR-REP-103, type: technical_requirement, name: "Una Ejecucion terminal nunca se reabre: continuar el Detalle usa seleccionar_detalle y reservar_insumos_e_iniciar_ejecucion existentes y crea una Ejecucion nueva sin calcular insumo restante entre Ejecuciones", status: IMPLEMENTED}
+
+  - {id: TASK-REP-189, type: task, name: "Exigir una Ejecucion terminada en generar_movimientos_inventario (gate de PROC-REP-210)", status: DONE}
+  - {id: TASK-REP-190, type: task, name: "Publicar INTERRUMPIR_EJECUCION en acciones_disponibles", status: DONE}
+  - {id: TASK-REP-191, type: task, name: "Frontend: tipos, cliente API, formulario y listado de Ejecuciones", status: DONE}
+
+  - {id: CODE-REP-169, type: code_artifact, name: "domain/models/enums.py::EstadoEjecucion.INTERRUMPIDO", status: IMPLEMENTED, source: "app/backend/app/domain/models/enums.py::EstadoEjecucion"}
+  - {id: CODE-REP-170, type: code_artifact, name: "services/ejecuciones.py::registrar_ejecucion_interrumpida", status: IMPLEMENTED, source: "app/backend/app/services/ejecuciones.py::registrar_ejecucion_interrumpida"}
+  - {id: CODE-REP-171, type: code_artifact, name: "services/ejecuciones.py::_registrar_fin_ejecucion", status: IMPLEMENTED, source: "app/backend/app/services/ejecuciones.py::_registrar_fin_ejecucion"}
+  - {id: CODE-REP-172, type: code_artifact, name: "services/inventario.py::generar_movimientos_inventario (gate de Ejecucion terminada)", status: IMPLEMENTED, source: "app/backend/app/services/inventario.py::generar_movimientos_inventario"}
+  - {id: CODE-REP-173, type: code_artifact, name: "application/taller.py::interrumpir_ejecucion", status: IMPLEMENTED, source: "app/backend/app/application/taller.py::interrumpir_ejecucion"}
+  - {id: CODE-REP-174, type: code_artifact, name: "application/taller.py::_cerrar_ejecucion", status: IMPLEMENTED, source: "app/backend/app/application/taller.py::_cerrar_ejecucion"}
+  - {id: CODE-REP-175, type: code_artifact, name: "api/ordenes.py::post_interrumpir_ejecucion", status: IMPLEMENTED, source: "app/backend/app/api/ordenes.py::post_interrumpir_ejecucion"}
+  - {id: CODE-REP-176, type: code_artifact, name: "application/acciones.py::acciones_disponibles (INTERRUMPIR_EJECUCION)", status: IMPLEMENTED, source: "app/backend/app/application/acciones.py::acciones_disponibles"}
+  - {id: CODE-REP-177, type: code_artifact, name: "frontend/src/features/ordenes-reparacion/AccionesOrden.tsx (INTERRUMPIR_EJECUCION)", status: IMPLEMENTED, source: "app/frontend/src/features/ordenes-reparacion/AccionesOrden.tsx"}
+
+  - {id: TEST-REP-330, type: internal_test, name: "test_interrumpir_deja_la_ejecucion_terminal_y_el_detalle_definido", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_interrumpir_deja_la_ejecucion_terminal_y_el_detalle_definido"}
+  - {id: TEST-REP-331, type: internal_test, name: "test_interrumpir_no_cierra_la_toma", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_interrumpir_no_cierra_la_toma"}
+  - {id: TEST-REP-332, type: internal_test, name: "test_completar_sigue_dando_completado_y_detalle_completo", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_completar_sigue_dando_completado_y_detalle_completo"}
+  - {id: TEST-REP-333, type: internal_test, name: "test_solo_el_tecnico_propietario_puede_interrumpir", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_solo_el_tecnico_propietario_puede_interrumpir"}
+  - {id: TEST-REP-334, type: internal_test, name: "test_una_ejecucion_terminal_no_puede_interrumpirse", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_una_ejecucion_terminal_no_puede_interrumpirse"}
+  - {id: TEST-REP-335, type: internal_test, name: "test_no_se_interrumpe_una_ejecucion_inexistente", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_no_se_interrumpe_una_ejecucion_inexistente"}
+  - {id: TEST-REP-336, type: internal_test, name: "test_210_reconcilia_la_ejecucion_interrumpida", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_210_reconcilia_la_ejecucion_interrumpida"}
+  - {id: TEST-REP-337, type: internal_test, name: "test_210_rechaza_una_ejecucion_en_progreso", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_210_rechaza_una_ejecucion_en_progreso"}
+  - {id: TEST-REP-338, type: internal_test, name: "test_210_acepta_completado_e_interrumpido", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_210_acepta_completado_e_interrumpido"}
+  - {id: TEST-REP-339, type: internal_test, name: "test_211_sale_del_resolver_con_el_detalle_trabajable", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_211_sale_del_resolver_con_el_detalle_trabajable"}
+  - {id: TEST-REP-340, type: internal_test, name: "test_acciones_con_ejecucion_activa_y_luego_de_interrumpir", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_acciones_con_ejecucion_activa_y_luego_de_interrumpir"}
+  - {id: TEST-REP-341, type: internal_test, name: "test_el_mismo_tecnico_continua_con_una_ejecucion_nueva", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_el_mismo_tecnico_continua_con_una_ejecucion_nueva"}
+  - {id: TEST-REP-342, type: internal_test, name: "test_la_interrupcion_no_depende_del_origen", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_la_interrupcion_no_depende_del_origen"}
+  - {id: TEST-REP-343, type: internal_test, name: "test_una_ejecucion_interrumpida_hace_round_trip_json", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_una_ejecucion_interrumpida_hace_round_trip_json"}
+  - {id: TEST-REP-344, type: internal_test, name: "test_json_previo_con_ejecuciones_en_progreso_y_completadas_sigue_cargando", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_json_previo_con_ejecuciones_en_progreso_y_completadas_sigue_cargando"}
+  - {id: TEST-REP-345, type: internal_test, name: "test_var_rep_003_interrupcion_de_punta_a_punta", status: PASSING, source: "app/backend/tests/test_api_var_rep_003.py::test_var_rep_003_interrupcion_de_punta_a_punta"}
+  - {id: TEST-REP-346, type: internal_test, name: "test_el_progreso_no_cambia_con_la_interrupcion", status: PASSING, source: "app/backend/tests/test_api_var_rep_003.py::test_el_progreso_no_cambia_con_la_interrupcion"}
+  - {id: TEST-REP-347, type: internal_test, name: "test_el_stock_fisico_refleja_lo_realmente_utilizado", status: PASSING, source: "app/backend/tests/test_api_var_rep_003.py::test_el_stock_fisico_refleja_lo_realmente_utilizado"}
+  - {id: TEST-REP-348, type: internal_test, name: "test_el_mismo_tecnico_continua_con_una_ejecucion_nueva", status: PASSING, source: "app/backend/tests/test_api_var_rep_003.py::test_el_mismo_tecnico_continua_con_una_ejecucion_nueva"}
+  - {id: TEST-REP-349, type: internal_test, name: "test_otro_tecnico_continua_luego_de_liberar_la_orden", status: PASSING, source: "app/backend/tests/test_api_var_rep_003.py::test_otro_tecnico_continua_luego_de_liberar_la_orden"}
+  - {id: TEST-REP-350, type: internal_test, name: "test_solo_el_tecnico_propietario_puede_interrumpir", status: PASSING, source: "app/backend/tests/test_api_var_rep_003.py::test_solo_el_tecnico_propietario_puede_interrumpir"}
+  - {id: TEST-REP-351, type: internal_test, name: "test_interrumpir_una_ejecucion_inexistente_devuelve_404", status: PASSING, source: "app/backend/tests/test_api_var_rep_003.py::test_interrumpir_una_ejecucion_inexistente_devuelve_404"}
+  - {id: TEST-REP-352, type: internal_test, name: "test_interrumpir_una_ejecucion_completada_devuelve_409", status: PASSING, source: "app/backend/tests/test_api_var_rep_003.py::test_interrumpir_una_ejecucion_completada_devuelve_409"}
+  - {id: TEST-REP-353, type: internal_test, name: "test_complete_conserva_su_contrato", status: PASSING, source: "app/backend/tests/test_api_var_rep_003.py::test_complete_conserva_su_contrato"}
+  - {id: TEST-REP-354, type: internal_test, name: "test_la_interrupcion_funciona_en_rt_interno", status: PASSING, source: "app/backend/tests/test_api_var_rep_003.py::test_la_interrupcion_funciona_en_rt_interno"}
+  - {id: TEST-REP-355, type: internal_test, name: "test_la_interrupcion_funciona_en_garantia_rma", status: PASSING, source: "app/backend/tests/test_api_var_rep_003.py::test_la_interrupcion_funciona_en_garantia_rma"}
+  - {id: TEST-REP-356, type: internal_test, name: "test_multidetalle_interrumpir_uno_ofrece_los_trabajables", status: PASSING, source: "app/backend/tests/test_api_var_rep_003.py::test_multidetalle_interrumpir_uno_ofrece_los_trabajables"}
+
+  - {id: UAT-REP-027, type: uat, name: "El tecnico puede interrumpir una Ejecucion conservando lo realizado y dejando el Detalle disponible para continuar", status: PENDING}
+  - {id: UAT-REP-028, type: uat, name: "El mismo u otro tecnico puede continuar posteriormente el Detalle mediante una nueva Ejecucion sin perder la anterior", status: PENDING}
+
+links:
+
+  - {from: PROC-REP, to: DOM-RMA, relationship: belongs_to}
+  - {from: VAR-REP-003, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-181, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-185, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-190, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-200, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-210, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-211, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-212, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-213, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-005, to: PROC-REP, relationship: belongs_to}
+  - {from: VAR-REP-003, to: FEAT-REP-005, relationship: activates}
+
+  - {from: US-REP-027, to: FEAT-REP-005, relationship: belongs_to}
+  - {from: US-REP-028, to: FEAT-REP-005, relationship: belongs_to}
+
+  - {from: ACC-REP-041, to: US-REP-027, relationship: realizes}
+  - {from: ACC-REP-041, to: PROC-REP-190, relationship: covers}
+  - {from: ACC-REP-041, to: PROC-REP-200, relationship: covers}
+  - {from: ACC-REP-041, to: PROC-REP-210, relationship: covers}
+  - {from: ACC-REP-041, to: PROC-REP-211, relationship: covers}
+  - {from: ACC-REP-041, to: BR-REP-004, relationship: governed_by}
+  - {from: ACC-REP-041, to: BR-REP-005, relationship: governed_by}
+  - {from: ACC-REP-041, to: BR-REP-012, relationship: governed_by}
+  - {from: ACC-REP-041, to: BR-REP-018, relationship: governed_by}
+
+  - {from: ACC-REP-042, to: US-REP-027, relationship: realizes}
+  - {from: ACC-REP-042, to: PROC-REP-200, relationship: covers}
+  - {from: ACC-REP-042, to: BR-REP-004, relationship: governed_by}
+
+  - {from: ACC-REP-043, to: US-REP-028, relationship: realizes}
+  - {from: ACC-REP-043, to: PROC-REP-212, relationship: covers}
+  - {from: ACC-REP-043, to: PROC-REP-181, relationship: covers}
+  - {from: ACC-REP-043, to: PROC-REP-185, relationship: covers}
+  - {from: ACC-REP-043, to: BR-REP-004, relationship: governed_by}
+  - {from: ACC-REP-043, to: BR-REP-007, relationship: governed_by}
+  - {from: ACC-REP-043, to: BR-REP-018, relationship: governed_by}
+
+  - {from: FR-REP-095, to: ACC-REP-041, relationship: derives_from}
+  - {from: FR-REP-096, to: ACC-REP-041, relationship: derives_from}
+  - {from: FR-REP-097, to: ACC-REP-041, relationship: derives_from}
+  - {from: FR-REP-098, to: ACC-REP-041, relationship: derives_from}
+  - {from: FR-REP-099, to: ACC-REP-042, relationship: derives_from}
+  - {from: FR-REP-100, to: ACC-REP-043, relationship: derives_from}
+
+  - {from: TR-REP-097, to: FR-REP-095, relationship: satisfies}
+  - {from: TR-REP-098, to: FR-REP-095, relationship: satisfies}
+  - {from: TR-REP-099, to: FR-REP-096, relationship: satisfies}
+  - {from: TR-REP-099, to: FR-REP-097, relationship: satisfies}
+  - {from: TR-REP-100, to: FR-REP-096, relationship: satisfies}
+  - {from: TR-REP-100, to: FR-REP-098, relationship: satisfies}
+  - {from: TR-REP-101, to: FR-REP-099, relationship: satisfies}
+  - {from: TR-REP-102, to: FR-REP-099, relationship: satisfies}
+  - {from: TR-REP-102, to: FR-REP-100, relationship: satisfies}
+  - {from: TR-REP-103, to: FR-REP-100, relationship: satisfies}
+
+  - {from: TASK-REP-189, to: TR-REP-099, relationship: implements}
+  - {from: TASK-REP-190, to: TR-REP-101, relationship: implements}
+  - {from: TASK-REP-191, to: TR-REP-102, relationship: implements}
+  - {from: TASK-REP-087, to: TR-REP-097, relationship: implements}
+  - {from: TASK-REP-087, to: TR-REP-098, relationship: implements}
+  - {from: TASK-REP-087, to: TR-REP-100, relationship: implements}
+  - {from: TASK-REP-091, to: TR-REP-103, relationship: implements}
+
+  - {from: CODE-REP-169, to: TASK-REP-087, relationship: produced_by}
+  - {from: CODE-REP-169, to: TR-REP-097, relationship: implements}
+  - {from: CODE-REP-170, to: TASK-REP-087, relationship: produced_by}
+  - {from: CODE-REP-170, to: TR-REP-098, relationship: implements}
+  - {from: CODE-REP-171, to: TASK-REP-087, relationship: produced_by}
+  - {from: CODE-REP-171, to: TR-REP-098, relationship: implements}
+  - {from: CODE-REP-172, to: TASK-REP-189, relationship: produced_by}
+  - {from: CODE-REP-172, to: TR-REP-099, relationship: implements}
+  - {from: CODE-REP-173, to: TASK-REP-087, relationship: produced_by}
+  - {from: CODE-REP-173, to: TR-REP-100, relationship: implements}
+  - {from: CODE-REP-174, to: TASK-REP-087, relationship: produced_by}
+  - {from: CODE-REP-174, to: TR-REP-100, relationship: implements}
+  - {from: CODE-REP-175, to: TASK-REP-087, relationship: produced_by}
+  - {from: CODE-REP-175, to: TR-REP-100, relationship: implements}
+  - {from: CODE-REP-176, to: TASK-REP-190, relationship: produced_by}
+  - {from: CODE-REP-176, to: TR-REP-101, relationship: implements}
+  - {from: CODE-REP-177, to: TASK-REP-191, relationship: produced_by}
+  - {from: CODE-REP-177, to: TR-REP-102, relationship: implements}
+
+  - {from: TEST-REP-330, to: FR-REP-095, relationship: verifies}
+  - {from: TEST-REP-330, to: CODE-REP-170, relationship: exercises}
+  - {from: TEST-REP-331, to: FR-REP-098, relationship: verifies}
+  - {from: TEST-REP-332, to: TR-REP-098, relationship: verifies}
+  - {from: TEST-REP-332, to: CODE-REP-171, relationship: exercises}
+  - {from: TEST-REP-333, to: TR-REP-098, relationship: verifies}
+  - {from: TEST-REP-334, to: FR-REP-095, relationship: verifies}
+  - {from: TEST-REP-335, to: TR-REP-098, relationship: verifies}
+  - {from: TEST-REP-336, to: FR-REP-096, relationship: verifies}
+  - {from: TEST-REP-336, to: CODE-REP-172, relationship: exercises}
+  - {from: TEST-REP-337, to: FR-REP-097, relationship: verifies}
+  - {from: TEST-REP-337, to: TR-REP-099, relationship: verifies}
+  - {from: TEST-REP-338, to: TR-REP-099, relationship: verifies}
+  - {from: TEST-REP-339, to: FR-REP-098, relationship: verifies}
+  - {from: TEST-REP-340, to: FR-REP-099, relationship: verifies}
+  - {from: TEST-REP-340, to: CODE-REP-176, relationship: exercises}
+  - {from: TEST-REP-341, to: FR-REP-100, relationship: verifies}
+  - {from: TEST-REP-341, to: TR-REP-103, relationship: verifies}
+  - {from: TEST-REP-342, to: FR-REP-095, relationship: verifies}
+  - {from: TEST-REP-343, to: TR-REP-097, relationship: verifies}
+  - {from: TEST-REP-343, to: CODE-REP-169, relationship: exercises}
+  - {from: TEST-REP-344, to: TR-REP-097, relationship: verifies}
+  - {from: TEST-REP-345, to: FR-REP-095, relationship: verifies}
+  - {from: TEST-REP-345, to: FR-REP-098, relationship: verifies}
+  - {from: TEST-REP-345, to: CODE-REP-175, relationship: exercises}
+  - {from: TEST-REP-345, to: CODE-REP-173, relationship: exercises}
+  - {from: TEST-REP-346, to: TR-REP-100, relationship: verifies}
+  - {from: TEST-REP-347, to: FR-REP-096, relationship: verifies}
+  - {from: TEST-REP-347, to: CODE-REP-174, relationship: exercises}
+  - {from: TEST-REP-348, to: FR-REP-100, relationship: verifies}
+  - {from: TEST-REP-349, to: FR-REP-100, relationship: verifies}
+  - {from: TEST-REP-349, to: TR-REP-103, relationship: verifies}
+  - {from: TEST-REP-350, to: TR-REP-098, relationship: verifies}
+  - {from: TEST-REP-351, to: TR-REP-100, relationship: verifies}
+  - {from: TEST-REP-352, to: FR-REP-095, relationship: verifies}
+  - {from: TEST-REP-353, to: TR-REP-100, relationship: verifies}
+  - {from: TEST-REP-354, to: FR-REP-095, relationship: verifies}
+  - {from: TEST-REP-355, to: FR-REP-095, relationship: verifies}
+  - {from: TEST-REP-356, to: FR-REP-098, relationship: verifies}
+
+  - {from: UAT-REP-027, to: US-REP-027, relationship: accepts}
+  - {from: UAT-REP-028, to: US-REP-028, relationship: accepts}

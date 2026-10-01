@@ -131,10 +131,17 @@ class EstadoTomaOrden(str, Enum):
 
 
 class EstadoEjecucion(str, Enum):
-    """Estado de una Ejecucion concreta de un Detalle."""
+    """Estado de una Ejecucion concreta de un Detalle.
+
+    ``COMPLETADO`` e ``INTERRUMPIDO`` son los dos resultados terminales de
+    PROC-REP-200 (VAR-REP-003 agrega el segundo). Una Ejecucion terminal
+    nunca se reabre: continuar un Detalle interrumpido es una Ejecucion
+    NUEVA.
+    """
 
     EN_PROGRESO = "EN_PROGRESO"
     COMPLETADO = "COMPLETADO"
+    INTERRUMPIDO = "INTERRUMPIDO"
 
 
 class RolUsuario(str, Enum):

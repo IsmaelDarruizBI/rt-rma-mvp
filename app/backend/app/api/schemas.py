@@ -212,6 +212,18 @@ class CompletarEjecucionIn(BaseModel):
     observaciones: str | None = None
 
 
+class InterrumpirEjecucionIn(BaseModel):
+    """``POST /api/orders/{id}/executions/{ejecucion_id}/interrupt``.
+
+    Misma forma que ``CompletarEjecucionIn``: ``insumos_utilizados`` es lo
+    realmente usado hasta la interrupcion.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    insumos_utilizados: list[InsumoUtilizadoIn] = Field(default_factory=list)
+    observaciones: str | None = None
+
+
 class AprobarControlIn(BaseModel):
     """``POST /api/orders/{id}/control/approve`` (ACT-RECEP).
 

@@ -11,7 +11,7 @@ seccion critica de inventario: el primero reserva stock, el segundo lo
 consume y reescribe el catalogo.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime
 
 from app.domain.models import (
@@ -28,6 +28,7 @@ from app.services import (
     ejecutar_detalle,
     evaluar_situacion_orden,
     registrar_ejecucion_completada,
+    registrar_ejecucion_interrumpida,
     reservar_insumos_e_iniciar_ejecucion,
     seleccionar_detalle,
     tomar_orden,
@@ -218,6 +219,60 @@ def completar_ejecucion(
     Solo el tecnico propietario de la Ejecucion puede completarla: lo
     valida el service, no este comando.
     """
+    return _cerrar_ejecucion(
+        contexto,
+        registrar_resultado=registrar_ejecucion_completada,
+        orden_id=orden_id,
+        ejecucion_id=ejecucion_id,
+        usuario_id=usuario_id,
+        insumos_utilizados=insumos_utilizados,
+        observaciones=observaciones,
+    )
+
+
+def interrumpir_ejecucion(
+    contexto: ApplicationContext,
+    *,
+    orden_id: str,
+    ejecucion_id: str,
+    usuario_id: str,
+    insumos_utilizados: Sequence[InsumoUtilizado],
+    observaciones: str | None = None,
+) -> tuple[OrdenReparacion, ResultadoEvaluacionOrden]:
+    """El tecnico interrumpe la Ejecucion (190 -> 200 Interrumpido -> 210
+    -> 211), VAR-REP-003.
+
+    Paralelo a ``completar_ejecucion``: la Ejecucion queda INTERRUMPIDO y
+    el Detalle vuelve a DEFINIDO; lo realmente utilizado se consume y lo
+    reservado que no se uso se libera (PROC-REP-210). El resultado de
+    PROC-REP-211 sale del resolver (con un Detalle trabajable,
+    ABIERTA_TRABAJABLE), no se fija aqui.
+
+    NO cierra la toma: el tecnico puede iniciar una Ejecucion nueva
+    (mismo u otro Detalle) o liberar la Orden (PROC-REP-212/213).
+    """
+    return _cerrar_ejecucion(
+        contexto,
+        registrar_resultado=registrar_ejecucion_interrumpida,
+        orden_id=orden_id,
+        ejecucion_id=ejecucion_id,
+        usuario_id=usuario_id,
+        insumos_utilizados=insumos_utilizados,
+        observaciones=observaciones,
+    )
+
+
+def _cerrar_ejecucion(
+    contexto: ApplicationContext,
+    *,
+    registrar_resultado: Callable[..., OrdenReparacion],
+    orden_id: str,
+    ejecucion_id: str,
+    usuario_id: str,
+    insumos_utilizados: Sequence[InsumoUtilizado],
+    observaciones: str | None,
+) -> tuple[OrdenReparacion, ResultadoEvaluacionOrden]:
+    """190 -> 200 -> 210 -> 211 para cualquier resultado de PROC-REP-200."""
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha: datetime = contexto.ahora()
 
@@ -231,7 +286,7 @@ def completar_ejecucion(
             usuario=usuario,
             fecha=fecha,
         )
-        orden = registrar_ejecucion_completada(
+        orden = registrar_resultado(
             orden,
             ejecucion_id=ejecucion_id,
             insumos_utilizados=insumos_utilizados,

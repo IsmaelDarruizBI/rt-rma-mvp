@@ -366,7 +366,7 @@ items:
   - {id: TR-REP-058, type: technical_requirement, name: domain.politicas.politica_de(origen) es un mapping de PoliticaOrigen (frozen dataclass) con la condicion comercial y los requerimientos de proceso -comprobante, notificacion, entrega a cliente, informar RT- de cada Origen, status: IMPLEMENTED}
   - {id: TR-REP-059, type: technical_requirement, name: resolver_situacion_orden (services/resolucion.py) es una funcion pura que clasifica los ocho resultados de BR-REP-012 sin excepciones para ningun resultado de negocio legitimo, status: IMPLEMENTED}
   - {id: TR-REP-060, type: technical_requirement, name: ReparacionDetail.condicion (CondicionReparacionDetail) separa el bloqueo del estado tecnico del Detalle, con SIN_BLOQUEO como default compatible con el JSON persistido antes de Slice 0, status: IMPLEMENTED}
-  - {id: TR-REP-061, type: technical_requirement, name: completar_ejecucion ya no puede fallar despues de persistir el inventario para ningun resultado de negocio legitimo porque evaluar_situacion_orden delega en el resolver total, status: IMPLEMENTED}
+  - {id: TR-REP-061, type: technical_requirement, name: completar_ejecucion e interrumpir_ejecucion (comparten _cerrar_ejecucion) ya no pueden fallar despues de persistir el inventario para ningun resultado de negocio legitimo porque evaluar_situacion_orden delega en el resolver total, status: IMPLEMENTED}
   - {id: TR-REP-062, type: technical_requirement, name: acciones_disponibles (application/acciones.py) consulta politica_de(orden.origen) para decidir Notificar Registrar-Pago y Entregar en vez de un condicional fijo por CLIENTE_EXTERNO, status: IMPLEMENTED}
   - {id: TR-REP-063, type: technical_requirement, name: progreso() (application/progreso.py) resuelve la ruta esperada desde un mapping por Origen extensible con CLIENTE_EXTERNO como fallback, status: IMPLEMENTED}
   - {id: TR-REP-064, type: technical_requirement, name: ROLES_PAGO (services/pagos.py) es la fuente unica de roles autorizados para Registrar Pago consumida por el backend y por acciones_disponibles, status: IMPLEMENTED}
@@ -489,11 +489,11 @@ items:
   - {id: TASK-REP-084, type: task, name: "[US-REP-009] Implementar evaluar_situacion_orden (PROC-REP-211) con ResultadoEvaluacionOrden, fail-safe explicito fuera del caso soportado y cierre...", status: DONE, spec: 005-feat-rep-005-hp-slice}
   - {id: TASK-REP-085, type: task, name: "Implementar la rama No de PROC-REP-174 y los nodos PROC-REP-176 / 178 / 179 (advertencia y override de estacion por Detalle, BR-REP-011-B)", status: NOT_IMPLEMENTED, spec: 005-feat-rep-005-hp-slice}
   - {id: TASK-REP-086, type: task, name: "Implementar PROC-REP-186 (registrar reserva fallida: Detalle BLOQUEADO_POR_RECURSOS y recalculo de la Orden). Hoy la reserva insuficiente lanza un...", status: NOT_IMPLEMENTED, spec: 005-feat-rep-005-hp-slice}
-  - {id: TASK-REP-087, type: task, name: "Implementar el resultado Interrumpido de PROC-REP-200 (BR-REP-004): la Ejecucion queda como historia y el Detalle vuelve a PENDIENTE", status: NOT_IMPLEMENTED, spec: 005-feat-rep-005-hp-slice}
+  - {id: TASK-REP-087, type: task, name: "Implementar el resultado Interrumpido de PROC-REP-200 (BR-REP-004): la Ejecucion queda como historia y el Detalle vuelve a PENDIENTE", status: DONE, spec: 005-feat-rep-005-hp-slice, note: "Implementada en specs/014-slice5-ejecucion-interrumpida (VAR-REP-003); ver traceability/var-rep-003.yaml."}
   - {id: TASK-REP-088, type: task, name: "Implementar las ramas (a), (b), (d), (e) y (f) del resolver PROC-REP-211 (BR-REP-012), incluyendo TODO_CANCELADO, PENDIENTE_RECURSOS y REQUIERE_REVISION", status: DONE, spec: 009-mvp2-foundation, note: "La CLASIFICACION esta completa y testeada (resolver_situacion_orden); TODO_CANCELADO queda formalmente correcta pero inalcanzable hasta que exista Cancelacion (FEAT-REP-009). Los COMANDOS que producen PENDIENTE_RECURSOS/REQUIERE_REVISION via API siguen NOT_IMPLEMENTED (ver TASK-REP-086/101)."}
   - {id: TASK-REP-089, type: task, name: "Reconciliar el catalogo TipoMovimientoInsumo con PROC-REP V1.3: DEVOLUCION viene del modelado tecnico inicial y no esta respaldado por el Business Process; DESPERDICIO esta en PROC-REP-210/BR-REP-005 y falta en el enum. Decision de negocio, no implementacion.", status: NOT_IMPLEMENTED, spec: 005-feat-rep-005-hp-slice}
   - {id: TASK-REP-090, type: task, name: "Implementar el registro de desperdicio (PROC-REP-210 / BR-REP-005 lo contemplan; fuera del slice de HP-REP-001). Depende de TASK-REP-089.", status: NOT_IMPLEMENTED, spec: 005-feat-rep-005-hp-slice}
-  - {id: TASK-REP-091, type: task, name: "Ejercitar varias Ejecuciones historicas sobre el mismo Detalle (el modelo lo soporta; no esta probado)", status: NOT_IMPLEMENTED, spec: 005-feat-rep-005-hp-slice}
+  - {id: TASK-REP-091, type: task, name: "Ejercitar varias Ejecuciones historicas sobre el mismo Detalle (el modelo lo soporta; no esta probado)", status: DONE, spec: 005-feat-rep-005-hp-slice, note: "Implementada en specs/014-slice5-ejecucion-interrumpida (VAR-REP-003); ver traceability/var-rep-003.yaml."}
   - {id: TASK-REP-092, type: task, name: "Resolver la consistencia entre la escritura de la Orden y la del catalogo (hoy sin transaccion)", status: NOT_IMPLEMENTED, spec: 005-feat-rep-005-hp-slice}
   - {id: TASK-REP-093, type: task, name: "[P] Modelar el resultado del control en el propio Detalle (control_estado, control_usuario_id, control_fecha, control_observaciones) y el enum Esta...", status: DONE, spec: 006-feat-rep-006-hp-slice}
   - {id: TASK-REP-094, type: task, name: "[P] Implementar puntaje_total como computed_field que suma solo los Detalles aprobados", status: DONE, spec: 006-feat-rep-006-hp-slice}
@@ -1548,6 +1548,8 @@ links:
   - {from: TASK-REP-109, to: TR-REP-008, relationship: implements}
   - {from: TASK-REP-110, to: TR-REP-045, relationship: implements}
   - {from: TASK-REP-111, to: TR-REP-043, relationship: implements}
+  - {from: TASK-REP-087, to: TR-REP-061, relationship: implements}
+  - {from: TASK-REP-091, to: TR-REP-034, relationship: implements}
   - {from: TASK-REP-112, to: TR-REP-044, relationship: implements}
   - {from: TASK-REP-113, to: TR-REP-020, relationship: implements}
   - {from: TASK-REP-114, to: TR-REP-046, relationship: implements}

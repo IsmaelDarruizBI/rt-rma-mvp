@@ -46,6 +46,7 @@ ACCION_ENCOLAR = "ENCOLAR"
 ACCION_TOMAR = "TOMAR"
 ACCION_INICIAR_DETALLE = "INICIAR_DETALLE"
 ACCION_COMPLETAR_EJECUCION = "COMPLETAR_EJECUCION"
+ACCION_INTERRUMPIR_EJECUCION = "INTERRUMPIR_EJECUCION"
 ACCION_APROBAR_CONTROL = "APROBAR_CONTROL"
 ACCION_LIBERAR_ORDEN = "LIBERAR_ORDEN"
 ACCION_NOTIFICAR = "NOTIFICAR"
@@ -285,6 +286,17 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             AccionDisponible(
                 codigo=ACCION_COMPLETAR_EJECUCION,
                 etiqueta="Registrar la ejecucion realizada",
+                roles=(RolUsuario.TECNICO,),
+                detalle_id=en_curso.reparacion_detail_id,
+                ejecucion_id=en_curso.id,
+            )
+        )
+        # VAR-REP-003: la otra salida de PROC-REP-200. Continuar luego es
+        # iniciar una Ejecucion nueva, no una accion propia.
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_INTERRUMPIR_EJECUCION,
+                etiqueta="Interrumpir la ejecucion",
                 roles=(RolUsuario.TECNICO,),
                 detalle_id=en_curso.reparacion_detail_id,
                 ejecucion_id=en_curso.id,

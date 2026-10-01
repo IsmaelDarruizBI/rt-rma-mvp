@@ -30,6 +30,7 @@ from app.application import (
     informar_rt,
     iniciar_detalle,
     insumos_previstos_por_detalle,
+    interrumpir_ejecucion,
     liberar_orden,
     listar_ordenes,
     nombres_de_tipo_por_detalle,
@@ -56,6 +57,7 @@ from .schemas import (
     EnviarARevisionIn,
     GarantiaRmaIn,
     IniciarDetalleIn,
+    InterrumpirEjecucionIn,
     LiberarOrdenIn,
     NotificarIn,
     OrdenConEntregaOut,
@@ -369,6 +371,32 @@ def post_completar_ejecucion(
     Orden se recalcula.
     """
     orden, _ = completar_ejecucion(
+        contexto,
+        orden_id=orden_id,
+        ejecucion_id=ejecucion_id,
+        usuario_id=cuerpo.usuario_id,
+        insumos_utilizados=[
+            insumo.a_dominio() for insumo in cuerpo.insumos_utilizados
+        ],
+        observaciones=cuerpo.observaciones,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/executions/{ejecucion_id}/interrupt")
+def post_interrumpir_ejecucion(
+    orden_id: str,
+    ejecucion_id: str,
+    cuerpo: InterrumpirEjecucionIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Interrumpir la Ejecucion en curso (ACT-TECH propietario, VAR-REP-003).
+
+    Compone PROC-REP-190 -> 200 (Interrumpido) -> 210 -> 211: lo realmente
+    utilizado se consume, lo reservado que no se uso se libera, el Detalle
+    vuelve a DEFINIDO y la toma sigue activa.
+    """
+    orden, _ = interrumpir_ejecucion(
         contexto,
         orden_id=orden_id,
         ejecucion_id=ejecucion_id,

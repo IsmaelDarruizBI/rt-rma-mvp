@@ -343,6 +343,48 @@ export function ProgresoHappyPath({ orden }: { orden: Orden }) {
  * Es una vista distinta de la tabla de Pagos del Resumen Comercial: ahí
  * está el estado económico, acá la secuencia de lo que fue pasando.
  */
+/**
+ * Ejecuciones de la Orden con su estado real. Una Ejecución INTERRUMPIDA
+ * nunca se reabre: continuar el Detalle crea una Ejecución nueva, y todas
+ * quedan listadas.
+ */
+export function EjecucionesOrden({ orden }: { orden: Orden }) {
+  if (orden.ejecuciones.length === 0) return null;
+  const COLOR: Record<string, string> = {
+    EN_PROGRESO: colores.acento,
+    COMPLETADO: colores.ok,
+    INTERRUMPIDO: colores.alerta,
+  };
+  return (
+    <Panel titulo={`Ejecuciones (${orden.ejecuciones.length})`}>
+      <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+        {orden.ejecuciones.map((ejecucion) => (
+          <li
+            key={ejecucion.id}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "0.5rem",
+              padding: "0.3rem 0",
+              borderTop: `1px solid ${colores.borde}`,
+              fontSize: "0.85rem",
+            }}
+          >
+            <span>
+              <strong>{ejecucion.id}</strong> · Detalle{" "}
+              {ejecucion.reparacion_detail_id} · {ejecucion.usuario_id}
+              {ejecucion.observaciones ? ` · ${ejecucion.observaciones}` : ""}
+            </span>
+            <Etiqueta color={COLOR[ejecucion.estado] ?? colores.suave}>
+              {ejecucion.estado}
+            </Etiqueta>
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
 export function HistorialOrden({ orden }: { orden: Orden }) {
   return (
     <Panel titulo="Historial">
