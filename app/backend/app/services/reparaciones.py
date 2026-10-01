@@ -31,6 +31,7 @@ from app.domain.models import (
 from .autorizacion import validar_actor
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .inventario import buscar_insumo, insumos_previstos_de, stock_disponible
+from .recursos import tiene_override_factibilidad
 from .revisiones import revision_tecnica_realizada
 from .workflow import registrar_paso
 
@@ -315,6 +316,10 @@ def validar_factibilidad_detalles(
             detalle.estado is not EstadoReparacionDetail.DEFINIDO
             or detalle.condicion not in _CONDICIONES_DE_RECURSOS
         ):
+            continue
+        if tiene_override_factibilidad(nueva_orden, detalle.id):
+            # EXC-REP-002: el override autorizado persiste (BR-REP-003).
+            detalle.condicion = CondicionReparacionDetail.SIN_BLOQUEO
             continue
         faltantes = _faltantes_del_detalle(
             detalle, nueva_orden, insumos, insumos_previstos, ajenas

@@ -271,7 +271,9 @@ features:
           disponibilidad
         - Permitir un override autorizado sobre un Detalle especifico
         - Registrar usuario, fecha, Detalle, motivo y validacion ignorada
-          del override
+          del override (solo registra la autorizacion; la reserva y el
+          consumo posteriores, de FEAT-REP-005, quedan habilitados para ese
+          Detalle segun BR-REP-003 y BR-REP-006)
         - Habilitar la Orden cuando exista al menos un Detalle trabajable
 
       excludes:

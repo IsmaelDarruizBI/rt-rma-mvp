@@ -310,6 +310,23 @@ export function esperarRecursos(ordenId: string): Promise<Orden> {
 }
 
 /**
+ * PROC-REP-110 (Sí) -> 130 -> 140 (Coordinador RMA, EXC-REP-002): fuerza UN
+ * Detalle bloqueado por recursos. El motivo es obligatorio. Solo registra la
+ * autorización: no reserva ni descuenta stock.
+ */
+export function overrideRecursos(
+  ordenId: string,
+  detalleId: string,
+  usuarioId: string,
+  motivo: string,
+): Promise<Orden> {
+  return post<Orden>(
+    `/api/orders/${ordenId}/details/${detalleId}/resources/override`,
+    { usuario_id: usuarioId, motivo },
+  );
+}
+
+/**
  * PROC-REP-120 -> 080 -> 090 [-> 140] (EXC-REP-001). Evento de sistema:
  * sin `usuario_id`. Solo válido desde PROC-REP-120.
  */

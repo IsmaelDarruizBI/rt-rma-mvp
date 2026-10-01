@@ -43,6 +43,7 @@ export interface EjecutorAcciones {
   ) => void;
   esperarRecursos: () => void;
   revalidarRecursos: () => void;
+  overrideRecursos: (detalleId: string, motivo: string) => void;
   interrumpirEjecucion: (
     ejecucionId: string,
     insumosUtilizados: InsumoUtilizado[],
@@ -204,6 +205,15 @@ function FormularioAccion({
         <Boton disabled={deshabilitado} onClick={ejecutar.esperarRecursos}>
           Esperar recursos (no forzar el Detalle)
         </Boton>
+      );
+
+    case "OVERRIDE_RECURSOS":
+      return (
+        <FormularioMotivoOverride
+          deshabilitado={deshabilitado || accion.detalle_id === null}
+          detalleId={accion.detalle_id}
+          onConfirmar={ejecutar.overrideRecursos}
+        />
       );
 
     case "REVALIDAR_RECURSOS":
@@ -667,6 +677,37 @@ function insumosPrevistosDe(
     (candidato) => candidato.id === ejecucion.reparacion_detail_id,
   );
   return detalle?.insumos_previstos ?? [];
+}
+
+function FormularioMotivoOverride({
+  deshabilitado,
+  detalleId,
+  onConfirmar,
+}: {
+  deshabilitado: boolean;
+  detalleId: string | null;
+  onConfirmar: (detalleId: string, motivo: string) => void;
+}) {
+  const [motivo, setMotivo] = useState("");
+
+  return (
+    <div>
+      <Campo etiqueta={`Motivo del override del Detalle ${detalleId ?? ""} (obligatorio)`}>
+        <input
+          value={motivo}
+          onChange={(evento) => setMotivo(evento.target.value)}
+          disabled={deshabilitado}
+          style={estiloInput}
+        />
+      </Campo>
+      <Boton
+        disabled={deshabilitado || motivo.trim() === "" || detalleId === null}
+        onClick={() => detalleId !== null && onConfirmar(detalleId, motivo.trim())}
+      >
+        Forzar el Detalle (override)
+      </Boton>
+    </div>
+  );
 }
 
 function FormularioResultadoRevision({

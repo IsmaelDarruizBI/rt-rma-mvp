@@ -1,0 +1,312 @@
+# Trazabilidad end-to-end del slice implementado - Scenario EXC-REP-002
+# (Recursos insuficientes al ingreso, resuelto por override).
+#
+# Unidad de implementacion INDEPENDIENTE (archivo propio, ver
+# traceability/README.md) y distinta de EXC-REP-001: misma situacion inicial
+# (090 "Ninguno trabajable" -> 100) pero decision distinta (110 Si: forzar, no
+# esperar), actor distinto (ACT-COORD), ciclo y UAT distintos.
+#
+# PROC-REP-090 Ninguno -> 100 -> 110 Si -> 130 -> 140. Un Coordinador RMA fuerza
+# UN Detalle bloqueado con un motivo (BR-REP-003). El override solo REGISTRA la
+# autorizacion (110 Si + 130 en el historial, sin flag en el Detalle): no
+# reserva ni descuenta stock. No se fabrica un 090 "Si"; habilitar_orden acepta
+# 130 -> 140 con override valido. Decision de negocio confirmada (BR-REP-003):
+# con override, PROC-REP-185 reserva aunque no alcance y PROC-REP-210 puede dejar
+# el stock fisico negativo (solo para ESE Detalle). 185/210 NO son nodos de este
+# Scenario: se declaran como consecuencia downstream (in_scenario: false).
+#
+# Reutiliza TASK-REP-045 de hp-rep-001.yaml (mismo id y name; aqui con el trabajo
+# hecho). EXC-REP-003 (reserva fallida / PROC-REP-186), EXC-REP-004 y EXC-REP-005
+# siguen NOT_IMPLEMENTED y no se trazan aqui.
+#
+# Continua la numeracion global: US-REP-031, ACC-REP-048, FR-REP-111,
+# TR-REP-111, TASK-REP-194, CODE-REP-194, TEST-REP-392, UAT-REP-032.
+#
+# Validacion: npx tsx scripts/validate-traceability.ts traceability/exc-rep-002.yaml
+
+meta:
+  id: TRACE-EXC-REP-002
+  name: Trazabilidad del slice implementado de EXC-REP-002
+  generated_from: rama mvp-v2-slice7-exc-rep-002, tras implementar el override de recursos sobre mvp-v2
+  date: "2026-10-01"
+  business_domain: DOM-RMA
+  business_process: PROC-REP
+  business_process_version: "1.3"
+  implemented_scenario: EXC-REP-002
+  active_features: [FEAT-REP-003]
+  related_trace_files:
+    - traceability/hp-rep-001.yaml (TASK-REP-045 y TR-REP-027 se actualizan)
+    - traceability/exc-rep-001.yaml (no se modifica)
+  sources:
+    process: business/processes/repair-management-v1.3.yaml
+    rules: business/rules/business-rules-v1.3.yaml
+    features: business/features/repair-management-features-v1.3.yaml
+    scenarios: business/scenarios/repair-management-scenarios-v1.3.yaml
+    convention: traceability/README.md
+    constitution: .specify/memory/constitution.md
+    backend: app/backend/
+    frontend: app/frontend/
+  relationship_vocabulary:
+    belongs_to: el origen pertenece al destino (jerarquia)
+    activates: el Scenario activa la Feature
+    realizes: la System Action realiza la User Story
+    covers: la System Action cubre el nodo del Business Process
+    governed_by: el item esta gobernado por la Business Rule
+    derives_from: el Functional Requirement deriva de la System Action
+    satisfies: el Technical Requirement satisface el Functional Requirement
+    supports: el artefacto de modelo de datos sostiene un FR o un TR (N:M)
+    implements: la Task o el Code implementa un Technical Requirement
+    produced_by: el Code fue producido por la Task
+    exercises: el Internal Test ejercita el Code
+    verifies: el Internal Test verifica un FR o un TR
+    accepts: el UAT acepta una User Story o un Functional Requirement
+
+items:
+
+  - {id: DOM-RMA, type: business_domain, name: Area funcional RMA, status: active, source: traceability/README.md}
+  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: draft, version: "1.3", source: business/processes/repair-management-v1.3.yaml}
+  - {id: EXC-REP-002, type: scenario, name: "Recursos insuficientes al ingreso, resuelto por override", status: draft, scenario_type: EXCEPTION, scope: FEATURE, source: business/scenarios/repair-management-scenarios-v1.3.yaml}
+
+  - {id: FEAT-REP-003, type: feature, name: "Validacion de factibilidad y habilitacion", status: draft, feature_status: draft, implemented_scenario: [EXC-REP-002], implemented_slice_status: IMPLEMENTED, nodes_total: 7, nodes_in_slice: 5, spec: specs/003-feat-rep-003-hp-slice/}
+
+  - {id: PROC-REP-090, type: process_node, name: "Existe al menos un Detalle trabajable", node_type: decision, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-100, type: process_node, name: "Registrar advertencia de faltante", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-110, type: process_node, name: "Usuario autorizado fuerza el Detalle bloqueado", node_type: decision, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-130, type: process_node, name: "Registrar override", node_type: activity, actor: ACT-COORD, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-140, type: process_node, name: "Habilitar Orden de Reparacion", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-185, type: process_node, name: "Reservar insumos e iniciar Ejecucion del Detalle", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: true, note: "Consecuencia downstream del override (BR-REP-003): no es un nodo de EXC-REP-002."}
+  - {id: PROC-REP-210, type: process_node, name: "Generar movimientos de inventario", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: true, note: "Consecuencia downstream del override (BR-REP-003): no es un nodo de EXC-REP-002."}
+
+  - {id: BR-REP-002, type: business_rule, name: "Validacion previa de recursos", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-003, type: business_rule, name: "Override justificado", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-005, type: business_rule, name: "Inventario consecuencia de ejecucion", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-006, type: business_rule, name: "Reserva de insumos al iniciar Ejecucion del Detalle", status: draft, coverage: PARTIAL}
+
+  # TASK-REP-045 se REUTILIZA de hp-rep-001.yaml (mismo id, type y name).
+  - {id: TASK-REP-045, type: task, name: "Implementar PROC-REP-110 + PROC-REP-130 (override justificado de Detalle bloqueado, BR-REP-003), con registro de usuario, fecha, Detalle, validacio...", status: DONE, note: "Implementada en specs/016-slice7-exc-rep-002 (EXC-REP-002)."}
+
+  - {id: US-REP-032, type: user_story, name: "Como Coordinador RMA quiero forzar un Detalle bloqueado por recursos dejando un motivo registrado para que la Orden continue cuando el trabajo no puede esperar a que haya stock", status: IMPLEMENTED, priority: P1, actor: ACT-COORD}
+  - {id: US-REP-033, type: user_story, name: "Como Coordinador RMA quiero que el Detalle forzado pueda reservarse y consumirse aunque el stock no alcance sin que eso habilite a los demas Detalles para asumir conscientemente la falta de stock", status: IMPLEMENTED, priority: P1, actor: ACT-COORD}
+
+  - {id: ACC-REP-049, type: system_action, name: "Registrar el override de un Detalle bloqueado por recursos (PROC-REP-110 Si y PROC-REP-130) por un Coordinador RMA con motivo y habilitar la Orden (PROC-REP-140) sin un PROC-REP-090 Si", status: IMPLEMENTED}
+  - {id: ACC-REP-050, type: system_action, name: "Publicar OVERRIDE_RECURSOS por cada Detalle bloqueado en PROC-REP-100 junto a ESPERAR_RECURSOS", status: IMPLEMENTED}
+  - {id: ACC-REP-051, type: system_action, name: "Reservar (PROC-REP-185) y consumir (PROC-REP-210) un Detalle con override aunque falten recursos, con el stock fisico posiblemente negativo", status: IMPLEMENTED}
+
+  - {id: FR-REP-112, type: functional_requirement, name: "El override solo lo realiza un Coordinador RMA activo con motivo obligatorio sobre un Detalle DEFINIDO y BLOQUEADO_POR_RECURSOS desde PROC-REP-100", status: IMPLEMENTED}
+  - {id: FR-REP-113, type: functional_requirement, name: "El override registra usuario fecha Detalle especifico validacion ignorada y motivo en PROC-REP-110 Si y PROC-REP-130 sin flag en el Detalle", status: IMPLEMENTED}
+  - {id: FR-REP-114, type: functional_requirement, name: "Solo el Detalle forzado pasa a SIN_BLOQUEO y los demas Detalles bloqueados permanecen BLOQUEADO_POR_RECURSOS", status: IMPLEMENTED}
+  - {id: FR-REP-115, type: functional_requirement, name: "La Orden se habilita desde PROC-REP-130 con un override valido sin fabricar un PROC-REP-090 Si y habilitar desde 100 o 110 sigue rechazado", status: IMPLEMENTED}
+  - {id: FR-REP-116, type: functional_requirement, name: "El override no reserva ni modifica el stock fisico: solo registra la autorizacion", status: IMPLEMENTED}
+  - {id: FR-REP-117, type: functional_requirement, name: "Con override del Detalle PROC-REP-185 reserva todas las previstas aunque no alcance y sin override sigue fallando con RecursoNoDisponibleError", status: IMPLEMENTED}
+  - {id: FR-REP-118, type: functional_requirement, name: "Con override del Detalle PROC-REP-210 puede dejar el stock fisico negativo la liberacion de reserva no descuenta y el override de un Detalle no habilita stock negativo para otro", status: IMPLEMENTED}
+  - {id: FR-REP-119, type: functional_requirement, name: "El backend publica OVERRIDE_RECURSOS para COORDINADOR_RMA por Detalle bloqueado en PROC-REP-100 y la UI solo ejecuta lo publicado", status: IMPLEMENTED}
+
+  - {id: TR-REP-112, type: technical_requirement, name: "services.recursos.registrar_override_recursos valida COORDINADOR_RMA activo PROC-REP-100 Detalle DEFINIDO bloqueado y motivo no vacio registra 110 Si con usuario y 130 con usuario Detalle y motivo deja solo ese Detalle SIN_BLOQUEO y no crea movimientos", status: IMPLEMENTED}
+  - {id: TR-REP-113, type: technical_requirement, name: "services.recursos.tiene_override_factibilidad deriva el override del historial (PROC-REP-130 del Detalle) sin flag y es el unico lugar consultado por la factibilidad por 185 y por 210", status: IMPLEMENTED}
+  - {id: TR-REP-114, type: technical_requirement, name: "services.ordenes.habilitar_orden acepta o bien PROC-REP-090 con ultimo resultado Si o bien PROC-REP-130 con override valido (override_listo_para_habilitar) y rechaza 100 y 110", status: IMPLEMENTED}
+  - {id: TR-REP-115, type: technical_requirement, name: "services.ejecuciones.reservar_insumos_e_iniciar_ejecucion omite la comprobacion de disponibilidad solo para un Detalle con override y mantiene la atomicidad de reservas", status: IMPLEMENTED}
+  - {id: TR-REP-116, type: technical_requirement, name: "services.inventario_global.aplicar_movimientos_inventario permite stock fisico negativo solo si el consumo proviene de un Detalle con override e Insumo.stock_fisico admite negativos", status: IMPLEMENTED}
+  - {id: TR-REP-117, type: technical_requirement, name: "application.recursos.forzar_detalle_por_recursos y POST /details/{id}/resources/override componen 110 Si 130 140 y persisten una sola vez con 404 409 y 422", status: IMPLEMENTED}
+  - {id: TR-REP-118, type: technical_requirement, name: "application.acciones.acciones_disponibles publica OVERRIDE_RECURSOS por Detalle bloqueado en PROC-REP-100 para COORDINADOR_RMA y application.progreso muestra 130 por evidencia", status: IMPLEMENTED}
+  - {id: TR-REP-119, type: technical_requirement, name: "El frontend ejecuta OVERRIDE_RECURSOS con un motivo obligatorio solo con lo publicado por el backend", status: IMPLEMENTED}
+
+  - {id: TASK-REP-195, type: task, name: "Permitir reserva y consumo con override: 185 sin comprobar disponibilidad y 210 con stock fisico negativo solo para el Detalle forzado", status: DONE}
+  - {id: TASK-REP-196, type: task, name: "Publicar OVERRIDE_RECURSOS y mostrar PROC-REP-130 en el progreso", status: DONE}
+  - {id: TASK-REP-197, type: task, name: "Frontend: formulario de motivo y accion de override", status: DONE}
+
+  - {id: CODE-REP-195, type: code_artifact, name: "services/recursos.py::registrar_override_recursos", status: IMPLEMENTED, source: "app/backend/app/services/recursos.py::registrar_override_recursos"}
+  - {id: CODE-REP-196, type: code_artifact, name: "services/recursos.py::tiene_override_factibilidad", status: IMPLEMENTED, source: "app/backend/app/services/recursos.py::tiene_override_factibilidad"}
+  - {id: CODE-REP-197, type: code_artifact, name: "services/recursos.py::override_listo_para_habilitar", status: IMPLEMENTED, source: "app/backend/app/services/recursos.py::override_listo_para_habilitar"}
+  - {id: CODE-REP-198, type: code_artifact, name: "services/ordenes.py::habilitar_orden (gate 090 Si o 130 con override)", status: IMPLEMENTED, source: "app/backend/app/services/ordenes.py::habilitar_orden"}
+  - {id: CODE-REP-199, type: code_artifact, name: "services/ejecuciones.py::reservar_insumos_e_iniciar_ejecucion (con override)", status: IMPLEMENTED, source: "app/backend/app/services/ejecuciones.py::reservar_insumos_e_iniciar_ejecucion"}
+  - {id: CODE-REP-200, type: code_artifact, name: "services/inventario_global.py::aplicar_movimientos_inventario (stock negativo con override)", status: IMPLEMENTED, source: "app/backend/app/services/inventario_global.py::aplicar_movimientos_inventario"}
+  - {id: CODE-REP-201, type: code_artifact, name: "domain/models/catalogos.py::Insumo.stock_fisico (admite negativos)", status: IMPLEMENTED, source: "app/backend/app/domain/models/catalogos.py::Insumo"}
+  - {id: CODE-REP-202, type: code_artifact, name: "application/recursos.py::forzar_detalle_por_recursos", status: IMPLEMENTED, source: "app/backend/app/application/recursos.py::forzar_detalle_por_recursos"}
+  - {id: CODE-REP-203, type: code_artifact, name: "api/ordenes.py::post_override_recursos", status: IMPLEMENTED, source: "app/backend/app/api/ordenes.py::post_override_recursos"}
+  - {id: CODE-REP-204, type: code_artifact, name: "application/acciones.py::acciones_disponibles (OVERRIDE_RECURSOS)", status: IMPLEMENTED, source: "app/backend/app/application/acciones.py::acciones_disponibles"}
+  - {id: CODE-REP-205, type: code_artifact, name: "application/progreso.py::_con_espera_de_recursos (PROC-REP-130)", status: IMPLEMENTED, source: "app/backend/app/application/progreso.py::_con_espera_de_recursos"}
+  - {id: CODE-REP-206, type: code_artifact, name: "frontend/src/features/ordenes-reparacion/AccionesOrden.tsx (OVERRIDE_RECURSOS)", status: IMPLEMENTED, source: "app/frontend/src/features/ordenes-reparacion/AccionesOrden.tsx"}
+
+  - {id: TEST-REP-393, type: internal_test, name: "test_override_completo_090_ninguno_100_110_si_130_140", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_override_completo_090_ninguno_100_110_si_130_140"}
+  - {id: TEST-REP-394, type: internal_test, name: "test_el_override_queda_trazado_con_usuario_fecha_detalle_y_motivo", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_el_override_queda_trazado_con_usuario_fecha_detalle_y_motivo"}
+  - {id: TEST-REP-395, type: internal_test, name: "test_solo_un_coordinador_activo_puede_hacer_el_override", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_solo_un_coordinador_activo_puede_hacer_el_override"}
+  - {id: TEST-REP-396, type: internal_test, name: "test_el_motivo_es_obligatorio", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_el_motivo_es_obligatorio"}
+  - {id: TEST-REP-397, type: internal_test, name: "test_el_override_solo_vale_desde_100_y_sobre_un_detalle_bloqueado", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_el_override_solo_vale_desde_100_y_sobre_un_detalle_bloqueado"}
+  - {id: TEST-REP-398, type: internal_test, name: "test_solo_el_detalle_forzado_pasa_a_sin_bloqueo", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_solo_el_detalle_forzado_pasa_a_sin_bloqueo"}
+  - {id: TEST-REP-399, type: internal_test, name: "test_override_de_a_deja_a_iniciable_y_b_no_iniciable", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_override_de_a_deja_a_iniciable_y_b_no_iniciable"}
+  - {id: TEST-REP-400, type: internal_test, name: "test_no_se_habilita_directo_desde_100_ni_desde_110", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_no_se_habilita_directo_desde_100_ni_desde_110"}
+  - {id: TEST-REP-401, type: internal_test, name: "test_el_gate_de_090_si_sigue_vigente", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_el_gate_de_090_si_sigue_vigente"}
+  - {id: TEST-REP-402, type: internal_test, name: "test_la_rama_110_no_hacia_120_no_tiene_regresion", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_la_rama_110_no_hacia_120_no_tiene_regresion"}
+  - {id: TEST-REP-403, type: internal_test, name: "test_el_override_no_reserva_ni_modifica_stock", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_el_override_no_reserva_ni_modifica_stock"}
+  - {id: TEST-REP-404, type: internal_test, name: "test_con_override_185_reserva_y_deja_el_disponible_negativo", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_con_override_185_reserva_y_deja_el_disponible_negativo"}
+  - {id: TEST-REP-405, type: internal_test, name: "test_sin_override_185_con_stock_insuficiente_sigue_fallando", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_sin_override_185_con_stock_insuficiente_sigue_fallando"}
+  - {id: TEST-REP-406, type: internal_test, name: "test_185_con_override_es_atomico_reserva_todo_o_nada", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_185_con_override_es_atomico_reserva_todo_o_nada"}
+  - {id: TEST-REP-407, type: internal_test, name: "test_al_consumir_con_override_el_stock_fisico_pasa_a_negativo", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_al_consumir_con_override_el_stock_fisico_pasa_a_negativo"}
+  - {id: TEST-REP-408, type: internal_test, name: "test_la_liberacion_de_reserva_no_descuenta_stock", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_la_liberacion_de_reserva_no_descuenta_stock"}
+  - {id: TEST-REP-409, type: internal_test, name: "test_sin_override_el_consumo_no_puede_dejar_stock_negativo", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_sin_override_el_consumo_no_puede_dejar_stock_negativo"}
+  - {id: TEST-REP-410, type: internal_test, name: "test_el_override_de_un_detalle_no_habilita_negativo_para_otro", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_el_override_de_un_detalle_no_habilita_negativo_para_otro"}
+  - {id: TEST-REP-411, type: internal_test, name: "test_en_100_se_publican_esperar_y_un_override_por_detalle_bloqueado", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_en_100_se_publican_esperar_y_un_override_por_detalle_bloqueado"}
+  - {id: TEST-REP-412, type: internal_test, name: "test_en_120_no_se_publica_el_override", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_en_120_no_se_publica_el_override"}
+  - {id: TEST-REP-413, type: internal_test, name: "test_el_progreso_muestra_130_solo_con_evidencia_de_override", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_el_progreso_muestra_130_solo_con_evidencia_de_override"}
+  - {id: TEST-REP-414, type: internal_test, name: "test_cliente_externo_override_090_ninguno_100_110_si_130_140", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_cliente_externo_override_090_ninguno_100_110_si_130_140"}
+  - {id: TEST-REP-415, type: internal_test, name: "test_solo_el_coordinador_rma_puede_hacer_el_override", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_solo_el_coordinador_rma_puede_hacer_el_override"}
+  - {id: TEST-REP-416, type: internal_test, name: "test_el_motivo_es_obligatorio", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_el_motivo_es_obligatorio"}
+  - {id: TEST-REP-417, type: internal_test, name: "test_el_override_valida_orden_detalle_y_punto_del_proceso", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_el_override_valida_orden_detalle_y_punto_del_proceso"}
+  - {id: TEST-REP-418, type: internal_test, name: "test_la_rama_110_no_hacia_120_no_tiene_regresion", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_la_rama_110_no_hacia_120_no_tiene_regresion"}
+  - {id: TEST-REP-419, type: internal_test, name: "test_multidetalle_override_de_uno_habilita_y_solo_ese_se_inicia", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_multidetalle_override_de_uno_habilita_y_solo_ese_se_inicia"}
+  - {id: TEST-REP-420, type: internal_test, name: "test_con_override_se_reserva_y_se_consume_dejando_stock_negativo", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_con_override_se_reserva_y_se_consume_dejando_stock_negativo"}
+  - {id: TEST-REP-421, type: internal_test, name: "test_interrumpir_con_override_sin_usar_nada_no_toca_el_stock", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_interrumpir_con_override_sin_usar_nada_no_toca_el_stock"}
+  - {id: TEST-REP-422, type: internal_test, name: "test_sin_override_iniciar_con_stock_insuficiente_sigue_siendo_409", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_sin_override_iniciar_con_stock_insuficiente_sigue_siendo_409"}
+  - {id: TEST-REP-423, type: internal_test, name: "test_rt_interno_override_sin_comprobante_ni_pagos", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_rt_interno_override_sin_comprobante_ni_pagos"}
+  - {id: TEST-REP-424, type: internal_test, name: "test_garantia_rma_override_conserva_origen_y_no_toca_la_orden_origen", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_garantia_rma_override_conserva_origen_y_no_toca_la_orden_origen"}
+
+  - {id: UAT-REP-033, type: uat, name: "Un Coordinador RMA puede forzar un Detalle bloqueado por recursos dejando un motivo y la Orden continua sin esperar el stock", status: PENDING}
+  - {id: UAT-REP-034, type: uat, name: "El Detalle forzado puede iniciarse y consumirse aunque el stock no alcance sin que eso habilite a otros Detalles bloqueados", status: PENDING}
+
+links:
+
+  - {from: PROC-REP, to: DOM-RMA, relationship: belongs_to}
+  - {from: EXC-REP-002, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-090, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-100, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-110, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-130, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-140, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-185, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-210, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-003, to: PROC-REP, relationship: belongs_to}
+  - {from: EXC-REP-002, to: FEAT-REP-003, relationship: activates}
+
+  - {from: US-REP-032, to: FEAT-REP-003, relationship: belongs_to}
+  - {from: US-REP-033, to: FEAT-REP-003, relationship: belongs_to}
+
+  - {from: ACC-REP-049, to: US-REP-032, relationship: realizes}
+  - {from: ACC-REP-049, to: PROC-REP-090, relationship: covers}
+  - {from: ACC-REP-049, to: PROC-REP-100, relationship: covers}
+  - {from: ACC-REP-049, to: PROC-REP-110, relationship: covers}
+  - {from: ACC-REP-049, to: PROC-REP-130, relationship: covers}
+  - {from: ACC-REP-049, to: PROC-REP-140, relationship: covers}
+  - {from: ACC-REP-049, to: BR-REP-002, relationship: governed_by}
+  - {from: ACC-REP-049, to: BR-REP-003, relationship: governed_by}
+
+  - {from: ACC-REP-050, to: US-REP-032, relationship: realizes}
+  - {from: ACC-REP-050, to: PROC-REP-100, relationship: covers}
+  - {from: ACC-REP-050, to: PROC-REP-110, relationship: covers}
+  - {from: ACC-REP-050, to: BR-REP-003, relationship: governed_by}
+
+  - {from: ACC-REP-051, to: US-REP-033, relationship: realizes}
+  - {from: ACC-REP-051, to: PROC-REP-185, relationship: covers}
+  - {from: ACC-REP-051, to: PROC-REP-210, relationship: covers}
+  - {from: ACC-REP-051, to: BR-REP-003, relationship: governed_by}
+  - {from: ACC-REP-051, to: BR-REP-005, relationship: governed_by}
+  - {from: ACC-REP-051, to: BR-REP-006, relationship: governed_by}
+
+  - {from: FR-REP-112, to: ACC-REP-049, relationship: derives_from}
+  - {from: FR-REP-113, to: ACC-REP-049, relationship: derives_from}
+  - {from: FR-REP-114, to: ACC-REP-049, relationship: derives_from}
+  - {from: FR-REP-115, to: ACC-REP-049, relationship: derives_from}
+  - {from: FR-REP-116, to: ACC-REP-049, relationship: derives_from}
+  - {from: FR-REP-117, to: ACC-REP-051, relationship: derives_from}
+  - {from: FR-REP-118, to: ACC-REP-051, relationship: derives_from}
+  - {from: FR-REP-119, to: ACC-REP-050, relationship: derives_from}
+
+  - {from: TR-REP-112, to: FR-REP-112, relationship: satisfies}
+  - {from: TR-REP-112, to: FR-REP-113, relationship: satisfies}
+  - {from: TR-REP-112, to: FR-REP-114, relationship: satisfies}
+  - {from: TR-REP-112, to: FR-REP-116, relationship: satisfies}
+  - {from: TR-REP-113, to: FR-REP-113, relationship: satisfies}
+  - {from: TR-REP-113, to: FR-REP-117, relationship: satisfies}
+  - {from: TR-REP-113, to: FR-REP-118, relationship: satisfies}
+  - {from: TR-REP-114, to: FR-REP-115, relationship: satisfies}
+  - {from: TR-REP-115, to: FR-REP-117, relationship: satisfies}
+  - {from: TR-REP-116, to: FR-REP-118, relationship: satisfies}
+  - {from: TR-REP-117, to: FR-REP-112, relationship: satisfies}
+  - {from: TR-REP-117, to: FR-REP-115, relationship: satisfies}
+  - {from: TR-REP-118, to: FR-REP-119, relationship: satisfies}
+  - {from: TR-REP-119, to: FR-REP-119, relationship: satisfies}
+
+  - {from: TASK-REP-195, to: TR-REP-115, relationship: implements}
+  - {from: TASK-REP-195, to: TR-REP-116, relationship: implements}
+  - {from: TASK-REP-196, to: TR-REP-118, relationship: implements}
+  - {from: TASK-REP-197, to: TR-REP-119, relationship: implements}
+  - {from: TASK-REP-045, to: TR-REP-112, relationship: implements}
+  - {from: TASK-REP-045, to: TR-REP-113, relationship: implements}
+  - {from: TASK-REP-045, to: TR-REP-114, relationship: implements}
+  - {from: TASK-REP-045, to: TR-REP-117, relationship: implements}
+
+  - {from: CODE-REP-195, to: TASK-REP-045, relationship: produced_by}
+  - {from: CODE-REP-195, to: TR-REP-112, relationship: implements}
+  - {from: CODE-REP-196, to: TASK-REP-045, relationship: produced_by}
+  - {from: CODE-REP-196, to: TR-REP-113, relationship: implements}
+  - {from: CODE-REP-197, to: TASK-REP-045, relationship: produced_by}
+  - {from: CODE-REP-197, to: TR-REP-114, relationship: implements}
+  - {from: CODE-REP-198, to: TASK-REP-045, relationship: produced_by}
+  - {from: CODE-REP-198, to: TR-REP-114, relationship: implements}
+  - {from: CODE-REP-199, to: TASK-REP-195, relationship: produced_by}
+  - {from: CODE-REP-199, to: TR-REP-115, relationship: implements}
+  - {from: CODE-REP-200, to: TASK-REP-195, relationship: produced_by}
+  - {from: CODE-REP-200, to: TR-REP-116, relationship: implements}
+  - {from: CODE-REP-201, to: TASK-REP-195, relationship: produced_by}
+  - {from: CODE-REP-201, to: TR-REP-116, relationship: implements}
+  - {from: CODE-REP-202, to: TASK-REP-045, relationship: produced_by}
+  - {from: CODE-REP-202, to: TR-REP-117, relationship: implements}
+  - {from: CODE-REP-203, to: TASK-REP-045, relationship: produced_by}
+  - {from: CODE-REP-203, to: TR-REP-117, relationship: implements}
+  - {from: CODE-REP-204, to: TASK-REP-196, relationship: produced_by}
+  - {from: CODE-REP-204, to: TR-REP-118, relationship: implements}
+  - {from: CODE-REP-205, to: TASK-REP-196, relationship: produced_by}
+  - {from: CODE-REP-205, to: TR-REP-118, relationship: implements}
+  - {from: CODE-REP-206, to: TASK-REP-197, relationship: produced_by}
+  - {from: CODE-REP-206, to: TR-REP-119, relationship: implements}
+
+  - {from: TEST-REP-393, to: FR-REP-115, relationship: verifies}
+  - {from: TEST-REP-393, to: CODE-REP-198, relationship: exercises}
+  - {from: TEST-REP-393, to: CODE-REP-195, relationship: exercises}
+  - {from: TEST-REP-394, to: FR-REP-113, relationship: verifies}
+  - {from: TEST-REP-394, to: CODE-REP-196, relationship: exercises}
+  - {from: TEST-REP-395, to: FR-REP-112, relationship: verifies}
+  - {from: TEST-REP-396, to: FR-REP-112, relationship: verifies}
+  - {from: TEST-REP-397, to: TR-REP-112, relationship: verifies}
+  - {from: TEST-REP-398, to: FR-REP-114, relationship: verifies}
+  - {from: TEST-REP-399, to: FR-REP-114, relationship: verifies}
+  - {from: TEST-REP-400, to: FR-REP-115, relationship: verifies}
+  - {from: TEST-REP-400, to: CODE-REP-197, relationship: exercises}
+  - {from: TEST-REP-401, to: TR-REP-114, relationship: verifies}
+  - {from: TEST-REP-402, to: TR-REP-112, relationship: verifies}
+  - {from: TEST-REP-403, to: FR-REP-116, relationship: verifies}
+  - {from: TEST-REP-404, to: FR-REP-117, relationship: verifies}
+  - {from: TEST-REP-404, to: CODE-REP-199, relationship: exercises}
+  - {from: TEST-REP-405, to: FR-REP-117, relationship: verifies}
+  - {from: TEST-REP-406, to: TR-REP-115, relationship: verifies}
+  - {from: TEST-REP-407, to: FR-REP-118, relationship: verifies}
+  - {from: TEST-REP-407, to: CODE-REP-200, relationship: exercises}
+  - {from: TEST-REP-407, to: CODE-REP-201, relationship: exercises}
+  - {from: TEST-REP-408, to: FR-REP-118, relationship: verifies}
+  - {from: TEST-REP-409, to: FR-REP-118, relationship: verifies}
+  - {from: TEST-REP-409, to: TR-REP-116, relationship: verifies}
+  - {from: TEST-REP-410, to: FR-REP-118, relationship: verifies}
+  - {from: TEST-REP-410, to: TR-REP-113, relationship: verifies}
+  - {from: TEST-REP-411, to: FR-REP-119, relationship: verifies}
+  - {from: TEST-REP-411, to: CODE-REP-204, relationship: exercises}
+  - {from: TEST-REP-412, to: TR-REP-118, relationship: verifies}
+  - {from: TEST-REP-413, to: TR-REP-118, relationship: verifies}
+  - {from: TEST-REP-413, to: CODE-REP-205, relationship: exercises}
+  - {from: TEST-REP-414, to: FR-REP-115, relationship: verifies}
+  - {from: TEST-REP-414, to: FR-REP-116, relationship: verifies}
+  - {from: TEST-REP-414, to: CODE-REP-202, relationship: exercises}
+  - {from: TEST-REP-414, to: CODE-REP-203, relationship: exercises}
+  - {from: TEST-REP-415, to: FR-REP-112, relationship: verifies}
+  - {from: TEST-REP-416, to: TR-REP-117, relationship: verifies}
+  - {from: TEST-REP-417, to: TR-REP-117, relationship: verifies}
+  - {from: TEST-REP-418, to: TR-REP-112, relationship: verifies}
+  - {from: TEST-REP-419, to: FR-REP-114, relationship: verifies}
+  - {from: TEST-REP-419, to: FR-REP-119, relationship: verifies}
+  - {from: TEST-REP-420, to: FR-REP-117, relationship: verifies}
+  - {from: TEST-REP-420, to: FR-REP-118, relationship: verifies}
+  - {from: TEST-REP-421, to: FR-REP-118, relationship: verifies}
+  - {from: TEST-REP-422, to: FR-REP-117, relationship: verifies}
+  - {from: TEST-REP-423, to: FR-REP-115, relationship: verifies}
+  - {from: TEST-REP-424, to: FR-REP-115, relationship: verifies}
+
+  - {from: UAT-REP-033, to: US-REP-032, relationship: accepts}
+  - {from: UAT-REP-034, to: US-REP-033, relationship: accepts}

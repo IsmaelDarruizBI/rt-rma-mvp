@@ -279,6 +279,17 @@ class GarantiaRmaIn(BaseModel):
     usuario_id: str = Field(min_length=1)
 
 
+class OverrideRecursosIn(BaseModel):
+    """``POST /api/orders/{id}/details/{detalle_id}/resources/override``.
+
+    Override de factibilidad por recursos (ACT-COORD, BR-REP-003): el
+    motivo es obligatorio.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    motivo: str = Field(min_length=1)
+
+
 class EnviarARevisionIn(BaseModel):
     """``POST /api/orders/{id}/send-to-review`` (ACT-RECEP, VAR-REP-001)."""
 

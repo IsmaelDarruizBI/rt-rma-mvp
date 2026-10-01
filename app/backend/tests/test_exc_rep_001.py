@@ -359,7 +359,11 @@ def _codigos(orden) -> list[str]:
 
 def test_acciones_en_100_y_120_priorizan_el_circuito_de_recursos():
     en_100 = _bloqueada()
-    assert _codigos(en_100) == ["ESPERAR_RECURSOS", "REGISTRAR_PAGO"]
+    assert _codigos(en_100) == [
+        "ESPERAR_RECURSOS",
+        "OVERRIDE_RECURSOS",
+        "REGISTRAR_PAGO",
+    ]
     esperar = acciones_disponibles(en_100)[0]
     assert esperar.requiere_actor is False and esperar.roles == ()
 
@@ -379,7 +383,7 @@ def test_acciones_en_recursos_para_rt_interno_sin_pago():
         _insumos(a="0"),
     )
     assert orden.current_process == "PROC-REP-100"
-    assert _codigos(orden) == ["ESPERAR_RECURSOS"]
+    assert _codigos(orden) == ["ESPERAR_RECURSOS", "OVERRIDE_RECURSOS"]
 
 
 def test_en_revision_con_recursos_pendientes_no_ofrece_definir():

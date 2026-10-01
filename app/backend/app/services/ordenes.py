@@ -33,7 +33,7 @@ from .autorizacion import validar_actor, validar_alguno_de
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .inventario import hay_reservas_activas
 from .pagos import condicion_entrega_cumplida
-from .recursos import marcar_pendiente_recursos
+from .recursos import marcar_pendiente_recursos, override_listo_para_habilitar
 from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
 from .workflow import registrar_paso
 
@@ -319,16 +319,18 @@ def habilitar_orden(
 ) -> OrdenReparacion:
     """PROC-REP-140: la Orden queda habilitada para trabajarse.
 
-    Precondiciones del MVP: existe al menos un Detalle y la Orden viene
-    de PROC-REP-090 con resultado "Si" (``current_process`` es el nodo
-    actual; el resultado se busca en la ultima evaluacion de 090 del
-    historial). Es del nodo 140, no del Scenario: protege HP-REP-001/002/003
-    y VAR-REP-001/002 contra una invocacion directa que saltee 080/090.
+    Precondiciones del MVP: existe al menos un Detalle y la Orden viene,
+    A) de PROC-REP-090 con resultado "Si" (``current_process`` es el nodo
+    actual; el resultado se busca en la ultima evaluacion de 090), o
+    B) de PROC-REP-130 con un override valido de un Detalle que quedo
+    SIN_BLOQUEO (EXC-REP-002; no se fabrica un 090 "Si"). Es del nodo 140,
+    no del Scenario: protege HP-REP-001/002/003 y VAR-REP-001/002 contra
+    una invocacion directa que saltee 080/090; 100 y 110 no habilitan.
     Acepta REQUERIMIENTO, EN_REVISION y EN_REPARACION (esta ultima al
     revalidar recursos tras PROC-REP-211 -> 120). PROC-REP-100 y la rama
     "No" de PROC-REP-110 / PROC-REP-120 (EXC-REP-001) estan implementados
-    fuera de esta funcion; el override (PROC-REP-110 "Si" -> PROC-REP-130,
-    EXC-REP-002) no esta implementado.
+    fuera de esta funcion, y tambien el override (PROC-REP-110 "Si" ->
+    PROC-REP-130, EXC-REP-002).
 
     Nodo ACT-SYSTEM: no lo ejecuta una persona, asi que no recibe
     Usuario y el historial queda sin actor humano.
@@ -348,23 +350,31 @@ def habilitar_orden(
             f"PROC-REP-211 -> 120); "
             f"esta en {orden.estado_workflow.value}."
         )
-    if orden.current_process != "PROC-REP-090":
+    if override_listo_para_habilitar(orden):
+        # B) PROC-REP-130 -> 140 (EXC-REP-002): un Coordinador forzo un
+        # Detalle bloqueado. No hay un 090 "Si": el historial real es
+        # 090 Ninguno -> 100 -> 110 Si -> 130 -> 140.
+        pass
+    elif orden.current_process != "PROC-REP-090":
         raise PrecondicionInvalidaError(
             "La Orden debe superar la validacion de factibilidad "
-            "(PROC-REP-080/090) antes de habilitarse; esta en "
+            "(PROC-REP-080/090) o tener un override valido (PROC-REP-130) "
+            "antes de habilitarse; esta en "
             f"{orden.current_process}."
         )
-    evaluacion_090 = next(
-        paso
-        for paso in reversed(orden.historial)
-        if paso.process_id == "PROC-REP-090"
-    )
-    if evaluacion_090.observacion != "Si":
-        raise PrecondicionInvalidaError(
-            "La Orden no puede habilitarse porque la validacion de "
-            "factibilidad (PROC-REP-090) no fue aprobada: "
-            f"{evaluacion_090.observacion}."
+    else:
+        # A) PROC-REP-090 con resultado "Si".
+        evaluacion_090 = next(
+            paso
+            for paso in reversed(orden.historial)
+            if paso.process_id == "PROC-REP-090"
         )
+        if evaluacion_090.observacion != "Si":
+            raise PrecondicionInvalidaError(
+                "La Orden no puede habilitarse porque la validacion de "
+                "factibilidad (PROC-REP-090) no fue aprobada: "
+                f"{evaluacion_090.observacion}."
+            )
 
     nueva_orden = registrar_paso(
         orden,

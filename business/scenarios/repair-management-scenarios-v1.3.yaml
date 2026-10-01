@@ -1261,7 +1261,10 @@ scenarios:
       BR-REP-003): el override se registra sobre ese Detalle especifico
       (PROC-REP-130) y la Orden continua el flujo normal hacia
       PROC-REP-140, igual que si el recurso hubiera estado disponible.
-      Origen: analisis estructural CAND-REP-019, confirmado como Scenario
+      Consecuencia posterior (BR-REP-003, aclaracion confirmada): al
+      iniciar y consumir ese Detalle, PROC-REP-185/210 -que no son nodos
+      de este Scenario- pueden dejar la disponibilidad y el stock fisico
+      negativos. Origen: analisis estructural CAND-REP-019, confirmado como Scenario
       real en generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
 
     trigger:

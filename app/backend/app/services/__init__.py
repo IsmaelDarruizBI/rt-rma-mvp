@@ -83,7 +83,10 @@ from .pagos import (
 from .recursos import (
     exigir_espera_por_recursos,
     marcar_pendiente_recursos,
+    override_listo_para_habilitar,
     registrar_espera_recursos,
+    registrar_override_recursos,
+    tiene_override_factibilidad,
 )
 from .reparaciones import (
     aprobar_control_tecnico,
@@ -140,6 +143,9 @@ __all__ = [
     # Espera de recursos (EXC-REP-001)
     "exigir_espera_por_recursos",
     "marcar_pendiente_recursos",
+    "override_listo_para_habilitar",
+    "registrar_override_recursos",
+    "tiene_override_factibilidad",
     "registrar_espera_recursos",
     # Revision tecnica (PROC-REP-065)
     "registrar_revision_tecnica",

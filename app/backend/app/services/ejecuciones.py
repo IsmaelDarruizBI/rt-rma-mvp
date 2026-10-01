@@ -41,6 +41,7 @@ from .inventario import (
     insumos_previstos_de,
     stock_disponible,
 )
+from .recursos import tiene_override_factibilidad
 from .tomas import buscar_detalle, hay_ejecucion_activa, toma_activa
 from .workflow import registrar_paso
 
@@ -78,7 +79,9 @@ def reservar_insumos_e_iniciar_ejecucion(
     ACT-SYSTEM; la trazabilidad al tecnico pasa por la Ejecucion.
 
     PROC-REP-186 (reserva fallida -> Detalle BLOQUEADO_POR_RECURSOS) no
-    esta implementado: el MVP falla con RecursoNoDisponibleError.
+    esta implementado: sin override el MVP falla con RecursoNoDisponibleError;
+    con override (PROC-REP-130 de ESTE Detalle) reserva igual, dejando el
+    disponible negativo (el stock fisico solo baja en PROC-REP-210).
 
     Nodo ACT-SYSTEM. El ``usuario`` recibido es el tecnico de la toma
     activa, al que se atribuye la Ejecucion que se abre aqui.
@@ -115,8 +118,15 @@ def reservar_insumos_e_iniciar_ejecucion(
         detalle.tipo_reparacion_id, insumos_previstos
     )
 
-    # Comprobar todo antes de modificar nada.
+    # Comprobar todo antes de modificar nada. Con un override de
+    # factibilidad VALIDO PARA ESTE Detalle (EXC-REP-002) la reserva se
+    # genera completa aunque la disponibilidad no alcance; sin override se
+    # mantiene el error (la reserva fallida, EXC-REP-003, no esta
+    # implementada). El override de otro Detalle no cuenta.
+    con_override = tiene_override_factibilidad(orden, detalle_id)
     for previsto in previstos:
+        if con_override:
+            break
         insumo = buscar_insumo(previsto.insumo_id, insumos)
         disponible = stock_disponible(
             insumo,

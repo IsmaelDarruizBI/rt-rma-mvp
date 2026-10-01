@@ -101,7 +101,11 @@ def test_cliente_externo_sin_stock_espera_y_se_habilita_al_revalidar(tmp_path):
         paso_100 = orden["historial"][-1]
         assert paso_100["reparacion_detail_id"] == "DET-001"
         assert paso_100["observacion"] == f"Faltantes: {INSUMO}"
-        assert _codigos(orden) == ["ESPERAR_RECURSOS", "REGISTRAR_PAGO"]
+        assert _codigos(orden) == [
+            "ESPERAR_RECURSOS",
+            "OVERRIDE_RECURSOS",
+            "REGISTRAR_PAGO",
+        ]
         espera = orden["acciones_disponibles"][0]
         assert espera["requiere_actor"] is False and espera["roles"] == []
 
@@ -218,7 +222,10 @@ def test_rt_interno_sin_stock_espera_sin_comprobante_ni_pagos(tmp_path):
             orden["documentos"]["comprobante_recepcion"]["generado"] is False
         )
         assert orden["current_process"] == "PROC-REP-100"
-        assert _codigos(orden) == ["ESPERAR_RECURSOS"]  # sin pagos
+        assert _codigos(orden) == [
+            "ESPERAR_RECURSOS",
+            "OVERRIDE_RECURSOS",
+        ]  # sin pagos
 
         orden = _esperar(cliente, orden_id).json()
         assert _ids(orden)[-2:] == ["PROC-REP-110", "PROC-REP-120"]

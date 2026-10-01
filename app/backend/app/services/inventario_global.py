@@ -40,6 +40,7 @@ from .inventario import (
     generar_movimientos_inventario,
     inventario_aplicado,
 )
+from .recursos import tiene_override_factibilidad
 
 CERO = Decimal("0")
 
@@ -125,7 +126,7 @@ def aplicar_movimientos_inventario(
     test, manana la API- no tenga que coordinarla a mano:
 
         1. generar los movimientos dentro de la Orden (service 210);
-        2. validar que ningun stock quede negativo;
+        2. validar que ningun stock quede negativo (salvo override);
         3. guardar la Orden;
         4. descontar del stock fisico lo efectivamente consumido.
 
@@ -151,12 +152,23 @@ def aplicar_movimientos_inventario(
 
     consumos = _consumos_de_la_ejecucion(nueva_orden, ejecucion_id)
 
+    # Un stock fisico negativo solo es admisible si el consumo viene de un
+    # Detalle con override de factibilidad valido (BR-REP-003). Es la
+    # unica politica de stock negativo; el override de otro Detalle no la
+    # habilita.
+    ejecucion = next(
+        e for e in nueva_orden.ejecuciones if e.id == ejecucion_id
+    )
+    permite_negativo = tiene_override_factibilidad(
+        nueva_orden, ejecucion.reparacion_detail_id
+    )
+
     # Validar todo antes de escribir nada.
     stocks_resultantes: list[tuple[str, Decimal]] = []
     for insumo_id, consumido in sorted(consumos.items()):
         insumo = catalogos_repo.obtener_insumo(insumo_id)
         resultante = insumo.stock_fisico - consumido
-        if resultante < CERO:
+        if resultante < CERO and not permite_negativo:
             raise PrecondicionInvalidaError(
                 f"El consumo de {consumido} de {insumo_id} dejaria el stock "
                 f"fisico en {resultante}: hay {insumo.stock_fisico}."

@@ -61,6 +61,7 @@ ACCION_DEFINIR_REPARACION_DESDE_REVISION = "DEFINIR_REPARACION_DESDE_REVISION"
 ACCION_GENERAR_GARANTIA_RMA_REVISION = "GENERAR_GARANTIA_RMA_REVISION"
 ACCION_ESPERAR_RECURSOS = "ESPERAR_RECURSOS"
 ACCION_REVALIDAR_RECURSOS = "REVALIDAR_RECURSOS"
+ACCION_OVERRIDE_RECURSOS = "OVERRIDE_RECURSOS"
 
 CERO = Decimal("0")
 
@@ -233,6 +234,24 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 requiere_actor=False,
             )
         )
+        # EXC-REP-002: en PROC-REP-100 conviven las dos decisiones de
+        # PROC-REP-110: esperar (sin actor) o forzar un Detalle bloqueado
+        # (Coordinador RMA, uno por Detalle).
+        if orden.current_process == "PROC-REP-100":
+            for detalle in orden.reparaciones_detail:
+                if (
+                    detalle.estado is EstadoReparacionDetail.DEFINIDO
+                    and detalle.condicion
+                    is CondicionReparacionDetail.BLOQUEADO_POR_RECURSOS
+                ):
+                    acciones.append(
+                        AccionDisponible(
+                            codigo=ACCION_OVERRIDE_RECURSOS,
+                            etiqueta="Forzar el Detalle bloqueado (override)",
+                            roles=(RolUsuario.COORDINADOR_RMA,),
+                            detalle_id=detalle.id,
+                        )
+                    )
 
     if estado is EstadoWorkflow.REQUERIMIENTO:
         acciones.append(

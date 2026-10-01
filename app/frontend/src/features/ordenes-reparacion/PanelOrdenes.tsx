@@ -133,6 +133,10 @@ export function PanelOrdenes() {
       ),
     esperarRecursos: () =>
       void ejecutarComando(() => api.esperarRecursos(idOrden)),
+    overrideRecursos: (detalleId, motivo) =>
+      void ejecutarComando(() =>
+        api.overrideRecursos(idOrden, detalleId, idActor, motivo),
+      ),
     revalidarRecursos: () =>
       void ejecutarComando(() => api.revalidarRecursos(idOrden)),
     interrumpirEjecucion: (ejecucionId, insumosUtilizados, observaciones) =>

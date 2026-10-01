@@ -38,7 +38,14 @@ rules:
       supero la validacion de factibilidad, debe registrarse usuario,
       fecha, el Detalle especifico, la validacion ignorada y el motivo.
       El override se aplica puntualmente sobre ese Detalle, no sobre la
-      Orden en abstracto.
+      Orden en abstracto. Aclaracion confirmada con negocio: el override
+      autoriza explicitamente que ese Detalle continue aunque no haya
+      stock suficiente, y habilita la reserva (PROC-REP-185) y el consumo
+      (PROC-REP-210) posteriores de ESE Detalle aunque la disponibilidad o
+      el stock fisico resultantes sean negativos. El override solo
+      registra la autorizacion (PROC-REP-130): no reserva ni descuenta
+      stock; la reserva y el consumo ocurren en sus nodos habituales. El
+      override de un Detalle nunca habilita stock negativo para otro.
     status: draft
 
   - id: BR-REP-004
@@ -69,11 +76,15 @@ rules:
       reserva real de sus insumos previstos (la factibilidad previa solo
       habia consultado disponibilidad, sin reservar). Si la reserva es
       exitosa, se generan las reservas trazadas al Detalle y la Ejecucion
-      se inicia; el Detalle pasa a EN_PROCESO. Si la reserva falla, la
+      se inicia; el Detalle pasa a EN_PROCESO. Normalmente la reserva
+      falla cuando no existe disponibilidad suficiente: en ese caso la
       Ejecucion NO se inicia, el Detalle permanece PENDIENTE con
       condicion BLOQUEADO_POR_RECURSOS, y el estado de la Orden se
-      recalcula. Reemplaza a la version V1.2, que reservaba una unica vez
-      "al tomar la Orden".
+      recalcula. Excepcion: si el Detalle tiene un override de
+      factibilidad por recursos valido (BR-REP-003), la reserva puede
+      continuar aun excediendo la disponibilidad (la fuente normativa de
+      la autorizacion es BR-REP-003). Reemplaza a la version V1.2, que
+      reservaba una unica vez "al tomar la Orden".
     status: draft
 
   - id: BR-REP-007

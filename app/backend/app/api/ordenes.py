@@ -28,6 +28,7 @@ from app.application import (
     entregar,
     enviar_a_revision,
     esperar_recursos,
+    forzar_detalle_por_recursos,
     informar_rt,
     iniciar_detalle,
     insumos_previstos_por_detalle,
@@ -65,6 +66,7 @@ from .schemas import (
     OrdenConEntregaOut,
     OrdenOut,
     OrdenResumenOut,
+    OverrideRecursosIn,
     PagoIn,
     RevisionTecnicaIn,
     TomarIn,
@@ -294,6 +296,28 @@ def post_definir_reparacion_desde_revision(
         observaciones=cuerpo.observaciones,
         finalizar_definicion=cuerpo.finalizar_definicion,
         detalle_origen_id=cuerpo.detalle_origen_id,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/details/{detalle_id}/resources/override")
+def post_override_recursos(
+    orden_id: str,
+    detalle_id: str,
+    cuerpo: OverrideRecursosIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Forzar un Detalle bloqueado por recursos (ACT-COORD, EXC-REP-002).
+
+    Compone PROC-REP-110 (Si) -> 130 -> 140 sobre ESE Detalle. Solo
+    registra la autorizacion: no reserva ni toca el stock.
+    """
+    orden = forzar_detalle_por_recursos(
+        contexto,
+        orden_id=orden_id,
+        detalle_id=detalle_id,
+        usuario_id=cuerpo.usuario_id,
+        motivo=cuerpo.motivo,
     )
     return _salida(orden, contexto)
 

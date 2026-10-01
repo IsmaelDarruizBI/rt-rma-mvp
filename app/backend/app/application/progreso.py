@@ -156,19 +156,28 @@ _TRAMO_RECURSOS: tuple[tuple[str, str], ...] = (
 )
 
 
+_NODO_OVERRIDE = ("PROC-REP-130", "Registrar override")
+
+
 def _con_espera_de_recursos(
     ruta: tuple[tuple[str, str], ...],
+    *,
+    con_override: bool = False,
 ) -> tuple[tuple[str, str], ...]:
     """Intercala 100 -> 110 -> 120 despues de 090 (EXC-REP-001).
 
     Se muestra UNA vez aunque el historial tenga varios ciclos
     (120 -> 080 -> 090 -> 100 ...): el historial conserva cada intento.
+    Con evidencia de PROC-REP-130 (override, EXC-REP-002) se agrega ese
+    nodo tras 120.
     """
     resultado: list[tuple[str, str]] = []
     for nodo in ruta:
         resultado.append(nodo)
         if nodo[0] == "PROC-REP-090":
             resultado.extend(_TRAMO_RECURSOS)
+            if con_override:
+                resultado.append(_NODO_OVERRIDE)
     return tuple(resultado)
 
 
@@ -215,7 +224,9 @@ def _ruta_esperada(orden: OrdenReparacion) -> tuple[tuple[str, str], ...]:
     if "PROC-REP-055" in alcanzados:
         ruta = _con_revision(ruta)
     if "PROC-REP-100" in alcanzados:
-        ruta = _con_espera_de_recursos(ruta)
+        ruta = _con_espera_de_recursos(
+            ruta, con_override="PROC-REP-130" in alcanzados
+        )
     return ruta
 
 
