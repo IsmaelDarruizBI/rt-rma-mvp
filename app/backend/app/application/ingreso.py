@@ -1,10 +1,12 @@
 """Tramo de Recepcion: ingreso del equipo y definicion de la reparacion.
 
-Dos comandos, uno por accion humana de ACT-RECEP:
+Comandos, uno por accion humana de ACT-RECEP:
 
     crear_orden          PROC-REP-010 -> 030 -> 040
     definir_reparacion   PROC-REP-045 -> 070 -> 050 -> 060 -> 080 ->
                          090 -> 140
+    crear_garantia_rma   PROC-REP-035 -> 040 -> 045 -> 070 -> 050 ->
+                         060 -> 080 -> 090 -> 140 (HP-REP-003)
 
 El corte entre ambos es la frontera del actor: entre 040 y 045 el
 proceso vuelve a pedirle algo a Recepcion (que reparacion se va a
@@ -13,11 +15,14 @@ Dentro de cada comando, los nodos ACT-SYSTEM y las decisiones que
 siguen (050/060/080/090/140) se encadenan sin volver a preguntar.
 """
 
+from datetime import datetime
+
 from app.domain.models import Cliente, Equipo, OrdenReparacion
 from app.services import (
     RecursoNoDisponibleError,
     cargar_reservas_externas,
     crear_orden_cliente_externo,
+    crear_orden_garantia_rma,
     crear_orden_rt_interno,
     definir_reparacion_detail,
     generar_comprobante_recepcion,
@@ -144,27 +149,88 @@ def definir_reparacion(
     )
 
     if finalizar_definicion:
-        orden = generar_comprobante_recepcion(orden, fecha=fecha)
-
-        orden, factible = validar_factibilidad_detalles(
-            orden,
-            insumos=contexto.catalogos.listar_insumos(),
-            insumos_previstos=(
-                contexto.catalogos.listar_tipo_reparacion_insumos()
-            ),
-            fecha=fecha,
-            reservas_externas=cargar_reservas_externas(
-                orden.id, contexto.ordenes
-            ),
-        )
-        if not factible:
-            raise RecursoNoDisponibleError(
-                "No hay disponibilidad de insumos para la reparacion "
-                "pedida (PROC-REP-090). El MVP no resuelve el camino de "
-                "faltante, asi que la Orden no se modifico."
-            )
-
-        orden = habilitar_orden(orden, fecha=fecha)
+        orden = _finalizar_definicion(contexto, orden, fecha=fecha)
 
     contexto.ordenes.guardar(orden)
+    return orden
+
+
+def _finalizar_definicion(
+    contexto: ApplicationContext,
+    orden: OrdenReparacion,
+    *,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """PROC-REP-050 -> 060 -> 080 -> 090 -> 140: de Detalles a HABILITADA.
+
+    Compartido por ``definir_reparacion`` y ``crear_garantia_rma``.
+    """
+    orden = generar_comprobante_recepcion(orden, fecha=fecha)
+
+    orden, factible = validar_factibilidad_detalles(
+        orden,
+        insumos=contexto.catalogos.listar_insumos(),
+        insumos_previstos=contexto.catalogos.listar_tipo_reparacion_insumos(),
+        fecha=fecha,
+        reservas_externas=cargar_reservas_externas(orden.id, contexto.ordenes),
+    )
+    if not factible:
+        raise RecursoNoDisponibleError(
+            "No hay disponibilidad de insumos para la reparacion "
+            "pedida (PROC-REP-090). El MVP no resuelve el camino de "
+            "faltante, asi que la Orden no se modifico."
+        )
+
+    return habilitar_orden(orden, fecha=fecha)
+
+
+def crear_garantia_rma(
+    contexto: ApplicationContext,
+    *,
+    orden_origen_id: str,
+    detalle_origen_id: str,
+    usuario_id: str,
+) -> OrdenReparacion:
+    """Recepcion genera la garantia RMA de un Detalle (HP-REP-003).
+
+    Encadena PROC-REP-035 -> 040 (Orden nueva vinculada), 045 -> 070
+    (un Detalle de garantia que referencia al Detalle origen) y, desde
+    ahi, 050 -> 060 -> 080 -> 090 -> 140 igual que ``definir_reparacion``.
+    Es un unico comando porque Recepcion ya eligio que Detalle reprocesar.
+
+    Devuelve la Orden NUEVA. La Orden origen solo se lee: no se vuelve a
+    guardar ni se modifica (BR-REP-019). El Detalle nuevo es del mismo
+    Tipo de Reparacion y toma un snapshot propio del catalogo actual.
+    """
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    orden_origen = contexto.ordenes.obtener(orden_origen_id)
+
+    with seccion_critica_inventario():
+        orden = crear_orden_garantia_rma(
+            orden_id=siguiente_orden_id(contexto.ordenes),
+            orden_origen=orden_origen,
+            detalle_origen_id=detalle_origen_id,
+            usuario=usuario,
+            fecha=fecha,
+        )
+        detalle_origen = next(
+            detalle
+            for detalle in orden_origen.reparaciones_detail
+            if detalle.id == detalle_origen_id
+        )
+        orden = definir_reparacion_detail(
+            orden,
+            detalle_id=siguiente_detalle_id(orden),
+            tipo_reparacion=contexto.catalogos.obtener_tipo_reparacion(
+                detalle_origen.tipo_reparacion_id
+            ),
+            usuario=usuario,
+            fecha=fecha,
+            detalle_origen_id=detalle_origen_id,
+        )
+        orden = _finalizar_definicion(contexto, orden, fecha=fecha)
+        contexto.ordenes.guardar(orden)
+
     return orden

@@ -58,6 +58,7 @@ from .inventario_global import (
 )
 from .ordenes import (
     crear_orden_cliente_externo,
+    crear_orden_garantia_rma,
     crear_orden_rt_interno,
     definir_prioridad,
     devolver_equipo_rt,
@@ -71,6 +72,7 @@ from .ordenes import (
 )
 from .pagos import (
     ROLES_PAGO,
+    condicion_entrega_cumplida,
     registrar_pago,
     registrar_saldo_pendiente,
     tipo_de_pago_para,
@@ -111,6 +113,7 @@ __all__ = [
     "registrar_paso",
     # Ciclo de vida de la Orden
     "crear_orden_cliente_externo",
+    "crear_orden_garantia_rma",
     "crear_orden_rt_interno",
     "definir_prioridad",
     "devolver_equipo_rt",
@@ -160,6 +163,7 @@ __all__ = [
     "stock_disponible_por_insumo",
     # Pagos
     "ROLES_PAGO",
+    "condicion_entrega_cumplida",
     "registrar_pago",
     "tipo_de_pago_para",
     "registrar_saldo_pendiente",

@@ -17,7 +17,6 @@ from decimal import Decimal
 from app.domain.models import (
     EstadoWorkflow,
     OrdenReparacion,
-    OrigenOrden,
     Pago,
     RolUsuario,
     TipoPago,
@@ -44,6 +43,26 @@ ROLES_PAGO = (
     RolUsuario.RECEPCION,
     RolUsuario.COORDINADOR_RMA,
 )
+
+
+def condicion_entrega_cumplida(orden: OrdenReparacion) -> bool:
+    """La condicion comercial para entregar al cliente (BR-REP-017-B).
+
+    Sale de la ``PoliticaOrigen``, no de un Origen hardcodeado:
+
+        sin entrega a cliente -> no aplica (True)
+        COBRABLE              -> saldo <= 0
+        NO_COBRABLE           -> True, sin pagos (garantia)
+
+    La cortesia queda fuera de alcance. El saldo nominal de una Orden
+    NO_COBRABLE puede ser > 0 sin que eso sea una deuda.
+    """
+    politica = politica_de(orden.origen)
+    if not politica.requiere_entrega_cliente:
+        return True
+    if politica.condicion_comercial == CondicionComercial.COBRABLE:
+        return orden.saldo <= 0
+    return politica.condicion_comercial == CondicionComercial.NO_COBRABLE
 
 
 def descripcion_de_pago(pago: Pago) -> str:
@@ -156,10 +175,10 @@ def validar_condicion_entrega(
 ) -> tuple[OrdenReparacion, bool]:
     """PROC-REP-265: determina si la Orden puede entregarse (BR-REP-017-B).
 
-    Para CLIENTE_EXTERNO la condicion es saldo = 0. V1.3 no admite
-    override para entregar con deuda. Las otras dos condiciones que la
-    regla contempla -cortesia total y origen no cobrable- quedan fuera
-    del MVP, que solo modela CLIENTE_EXTERNO sin ajustes comerciales.
+    Para un Origen COBRABLE la condicion es saldo = 0 (V1.3 no admite
+    override para entregar con deuda); para NO_COBRABLE (garantia RMA) se
+    aprueba directamente por Origen, sin pagos. La cortesia total queda
+    fuera del MVP.
 
     Se evalua antes de generar el comprobante final (PROC-REP-280), para
     que el comprobante refleje siempre el saldo definitivo.
@@ -169,20 +188,26 @@ def validar_condicion_entrega(
             f"La condicion de entrega se evalua sobre una Orden "
             f"REPARACION_LISTA; esta en {orden.estado_workflow.value}."
         )
-    if orden.origen is not OrigenOrden.CLIENTE_EXTERNO:
+    politica = politica_de(orden.origen)
+    if not politica.requiere_entrega_cliente:
         raise PrecondicionInvalidaError(
-            f"El MVP solo resuelve el cobro de CLIENTE_EXTERNO, no de "
-            f"{orden.origen.value}."
+            f"{orden.origen.value} no tiene entrega a cliente: no recorre "
+            f"PROC-REP-265."
         )
 
-    puede_entregar = orden.saldo <= 0
+    puede_entregar = condicion_entrega_cumplida(orden)
+
+    if politica.condicion_comercial == CondicionComercial.NO_COBRABLE:
+        observacion = "NO_COBRABLE_POR_ORIGEN"
+    else:
+        observacion = f"Saldo {orden.saldo}"
 
     nueva_orden = registrar_paso(
         orden,
         process_id="PROC-REP-265",
         accion="VALIDAR_CONDICION_ENTREGA",
         fecha=fecha,
-        observacion=f"Saldo {orden.saldo}",
+        observacion=observacion,
     )
     return nueva_orden, puede_entregar
 

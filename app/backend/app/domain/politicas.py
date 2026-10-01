@@ -14,10 +14,9 @@ Es deliberadamente una tabla de datos, no un mecanismo: un
 indexado por ``OrigenOrden``. No hay motor de reglas ni DSL: agregar un
 Origen nuevo es agregar una entrada a ``_POLITICAS``.
 
-Alcance de Slice 0: las tres politicas estan declaradas y testeadas,
-pero solo la de ``CLIENTE_EXTERNO`` tiene un flujo operativo -es el unico
-Origen que la API puede crear-. ``RT_INTERNO`` y ``RMA_GARANTIA_REPARACION``
-quedan listas para los slices que conectan HP-REP-002 y HP-REP-003.
+Las tres politicas tienen flujo operativo: ``CLIENTE_EXTERNO``
+(HP-REP-001), ``RT_INTERNO`` (HP-REP-002) y ``RMA_GARANTIA_REPARACION``
+(HP-REP-003, que nace de una Orden origen ENTREGADA).
 """
 
 from dataclasses import dataclass

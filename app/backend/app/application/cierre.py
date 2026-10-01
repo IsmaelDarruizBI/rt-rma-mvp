@@ -18,6 +18,7 @@ from app.services import (
     PrecondicionInvalidaError,
     aprobar_control_tecnico,
     calcular_puntaje,
+    condicion_entrega_cumplida,
     devolver_equipo_rt,
     entregar_equipo,
     generar_comprobante_final,
@@ -34,6 +35,9 @@ from app.services.ordenes import ROLES_ENTREGA
 from .contexto import ApplicationContext
 
 CERO = Decimal("0")
+
+# Nodos en los que la Orden ya esta en Completar Cobro (BR-REP-017-B).
+_NODOS_DE_CONDICION_DE_ENTREGA = frozenset({"PROC-REP-265", "PROC-REP-266"})
 
 
 def aprobar_control(
@@ -126,11 +130,13 @@ def registrar_pago_de_orden(
     el rol se valida contra ``ROLES_PAGO`` (ADMINISTRADOR, RECEPCION y
     COORDINADOR_RMA); TECNICO no puede registrar Pagos.
 
-    Si la Orden ya esta REPARACION_LISTA, el pago puede destrabar la
-    entrega, asi que se revalida PROC-REP-265. Si todavia no lo esta, el
-    Pago se registra igual y no se evalua nada: 265 pertenece a la fase
-    de cierre (BR-REP-017-B) y evaluarlo antes seria inventar un paso
-    que el proceso no da.
+    Si la Orden ya esta en Completar Cobro (current_process 265 o 266),
+    el pago puede destrabar la entrega, asi que se revalida PROC-REP-265
+    y, si todavia queda saldo, vuelve PROC-REP-266 (pago parcial). Si el
+    cierre todavia no empezo (por ejemplo en PROC-REP-240), el Pago se
+    registra igual y no se evalua nada: 265 pertenece a la fase de
+    cierre (BR-REP-017-B) y evaluarlo antes seria inventar un paso que
+    el proceso no da.
 
     NO genera el comprobante final: eso es PROC-REP-280 y ocurre en la
     entrega.
@@ -143,9 +149,15 @@ def registrar_pago_de_orden(
         orden, monto=monto, metodo=metodo, usuario=usuario, fecha=fecha
     )
 
+    # PROC-REP-265 es de la fase SECUENCIAL de cierre: solo se revalida
+    # si la Orden ya llego a ella (tras 250 -> 260 -> 265). Un Pago
+    # anterior solo baja el saldo; el Pago es transversal y no mueve el
+    # proceso.
     puede_entregar = False
-    if orden.estado_workflow is EstadoWorkflow.REPARACION_LISTA:
+    if orden.current_process in _NODOS_DE_CONDICION_DE_ENTREGA:
         orden, puede_entregar = validar_condicion_entrega(orden, fecha=fecha)
+        if not puede_entregar:
+            orden = registrar_saldo_pendiente(orden, fecha=fecha)
 
     contexto.ordenes.guardar(orden)
     return orden, puede_entregar
@@ -179,7 +191,13 @@ def entregar(
             f"Solo se entrega una Orden REPARACION_LISTA; esta en "
             f"{orden.estado_workflow.value}."
         )
-    if orden.saldo > CERO:
+    if orden.current_process != "PROC-REP-265":
+        raise PrecondicionInvalidaError(
+            "Falta validar la condicion de entrega (PROC-REP-265) "
+            "antes de entregar; la Orden esta en "
+            f"{orden.current_process}."
+        )
+    if not condicion_entrega_cumplida(orden):
         raise PrecondicionInvalidaError(
             f"No se puede entregar con saldo pendiente: {orden.saldo}. "
             "Registra el Pago y volve a intentarlo."

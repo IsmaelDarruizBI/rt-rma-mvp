@@ -209,6 +209,22 @@ export function informarRt(ordenId: string): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/inform-rt`, {});
 }
 
+/**
+ * PROC-REP-035 -> 040 -> 045 -> 070 -> 050 -> 060 -> 080 -> 090 -> 140
+ * (Recepción, HP-REP-003). Devuelve la NUEVA Orden de garantía RMA; la
+ * Orden origen no se modifica.
+ */
+export function generarGarantiaRma(
+  ordenOrigenId: string,
+  detalleOrigenId: string,
+  usuarioId: string,
+): Promise<Orden> {
+  return post<Orden>(
+    `/api/orders/${ordenOrigenId}/details/${detalleOrigenId}/warranty-rma`,
+    { usuario_id: usuarioId },
+  );
+}
+
 /** PROC-REP-270 reutilizado (HP-REP-002, RT_INTERNO -> EVT-REP-999). */
 export function devolverRt(
   ordenId: string,

@@ -276,7 +276,7 @@ items:
   - {id: FR-REP-049, type: functional_requirement, name: Derivar siempre importe a cobrar pagado saldo y estado de cobro de los Detalles y los pagos, status: IMPLEMENTED}
   - {id: FR-REP-050, type: functional_requirement, name: Distinguir una Orden sin nada que cobrar de una Orden cuyo importe es cero, status: IMPLEMENTED}
   - {id: FR-REP-051, type: functional_requirement, name: Calcular el saldo y validar la condicion de entrega antes de habilitarla, status: IMPLEMENTED}
-  - {id: FR-REP-052, type: functional_requirement, name: Bloquear la entrega mientras haya saldo y revalidar la condicion despues de cada pago, status: IMPLEMENTED}
+  - {id: FR-REP-052, type: functional_requirement, name: Bloquear la entrega mientras haya saldo y, una vez iniciada la fase de Completar Cobro, revalidar la condicion despues de cada Pago, status: IMPLEMENTED}
   - {id: FR-REP-053, type: functional_requirement, name: Entregar una Orden cobrable solo con saldo cero sin override posible, status: IMPLEMENTED}
   - {id: FR-REP-054, type: functional_requirement, name: Generar el comprobante final despues de aprobada la condicion de entrega, status: IMPLEMENTED}
   - {id: FR-REP-055, type: functional_requirement, name: Determinar que la Orden requiere entrega y permitir notificar al cliente, status: IMPLEMENTED}
@@ -287,7 +287,7 @@ items:
   - {id: FR-REP-060, type: functional_requirement, name: Pasar la Orden a ENTREGADA y posicionarla en el evento final del flujo, status: IMPLEMENTED}
   - {id: FR-REP-061, type: functional_requirement, name: Exponer el nombre del Tipo de Reparacion de cada Detalle sin persistirlo en la Orden, status: IMPLEMENTED}
   - {id: FR-REP-062, type: functional_requirement, name: Clasificar cada Pago como ANTICIPO o PAGO derivandolo del estado de la Orden, status: IMPLEMENTED}
-  - {id: FR-REP-063, type: functional_requirement, name: Permitir registrar Pagos antes de REPARACION_LISTA sin evaluar la condicion de entrega, status: IMPLEMENTED}
+  - {id: FR-REP-063, type: functional_requirement, name: Permitir registrar Pagos antes de REPARACION_LISTA sin evaluar la condicion de entrega, status: IMPLEMENTED, note: "Tambien un Pago registrado en REPARACION_LISTA con current_process PROC-REP-240 (antes de 250/260/265) solo baja el saldo: no evalua 265 ni 266 hasta que la Orden entra a Completar Cobro."}
   - {id: FR-REP-065, type: functional_requirement, name: Registrar en el historial de la Orden cada capacidad transversal ejecutada sin alterar el recorrido, status: IMPLEMENTED}
 
   # --- Slice 0 (MVP v2 - Foundation). spec: 009-mvp2-foundation ------ #
@@ -343,7 +343,7 @@ items:
   - {id: TR-REP-037, type: technical_requirement, name: puntaje_total es computed_field que suma solo los Detalles aprobados, status: IMPLEMENTED}
   - {id: TR-REP-038, type: technical_requirement, name: aprobar_control_tecnico exige ausencia de Ejecucion activa antes de aprobar nada, status: IMPLEMENTED}
   - {id: TR-REP-039, type: technical_requirement, name: marcar_reparacion_lista exige control aprobado porque el hito no es derivable de los Detalles, status: IMPLEMENTED}
-  - {id: TR-REP-040, type: technical_requirement, name: registrar_pago no toca current_process y deja traza como accion funcional ACC-REP-020 enlazada al Pago, status: IMPLEMENTED}
+  - {id: TR-REP-040, type: technical_requirement, name: "registrar_pago siempre registra la capacidad transversal, no toca current_process y deja traza como accion funcional ACC-REP-020 enlazada al Pago; application.registrar_pago_de_orden solo revalida PROC-REP-265 (y, con saldo, PROC-REP-266) cuando la Orden ya esta en la fase secuencial de Completar Cobro (current_process PROC-REP-265 o PROC-REP-266)", status: IMPLEMENTED}
   - {id: TR-REP-041, type: technical_requirement, name: La situacion comercial es enteramente derivada y ResumenPago no conoce los Detalles, status: IMPLEMENTED}
   - {id: TR-REP-042, type: technical_requirement, name: estado_pago distingue Orden sin Detalles de Orden con total cero, status: IMPLEMENTED}
   - {id: TR-REP-043, type: technical_requirement, name: validar_condicion_entrega devuelve (Orden bool) y registra PROC-REP-265 en cada evaluacion, status: IMPLEMENTED}
@@ -711,6 +711,7 @@ items:
   - {id: CODE-REP-124, type: code_artifact, name: "app/backend/app/application/taller.py::liberar_orden", status: IMPLEMENTED, source: "app/backend/app/application/taller.py::liberar_orden"}
   - {id: CODE-REP-125, type: code_artifact, name: "app/backend/app/services/reparaciones.py::aprobar_control_tecnico", status: IMPLEMENTED, source: "app/backend/app/services/reparaciones.py::aprobar_control_tecnico"}
   - {id: CODE-REP-126, type: code_artifact, name: "app/backend/app/application/cierre.py::aprobar_control", status: IMPLEMENTED, source: "app/backend/app/application/cierre.py::aprobar_control"}
+  - {id: CODE-REP-156, type: code_artifact, name: "app/backend/app/application/cierre.py::registrar_pago_de_orden", status: IMPLEMENTED, source: "app/backend/app/application/cierre.py::registrar_pago_de_orden"}
   - {id: CODE-REP-127, type: code_artifact, name: "app/backend/app/services/tomas.py::seleccionar_detalle", status: IMPLEMENTED, source: "app/backend/app/services/tomas.py::seleccionar_detalle"}
   - {id: CODE-REP-128, type: code_artifact, name: "app/backend/app/services/tomas.py::validar_estacion_trabajo", status: IMPLEMENTED, source: "app/backend/app/services/tomas.py::validar_estacion_trabajo"}
   - {id: CODE-REP-129, type: code_artifact, name: "app/backend/app/services/ejecuciones.py::reservar_insumos_e_iniciar_ejecucion", status: IMPLEMENTED, source: "app/backend/app/services/ejecuciones.py::reservar_insumos_e_iniciar_ejecucion"}
@@ -978,6 +979,9 @@ items:
   - {id: TEST-REP-226, type: internal_test, name: "test_control_tecnico_rechaza_si_algun_detalle_no_es_terminal", status: PASSING, source: "app/backend/tests/test_multidetalle.py::test_control_tecnico_rechaza_si_algun_detalle_no_es_terminal"}
   - {id: TEST-REP-227, type: internal_test, name: "test_detalle_bloqueado_guard.py (4 funciones, 7 casos)", status: PASSING, source: "app/backend/tests/test_detalle_bloqueado_guard.py", note: "seleccionar_detalle, validar_estacion_trabajo y reservar_insumos_e_iniciar_ejecucion rechazan BLOQUEADO_POR_RECURSOS y REQUIERE_DEFINICION; solo DEFINIDO+SIN_BLOQUEO se acepta."}
   - {id: TEST-REP-228, type: internal_test, name: "test_proc212_registro_condicional.py (2 funciones)", status: PASSING, source: "app/backend/tests/test_proc212_registro_condicional.py", note: "212 [Si] se registra desde PROC-REP-180; una reentrada a seleccionar_detalle sin volver a pasar por 180/211 no duplica PROC-REP-212."}
+  - {id: TEST-REP-285, type: internal_test, name: "test_pago_total_en_reparacion_lista_no_ejecuta_265", status: PASSING, source: "app/backend/tests/test_api_hp_rep_003.py::test_pago_total_en_reparacion_lista_no_ejecuta_265", note: "Pago total en REPARACION_LISTA (current_process 240) no ejecuta 265 ni 266; entregar es 409 hasta notificar (250, 260, 265)."}
+  - {id: TEST-REP-286, type: internal_test, name: "test_pago_parcial_en_completar_cobro_vuelve_a_265_no_y_266", status: PASSING, source: "app/backend/tests/test_api_hp_rep_003.py::test_pago_parcial_en_completar_cobro_vuelve_a_265_no_y_266", note: "Pago parcial desde 266: ACC-REP-020, 265 No, 266 otra vez; puede_entregar false."}
+  - {id: TEST-REP-287, type: internal_test, name: "test_pago_final_en_completar_cobro_aprueba_265_y_permite_entregar", status: PASSING, source: "app/backend/tests/test_api_hp_rep_003.py::test_pago_final_en_completar_cobro_aprueba_265_y_permite_entregar", note: "Pago final desde 266: ACC-REP-020, 265 Si; puede_entregar true y la entrega es exitosa."}
 
 links:
 
@@ -2588,6 +2592,7 @@ links:
   - {from: CODE-REP-125, to: TR-REP-068, relationship: implements}
   - {from: CODE-REP-126, to: TASK-REP-160, relationship: produced_by}
   - {from: CODE-REP-126, to: TR-REP-068, relationship: implements}
+  - {from: CODE-REP-156, to: TR-REP-040, relationship: implements}
   - {from: CODE-REP-127, to: TASK-REP-161, relationship: produced_by}
   - {from: CODE-REP-127, to: TR-REP-067, relationship: implements}
   - {from: CODE-REP-127, to: TR-REP-069, relationship: implements}
@@ -2618,3 +2623,16 @@ links:
   - {from: TEST-REP-227, to: TR-REP-069, relationship: verifies}
   - {from: TEST-REP-228, to: CODE-REP-127, relationship: exercises}
   - {from: TEST-REP-228, to: TR-REP-067, relationship: verifies}
+  - {from: TEST-REP-285, to: FR-REP-046, relationship: verifies}
+  - {from: TEST-REP-285, to: FR-REP-063, relationship: verifies}
+  - {from: TEST-REP-285, to: TR-REP-040, relationship: verifies}
+  - {from: TEST-REP-285, to: FR-REP-053, relationship: verifies}
+  - {from: TEST-REP-285, to: CODE-REP-156, relationship: exercises}
+  - {from: TEST-REP-286, to: FR-REP-052, relationship: verifies}
+  - {from: TEST-REP-286, to: TR-REP-043, relationship: verifies}
+  - {from: TEST-REP-286, to: CODE-REP-089, relationship: exercises}
+  - {from: TEST-REP-286, to: CODE-REP-156, relationship: exercises}
+  - {from: TEST-REP-287, to: FR-REP-052, relationship: verifies}
+  - {from: TEST-REP-287, to: FR-REP-053, relationship: verifies}
+  - {from: TEST-REP-287, to: CODE-REP-088, relationship: exercises}
+  - {from: TEST-REP-287, to: CODE-REP-156, relationship: exercises}

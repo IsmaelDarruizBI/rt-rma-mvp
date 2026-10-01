@@ -147,6 +147,10 @@ export function PanelOrdenes() {
     informarRt: () => void ejecutarComando(() => api.informarRt(idOrden)),
     devolverRt: () =>
       void ejecutarComando(() => api.devolverRt(idOrden, idActor)),
+    generarGarantiaRma: (detalleId) =>
+      void ejecutarComando(() =>
+        api.generarGarantiaRma(idOrden, detalleId, idActor),
+      ),
   };
 
   return (
@@ -164,7 +168,7 @@ export function PanelOrdenes() {
         <div>
           <h1 style={{ margin: 0, fontSize: "1.4rem" }}>Rosario Tecno</h1>
           <p style={{ margin: 0, color: colores.suave }}>
-            RMA MVP · HP-REP-001 · HP-REP-002
+            RMA MVP · HP-REP-001 · HP-REP-002 · HP-REP-003
           </p>
         </div>
         <SelectorActor

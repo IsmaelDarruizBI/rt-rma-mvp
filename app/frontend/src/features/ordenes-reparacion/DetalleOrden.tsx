@@ -46,6 +46,16 @@ export function CabeceraOrden({ orden }: { orden: Orden }) {
             {orden.equipo.marca} {orden.equipo.modelo} —{" "}
             {orden.equipo.falla_reportada}
           </p>
+          {orden.orden_origen_id && (
+            <p style={{ margin: "0.2rem 0 0", color: colores.suave }}>
+              Origen garantía: {orden.orden_origen_id}
+              {orden.reparaciones_detail.some((d) => d.detalle_origen_id) &&
+                ` / ${orden.reparaciones_detail
+                  .map((d) => d.detalle_origen_id)
+                  .filter(Boolean)
+                  .join(", ")}`}
+            </p>
+          )}
         </div>
         <div style={{ textAlign: "right" }}>
           <p
@@ -227,6 +237,12 @@ export function DetallesOrden({ orden }: { orden: Orden }) {
               <strong style={{ fontSize: "1rem" }}>
                 {detalle.tipo_reparacion_nombre}
               </strong>
+              {detalle.detalle_origen_id && (
+                <div style={{ fontSize: "0.75rem", color: colores.suave }}>
+                  Origen garantía: {orden.orden_origen_id} /{" "}
+                  {detalle.detalle_origen_id}
+                </div>
+              )}
               <div
                 style={{
                   fontSize: "0.7rem",

@@ -72,6 +72,17 @@ export function ListadoOrdenes({
                 >
                   {orden.cliente_nombre} · {orden.equipo}
                 </span>
+                {orden.origen === "RMA_GARANTIA_REPARACION" && (
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "0.75rem",
+                      color: colores.suave,
+                    }}
+                  >
+                    Garantía RMA de {orden.orden_origen_id ?? "—"}
+                  </span>
+                )}
               </span>
               <span style={{ textAlign: "right" }}>
                 <Etiqueta>{orden.estado_workflow}</Etiqueta>
