@@ -376,7 +376,11 @@ def test_reparacion_lista_sin_saldo():
 def test_entregada():
     orden = flujo_mvp.orden_entregada()
 
-    assert _codigos_y_roles(orden) == []
+    # Slice 3 (HP-REP-003): una Orden ENTREGADA con Cliente ofrece a
+    # Recepcion generar la garantia RMA de cada Detalle; ya no es [].
+    assert _codigos_y_roles(orden) == [
+        ("GENERAR_GARANTIA_RMA", (RolUsuario.RECEPCION,), "DET-001"),
+    ]
     assert _alcanzados(orden) == [
         "PROC-REP-010",
         "PROC-REP-030",

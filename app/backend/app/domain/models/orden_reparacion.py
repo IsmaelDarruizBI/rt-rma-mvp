@@ -47,6 +47,11 @@ class OrdenReparacion(BaseModel):
 
     referencia_rt: str | None = None
 
+    # HP-REP-003 / BR-REP-019: solo RMA_GARANTIA_REPARACION la completa
+    # (ID de la Orden ENTREGADA de la que nace la garantia; nunca el
+    # objeto). Default None: un JSON anterior a Slice 3 sigue cargando.
+    orden_origen_id: str | None = None
+
     prioridad: int = Field(default=0, ge=0)
 
     reparaciones_detail: list[ReparacionDetail] = Field(default_factory=list)

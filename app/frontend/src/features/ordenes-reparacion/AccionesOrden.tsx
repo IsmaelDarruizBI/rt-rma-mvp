@@ -48,6 +48,7 @@ export interface EjecutorAcciones {
   entregar: () => void;
   informarRt: () => void;
   devolverRt: () => void;
+  generarGarantiaRma: (detalleId: string) => void;
 }
 
 interface Props {
@@ -282,6 +283,20 @@ function FormularioAccion({
       return (
         <Boton disabled={deshabilitado} onClick={ejecutar.informarRt}>
           Informar resultado a Gestión RT
+        </Boton>
+      );
+
+    case "GENERAR_GARANTIA_RMA":
+      return (
+        <Boton
+          disabled={deshabilitado || accion.detalle_id === null}
+          onClick={() => {
+            if (accion.detalle_id !== null) {
+              ejecutar.generarGarantiaRma(accion.detalle_id);
+            }
+          }}
+        >
+          Generar garantía de {accion.detalle_id}
         </Boton>
       );
 

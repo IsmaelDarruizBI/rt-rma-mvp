@@ -140,10 +140,12 @@ def test_el_pago_del_cierre_es_de_tipo_pago(cliente):  # noqa: F811
     ).json()
 
     assert orden["pagos"][-1]["tipo_pago"] == "PAGO"
-    assert orden["puede_entregar"] is True
-    # Con REPARACION_LISTA si se revalida la condicion de entrega.
+    # El cierre comercial todavia no empezo (current_process 240): el
+    # Pago es transversal y NO evalua PROC-REP-265.
+    assert orden["puede_entregar"] is False
     recorridos = [paso["process_id"] for paso in orden["historial"]]
-    assert "PROC-REP-265" in recorridos
+    assert "PROC-REP-265" not in recorridos
+    assert orden["current_process"] == "PROC-REP-240"
 
 
 def test_anticipo_y_pago_conviven_en_la_misma_orden(cliente):  # noqa: F811
@@ -183,7 +185,8 @@ def test_anticipo_y_pago_conviven_en_la_misma_orden(cliente):  # noqa: F811
         "PAGO",
     ]
     assert orden["resumen"]["saldo"] == "0"
-    assert orden["puede_entregar"] is True
+    assert orden["puede_entregar"] is False
+    assert orden["current_process"] == "PROC-REP-240"
 
 
 def test_un_tecnico_no_puede_registrar_un_pago_por_http(cliente):  # noqa: F811

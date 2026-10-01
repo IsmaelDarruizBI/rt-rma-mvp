@@ -57,6 +57,44 @@ _RUTA_CLIENTE_EXTERNO: tuple[tuple[str, str], ...] = (
     ("EVT-REP-999", "Proceso finalizado"),
 )
 
+# Nodos de HP-REP-003 (RMA_GARANTIA_REPARACION), en el orden en que el
+# escenario los recorre. Parte de PROC-REP-035 (la Orden nace de una
+# Orden origen ENTREGADA: no hay 010 ni 030) y, como todo Origen con
+# entrega a cliente, recorre PROC-REP-265 pero nunca 266 (NO_COBRABLE).
+_RUTA_RMA_GARANTIA_REPARACION: tuple[tuple[str, str], ...] = (
+    ("PROC-REP-035", "Identificar reparacion original en garantia"),
+    ("PROC-REP-040", "Crear Orden"),
+    ("PROC-REP-045", "Detalles conocidos"),
+    ("PROC-REP-070", "Definir Detalles"),
+    ("PROC-REP-050", "Requiere comprobante de recepcion"),
+    ("PROC-REP-060", "Generar comprobante de recepcion"),
+    ("PROC-REP-080", "Validar factibilidad"),
+    ("PROC-REP-090", "Existe Detalle trabajable"),
+    ("PROC-REP-140", "Habilitar Orden"),
+    ("PROC-REP-150", "Definir prioridad"),
+    ("PROC-REP-170", "Ingresar a cola"),
+    ("PROC-REP-172", "Validar estacion de trabajo"),
+    ("PROC-REP-180", "Tomar Orden"),
+    ("PROC-REP-212", "Iniciar un Detalle de reparacion"),
+    ("PROC-REP-181", "Seleccionar Detalle"),
+    ("PROC-REP-174", "Estacion habilitada para el Detalle"),
+    ("PROC-REP-185", "Reservar insumos e iniciar Ejecucion"),
+    ("PROC-REP-190", "Ejecutar Detalle"),
+    ("PROC-REP-200", "Registrar ejecucion real"),
+    ("PROC-REP-210", "Aplicar movimientos de inventario"),
+    ("PROC-REP-211", "Evaluar situacion de la Orden"),
+    ("PROC-REP-220", "Realizar control tecnico"),
+    ("PROC-REP-230", "Todos los Detalles aprobados"),
+    ("PROC-REP-245", "Consolidar puntaje"),
+    ("PROC-REP-240", "Marcar reparacion lista"),
+    ("PROC-REP-250", "Requiere entrega a cliente"),
+    ("PROC-REP-260", "Notificar cliente"),
+    ("PROC-REP-265", "Validar condicion de entrega"),
+    ("PROC-REP-280", "Generar comprobante final"),
+    ("PROC-REP-270", "Entregar equipo"),
+    ("EVT-REP-999", "Proceso finalizado"),
+)
+
 # Nodos de HP-REP-002 (RT_INTERNO), en el orden en que el escenario los
 # recorre. Diverge de CLIENTE_EXTERNO desde el ingreso (020 en vez de
 # 030, sin comprobante de recepcion) y en el cierre (informar a Gestion
@@ -98,6 +136,7 @@ _RUTA_RT_INTERNO: tuple[tuple[str, str], ...] = (
 _RUTAS_POR_ORIGEN: dict[OrigenOrden, tuple[tuple[str, str], ...]] = {
     OrigenOrden.CLIENTE_EXTERNO: _RUTA_CLIENTE_EXTERNO,
     OrigenOrden.RT_INTERNO: _RUTA_RT_INTERNO,
+    OrigenOrden.RMA_GARANTIA_REPARACION: _RUTA_RMA_GARANTIA_REPARACION,
 }
 
 

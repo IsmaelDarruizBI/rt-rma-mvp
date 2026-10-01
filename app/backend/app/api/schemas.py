@@ -256,6 +256,16 @@ class EntregarIn(BaseModel):
     usuario_id: str = Field(min_length=1)
 
 
+class GarantiaRmaIn(BaseModel):
+    """``POST /api/orders/{id}/details/{detalle_id}/warranty-rma``.
+
+    Recepcion genera la garantia RMA de un Detalle de una Orden ENTREGADA
+    (HP-REP-003).
+    """
+
+    usuario_id: str = Field(min_length=1)
+
+
 class DevolverRtIn(BaseModel):
     """``POST /api/orders/{id}/return-rt`` (PROC-REP-270, HP-REP-002)."""
 
@@ -323,6 +333,7 @@ class DetalleOut(BaseModel):
     control_fecha: datetime | None = None
     control_observaciones: str | None = None
     observaciones: str | None = None
+    detalle_origen_id: str | None = None
     insumos_previstos: list[InsumoPrevistoOut] = Field(default_factory=list)
 
     @classmethod
@@ -370,9 +381,7 @@ class EjecucionOut(BaseModel):
     estado: EstadoEjecucion
     inicio: datetime
     fin: datetime | None = None
-    insumos_utilizados: list[InsumoUtilizadoOut] = Field(
-        default_factory=list
-    )
+    insumos_utilizados: list[InsumoUtilizadoOut] = Field(default_factory=list)
     observaciones: str | None = None
 
     @classmethod
@@ -524,6 +533,7 @@ class OrdenResumenOut(BaseModel):
 
     id: str
     origen: OrigenOrden
+    orden_origen_id: str | None
     estado_workflow: EstadoWorkflow
     current_process: str
     prioridad: int
@@ -540,6 +550,7 @@ class OrdenResumenOut(BaseModel):
         return cls(
             id=orden.id,
             origen=orden.origen,
+            orden_origen_id=orden.orden_origen_id,
             estado_workflow=orden.estado_workflow,
             current_process=orden.current_process,
             prioridad=orden.prioridad,
@@ -564,6 +575,7 @@ class OrdenOut(BaseModel):
     cliente: ClienteOut | None
     equipo: EquipoOut
     referencia_rt: str | None
+    orden_origen_id: str | None
     reparaciones_detail: list[DetalleOut]
     tomas: list[TomaOut]
     ejecuciones: list[EjecucionOut]
@@ -600,6 +612,7 @@ class OrdenOut(BaseModel):
             ),
             equipo=EquipoOut(**orden.equipo.model_dump()),
             referencia_rt=orden.referencia_rt,
+            orden_origen_id=orden.orden_origen_id,
             reparaciones_detail=[
                 DetalleOut.desde_dominio(
                     detalle,
@@ -617,9 +630,7 @@ class OrdenOut(BaseModel):
                 PagoOut(**pago.model_dump())
                 for pago in orden.resumen_pago.pagos
             ],
-            documentos=DocumentosOut(
-                **orden.documentos.model_dump()
-            ),
+            documentos=DocumentosOut(**orden.documentos.model_dump()),
             resumen=ResumenComercialOut(
                 total=orden.total,
                 pagado=orden.resumen_pago.pagado,

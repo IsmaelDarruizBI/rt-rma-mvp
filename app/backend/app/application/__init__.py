@@ -43,7 +43,12 @@ from .consultas import (
 )
 from .contexto import ApplicationContext, construir_contexto
 from .identificadores import siguiente_detalle_id, siguiente_orden_id
-from .ingreso import crear_orden, crear_orden_rt, definir_reparacion
+from .ingreso import (
+    crear_garantia_rma,
+    crear_orden,
+    crear_orden_rt,
+    definir_reparacion,
+)
 from .progreso import PasoProgreso, progreso
 from .taller import (
     completar_ejecucion,
@@ -78,6 +83,7 @@ __all__ = [
     # Comandos
     "crear_orden",
     "crear_orden_rt",
+    "crear_garantia_rma",
     "definir_reparacion",
     "encolar_orden",
     "tomar_orden_en_estacion",

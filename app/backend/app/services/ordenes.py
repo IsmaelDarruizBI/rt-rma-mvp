@@ -1,6 +1,6 @@
 """Ciclo de vida de la Orden de Reparacion.
 
-Nodos cubiertos: PROC-REP-010/030/040 (ingreso y creacion),
+Nodos cubiertos: PROC-REP-010/030/035/040 (ingreso y creacion),
 PROC-REP-140 (habilitar), PROC-REP-150 (prioridad), PROC-REP-170 (cola),
 PROC-REP-211 (evaluar situacion), PROC-REP-240 (reparacion lista),
 PROC-REP-250/260 (notificar) y PROC-REP-270 (entrega).
@@ -30,8 +30,9 @@ from app.domain.models import (
 )
 
 from .autorizacion import validar_actor, validar_alguno_de
-from .exceptions import PrecondicionInvalidaError
+from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .inventario import hay_reservas_activas
+from .pagos import condicion_entrega_cumplida
 from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
 from .workflow import registrar_paso
 
@@ -163,6 +164,86 @@ def crear_orden_rt_interno(
         accion="RECIBIR_REFERENCIA_CONTEXTO_RT",
         fecha=fecha,
         observacion=referencia_rt,
+    )
+    return registrar_paso(
+        orden,
+        process_id="PROC-REP-040",
+        accion="CREAR_ORDEN",
+        fecha=fecha,
+        usuario_id=usuario.id,
+    )
+
+
+def crear_orden_garantia_rma(
+    *,
+    orden_id: str,
+    orden_origen: OrdenReparacion,
+    detalle_origen_id: str,
+    usuario: Usuario,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """PROC-REP-035 -> PROC-REP-040 (HP-REP-003, BR-REP-019).
+
+    Crea una NUEVA Orden de garantia RMA a partir de una Orden origen
+    ENTREGADA. La Orden origen no se reabre ni se modifica: solo se leen
+    su Cliente y su Equipo (copiados en profundidad, sin compartir
+    instancias) y se guarda su ID en ``orden_origen_id``. No se copia
+    historia tecnica (tomas, ejecuciones, movimientos, pagos,
+    documentos, historial).
+
+    No registra PROC-REP-010 ni PROC-REP-030: no es un alta nueva. El
+    Detalle de garantia lo crea despues ``definir_reparacion_detail``
+    con ``detalle_origen_id``.
+
+    Fuera de alcance (BR-REP-019 los deja pendientes): vigencia de la
+    garantia, motivo valido, cantidad maxima de garantias.
+    """
+    validar_actor(usuario, RolUsuario.RECEPCION)
+
+    if orden_origen.estado_workflow is not EstadoWorkflow.ENTREGADA:
+        raise PrecondicionInvalidaError(
+            f"La garantia nace de una Orden ENTREGADA; "
+            f"{orden_origen.id} esta en "
+            f"{orden_origen.estado_workflow.value}."
+        )
+    if not any(
+        detalle.id == detalle_origen_id
+        for detalle in orden_origen.reparaciones_detail
+    ):
+        raise EntidadNoEncontradaError(
+            f"La Orden {orden_origen.id} no tiene un Detalle "
+            f"{detalle_origen_id}."
+        )
+    if orden_origen.cliente is None:
+        raise PrecondicionInvalidaError(
+            f"La Orden origen {orden_origen.id} no tiene Cliente: no hay "
+            f"a quien otorgarle la garantia."
+        )
+
+    orden = OrdenReparacion(
+        id=orden_id,
+        origen=OrigenOrden.RMA_GARANTIA_REPARACION,
+        estado_workflow=EstadoWorkflow.REQUERIMIENTO,
+        current_process="PROC-REP-035",
+        cliente=orden_origen.cliente.model_copy(deep=True),
+        equipo=orden_origen.equipo.model_copy(deep=True),
+        orden_origen_id=orden_origen.id,
+        resumen_pago=ResumenPago(),
+        documentos=DocumentosOrden(),
+        created_at=fecha,
+        updated_at=fecha,
+    )
+
+    orden = registrar_paso(
+        orden,
+        process_id="PROC-REP-035",
+        accion="IDENTIFICAR_REPARACION_ORIGINAL_GARANTIA",
+        fecha=fecha,
+        usuario_id=usuario.id,
+        observacion=(
+            f"orden_origen_id={orden_origen.id}; "
+            f"detalle_origen_id={detalle_origen_id}"
+        ),
     )
     return registrar_paso(
         orden,
@@ -399,10 +480,11 @@ def entregar_equipo(
 ) -> OrdenReparacion:
     """PROC-REP-270: se entrega el equipo y la Orden pasa a ENTREGADA.
 
-    Exige la condicion de entrega ya superada (PROC-REP-265, saldo 0 sin
-    override en V1.3), la documentacion final emitida (PROC-REP-280) y
-    que no quede trabajo abierto: sin Ejecucion activa, sin toma activa
-    y sin reservas pendientes.
+    Exige la condicion de entrega ya superada (PROC-REP-265: saldo 0 sin
+    override en V1.3 si es COBRABLE; sin pagos si es NO_COBRABLE), la
+    documentacion final emitida (PROC-REP-280) y que no quede trabajo
+    abierto: sin Ejecucion activa, sin toma activa y sin reservas
+    pendientes.
 
     Al terminar, ``current_process`` avanza al evento terminal
     EVT-REP-999. Ese evento no genera entrada de historial: es el fin del
@@ -419,7 +501,7 @@ def entregar_equipo(
             f"Solo se entrega una Orden REPARACION_LISTA; "
             f"esta en {orden.estado_workflow.value}."
         )
-    if orden.saldo > 0:
+    if not condicion_entrega_cumplida(orden):
         raise PrecondicionInvalidaError(
             f"No se puede entregar con saldo pendiente: {orden.saldo}."
         )
@@ -550,8 +632,7 @@ def devolver_equipo_rt(
         )
     if hay_reservas_activas(orden.movimientos_insumo):
         raise PrecondicionInvalidaError(
-            "No se puede devolver el equipo con reservas de insumos "
-            "activas."
+            "No se puede devolver el equipo con reservas de insumos activas."
         )
 
     nueva_orden = registrar_paso(

@@ -24,7 +24,7 @@
     "generate:mermaid:v1.3": "tsx scripts/generate-mermaid.ts business/processes/repair-management-v1.3.yaml",
     "generate:viewer:v1.3": "tsx scripts/generate-process-viewer.ts business/processes/repair-management-v1.3.yaml business/rules/business-rules-v1.3.yaml business/actors/actors.yaml business/features/repair-management-features-v1.3.yaml business/scenarios/repair-management-scenarios-v1.3.yaml",
     "generate:v1.3": "npm run validate:v1.3 && npm run generate:mermaid:v1.3 && npm run generate:viewer:v1.3",
-    "validate:traceability:files": "tsx scripts/validate-traceability.ts traceability/hp-rep-001.yaml && tsx scripts/validate-traceability.ts traceability/hp-rep-002.yaml",
+    "validate:traceability:files": "tsx scripts/validate-traceability-files.ts",
     "validate:traceability:global": "tsx scripts/validate-traceability-global.ts",
     "test:traceability:global": "tsx scripts/test-traceability-global.ts",
     "validate:traceability": "npm run validate:traceability:files && npm run test:traceability:global && npm run validate:traceability:global",

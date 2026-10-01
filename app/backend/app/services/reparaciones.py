@@ -40,6 +40,7 @@ def definir_reparacion_detail(
     usuario: Usuario,
     fecha: datetime,
     observaciones: str | None = None,
+    detalle_origen_id: str | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-045 ("Si") -> PROC-REP-070 (FEAT-REP-002 / FEAT-REP-007).
 
@@ -47,6 +48,10 @@ def definir_reparacion_detail(
     puntaje y garantia (BR-REP-015): el Detalle guarda solo el ID del
     tipo, nunca el objeto, para que un cambio posterior de catalogo no
     reescriba una Orden ya registrada.
+
+    ``detalle_origen_id`` (HP-REP-003, BR-REP-019) deja vinculado el
+    Detalle de garantia con el Detalle de la Orden origen; el snapshot se
+    toma igual del TipoReparacion, nunca del Detalle viejo.
 
     El Detalle nace DEFINIDO con control PENDIENTE. La decision
     PROC-REP-045 se registra una sola vez, al definir el primer Detalle.
@@ -100,6 +105,7 @@ def definir_reparacion_detail(
             estado=EstadoReparacionDetail.DEFINIDO,
             control_estado=EstadoControl.PENDIENTE,
             observaciones=observaciones,
+            detalle_origen_id=detalle_origen_id,
         )
     )
     return nueva_orden
@@ -214,9 +220,7 @@ def aprobar_control_tecnico(
     validar_actor(usuario, RolUsuario.RECEPCION)
 
     if not orden.reparaciones_detail:
-        raise PrecondicionInvalidaError(
-            "No hay Detalles que controlar."
-        )
+        raise PrecondicionInvalidaError("No hay Detalles que controlar.")
     if any(
         ejecucion.estado is EstadoEjecucion.EN_PROGRESO
         for ejecucion in orden.ejecuciones

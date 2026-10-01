@@ -14,6 +14,7 @@ from app.domain.models import Documento, EstadoWorkflow, OrdenReparacion
 from app.domain.politicas import politica_de
 
 from .exceptions import PrecondicionInvalidaError
+from .pagos import condicion_entrega_cumplida
 from .workflow import registrar_paso
 
 
@@ -83,7 +84,13 @@ def generar_comprobante_final(
             f"El comprobante final se emite sobre una Orden "
             f"REPARACION_LISTA; esta en {orden.estado_workflow.value}."
         )
-    if orden.saldo > 0:
+    if orden.current_process != "PROC-REP-265":
+        raise PrecondicionInvalidaError(
+            "Falta validar la condicion de entrega (PROC-REP-265) "
+            "antes de emitir el comprobante final; la Orden esta en "
+            f"{orden.current_process}."
+        )
+    if not condicion_entrega_cumplida(orden):
         raise PrecondicionInvalidaError(
             f"No se emite el comprobante final con saldo pendiente: "
             f"{orden.saldo}."

@@ -104,6 +104,8 @@ export interface Detalle {
   control_fecha: string | null;
   control_observaciones: string | null;
   observaciones: string | null;
+  /** Detalle de la Orden origen que motiva esta garantía (HP-REP-003). */
+  detalle_origen_id: string | null;
   /** Resuelto por la API contra el catálogo; no vive en el dominio. */
   insumos_previstos: InsumoPrevisto[];
 }
@@ -212,6 +214,8 @@ export interface Accion {
 export interface OrdenResumen {
   id: string;
   origen: OrigenOrden;
+  /** Orden ENTREGADA de la que nace una garantía RMA; `null` si no aplica. */
+  orden_origen_id: string | null;
   estado_workflow: EstadoWorkflow;
   current_process: string;
   prioridad: number;
@@ -236,6 +240,8 @@ export interface Orden {
   equipo: Equipo;
   /** Contexto de Gestion RT (PROC-REP-020). `null` salvo en RT_INTERNO. */
   referencia_rt: string | null;
+  /** Orden origen de una garantía RMA (HP-REP-003). `null` en los demás Origenes. */
+  orden_origen_id: string | null;
   reparaciones_detail: Detalle[];
   tomas: Toma[];
   ejecuciones: Ejecucion[];

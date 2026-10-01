@@ -53,6 +53,10 @@ class ReparacionDetail(BaseModel):
 
     observaciones: str | None = None
 
+    # BR-REP-019: en un Detalle de garantia RMA, el Detalle de la Orden
+    # origen que motiva el reproceso (solo el ID, no el objeto).
+    detalle_origen_id: str | None = None
+
 
 class TomaOrden(BaseModel):
     """Participacion activa de un tecnico sobre la Orden completa.

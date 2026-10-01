@@ -17,6 +17,7 @@ from app.application import (
     acciones_disponibles,
     aprobar_control,
     completar_ejecucion,
+    crear_garantia_rma,
     crear_orden,
     crear_orden_rt,
     definir_reparacion,
@@ -47,6 +48,7 @@ from .schemas import (
     DevolverRtIn,
     EncolarIn,
     EntregarIn,
+    GarantiaRmaIn,
     IniciarDetalleIn,
     LiberarOrdenIn,
     NotificarIn,
@@ -172,6 +174,31 @@ def post_definir_reparacion(
         tipo_reparacion_id=cuerpo.tipo_reparacion_id,
         observaciones=cuerpo.observaciones,
         finalizar_definicion=cuerpo.finalizar_definicion,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post(
+    "/{orden_origen_id}/details/{detalle_origen_id}/warranty-rma",
+    status_code=status.HTTP_201_CREATED,
+)
+def post_generar_garantia_rma(
+    orden_origen_id: str,
+    detalle_origen_id: str,
+    cuerpo: GarantiaRmaIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Generar la garantia RMA de un Detalle (ACT-RECEP, HP-REP-003).
+
+    Compone PROC-REP-035 -> 040 -> 045 -> 070 -> 050 -> 060 -> 080 ->
+    090 -> 140. Devuelve la NUEVA Orden de garantia; la Orden origen no
+    se modifica.
+    """
+    orden = crear_garantia_rma(
+        contexto,
+        orden_origen_id=orden_origen_id,
+        detalle_origen_id=detalle_origen_id,
+        usuario_id=cuerpo.usuario_id,
     )
     return _salida(orden, contexto)
 
