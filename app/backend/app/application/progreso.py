@@ -149,6 +149,35 @@ class PasoProgreso:
     alcanzado: bool
 
 
+def _con_revision(
+    ruta: tuple[tuple[str, str], ...],
+) -> tuple[tuple[str, str], ...]:
+    """La ruta de un Origen, pero pasando por revision (VAR-REP-001/002).
+
+    PROC-REP-045 "No" reemplaza PROC-REP-070 por 055, y entre el
+    comprobante (050 [-> 060]) y 080 se intercala 065 -> 068 -> 075. De
+    080 en adelante converge con la ruta original.
+    """
+    resultado: list[tuple[str, str]] = []
+    for nodo in ruta:
+        process_id = nodo[0]
+        if process_id == "PROC-REP-070":
+            continue
+        if process_id == "PROC-REP-080":
+            resultado.extend(_TRAMO_REVISION)
+        resultado.append(nodo)
+        if process_id == "PROC-REP-045":
+            resultado.append(("PROC-REP-055", "Marcar Orden en revision"))
+    return tuple(resultado)
+
+
+_TRAMO_REVISION: tuple[tuple[str, str], ...] = (
+    ("PROC-REP-065", "Realizar revision tecnica"),
+    ("PROC-REP-068", "Se pudo definir la reparacion requerida"),
+    ("PROC-REP-075", "Definir Detalles luego de revision"),
+)
+
+
 def _ruta_esperada(orden: OrdenReparacion) -> tuple[tuple[str, str], ...]:
     """Ruta de referencia para mostrar el progreso de esta Orden.
 
@@ -156,7 +185,12 @@ def _ruta_esperada(orden: OrdenReparacion) -> tuple[tuple[str, str], ...]:
     de CLIENTE_EXTERNO como mejor aproximacion disponible: es solo
     visualizacion, nunca gobierna que accion corresponde.
     """
-    return _RUTAS_POR_ORIGEN.get(orden.origen, _RUTA_CLIENTE_EXTERNO)
+    ruta = _RUTAS_POR_ORIGEN.get(orden.origen, _RUTA_CLIENTE_EXTERNO)
+    # La variante se reconoce por evidencia real (PROC-REP-055 en el
+    # historial), no por un id de Scenario guardado en la Orden.
+    if "PROC-REP-055" in nodos_alcanzados(orden):
+        return _con_revision(ruta)
+    return ruta
 
 
 def nodos_alcanzados(orden: OrdenReparacion) -> set[str]:

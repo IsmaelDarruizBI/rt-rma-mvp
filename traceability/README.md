@@ -200,6 +200,61 @@ aprobada para uso general.
 - **Epic**: agrupacion opcional de planificacion, no sustituto de Feature
   ni de Business Domain.
 
+## Agrupacion de archivos de trazabilidad
+
+Los archivos `traceability/*.yaml` representan **unidades reales de
+implementacion**, no necesariamente un unico Scenario de negocio.
+
+### Cuando agrupar Scenarios en un mismo archivo
+
+Se pueden agrupar cuando:
+
+- comparten esencialmente la misma capacidad funcional;
+- se implementan en el mismo Slice;
+- comparten la mayor parte de las US / ACC / FR / TR / TASK / CODE;
+- sus diferencias se representan mediante reglas, politicas o tests;
+- evolucionan como una misma unidad tecnica.
+
+Aunque compartan archivo, **cada Scenario conserva**: su ID propio, su
+definicion en `business/`, sus condiciones y expectativas, sus links, sus
+tests especificos (campo `scenario` en el item de test) y sus UAT
+independientes. No se inventa un Scenario ficticio que los combine (por
+ejemplo `VAR-REP-001-002`).
+
+Ejemplo: `var-rep-001-002.yaml` agrupa `VAR-REP-001` y `VAR-REP-002`, que
+son la misma capacidad (ingreso sin diagnostico conocido) y solo difieren
+en si el Origen requiere comprobante de recepcion (`PoliticaOrigen`).
+
+### Cuando crear un archivo distinto
+
+Se crea un archivo de trazabilidad distinto cuando un Scenario constituye
+una **unidad de implementacion sustancialmente independiente**. Criterios:
+
+- Slice propio e independiente;
+- User Stories o System Actions materialmente diferentes;
+- FR / TR principalmente propios;
+- componentes o modulos propios;
+- ciclo funcional diferente;
+- reglas o excepciones propias relevantes;
+- testing / UAT que evoluciona de forma independiente;
+- el archivo compartido pierde claridad;
+- separarlo mejora la navegacion E2E sin duplicar artefactos
+  artificialmente.
+
+### Regla practica
+
+```text
+Misma unidad real de implementacion
+→ mismo archivo de trazabilidad.
+
+Unidad de implementacion independiente
+→ archivo de trazabilidad distinto.
+```
+
+Sea cual sea el agrupamiento, los IDs de implementacion son globalmente
+unicos y la capa de negocio coincide con `business/`:
+`npm run validate:traceability` lo comprueba sobre todos los archivos.
+
 ## Objetivo futuro
 
 Poder navegar desde cualquier elemento hasta todos sus relacionados, en

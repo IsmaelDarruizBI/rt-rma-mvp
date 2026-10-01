@@ -124,8 +124,12 @@ def test_hp_rep_003_end_to_end_por_http(cliente):
     detalle_origen_id = origen["reparaciones_detail"][0]["id"]
 
     # El backend publica la capacidad (no la deduce el frontend).
-    (accion,) = origen["acciones_disponibles"]
-    assert accion["codigo"] == "GENERAR_GARANTIA_RMA"
+    acciones = origen["acciones_disponibles"]
+    assert [a["codigo"] for a in acciones] == [
+        "GENERAR_GARANTIA_RMA",
+        "GENERAR_GARANTIA_RMA_REVISION",
+    ]
+    accion = acciones[0]
     assert accion["detalle_id"] == detalle_origen_id
     assert accion["roles"] == ["RECEPCION"]
 

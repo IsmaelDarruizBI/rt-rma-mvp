@@ -67,6 +67,7 @@ from .ordenes import (
     habilitar_orden,
     informar_resultado_rt,
     ingresar_a_cola,
+    marcar_orden_en_revision,
     marcar_reparacion_lista,
     notificar_cliente,
 )
@@ -82,9 +83,11 @@ from .reparaciones import (
     aprobar_control_tecnico,
     calcular_puntaje,
     definir_reparacion_detail,
+    definir_reparacion_detail_luego_revision,
     validar_factibilidad_detalles,
 )
 from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
+from .revisiones import registrar_revision_tecnica
 from .tomas import (
     hay_ejecucion_activa,
     liberar_orden,
@@ -122,15 +125,19 @@ __all__ = [
     "habilitar_orden",
     "informar_resultado_rt",
     "ingresar_a_cola",
+    "marcar_orden_en_revision",
     "marcar_reparacion_lista",
     "notificar_cliente",
     # Resolver puro de BR-REP-012
     "ResultadoEvaluacionOrden",
     "resolver_situacion_orden",
+    # Revision tecnica (PROC-REP-065)
+    "registrar_revision_tecnica",
     # Detalles de Reparacion
     "aprobar_control_tecnico",
     "calcular_puntaje",
     "definir_reparacion_detail",
+    "definir_reparacion_detail_luego_revision",
     "validar_factibilidad_detalles",
     # Toma y seleccion
     "hay_ejecucion_activa",

@@ -330,7 +330,7 @@ items:
   - {id: TR-REP-024, type: technical_requirement, name: Los identificadores de entidades transaccionales se generan con un unico helper centralizado, status: IMPLEMENTED}
   - {id: TR-REP-025, type: technical_requirement, name: La reserva y la aprobacion de control no son estados tecnicos del Detalle, status: IMPLEMENTED}
   - {id: TR-REP-026, type: technical_requirement, name: validar_factibilidad_detalles devuelve (Orden bool) sin persistir el resultado como estado, status: IMPLEMENTED}
-  - {id: TR-REP-027, type: technical_requirement, name: habilitar_orden exige al menos un Detalle y es nodo ACT-SYSTEM, status: IMPLEMENTED}
+  - {id: TR-REP-027, type: technical_requirement, name: "habilitar_orden exige al menos un Detalle, que la Orden venga de PROC-REP-090 con resultado Si (no se puede saltear 080/090 por invocacion directa) y es nodo ACT-SYSTEM", status: IMPLEMENTED}
   - {id: TR-REP-028, type: technical_requirement, name: TomaOrden y EjecucionReparacion son entidades distintas con invariantes separadas, status: IMPLEMENTED}
   - {id: TR-REP-029, type: technical_requirement, name: El historial de participaciones es append-only se cierra con fin y estado CERRADA, status: IMPLEMENTED}
   - {id: TR-REP-030, type: technical_requirement, name: validar_estacion_trabajo registra PROC-REP-172 tanto si pasa como si falla, status: IMPLEMENTED}
@@ -982,6 +982,9 @@ items:
   - {id: TEST-REP-285, type: internal_test, name: "test_pago_total_en_reparacion_lista_no_ejecuta_265", status: PASSING, source: "app/backend/tests/test_api_hp_rep_003.py::test_pago_total_en_reparacion_lista_no_ejecuta_265", note: "Pago total en REPARACION_LISTA (current_process 240) no ejecuta 265 ni 266; entregar es 409 hasta notificar (250, 260, 265)."}
   - {id: TEST-REP-286, type: internal_test, name: "test_pago_parcial_en_completar_cobro_vuelve_a_265_no_y_266", status: PASSING, source: "app/backend/tests/test_api_hp_rep_003.py::test_pago_parcial_en_completar_cobro_vuelve_a_265_no_y_266", note: "Pago parcial desde 266: ACC-REP-020, 265 No, 266 otra vez; puede_entregar false."}
   - {id: TEST-REP-287, type: internal_test, name: "test_pago_final_en_completar_cobro_aprueba_265_y_permite_entregar", status: PASSING, source: "app/backend/tests/test_api_hp_rep_003.py::test_pago_final_en_completar_cobro_aprueba_265_y_permite_entregar", note: "Pago final desde 266: ACC-REP-020, 265 Si; puede_entregar true y la entrega es exitosa."}
+  - {id: TEST-REP-327, type: internal_test, name: "test_habilitar_no_permite_saltear_la_factibilidad_desde_070", status: PASSING, source: "app/backend/tests/test_services_invariantes.py::test_habilitar_no_permite_saltear_la_factibilidad_desde_070"}
+  - {id: TEST-REP-328, type: internal_test, name: "test_habilitar_funciona_tras_090_si", status: PASSING, source: "app/backend/tests/test_services_invariantes.py::test_habilitar_funciona_tras_090_si"}
+  - {id: TEST-REP-329, type: internal_test, name: "test_habilitar_rechaza_090_con_faltantes", status: PASSING, source: "app/backend/tests/test_services_invariantes.py::test_habilitar_rechaza_090_con_faltantes"}
 
 links:
 
@@ -2636,3 +2639,9 @@ links:
   - {from: TEST-REP-287, to: FR-REP-053, relationship: verifies}
   - {from: TEST-REP-287, to: CODE-REP-088, relationship: exercises}
   - {from: TEST-REP-287, to: CODE-REP-156, relationship: exercises}
+  - {from: TEST-REP-327, to: TR-REP-027, relationship: verifies}
+  - {from: TEST-REP-327, to: CODE-REP-047, relationship: exercises}
+  - {from: TEST-REP-328, to: TR-REP-027, relationship: verifies}
+  - {from: TEST-REP-328, to: CODE-REP-047, relationship: exercises}
+  - {from: TEST-REP-329, to: TR-REP-027, relationship: verifies}
+  - {from: TEST-REP-329, to: CODE-REP-047, relationship: exercises}

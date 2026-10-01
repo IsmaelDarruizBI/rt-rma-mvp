@@ -78,20 +78,29 @@ def orden_con_detalle() -> OrdenReparacion:
         usuario=RECEPCION,
         fecha=t(5),
     )
-    return generar_comprobante_recepcion(
-        orden, fecha=t(10)
-    )
+    return generar_comprobante_recepcion(orden, fecha=t(10))
 
 
-def orden_en_cola() -> OrdenReparacion:
-    """Hasta PROC-REP-170: Orden EN_COLA, lista para tomarse."""
-    orden, _ = validar_factibilidad_detalles(
+def orden_con_factibilidad() -> OrdenReparacion:
+    """Hasta PROC-REP-090 "Si": factible, todavia sin habilitar."""
+    orden, factible = validar_factibilidad_detalles(
         orden_con_detalle(),
         insumos=INSUMOS,
         insumos_previstos=INSUMOS_PREVISTOS,
         fecha=t(15),
     )
-    orden = habilitar_orden(orden, fecha=t(20))
+    assert factible
+    return orden
+
+
+def orden_habilitada() -> OrdenReparacion:
+    """Hasta PROC-REP-140: HABILITADA, todavia sin cola."""
+    return habilitar_orden(orden_con_factibilidad(), fecha=t(20))
+
+
+def orden_en_cola() -> OrdenReparacion:
+    """Hasta PROC-REP-170: Orden EN_COLA, lista para tomarse."""
+    orden = orden_habilitada()
     orden = definir_prioridad(
         orden, prioridad=1, usuario=COORDINADOR, fecha=t(25)
     )
@@ -189,9 +198,7 @@ def orden_controlada() -> OrdenReparacion:
 
 def orden_reparacion_lista() -> OrdenReparacion:
     """Hasta PROC-REP-260: REPARACION_LISTA y cliente notificado."""
-    orden = marcar_reparacion_lista(
-        orden_controlada(), fecha=t(170)
-    )
+    orden = marcar_reparacion_lista(orden_controlada(), fecha=t(170))
     return notificar_cliente(orden, usuario=RECEPCION, fecha=t(175))
 
 

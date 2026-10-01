@@ -18,12 +18,15 @@ from app.application import (
     aprobar_control,
     completar_ejecucion,
     crear_garantia_rma,
+    crear_garantia_rma_en_revision,
     crear_orden,
     crear_orden_rt,
     definir_reparacion,
+    definir_reparacion_desde_revision,
     devolver_rt,
     encolar_orden,
     entregar,
+    enviar_a_revision,
     informar_rt,
     iniciar_detalle,
     insumos_previstos_por_detalle,
@@ -33,6 +36,7 @@ from app.application import (
     notificar,
     obtener_orden,
     progreso,
+    realizar_revision,
     registrar_pago_de_orden,
     tomar_orden_en_estacion,
 )
@@ -44,10 +48,12 @@ from .schemas import (
     CompletarEjecucionIn,
     CrearOrdenIn,
     CrearOrdenRtIn,
+    DefinirReparacionDesdeRevisionIn,
     DefinirReparacionIn,
     DevolverRtIn,
     EncolarIn,
     EntregarIn,
+    EnviarARevisionIn,
     GarantiaRmaIn,
     IniciarDetalleIn,
     LiberarOrdenIn,
@@ -56,6 +62,7 @@ from .schemas import (
     OrdenOut,
     OrdenResumenOut,
     PagoIn,
+    RevisionTecnicaIn,
     TomarIn,
 )
 
@@ -199,6 +206,90 @@ def post_generar_garantia_rma(
         orden_origen_id=orden_origen_id,
         detalle_origen_id=detalle_origen_id,
         usuario_id=cuerpo.usuario_id,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post(
+    "/{orden_origen_id}/details/{detalle_origen_id}/warranty-rma/review",
+    status_code=status.HTTP_201_CREATED,
+)
+def post_generar_garantia_rma_en_revision(
+    orden_origen_id: str,
+    detalle_origen_id: str,
+    cuerpo: GarantiaRmaIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Generar una garantia RMA que entra en revision (VAR-REP-001).
+
+    Compone PROC-REP-035 -> 040 -> 045 (No) -> 055 -> 050 -> 060 y se
+    detiene: la NUEVA Orden queda EN_REVISION, sin Detalles. La Orden
+    origen no se modifica.
+    """
+    orden = crear_garantia_rma_en_revision(
+        contexto,
+        orden_origen_id=orden_origen_id,
+        detalle_origen_id=detalle_origen_id,
+        usuario_id=cuerpo.usuario_id,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/send-to-review")
+def post_enviar_a_revision(
+    orden_id: str,
+    cuerpo: EnviarARevisionIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Enviar una Orden sin diagnostico a revision (ACT-RECEP).
+
+    Compone PROC-REP-045 (No) -> 055 -> 050 y, si la politica del Origen
+    lo exige, 060 (VAR-REP-001/002). La Orden queda EN_REVISION.
+    """
+    orden = enviar_a_revision(
+        contexto, orden_id=orden_id, usuario_id=cuerpo.usuario_id
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/technical-review")
+def post_revision_tecnica(
+    orden_id: str,
+    cuerpo: RevisionTecnicaIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Realizar la revision tecnica y registrar su resultado (ACT-TECH).
+
+    PROC-REP-065. No define Detalles: eso vuelve a ser de Recepcion.
+    """
+    orden = realizar_revision(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        resultado=cuerpo.resultado,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/review/details")
+def post_definir_reparacion_desde_revision(
+    orden_id: str,
+    cuerpo: DefinirReparacionDesdeRevisionIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Definir la reparacion luego de la revision (ACT-RECEP).
+
+    Compone PROC-REP-068 (Si) -> 075 y, con ``finalizar_definicion``,
+    080 -> 090 -> 140. No repite el comprobante.
+    """
+    orden = definir_reparacion_desde_revision(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        tipo_reparacion_id=cuerpo.tipo_reparacion_id,
+        observaciones=cuerpo.observaciones,
+        finalizar_definicion=cuerpo.finalizar_definicion,
+        detalle_origen_id=cuerpo.detalle_origen_id,
     )
     return _salida(orden, contexto)
 

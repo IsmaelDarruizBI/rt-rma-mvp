@@ -8,6 +8,7 @@
 
 export type EstadoWorkflow =
   | "REQUERIMIENTO"
+  | "EN_REVISION"
   | "HABILITADA"
   | "EN_COLA"
   | "EN_REPARACION"
@@ -242,6 +243,8 @@ export interface Orden {
   referencia_rt: string | null;
   /** Orden origen de una garantía RMA (HP-REP-003). `null` en los demás Origenes. */
   orden_origen_id: string | null;
+  /** Detalles de la Orden origen identificados en PROC-REP-035 (garantía RMA). */
+  detalles_origen_ids: string[];
   reparaciones_detail: Detalle[];
   tomas: Toma[];
   ejecuciones: Ejecucion[];

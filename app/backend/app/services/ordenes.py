@@ -228,6 +228,7 @@ def crear_orden_garantia_rma(
         cliente=orden_origen.cliente.model_copy(deep=True),
         equipo=orden_origen.equipo.model_copy(deep=True),
         orden_origen_id=orden_origen.id,
+        detalles_origen_ids=[detalle_origen_id],
         resumen_pago=ResumenPago(),
         documentos=DocumentosOrden(),
         created_at=fecha,
@@ -254,6 +255,61 @@ def crear_orden_garantia_rma(
     )
 
 
+def marcar_orden_en_revision(
+    orden: OrdenReparacion,
+    *,
+    usuario: Usuario,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """PROC-REP-045 ("No") -> PROC-REP-055 (VAR-REP-001/002).
+
+    Todavia no se conocen los Detalles: la Orden pasa a EN_REVISION, un
+    hito de workflow que significa "espera o atraviesa una revision
+    tecnica antes de poder definir sus Detalles". NO implica que la
+    revision viva dentro de la Orden.
+
+    Exige Orden en REQUERIMIENTO, recien creada (PROC-REP-040) y sin
+    Detalles. No genera el comprobante (PROC-REP-050/060): eso lo
+    compone la capa de aplicacion segun ``PoliticaOrigen``.
+
+    PROC-REP-055 es ACT-SYSTEM: queda sin actor humano. La intencion que
+    lo dispara es de Recepcion.
+    """
+    validar_actor(usuario, RolUsuario.RECEPCION)
+
+    if orden.estado_workflow is not EstadoWorkflow.REQUERIMIENTO:
+        raise PrecondicionInvalidaError(
+            f"Solo se envia a revision una Orden en REQUERIMIENTO; "
+            f"esta en {orden.estado_workflow.value}."
+        )
+    if orden.reparaciones_detail:
+        raise PrecondicionInvalidaError(
+            "No se envia a revision una Orden que ya tiene Detalles."
+        )
+    if orden.current_process != "PROC-REP-040":
+        raise PrecondicionInvalidaError(
+            f"Solo se envia a revision una Orden recien creada "
+            f"(PROC-REP-040); esta en {orden.current_process}."
+        )
+
+    nueva_orden = registrar_paso(
+        orden,
+        process_id="PROC-REP-045",
+        accion="DETALLES_CONOCIDOS",
+        fecha=fecha,
+        usuario_id=usuario.id,
+        observacion="No",
+    )
+    nueva_orden = registrar_paso(
+        nueva_orden,
+        process_id="PROC-REP-055",
+        accion="MARCAR_ORDEN_EN_REVISION",
+        fecha=fecha,
+    )
+    nueva_orden.estado_workflow = EstadoWorkflow.EN_REVISION
+    return nueva_orden
+
+
 def habilitar_orden(
     orden: OrdenReparacion,
     *,
@@ -261,9 +317,13 @@ def habilitar_orden(
 ) -> OrdenReparacion:
     """PROC-REP-140: la Orden queda habilitada para trabajarse.
 
-    Precondicion del MVP: existe al menos un Detalle y el caller ya
-    confirmo la factibilidad (PROC-REP-080/090). Los caminos de
-    advertencia y override (PROC-REP-100/110/130) no estan implementados.
+    Precondiciones del MVP: existe al menos un Detalle y la Orden viene
+    de PROC-REP-090 con resultado "Si" (``current_process`` es el nodo
+    actual; el resultado se busca en la ultima evaluacion de 090 del
+    historial). Es del nodo 140, no del Scenario: protege HP-REP-001/002/003
+    y VAR-REP-001/002 contra una invocacion directa que saltee 080/090.
+    Los caminos de advertencia y override (PROC-REP-100/110/130) no estan
+    implementados.
 
     Nodo ACT-SYSTEM: no lo ejecuta una persona, asi que no recibe
     Usuario y el historial queda sin actor humano.
@@ -272,10 +332,31 @@ def habilitar_orden(
         raise PrecondicionInvalidaError(
             "No se puede habilitar una Orden sin Detalles de Reparacion."
         )
-    if orden.estado_workflow is not EstadoWorkflow.REQUERIMIENTO:
+    if orden.estado_workflow not in (
+        EstadoWorkflow.REQUERIMIENTO,
+        EstadoWorkflow.EN_REVISION,
+    ):
         raise PrecondicionInvalidaError(
-            f"Solo se habilita una Orden en REQUERIMIENTO; "
+            f"Solo se habilita una Orden en REQUERIMIENTO o EN_REVISION "
+            f"(con Detalles ya definidos); "
             f"esta en {orden.estado_workflow.value}."
+        )
+    if orden.current_process != "PROC-REP-090":
+        raise PrecondicionInvalidaError(
+            "La Orden debe superar la validacion de factibilidad "
+            "(PROC-REP-080/090) antes de habilitarse; esta en "
+            f"{orden.current_process}."
+        )
+    evaluacion_090 = next(
+        paso
+        for paso in reversed(orden.historial)
+        if paso.process_id == "PROC-REP-090"
+    )
+    if evaluacion_090.observacion != "Si":
+        raise PrecondicionInvalidaError(
+            "La Orden no puede habilitarse porque la validacion de "
+            "factibilidad (PROC-REP-090) no fue aprobada: "
+            f"{evaluacion_090.observacion}."
         )
 
     nueva_orden = registrar_paso(

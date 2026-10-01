@@ -266,6 +266,33 @@ class GarantiaRmaIn(BaseModel):
     usuario_id: str = Field(min_length=1)
 
 
+class EnviarARevisionIn(BaseModel):
+    """``POST /api/orders/{id}/send-to-review`` (ACT-RECEP, VAR-REP-001)."""
+
+    usuario_id: str = Field(min_length=1)
+
+
+class RevisionTecnicaIn(BaseModel):
+    """``POST /api/orders/{id}/technical-review`` (ACT-TECH, PROC-REP-065)."""
+
+    usuario_id: str = Field(min_length=1)
+    resultado: str = Field(min_length=1)
+
+
+class DefinirReparacionDesdeRevisionIn(BaseModel):
+    """``POST /api/orders/{id}/review/details`` (ACT-RECEP, PROC-REP-075).
+
+    ``detalle_origen_id`` solo hace falta en una garantia RMA con mas de
+    un Detalle origen identificado.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    tipo_reparacion_id: str = Field(min_length=1)
+    observaciones: str | None = None
+    finalizar_definicion: bool = True
+    detalle_origen_id: str | None = None
+
+
 class DevolverRtIn(BaseModel):
     """``POST /api/orders/{id}/return-rt`` (PROC-REP-270, HP-REP-002)."""
 
@@ -576,6 +603,7 @@ class OrdenOut(BaseModel):
     equipo: EquipoOut
     referencia_rt: str | None
     orden_origen_id: str | None
+    detalles_origen_ids: list[str]
     reparaciones_detail: list[DetalleOut]
     tomas: list[TomaOut]
     ejecuciones: list[EjecucionOut]
@@ -613,6 +641,7 @@ class OrdenOut(BaseModel):
             equipo=EquipoOut(**orden.equipo.model_dump()),
             referencia_rt=orden.referencia_rt,
             orden_origen_id=orden.orden_origen_id,
+            detalles_origen_ids=list(orden.detalles_origen_ids),
             reparaciones_detail=[
                 DetalleOut.desde_dominio(
                     detalle,

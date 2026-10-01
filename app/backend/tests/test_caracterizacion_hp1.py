@@ -84,6 +84,8 @@ def test_requerimiento_sin_detalles():
 
     assert _codigos_y_roles(orden) == [
         ("DEFINIR_REPARACION", (RolUsuario.RECEPCION,), None),
+        # Slice 4: la otra rama de PROC-REP-045 (Detalles no conocidos).
+        ("ENVIAR_A_REVISION", (RolUsuario.RECEPCION,), None),
     ]
     assert _alcanzados(orden) == [
         "PROC-REP-010",
@@ -380,6 +382,7 @@ def test_entregada():
     # Recepcion generar la garantia RMA de cada Detalle; ya no es [].
     assert _codigos_y_roles(orden) == [
         ("GENERAR_GARANTIA_RMA", (RolUsuario.RECEPCION,), "DET-001"),
+        ("GENERAR_GARANTIA_RMA_REVISION", (RolUsuario.RECEPCION,), "DET-001"),
     ]
     assert _alcanzados(orden) == [
         "PROC-REP-010",

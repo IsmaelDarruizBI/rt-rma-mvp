@@ -14,6 +14,7 @@ import type { Orden } from "../../types/api";
 
 const COLOR_ESTADO: Record<string, string> = {
   REQUERIMIENTO: colores.suave,
+  EN_REVISION: colores.alerta,
   HABILITADA: colores.acento,
   EN_COLA: colores.acento,
   EN_REPARACION: colores.alerta,
@@ -49,11 +50,8 @@ export function CabeceraOrden({ orden }: { orden: Orden }) {
           {orden.orden_origen_id && (
             <p style={{ margin: "0.2rem 0 0", color: colores.suave }}>
               Origen garantía: {orden.orden_origen_id}
-              {orden.reparaciones_detail.some((d) => d.detalle_origen_id) &&
-                ` / ${orden.reparaciones_detail
-                  .map((d) => d.detalle_origen_id)
-                  .filter(Boolean)
-                  .join(", ")}`}
+              {orden.detalles_origen_ids.length > 0 &&
+                ` / ${orden.detalles_origen_ids.join(", ")}`}
             </p>
           )}
         </div>

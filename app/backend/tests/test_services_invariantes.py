@@ -41,6 +41,7 @@ from app.services import (
     tomar_orden,
     validar_compatibilidad_detalle,
     validar_estacion_trabajo,
+    validar_factibilidad_detalles,
 )
 from tests.fixtures import flujo_mvp
 from tests.fixtures.catalogos_mvp import (
@@ -67,7 +68,7 @@ DETALLE_ID = flujo_mvp.DETALLE_ID
 
 
 def test_habilitar_orden_no_muta_la_orden_recibida():
-    original = flujo_mvp.orden_con_detalle()
+    original = flujo_mvp.orden_con_factibilidad()
     copia_previa = original.model_dump(mode="json")
 
     nueva = habilitar_orden(original, fecha=t(20))
@@ -498,15 +499,11 @@ def test_entrega_con_reserva_activa_falla():
 
 def test_no_se_habilita_una_orden_sin_detalles():
     with pytest.raises(PrecondicionInvalidaError):
-        habilitar_orden(
-            flujo_mvp.orden_creada(), fecha=t(20)
-        )
+        habilitar_orden(flujo_mvp.orden_creada(), fecha=t(20))
 
 
 def test_la_prioridad_no_puede_ser_negativa():
-    orden = habilitar_orden(
-        flujo_mvp.orden_con_detalle(), fecha=t(20)
-    )
+    orden = flujo_mvp.orden_habilitada()
 
     with pytest.raises(PrecondicionInvalidaError):
         definir_prioridad(
@@ -538,3 +535,57 @@ def test_no_se_selecciona_un_detalle_ya_en_progreso():
         seleccionar_detalle(
             orden, detalle_id=DETALLE_ID, usuario=TECNICO, fecha=t(80)
         )
+
+
+# Gate de PROC-REP-140: solo se habilita tras 080 -> 090 "Si".
+
+
+def test_habilitar_no_permite_saltear_la_factibilidad_desde_070():
+    orden = flujo_mvp.orden_con_detalle()
+    assert orden.current_process == "PROC-REP-060"
+    sin_comprobante = flujo_mvp.orden_creada()
+    directo = definir_reparacion_detail(
+        sin_comprobante,
+        detalle_id="DET-001",
+        tipo_reparacion=TIPO_BATERIA,
+        usuario=RECEPCION,
+        fecha=t(5),
+    )
+    assert directo.current_process == "PROC-REP-070"
+
+    for candidata in (directo, orden):
+        with pytest.raises(PrecondicionInvalidaError, match="factibilidad"):
+            habilitar_orden(candidata, fecha=t(20))
+        assert "PROC-REP-140" not in [
+            p.referencia_id for p in candidata.historial
+        ]
+
+
+def test_habilitar_funciona_tras_090_si():
+    orden = flujo_mvp.orden_con_factibilidad()
+    assert orden.current_process == "PROC-REP-090"
+    assert orden.historial[-1].observacion == "Si"
+
+    habilitada = habilitar_orden(orden, fecha=t(20))
+
+    assert habilitada.estado_workflow is EstadoWorkflow.HABILITADA
+    assert habilitada.historial[-1].referencia_id == "PROC-REP-140"
+
+
+def test_habilitar_rechaza_090_con_faltantes():
+    sin_stock = [
+        INSUMO_BATERIA.model_copy(update={"stock_fisico": Decimal("0")})
+    ]
+    orden, factible = validar_factibilidad_detalles(
+        flujo_mvp.orden_con_detalle(),
+        insumos=sin_stock,
+        insumos_previstos=INSUMOS_PREVISTOS,
+        fecha=t(15),
+    )
+    assert factible is False
+    assert orden.current_process == "PROC-REP-090"
+    assert orden.historial[-1].observacion.startswith("Faltantes")
+
+    with pytest.raises(PrecondicionInvalidaError, match="no fue aprobada"):
+        habilitar_orden(orden, fecha=t(20))
+    assert "PROC-REP-140" not in [p.referencia_id for p in orden.historial]

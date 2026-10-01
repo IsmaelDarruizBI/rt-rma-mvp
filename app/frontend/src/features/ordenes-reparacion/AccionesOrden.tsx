@@ -49,6 +49,13 @@ export interface EjecutorAcciones {
   informarRt: () => void;
   devolverRt: () => void;
   generarGarantiaRma: (detalleId: string) => void;
+  enviarARevision: () => void;
+  realizarRevision: (resultado: string) => void;
+  definirReparacionDesdeRevision: (
+    tipoReparacionId: string,
+    finalizarDefinicion: boolean,
+  ) => void;
+  generarGarantiaRmaEnRevision: (detalleId: string) => void;
 }
 
 interface Props {
@@ -185,6 +192,31 @@ function FormularioAccion({
         />
       );
 
+    case "ENVIAR_A_REVISION":
+      return (
+        <Boton disabled={deshabilitado} onClick={ejecutar.enviarARevision}>
+          Enviar a revisión técnica
+        </Boton>
+      );
+
+    case "REALIZAR_REVISION":
+      return (
+        <FormularioResultadoRevision
+          deshabilitado={deshabilitado}
+          onConfirmar={ejecutar.realizarRevision}
+        />
+      );
+
+    case "DEFINIR_REPARACION_DESDE_REVISION":
+      return (
+        <FormularioDefinirReparacion
+          tipos={tipos}
+          cantidadDetallesActual={orden.reparaciones_detail.length}
+          deshabilitado={deshabilitado}
+          onConfirmar={ejecutar.definirReparacionDesdeRevision}
+        />
+      );
+
     case "ENCOLAR":
       return (
         <FormularioPrioridad
@@ -283,6 +315,20 @@ function FormularioAccion({
       return (
         <Boton disabled={deshabilitado} onClick={ejecutar.informarRt}>
           Informar resultado a Gestión RT
+        </Boton>
+      );
+
+    case "GENERAR_GARANTIA_RMA_REVISION":
+      return (
+        <Boton
+          disabled={deshabilitado || accion.detalle_id === null}
+          onClick={() => {
+            if (accion.detalle_id !== null) {
+              ejecutar.generarGarantiaRmaEnRevision(accion.detalle_id);
+            }
+          }}
+        >
+          Generar garantía de {accion.detalle_id} para revisión
         </Boton>
       );
 
@@ -581,6 +627,35 @@ function insumosPrevistosDe(
     (candidato) => candidato.id === ejecucion.reparacion_detail_id,
   );
   return detalle?.insumos_previstos ?? [];
+}
+
+function FormularioResultadoRevision({
+  deshabilitado,
+  onConfirmar,
+}: {
+  deshabilitado: boolean;
+  onConfirmar: (resultado: string) => void;
+}) {
+  const [resultado, setResultado] = useState("");
+
+  return (
+    <div>
+      <Campo etiqueta="Resultado de la revisión (obligatorio)">
+        <input
+          value={resultado}
+          onChange={(evento) => setResultado(evento.target.value)}
+          disabled={deshabilitado}
+          style={estiloInput}
+        />
+      </Campo>
+      <Boton
+        disabled={deshabilitado || resultado.trim() === ""}
+        onClick={() => onConfirmar(resultado.trim())}
+      >
+        Registrar la revisión
+      </Boton>
+    </div>
+  );
 }
 
 function FormularioObservaciones({
