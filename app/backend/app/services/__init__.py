@@ -29,6 +29,7 @@ from .ejecuciones import (
     ejecucion_activa,
     ejecutar_detalle,
     registrar_ejecucion_completada,
+    registrar_ejecucion_interrumpida,
     reservar_insumos_e_iniciar_ejecucion,
 )
 from .exceptions import (
@@ -151,6 +152,7 @@ __all__ = [
     "ejecucion_activa",
     "ejecutar_detalle",
     "registrar_ejecucion_completada",
+    "registrar_ejecucion_interrumpida",
     "reservar_insumos_e_iniciar_ejecucion",
     # Inventario
     "cantidad_pendiente",

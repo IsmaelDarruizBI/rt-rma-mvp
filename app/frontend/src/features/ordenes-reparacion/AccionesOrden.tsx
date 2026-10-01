@@ -41,6 +41,11 @@ export interface EjecutorAcciones {
     insumosUtilizados: InsumoUtilizado[],
     observaciones: string,
   ) => void;
+  interrumpirEjecucion: (
+    ejecucionId: string,
+    insumosUtilizados: InsumoUtilizado[],
+    observaciones: string,
+  ) => void;
   aprobarControl: (detalleId: string | null, observaciones: string) => void;
   liberarOrden: () => void;
   notificar: () => void;
@@ -258,6 +263,23 @@ function FormularioAccion({
           onConfirmar={(insumosUtilizados, observaciones) =>
             accion.ejecucion_id &&
             ejecutar.completarEjecucion(
+              accion.ejecucion_id,
+              insumosUtilizados,
+              observaciones,
+            )
+          }
+        />
+      );
+
+    case "INTERRUMPIR_EJECUCION":
+      return (
+        <FormularioEjecucion
+          previstos={insumosPrevistosDe(orden, accion.ejecucion_id)}
+          deshabilitado={deshabilitado || !accion.ejecucion_id}
+          textoBoton="Interrumpir ejecución"
+          onConfirmar={(insumosUtilizados, observaciones) =>
+            accion.ejecucion_id &&
+            ejecutar.interrumpirEjecucion(
               accion.ejecucion_id,
               insumosUtilizados,
               observaciones,
@@ -530,10 +552,12 @@ function FormularioPrioridad({
 function FormularioEjecucion({
   previstos,
   deshabilitado,
+  textoBoton = "Completar ejecución",
   onConfirmar,
 }: {
   previstos: InsumoPrevisto[];
   deshabilitado: boolean;
+  textoBoton?: string;
   onConfirmar: (
     insumosUtilizados: InsumoUtilizado[],
     observaciones: string,
@@ -607,7 +631,7 @@ function FormularioEjecucion({
         disabled={deshabilitado}
         onClick={() => onConfirmar(utilizados(), observaciones)}
       >
-        Completar ejecución
+        {textoBoton}
       </Boton>
     </div>
   );

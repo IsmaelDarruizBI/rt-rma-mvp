@@ -23,6 +23,7 @@ import { AccionesOrden, type EjecutorAcciones } from "./AccionesOrden";
 import {
   CabeceraOrden,
   DetallesOrden,
+  EjecucionesOrden,
   HistorialOrden,
   ProgresoHappyPath,
   ResumenComercialOrden,
@@ -130,6 +131,16 @@ export function PanelOrdenes() {
           observaciones || null,
         ),
       ),
+    interrumpirEjecucion: (ejecucionId, insumosUtilizados, observaciones) =>
+      void ejecutarComando(() =>
+        api.interrumpirEjecucion(
+          idOrden,
+          ejecucionId,
+          idActor,
+          insumosUtilizados,
+          observaciones || null,
+        ),
+      ),
     aprobarControl: (detalleId, observaciones) =>
       void ejecutarComando(() =>
         api.aprobarControl(idOrden, idActor, detalleId, observaciones || null),
@@ -215,6 +226,7 @@ export function PanelOrdenes() {
           <div style={{ display: "grid", gap: "0.75rem" }}>
             <CabeceraOrden orden={orden} />
             <DetallesOrden orden={orden} />
+            <EjecucionesOrden orden={orden} />
             <AccionesOrden
               orden={orden}
               actor={actor}

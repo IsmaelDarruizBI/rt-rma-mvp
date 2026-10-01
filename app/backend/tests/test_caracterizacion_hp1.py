@@ -190,6 +190,13 @@ def test_en_reparacion():
             flujo_mvp.DETALLE_ID,
             ejecucion_id,
         ),
+        # Slice 5 (VAR-REP-003): la otra salida de PROC-REP-200.
+        (
+            "INTERRUMPIR_EJECUCION",
+            (RolUsuario.TECNICO,),
+            flujo_mvp.DETALLE_ID,
+            ejecucion_id,
+        ),
         ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None, None),
     ]
     assert _alcanzados(orden) == [

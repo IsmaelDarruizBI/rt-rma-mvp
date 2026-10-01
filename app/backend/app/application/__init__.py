@@ -57,6 +57,7 @@ from .revision import realizar_revision
 from .taller import (
     completar_ejecucion,
     iniciar_detalle,
+    interrumpir_ejecucion,
     liberar_orden,
     tomar_orden_en_estacion,
 )
@@ -98,6 +99,7 @@ __all__ = [
     "iniciar_detalle",
     "liberar_orden",
     "completar_ejecucion",
+    "interrumpir_ejecucion",
     "aprobar_control",
     "notificar",
     "registrar_pago_de_orden",

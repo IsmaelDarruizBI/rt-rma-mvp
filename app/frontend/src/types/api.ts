@@ -35,7 +35,8 @@ export type EstadoDetalle = "DEFINIDO" | "EN_PROGRESO" | "COMPLETO";
 
 export type EstadoControl = "PENDIENTE" | "APROBADO";
 
-export type EstadoEjecucion = "EN_PROGRESO" | "COMPLETADO";
+/** INTERRUMPIDO y COMPLETADO son los resultados terminales de PROC-REP-200. */
+export type EstadoEjecucion = "EN_PROGRESO" | "COMPLETADO" | "INTERRUMPIDO";
 
 export type EstadoToma = "ACTIVA" | "CERRADA";
 
