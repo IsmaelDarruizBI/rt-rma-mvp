@@ -52,6 +52,13 @@ class OrdenReparacion(BaseModel):
     # objeto). Default None: un JSON anterior a Slice 3 sigue cargando.
     orden_origen_id: str | None = None
 
+    # BR-REP-019: Detalles de la Orden origen identificados en
+    # PROC-REP-035 como procedencia de esta garantia. Existe aparte de
+    # ``ReparacionDetail.detalle_origen_id`` (Detalle NUEVO -> Detalle
+    # origen) porque una garantia que entra en revision todavia no tiene
+    # Detalles propios. Vacio en los demas Origenes (y en JSON previo).
+    detalles_origen_ids: list[str] = Field(default_factory=list)
+
     prioridad: int = Field(default=0, ge=0)
 
     reparaciones_detail: list[ReparacionDetail] = Field(default_factory=list)

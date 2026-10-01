@@ -164,9 +164,7 @@ def test_solo_recepcion_puede_definir_detalle(usuario):
 
 
 def test_coordinador_puede_definir_prioridad():
-    habilitada = habilitar_orden(
-        flujo_mvp.orden_con_detalle(), fecha=t(20)
-    )
+    habilitada = flujo_mvp.orden_habilitada()
 
     orden = definir_prioridad(
         habilitada, prioridad=2, usuario=COORDINADOR, fecha=t(25)
@@ -177,9 +175,7 @@ def test_coordinador_puede_definir_prioridad():
 
 def test_recepcion_tambien_puede_definir_prioridad():
     """PROC-REP-150 declara actores_alternativos: [ACT-RECEP]."""
-    habilitada = habilitar_orden(
-        flujo_mvp.orden_con_detalle(), fecha=t(20)
-    )
+    habilitada = flujo_mvp.orden_habilitada()
 
     orden = definir_prioridad(
         habilitada, prioridad=3, usuario=RECEPCION, fecha=t(25)
@@ -195,9 +191,7 @@ def test_recepcion_tambien_puede_definir_prioridad():
 )
 def test_solo_coordinacion_o_recepcion_definen_prioridad(usuario):
     """Ampliar a dos actores no abre la accion a cualquiera."""
-    habilitada = habilitar_orden(
-        flujo_mvp.orden_con_detalle(), fecha=t(20)
-    )
+    habilitada = flujo_mvp.orden_habilitada()
 
     with pytest.raises(PrecondicionInvalidaError):
         definir_prioridad(
@@ -359,9 +353,7 @@ def test_el_tecnico_no_puede_aprobar_su_propio_control(usuario):
 
 
 def test_recepcion_puede_notificar_al_cliente():
-    lista = marcar_reparacion_lista(
-        flujo_mvp.orden_controlada(), fecha=t(170)
-    )
+    lista = marcar_reparacion_lista(flujo_mvp.orden_controlada(), fecha=t(170))
 
     orden = notificar_cliente(lista, usuario=RECEPCION, fecha=t(175))
 
@@ -370,9 +362,7 @@ def test_recepcion_puede_notificar_al_cliente():
 
 @pytest.mark.parametrize("usuario", [TECNICO, COORDINADOR, RECEPCION_INACTIVA])
 def test_solo_recepcion_puede_notificar_al_cliente(usuario):
-    lista = marcar_reparacion_lista(
-        flujo_mvp.orden_controlada(), fecha=t(170)
-    )
+    lista = marcar_reparacion_lista(flujo_mvp.orden_controlada(), fecha=t(170))
 
     with pytest.raises(PrecondicionInvalidaError):
         notificar_cliente(lista, usuario=usuario, fecha=t(175))
@@ -451,9 +441,7 @@ def test_un_usuario_inactivo_no_puede_operar(usuario, operacion):
                 fecha=t(60),
             )
     elif operacion == "prioridad":
-        habilitada = habilitar_orden(
-            flujo_mvp.orden_con_detalle(), fecha=t(20)
-        )
+        habilitada = flujo_mvp.orden_habilitada()
         with pytest.raises(PrecondicionInvalidaError):
             definir_prioridad(
                 habilitada, prioridad=1, usuario=usuario, fecha=t(25)
@@ -481,9 +469,9 @@ def test_los_nodos_de_sistema_no_reciben_usuario(servicio):
 
 def test_los_nodos_de_sistema_corren_sin_actor_humano():
     """PROC-REP-060/140/170 avanzan sin que nadie los firme."""
-    con_detalle = flujo_mvp.orden_con_detalle()
+    con_factibilidad = flujo_mvp.orden_con_factibilidad()
 
-    habilitada = habilitar_orden(con_detalle, fecha=t(20))
+    habilitada = habilitar_orden(con_factibilidad, fecha=t(20))
     assert habilitada.estado_workflow is EstadoWorkflow.HABILITADA
 
     en_cola = ingresar_a_cola(habilitada, fecha=t(30))
@@ -494,8 +482,12 @@ def test_el_historial_de_los_nodos_de_sistema_no_tiene_usuario():
     orden = flujo_mvp.orden_entregada()
     por_nodo = {paso.process_id: paso.usuario_id for paso in orden.historial}
 
-    for process_id in ("PROC-REP-060", "PROC-REP-140", "PROC-REP-170",
-                       "PROC-REP-240"):
+    for process_id in (
+        "PROC-REP-060",
+        "PROC-REP-140",
+        "PROC-REP-170",
+        "PROC-REP-240",
+    ):
         assert por_nodo[process_id] is None, process_id
 
 

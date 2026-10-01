@@ -19,6 +19,7 @@ from app.domain.models import (
     EstadoWorkflow,
     Insumo,
     OrdenReparacion,
+    OrigenOrden,
     ReparacionDetail,
     RolUsuario,
     TipoReparacion,
@@ -29,6 +30,7 @@ from app.domain.models import (
 from .autorizacion import validar_actor
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .inventario import buscar_insumo, insumos_previstos_de, stock_disponible
+from .revisiones import revision_tecnica_realizada
 from .workflow import registrar_paso
 
 
@@ -96,19 +98,146 @@ def definir_reparacion_detail(
         reparacion_detail_id=detalle_id,
     )
     nueva_orden.reparaciones_detail.append(
-        ReparacionDetail(
-            id=detalle_id,
-            tipo_reparacion_id=tipo_reparacion.id,
-            precio=tipo_reparacion.precio,
-            puntaje=tipo_reparacion.puntaje,
-            garantia_dias=tipo_reparacion.garantia_dias,
-            estado=EstadoReparacionDetail.DEFINIDO,
-            control_estado=EstadoControl.PENDIENTE,
+        _detalle_con_snapshot(
+            detalle_id=detalle_id,
+            tipo_reparacion=tipo_reparacion,
             observaciones=observaciones,
             detalle_origen_id=detalle_origen_id,
         )
     )
     return nueva_orden
+
+
+def _detalle_con_snapshot(
+    *,
+    detalle_id: str,
+    tipo_reparacion: TipoReparacion,
+    observaciones: str | None,
+    detalle_origen_id: str | None,
+) -> ReparacionDetail:
+    """Detalle DEFINIDO con el snapshot del Tipo (BR-REP-015).
+
+    Compartido por PROC-REP-070 y PROC-REP-075: mismo snapshot, nodos
+    funcionales distintos.
+    """
+    return ReparacionDetail(
+        id=detalle_id,
+        tipo_reparacion_id=tipo_reparacion.id,
+        precio=tipo_reparacion.precio,
+        puntaje=tipo_reparacion.puntaje,
+        garantia_dias=tipo_reparacion.garantia_dias,
+        estado=EstadoReparacionDetail.DEFINIDO,
+        control_estado=EstadoControl.PENDIENTE,
+        observaciones=observaciones,
+        detalle_origen_id=detalle_origen_id,
+    )
+
+
+def definir_reparacion_detail_luego_revision(
+    orden: OrdenReparacion,
+    *,
+    detalle_id: str,
+    tipo_reparacion: TipoReparacion,
+    usuario: Usuario,
+    fecha: datetime,
+    observaciones: str | None = None,
+    detalle_origen_id: str | None = None,
+) -> OrdenReparacion:
+    """PROC-REP-068 ("Si") -> PROC-REP-075 (VAR-REP-001/002).
+
+    Recepcion define un Detalle usando el resultado de la revision
+    tecnica de una Orden EN_REVISION. Mismo snapshot que PROC-REP-070,
+    pero la traza es la del proceso real: NO registra PROC-REP-045 "Si"
+    ni PROC-REP-070.
+
+    PROC-REP-068 se registra una sola vez, con el primer Detalle; cada
+    Detalle registra su propio PROC-REP-075 (Multi-Detalle). El camino
+    "No" (PROC-REP-069, SIN_REPARACION) no esta implementado.
+
+    En una garantia RMA cada Detalle referencia a su Detalle origen
+    tomado de ``orden.detalles_origen_ids`` -nunca del historial-: con
+    exactamente uno se usa ese; con mas de uno hay que indicarlo.
+    """
+    validar_actor(usuario, RolUsuario.RECEPCION)
+
+    if orden.estado_workflow is not EstadoWorkflow.EN_REVISION:
+        raise PrecondicionInvalidaError(
+            f"Solo se definen Detalles luego de revision sobre una Orden "
+            f"EN_REVISION; esta en {orden.estado_workflow.value}."
+        )
+    if not revision_tecnica_realizada(orden):
+        raise PrecondicionInvalidaError(
+            "Falta la revision tecnica (PROC-REP-065) antes de definir "
+            "los Detalles."
+        )
+    if not tipo_reparacion.activo:
+        raise PrecondicionInvalidaError(
+            f"El Tipo de Reparacion {tipo_reparacion.id} no esta activo."
+        )
+    if any(detalle.id == detalle_id for detalle in orden.reparaciones_detail):
+        raise PrecondicionInvalidaError(
+            f"La Orden ya tiene un Detalle con id {detalle_id}."
+        )
+
+    origen_del_detalle = _detalle_origen_para(orden, detalle_origen_id)
+
+    nueva_orden = orden
+    if not orden.reparaciones_detail:
+        nueva_orden = registrar_paso(
+            nueva_orden,
+            process_id="PROC-REP-068",
+            accion="SE_PUDO_DEFINIR_REPARACION",
+            fecha=fecha,
+            usuario_id=usuario.id,
+            observacion="Si",
+        )
+
+    nueva_orden = registrar_paso(
+        nueva_orden,
+        process_id="PROC-REP-075",
+        accion="DEFINIR_DETALLES_LUEGO_DE_REVISION",
+        fecha=fecha,
+        usuario_id=usuario.id,
+        reparacion_detail_id=detalle_id,
+    )
+    nueva_orden.reparaciones_detail.append(
+        _detalle_con_snapshot(
+            detalle_id=detalle_id,
+            tipo_reparacion=tipo_reparacion,
+            observaciones=observaciones,
+            detalle_origen_id=origen_del_detalle,
+        )
+    )
+    return nueva_orden
+
+
+def _detalle_origen_para(
+    orden: OrdenReparacion,
+    detalle_origen_id: str | None,
+) -> str | None:
+    """Detalle origen que corresponde a un Detalle nuevo (BR-REP-019)."""
+    if orden.origen is not OrigenOrden.RMA_GARANTIA_REPARACION:
+        if detalle_origen_id is not None:
+            raise PrecondicionInvalidaError(
+                f"Un Detalle de una Orden {orden.origen.value} no tiene "
+                f"Detalle origen."
+            )
+        return None
+
+    posibles = orden.detalles_origen_ids
+    if detalle_origen_id is not None:
+        if detalle_origen_id not in posibles:
+            raise PrecondicionInvalidaError(
+                f"{detalle_origen_id} no es un Detalle origen identificado "
+                f"para la Orden {orden.id}."
+            )
+        return detalle_origen_id
+    if len(posibles) != 1:
+        raise PrecondicionInvalidaError(
+            f"La Orden {orden.id} tiene {len(posibles)} Detalles origen: "
+            f"hay que indicar a cual corresponde el Detalle nuevo."
+        )
+    return posibles[0]
 
 
 def validar_factibilidad_detalles(

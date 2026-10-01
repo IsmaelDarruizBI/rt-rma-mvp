@@ -35,6 +35,7 @@ from app.domain.politicas import CondicionComercial, politica_de
 from app.services import ejecucion_activa, toma_activa
 from app.services.ordenes import ROLES_ENTREGA, ROLES_PRIORIZACION
 from app.services.pagos import ROLES_PAGO, condicion_entrega_cumplida
+from app.services.revisiones import revision_tecnica_realizada
 
 from .progreso import nodos_alcanzados
 
@@ -53,6 +54,10 @@ ACCION_ENTREGAR = "ENTREGAR"
 ACCION_INFORMAR_RT = "INFORMAR_RT"
 ACCION_DEVOLVER_RT = "DEVOLVER_RT"
 ACCION_GENERAR_GARANTIA_RMA = "GENERAR_GARANTIA_RMA"
+ACCION_ENVIAR_A_REVISION = "ENVIAR_A_REVISION"
+ACCION_REALIZAR_REVISION = "REALIZAR_REVISION"
+ACCION_DEFINIR_REPARACION_DESDE_REVISION = "DEFINIR_REPARACION_DESDE_REVISION"
+ACCION_GENERAR_GARANTIA_RMA_REVISION = "GENERAR_GARANTIA_RMA_REVISION"
 
 CERO = Decimal("0")
 
@@ -151,8 +156,9 @@ def _detalles_en_espera_de_control(orden: OrdenReparacion) -> list[str]:
 def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
     """Acciones humanas que corresponden al estado actual de la Orden.
 
-    Una Orden ENTREGADA solo admite GENERAR_GARANTIA_RMA (uno por Detalle,
-    si tiene Cliente): su proceso termino. Lo mismo
+    Una Orden ENTREGADA solo admite GENERAR_GARANTIA_RMA y
+    GENERAR_GARANTIA_RMA_REVISION (uno de cada por Detalle, si tiene
+    Cliente): su proceso termino. Lo mismo
     vale para RT_INTERNO al llegar a EVT-REP-999: ese origen no pasa por
     ENTREGADA (el estado terminal sigue pendiente de definicion, ver
     ``devolver_equipo_rt``), asi que el fin de proceso se detecta por
@@ -162,17 +168,28 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
         orden.estado_workflow is EstadoWorkflow.ENTREGADA
         and orden.cliente is not None
     ):
-        # HP-REP-003: el proceso de ESTA Orden termino, pero Recepcion
-        # puede generar una garantia RMA de cualquiera de sus Detalles.
-        return [
-            AccionDisponible(
-                codigo=ACCION_GENERAR_GARANTIA_RMA,
-                etiqueta="Generar garantia RMA del Detalle",
-                roles=(RolUsuario.RECEPCION,),
-                detalle_id=detalle.id,
+        # HP-REP-003 / VAR-REP-001: el proceso de ESTA Orden termino,
+        # pero Recepcion puede generar una garantia RMA de cualquiera de
+        # sus Detalles, ya con reparacion conocida o para revision.
+        garantias: list[AccionDisponible] = []
+        for detalle in orden.reparaciones_detail:
+            garantias.append(
+                AccionDisponible(
+                    codigo=ACCION_GENERAR_GARANTIA_RMA,
+                    etiqueta="Generar garantia RMA del Detalle",
+                    roles=(RolUsuario.RECEPCION,),
+                    detalle_id=detalle.id,
+                )
             )
-            for detalle in orden.reparaciones_detail
-        ]
+            garantias.append(
+                AccionDisponible(
+                    codigo=ACCION_GENERAR_GARANTIA_RMA_REVISION,
+                    etiqueta="Generar garantia RMA para revision del Detalle",
+                    roles=(RolUsuario.RECEPCION,),
+                    detalle_id=detalle.id,
+                )
+            )
+        return garantias
 
     if (
         orden.estado_workflow is EstadoWorkflow.ENTREGADA
@@ -194,6 +211,35 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 roles=(RolUsuario.RECEPCION,),
             )
         )
+        # PROC-REP-045 tiene dos ramas: Detalles conocidos (arriba) o no
+        # (revision). Con Detalles ya definidos (Multi-Detalle) solo la
+        # primera sigue abierta.
+        if not orden.reparaciones_detail:
+            acciones.append(
+                AccionDisponible(
+                    codigo=ACCION_ENVIAR_A_REVISION,
+                    etiqueta="Enviar a revision tecnica (sin diagnostico)",
+                    roles=(RolUsuario.RECEPCION,),
+                )
+            )
+
+    if estado is EstadoWorkflow.EN_REVISION:
+        if not revision_tecnica_realizada(orden):
+            acciones.append(
+                AccionDisponible(
+                    codigo=ACCION_REALIZAR_REVISION,
+                    etiqueta="Realizar la revision tecnica",
+                    roles=(RolUsuario.TECNICO,),
+                )
+            )
+        else:
+            acciones.append(
+                AccionDisponible(
+                    codigo=ACCION_DEFINIR_REPARACION_DESDE_REVISION,
+                    etiqueta="Definir la reparacion luego de la revision",
+                    roles=(RolUsuario.RECEPCION,),
+                )
+            )
 
     if estado is EstadoWorkflow.HABILITADA:
         acciones.append(

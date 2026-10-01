@@ -147,6 +147,25 @@ export function PanelOrdenes() {
     informarRt: () => void ejecutarComando(() => api.informarRt(idOrden)),
     devolverRt: () =>
       void ejecutarComando(() => api.devolverRt(idOrden, idActor)),
+    enviarARevision: () =>
+      void ejecutarComando(() => api.enviarARevision(idOrden, idActor)),
+    realizarRevision: (resultado) =>
+      void ejecutarComando(() =>
+        api.realizarRevision(idOrden, idActor, resultado),
+      ),
+    definirReparacionDesdeRevision: (tipoId, finalizarDefinicion) =>
+      void ejecutarComando(() =>
+        api.definirReparacionDesdeRevision(
+          idOrden,
+          idActor,
+          tipoId,
+          finalizarDefinicion,
+        ),
+      ),
+    generarGarantiaRmaEnRevision: (detalleId) =>
+      void ejecutarComando(() =>
+        api.generarGarantiaRmaEnRevision(idOrden, detalleId, idActor),
+      ),
     generarGarantiaRma: (detalleId) =>
       void ejecutarComando(() =>
         api.generarGarantiaRma(idOrden, detalleId, idActor),
@@ -168,7 +187,7 @@ export function PanelOrdenes() {
         <div>
           <h1 style={{ margin: 0, fontSize: "1.4rem" }}>Rosario Tecno</h1>
           <p style={{ margin: 0, color: colores.suave }}>
-            RMA MVP · HP-REP-001 · HP-REP-002 · HP-REP-003
+            RMA MVP · HP-REP-001/002/003 · VAR-REP-001/002
           </p>
         </div>
         <SelectorActor

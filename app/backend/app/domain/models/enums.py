@@ -44,13 +44,12 @@ class EstadoWorkflow(str, Enum):
         PROC-REP-240 -> REPARACION_LISTA
         PROC-REP-270 -> ENTREGADA
 
-    ``EN_REVISION`` se agrega de forma aditiva en Slice 0 para dejar el
-    dominio preparado: ningun comando de la API lo alcanza todavia -toda
-    Orden nace con al menos la intencion de tener Detalles conocidos-,
-    asi que ninguna Orden real queda hoy en ese hito. El circuito que lo
-    produce (PROC-REP-055/065/068/075, VAR-REP-001/002) llega en un
-    slice posterior. ``CANCELADA`` existe en V1.3 pero el MVP todavia no
-    la representa: la cancelacion esta fuera de scope de MVP v2.
+    ``EN_REVISION`` (PROC-REP-055, VAR-REP-001/002) significa que la
+    Orden espera o atraviesa una revision tecnica ANTES de poder definir
+    sus Detalles (por eso admite cero Detalles). NO significa que la
+    revision este embebida dentro de la Orden: ver
+    ``app.services.revisiones``. ``CANCELADA`` existe en V1.3 pero el MVP
+    todavia no la representa: la cancelacion esta fuera de scope de MVP v2.
     """
 
     REQUERIMIENTO = "REQUERIMIENTO"

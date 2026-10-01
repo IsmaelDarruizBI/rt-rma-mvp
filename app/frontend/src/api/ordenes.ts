@@ -225,6 +225,61 @@ export function generarGarantiaRma(
   );
 }
 
+/**
+ * PROC-REP-035 -> 040 -> 045 (No) -> 055 -> 050 -> 060 (Recepción,
+ * VAR-REP-001). Devuelve la NUEVA Orden de garantía, EN_REVISION y sin
+ * Detalles.
+ */
+export function generarGarantiaRmaEnRevision(
+  ordenOrigenId: string,
+  detalleOrigenId: string,
+  usuarioId: string,
+): Promise<Orden> {
+  return post<Orden>(
+    `/api/orders/${ordenOrigenId}/details/${detalleOrigenId}/warranty-rma/review`,
+    { usuario_id: usuarioId },
+  );
+}
+
+/** PROC-REP-045 (No) -> 055 -> 050 [-> 060] (Recepción, VAR-REP-001/002). */
+export function enviarARevision(
+  ordenId: string,
+  usuarioId: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/send-to-review`, {
+    usuario_id: usuarioId,
+  });
+}
+
+/** PROC-REP-065 (Técnico): registra el resultado de la revisión. */
+export function realizarRevision(
+  ordenId: string,
+  usuarioId: string,
+  resultado: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/technical-review`, {
+    usuario_id: usuarioId,
+    resultado,
+  });
+}
+
+/**
+ * PROC-REP-068 (Sí) -> 075 y, con `finalizarDefinicion`, 080 -> 090 ->
+ * 140 (Recepción). No repite el comprobante.
+ */
+export function definirReparacionDesdeRevision(
+  ordenId: string,
+  usuarioId: string,
+  tipoReparacionId: string,
+  finalizarDefinicion = true,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/review/details`, {
+    usuario_id: usuarioId,
+    tipo_reparacion_id: tipoReparacionId,
+    finalizar_definicion: finalizarDefinicion,
+  });
+}
+
 /** PROC-REP-270 reutilizado (HP-REP-002, RT_INTERNO -> EVT-REP-999). */
 export function devolverRt(
   ordenId: string,

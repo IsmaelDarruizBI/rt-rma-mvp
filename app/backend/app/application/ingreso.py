@@ -7,6 +7,13 @@ Comandos, uno por accion humana de ACT-RECEP:
                          090 -> 140
     crear_garantia_rma   PROC-REP-035 -> 040 -> 045 -> 070 -> 050 ->
                          060 -> 080 -> 090 -> 140 (HP-REP-003)
+    enviar_a_revision    PROC-REP-045 (No) -> 055 -> 050 -> 060 si
+                         corresponde (VAR-REP-001/002)
+    crear_garantia_rma_en_revision
+                         PROC-REP-035 -> 040 -> 045 (No) -> 055 -> 050 ->
+                         060 (VAR-REP-001)
+    definir_reparacion_desde_revision
+                         PROC-REP-068 (Si) -> 075 -> 080 -> 090 -> 140
 
 El corte entre ambos es la frontera del actor: entre 040 y 045 el
 proceso vuelve a pedirle algo a Recepcion (que reparacion se va a
@@ -25,8 +32,10 @@ from app.services import (
     crear_orden_garantia_rma,
     crear_orden_rt_interno,
     definir_reparacion_detail,
+    definir_reparacion_detail_luego_revision,
     generar_comprobante_recepcion,
     habilitar_orden,
+    marcar_orden_en_revision,
     validar_factibilidad_detalles,
 )
 
@@ -163,10 +172,24 @@ def _finalizar_definicion(
 ) -> OrdenReparacion:
     """PROC-REP-050 -> 060 -> 080 -> 090 -> 140: de Detalles a HABILITADA.
 
-    Compartido por ``definir_reparacion`` y ``crear_garantia_rma``.
+    Compartido por ``definir_reparacion`` y ``crear_garantia_rma``. El
+    tramo 080 -> 140 es ``_validar_y_habilitar``.
     """
     orden = generar_comprobante_recepcion(orden, fecha=fecha)
+    return _validar_y_habilitar(contexto, orden, fecha=fecha)
 
+
+def _validar_y_habilitar(
+    contexto: ApplicationContext,
+    orden: OrdenReparacion,
+    *,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """PROC-REP-080 -> 090 -> 140: factibilidad y habilitacion.
+
+    Tambien lo usa el camino de revision (075 -> 080), donde el
+    comprobante ya se genero antes del diagnostico.
+    """
     orden, factible = validar_factibilidad_detalles(
         orden,
         insumos=contexto.catalogos.listar_insumos(),
@@ -233,4 +256,105 @@ def crear_garantia_rma(
         orden = _finalizar_definicion(contexto, orden, fecha=fecha)
         contexto.ordenes.guardar(orden)
 
+    return orden
+
+
+def enviar_a_revision(
+    contexto: ApplicationContext,
+    *,
+    orden_id: str,
+    usuario_id: str,
+) -> OrdenReparacion:
+    """Recepcion envia una Orden sin diagnostico a revision (VAR-REP-001/002).
+
+    PROC-REP-045 (No) -> 055 (EN_REVISION) -> 050 y, si la politica del
+    Origen exige comprobante, 060. La Orden queda EN_REVISION y sin
+    Detalles: el comprobante no los lista ("reparacion pendiente de
+    diagnostico"). La diferencia entre VAR-REP-001 y VAR-REP-002 sale solo
+    de ``PoliticaOrigen.requiere_comprobante_recepcion``.
+    """
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    orden = contexto.ordenes.obtener(orden_id)
+    orden = marcar_orden_en_revision(orden, usuario=usuario, fecha=fecha)
+    orden = generar_comprobante_recepcion(orden, fecha=fecha)
+
+    contexto.ordenes.guardar(orden)
+    return orden
+
+
+def crear_garantia_rma_en_revision(
+    contexto: ApplicationContext,
+    *,
+    orden_origen_id: str,
+    detalle_origen_id: str,
+    usuario_id: str,
+) -> OrdenReparacion:
+    """Garantia RMA que entra directamente en revision (VAR-REP-001).
+
+    PROC-REP-035 -> 040 -> 045 (No) -> 055 -> 050 -> 060 y se detiene:
+    todavia no hay Detalles. La procedencia queda en ``orden_origen_id`` y
+    ``detalles_origen_ids``. Igual que HP-REP-003, la Orden origen solo
+    se lee: no se guarda ni se modifica.
+    """
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    orden_origen = contexto.ordenes.obtener(orden_origen_id)
+
+    with seccion_critica_inventario():
+        orden = crear_orden_garantia_rma(
+            orden_id=siguiente_orden_id(contexto.ordenes),
+            orden_origen=orden_origen,
+            detalle_origen_id=detalle_origen_id,
+            usuario=usuario,
+            fecha=fecha,
+        )
+        orden = marcar_orden_en_revision(orden, usuario=usuario, fecha=fecha)
+        orden = generar_comprobante_recepcion(orden, fecha=fecha)
+        contexto.ordenes.guardar(orden)
+
+    return orden
+
+
+def definir_reparacion_desde_revision(
+    contexto: ApplicationContext,
+    *,
+    orden_id: str,
+    usuario_id: str,
+    tipo_reparacion_id: str,
+    observaciones: str | None = None,
+    finalizar_definicion: bool = True,
+    detalle_origen_id: str | None = None,
+) -> OrdenReparacion:
+    """Recepcion define un Detalle luego de la revision (VAR-REP-001/002).
+
+    PROC-REP-068 (Si, una sola vez) -> 075 por Detalle y, con
+    ``finalizar_definicion``, 080 -> 090 -> 140. NO repite 050/060: el
+    comprobante se genero antes del diagnostico.
+
+    ``detalle_origen_id`` solo hace falta en una garantia con mas de un
+    Detalle origen identificado.
+    """
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    tipo = contexto.catalogos.obtener_tipo_reparacion(tipo_reparacion_id)
+    fecha = contexto.ahora()
+
+    orden = contexto.ordenes.obtener(orden_id)
+
+    orden = definir_reparacion_detail_luego_revision(
+        orden,
+        detalle_id=siguiente_detalle_id(orden),
+        tipo_reparacion=tipo,
+        usuario=usuario,
+        fecha=fecha,
+        observaciones=observaciones,
+        detalle_origen_id=detalle_origen_id,
+    )
+
+    if finalizar_definicion:
+        orden = _validar_y_habilitar(contexto, orden, fecha=fecha)
+
+    contexto.ordenes.guardar(orden)
     return orden

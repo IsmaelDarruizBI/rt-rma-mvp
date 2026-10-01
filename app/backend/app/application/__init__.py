@@ -45,11 +45,15 @@ from .contexto import ApplicationContext, construir_contexto
 from .identificadores import siguiente_detalle_id, siguiente_orden_id
 from .ingreso import (
     crear_garantia_rma,
+    crear_garantia_rma_en_revision,
     crear_orden,
     crear_orden_rt,
     definir_reparacion,
+    definir_reparacion_desde_revision,
+    enviar_a_revision,
 )
 from .progreso import PasoProgreso, progreso
+from .revision import realizar_revision
 from .taller import (
     completar_ejecucion,
     iniciar_detalle,
@@ -84,7 +88,11 @@ __all__ = [
     "crear_orden",
     "crear_orden_rt",
     "crear_garantia_rma",
+    "crear_garantia_rma_en_revision",
     "definir_reparacion",
+    "definir_reparacion_desde_revision",
+    "enviar_a_revision",
+    "realizar_revision",
     "encolar_orden",
     "tomar_orden_en_estacion",
     "iniciar_detalle",

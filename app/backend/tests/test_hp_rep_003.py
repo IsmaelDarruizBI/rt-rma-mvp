@@ -294,7 +294,8 @@ def test_orden_entregada_publica_generar_garantia_por_detalle():
     acciones = acciones_disponibles(flujo_mvp.orden_entregada())
 
     assert [(a.codigo, a.roles, a.detalle_id) for a in acciones] == [
-        ("GENERAR_GARANTIA_RMA", (RECEPCION.rol,), DETALLE_ORIGEN_ID)
+        ("GENERAR_GARANTIA_RMA", (RECEPCION.rol,), DETALLE_ORIGEN_ID),
+        ("GENERAR_GARANTIA_RMA_REVISION", (RECEPCION.rol,), DETALLE_ORIGEN_ID),
     ]
 
 
