@@ -60,6 +60,7 @@ con TR existentes de ese archivo:
 
 - `PENDIENTE_RECURSOS` es un agregado derivado: no hay `FR/TR` de un estado de
   workflow nuevo.
-- El gate de `habilitar_orden` (Slice 4) no se modificó.
+- `habilitar_orden` se amplió para aceptar `EN_REPARACION`, pero el gate de
+  Slice 4 (090 `Si`) no se relajó.
 - El Scenario oficial declara `FEAT-REP-003`; ese es el único Feature de este
   archivo.

@@ -29,8 +29,12 @@ progreso. Sin estados de workflow nuevos ni campos persistidos nuevos.
 - En 100/120 `acciones_disponibles` neutraliza el hito de workflow (`estado =
   None`) en lugar de hacer `return`, así los pagos transversales siguen
   evaluándose con su regla normal.
-- `habilitar_orden` no cambia: el gate de 090 `Si` ya impide habilitar desde
-  100.
+- `habilitar_orden` se amplió para aceptar también `EN_REPARACION` (la Orden
+  vuelve de `211 PENDIENTE_RECURSOS → 120 → 080 → 090 Sí → 140` conservando ese
+  hito). El gate funcional **no se relajó**: sigue exigiendo
+  `current_process == PROC-REP-090` y que el último `PROC-REP-090` tenga
+  resultado `Si`. `EN_COLA`, `REPARACION_LISTA` y `ENTREGADA` siguen
+  rechazados, y desde 100/120 no se puede habilitar sin pasar por 080/090.
 - La factibilidad evalúa cada Detalle contra la disponibilidad actual
   (no acumulada entre Detalles), igual que antes pero sin el "todo o nada".
 - `RecursoNoDisponibleError` se mantiene para 185 (reserva real).

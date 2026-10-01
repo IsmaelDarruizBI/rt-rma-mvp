@@ -324,8 +324,11 @@ def habilitar_orden(
     actual; el resultado se busca en la ultima evaluacion de 090 del
     historial). Es del nodo 140, no del Scenario: protege HP-REP-001/002/003
     y VAR-REP-001/002 contra una invocacion directa que saltee 080/090.
-    Los caminos de advertencia y override (PROC-REP-100/110/130) no estan
-    implementados.
+    Acepta REQUERIMIENTO, EN_REVISION y EN_REPARACION (esta ultima al
+    revalidar recursos tras PROC-REP-211 -> 120). PROC-REP-100 y la rama
+    "No" de PROC-REP-110 / PROC-REP-120 (EXC-REP-001) estan implementados
+    fuera de esta funcion; el override (PROC-REP-110 "Si" -> PROC-REP-130,
+    EXC-REP-002) no esta implementado.
 
     Nodo ACT-SYSTEM: no lo ejecuta una persona, asi que no recibe
     Usuario y el historial queda sin actor humano.

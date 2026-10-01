@@ -147,7 +147,8 @@ que faltaba.
 `EXC-REP-002` (override, PROC-REP-130), `EXC-REP-003` (reserva fallida, 186),
 `EXC-REP-004` (125/126/127), `EXC-REP-005`, `DESPERDICIO`, `OrdenRevision`,
 `RT_GARANTIA_VENTA`, `SIN_REPARACION`, cancelación, PostgreSQL, notificaciones
-automáticas de stock. `PROC-REP-120` desde `PROC-REP-211` tampoco se conecta
-aquí.
+automáticas de stock. `REQUIERE_REVISION → PROC-REP-125` (EXC-REP-004) tampoco
+se conecta aquí. En cambio, `PROC-REP-211 PENDIENTE_RECURSOS → PROC-REP-120`
+**sí está implementado** en EXC-REP-001 (directo, sin 100 ni 110).
 
-UAT (`UAT-REP-029..031`) siguen `PENDING`.
+UAT (`UAT-REP-029..032`) siguen `PENDING`.
