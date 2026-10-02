@@ -1,0 +1,317 @@
+# Trazabilidad end-to-end del slice implementado - Scenario EXC-REP-003
+# (Reserva de insumos fallida al iniciar la Ejecucion).
+#
+# Unidad de implementacion INDEPENDIENTE (archivo propio, ver
+# traceability/README.md): trigger distinto (PROC-REP-185 -> 186, dentro del
+# taller y con la toma activa), Feature distinta (FEAT-REP-005) y UAT propio.
+#
+# La factibilidad (PROC-REP-080) fue correcta, pero al intentar la reserva real
+# (PROC-REP-185) faltan insumos y el Detalle NO tiene override propio
+# (BR-REP-003, EXC-REP-002). Resultado funcional persistido (no un error): 181 ->
+# 174 -> 185 "Reserva fallida" -> 186 -> 211 [-> 120]. Sin Ejecucion, sin
+# reservas y sin tocar el stock fisico; el Detalle queda DEFINIDO (la
+# representacion tecnica de PENDIENTE) + BLOQUEADO_POR_RECURSOS. Con otro
+# Detalle trabajable 211 = ABIERTA_TRABAJABLE (la toma sigue activa); sin
+# ninguno, 211 = PENDIENTE_RECURSOS cierra la toma y va directo a 120 (sin
+# 100/110). PENDIENTE_RECURSOS no es un EstadoWorkflow: el hito se conserva.
+#
+# Gap cerrado en este Slice: una Orden que llega a 120 estando EN_COLA (primer
+# intento tras tomarla) ahora puede revalidarse y habilitarse (PROC-REP-140),
+# sin relajar el gate (090 Si o 130 valido).
+#
+# Reutiliza TASK-REP-086 de hp-rep-001.yaml (mismo id y name; aqui con el
+# trabajo hecho). 211 -> 120 y el cierre de toma son de EXC-REP-001
+# (exc-rep-001.yaml); el override, de EXC-REP-002. EXC-REP-004 y EXC-REP-005
+# siguen NOT_IMPLEMENTED y no se trazan aqui.
+#
+# Limitacion conocida (fuera de alcance): con DET-A bloqueado y DET-B todavia
+# trabajable no hay revalidacion automatica de DET-A.
+#
+# Continua la numeracion global: US-REP-033, ACC-REP-051, FR-REP-119,
+# TR-REP-119, TASK-REP-197, CODE-REP-206, TEST-REP-424, UAT-REP-034.
+#
+# Validacion: npx tsx scripts/validate-traceability.ts traceability/exc-rep-003.yaml
+
+meta:
+  id: TRACE-EXC-REP-003
+  name: Trazabilidad del slice implementado de EXC-REP-003
+  generated_from: rama mvp-v2-slice8-exc-rep-003, tras implementar la reserva fallida (PROC-REP-186) sobre mvp-v2
+  date: "2026-10-01"
+  business_domain: DOM-RMA
+  business_process: PROC-REP
+  business_process_version: "1.3"
+  implemented_scenario: EXC-REP-003
+  active_features: [FEAT-REP-005]
+  related_trace_files:
+    - traceability/hp-rep-001.yaml (TASK-REP-086 y TASK-REP-088 se actualizan; TR-REP-027 se amplia)
+    - traceability/exc-rep-001.yaml (no se modifica)
+    - traceability/exc-rep-002.yaml (se ajustan FR-REP-117 y TEST-REP-422)
+  sources:
+    process: business/processes/repair-management-v1.3.yaml
+    rules: business/rules/business-rules-v1.3.yaml
+    features: business/features/repair-management-features-v1.3.yaml
+    scenarios: business/scenarios/repair-management-scenarios-v1.3.yaml
+    convention: traceability/README.md
+    constitution: .specify/memory/constitution.md
+    backend: app/backend/
+    frontend: app/frontend/
+  relationship_vocabulary:
+    belongs_to: el origen pertenece al destino (jerarquia)
+    activates: el Scenario activa la Feature
+    realizes: la System Action realiza la User Story
+    covers: la System Action cubre el nodo del Business Process
+    governed_by: el item esta gobernado por la Business Rule
+    derives_from: el Functional Requirement deriva de la System Action
+    satisfies: el Technical Requirement satisface el Functional Requirement
+    supports: el artefacto de modelo de datos sostiene un FR o un TR (N:M)
+    implements: la Task o el Code implementa un Technical Requirement
+    produced_by: el Code fue producido por la Task
+    exercises: el Internal Test ejercita el Code
+    verifies: el Internal Test verifica un FR o un TR
+    accepts: el UAT acepta una User Story o un Functional Requirement
+
+items:
+
+  - {id: DOM-RMA, type: business_domain, name: Area funcional RMA, status: active, source: traceability/README.md}
+  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: draft, version: "1.3", source: business/processes/repair-management-v1.3.yaml}
+  - {id: EXC-REP-003, type: scenario, name: "Reserva de insumos fallida al iniciar la Ejecucion", status: draft, scenario_type: EXCEPTION, scope: FEATURE, source: business/scenarios/repair-management-scenarios-v1.3.yaml}
+
+  - {id: FEAT-REP-005, type: feature, name: "Ejecucion de Detalles y gestion de insumos", status: draft, feature_status: draft, implemented_scenario: [EXC-REP-003], implemented_slice_status: IMPLEMENTED, nodes_total: 11, nodes_in_slice: 3, spec: specs/005-feat-rep-005-hp-slice/}
+
+  - {id: PROC-REP-185, type: process_node, name: "Reservar insumos e iniciar Ejecucion del Detalle", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-186, type: process_node, name: "Registrar reserva fallida (Detalle bloqueado por recursos)", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-211, type: process_node, name: "Evaluar situacion de la Orden", node_type: decision, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-120, type: process_node, name: "Detalle(s) pendientes por recursos", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: true, note: "Consecuencia de 211 PENDIENTE_RECURSOS (EXC-REP-001): no es un nodo de EXC-REP-003."}
+  - {id: PROC-REP-140, type: process_node, name: "Habilitar Orden de Reparacion", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: true, note: "Habilitacion tras revalidar desde 120 (EN_COLA admitido): no es un nodo de EXC-REP-003."}
+
+  - {id: BR-REP-003, type: business_rule, name: "Override justificado", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-006, type: business_rule, name: "Reserva de insumos al iniciar Ejecucion del Detalle", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-012, type: business_rule, name: "Estado agregado de la Orden como calculo derivado", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-018, type: business_rule, name: "Toma y liberacion de Orden (participacion activa)", status: draft, coverage: PARTIAL}
+
+  # TASK-REP-086 se REUTILIZA de hp-rep-001.yaml (mismo id, type y name).
+  - {id: TASK-REP-086, type: task, name: "Implementar PROC-REP-186 (registrar reserva fallida: Detalle BLOQUEADO_POR_RECURSOS y recalculo de la Orden). Hoy la reserva insuficiente lanza un...", status: DONE, note: "Implementada en specs/017-slice8-exc-rep-003 (EXC-REP-003)."}
+
+  - {id: US-REP-034, type: user_story, name: "Como Tecnico quiero que si un insumo dejo de estar disponible al iniciar un Detalle el sistema registre la reserva fallida y bloquee solo ese Detalle sin crear la Ejecucion ni tocar el stock para poder continuar con otro Detalle trabajable o liberar la Orden", status: IMPLEMENTED, priority: P1, actor: ACT-TECH}
+  - {id: US-REP-035, type: user_story, name: "Como Coordinador RMA quiero que una Orden que queda pendiente de recursos tras una reserva fallida pueda revalidarse y habilitarse otra vez cuando vuelve el stock o se fuerza el Detalle sin quedar atascada", status: IMPLEMENTED, priority: P1, actor: ACT-COORD}
+
+  - {id: ACC-REP-052, type: system_action, name: "Registrar la reserva fallida (PROC-REP-185 Reserva fallida y PROC-REP-186) del Detalle seleccionado cuando faltan insumos y no tiene override propio sin crear Ejecucion reservas ni cambios de stock", status: IMPLEMENTED}
+  - {id: ACC-REP-053, type: system_action, name: "Recalcular la situacion de la Orden (PROC-REP-211) tras la reserva fallida: continuar con otro Detalle trabajable con la toma activa o cerrar la toma y pasar a PROC-REP-120 sin 100 ni 110", status: IMPLEMENTED}
+  - {id: ACC-REP-054, type: system_action, name: "Habilitar (PROC-REP-140) una Orden que llego a PROC-REP-120 estando EN_COLA tras revalidar o forzar el Detalle y mostrar 186 y 120 en el progreso por evidencia del historial", status: IMPLEMENTED}
+
+  - {id: FR-REP-120, type: functional_requirement, name: "Si en PROC-REP-185 faltan insumos del Detalle y este no tiene override propio la reserva falla sin crear Ejecucion ni reservas ni movimientos y sin cambiar el stock fisico", status: IMPLEMENTED}
+  - {id: FR-REP-121, type: functional_requirement, name: "La reserva fallida deja en el historial PROC-REP-185 con resultado Reserva fallida y Detalle y PROC-REP-186 sin usuario con los insumos faltantes ordenados y el Detalle queda DEFINIDO y BLOQUEADO_POR_RECURSOS sin tocar otros Detalles", status: IMPLEMENTED}
+  - {id: FR-REP-122, type: functional_requirement, name: "Con otro Detalle trabajable PROC-REP-211 da ABIERTA_TRABAJABLE la toma sigue activa el hito de workflow no cambia y el siguiente intento registra PROC-REP-212 Si y PROC-REP-181", status: IMPLEMENTED}
+  - {id: FR-REP-123, type: functional_requirement, name: "Sin otro Detalle trabajable PROC-REP-211 da PENDIENTE_RECURSOS cierra la toma y continua a PROC-REP-120 sin pasar por PROC-REP-100 ni PROC-REP-110 conservando el hito de workflow", status: IMPLEMENTED}
+  - {id: FR-REP-124, type: functional_requirement, name: "La reserva fallida es un resultado funcional persistido con respuesta 200 y las precondiciones reales de rol Detalle toma Ejecucion activa o estacion siguen siendo 409 y no persisten una reserva fallida", status: IMPLEMENTED}
+  - {id: FR-REP-125, type: functional_requirement, name: "El override de factibilidad del mismo Detalle evita la reserva fallida y el override de otro Detalle no cuenta", status: IMPLEMENTED}
+  - {id: FR-REP-126, type: functional_requirement, name: "Una Orden EN_COLA en PROC-REP-120 puede revalidarse y habilitarse desde PROC-REP-090 Si o PROC-REP-130 valido sin relajar el gate", status: IMPLEMENTED}
+  - {id: FR-REP-127, type: functional_requirement, name: "El progreso muestra PROC-REP-186 tras 185 y PROC-REP-120 tras 211 solo con evidencia real del historial", status: IMPLEMENTED}
+
+  - {id: TR-REP-120, type: technical_requirement, name: "services.inventario.faltantes_del_detalle es la unica logica de disponibilidad por Detalle usada por PROC-REP-080 y por PROC-REP-185 y 186 con orden determinista", status: IMPLEMENTED}
+  - {id: TR-REP-121, type: technical_requirement, name: "services.ejecuciones.intentar_reserva_e_inicio valida las precondiciones reales y devuelve la Orden y si la reserva fue exitosa delegando en reservar_insumos_e_iniciar_ejecucion o registrando 185 Reserva fallida y 186", status: IMPLEMENTED}
+  - {id: TR-REP-122, type: technical_requirement, name: "services.ejecuciones.registrar_reserva_fallida registra PROC-REP-186 como nodo ACT-SYSTEM con los faltantes y deja el Detalle BLOQUEADO_POR_RECURSOS sin movimientos ni Ejecucion", status: IMPLEMENTED}
+  - {id: TR-REP-123, type: technical_requirement, name: "application.taller.iniciar_detalle dentro de la seccion critica de inventario compone 181 174 y la reserva evalua PROC-REP-211 con evaluar_situacion_orden y persiste la Orden una sola vez", status: IMPLEMENTED}
+  - {id: TR-REP-124, type: technical_requirement, name: "POST /details/{id}/start responde 200 OrdenOut ante una reserva fallida y conserva 409 para las precondiciones", status: IMPLEMENTED}
+  - {id: TR-REP-125, type: technical_requirement, name: "services.ordenes.habilitar_orden acepta EN_COLA y EN_REPARACION ademas de REQUERIMIENTO y EN_REVISION conservando el gate 090 Si o 130 con override valido", status: IMPLEMENTED}
+  - {id: TR-REP-126, type: technical_requirement, name: "application.progreso intercala PROC-REP-186 tras 185 y PROC-REP-120 tras 211 solo con evidencia en el historial", status: IMPLEMENTED}
+
+  - {id: TASK-REP-198, type: task, name: "Extraer el helper compartido de faltantes de disponibilidad por Detalle usado por factibilidad y reserva", status: DONE}
+  - {id: TASK-REP-199, type: task, name: "Permitir habilitar desde EN_COLA tras el circuito 186 211 120 sin relajar el gate de PROC-REP-140", status: DONE}
+  - {id: TASK-REP-200, type: task, name: "Mostrar PROC-REP-186 y PROC-REP-120 en el progreso por evidencia del historial", status: DONE}
+
+  - {id: CODE-REP-207, type: code_artifact, name: "services/inventario.py::faltantes_del_detalle", status: IMPLEMENTED, source: "app/backend/app/services/inventario.py::faltantes_del_detalle"}
+  - {id: CODE-REP-208, type: code_artifact, name: "services/reparaciones.py::validar_factibilidad_detalles (usa el helper)", status: IMPLEMENTED, source: "app/backend/app/services/reparaciones.py::validar_factibilidad_detalles"}
+  - {id: CODE-REP-209, type: code_artifact, name: "services/ejecuciones.py::intentar_reserva_e_inicio", status: IMPLEMENTED, source: "app/backend/app/services/ejecuciones.py::intentar_reserva_e_inicio"}
+  - {id: CODE-REP-210, type: code_artifact, name: "services/ejecuciones.py::registrar_reserva_fallida", status: IMPLEMENTED, source: "app/backend/app/services/ejecuciones.py::registrar_reserva_fallida"}
+  - {id: CODE-REP-211, type: code_artifact, name: "application/taller.py::iniciar_detalle", status: IMPLEMENTED, source: "app/backend/app/application/taller.py::iniciar_detalle"}
+  - {id: CODE-REP-212, type: code_artifact, name: "api/ordenes.py::post_iniciar_detalle", status: IMPLEMENTED, source: "app/backend/app/api/ordenes.py::post_iniciar_detalle"}
+  - {id: CODE-REP-213, type: code_artifact, name: "services/ordenes.py::habilitar_orden (EN_COLA)", status: IMPLEMENTED, source: "app/backend/app/services/ordenes.py::habilitar_orden"}
+  - {id: CODE-REP-214, type: code_artifact, name: "application/progreso.py::_con_recursos_del_taller", status: IMPLEMENTED, source: "app/backend/app/application/progreso.py::_con_recursos_del_taller"}
+
+  - {id: TEST-REP-425, type: internal_test, name: "test_faltantes_del_detalle_ordenados_y_con_reservas_ajenas", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_faltantes_del_detalle_ordenados_y_con_reservas_ajenas"}
+  - {id: TEST-REP-426, type: internal_test, name: "test_caso_a_det_a_falla_y_det_b_sigue_trabajable", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_caso_a_det_a_falla_y_det_b_sigue_trabajable"}
+  - {id: TEST-REP-427, type: internal_test, name: "test_la_orden_original_no_se_modifica", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_la_orden_original_no_se_modifica"}
+  - {id: TEST-REP-428, type: internal_test, name: "test_caso_b_unico_detalle_211_cierra_la_toma_y_va_a_120", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_caso_b_unico_detalle_211_cierra_la_toma_y_va_a_120"}
+  - {id: TEST-REP-429, type: internal_test, name: "test_primer_intento_en_cola_y_con_trabajo_previo_en_reparacion", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_primer_intento_en_cola_y_con_trabajo_previo_en_reparacion"}
+  - {id: TEST-REP-430, type: internal_test, name: "test_la_reserva_fallida_no_deja_reservas_ejecuciones_ni_movimientos", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_la_reserva_fallida_no_deja_reservas_ejecuciones_ni_movimientos"}
+  - {id: TEST-REP-431, type: internal_test, name: "test_varios_faltantes_se_registran_todos_y_ordenados", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_varios_faltantes_se_registran_todos_y_ordenados"}
+  - {id: TEST-REP-432, type: internal_test, name: "test_concurrencia_entre_ordenes_la_segunda_ve_la_reserva_de_la_primera", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_concurrencia_entre_ordenes_la_segunda_ve_la_reserva_de_la_primera"}
+  - {id: TEST-REP-433, type: internal_test, name: "test_con_stock_suficiente_se_delega_en_la_reserva_exitosa", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_con_stock_suficiente_se_delega_en_la_reserva_exitosa"}
+  - {id: TEST-REP-434, type: internal_test, name: "test_con_override_del_mismo_detalle_reserva_sin_reserva_fallida", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_con_override_del_mismo_detalle_reserva_sin_reserva_fallida"}
+  - {id: TEST-REP-435, type: internal_test, name: "test_el_override_de_otro_detalle_no_cuenta", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_el_override_de_otro_detalle_no_cuenta"}
+  - {id: TEST-REP-436, type: internal_test, name: "test_sin_toma_es_una_precondicion_no_una_reserva_fallida", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_sin_toma_es_una_precondicion_no_una_reserva_fallida"}
+  - {id: TEST-REP-437, type: internal_test, name: "test_con_ejecucion_activa_es_una_precondicion", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_con_ejecucion_activa_es_una_precondicion"}
+  - {id: TEST-REP-438, type: internal_test, name: "test_un_detalle_bloqueado_es_una_precondicion", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_un_detalle_bloqueado_es_una_precondicion"}
+  - {id: TEST-REP-439, type: internal_test, name: "test_la_funcion_exitosa_sigue_lanzando_el_error_defensivo", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_la_funcion_exitosa_sigue_lanzando_el_error_defensivo"}
+  - {id: TEST-REP-440, type: internal_test, name: "test_186_exige_una_reserva_fallida_previa_y_faltantes", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_186_exige_una_reserva_fallida_previa_y_faltantes"}
+  - {id: TEST-REP-441, type: internal_test, name: "test_186_no_toca_otros_detalles_ni_el_stock", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_186_no_toca_otros_detalles_ni_el_stock"}
+  - {id: TEST-REP-442, type: internal_test, name: "test_revalidar_desde_120_en_cola_permite_habilitar", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_revalidar_desde_120_en_cola_permite_habilitar"}
+  - {id: TEST-REP-443, type: internal_test, name: "test_en_cola_sin_090_si_ni_130_valido_sigue_rechazada", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_en_cola_sin_090_si_ni_130_valido_sigue_rechazada"}
+  - {id: TEST-REP-444, type: internal_test, name: "test_090_ninguno_en_cola_no_habilita", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_090_ninguno_en_cola_no_habilita"}
+  - {id: TEST-REP-445, type: internal_test, name: "test_003_120_revalida_100_override_130_140_en_cola", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_003_120_revalida_100_override_130_140_en_cola"}
+  - {id: TEST-REP-446, type: internal_test, name: "test_progreso_incluye_186_y_120_solo_con_evidencia", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_progreso_incluye_186_y_120_solo_con_evidencia"}
+  - {id: TEST-REP-447, type: internal_test, name: "test_progreso_no_duplica_120_si_ya_hubo_100", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_progreso_no_duplica_120_si_ya_hubo_100"}
+  - {id: TEST-REP-448, type: internal_test, name: "test_la_orden_se_guarda_una_sola_vez_ante_reserva_fallida", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_la_orden_se_guarda_una_sola_vez_ante_reserva_fallida"}
+  - {id: TEST-REP-449, type: internal_test, name: "test_la_orden_se_guarda_una_sola_vez_ante_reserva_exitosa", status: PASSING, source: "app/backend/tests/test_exc_rep_003.py::test_la_orden_se_guarda_una_sola_vez_ante_reserva_exitosa"}
+  - {id: TEST-REP-450, type: internal_test, name: "test_caso_a_det_a_falla_det_b_sigue_trabajable", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_caso_a_det_a_falla_det_b_sigue_trabajable"}
+  - {id: TEST-REP-451, type: internal_test, name: "test_despues_se_inicia_det_b_con_212_si_y_se_continua_normal", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_despues_se_inicia_det_b_con_212_si_y_se_continua_normal"}
+  - {id: TEST-REP-452, type: internal_test, name: "test_caso_a_liberar_la_orden_despues_de_la_reserva_fallida", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_caso_a_liberar_la_orden_despues_de_la_reserva_fallida"}
+  - {id: TEST-REP-453, type: internal_test, name: "test_caso_b_unico_detalle_211_pendiente_recursos_cierra_toma_y_va_a_120", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_caso_b_unico_detalle_211_pendiente_recursos_cierra_toma_y_va_a_120"}
+  - {id: TEST-REP-454, type: internal_test, name: "test_el_progreso_muestra_186_y_120_con_evidencia_real", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_el_progreso_muestra_186_y_120_con_evidencia_real"}
+  - {id: TEST-REP-455, type: internal_test, name: "test_el_progreso_no_cambia_si_la_reserva_sale_bien", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_el_progreso_no_cambia_si_la_reserva_sale_bien"}
+  - {id: TEST-REP-456, type: internal_test, name: "test_i1_en_cola_a_120_revalida_habilita_y_el_proceso_continua", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_i1_en_cola_a_120_revalida_habilita_y_el_proceso_continua"}
+  - {id: TEST-REP-457, type: internal_test, name: "test_i1_revalidar_sin_stock_vuelve_a_100_y_luego_espera", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_i1_revalidar_sin_stock_vuelve_a_100_y_luego_espera"}
+  - {id: TEST-REP-458, type: internal_test, name: "test_i1_003_120_revalidar_100_override_130_140_con_en_cola", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_i1_003_120_revalidar_100_override_130_140_con_en_cola"}
+  - {id: TEST-REP-459, type: internal_test, name: "test_la_habilitacion_directa_desde_120_sigue_rechazada", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_la_habilitacion_directa_desde_120_sigue_rechazada"}
+  - {id: TEST-REP-460, type: internal_test, name: "test_con_override_del_mismo_detalle_no_hay_reserva_fallida", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_con_override_del_mismo_detalle_no_hay_reserva_fallida"}
+  - {id: TEST-REP-461, type: internal_test, name: "test_el_override_de_otro_detalle_no_evita_la_reserva_fallida", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_el_override_de_otro_detalle_no_evita_la_reserva_fallida"}
+  - {id: TEST-REP-462, type: internal_test, name: "test_dos_ordenes_la_segunda_pierde_la_ultima_unidad", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_dos_ordenes_la_segunda_pierde_la_ultima_unidad"}
+  - {id: TEST-REP-463, type: internal_test, name: "test_las_precondiciones_siguen_siendo_409_y_no_persisten", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_las_precondiciones_siguen_siendo_409_y_no_persisten"}
+  - {id: TEST-REP-464, type: internal_test, name: "test_sin_toma_no_se_registra_una_reserva_fallida", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_sin_toma_no_se_registra_una_reserva_fallida"}
+  - {id: TEST-REP-465, type: internal_test, name: "test_con_ejecucion_activa_no_se_registra_una_reserva_fallida", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_con_ejecucion_activa_no_se_registra_una_reserva_fallida"}
+  - {id: TEST-REP-466, type: internal_test, name: "test_rt_interno_reserva_fallida_sin_pagos", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_rt_interno_reserva_fallida_sin_pagos"}
+  - {id: TEST-REP-467, type: internal_test, name: "test_garantia_rma_reserva_fallida", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_garantia_rma_reserva_fallida"}
+  - {id: TEST-REP-468, type: internal_test, name: "test_un_detalle_interrumpido_sin_stock_entra_en_exc_003", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_un_detalle_interrumpido_sin_stock_entra_en_exc_003"}
+  - {id: TEST-REP-469, type: internal_test, name: "test_ciclo_completo_003_espera_revalida_y_termina", status: PASSING, source: "app/backend/tests/test_api_exc_rep_003.py::test_ciclo_completo_003_espera_revalida_y_termina"}
+
+  - {id: UAT-REP-035, type: uat, name: "Si un insumo deja de estar disponible al iniciar un Detalle el Tecnico ve ese Detalle bloqueado por recursos sin Ejecucion y puede continuar con otro Detalle o la Orden queda pendiente de recursos", status: PENDING}
+  - {id: UAT-REP-036, type: uat, name: "Una Orden pendiente de recursos tras una reserva fallida se revalida o se fuerza y vuelve a habilitarse sin quedar atascada", status: PENDING}
+
+links:
+
+  - {from: PROC-REP, to: DOM-RMA, relationship: belongs_to}
+  - {from: EXC-REP-003, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-185, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-186, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-211, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-120, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-140, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-005, to: PROC-REP, relationship: belongs_to}
+  - {from: EXC-REP-003, to: FEAT-REP-005, relationship: activates}
+
+  - {from: US-REP-034, to: FEAT-REP-005, relationship: belongs_to}
+  - {from: US-REP-035, to: FEAT-REP-005, relationship: belongs_to}
+
+  - {from: ACC-REP-052, to: US-REP-034, relationship: realizes}
+  - {from: ACC-REP-052, to: PROC-REP-185, relationship: covers}
+  - {from: ACC-REP-052, to: PROC-REP-186, relationship: covers}
+  - {from: ACC-REP-052, to: BR-REP-006, relationship: governed_by}
+  - {from: ACC-REP-052, to: BR-REP-003, relationship: governed_by}
+
+  - {from: ACC-REP-053, to: US-REP-034, relationship: realizes}
+  - {from: ACC-REP-053, to: PROC-REP-211, relationship: covers}
+  - {from: ACC-REP-053, to: BR-REP-012, relationship: governed_by}
+  - {from: ACC-REP-053, to: BR-REP-018, relationship: governed_by}
+
+  - {from: ACC-REP-054, to: US-REP-035, relationship: realizes}
+  - {from: ACC-REP-054, to: PROC-REP-120, relationship: covers}
+  - {from: ACC-REP-054, to: PROC-REP-140, relationship: covers}
+  - {from: ACC-REP-054, to: BR-REP-012, relationship: governed_by}
+
+  - {from: FR-REP-120, to: ACC-REP-052, relationship: derives_from}
+  - {from: FR-REP-121, to: ACC-REP-052, relationship: derives_from}
+  - {from: FR-REP-122, to: ACC-REP-053, relationship: derives_from}
+  - {from: FR-REP-123, to: ACC-REP-053, relationship: derives_from}
+  - {from: FR-REP-124, to: ACC-REP-052, relationship: derives_from}
+  - {from: FR-REP-125, to: ACC-REP-052, relationship: derives_from}
+  - {from: FR-REP-126, to: ACC-REP-054, relationship: derives_from}
+  - {from: FR-REP-127, to: ACC-REP-054, relationship: derives_from}
+
+  - {from: TR-REP-120, to: FR-REP-120, relationship: satisfies}
+  - {from: TR-REP-120, to: FR-REP-125, relationship: satisfies}
+  - {from: TR-REP-121, to: FR-REP-120, relationship: satisfies}
+  - {from: TR-REP-121, to: FR-REP-124, relationship: satisfies}
+  - {from: TR-REP-121, to: FR-REP-125, relationship: satisfies}
+  - {from: TR-REP-122, to: FR-REP-121, relationship: satisfies}
+  - {from: TR-REP-123, to: FR-REP-122, relationship: satisfies}
+  - {from: TR-REP-123, to: FR-REP-123, relationship: satisfies}
+  - {from: TR-REP-124, to: FR-REP-124, relationship: satisfies}
+  - {from: TR-REP-125, to: FR-REP-126, relationship: satisfies}
+  - {from: TR-REP-126, to: FR-REP-127, relationship: satisfies}
+
+  - {from: TASK-REP-198, to: TR-REP-120, relationship: implements}
+  - {from: TASK-REP-199, to: TR-REP-125, relationship: implements}
+  - {from: TASK-REP-200, to: TR-REP-126, relationship: implements}
+  - {from: TASK-REP-086, to: TR-REP-121, relationship: implements}
+  - {from: TASK-REP-086, to: TR-REP-122, relationship: implements}
+  - {from: TASK-REP-086, to: TR-REP-123, relationship: implements}
+  - {from: TASK-REP-086, to: TR-REP-124, relationship: implements}
+
+  - {from: CODE-REP-207, to: TASK-REP-198, relationship: produced_by}
+  - {from: CODE-REP-207, to: TR-REP-120, relationship: implements}
+  - {from: CODE-REP-208, to: TASK-REP-198, relationship: produced_by}
+  - {from: CODE-REP-208, to: TR-REP-120, relationship: implements}
+  - {from: CODE-REP-209, to: TASK-REP-086, relationship: produced_by}
+  - {from: CODE-REP-209, to: TR-REP-121, relationship: implements}
+  - {from: CODE-REP-210, to: TASK-REP-086, relationship: produced_by}
+  - {from: CODE-REP-210, to: TR-REP-122, relationship: implements}
+  - {from: CODE-REP-211, to: TASK-REP-086, relationship: produced_by}
+  - {from: CODE-REP-211, to: TR-REP-123, relationship: implements}
+  - {from: CODE-REP-212, to: TASK-REP-086, relationship: produced_by}
+  - {from: CODE-REP-212, to: TR-REP-124, relationship: implements}
+  - {from: CODE-REP-213, to: TASK-REP-199, relationship: produced_by}
+  - {from: CODE-REP-213, to: TR-REP-125, relationship: implements}
+  - {from: CODE-REP-214, to: TASK-REP-200, relationship: produced_by}
+  - {from: CODE-REP-214, to: TR-REP-126, relationship: implements}
+
+  - {from: TEST-REP-425, to: TR-REP-120, relationship: verifies}
+  - {from: TEST-REP-425, to: CODE-REP-207, relationship: exercises}
+  - {from: TEST-REP-426, to: FR-REP-121, relationship: verifies}
+  - {from: TEST-REP-426, to: FR-REP-122, relationship: verifies}
+  - {from: TEST-REP-426, to: CODE-REP-209, relationship: exercises}
+  - {from: TEST-REP-426, to: CODE-REP-210, relationship: exercises}
+  - {from: TEST-REP-427, to: TR-REP-121, relationship: verifies}
+  - {from: TEST-REP-428, to: FR-REP-123, relationship: verifies}
+  - {from: TEST-REP-429, to: FR-REP-123, relationship: verifies}
+  - {from: TEST-REP-430, to: FR-REP-120, relationship: verifies}
+  - {from: TEST-REP-431, to: FR-REP-121, relationship: verifies}
+  - {from: TEST-REP-432, to: FR-REP-120, relationship: verifies}
+  - {from: TEST-REP-433, to: TR-REP-121, relationship: verifies}
+  - {from: TEST-REP-434, to: FR-REP-125, relationship: verifies}
+  - {from: TEST-REP-435, to: FR-REP-125, relationship: verifies}
+  - {from: TEST-REP-436, to: FR-REP-124, relationship: verifies}
+  - {from: TEST-REP-437, to: FR-REP-124, relationship: verifies}
+  - {from: TEST-REP-438, to: FR-REP-124, relationship: verifies}
+  - {from: TEST-REP-439, to: TR-REP-121, relationship: verifies}
+  - {from: TEST-REP-440, to: TR-REP-122, relationship: verifies}
+  - {from: TEST-REP-441, to: FR-REP-121, relationship: verifies}
+  - {from: TEST-REP-442, to: FR-REP-126, relationship: verifies}
+  - {from: TEST-REP-442, to: CODE-REP-213, relationship: exercises}
+  - {from: TEST-REP-443, to: TR-REP-125, relationship: verifies}
+  - {from: TEST-REP-444, to: TR-REP-125, relationship: verifies}
+  - {from: TEST-REP-445, to: FR-REP-126, relationship: verifies}
+  - {from: TEST-REP-446, to: FR-REP-127, relationship: verifies}
+  - {from: TEST-REP-446, to: CODE-REP-214, relationship: exercises}
+  - {from: TEST-REP-447, to: TR-REP-126, relationship: verifies}
+  - {from: TEST-REP-448, to: TR-REP-123, relationship: verifies}
+  - {from: TEST-REP-448, to: CODE-REP-211, relationship: exercises}
+  - {from: TEST-REP-449, to: TR-REP-123, relationship: verifies}
+  - {from: TEST-REP-450, to: FR-REP-122, relationship: verifies}
+  - {from: TEST-REP-450, to: FR-REP-124, relationship: verifies}
+  - {from: TEST-REP-450, to: CODE-REP-212, relationship: exercises}
+  - {from: TEST-REP-451, to: FR-REP-122, relationship: verifies}
+  - {from: TEST-REP-452, to: FR-REP-122, relationship: verifies}
+  - {from: TEST-REP-453, to: FR-REP-123, relationship: verifies}
+  - {from: TEST-REP-453, to: FR-REP-120, relationship: verifies}
+  - {from: TEST-REP-454, to: FR-REP-127, relationship: verifies}
+  - {from: TEST-REP-455, to: TR-REP-126, relationship: verifies}
+  - {from: TEST-REP-456, to: FR-REP-126, relationship: verifies}
+  - {from: TEST-REP-457, to: TR-REP-125, relationship: verifies}
+  - {from: TEST-REP-458, to: FR-REP-126, relationship: verifies}
+  - {from: TEST-REP-458, to: FR-REP-125, relationship: verifies}
+  - {from: TEST-REP-459, to: TR-REP-125, relationship: verifies}
+  - {from: TEST-REP-460, to: FR-REP-125, relationship: verifies}
+  - {from: TEST-REP-461, to: FR-REP-125, relationship: verifies}
+  - {from: TEST-REP-462, to: FR-REP-120, relationship: verifies}
+  - {from: TEST-REP-462, to: FR-REP-121, relationship: verifies}
+  - {from: TEST-REP-463, to: FR-REP-124, relationship: verifies}
+  - {from: TEST-REP-464, to: FR-REP-124, relationship: verifies}
+  - {from: TEST-REP-465, to: FR-REP-124, relationship: verifies}
+  - {from: TEST-REP-466, to: FR-REP-123, relationship: verifies}
+  - {from: TEST-REP-467, to: FR-REP-123, relationship: verifies}
+  - {from: TEST-REP-468, to: FR-REP-120, relationship: verifies}
+  - {from: TEST-REP-469, to: FR-REP-126, relationship: verifies}
+
+  - {from: UAT-REP-035, to: US-REP-034, relationship: accepts}
+  - {from: UAT-REP-036, to: US-REP-035, relationship: accepts}

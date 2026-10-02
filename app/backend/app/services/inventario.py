@@ -8,7 +8,7 @@ Una reserva no tiene estado propio: lo pendiente se deriva siempre de
 los movimientos que la referencian.
 """
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from decimal import Decimal
 
@@ -77,6 +77,35 @@ def cantidad_pendiente(
         CERO,
     )
     return reserva.cantidad - cerrado
+
+
+def faltantes_del_detalle(
+    tipo_reparacion_id: str,
+    movimientos: Sequence[MovimientoInsumo],
+    insumos: Sequence[Insumo],
+    insumos_previstos: Sequence[TipoReparacionInsumos],
+    reservas_externas: Mapping[str, Decimal] | None = None,
+) -> list[str]:
+    """IDs (ordenados) de los insumos previstos que hoy no alcanzan.
+
+    Unica logica de disponibilidad por Detalle: la usan la factibilidad
+    (PROC-REP-080) y la reserva real (PROC-REP-185/186). Compara lo
+    previsto por el Tipo de Reparacion contra ``stock_fisico`` menos las
+    reservas propias (``movimientos``) y ajenas (``reservas_externas``,
+    insumo_id -> cantidad). No decide nada sobre overrides: eso es del
+    llamador.
+    """
+    ajenas = reservas_externas or {}
+    faltantes: set[str] = set()
+    previstos = insumos_previstos_de(tipo_reparacion_id, insumos_previstos)
+    for previsto in previstos:
+        insumo = buscar_insumo(previsto.insumo_id, insumos)
+        disponible = stock_disponible(
+            insumo, movimientos, ajenas.get(insumo.id, CERO)
+        )
+        if disponible < previsto.cantidad:
+            faltantes.add(insumo.id)
+    return sorted(faltantes)
 
 
 def reservas_activas(

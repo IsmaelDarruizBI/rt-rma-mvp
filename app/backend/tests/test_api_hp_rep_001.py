@@ -496,7 +496,7 @@ def test_la_factibilidad_bloquea_cuando_el_stock_ya_esta_reservado(tmp_path):
         ]
 
 
-def test_stock_insuficiente_al_iniciar_devuelve_409(tmp_path):
+def test_stock_insuficiente_al_iniciar_registra_reserva_fallida(tmp_path):
     """Dos Ordenes tomadas, una sola unidad: la segunda falla en 185.
 
     Ambas pasan la factibilidad (PROC-REP-080 solo consulta y todavia no
@@ -518,21 +518,24 @@ def test_stock_insuficiente_al_iniciar_devuelve_409(tmp_path):
             json={"usuario_id": TECNICO},
         )
 
-        assert respuesta.status_code == 409
-        assert respuesta.json()["error"]["codigo"] == "RECURSO_NO_DISPONIBLE"
+        # EXC-REP-003: la reserva fallida es un resultado funcional (200),
+        # no un error: la Orden persiste 185 fallida -> 186 -> 211 -> 120.
+        assert respuesta.status_code == 200, respuesta.text
 
         # La segunda no genero reserva parcial ni Ejecucion.
         sin_reservar = cliente.get(f"/api/orders/{segunda}").json()
         assert sin_reservar["ejecuciones"] == []
         assert sin_reservar["estado_workflow"] == "EN_COLA"
+        assert sin_reservar["current_process"] == "PROC-REP-120"
 
 
 def test_dos_reservas_concurrentes_solo_una_gana(tmp_path):
     """Dos tecnicos van por la ultima unidad al mismo tiempo.
 
     El lock de inventario serializa la seccion critica de PROC-REP-185,
-    asi que una reserva y la otra recibe 409. Sin el lock las dos podrian
-    leer el mismo stock disponible y reservarlo.
+    asi que una reserva y la otra registra la reserva fallida (EXC-REP-003,
+    200 con la Orden bloqueada). Sin el lock las dos podrian leer el mismo
+    stock disponible y reservarlo.
     """
     with _cliente(tmp_path, stock="1") as cliente:
         ordenes = [_hasta_tomada(cliente) for _ in range(2)]
@@ -559,7 +562,7 @@ def test_dos_reservas_concurrentes_solo_una_gana(tmp_path):
         for hilo in hilos:
             hilo.join(timeout=30)
 
-        assert sorted(resultados) == [200, 409], resultados
+        assert resultados == [200, 200], resultados
 
         # Exactamente una Orden quedo con Ejecucion abierta.
         con_ejecucion = [
@@ -568,6 +571,10 @@ def test_dos_reservas_concurrentes_solo_una_gana(tmp_path):
             if cliente.get(f"/api/orders/{orden_id}").json()["ejecuciones"]
         ]
         assert len(con_ejecucion) == 1
+        # La otra quedo con 186 registrado y sin Ejecucion ni reserva.
+        perdedora = next(o for o, _ in ordenes if o not in con_ejecucion)
+        historial = cliente.get(f"/api/orders/{perdedora}").json()["historial"]
+        assert "PROC-REP-186" in [p["referencia_id"] for p in historial]
 
 
 def test_los_catalogos_demo_versionados_no_se_tocan(cliente, tmp_path):

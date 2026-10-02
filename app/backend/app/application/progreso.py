@@ -157,6 +157,11 @@ _TRAMO_RECURSOS: tuple[tuple[str, str], ...] = (
 
 
 _NODO_OVERRIDE = ("PROC-REP-130", "Registrar override")
+_NODO_RESERVA_FALLIDA = (
+    "PROC-REP-186",
+    "Registrar reserva fallida (Detalle bloqueado por recursos)",
+)
+_NODO_ESPERA = _TRAMO_RECURSOS[-1]
 
 
 def _con_espera_de_recursos(
@@ -178,6 +183,28 @@ def _con_espera_de_recursos(
             resultado.extend(_TRAMO_RECURSOS)
             if con_override:
                 resultado.append(_NODO_OVERRIDE)
+    return tuple(resultado)
+
+
+def _con_recursos_del_taller(
+    ruta: tuple[tuple[str, str], ...],
+    *,
+    con_reserva_fallida: bool,
+    con_espera_desde_211: bool,
+) -> tuple[tuple[str, str], ...]:
+    """Intercala 186 tras 185 y 120 tras 211 (EXC-REP-003).
+
+    La espera de recursos que nace DENTRO del taller no pasa por 100/110:
+    185 -> 186 -> 211 -> 120. Se muestra solo con evidencia real en el
+    historial (186, y 120 sin el tramo 100/110 ya intercalado).
+    """
+    resultado: list[tuple[str, str]] = []
+    for nodo in ruta:
+        resultado.append(nodo)
+        if nodo[0] == "PROC-REP-185" and con_reserva_fallida:
+            resultado.append(_NODO_RESERVA_FALLIDA)
+        if nodo[0] == "PROC-REP-211" and con_espera_desde_211:
+            resultado.append(_NODO_ESPERA)
     return tuple(resultado)
 
 
@@ -226,6 +253,18 @@ def _ruta_esperada(orden: OrdenReparacion) -> tuple[tuple[str, str], ...]:
     if "PROC-REP-100" in alcanzados:
         ruta = _con_espera_de_recursos(
             ruta, con_override="PROC-REP-130" in alcanzados
+        )
+    con_reserva_fallida = "PROC-REP-186" in alcanzados
+    # 120 ya figura en el tramo 100/110/120; solo se agrega si la espera
+    # nacio en PROC-REP-211 sin pasar por 100.
+    con_espera_desde_211 = (
+        "PROC-REP-120" in alcanzados and "PROC-REP-100" not in alcanzados
+    )
+    if con_reserva_fallida or con_espera_desde_211:
+        ruta = _con_recursos_del_taller(
+            ruta,
+            con_reserva_fallida=con_reserva_fallida,
+            con_espera_desde_211=con_espera_desde_211,
         )
     return ruta
 

@@ -23,8 +23,10 @@ from app.domain.models import (
     InsumoUtilizado,
     MovimientoInsumo,
     OrdenReparacion,
+    ReparacionDetail,
     RolUsuario,
     TipoReparacionInsumos,
+    TomaOrden,
     Usuario,
 )
 
@@ -36,14 +38,15 @@ from .exceptions import (
 )
 from .identificadores import nuevo_id
 from .inventario import (
-    buscar_insumo,
     crear_reserva,
+    faltantes_del_detalle,
     insumos_previstos_de,
-    stock_disponible,
 )
 from .recursos import tiene_override_factibilidad
 from .tomas import buscar_detalle, hay_ejecucion_activa, toma_activa
 from .workflow import registrar_paso
+
+RESULTADO_RESERVA_FALLIDA = "Reserva fallida"
 
 
 def ejecucion_activa(orden: OrdenReparacion) -> EjecucionReparacion | None:
@@ -78,10 +81,12 @@ def reservar_insumos_e_iniciar_ejecucion(
     Las reservas se generan con ``usuario_id=None`` porque el nodo es
     ACT-SYSTEM; la trazabilidad al tecnico pasa por la Ejecucion.
 
-    PROC-REP-186 (reserva fallida -> Detalle BLOQUEADO_POR_RECURSOS) no
-    esta implementado: sin override el MVP falla con RecursoNoDisponibleError;
-    con override (PROC-REP-130 de ESTE Detalle) reserva igual, dejando el
-    disponible negativo (el stock fisico solo baja en PROC-REP-210).
+    Esta funcion es el camino exitoso. La reserva fallida (PROC-REP-186,
+    EXC-REP-003) la compone ``intentar_reserva_e_inicio``; aqui, sin
+    override, la falta de stock solo se defiende con
+    RecursoNoDisponibleError. Con override (PROC-REP-130 de ESTE Detalle)
+    reserva igual, dejando el disponible negativo (el stock fisico solo
+    baja en PROC-REP-210).
 
     Nodo ACT-SYSTEM. El ``usuario`` recibido es el tecnico de la toma
     activa, al que se atribuye la Ejecucion que se abre aqui.
@@ -90,29 +95,7 @@ def reservar_insumos_e_iniciar_ejecucion(
     que otras Ordenes ya reservaron: entre la factibilidad y este
     momento el insumo pudo haber sido tomado por otra Orden.
     """
-    ajenas = reservas_externas or {}
-
-    detalle = buscar_detalle(orden, detalle_id)
-    if detalle.estado is not EstadoReparacionDetail.DEFINIDO:
-        raise PrecondicionInvalidaError(
-            f"El Detalle {detalle_id} no esta disponible para ejecutarse "
-            f"(estado {detalle.estado.value})."
-        )
-    if detalle.condicion is not CondicionReparacionDetail.SIN_BLOQUEO:
-        raise PrecondicionInvalidaError(
-            f"El Detalle {detalle_id} no esta disponible para ejecutarse "
-            f"(condicion {detalle.condicion.value})."
-        )
-
-    toma = toma_activa(orden)
-    if toma is None:
-        raise PrecondicionInvalidaError(
-            "Hay que tomar la Orden antes de iniciar una Ejecucion."
-        )
-    if hay_ejecucion_activa(orden):
-        raise PrecondicionInvalidaError(
-            "La Orden ya tiene una Ejecucion activa (BR-REP-007)."
-        )
+    detalle, toma = _validar_precondiciones_de_la_reserva(orden, detalle_id)
 
     previstos = insumos_previstos_de(
         detalle.tipo_reparacion_id, insumos_previstos
@@ -120,23 +103,22 @@ def reservar_insumos_e_iniciar_ejecucion(
 
     # Comprobar todo antes de modificar nada. Con un override de
     # factibilidad VALIDO PARA ESTE Detalle (EXC-REP-002) la reserva se
-    # genera completa aunque la disponibilidad no alcance; sin override se
-    # mantiene el error (la reserva fallida, EXC-REP-003, no esta
-    # implementada). El override de otro Detalle no cuenta.
-    con_override = tiene_override_factibilidad(orden, detalle_id)
-    for previsto in previstos:
-        if con_override:
-            break
-        insumo = buscar_insumo(previsto.insumo_id, insumos)
-        disponible = stock_disponible(
-            insumo,
+    # genera completa aunque la disponibilidad no alcance. Sin override,
+    # el camino normal de la aplicacion pasa antes por
+    # ``intentar_reserva_e_inicio`` (EXC-REP-003); este error es solo la
+    # defensa de bajo nivel. El override de otro Detalle no cuenta.
+    if not tiene_override_factibilidad(orden, detalle_id):
+        faltantes = faltantes_del_detalle(
+            detalle.tipo_reparacion_id,
             orden.movimientos_insumo,
-            ajenas.get(insumo.id, Decimal("0")),
+            insumos,
+            insumos_previstos,
+            reservas_externas,
         )
-        if disponible < previsto.cantidad:
+        if faltantes:
             raise RecursoNoDisponibleError(
-                f"Insumo {insumo.id}: se necesitan {previsto.cantidad} y hay "
-                f"{disponible} disponibles. No se genero ninguna reserva."
+                f"Insumos sin disponibilidad suficiente: "
+                f"{', '.join(faltantes)}. No se genero ninguna reserva."
             )
 
     reservas: list[MovimientoInsumo] = [
@@ -174,6 +156,157 @@ def reservar_insumos_e_iniciar_ejecucion(
     ).estado = EstadoReparacionDetail.EN_PROGRESO
     nueva_orden.estado_workflow = EstadoWorkflow.EN_REPARACION
 
+    return nueva_orden
+
+
+def _validar_precondiciones_de_la_reserva(
+    orden: OrdenReparacion,
+    detalle_id: str,
+) -> tuple[ReparacionDetail, TomaOrden]:
+    """Precondiciones reales de PROC-REP-185: no son una reserva fallida.
+
+    Un Detalle no trabajable, sin toma o con otra Ejecucion en curso es un
+    error de precondicion, no el resultado "Reserva fallida".
+    """
+    detalle = buscar_detalle(orden, detalle_id)
+    if detalle.estado is not EstadoReparacionDetail.DEFINIDO:
+        raise PrecondicionInvalidaError(
+            f"El Detalle {detalle_id} no esta disponible para ejecutarse "
+            f"(estado {detalle.estado.value})."
+        )
+    if detalle.condicion is not CondicionReparacionDetail.SIN_BLOQUEO:
+        raise PrecondicionInvalidaError(
+            f"El Detalle {detalle_id} no esta disponible para ejecutarse "
+            f"(condicion {detalle.condicion.value})."
+        )
+
+    toma = toma_activa(orden)
+    if toma is None:
+        raise PrecondicionInvalidaError(
+            "Hay que tomar la Orden antes de iniciar una Ejecucion."
+        )
+    if hay_ejecucion_activa(orden):
+        raise PrecondicionInvalidaError(
+            "La Orden ya tiene una Ejecucion activa (BR-REP-007)."
+        )
+    return detalle, toma
+
+
+def intentar_reserva_e_inicio(
+    orden: OrdenReparacion,
+    *,
+    detalle_id: str,
+    usuario: Usuario,
+    insumos: Sequence[Insumo],
+    insumos_previstos: Sequence[TipoReparacionInsumos],
+    fecha: datetime,
+    reservas_externas: Mapping[str, Decimal] | None = None,
+    ejecucion_id: str | None = None,
+) -> tuple[OrdenReparacion, bool]:
+    """PROC-REP-185 con sus dos resultados: exitosa o fallida (EXC-REP-003).
+
+    Devuelve ``(orden, reserva_exitosa)``:
+
+    - Exitosa (hay disponibilidad, o el Detalle tiene override valido,
+      EXC-REP-002): delega en ``reservar_insumos_e_iniciar_ejecucion``.
+    - Fallida (faltan insumos y NO hay override de ESTE Detalle): registra
+      PROC-REP-185 "Reserva fallida" y PROC-REP-186. No genera reservas ni
+      Ejecucion y no toca el stock; el Detalle queda DEFINIDO +
+      BLOQUEADO_POR_RECURSOS. Recalcular la Orden (PROC-REP-211) es del
+      caller (``evaluar_situacion_orden``).
+
+    Las precondiciones reales (Detalle, toma, BR-REP-007) siguen lanzando
+    PrecondicionInvalidaError: no se registran como reserva fallida.
+    """
+    detalle, _ = _validar_precondiciones_de_la_reserva(orden, detalle_id)
+
+    faltantes: list[str] = []
+    if not tiene_override_factibilidad(orden, detalle_id):
+        faltantes = faltantes_del_detalle(
+            detalle.tipo_reparacion_id,
+            orden.movimientos_insumo,
+            insumos,
+            insumos_previstos,
+            reservas_externas,
+        )
+
+    if not faltantes:
+        nueva_orden = reservar_insumos_e_iniciar_ejecucion(
+            orden,
+            detalle_id=detalle_id,
+            usuario=usuario,
+            insumos=insumos,
+            insumos_previstos=insumos_previstos,
+            fecha=fecha,
+            reservas_externas=reservas_externas,
+            ejecucion_id=ejecucion_id,
+        )
+        return nueva_orden, True
+
+    nueva_orden = registrar_paso(
+        orden,
+        process_id="PROC-REP-185",
+        accion="RESERVAR_INSUMOS_E_INICIAR_EJECUCION",
+        fecha=fecha,
+        usuario_id=usuario.id,
+        reparacion_detail_id=detalle_id,
+        observacion=RESULTADO_RESERVA_FALLIDA,
+    )
+    nueva_orden = registrar_reserva_fallida(
+        nueva_orden, detalle_id=detalle_id, faltantes=faltantes, fecha=fecha
+    )
+    return nueva_orden, False
+
+
+def registrar_reserva_fallida(
+    orden: OrdenReparacion,
+    *,
+    detalle_id: str,
+    faltantes: Sequence[str],
+    fecha: datetime,
+) -> OrdenReparacion:
+    """PROC-REP-186: la reserva fallo, el Detalle queda bloqueado.
+
+    BR-REP-006. Nodo ACT-SYSTEM (sin usuario). Solo se alcanza desde un
+    PROC-REP-185 que ya registro "Reserva fallida" sobre ESE Detalle. El
+    Detalle conserva su estado tecnico (DEFINIDO, la representacion de
+    PENDIENTE) y pasa a BLOQUEADO_POR_RECURSOS. No genera movimientos, no
+    crea Ejecucion, no toca el stock ni otros Detalles.
+    """
+    ultimo = orden.historial[-1] if orden.historial else None
+    if (
+        orden.current_process != "PROC-REP-185"
+        or ultimo is None
+        or ultimo.observacion != RESULTADO_RESERVA_FALLIDA
+        or ultimo.reparacion_detail_id != detalle_id
+    ):
+        raise PrecondicionInvalidaError(
+            "PROC-REP-186 solo se alcanza tras una reserva fallida "
+            f"(PROC-REP-185) del Detalle {detalle_id}."
+        )
+    if not faltantes:
+        raise PrecondicionInvalidaError(
+            "Una reserva fallida debe indicar los insumos faltantes."
+        )
+    if (
+        buscar_detalle(orden, detalle_id).estado
+        is not EstadoReparacionDetail.DEFINIDO
+    ):
+        raise PrecondicionInvalidaError(
+            f"El Detalle {detalle_id} no puede bloquearse por recursos."
+        )
+
+    nueva_orden = registrar_paso(
+        orden,
+        process_id="PROC-REP-186",
+        accion="REGISTRAR_RESERVA_FALLIDA",
+        fecha=fecha,
+        reparacion_detail_id=detalle_id,
+        observacion=f"Faltantes: {', '.join(sorted(faltantes))}",
+    )
+    buscar_detalle(
+        nueva_orden, detalle_id
+    ).condicion = CondicionReparacionDetail.BLOQUEADO_POR_RECURSOS
     return nueva_orden
 
 

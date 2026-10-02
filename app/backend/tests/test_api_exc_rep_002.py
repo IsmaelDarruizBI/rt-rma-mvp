@@ -280,10 +280,8 @@ def test_interrumpir_con_override_sin_usar_nada_no_toca_el_stock(tmp_path):
         assert _stock(tmp_path, INSUMO) == Decimal("0")
 
 
-def test_sin_override_iniciar_con_stock_insuficiente_sigue_siendo_409(
-    tmp_path,
-):
-    """EXC-REP-003 (reserva fallida) sigue sin implementarse."""
+def test_sin_override_iniciar_con_stock_insuficiente_registra_186(tmp_path):
+    """Sin override rige EXC-REP-003: 200 con 185 fallida -> 186 -> 211."""
     with _cliente(tmp_path, stock="1") as cliente:
         primera = _crear_orden_cliente(cliente)
         _definir(cliente, primera)
@@ -294,8 +292,15 @@ def test_sin_override_iniciar_con_stock_insuficiente_sigue_siendo_409(
 
         assert _iniciar(cliente, primera).status_code == 200
         perdedora = _iniciar(cliente, segunda)
-        assert perdedora.status_code == 409
-        assert perdedora.json()["error"]["codigo"] == "RECURSO_NO_DISPONIBLE"
+        assert perdedora.status_code == 200, perdedora.text
+        orden = perdedora.json()
+        assert _ids(orden)[-4:] == [
+            "PROC-REP-185",
+            "PROC-REP-186",
+            "PROC-REP-211",
+            "PROC-REP-120",
+        ]
+        assert orden["ejecuciones"] == []
 
 
 # --- Origenes ---

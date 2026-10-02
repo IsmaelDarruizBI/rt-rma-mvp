@@ -30,7 +30,7 @@ from app.domain.models import (
 
 from .autorizacion import validar_actor
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
-from .inventario import buscar_insumo, insumos_previstos_de, stock_disponible
+from .inventario import faltantes_del_detalle
 from .recursos import tiene_override_factibilidad
 from .revisiones import revision_tecnica_realizada
 from .workflow import registrar_paso
@@ -242,29 +242,6 @@ def _detalle_origen_para(
     return posibles[0]
 
 
-def _faltantes_del_detalle(
-    detalle: ReparacionDetail,
-    orden: OrdenReparacion,
-    insumos: Sequence[Insumo],
-    insumos_previstos: Sequence[TipoReparacionInsumos],
-    ajenas: Mapping[str, Decimal],
-) -> list[str]:
-    """Insumos previstos de ESE Detalle que hoy no estan disponibles."""
-    faltantes: list[str] = []
-    for previsto in insumos_previstos_de(
-        detalle.tipo_reparacion_id, insumos_previstos
-    ):
-        insumo = buscar_insumo(previsto.insumo_id, insumos)
-        disponible = stock_disponible(
-            insumo,
-            orden.movimientos_insumo,
-            ajenas.get(insumo.id, Decimal("0")),
-        )
-        if disponible < previsto.cantidad:
-            faltantes.append(insumo.id)
-    return sorted(set(faltantes))
-
-
 # Condiciones del circuito de recursos: son las unicas que PROC-REP-080
 # reevalua. Otra causa de bloqueo (REQUIERE_DEFINICION, EXC-REP-004) no se
 # pisa.
@@ -321,8 +298,12 @@ def validar_factibilidad_detalles(
             # EXC-REP-002: el override autorizado persiste (BR-REP-003).
             detalle.condicion = CondicionReparacionDetail.SIN_BLOQUEO
             continue
-        faltantes = _faltantes_del_detalle(
-            detalle, nueva_orden, insumos, insumos_previstos, ajenas
+        faltantes = faltantes_del_detalle(
+            detalle.tipo_reparacion_id,
+            nueva_orden.movimientos_insumo,
+            insumos,
+            insumos_previstos,
+            ajenas,
         )
         if faltantes:
             detalle.condicion = (

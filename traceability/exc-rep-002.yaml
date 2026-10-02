@@ -16,8 +16,9 @@
 # Scenario: se declaran como consecuencia downstream (in_scenario: false).
 #
 # Reutiliza TASK-REP-045 de hp-rep-001.yaml (mismo id y name; aqui con el trabajo
-# hecho). EXC-REP-003 (reserva fallida / PROC-REP-186), EXC-REP-004 y EXC-REP-005
-# siguen NOT_IMPLEMENTED y no se trazan aqui.
+# hecho). La reserva fallida sin override (PROC-REP-186) es EXC-REP-003
+# (traceability/exc-rep-003.yaml); EXC-REP-004 y EXC-REP-005 siguen
+# NOT_IMPLEMENTED y no se trazan aqui.
 #
 # Continua la numeracion global: US-REP-031, ACC-REP-048, FR-REP-111,
 # TR-REP-111, TASK-REP-194, CODE-REP-194, TEST-REP-392, UAT-REP-032.
@@ -97,7 +98,7 @@ items:
   - {id: FR-REP-114, type: functional_requirement, name: "Solo el Detalle forzado pasa a SIN_BLOQUEO y los demas Detalles bloqueados permanecen BLOQUEADO_POR_RECURSOS", status: IMPLEMENTED}
   - {id: FR-REP-115, type: functional_requirement, name: "La Orden se habilita desde PROC-REP-130 con un override valido sin fabricar un PROC-REP-090 Si y habilitar desde 100 o 110 sigue rechazado", status: IMPLEMENTED}
   - {id: FR-REP-116, type: functional_requirement, name: "El override no reserva ni modifica el stock fisico: solo registra la autorizacion", status: IMPLEMENTED}
-  - {id: FR-REP-117, type: functional_requirement, name: "Con override del Detalle PROC-REP-185 reserva todas las previstas aunque no alcance y sin override sigue fallando con RecursoNoDisponibleError", status: IMPLEMENTED}
+  - {id: FR-REP-117, type: functional_requirement, name: "Con override del Detalle PROC-REP-185 reserva todas las previstas aunque no alcance y sin override no se omite la comprobacion (la reserva fallida la registra EXC-REP-003)", status: IMPLEMENTED}
   - {id: FR-REP-118, type: functional_requirement, name: "Con override del Detalle PROC-REP-210 puede dejar el stock fisico negativo la liberacion de reserva no descuenta y el override de un Detalle no habilita stock negativo para otro", status: IMPLEMENTED}
   - {id: FR-REP-119, type: functional_requirement, name: "El backend publica OVERRIDE_RECURSOS para COORDINADOR_RMA por Detalle bloqueado en PROC-REP-100 y la UI solo ejecuta lo publicado", status: IMPLEMENTED}
 
@@ -156,7 +157,7 @@ items:
   - {id: TEST-REP-419, type: internal_test, name: "test_multidetalle_override_de_uno_habilita_y_solo_ese_se_inicia", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_multidetalle_override_de_uno_habilita_y_solo_ese_se_inicia"}
   - {id: TEST-REP-420, type: internal_test, name: "test_con_override_se_reserva_y_se_consume_dejando_stock_negativo", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_con_override_se_reserva_y_se_consume_dejando_stock_negativo"}
   - {id: TEST-REP-421, type: internal_test, name: "test_interrumpir_con_override_sin_usar_nada_no_toca_el_stock", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_interrumpir_con_override_sin_usar_nada_no_toca_el_stock"}
-  - {id: TEST-REP-422, type: internal_test, name: "test_sin_override_iniciar_con_stock_insuficiente_sigue_siendo_409", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_sin_override_iniciar_con_stock_insuficiente_sigue_siendo_409"}
+  - {id: TEST-REP-422, type: internal_test, name: "test_sin_override_iniciar_con_stock_insuficiente_registra_186", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_sin_override_iniciar_con_stock_insuficiente_registra_186"}
   - {id: TEST-REP-423, type: internal_test, name: "test_rt_interno_override_sin_comprobante_ni_pagos", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_rt_interno_override_sin_comprobante_ni_pagos"}
   - {id: TEST-REP-424, type: internal_test, name: "test_garantia_rma_override_conserva_origen_y_no_toca_la_orden_origen", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_garantia_rma_override_conserva_origen_y_no_toca_la_orden_origen"}
 

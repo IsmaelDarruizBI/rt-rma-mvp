@@ -326,8 +326,12 @@ def habilitar_orden(
     SIN_BLOQUEO (EXC-REP-002; no se fabrica un 090 "Si"). Es del nodo 140,
     no del Scenario: protege HP-REP-001/002/003 y VAR-REP-001/002 contra
     una invocacion directa que saltee 080/090; 100 y 110 no habilitan.
-    Acepta REQUERIMIENTO, EN_REVISION y EN_REPARACION (esta ultima al
-    revalidar recursos tras PROC-REP-211 -> 120). PROC-REP-100 y la rama
+    Acepta REQUERIMIENTO, EN_REVISION, EN_REPARACION y EN_COLA (las dos
+    ultimas al revalidar recursos tras PROC-REP-211 -> 120: EN_COLA si la
+    reserva fallo en el primer intento tras tomar la Orden, EXC-REP-003,
+    y ninguna Ejecucion llego a empezar). Aceptar el hito no relaja el
+    gate: sin 090 "Si" ni 130 valido, 100/110/120 siguen sin habilitar y
+    una Orden EN_COLA arbitraria tampoco. PROC-REP-100 y la rama
     "No" de PROC-REP-110 / PROC-REP-120 (EXC-REP-001) estan implementados
     fuera de esta funcion, y tambien el override (PROC-REP-110 "Si" ->
     PROC-REP-130, EXC-REP-002).
@@ -343,11 +347,12 @@ def habilitar_orden(
         EstadoWorkflow.REQUERIMIENTO,
         EstadoWorkflow.EN_REVISION,
         EstadoWorkflow.EN_REPARACION,
+        EstadoWorkflow.EN_COLA,
     ):
         raise PrecondicionInvalidaError(
-            f"Solo se habilita una Orden en REQUERIMIENTO, EN_REVISION o "
-            f"EN_REPARACION (esta ultima al revalidar recursos desde "
-            f"PROC-REP-211 -> 120); "
+            f"Solo se habilita una Orden en REQUERIMIENTO, EN_REVISION, "
+            f"EN_REPARACION o EN_COLA (las dos ultimas al revalidar "
+            f"recursos desde PROC-REP-211 -> 120); "
             f"esta en {orden.estado_workflow.value}."
         )
     if override_listo_para_habilitar(orden):

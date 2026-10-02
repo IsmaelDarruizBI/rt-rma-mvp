@@ -3,7 +3,7 @@
 Tres comandos, uno por accion humana de ACT-TECH:
 
     tomar_orden_en_estacion   PROC-REP-172 -> 180
-    iniciar_detalle           PROC-REP-181 -> 174 -> 185
+    iniciar_detalle           PROC-REP-181 -> 174 -> 185 [-> 186 -> 211]
     completar_ejecucion       PROC-REP-190 -> 200 -> 210 -> 211
 
 ``iniciar_detalle`` y ``completar_ejecucion`` corren dentro de la
@@ -27,9 +27,9 @@ from app.services import (
     cargar_reservas_externas,
     ejecutar_detalle,
     evaluar_situacion_orden,
+    intentar_reserva_e_inicio,
     registrar_ejecucion_completada,
     registrar_ejecucion_interrumpida,
-    reservar_insumos_e_iniciar_ejecucion,
     seleccionar_detalle,
     tomar_orden,
     validar_compatibilidad_detalle,
@@ -119,6 +119,16 @@ def iniciar_detalle(
 
     La disponibilidad se vuelve a calcular aqui aunque PROC-REP-080 ya
     la haya consultado: entre una cosa y la otra pudieron pasar dias.
+
+    Si la reserva falla (EXC-REP-003: faltan insumos y el Detalle no tiene
+    override) NO es un error: es un resultado funcional que se persiste.
+    Quedan 185 "Reserva fallida" -> 186 -> 211 [-> 120] con el Detalle
+    BLOQUEADO_POR_RECURSOS, sin Ejecucion, reservas ni cambios de stock, y
+    la Orden se guarda UNA sola vez. Con otro Detalle trabajable la toma
+    sigue activa; sin ninguno, 211 la cierra y la Orden va a 120. Las
+    precondiciones reales (rol, Detalle no trabajable, sin toma,
+    Ejecucion activa, estacion incompatible) siguen siendo conflicto y no
+    persisten nada.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
@@ -144,7 +154,7 @@ def iniciar_detalle(
                 "implementa el override de incompatibilidad."
             )
 
-        orden = reservar_insumos_e_iniciar_ejecucion(
+        orden, reserva_exitosa = intentar_reserva_e_inicio(
             orden,
             detalle_id=detalle_id,
             usuario=usuario,
@@ -157,6 +167,11 @@ def iniciar_detalle(
                 orden.id, contexto.ordenes
             ),
         )
+        if not reserva_exitosa:
+            # PROC-REP-186 -> 211: mismo snapshot de inventario que hizo
+            # fallar la reserva. 211 -> 120 (sin 100/110) si no queda
+            # ningun Detalle trabajable.
+            orden, _ = evaluar_situacion_orden(orden, fecha=fecha)
 
         contexto.ordenes.guardar(orden)
 

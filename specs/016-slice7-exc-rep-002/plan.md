@@ -34,7 +34,8 @@ Detalle forzado.
 - **No hay `if scenario == …`**: el comportamiento sale del Detalle, el
   historial, el rol, `current_process` y el stock.
 - La comprobación de reserva sin override se conserva intacta
-  (`RecursoNoDisponibleError`); PROC-REP-186 sigue sin implementarse.
+  (`RecursoNoDisponibleError`); desde el Slice 8 la reserva fallida sin override
+  se registra como EXC-REP-003 (PROC-REP-186, `specs/017-slice8-exc-rep-003`).
 
 ## Verificación
 

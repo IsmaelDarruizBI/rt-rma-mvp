@@ -564,8 +564,8 @@ def test_en_reparacion_con_090_ninguno_o_fuera_de_090_no_habilita():
 
 
 def test_otros_estados_siguen_sin_poder_habilitarse():
+    # EN_COLA se acepta desde EXC-REP-003 (ver test_exc_rep_003.py).
     for estado in (
-        EstadoWorkflow.EN_COLA,
         EstadoWorkflow.REPARACION_LISTA,
         EstadoWorkflow.ENTREGADA,
     ):

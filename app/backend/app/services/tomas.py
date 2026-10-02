@@ -146,9 +146,7 @@ def validar_estacion_trabajo(
         )
         for detalle in trabajables
     ):
-        motivo = (
-            f"Ningun Detalle trabajable es compatible con {estacion_id}"
-        )
+        motivo = f"Ningun Detalle trabajable es compatible con {estacion_id}"
         return _registrar_validacion_estacion(orden, fecha, usuario, motivo)
 
     return _registrar_validacion_estacion(orden, fecha, usuario, None)
@@ -247,12 +245,13 @@ def _registrar_decision_iniciar_detalle(
 
 # current_process desde los que PROC-REP-181 realmente viene de la
 # decision PROC-REP-212 ("¿Iniciar un Detalle de reparacion?"): recien
-# tomada (PROC-REP-180) o tras completar otro Detalle con la Orden
-# todavia trabajable (PROC-REP-211 = ABIERTA_TRABAJABLE). Caminos
-# futuros que puedan reentrar a PROC-REP-181 sin pasar por esa decision
-# -incompatibilidad de estacion (PROC-REP-176/178/179) o reserva
-# fallida (PROC-REP-186), ninguno implementado en este slice- no deben
-# inventar una segunda 212 que el tecnico no volvio a decidir.
+# tomada (PROC-REP-180) o con otro Detalle todavia trabajable tras
+# PROC-REP-211 = ABIERTA_TRABAJABLE, sea porque se completo/interrumpio un
+# Detalle (210) o porque una reserva fallo (186 -> 211, EXC-REP-003). En
+# ambos casos el grafo pasa por 211 -> 212 -> 181, y ``current_process`` es
+# 211. Un camino que reentre a PROC-REP-181 sin pasar por esa decision
+# -incompatibilidad de estacion (PROC-REP-176/178/179), no implementado-
+# no debe inventar una segunda 212 que el tecnico no volvio a decidir.
 _ORIGENES_DE_LA_DECISION_212 = ("PROC-REP-180", "PROC-REP-211")
 
 

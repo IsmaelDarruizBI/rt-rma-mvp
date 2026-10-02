@@ -28,8 +28,10 @@ from .documentos import (
 from .ejecuciones import (
     ejecucion_activa,
     ejecutar_detalle,
+    intentar_reserva_e_inicio,
     registrar_ejecucion_completada,
     registrar_ejecucion_interrumpida,
+    registrar_reserva_fallida,
     reservar_insumos_e_iniciar_ejecucion,
 )
 from .exceptions import (
@@ -41,6 +43,7 @@ from .exceptions import (
 from .identificadores import nuevo_id
 from .inventario import (
     cantidad_pendiente,
+    faltantes_del_detalle,
     generar_movimientos_inventario,
     hay_reservas_activas,
     insumos_previstos_de,
@@ -168,9 +171,12 @@ __all__ = [
     "ejecutar_detalle",
     "registrar_ejecucion_completada",
     "registrar_ejecucion_interrumpida",
+    "registrar_reserva_fallida",
+    "intentar_reserva_e_inicio",
     "reservar_insumos_e_iniciar_ejecucion",
     # Inventario
     "cantidad_pendiente",
+    "faltantes_del_detalle",
     "generar_movimientos_inventario",
     "hay_reservas_activas",
     "insumos_previstos_de",

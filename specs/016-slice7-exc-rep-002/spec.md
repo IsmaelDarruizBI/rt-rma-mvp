@@ -85,7 +85,7 @@ El override **solo autoriza**; no toca el stock:
 | Nodo | Efecto |
 |---|---|
 | `130` | registra la autorización. Sin reserva, sin cambio de stock |
-| `185` | con override *del Detalle*: reserva **todas** las previstas aunque no alcance (todo o nada); sin override: `RecursoNoDisponibleError` como antes (EXC-REP-003 / PROC-REP-186 **no** se implementa) |
+| `185` | con override *del Detalle*: reserva **todas** las previstas aunque no alcance (todo o nada); sin override: la reserva fallida se registra como EXC-REP-003 (185 "Reserva fallida" → 186 → 211, ver `specs/017-slice8-exc-rep-003`); `RecursoNoDisponibleError` queda como guard defensivo de bajo nivel |
 | `210` | `CONSUMO` baja `stock_fisico`, que puede quedar negativo **solo** si el consumo viene de un Detalle con override; `LIBERACION_RESERVA` no lo toca; sin override sigue rechazado |
 
 Ejemplo: `stock_fisico = 0`, requerido 1, override → 185: `RESERVA 1`
