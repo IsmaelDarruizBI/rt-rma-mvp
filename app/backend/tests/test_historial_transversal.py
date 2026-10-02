@@ -388,7 +388,8 @@ def test_el_historial_enlaza_con_el_pago_que_lo_origino(cliente):  # noqa: F811
 
 
 def test_el_stock_demo_alcanza_para_varias_pruebas():
-    """El catalogo versionado subio de 2 a 6 unidades."""
+    """El catalogo versionado usa stock 2 para permitir demostrar
+    EXC-REP-001/002/003 de forma practica en el MVP v2 Demo."""
     from pathlib import Path
 
     from app.storage import JsonCatalogosRepository
@@ -396,7 +397,7 @@ def test_el_stock_demo_alcanza_para_varias_pruebas():
     directorio = Path(__file__).parent.parent / "data" / "catalogs"
     repo = JsonCatalogosRepository(directorio)
 
-    assert repo.obtener_insumo("INS-001").stock_fisico == Decimal("6")
+    assert repo.obtener_insumo("INS-001").stock_fisico == Decimal("2")
 
 
 def test_el_cliente_sigue_siendo_un_testclient(cliente):  # noqa: F811

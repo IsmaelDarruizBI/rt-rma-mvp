@@ -6,5 +6,13 @@
     "puntaje": 10,
     "garantia_dias": 90,
     "activo": true
+  },
+  {
+    "id": "TR-002",
+    "nombre": "Cambio de placa iPhone 14",
+    "precio": "120000",
+    "puntaje": 20,
+    "garantia_dias": 90,
+    "activo": true
   }
 ]

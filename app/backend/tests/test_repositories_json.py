@@ -341,7 +341,7 @@ def test_los_catalogos_demo_del_repositorio_son_validos():
     repo = JsonCatalogosRepository(directorio)
 
     assert repo.obtener_tipo_reparacion("TR-001").precio == Decimal("80000")
-    assert repo.obtener_insumo("INS-001").stock_fisico == Decimal("6")
+    assert repo.obtener_insumo("INS-001").stock_fisico == Decimal("2")
     assert {u.id for u in repo.listar_usuarios()} == {
         "RECEP-001",
         "COORD-001",

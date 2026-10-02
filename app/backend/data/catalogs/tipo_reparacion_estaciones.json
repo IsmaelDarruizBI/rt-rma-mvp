@@ -2,5 +2,9 @@
   {
     "tipo_reparacion_id": "TR-001",
     "estacion_id": "EST-001"
+  },
+  {
+    "tipo_reparacion_id": "TR-002",
+    "estacion_id": "EST-001"
   }
 ]
