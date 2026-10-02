@@ -208,6 +208,36 @@ def _con_recursos_del_taller(
     return tuple(resultado)
 
 
+_TRAMO_REVISION_POSTERIOR: tuple[tuple[str, str], ...] = (
+    ("PROC-REP-125", "Detalle(s) pendientes de revision tecnica"),
+    ("PROC-REP-126", "Realizar revision tecnica de Detalle pendiente"),
+    ("PROC-REP-127", "Definir/actualizar reparacion del Detalle"),
+)
+
+
+def _con_revision_posterior(
+    ruta: tuple[tuple[str, str], ...],
+) -> tuple[tuple[str, str], ...]:
+    """Intercala 125 -> 126 -> 127 tras 211 (EXC-REP-004).
+
+    Va despues de 120 si la espera de recursos tambien nacio en 211. Se
+    muestra UNA vez aunque haya varios ciclos de redefinicion: el
+    historial conserva cada uno.
+    """
+    resultado: list[tuple[str, str]] = []
+    pendiente = False
+    for nodo in ruta:
+        if pendiente and nodo != _NODO_ESPERA:
+            resultado.extend(_TRAMO_REVISION_POSTERIOR)
+            pendiente = False
+        resultado.append(nodo)
+        if nodo[0] == "PROC-REP-211":
+            pendiente = True
+    if pendiente:
+        resultado.extend(_TRAMO_REVISION_POSTERIOR)
+    return tuple(resultado)
+
+
 def _con_revision(
     ruta: tuple[tuple[str, str], ...],
 ) -> tuple[tuple[str, str], ...]:
@@ -266,6 +296,8 @@ def _ruta_esperada(orden: OrdenReparacion) -> tuple[tuple[str, str], ...]:
             con_reserva_fallida=con_reserva_fallida,
             con_espera_desde_211=con_espera_desde_211,
         )
+    if "PROC-REP-125" in alcanzados:
+        ruta = _con_revision_posterior(ruta)
     return ruta
 
 

@@ -34,6 +34,7 @@ from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .inventario import hay_reservas_activas
 from .pagos import condicion_entrega_cumplida
 from .recursos import marcar_pendiente_recursos, override_listo_para_habilitar
+from .redefinicion import marcar_pendiente_revision
 from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
 from .workflow import registrar_paso
 
@@ -51,14 +52,15 @@ ROLES_ENTREGA = (
 
 # Resultados de BR-REP-012 que cierran la toma activa (BR-REP-018): no queda
 # ningun Detalle trabajable ni en ejecucion. COMPLETA y TODO_CANCELADO; y
-# PENDIENTE_RECURSOS (PROC-REP-211 caso e), donde ademas la Orden pasa a
-# esperar en PROC-REP-120. Los demas (ABIERTA_TRABAJABLE, EN_EJECUCION)
-# preservan la toma: si continuar o liberar lo resuelve PROC-REP-212/213.
-# REQUIERE_REVISION cerrara la toma cuando se conecte PROC-REP-125.
+# PENDIENTE_RECURSOS (PROC-REP-211 caso e) y REQUIERE_REVISION (caso f),
+# donde ademas la Orden pasa a esperar en PROC-REP-120 / PROC-REP-125. Los
+# demas (ABIERTA_TRABAJABLE, EN_EJECUCION) preservan la toma: si continuar
+# o liberar lo resuelve PROC-REP-212/213.
 _RESULTADOS_QUE_CIERRAN_LA_TOMA = (
     ResultadoEvaluacionOrden.COMPLETA,
     ResultadoEvaluacionOrden.TODO_CANCELADO,
     ResultadoEvaluacionOrden.PENDIENTE_RECURSOS,
+    ResultadoEvaluacionOrden.REQUIERE_REVISION,
 )
 
 
@@ -473,9 +475,9 @@ def evaluar_situacion_orden(
 
     Todos los resultados estan clasificados y testeados (ver
     ``tests/test_resolucion_orden.py``). Con PENDIENTE_RECURSOS (EXC-REP-001)
-    cierra la toma y continua directo a PROC-REP-120 (sin 100 ni 110). Los
-    caminos de revision (REQUIERE_REVISION) y cancelacion todavia no estan
-    conectados.
+    cierra la toma y continua directo a PROC-REP-120 (sin 100 ni 110); con
+    REQUIERE_REVISION (EXC-REP-004) cierra la toma y continua a
+    PROC-REP-125. La cancelacion todavia no esta conectada.
 
     No cambia ``estado_workflow``: REPARACION_LISTA se fija recien en
     PROC-REP-240, tras el control tecnico, y la espera de recursos conserva
@@ -500,6 +502,9 @@ def evaluar_situacion_orden(
     if resultado is ResultadoEvaluacionOrden.PENDIENTE_RECURSOS:
         # PROC-REP-211 -> PROC-REP-120 directo (sin 100 ni 110).
         nueva_orden = marcar_pendiente_recursos(nueva_orden, fecha=fecha)
+    elif resultado is ResultadoEvaluacionOrden.REQUIERE_REVISION:
+        # PROC-REP-211 -> PROC-REP-125 (EXC-REP-004).
+        nueva_orden = marcar_pendiente_revision(nueva_orden, fecha=fecha)
 
     return nueva_orden, resultado
 

@@ -1409,14 +1409,25 @@ scenarios:
 
     description: >
       Distinto de EN_REVISION inicial (VAR-REP-001/VAR-REP-002): aqui el
-      Detalle YA EXISTE y, durante el ciclo de reparacion, el resolver de
-      estado de la Orden (PROC-REP-211) determina que requiere una nueva
-      revision tecnica (REQUIERE_REVISION, BR-REP-012). El tecnico revisa
-      especificamente ese Detalle (PROC-REP-126) sin crear uno nuevo, se
-      actualiza su Tipo de Reparacion y precio snapshot (PROC-REP-127), y
-      se revalida su factibilidad (PROC-REP-080) - no se reutiliza el
-      circuito inicial de revision de la Orden completa (PROC-REP-050 a
-      069). Origen: analisis estructural CAND-REP-032, confirmado como
+      Detalle YA EXISTE. Precondicion/productor (anterior al trigger):
+      durante una Ejecucion, PROC-REP-200 puede registrar "Requiere
+      redefinicion" (la definicion actual del Detalle dejo de ser valida o
+      suficiente): la Ejecucion se cierra como no completada (conserva
+      tecnico, estacion, inicio/fin, trabajo, observaciones e insumos), el
+      Detalle queda PENDIENTE + REQUIERE_DEFINICION con motivo
+      obligatorio, y PROC-REP-210 reconcilia el inventario (consumo de lo
+      usado, liberacion de lo reservado no usado). Luego PROC-REP-211
+      deriva ABIERTA_TRABAJABLE si otro Detalle sigue trabajable, y
+      REQUIERE_REVISION (trigger de este Scenario) cuando ya no queda
+      ninguno. Desde ahi: el tecnico revisa especificamente ese Detalle
+      (PROC-REP-126, sin nueva toma) sin crear uno nuevo; Recepcion lo
+      redefine (PROC-REP-127: nueva definicion vigente, la anterior se
+      conserva historicamente, se conserva detalle_id, Ejecuciones y
+      vinculo de garantia, y se invalida cualquier override 130
+      anterior); y se revalida su factibilidad desde cero (PROC-REP-080).
+      No se reutiliza el circuito inicial de revision de la Orden completa
+      (PROC-REP-050 a 069). No es lo mismo que "Interrumpido" (la
+      definicion sigue valida). Origen: analisis estructural CAND-REP-032, confirmado como
       Scenario real en
       generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
 
@@ -1437,8 +1448,19 @@ scenarios:
     rules:
       - BR-REP-012
       - BR-REP-001
+      - BR-REP-004
+      - BR-REP-015
 
     facts:
+      - key: execution_result
+        label: Resultado de la Ejecucion que produce la condicion (PROC-REP-200)
+        value: Requiere redefinicion
+      - key: execution_closed
+        label: Ejecucion cerrada como no completada
+        value: true
+      - key: detail_requires_definition
+        label: Detalle PENDIENTE + REQUIERE_DEFINICION
+        value: true
       - key: detail_requires_further_technical_review
         label: Detalle requiere nueva revision tecnica
         value: true
@@ -1465,6 +1487,12 @@ scenarios:
     expected:
       - key: same_detail_preserved
         label: Se actualiza el mismo Detalle (no se crea uno nuevo)
+        value: true
+      - key: previous_definition_preserved
+        label: Definicion anterior (Tipo y snapshots) conservada historicamente
+        value: true
+      - key: previous_override_invalidated
+        label: Override 130 anterior invalidado por la redefinicion
         value: true
       - key: requires_definicion_cleared
         label: Condicion REQUIERE_DEFINICION removida tras la revision

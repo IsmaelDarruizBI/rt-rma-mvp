@@ -60,9 +60,10 @@ def definir_reparacion_detail(
     El Detalle nace DEFINIDO con control PENDIENTE. La decision
     PROC-REP-045 se registra una sola vez, al definir el primer Detalle.
 
-    El MVP cubre unicamente el camino "los Detalles se conocen desde el
-    ingreso": PROC-REP-055/065/075 (revision tecnica previa) y
-    PROC-REP-126/127 no estan implementados.
+    Cubre el camino "los Detalles se conocen desde el ingreso". La
+    revision tecnica previa (PROC-REP-075) es
+    ``definir_reparacion_detail_luego_revision``; la redefinicion de un
+    Detalle existente (PROC-REP-127) vive en ``services.redefinicion``.
     """
     validar_actor(usuario, RolUsuario.RECEPCION)
 

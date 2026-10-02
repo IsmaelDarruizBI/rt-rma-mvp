@@ -476,7 +476,14 @@ nodes:
       PROC-REP-127) antes de que tenga sentido validar su factibilidad. La
       espera representa un evento posterior -que se realice la revision
       tecnica pendiente de ese Detalle-, nunca un loop inmediato
-      automatico.
+      automatico. REQUIERE_DEFINICION lo asigna PROC-REP-200 (resultado
+      Requiere redefinicion), no este nodo: PROC-REP-125 solo representa
+      la espera. No cambia el workflow, no modifica el Detalle y no
+      realiza la revision automaticamente. Se alcanza unicamente desde
+      PROC-REP-211 con resultado REQUIERE_REVISION, es decir cuando ningun
+      Detalle es trabajable y existe al menos uno PENDIENTE con
+      REQUIERE_DEFINICION (si otro Detalle sigue trabajable el resolver
+      devuelve ABIERTA_TRABAJABLE y no se llega aqui todavia).
     rules:
       - BR-REP-012
 
@@ -493,7 +500,11 @@ nodes:
       no se crea un Detalle nuevo. No regenera el comprobante de
       recepcion ni reevalua el origen de la Orden -eso pertenece
       unicamente al circuito inicial (PROC-REP-050 a 069), que no se
-      reutiliza aqui-.
+      reutiliza aqui-. Debe registrar usuario, fecha, Detalle y
+      resultado/observaciones tecnicas. Todavia NO modifica Tipo de
+      Reparacion, precio, puntaje ni garantia del Detalle (eso es
+      PROC-REP-127). No crea una nueva toma de Orden: esta revision puntual
+      no pasa por PROC-REP-170 -> 172 -> 180.
     outputs:
       - Resultado de revision tecnica del Detalle
 
@@ -510,13 +521,24 @@ nodes:
       Detalle cuando corresponda -pasa a SIN_BLOQUEO, salvo que ademas
       resulte BLOQUEADO_POR_RECURSOS, lo que recien se determina en
       PROC-REP-080-. El Detalle conserva su identidad e historial
-      completo (incluida la revision de PROC-REP-126).
+      completo (incluida la revision de PROC-REP-126), sus Ejecuciones
+      anteriores y, en una garantia RMA, su vinculo al Detalle origen y a
+      la Orden origen (BR-REP-019): no se modifican. PROC-REP-127 genera
+      una NUEVA definicion vigente (Tipo de Reparacion y snapshots de
+      precio, puntaje y garantia segun la confirmacion actual) y conserva
+      historicamente la definicion anterior (BR-REP-015). Aunque
+      Recepcion confirme el mismo Tipo de Reparacion, igual es una nueva
+      redefinicion: invalida cualquier override de factibilidad previo
+      (PROC-REP-130, BR-REP-003) y obliga a reevaluar los recursos desde
+      cero en PROC-REP-080.
     inputs:
       - Resultado de revision tecnica del Detalle
     outputs:
       - Detalle actualizado con Tipo de Reparacion y precio snapshot
+      - Definicion anterior conservada historicamente
     rules:
       - BR-REP-001
+      - BR-REP-015
 
   - id: PROC-REP-130
     type: activity
@@ -749,19 +771,30 @@ nodes:
     description: >
       El tecnico confirma o modifica los trabajos efectivamente
       realizados, repuestos utilizados, cantidades y observaciones de
-      esta Ejecucion. La Ejecucion puede finalizar de dos formas: (a)
+      esta Ejecucion. La Ejecucion puede finalizar de tres formas: (a)
       Completado: el Detalle pasa a COMPLETO; (b) Interrumpido: el
       tecnico se retira sin terminar, la Ejecucion queda registrada como
       historia (tecnico, estacion, inicio/fin, trabajo realizado,
       observaciones, insumos ya ocurridos) y el Detalle vuelve a
-      PENDIENTE, disponible para que el mismo u otro tecnico lo continue
-      mas adelante con una nueva Ejecucion. Nunca se sobrescribe una
-      Ejecucion anterior.
+      PENDIENTE sin bloqueo -su definicion sigue siendo valida-,
+      disponible para que el mismo u otro tecnico lo continue mas
+      adelante con una nueva Ejecucion; (c) Requiere redefinicion: el
+      tecnico descubre durante la Ejecucion que la definicion actual del
+      Detalle ya no es valida o suficiente. NO completa el Detalle: cierra
+      la Ejecucion como no completada (tecnicamente interrumpida), exige
+      un motivo obligatorio, y deja el Detalle PENDIENTE con condicion
+      REQUIERE_DEFINICION (este resultado es quien ASIGNA esa condicion;
+      no existe un nodo aparte que la produzca). Los tres resultados
+      continuan a PROC-REP-210. La diferencia funcional entre (b) y (c):
+      Interrumpido deja la definicion vigente; Requiere redefinicion la
+      invalida y obliga a pasar por la revision posterior (PROC-REP-125 a
+      127). Nunca se sobrescribe una Ejecucion anterior.
     outputs:
       - Trabajo realizado
       - Repuestos y cantidades reales
       - Observaciones
-      - Resultado de la Ejecucion (Completado / Interrumpido)
+      - Resultado de la Ejecucion (Completado / Interrumpido / Requiere redefinicion)
+      - Motivo de redefinicion (obligatorio cuando el resultado es Requiere redefinicion)
     rules:
       - BR-REP-004
 
@@ -770,13 +803,18 @@ nodes:
     name: Generar movimientos de inventario
     actor: ACT-SYSTEM
     description: >
-      A partir de la Ejecucion registrada (haya finalizado Completada o
-      Interrumpida), los insumos reservados de ESE Detalle se consumen
+      A partir de la Ejecucion registrada (haya finalizado Completada,
+      Interrumpida o con resultado Requiere redefinicion; ojo: el
+      resultado funcional de PROC-REP-200 no es lo mismo que el estado de
+      la Ejecucion, y Requiere redefinicion corresponde a una Ejecucion que
+      termina tecnicamente interrumpida), los insumos reservados de ESE Detalle se consumen
       segun lo efectivamente utilizado y se liberan las reservas no
       utilizadas; se registran desperdicios cuando corresponda. Todo
       movimiento (RESERVADO -> CONSUMIDO / LIBERADO / DESPERDICIO) queda
       trazado hasta el Detalle que lo origino, y transitivamente hasta la
-      Orden (Orden -> Detalle -> Insumo -> Movimiento).
+      Orden (Orden -> Detalle -> Insumo -> Movimiento). Tras este nodo no
+      queda ninguna reserva activa asociada a la Ejecucion cerrada, sea
+      cual sea su resultado.
     rules:
       - BR-REP-005
 
@@ -1331,6 +1369,10 @@ edges:
     to: PROC-REP-210
     condition: Interrumpido
 
+  - from: PROC-REP-200
+    to: PROC-REP-210
+    condition: Requiere redefinicion
+
   - from: PROC-REP-210
     to: PROC-REP-211
 
@@ -1374,7 +1416,7 @@ edges:
 
   - from: PROC-REP-230
     to: PROC-REP-235
-    condition: No
+    condition: "No"
 
   - from: PROC-REP-230
     to: PROC-REP-245

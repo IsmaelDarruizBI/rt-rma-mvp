@@ -46,15 +46,31 @@ rules:
       registra la autorizacion (PROC-REP-130): no reserva ni descuenta
       stock; la reserva y el consumo ocurren en sus nodos habituales. El
       override de un Detalle nunca habilita stock negativo para otro.
+      Vigencia: un override de factibilidad es valido solamente mientras
+      siga vigente la definicion tecnica sobre la que fue autorizado. Es
+      valido el override cuyo PROC-REP-130 ocurrio DESPUES del ultimo
+      PROC-REP-127 del mismo Detalle; cualquier PROC-REP-127 invalida los
+      overrides anteriores, incluso si Recepcion vuelve a elegir el mismo
+      Tipo de Reparacion (es una nueva confirmacion de la definicion y una
+      nueva factibilidad en PROC-REP-080: si hace falta forzar de nuevo,
+      debe existir una nueva autorizacion consciente).
     status: draft
 
   - id: BR-REP-004
     name: Registro de ejecucion real
     description: >
+      Una Ejecucion finaliza con uno de tres resultados (PROC-REP-200),
+      todos conservados historicamente sin sobrescribirse: Completado
+      (Ejecucion COMPLETADA, Detalle COMPLETO); Interrumpido (Ejecucion
+      INTERRUMPIDA, Detalle vuelve a PENDIENTE y su definicion vigente
+      sigue siendo valida); Requiere redefinicion (Ejecucion INTERRUMPIDA,
+      Detalle PENDIENTE + REQUIERE_DEFINICION, motivo obligatorio: la
+      definicion actual dejo de ser valida o suficiente). Los tres
+      continuan a PROC-REP-210. Detalle del registro:
       El tecnico debe registrar, por cada Ejecucion de un Detalle, lo
       efectivamente realizado, los repuestos realmente utilizados, y si
-      la Ejecucion se completo o se interrumpio. Una Ejecucion
-      interrumpida no completa el Detalle -que vuelve a PENDIENTE-, pero
+      su resultado. Una Ejecucion interrumpida (con o sin redefinicion) no
+      completa el Detalle -que vuelve a PENDIENTE-, pero
       queda conservada integramente en el historial: nunca se sobrescribe
       una Ejecucion anterior.
     status: draft
@@ -206,6 +222,13 @@ rules:
       EN_COLA: cada uno tiene su propio circuito de espera/revalidacion
       (PROC-REP-120 y PROC-REP-125 respectivamente, ver PROC-REP-211), y
       no se mezclan entre si ni con el estado de workflow EN_REVISION.
+      REQUIERE_REVISION se alcanza cuando ningun Detalle es trabajable y
+      existe al menos un Detalle pendiente con REQUIERE_DEFINICION (asignada
+      por PROC-REP-200, resultado Requiere redefinicion); si otro Detalle
+      sigue trabajable, el resultado es ABIERTA_TRABAJABLE. No es un
+      estado de workflow: normalmente estado_workflow sigue en
+      EN_REPARACION mientras la situacion tecnica derivada es
+      REQUIERE_REVISION.
       PENDIENTE_RECURSOS revalida directamente via PROC-REP-080 (el
       bloqueo es de disponibilidad de insumos); REQUIERE_REVISION no
       puede resolverse con PROC-REP-080 solo, porque la condicion
@@ -293,7 +316,21 @@ rules:
       Cada Detalle registra, al confirmarse, el precio vigente de su Tipo
       de Reparacion como snapshot historico inmutable: cambios
       posteriores en el precio del Tipo de Reparacion no afectan
-      Detalles ya confirmados. El Subtotal de la Orden es la suma de los
+      Detalles ya confirmados. "Inmutable" significa que un snapshot
+      confirmado no cambia por cambios posteriores del catalogo; NO que el
+      Detalle no pueda redefinirse. Si PROC-REP-127 redefine el Detalle, se
+      genera una nueva definicion/snapshot vigente (Tipo de Reparacion,
+      precio, puntaje y garantia segun la confirmacion actual) y la
+      definicion anterior se conserva historicamente, sin sobrescribirse:
+      como minimo Tipo de Reparacion, precio, puntaje y garantia
+      anteriores, fecha de reemplazo y usuario responsable. Conceptualmente
+      el Detalle tiene una definicion vigente y 0..N definiciones
+      historicas, de modo que se pueda reconstruir la definicion previa a
+      cada PROC-REP-127. Aplica tambien si se confirma el mismo Tipo de
+      Reparacion (es igualmente una nueva confirmacion). El Subtotal
+      usa el snapshot vigente. PROC-REP-127 no modifica el vinculo de
+      garantia (BR-REP-019). El efecto de un cambio de precio sobre pagos y
+      saldo queda pendiente (ver docs/discovery/README.md). El Subtotal de la Orden es la suma de los
       precios snapshot de los Detalles NO CANCELADOS; un Detalle
       CANCELADO conserva su Tipo, precio historico y trazabilidad, pero
       no participa del Subtotal. No existe costo configurable del Tipo de

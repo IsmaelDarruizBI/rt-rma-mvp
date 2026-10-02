@@ -47,6 +47,7 @@ from .tomas import buscar_detalle, hay_ejecucion_activa, toma_activa
 from .workflow import registrar_paso
 
 RESULTADO_RESERVA_FALLIDA = "Reserva fallida"
+RESULTADO_REQUIERE_REDEFINICION = "Requiere redefinicion"
 
 
 def ejecucion_activa(orden: OrdenReparacion) -> EjecucionReparacion | None:
@@ -456,6 +457,47 @@ def registrar_ejecucion_interrumpida(
     )
 
 
+def registrar_ejecucion_requiere_redefinicion(
+    orden: OrdenReparacion,
+    *,
+    ejecucion_id: str,
+    insumos_utilizados: Sequence[InsumoUtilizado],
+    usuario: Usuario,
+    fecha: datetime,
+    motivo: str,
+    observaciones: str | None = None,
+) -> OrdenReparacion:
+    """PROC-REP-200 con resultado "Requiere redefinicion" (EXC-REP-004).
+
+    BR-REP-004: el tecnico descubre que la definicion vigente del Detalle
+    ya no es valida o suficiente. Como en "Interrumpido", la Ejecucion
+    pasa a INTERRUMPIDO (no hay un estado de Ejecucion nuevo) y el
+    Detalle vuelve a DEFINIDO; la diferencia es la condicion:
+    REQUIERE_DEFINICION en vez de SIN_BLOQUEO. Este resultado es el unico
+    que ASIGNA esa condicion. El motivo es obligatorio y queda en la
+    Ejecucion.
+
+    Igual que los otros dos resultados, continua a PROC-REP-210 y 211.
+    """
+    if not motivo.strip():
+        raise PrecondicionInvalidaError(
+            "Requiere redefinicion exige un motivo (BR-REP-004)."
+        )
+    return _registrar_fin_ejecucion(
+        orden,
+        ejecucion_id=ejecucion_id,
+        insumos_utilizados=insumos_utilizados,
+        usuario=usuario,
+        fecha=fecha,
+        observaciones=observaciones,
+        resultado=EstadoEjecucion.INTERRUMPIDO,
+        estado_del_detalle=EstadoReparacionDetail.DEFINIDO,
+        observacion_200=RESULTADO_REQUIERE_REDEFINICION,
+        condicion_del_detalle=CondicionReparacionDetail.REQUIERE_DEFINICION,
+        motivo_redefinicion=motivo.strip(),
+    )
+
+
 def _registrar_fin_ejecucion(
     orden: OrdenReparacion,
     *,
@@ -467,8 +509,14 @@ def _registrar_fin_ejecucion(
     resultado: EstadoEjecucion,
     estado_del_detalle: EstadoReparacionDetail,
     observacion_200: str,
+    condicion_del_detalle: CondicionReparacionDetail | None = None,
+    motivo_redefinicion: str | None = None,
 ) -> OrdenReparacion:
-    """Cierre de una Ejecucion en PROC-REP-200, comun a sus dos resultados."""
+    """Cierre de una Ejecucion en PROC-REP-200, comun a sus tres resultados.
+
+    ``condicion_del_detalle`` en ``None`` deja la condicion como estaba
+    (Completado e Interrumpido); "Requiere redefinicion" la fija.
+    """
     validar_actor(usuario, RolUsuario.TECNICO)
 
     ejecucion = next(
@@ -508,7 +556,11 @@ def _registrar_fin_ejecucion(
         utilizado.model_copy(deep=True) for utilizado in insumos_utilizados
     ]
     nueva_ejecucion.observaciones = observaciones
+    nueva_ejecucion.motivo_redefinicion = motivo_redefinicion
 
-    buscar_detalle(nueva_orden, detalle_id).estado = estado_del_detalle
+    detalle = buscar_detalle(nueva_orden, detalle_id)
+    detalle.estado = estado_del_detalle
+    if condicion_del_detalle is not None:
+        detalle.condicion = condicion_del_detalle
 
     return nueva_orden

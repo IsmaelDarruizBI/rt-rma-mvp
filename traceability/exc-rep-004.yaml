@@ -1,0 +1,369 @@
+# Trazabilidad end-to-end del slice implementado - Scenario EXC-REP-004
+# (Detalle requiere revision tecnica posterior, REQUIERE_REVISION).
+#
+# Unidad de implementacion INDEPENDIENTE (archivo propio, ver
+# traceability/README.md): trigger propio (PROC-REP-211 -> 125), Feature
+# FEAT-REP-002 (resuelve REQUIERE_DEFINICION) con dependencia de FEAT-REP-005
+# (la produce al cerrar una Ejecucion).
+#
+# Productor (antes del trigger): PROC-REP-200 "Requiere redefinicion" ->
+# Ejecucion INTERRUMPIDO, Detalle DEFINIDO (PENDIENTE) + REQUIERE_DEFINICION,
+# motivo obligatorio -> 210 (consumo + liberacion) -> 211. Con otro Detalle
+# trabajable: ABIERTA_TRABAJABLE (toma activa). Sin ninguno: REQUIERE_REVISION
+# -> cierre de toma -> 125 -> 126 (Tecnico, sin toma) -> 127 (Recepcion: nueva
+# definicion vigente, la anterior en definiciones_anteriores, mismo Detalle,
+# override 130 anterior invalidado) -> 080 -> 090 Si -> 140 | Ninguno -> 100.
+# 200/210/211 se trazan como nodos productores (in_scenario: false); steps[]
+# del Scenario sigue siendo 211 -> 125 -> 126 -> 127 -> 080.
+#
+# Reutiliza TASK-REP-030 de hp-rep-001.yaml (mismo id y name). EXC-REP-005 y
+# la politica comercial de pago excedente quedan fuera.
+#
+# Continua la numeracion global: US-REP-035, ACC-REP-054, FR-REP-127,
+# TR-REP-126, TASK-REP-200, CODE-REP-214, TEST-REP-469, UAT-REP-036.
+#
+# Validacion: npx tsx scripts/validate-traceability.ts traceability/exc-rep-004.yaml
+
+meta:
+  id: TRACE-EXC-REP-004
+  name: Trazabilidad del slice implementado de EXC-REP-004
+  generated_from: rama mvp-v2-slice9-exc-rep-004, tras implementar la redefinicion posterior de un Detalle sobre mvp-v2
+  date: "2026-10-01"
+  business_domain: DOM-RMA
+  business_process: PROC-REP
+  business_process_version: "1.3"
+  implemented_scenario: EXC-REP-004
+  active_features: [FEAT-REP-002, FEAT-REP-005]
+  related_trace_files:
+    - traceability/hp-rep-001.yaml (TASK-REP-030 y la nota de TASK-REP-088 se actualizan)
+    - traceability/exc-rep-002.yaml (no se modifica; BR-REP-003 suma la vigencia del override)
+  sources:
+    process: business/processes/repair-management-v1.3.yaml
+    rules: business/rules/business-rules-v1.3.yaml
+    features: business/features/repair-management-features-v1.3.yaml
+    scenarios: business/scenarios/repair-management-scenarios-v1.3.yaml
+    convention: traceability/README.md
+    constitution: .specify/memory/constitution.md
+    backend: app/backend/
+    frontend: app/frontend/
+  relationship_vocabulary:
+    belongs_to: el origen pertenece al destino (jerarquia)
+    activates: el Scenario activa la Feature
+    realizes: la System Action realiza la User Story
+    covers: la System Action cubre el nodo del Business Process
+    governed_by: el item esta gobernado por la Business Rule
+    derives_from: el Functional Requirement deriva de la System Action
+    satisfies: el Technical Requirement satisface el Functional Requirement
+    supports: el artefacto de modelo de datos sostiene un FR o un TR (N:M)
+    implements: la Task o el Code implementa un Technical Requirement
+    produced_by: el Code fue producido por la Task
+    exercises: el Internal Test ejercita el Code
+    verifies: el Internal Test verifica un FR o un TR
+    accepts: el UAT acepta una User Story o un Functional Requirement
+
+items:
+
+  - {id: DOM-RMA, type: business_domain, name: Area funcional RMA, status: active, source: traceability/README.md}
+  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: draft, version: "1.3", source: business/processes/repair-management-v1.3.yaml}
+  - {id: EXC-REP-004, type: scenario, name: "Detalle requiere revision tecnica posterior (REQUIERE_REVISION)", status: draft, scenario_type: EXCEPTION, scope: FEATURE, source: business/scenarios/repair-management-scenarios-v1.3.yaml}
+
+  - {id: FEAT-REP-002, type: feature, name: "Diagnostico y gestion de Detalles de Reparacion", status: draft, feature_status: draft, implemented_scenario: [EXC-REP-004], implemented_slice_status: IMPLEMENTED, nodes_total: 10, nodes_in_slice: 3, spec: specs/002-feat-rep-002-hp-slice/}
+  - {id: FEAT-REP-005, type: feature, name: "Ejecucion de Detalles y gestion de insumos", status: draft, feature_status: draft, implemented_scenario: [EXC-REP-004], implemented_slice_status: IMPLEMENTED, nodes_total: 11, nodes_in_slice: 3, spec: specs/005-feat-rep-005-hp-slice/}
+
+  - {id: PROC-REP-125, type: process_node, name: "Detalle(s) pendientes de revision tecnica", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-126, type: process_node, name: "Realizar revision tecnica de Detalle pendiente", node_type: activity, actor: ACT-TECH, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-127, type: process_node, name: "Definir/actualizar reparacion del Detalle", node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-080, type: process_node, name: "Validar factibilidad por Detalle", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-200, type: process_node, name: "Registrar ejecucion real del Detalle", node_type: activity, actor: ACT-TECH, status: draft, in_scenario: false, implemented: true, note: "Productor de REQUIERE_DEFINICION (200 Requiere redefinicion -> 210 -> 211), anterior al trigger de EXC-REP-004."}
+  - {id: PROC-REP-210, type: process_node, name: "Generar movimientos de inventario", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: true, note: "Productor de REQUIERE_DEFINICION (200 Requiere redefinicion -> 210 -> 211), anterior al trigger de EXC-REP-004."}
+  - {id: PROC-REP-211, type: process_node, name: "Evaluar situacion de la Orden", node_type: decision, status: draft, in_scenario: false, implemented: true, note: "Productor de REQUIERE_DEFINICION (200 Requiere redefinicion -> 210 -> 211), anterior al trigger de EXC-REP-004."}
+
+  - {id: BR-REP-001, type: business_rule, name: "Definicion del requerimiento", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-003, type: business_rule, name: "Override justificado", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-004, type: business_rule, name: "Registro de ejecucion real", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-012, type: business_rule, name: "Estado agregado de la Orden como calculo derivado", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-015, type: business_rule, name: "Precio snapshot y Subtotal", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-018, type: business_rule, name: "Toma y liberacion de Orden (participacion activa)", status: draft, coverage: PARTIAL}
+
+  # TASK-REP-030 se REUTILIZA de hp-rep-001.yaml (mismo id, type y name).
+  - {id: TASK-REP-030, type: task, name: "Implementar el circuito de Detalle pendiente de revision: PROC-REP-125 → PROC-REP-126 → PROC-REP-127, con la condicion REQUIERE_DEFINICION del Detalle", status: DONE, note: "Implementada en specs/018-slice9-exc-rep-004 (EXC-REP-004)."}
+
+  - {id: US-REP-036, type: user_story, name: "Como Tecnico quiero indicar al cerrar una Ejecucion que la definicion del Detalle ya no sirve dejando un motivo para que se revise y redefina antes de volver a trabajarlo sin perder lo que ya hice ni los insumos usados", status: IMPLEMENTED, priority: P1, actor: ACT-TECH}
+  - {id: US-REP-037, type: user_story, name: "Como Recepcion quiero redefinir el mismo Detalle a partir de la revision tecnica conservando su definicion anterior para que la Orden vuelva al flujo con la reparacion correcta", status: IMPLEMENTED, priority: P1, actor: ACT-RECEP}
+
+  - {id: ACC-REP-055, type: system_action, name: "Cerrar la Ejecucion con el resultado Requiere redefinicion de PROC-REP-200 dejando el Detalle REQUIERE_DEFINICION y conciliando el inventario en PROC-REP-210", status: IMPLEMENTED}
+  - {id: ACC-REP-056, type: system_action, name: "Recalcular PROC-REP-211 tras la redefinicion: continuar con otro Detalle trabajable o cerrar la toma y pasar a PROC-REP-125", status: IMPLEMENTED}
+  - {id: ACC-REP-057, type: system_action, name: "Registrar la revision tecnica posterior de UN Detalle pendiente (PROC-REP-126) por un Tecnico sin toma", status: IMPLEMENTED}
+  - {id: ACC-REP-058, type: system_action, name: "Redefinir el mismo Detalle (PROC-REP-127) con definicion historica e invalidacion del override previo y revalidar la factibilidad (PROC-REP-080)", status: IMPLEMENTED}
+
+  - {id: FR-REP-128, type: functional_requirement, name: "El resultado Requiere redefinicion de PROC-REP-200 exige motivo deja la Ejecucion INTERRUMPIDO y el Detalle DEFINIDO con REQUIERE_DEFINICION y solo lo registra el tecnico propietario", status: IMPLEMENTED}
+  - {id: FR-REP-129, type: functional_requirement, name: "Interrumpido deja el Detalle SIN_BLOQUEO y Requiere redefinicion lo deja REQUIERE_DEFINICION sin un estado de Ejecucion nuevo", status: IMPLEMENTED}
+  - {id: FR-REP-130, type: functional_requirement, name: "PROC-REP-210 consume lo utilizado y libera lo reservado no utilizado sin dejar reservas activas de la Ejecucion cerrada", status: IMPLEMENTED}
+  - {id: FR-REP-131, type: functional_requirement, name: "Con otro Detalle trabajable PROC-REP-211 da ABIERTA_TRABAJABLE con la toma activa y sin ningun trabajable da REQUIERE_REVISION cierra la toma y pasa a PROC-REP-125 conservando el workflow", status: IMPLEMENTED}
+  - {id: FR-REP-132, type: functional_requirement, name: "PROC-REP-126 lo realiza un Tecnico desde PROC-REP-125 sobre un Detalle DEFINIDO con REQUIERE_DEFINICION sin toma ni Ejecucion activa con resultado obligatorio y no modifica la definicion", status: IMPLEMENTED}
+  - {id: FR-REP-133, type: functional_requirement, name: "PROC-REP-127 lo realiza Recepcion con un PROC-REP-126 del mismo Detalle en su ciclo actual sobre el mismo Detalle con un Tipo activo y deja SIN_BLOQUEO", status: IMPLEMENTED}
+  - {id: FR-REP-134, type: functional_requirement, name: "PROC-REP-127 conserva la definicion anterior (Tipo precio puntaje garantia fecha y usuario) y toma el snapshot del Tipo elegido aun si es el mismo sin alterar el vinculo de garantia", status: IMPLEMENTED}
+  - {id: FR-REP-135, type: functional_requirement, name: "Un override PROC-REP-130 solo es valido si ocurrio despues del ultimo PROC-REP-127 del mismo Detalle", status: IMPLEMENTED}
+  - {id: FR-REP-136, type: functional_requirement, name: "PROC-REP-127 continua a PROC-REP-080 y 090 Si -> 140 o Ninguno -> 100 en el mismo comando", status: IMPLEMENTED}
+  - {id: FR-REP-137, type: functional_requirement, name: "El total y el saldo usan el snapshot vigente y el saldo puede quedar negativo sin politica de reembolso", status: IMPLEMENTED}
+
+  - {id: TR-REP-127, type: technical_requirement, name: "services.ejecuciones.registrar_ejecucion_requiere_redefinicion reutiliza _registrar_fin_ejecucion con condicion_del_detalle y motivo_redefinicion en la Ejecucion", status: IMPLEMENTED}
+  - {id: TR-REP-128, type: technical_requirement, name: "application.taller.requerir_redefinicion_ejecucion reutiliza _cerrar_ejecucion (190 200 210 211) en la seccion critica de inventario", status: IMPLEMENTED}
+  - {id: TR-REP-129, type: technical_requirement, name: "services.ordenes.evaluar_situacion_orden cierra la toma ante REQUIERE_REVISION y compone PROC-REP-125 (services.redefinicion.marcar_pendiente_revision)", status: IMPLEMENTED}
+  - {id: TR-REP-130, type: technical_requirement, name: "services.redefinicion.revisar_detalle_pendiente registra PROC-REP-126 por Detalle y application.redefinicion.revisar_detalle persiste una vez", status: IMPLEMENTED}
+  - {id: TR-REP-131, type: technical_requirement, name: "services.redefinicion.redefinir_detalle exige revision_vigente (126 posterior al ultimo 200 Requiere redefinicion del Detalle) y agrega DefinicionAnteriorDetalle a ReparacionDetail.definiciones_anteriores (append-only, default vacio en JSON)", status: IMPLEMENTED}
+  - {id: TR-REP-132, type: technical_requirement, name: "services.recursos.tiene_override_factibilidad deriva la vigencia del override del historial: un 130 del Detalle posterior a su ultimo 127", status: IMPLEMENTED}
+  - {id: TR-REP-133, type: technical_requirement, name: "application.redefinicion.redefinir_detalle encadena 127 con _validar_y_habilitar (080 090 140 o 100) y persiste una vez", status: IMPLEMENTED}
+  - {id: TR-REP-134, type: technical_requirement, name: "API requires-redefinition technical-review y redefine con 200 OrdenOut 404 409 y 422 y DetalleOut expone definiciones_anteriores", status: IMPLEMENTED}
+  - {id: TR-REP-135, type: technical_requirement, name: "application.acciones publica REQUIERE_REDEFINICION REVISAR_DETALLE y REDEFINIR_DETALLE por Detalle y application.progreso muestra 125 126 127 por evidencia; el frontend ejecuta solo lo publicado", status: IMPLEMENTED}
+
+  - {id: TASK-REP-201, type: task, name: "Tercer resultado de PROC-REP-200 Requiere redefinicion con la condicion REQUIERE_DEFINICION reutilizando el cierre de Ejecucion", status: DONE}
+  - {id: TASK-REP-202, type: task, name: "211 REQUIERE_REVISION con cierre automatico de toma y PROC-REP-125 en evaluar_situacion_orden", status: DONE}
+  - {id: TASK-REP-203, type: task, name: "Definicion historica append-only del Detalle y snapshot nuevo en PROC-REP-127", status: DONE}
+  - {id: TASK-REP-204, type: task, name: "Vigencia del override acotada al ultimo PROC-REP-127 del Detalle", status: DONE}
+  - {id: TASK-REP-205, type: task, name: "Acciones API y frontend de la redefinicion posterior", status: DONE}
+  - {id: TASK-REP-206, type: task, name: "Progreso de PROC-REP-125 126 y 127 por evidencia del historial", status: DONE}
+  - {id: TASK-REP-207, type: task, name: "Tests de services y API de EXC-REP-004 y regresion", status: DONE}
+  - {id: TASK-REP-208, type: task, name: "Trazabilidad exc-rep-004.yaml TASK-REP-030 DONE y UAT pendientes", status: DONE}
+
+  - {id: CODE-REP-215, type: code_artifact, name: "services/ejecuciones.py::registrar_ejecucion_requiere_redefinicion", status: IMPLEMENTED, source: "app/backend/app/services/ejecuciones.py::registrar_ejecucion_requiere_redefinicion"}
+  - {id: CODE-REP-216, type: code_artifact, name: "services/ejecuciones.py::_registrar_fin_ejecucion (condicion_del_detalle)", status: IMPLEMENTED, source: "app/backend/app/services/ejecuciones.py::_registrar_fin_ejecucion"}
+  - {id: CODE-REP-217, type: code_artifact, name: "application/taller.py::requerir_redefinicion_ejecucion", status: IMPLEMENTED, source: "app/backend/app/application/taller.py::requerir_redefinicion_ejecucion"}
+  - {id: CODE-REP-218, type: code_artifact, name: "services/ordenes.py::evaluar_situacion_orden (211 -> 125)", status: IMPLEMENTED, source: "app/backend/app/services/ordenes.py::evaluar_situacion_orden"}
+  - {id: CODE-REP-219, type: code_artifact, name: "services/redefinicion.py::marcar_pendiente_revision", status: IMPLEMENTED, source: "app/backend/app/services/redefinicion.py::marcar_pendiente_revision"}
+  - {id: CODE-REP-220, type: code_artifact, name: "services/redefinicion.py::revisar_detalle_pendiente", status: IMPLEMENTED, source: "app/backend/app/services/redefinicion.py::revisar_detalle_pendiente"}
+  - {id: CODE-REP-221, type: code_artifact, name: "services/redefinicion.py::redefinir_detalle", status: IMPLEMENTED, source: "app/backend/app/services/redefinicion.py::redefinir_detalle"}
+  - {id: CODE-REP-222, type: code_artifact, name: "domain/models/reparacion.py::DefinicionAnteriorDetalle", status: IMPLEMENTED, source: "app/backend/app/domain/models/reparacion.py::DefinicionAnteriorDetalle"}
+  - {id: CODE-REP-223, type: code_artifact, name: "services/recursos.py::tiene_override_factibilidad (vigencia por 127)", status: IMPLEMENTED, source: "app/backend/app/services/recursos.py::tiene_override_factibilidad"}
+  - {id: CODE-REP-224, type: code_artifact, name: "application/redefinicion.py::redefinir_detalle", status: IMPLEMENTED, source: "app/backend/app/application/redefinicion.py::redefinir_detalle"}
+  - {id: CODE-REP-225, type: code_artifact, name: "application/redefinicion.py::revisar_detalle", status: IMPLEMENTED, source: "app/backend/app/application/redefinicion.py::revisar_detalle"}
+  - {id: CODE-REP-226, type: code_artifact, name: "api/ordenes.py::post_requiere_redefinicion / post_revisar_detalle / post_redefinir_detalle", status: IMPLEMENTED, source: "app/backend/app/api/ordenes.py"}
+  - {id: CODE-REP-227, type: code_artifact, name: "application/acciones.py::acciones_disponibles (REQUIERE_REDEFINICION, REVISAR_DETALLE, REDEFINIR_DETALLE)", status: IMPLEMENTED, source: "app/backend/app/application/acciones.py::acciones_disponibles"}
+  - {id: CODE-REP-228, type: code_artifact, name: "application/progreso.py::_con_revision_posterior", status: IMPLEMENTED, source: "app/backend/app/application/progreso.py::_con_revision_posterior"}
+  - {id: CODE-REP-229, type: code_artifact, name: "frontend/src/features/ordenes-reparacion/AccionesOrden.tsx (redefinicion posterior)", status: IMPLEMENTED, source: "app/frontend/src/features/ordenes-reparacion/AccionesOrden.tsx"}
+
+  - {id: TEST-REP-470, type: internal_test, name: "test_requiere_redefinicion_interrumpe_y_deja_requiere_definicion", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_requiere_redefinicion_interrumpe_y_deja_requiere_definicion"}
+  - {id: TEST-REP-471, type: internal_test, name: "test_el_motivo_es_obligatorio", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_el_motivo_es_obligatorio"}
+  - {id: TEST-REP-472, type: internal_test, name: "test_interrumpido_y_requiere_redefinicion_difieren_solo_en_la_condicion", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_interrumpido_y_requiere_redefinicion_difieren_solo_en_la_condicion"}
+  - {id: TEST-REP-473, type: internal_test, name: "test_solo_el_tecnico_propietario_puede_cerrar", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_solo_el_tecnico_propietario_puede_cerrar"}
+  - {id: TEST-REP-474, type: internal_test, name: "test_210_consume_lo_usado_y_libera_el_resto", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_210_consume_lo_usado_y_libera_el_resto"}
+  - {id: TEST-REP-475, type: internal_test, name: "test_caso_a_otro_trabajable_211_abierta_trabajable_y_toma_activa", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_caso_a_otro_trabajable_211_abierta_trabajable_y_toma_activa"}
+  - {id: TEST-REP-476, type: internal_test, name: "test_caso_b_211_requiere_revision_cierra_toma_y_va_a_125", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_caso_b_211_requiere_revision_cierra_toma_y_va_a_125"}
+  - {id: TEST-REP-477, type: internal_test, name: "test_125_no_modifica_detalles_ni_workflow", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_125_no_modifica_detalles_ni_workflow"}
+  - {id: TEST-REP-478, type: internal_test, name: "test_125_solo_desde_211_con_requiere_revision", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_125_solo_desde_211_con_requiere_revision"}
+  - {id: TEST-REP-479, type: internal_test, name: "test_requiere_definicion_gana_sobre_bloqueado_por_recursos", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_requiere_definicion_gana_sobre_bloqueado_por_recursos"}
+  - {id: TEST-REP-480, type: internal_test, name: "test_126_registra_la_revision_sin_tocar_la_definicion", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_126_registra_la_revision_sin_tocar_la_definicion"}
+  - {id: TEST-REP-481, type: internal_test, name: "test_126_solo_tecnico", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_126_solo_tecnico"}
+  - {id: TEST-REP-482, type: internal_test, name: "test_126_resultado_obligatorio", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_126_resultado_obligatorio"}
+  - {id: TEST-REP-483, type: internal_test, name: "test_126_fuera_del_circuito_o_con_toma_o_ejecucion", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_126_fuera_del_circuito_o_con_toma_o_ejecucion"}
+  - {id: TEST-REP-484, type: internal_test, name: "test_127_redefine_el_mismo_detalle_y_conserva_lo_anterior", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_127_redefine_el_mismo_detalle_y_conserva_lo_anterior"}
+  - {id: TEST-REP-485, type: internal_test, name: "test_la_primera_definicion_no_genera_historico", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_la_primera_definicion_no_genera_historico"}
+  - {id: TEST-REP-486, type: internal_test, name: "test_historico_a_b_c_es_append_only", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_historico_a_b_c_es_append_only"}
+  - {id: TEST-REP-487, type: internal_test, name: "test_mismo_tipo_tambien_es_una_redefinicion_con_snapshot_nuevo", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_mismo_tipo_tambien_es_una_redefinicion_con_snapshot_nuevo"}
+  - {id: TEST-REP-488, type: internal_test, name: "test_127_exige_revision_del_mismo_detalle_en_el_ciclo_actual", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_127_exige_revision_del_mismo_detalle_en_el_ciclo_actual"}
+  - {id: TEST-REP-489, type: internal_test, name: "test_una_revision_de_un_ciclo_anterior_no_habilita_127", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_una_revision_de_un_ciclo_anterior_no_habilita_127"}
+  - {id: TEST-REP-490, type: internal_test, name: "test_127_valida_rol_y_tipo_activo", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_127_valida_rol_y_tipo_activo"}
+  - {id: TEST-REP-491, type: internal_test, name: "test_un_127_invalida_el_override_anterior", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_un_127_invalida_el_override_anterior"}
+  - {id: TEST-REP-492, type: internal_test, name: "test_un_130_posterior_al_127_es_valido", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_un_130_posterior_al_127_es_valido"}
+  - {id: TEST-REP-493, type: internal_test, name: "test_el_127_de_otro_detalle_no_invalida_el_override", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_el_127_de_otro_detalle_no_invalida_el_override"}
+  - {id: TEST-REP-494, type: internal_test, name: "test_127_y_080_con_stock_habilita", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_127_y_080_con_stock_habilita"}
+  - {id: TEST-REP-495, type: internal_test, name: "test_el_nuevo_snapshot_cambia_total_y_saldo_incluso_negativo", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_el_nuevo_snapshot_cambia_total_y_saldo_incluso_negativo"}
+  - {id: TEST-REP-496, type: internal_test, name: "test_json_conserva_varias_definiciones_anteriores", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_json_conserva_varias_definiciones_anteriores"}
+  - {id: TEST-REP-497, type: internal_test, name: "test_un_json_sin_el_campo_carga_con_historico_vacio", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_un_json_sin_el_campo_carga_con_historico_vacio"}
+  - {id: TEST-REP-498, type: internal_test, name: "test_progreso_muestra_125_126_127_tras_211_con_evidencia", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_progreso_muestra_125_126_127_tras_211_con_evidencia"}
+  - {id: TEST-REP-499, type: internal_test, name: "test_escrituras_de_la_orden_por_comando", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_escrituras_de_la_orden_por_comando"}
+  - {id: TEST-REP-500, type: internal_test, name: "test_interrumpir_tambien_escribe_dos_veces", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_interrumpir_tambien_escribe_dos_veces"}
+  - {id: TEST-REP-501, type: internal_test, name: "test_caso_b_e2e_requiere_redefinicion_125_126_127_080_y_reingreso", status: PASSING, source: "app/backend/tests/test_api_exc_rep_004.py::test_caso_b_e2e_requiere_redefinicion_125_126_127_080_y_reingreso"}
+  - {id: TEST-REP-502, type: internal_test, name: "test_caso_b_sin_stock_tras_127_va_a_100_y_admite_override", status: PASSING, source: "app/backend/tests/test_api_exc_rep_004.py::test_caso_b_sin_stock_tras_127_va_a_100_y_admite_override"}
+  - {id: TEST-REP-503, type: internal_test, name: "test_caso_a_multidetalle_continua_b_y_despues_entra_a_125", status: PASSING, source: "app/backend/tests/test_api_exc_rep_004.py::test_caso_a_multidetalle_continua_b_y_despues_entra_a_125"}
+  - {id: TEST-REP-504, type: internal_test, name: "test_requires_redefinition_404_409_422", status: PASSING, source: "app/backend/tests/test_api_exc_rep_004.py::test_requires_redefinition_404_409_422"}
+  - {id: TEST-REP-505, type: internal_test, name: "test_technical_review_404_409_422", status: PASSING, source: "app/backend/tests/test_api_exc_rep_004.py::test_technical_review_404_409_422"}
+  - {id: TEST-REP-506, type: internal_test, name: "test_technical_review_fuera_de_125_es_409", status: PASSING, source: "app/backend/tests/test_api_exc_rep_004.py::test_technical_review_fuera_de_125_es_409"}
+  - {id: TEST-REP-507, type: internal_test, name: "test_redefine_404_409_422", status: PASSING, source: "app/backend/tests/test_api_exc_rep_004.py::test_redefine_404_409_422"}
+  - {id: TEST-REP-508, type: internal_test, name: "test_garantia_rma_conserva_vinculo_al_detalle_origen", status: PASSING, source: "app/backend/tests/test_api_exc_rep_004.py::test_garantia_rma_conserva_vinculo_al_detalle_origen"}
+  - {id: TEST-REP-509, type: internal_test, name: "test_rt_interno_redefinicion_sin_pagos", status: PASSING, source: "app/backend/tests/test_api_exc_rep_004.py::test_rt_interno_redefinicion_sin_pagos"}
+  - {id: TEST-REP-510, type: internal_test, name: "test_requiere_redefinicion_no_deja_reservas_activas", status: PASSING, source: "app/backend/tests/test_api_exc_rep_004.py::test_requiere_redefinicion_no_deja_reservas_activas"}
+
+  - {id: UAT-REP-037, type: uat, name: "Con un unico Detalle el Tecnico marca Requiere redefinicion y la Orden pasa por 125 126 127 y 080 y vuelve al flujo con la nueva reparacion", status: PENDING}
+  - {id: UAT-REP-038, type: uat, name: "Con dos Detalles el Tecnico marca Requiere redefinicion en A continua con B y recien despues la Orden entra al circuito de revision de A", status: PENDING}
+  - {id: UAT-REP-039, type: uat, name: "Recepcion redefine el Detalle y ve la definicion anterior conservada y el override previo ya no aplica", status: PENDING}
+
+links:
+
+  - {from: PROC-REP, to: DOM-RMA, relationship: belongs_to}
+  - {from: EXC-REP-004, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-125, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-126, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-127, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-080, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-200, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-210, to: PROC-REP, relationship: belongs_to}
+  - {from: PROC-REP-211, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-002, to: PROC-REP, relationship: belongs_to}
+  - {from: FEAT-REP-005, to: PROC-REP, relationship: belongs_to}
+  - {from: EXC-REP-004, to: FEAT-REP-002, relationship: activates}
+  - {from: EXC-REP-004, to: FEAT-REP-005, relationship: activates}
+
+  - {from: US-REP-036, to: FEAT-REP-005, relationship: belongs_to}
+  - {from: US-REP-037, to: FEAT-REP-002, relationship: belongs_to}
+
+  - {from: ACC-REP-055, to: US-REP-036, relationship: realizes}
+  - {from: ACC-REP-055, to: PROC-REP-200, relationship: covers}
+  - {from: ACC-REP-055, to: PROC-REP-210, relationship: covers}
+  - {from: ACC-REP-055, to: BR-REP-004, relationship: governed_by}
+
+  - {from: ACC-REP-056, to: US-REP-036, relationship: realizes}
+  - {from: ACC-REP-056, to: PROC-REP-211, relationship: covers}
+  - {from: ACC-REP-056, to: PROC-REP-125, relationship: covers}
+  - {from: ACC-REP-056, to: BR-REP-012, relationship: governed_by}
+  - {from: ACC-REP-056, to: BR-REP-018, relationship: governed_by}
+
+  - {from: ACC-REP-057, to: US-REP-036, relationship: realizes}
+  - {from: ACC-REP-057, to: PROC-REP-126, relationship: covers}
+  - {from: ACC-REP-057, to: BR-REP-012, relationship: governed_by}
+
+  - {from: ACC-REP-058, to: US-REP-037, relationship: realizes}
+  - {from: ACC-REP-058, to: PROC-REP-127, relationship: covers}
+  - {from: ACC-REP-058, to: PROC-REP-080, relationship: covers}
+  - {from: ACC-REP-058, to: BR-REP-001, relationship: governed_by}
+  - {from: ACC-REP-058, to: BR-REP-003, relationship: governed_by}
+  - {from: ACC-REP-058, to: BR-REP-015, relationship: governed_by}
+
+  - {from: FR-REP-128, to: ACC-REP-055, relationship: derives_from}
+  - {from: FR-REP-129, to: ACC-REP-055, relationship: derives_from}
+  - {from: FR-REP-130, to: ACC-REP-055, relationship: derives_from}
+  - {from: FR-REP-131, to: ACC-REP-056, relationship: derives_from}
+  - {from: FR-REP-132, to: ACC-REP-057, relationship: derives_from}
+  - {from: FR-REP-133, to: ACC-REP-058, relationship: derives_from}
+  - {from: FR-REP-134, to: ACC-REP-058, relationship: derives_from}
+  - {from: FR-REP-135, to: ACC-REP-058, relationship: derives_from}
+  - {from: FR-REP-136, to: ACC-REP-058, relationship: derives_from}
+  - {from: FR-REP-137, to: ACC-REP-058, relationship: derives_from}
+
+  - {from: TR-REP-127, to: FR-REP-128, relationship: satisfies}
+  - {from: TR-REP-127, to: FR-REP-129, relationship: satisfies}
+  - {from: TR-REP-128, to: FR-REP-130, relationship: satisfies}
+  - {from: TR-REP-128, to: FR-REP-131, relationship: satisfies}
+  - {from: TR-REP-129, to: FR-REP-131, relationship: satisfies}
+  - {from: TR-REP-130, to: FR-REP-132, relationship: satisfies}
+  - {from: TR-REP-131, to: FR-REP-133, relationship: satisfies}
+  - {from: TR-REP-131, to: FR-REP-134, relationship: satisfies}
+  - {from: TR-REP-132, to: FR-REP-135, relationship: satisfies}
+  - {from: TR-REP-133, to: FR-REP-136, relationship: satisfies}
+  - {from: TR-REP-133, to: FR-REP-137, relationship: satisfies}
+  - {from: TR-REP-134, to: FR-REP-128, relationship: satisfies}
+  - {from: TR-REP-134, to: FR-REP-132, relationship: satisfies}
+  - {from: TR-REP-134, to: FR-REP-133, relationship: satisfies}
+  - {from: TR-REP-135, to: FR-REP-131, relationship: satisfies}
+  - {from: TR-REP-135, to: FR-REP-132, relationship: satisfies}
+  - {from: TR-REP-135, to: FR-REP-133, relationship: satisfies}
+
+  - {from: TASK-REP-201, to: TR-REP-127, relationship: implements}
+  - {from: TASK-REP-201, to: TR-REP-128, relationship: implements}
+  - {from: TASK-REP-202, to: TR-REP-129, relationship: implements}
+  - {from: TASK-REP-203, to: TR-REP-131, relationship: implements}
+  - {from: TASK-REP-204, to: TR-REP-132, relationship: implements}
+  - {from: TASK-REP-205, to: TR-REP-134, relationship: implements}
+  - {from: TASK-REP-205, to: TR-REP-135, relationship: implements}
+  - {from: TASK-REP-206, to: TR-REP-135, relationship: implements}
+  - {from: TASK-REP-207, to: TR-REP-127, relationship: implements}
+  - {from: TASK-REP-207, to: TR-REP-133, relationship: implements}
+  - {from: TASK-REP-208, to: TR-REP-130, relationship: implements}
+  - {from: TASK-REP-030, to: TR-REP-129, relationship: implements}
+  - {from: TASK-REP-030, to: TR-REP-130, relationship: implements}
+  - {from: TASK-REP-030, to: TR-REP-131, relationship: implements}
+  - {from: TASK-REP-030, to: TR-REP-133, relationship: implements}
+
+  - {from: CODE-REP-215, to: TASK-REP-201, relationship: produced_by}
+  - {from: CODE-REP-215, to: TR-REP-127, relationship: implements}
+  - {from: CODE-REP-216, to: TASK-REP-201, relationship: produced_by}
+  - {from: CODE-REP-216, to: TR-REP-127, relationship: implements}
+  - {from: CODE-REP-217, to: TASK-REP-201, relationship: produced_by}
+  - {from: CODE-REP-217, to: TR-REP-128, relationship: implements}
+  - {from: CODE-REP-218, to: TASK-REP-202, relationship: produced_by}
+  - {from: CODE-REP-218, to: TR-REP-129, relationship: implements}
+  - {from: CODE-REP-219, to: TASK-REP-030, relationship: produced_by}
+  - {from: CODE-REP-219, to: TR-REP-129, relationship: implements}
+  - {from: CODE-REP-220, to: TASK-REP-030, relationship: produced_by}
+  - {from: CODE-REP-220, to: TR-REP-130, relationship: implements}
+  - {from: CODE-REP-221, to: TASK-REP-030, relationship: produced_by}
+  - {from: CODE-REP-221, to: TR-REP-131, relationship: implements}
+  - {from: CODE-REP-222, to: TASK-REP-203, relationship: produced_by}
+  - {from: CODE-REP-222, to: TR-REP-131, relationship: implements}
+  - {from: CODE-REP-223, to: TASK-REP-204, relationship: produced_by}
+  - {from: CODE-REP-223, to: TR-REP-132, relationship: implements}
+  - {from: CODE-REP-224, to: TASK-REP-030, relationship: produced_by}
+  - {from: CODE-REP-224, to: TR-REP-133, relationship: implements}
+  - {from: CODE-REP-225, to: TASK-REP-030, relationship: produced_by}
+  - {from: CODE-REP-225, to: TR-REP-130, relationship: implements}
+  - {from: CODE-REP-226, to: TASK-REP-205, relationship: produced_by}
+  - {from: CODE-REP-226, to: TR-REP-134, relationship: implements}
+  - {from: CODE-REP-227, to: TASK-REP-205, relationship: produced_by}
+  - {from: CODE-REP-227, to: TR-REP-135, relationship: implements}
+  - {from: CODE-REP-228, to: TASK-REP-206, relationship: produced_by}
+  - {from: CODE-REP-228, to: TR-REP-135, relationship: implements}
+  - {from: CODE-REP-229, to: TASK-REP-205, relationship: produced_by}
+  - {from: CODE-REP-229, to: TR-REP-135, relationship: implements}
+
+  - {from: TEST-REP-470, to: FR-REP-128, relationship: verifies}
+  - {from: TEST-REP-470, to: CODE-REP-215, relationship: exercises}
+  - {from: TEST-REP-470, to: CODE-REP-216, relationship: exercises}
+  - {from: TEST-REP-471, to: FR-REP-128, relationship: verifies}
+  - {from: TEST-REP-472, to: FR-REP-129, relationship: verifies}
+  - {from: TEST-REP-473, to: FR-REP-128, relationship: verifies}
+  - {from: TEST-REP-474, to: FR-REP-130, relationship: verifies}
+  - {from: TEST-REP-475, to: FR-REP-131, relationship: verifies}
+  - {from: TEST-REP-475, to: CODE-REP-218, relationship: exercises}
+  - {from: TEST-REP-476, to: FR-REP-131, relationship: verifies}
+  - {from: TEST-REP-476, to: CODE-REP-219, relationship: exercises}
+  - {from: TEST-REP-477, to: TR-REP-129, relationship: verifies}
+  - {from: TEST-REP-478, to: TR-REP-129, relationship: verifies}
+  - {from: TEST-REP-479, to: FR-REP-131, relationship: verifies}
+  - {from: TEST-REP-480, to: FR-REP-132, relationship: verifies}
+  - {from: TEST-REP-480, to: CODE-REP-220, relationship: exercises}
+  - {from: TEST-REP-481, to: FR-REP-132, relationship: verifies}
+  - {from: TEST-REP-482, to: FR-REP-132, relationship: verifies}
+  - {from: TEST-REP-483, to: FR-REP-132, relationship: verifies}
+  - {from: TEST-REP-484, to: FR-REP-133, relationship: verifies}
+  - {from: TEST-REP-484, to: FR-REP-134, relationship: verifies}
+  - {from: TEST-REP-484, to: CODE-REP-221, relationship: exercises}
+  - {from: TEST-REP-484, to: CODE-REP-222, relationship: exercises}
+  - {from: TEST-REP-485, to: FR-REP-134, relationship: verifies}
+  - {from: TEST-REP-486, to: FR-REP-134, relationship: verifies}
+  - {from: TEST-REP-487, to: FR-REP-134, relationship: verifies}
+  - {from: TEST-REP-488, to: FR-REP-133, relationship: verifies}
+  - {from: TEST-REP-489, to: TR-REP-131, relationship: verifies}
+  - {from: TEST-REP-490, to: FR-REP-133, relationship: verifies}
+  - {from: TEST-REP-491, to: FR-REP-135, relationship: verifies}
+  - {from: TEST-REP-491, to: CODE-REP-223, relationship: exercises}
+  - {from: TEST-REP-492, to: FR-REP-135, relationship: verifies}
+  - {from: TEST-REP-493, to: TR-REP-132, relationship: verifies}
+  - {from: TEST-REP-494, to: FR-REP-136, relationship: verifies}
+  - {from: TEST-REP-495, to: FR-REP-137, relationship: verifies}
+  - {from: TEST-REP-496, to: TR-REP-131, relationship: verifies}
+  - {from: TEST-REP-497, to: TR-REP-131, relationship: verifies}
+  - {from: TEST-REP-498, to: TR-REP-135, relationship: verifies}
+  - {from: TEST-REP-498, to: CODE-REP-228, relationship: exercises}
+  - {from: TEST-REP-499, to: TR-REP-133, relationship: verifies}
+  - {from: TEST-REP-499, to: CODE-REP-217, relationship: exercises}
+  - {from: TEST-REP-499, to: CODE-REP-224, relationship: exercises}
+  - {from: TEST-REP-499, to: CODE-REP-225, relationship: exercises}
+  - {from: TEST-REP-500, to: TR-REP-128, relationship: verifies}
+  - {from: TEST-REP-501, to: FR-REP-131, relationship: verifies}
+  - {from: TEST-REP-501, to: FR-REP-136, relationship: verifies}
+  - {from: TEST-REP-501, to: CODE-REP-226, relationship: exercises}
+  - {from: TEST-REP-501, to: CODE-REP-227, relationship: exercises}
+  - {from: TEST-REP-502, to: FR-REP-136, relationship: verifies}
+  - {from: TEST-REP-502, to: FR-REP-135, relationship: verifies}
+  - {from: TEST-REP-503, to: FR-REP-131, relationship: verifies}
+  - {from: TEST-REP-504, to: TR-REP-134, relationship: verifies}
+  - {from: TEST-REP-505, to: TR-REP-134, relationship: verifies}
+  - {from: TEST-REP-506, to: FR-REP-132, relationship: verifies}
+  - {from: TEST-REP-507, to: TR-REP-134, relationship: verifies}
+  - {from: TEST-REP-508, to: FR-REP-134, relationship: verifies}
+  - {from: TEST-REP-509, to: FR-REP-136, relationship: verifies}
+  - {from: TEST-REP-510, to: FR-REP-130, relationship: verifies}
+
+  - {from: UAT-REP-037, to: US-REP-036, relationship: accepts}
+  - {from: UAT-REP-038, to: US-REP-036, relationship: accepts}
+  - {from: UAT-REP-039, to: US-REP-037, relationship: accepts}

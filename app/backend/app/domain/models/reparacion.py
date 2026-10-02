@@ -20,6 +20,23 @@ from .enums import (
 from .inventario import InsumoUtilizado
 
 
+class DefinicionAnteriorDetalle(BaseModel):
+    """Definicion de un Detalle reemplazada por PROC-REP-127 (BR-REP-015).
+
+    Append-only: cada redefinicion agrega la definicion que deja de estar
+    vigente (Tipo y snapshots), cuando y quien la reemplazo. La primera
+    definicion (PROC-REP-070/075) no genera entrada: solo existe historia
+    cuando algo se reemplaza.
+    """
+
+    tipo_reparacion_id: str
+    precio: Decimal = Field(ge=0)
+    puntaje: int = Field(ge=0)
+    garantia_dias: int = Field(ge=0)
+    reemplazada_en: datetime
+    usuario_id: str
+
+
 class ReparacionDetail(BaseModel):
     """Trabajo tecnico requerido dentro de una Orden.
 
@@ -57,6 +74,13 @@ class ReparacionDetail(BaseModel):
     # origen que motiva el reproceso (solo el ID, no el objeto).
     detalle_origen_id: str | None = None
 
+    # BR-REP-015 / PROC-REP-127: definiciones reemplazadas, de la mas
+    # antigua a la mas reciente. Default vacio: un JSON anterior al
+    # Slice 9 sigue cargando sin migracion.
+    definiciones_anteriores: list[DefinicionAnteriorDetalle] = Field(
+        default_factory=list
+    )
+
 
 class TomaOrden(BaseModel):
     """Participacion activa de un tecnico sobre la Orden completa.
@@ -91,3 +115,6 @@ class EjecucionReparacion(BaseModel):
     fin: datetime | None = None
     insumos_utilizados: list[InsumoUtilizado] = Field(default_factory=list)
     observaciones: str | None = None
+    # PROC-REP-200 "Requiere redefinicion" (EXC-REP-004): motivo
+    # obligatorio por el que la definicion del Detalle dejo de servir.
+    motivo_redefinicion: str | None = None

@@ -39,6 +39,7 @@ from .workflow import registrar_paso
 NODO_ADVERTENCIA = "PROC-REP-100"
 NODO_ESPERA = "PROC-REP-120"
 NODO_OVERRIDE = "PROC-REP-130"
+NODO_REDEFINICION = "PROC-REP-127"
 _NODOS_QUE_LLEVAN_A_120 = ("PROC-REP-110", "PROC-REP-211")
 
 
@@ -108,19 +109,26 @@ def tiene_override_factibilidad(
     orden: OrdenReparacion,
     detalle_id: str,
 ) -> bool:
-    """True si el Detalle tiene un override de factibilidad (PROC-REP-130).
+    """True si el Detalle tiene un override de factibilidad VIGENTE.
 
     Se deriva del historial -sin flag en el Detalle-: existe un
-    PROC-REP-130 registrado para ESE Detalle. Es el unico lugar donde se
-    busca; lo consultan la factibilidad (no lo rebloquea), la reserva
-    real (PROC-REP-185) y el consumo (PROC-REP-210). Un override jamas
-    alcanza a otro Detalle.
+    PROC-REP-130 registrado para ESE Detalle DESPUES de su ultimo
+    PROC-REP-127 (BR-REP-003, vigencia): una redefinicion invalida los
+    overrides anteriores, aunque se confirme el mismo Tipo. Es el unico
+    lugar donde se busca; lo consultan la factibilidad (no lo rebloquea),
+    la reserva real (PROC-REP-185) y el consumo (PROC-REP-210). Un
+    override jamas alcanza a otro Detalle, y el 127 de otro Detalle no lo
+    invalida.
     """
-    return any(
-        paso.process_id == NODO_OVERRIDE
-        and paso.reparacion_detail_id == detalle_id
-        for paso in orden.historial
-    )
+    vigente = False
+    for paso in orden.historial:
+        if paso.reparacion_detail_id != detalle_id:
+            continue
+        if paso.process_id == NODO_OVERRIDE:
+            vigente = True
+        elif paso.process_id == NODO_REDEFINICION:
+            vigente = False
+    return vigente
 
 
 def registrar_override_recursos(

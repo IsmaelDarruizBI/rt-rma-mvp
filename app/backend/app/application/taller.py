@@ -5,6 +5,10 @@ Tres comandos, uno por accion humana de ACT-TECH:
     tomar_orden_en_estacion   PROC-REP-172 -> 180
     iniciar_detalle           PROC-REP-181 -> 174 -> 185 [-> 186 -> 211]
     completar_ejecucion       PROC-REP-190 -> 200 -> 210 -> 211
+    interrumpir_ejecucion     idem, 200 "Interrumpido" (VAR-REP-003)
+    requerir_redefinicion_ejecucion
+                              idem, 200 "Requiere redefinicion"
+                              [-> 211 -> 125] (EXC-REP-004)
 
 ``iniciar_detalle`` y ``completar_ejecucion`` corren dentro de la
 seccion critica de inventario: el primero reserva stock, el segundo lo
@@ -13,6 +17,7 @@ consume y reescribe el catalogo.
 
 from collections.abc import Callable, Sequence
 from datetime import datetime
+from functools import partial
 
 from app.domain.models import (
     EjecucionReparacion,
@@ -30,6 +35,7 @@ from app.services import (
     intentar_reserva_e_inicio,
     registrar_ejecucion_completada,
     registrar_ejecucion_interrumpida,
+    registrar_ejecucion_requiere_redefinicion,
     seleccionar_detalle,
     tomar_orden,
     validar_compatibilidad_detalle,
@@ -277,6 +283,41 @@ def interrumpir_ejecucion(
     )
 
 
+def requerir_redefinicion_ejecucion(
+    contexto: ApplicationContext,
+    *,
+    orden_id: str,
+    ejecucion_id: str,
+    usuario_id: str,
+    insumos_utilizados: Sequence[InsumoUtilizado],
+    motivo: str,
+    observaciones: str | None = None,
+) -> tuple[OrdenReparacion, ResultadoEvaluacionOrden]:
+    """El tecnico cierra la Ejecucion porque el Detalle requiere
+    redefinicion (190 -> 200 "Requiere redefinicion" -> 210 -> 211),
+    EXC-REP-004.
+
+    Tercer cierre de PROC-REP-200, con la misma mecanica que los otros
+    dos: la Ejecucion queda INTERRUMPIDO, lo utilizado se consume y lo
+    reservado sin usar se libera. El Detalle queda DEFINIDO +
+    REQUIERE_DEFINICION. Si otro Detalle sigue trabajable, 211 da
+    ABIERTA_TRABAJABLE y la toma sigue activa; si no, REQUIERE_REVISION
+    cierra la toma y la Orden pasa a PROC-REP-125 (lo compone
+    ``evaluar_situacion_orden``). Una sola escritura.
+    """
+    return _cerrar_ejecucion(
+        contexto,
+        registrar_resultado=partial(
+            registrar_ejecucion_requiere_redefinicion, motivo=motivo
+        ),
+        orden_id=orden_id,
+        ejecucion_id=ejecucion_id,
+        usuario_id=usuario_id,
+        insumos_utilizados=insumos_utilizados,
+        observaciones=observaciones,
+    )
+
+
 def _cerrar_ejecucion(
     contexto: ApplicationContext,
     *,
@@ -287,7 +328,11 @@ def _cerrar_ejecucion(
     insumos_utilizados: Sequence[InsumoUtilizado],
     observaciones: str | None,
 ) -> tuple[OrdenReparacion, ResultadoEvaluacionOrden]:
-    """190 -> 200 -> 210 -> 211 para cualquier resultado de PROC-REP-200."""
+    """190 -> 200 -> 210 -> 211 para cualquier resultado de PROC-REP-200.
+
+    El motivo de "Requiere redefinicion" se fija antes, con
+    ``functools.partial``: el cierre es uno solo para los tres resultados.
+    """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha: datetime = contexto.ahora()
 

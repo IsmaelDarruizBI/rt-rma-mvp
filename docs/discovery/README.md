@@ -338,9 +338,24 @@ separando ambos resultados en sus propios circuitos de espera:
   - **PROC-REP-126** "Realizar revision tecnica de Detalle pendiente" -
     analogo a PROC-REP-065, pero sobre un Detalle ya existente.
   - **PROC-REP-127** "Definir/actualizar reparacion del Detalle" - analogo
-    a PROC-REP-070/075, actualiza el Tipo de Reparacion y precio snapshot
-    del Detalle existente y le quita la condicion REQUIERE_DEFINICION
-    cuando corresponde.
+    a PROC-REP-070/075, redefine el MISMO Detalle (nueva definicion
+    vigente, la anterior se conserva historicamente) y le quita la
+    condicion REQUIERE_DEFINICION cuando corresponde.
+
+  Quien ASIGNA REQUIERE_DEFINICION es `PROC-REP-200` con su tercer
+  resultado "Requiere redefinicion" (Ejecucion cerrada como no completada,
+  Detalle PENDIENTE + REQUIERE_DEFINICION, motivo obligatorio, luego
+  PROC-REP-210 y PROC-REP-211); no existe un nodo aparte que la produzca.
+  `PROC-REP-125` solo representa la espera/circuito posterior,
+  `PROC-REP-126` realiza la revision tecnica y `PROC-REP-127` redefine y
+  RETIRA la condicion. Si otro Detalle sigue trabajable, `PROC-REP-211`
+  devuelve ABIERTA_TRABAJABLE y recien cuando no queda ninguno trabajable
+  se llega a REQUIERE_REVISION -> 125. REQUIERE_REVISION no es un estado
+  de workflow. "Interrumpido" (definicion vigente) no es lo mismo que
+  "Requiere redefinicion" (definicion invalida). Un `PROC-REP-127`
+  invalida cualquier override de `PROC-REP-130` anterior del mismo
+  Detalle (BR-REP-003) y preserva historicamente la definicion previa
+  (BR-REP-015), incluso si se confirma el mismo Tipo.
 
   Recien despues de PROC-REP-127 se revalida factibilidad con
   PROC-REP-080 (el Detalle ya definido). Deliberadamente NO se reutiliza
@@ -1139,10 +1154,17 @@ deliberadamente fuera de alcance de esta revision:
   Detalle en particular: a diferencia del circuito inicial
   (PROC-REP-068/069), aqui no existe todavia un camino equivalente a
   SIN_REPARACION acotado a un unico Detalle (por ejemplo, dejarlo
-  indefinido, o cancelarlo puntualmente via PROC-REP-300). Que asigna y
-  retira la condicion REQUIERE_DEFINICION en si ya esta definido
-  (PROC-REP-125/126/127); lo pendiente es exclusivamente este caso de
-  borde.
+  indefinido, o cancelarlo puntualmente via PROC-REP-300). Que asigna la
+  condicion REQUIERE_DEFINICION (PROC-REP-200 "Requiere redefinicion") y
+  quien la retira (PROC-REP-127) ya esta definido; lo pendiente es
+  exclusivamente este caso de borde.
+- Efecto comercial de una redefinicion (PROC-REP-127) que cambia el
+  precio snapshot: el nuevo total es la suma de los snapshots vigentes y
+  saldo = total - pagado. Precio mayor -> saldo adicional pendiente;
+  precio menor -> saldo negativo / pago excedente. SIN definir todavia:
+  tratamiento del pago excedente (devolucion/reembolso, credito a favor),
+  y aceptacion/aprobacion comercial del cliente ante un aumento de precio
+  (presupuesto). No bloquea EXC-REP-004.
 - Reporting por tecnico (a futuro, sin agregar nodos al Business
   Process): OR actualmente tomadas, OR trabajadas, OR liberadas, Detalles
   completados, trabajos pendientes. El historial de toma/liberacion

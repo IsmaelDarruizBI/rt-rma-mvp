@@ -49,6 +49,14 @@ export interface EjecutorAcciones {
     insumosUtilizados: InsumoUtilizado[],
     observaciones: string,
   ) => void;
+  requerirRedefinicion: (
+    ejecucionId: string,
+    insumosUtilizados: InsumoUtilizado[],
+    motivo: string,
+    observaciones: string,
+  ) => void;
+  revisarDetalle: (detalleId: string, resultado: string) => void;
+  redefinirDetalle: (detalleId: string, tipoReparacionId: string) => void;
   aprobarControl: (detalleId: string | null, observaciones: string) => void;
   liberarOrden: () => void;
   notificar: () => void;
@@ -310,6 +318,54 @@ function FormularioAccion({
               insumosUtilizados,
               observaciones,
             )
+          }
+        />
+      );
+
+    case "REQUIERE_REDEFINICION":
+      return (
+        <FormularioEjecucion
+          previstos={insumosPrevistosDe(orden, accion.ejecucion_id)}
+          deshabilitado={deshabilitado || !accion.ejecucion_id}
+          textoBoton="Requiere redefinición"
+          pideMotivo
+          onConfirmar={(insumosUtilizados, observaciones, motivo) =>
+            accion.ejecucion_id &&
+            ejecutar.requerirRedefinicion(
+              accion.ejecucion_id,
+              insumosUtilizados,
+              motivo,
+              observaciones,
+            )
+          }
+        />
+      );
+
+    case "REVISAR_DETALLE":
+      return (
+        <FormularioResultadoRevision
+          deshabilitado={deshabilitado || !accion.detalle_id}
+          textoBoton={`Realizar revisión técnica del Detalle ${
+            accion.detalle_id ?? ""
+          }`}
+          onConfirmar={(resultado) =>
+            accion.detalle_id &&
+            ejecutar.revisarDetalle(accion.detalle_id, resultado)
+          }
+        />
+      );
+
+    case "REDEFINIR_DETALLE":
+      return (
+        <FormularioRedefinirDetalle
+          tipos={tipos}
+          detalle={orden.reparaciones_detail.find(
+            (candidato) => candidato.id === accion.detalle_id,
+          )}
+          deshabilitado={deshabilitado || !accion.detalle_id}
+          onConfirmar={(tipoId) =>
+            accion.detalle_id &&
+            ejecutar.redefinirDetalle(accion.detalle_id, tipoId)
           }
         />
       );
@@ -579,16 +635,21 @@ function FormularioEjecucion({
   previstos,
   deshabilitado,
   textoBoton = "Completar ejecución",
+  pideMotivo = false,
   onConfirmar,
 }: {
   previstos: InsumoPrevisto[];
   deshabilitado: boolean;
   textoBoton?: string;
+  /** EXC-REP-004: "Requiere redefinición" exige un motivo. */
+  pideMotivo?: boolean;
   onConfirmar: (
     insumosUtilizados: InsumoUtilizado[],
     observaciones: string,
+    motivo: string,
   ) => void;
 }) {
+  const [motivo, setMotivo] = useState("");
   const [cantidades, setCantidades] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       previstos.map((previsto) => [
@@ -645,6 +706,16 @@ function FormularioEjecucion({
           </Campo>
         ))
       )}
+      {pideMotivo && (
+        <Campo etiqueta="Motivo de la redefinición (obligatorio)">
+          <input
+            value={motivo}
+            onChange={(evento) => setMotivo(evento.target.value)}
+            disabled={deshabilitado}
+            style={estiloInput}
+          />
+        </Campo>
+      )}
       <Campo etiqueta="Observaciones">
         <input
           value={observaciones}
@@ -654,8 +725,8 @@ function FormularioEjecucion({
         />
       </Campo>
       <Boton
-        disabled={deshabilitado}
-        onClick={() => onConfirmar(utilizados(), observaciones)}
+        disabled={deshabilitado || (pideMotivo && motivo.trim() === "")}
+        onClick={() => onConfirmar(utilizados(), observaciones, motivo.trim())}
       >
         {textoBoton}
       </Boton>
@@ -712,9 +783,11 @@ function FormularioMotivoOverride({
 
 function FormularioResultadoRevision({
   deshabilitado,
+  textoBoton = "Registrar la revisión",
   onConfirmar,
 }: {
   deshabilitado: boolean;
+  textoBoton?: string;
   onConfirmar: (resultado: string) => void;
 }) {
   const [resultado, setResultado] = useState("");
@@ -733,7 +806,70 @@ function FormularioResultadoRevision({
         disabled={deshabilitado || resultado.trim() === ""}
         onClick={() => onConfirmar(resultado.trim())}
       >
-        Registrar la revisión
+        {textoBoton}
+      </Boton>
+    </div>
+  );
+}
+
+/**
+ * PROC-REP-127 (EXC-REP-004): Recepción elige la nueva definición del
+ * MISMO Detalle. Muestra el Tipo vigente; confirmar el mismo Tipo también
+ * es una redefinición (nuevo snapshot, override previo invalidado).
+ */
+function FormularioRedefinirDetalle({
+  tipos,
+  detalle,
+  deshabilitado,
+  onConfirmar,
+}: {
+  tipos: TipoReparacion[];
+  detalle: Orden["reparaciones_detail"][number] | undefined;
+  deshabilitado: boolean;
+  onConfirmar: (tipoReparacionId: string) => void;
+}) {
+  const [tipoId, setTipoId] = useState(
+    detalle?.tipo_reparacion_id ?? tipos[0]?.id ?? "",
+  );
+  const elegido = tipos.find((tipo) => tipo.id === tipoId);
+
+  return (
+    <div>
+      <p style={{ margin: "0 0 0.5rem", fontSize: "0.85rem" }}>
+        Detalle {detalle?.id ?? "—"} · Tipo actual:{" "}
+        <strong>{detalle?.tipo_reparacion_nombre ?? "—"}</strong> (
+        {detalle?.precio ?? "—"})
+      </p>
+      <Campo etiqueta="Nuevo tipo de reparación">
+        <select
+          value={tipoId}
+          onChange={(evento) => setTipoId(evento.target.value)}
+          disabled={deshabilitado}
+          style={estiloInput}
+        >
+          {tipos.map((tipo) => (
+            <option key={tipo.id} value={tipo.id}>
+              {tipo.nombre} — {tipo.precio}
+            </option>
+          ))}
+        </select>
+      </Campo>
+      {elegido && (
+        <p
+          style={{
+            margin: "0 0 0.5rem",
+            fontSize: "0.8rem",
+            color: colores.suave,
+          }}
+        >
+          Nueva definición: {elegido.nombre} ({elegido.precio})
+        </p>
+      )}
+      <Boton
+        disabled={deshabilitado || !tipoId}
+        onClick={() => onConfirmar(tipoId)}
+      >
+        Redefinir reparación
       </Boton>
     </div>
   );

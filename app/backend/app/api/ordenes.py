@@ -40,8 +40,11 @@ from app.application import (
     obtener_orden,
     progreso,
     realizar_revision,
+    redefinir_detalle,
     registrar_pago_de_orden,
+    requerir_redefinicion_ejecucion,
     revalidar_recursos,
+    revisar_detalle,
     tomar_orden_en_estacion,
 )
 from app.domain.models import OrdenReparacion
@@ -68,6 +71,9 @@ from .schemas import (
     OrdenResumenOut,
     OverrideRecursosIn,
     PagoIn,
+    RedefinirDetalleIn,
+    RequiereRedefinicionIn,
+    RevisionDetalleIn,
     RevisionTecnicaIn,
     TomarIn,
 )
@@ -459,6 +465,70 @@ def post_interrumpir_ejecucion(
             insumo.a_dominio() for insumo in cuerpo.insumos_utilizados
         ],
         observaciones=cuerpo.observaciones,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/executions/{ejecucion_id}/requires-redefinition")
+def post_requiere_redefinicion(
+    orden_id: str,
+    ejecucion_id: str,
+    cuerpo: RequiereRedefinicionIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Cerrar la Ejecucion porque el Detalle requiere redefinicion.
+
+    ACT-TECH propietario, EXC-REP-004. Compone PROC-REP-190 -> 200
+    ("Requiere redefinicion") -> 210 -> 211 [-> 125]: lo utilizado se
+    consume, lo reservado sin usar se libera y el Detalle queda DEFINIDO +
+    REQUIERE_DEFINICION. El motivo es obligatorio.
+    """
+    orden, _ = requerir_redefinicion_ejecucion(
+        contexto,
+        orden_id=orden_id,
+        ejecucion_id=ejecucion_id,
+        usuario_id=cuerpo.usuario_id,
+        insumos_utilizados=[
+            insumo.a_dominio() for insumo in cuerpo.insumos_utilizados
+        ],
+        motivo=cuerpo.motivo,
+        observaciones=cuerpo.observaciones,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/details/{detalle_id}/technical-review")
+def post_revisar_detalle(
+    orden_id: str,
+    detalle_id: str,
+    cuerpo: RevisionDetalleIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Revision tecnica de un Detalle pendiente (ACT-TECH, PROC-REP-126)."""
+    orden = revisar_detalle(
+        contexto,
+        orden_id=orden_id,
+        detalle_id=detalle_id,
+        usuario_id=cuerpo.usuario_id,
+        resultado=cuerpo.resultado,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/details/{detalle_id}/redefine")
+def post_redefinir_detalle(
+    orden_id: str,
+    detalle_id: str,
+    cuerpo: RedefinirDetalleIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Redefinir el Detalle (ACT-RECEP, PROC-REP-127 -> 080 -> 090 ...)."""
+    orden = redefinir_detalle(
+        contexto,
+        orden_id=orden_id,
+        detalle_id=detalle_id,
+        usuario_id=cuerpo.usuario_id,
+        tipo_reparacion_id=cuerpo.tipo_reparacion_id,
     )
     return _salida(orden, contexto)
 

@@ -244,6 +244,17 @@ export function DetallesOrden({ orden }: { orden: Orden }) {
                   </Etiqueta>
                 </div>
               )}
+              {detalle.definiciones_anteriores.length > 0 && (
+                <div style={{ fontSize: "0.75rem", color: colores.suave }}>
+                  Redefinido · anteriores:{" "}
+                  {detalle.definiciones_anteriores
+                    .map(
+                      (anterior) =>
+                        `${anterior.tipo_reparacion_id} (${anterior.precio})`,
+                    )
+                    .join(" → ")}
+                </div>
+              )}
               {detalle.detalle_origen_id && (
                 <div style={{ fontSize: "0.75rem", color: colores.suave }}>
                   Origen garantía: {orden.orden_origen_id} /{" "}

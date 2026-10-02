@@ -159,6 +159,58 @@ export function interrumpirEjecucion(
 }
 
 /**
+ * PROC-REP-190 -> 200 ("Requiere redefinicion") -> 210 -> 211 [-> 125]
+ * (EXC-REP-004). Técnico propietario; el motivo es obligatorio.
+ */
+export function requerirRedefinicion(
+  ordenId: string,
+  ejecucionId: string,
+  usuarioId: string,
+  insumosUtilizados: InsumoUtilizado[],
+  motivo: string,
+  observaciones: string | null,
+): Promise<Orden> {
+  return post<Orden>(
+    `/api/orders/${ordenId}/executions/${ejecucionId}/requires-redefinition`,
+    {
+      usuario_id: usuarioId,
+      insumos_utilizados: insumosUtilizados,
+      motivo,
+      observaciones,
+    },
+  );
+}
+
+/** PROC-REP-126: revisión técnica de UN Detalle pendiente (Técnico). */
+export function revisarDetalle(
+  ordenId: string,
+  detalleId: string,
+  usuarioId: string,
+  resultado: string,
+): Promise<Orden> {
+  return post<Orden>(
+    `/api/orders/${ordenId}/details/${detalleId}/technical-review`,
+    { usuario_id: usuarioId, resultado },
+  );
+}
+
+/**
+ * PROC-REP-127 -> 080 -> 090 [-> 140 | -> 100]: Recepción redefine el
+ * mismo Detalle y se revalida la factibilidad.
+ */
+export function redefinirDetalle(
+  ordenId: string,
+  detalleId: string,
+  usuarioId: string,
+  tipoReparacionId: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/details/${detalleId}/redefine`, {
+    usuario_id: usuarioId,
+    tipo_reparacion_id: tipoReparacionId,
+  });
+}
+
+/**
  * PROC-REP-220 -> 230, y 245 -> 240 recién cuando todos los Detalles
  * quedan APROBADO (Recepción). `detalleId` (Multi-Detalle) aprueba un
  * único Detalle; `null` preserva la aprobación en bloque.

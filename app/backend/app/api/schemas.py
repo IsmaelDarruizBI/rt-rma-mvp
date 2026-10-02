@@ -225,6 +225,41 @@ class InterrumpirEjecucionIn(BaseModel):
     observaciones: str | None = None
 
 
+class RequiereRedefinicionIn(BaseModel):
+    """``POST .../executions/{ejecucion_id}/requires-redefinition``.
+
+    Tercer resultado de PROC-REP-200 (EXC-REP-004). Misma forma que
+    ``InterrumpirEjecucionIn`` mas el ``motivo`` obligatorio.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    insumos_utilizados: list[InsumoUtilizadoIn] = Field(default_factory=list)
+    motivo: str = Field(min_length=1)
+    observaciones: str | None = None
+
+
+class RevisionDetalleIn(BaseModel):
+    """``POST /api/orders/{id}/details/{detalle_id}/technical-review``.
+
+    PROC-REP-126 (ACT-TECH, EXC-REP-004): revision de UN Detalle
+    existente que requiere redefinicion.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    resultado: str = Field(min_length=1)
+
+
+class RedefinirDetalleIn(BaseModel):
+    """``POST /api/orders/{id}/details/{detalle_id}/redefine``.
+
+    PROC-REP-127 (ACT-RECEP, EXC-REP-004): nueva definicion del MISMO
+    Detalle; despues se revalida la factibilidad (080).
+    """
+
+    usuario_id: str = Field(min_length=1)
+    tipo_reparacion_id: str = Field(min_length=1)
+
+
 class AprobarControlIn(BaseModel):
     """``POST /api/orders/{id}/control/approve`` (ACT-RECEP).
 
@@ -369,8 +404,23 @@ class InsumoPrevistoOut(BaseModel):
         )
 
 
+class DefinicionAnteriorOut(BaseModel):
+    """Definicion reemplazada por PROC-REP-127 (BR-REP-015)."""
+
+    tipo_reparacion_id: str
+    precio: Decimal
+    puntaje: int
+    garantia_dias: int
+    reemplazada_en: datetime
+    usuario_id: str
+
+
 class DetalleOut(BaseModel):
-    """Detalle de Reparacion con su snapshot comercial."""
+    """Detalle de Reparacion con su snapshot comercial.
+
+    ``definiciones_anteriores`` (EXC-REP-004) son las definiciones que
+    PROC-REP-127 reemplazo, de la mas antigua a la mas reciente.
+    """
 
     id: str
     tipo_reparacion_id: str
@@ -386,6 +436,9 @@ class DetalleOut(BaseModel):
     control_observaciones: str | None = None
     observaciones: str | None = None
     detalle_origen_id: str | None = None
+    definiciones_anteriores: list[DefinicionAnteriorOut] = Field(
+        default_factory=list
+    )
     insumos_previstos: list[InsumoPrevistoOut] = Field(default_factory=list)
 
     @classmethod
@@ -435,6 +488,7 @@ class EjecucionOut(BaseModel):
     fin: datetime | None = None
     insumos_utilizados: list[InsumoUtilizadoOut] = Field(default_factory=list)
     observaciones: str | None = None
+    motivo_redefinicion: str | None = None
 
     @classmethod
     def desde_dominio(cls, ejecucion: EjecucionReparacion) -> "EjecucionOut":

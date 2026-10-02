@@ -31,6 +31,7 @@ from .ejecuciones import (
     intentar_reserva_e_inicio,
     registrar_ejecucion_completada,
     registrar_ejecucion_interrumpida,
+    registrar_ejecucion_requiere_redefinicion,
     registrar_reserva_fallida,
     reservar_insumos_e_iniciar_ejecucion,
 )
@@ -90,6 +91,13 @@ from .recursos import (
     registrar_espera_recursos,
     registrar_override_recursos,
     tiene_override_factibilidad,
+)
+from .redefinicion import (
+    marcar_pendiente_revision,
+    redefinir_detalle,
+    requiere_definicion,
+    revisar_detalle_pendiente,
+    revision_vigente,
 )
 from .reparaciones import (
     aprobar_control_tecnico,
@@ -172,6 +180,13 @@ __all__ = [
     "registrar_ejecucion_completada",
     "registrar_ejecucion_interrumpida",
     "registrar_reserva_fallida",
+    "registrar_ejecucion_requiere_redefinicion",
+    # Revision posterior de un Detalle (EXC-REP-004)
+    "marcar_pendiente_revision",
+    "redefinir_detalle",
+    "requiere_definicion",
+    "revisar_detalle_pendiente",
+    "revision_vigente",
     "intentar_reserva_e_inicio",
     "reservar_insumos_e_iniciar_ejecucion",
     # Inventario

@@ -32,7 +32,12 @@ from app.domain.models import (
     RolUsuario,
 )
 from app.domain.politicas import CondicionComercial, politica_de
-from app.services import ejecucion_activa, toma_activa
+from app.services import (
+    ejecucion_activa,
+    requiere_definicion,
+    revision_vigente,
+    toma_activa,
+)
 from app.services.ordenes import ROLES_ENTREGA, ROLES_PRIORIZACION
 from app.services.pagos import ROLES_PAGO, condicion_entrega_cumplida
 from app.services.revisiones import revision_tecnica_realizada
@@ -62,6 +67,12 @@ ACCION_GENERAR_GARANTIA_RMA_REVISION = "GENERAR_GARANTIA_RMA_REVISION"
 ACCION_ESPERAR_RECURSOS = "ESPERAR_RECURSOS"
 ACCION_REVALIDAR_RECURSOS = "REVALIDAR_RECURSOS"
 ACCION_OVERRIDE_RECURSOS = "OVERRIDE_RECURSOS"
+ACCION_REQUIERE_REDEFINICION = "REQUIERE_REDEFINICION"
+ACCION_REVISAR_DETALLE = "REVISAR_DETALLE"
+ACCION_REDEFINIR_DETALLE = "REDEFINIR_DETALLE"
+
+# EXC-REP-004: circuito de revision posterior (125 espera, 126 revision).
+_NODOS_REVISION_POSTERIOR = ("PROC-REP-125", "PROC-REP-126")
 
 CERO = Decimal("0")
 
@@ -253,6 +264,34 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                         )
                     )
 
+    # EXC-REP-004: en PROC-REP-125/126 cada Detalle pendiente se revisa
+    # (Tecnico, PROC-REP-126) y, ya revisado en su ciclo actual, se
+    # redefine (Recepcion, PROC-REP-127). Como en 100/120, el hito de
+    # workflow (EN_REPARACION) no ofrece nada propio.
+    if orden.current_process in _NODOS_REVISION_POSTERIOR:
+        estado = None
+        for detalle in orden.reparaciones_detail:
+            if not requiere_definicion(detalle):
+                continue
+            if revision_vigente(orden, detalle.id):
+                acciones.append(
+                    AccionDisponible(
+                        codigo=ACCION_REDEFINIR_DETALLE,
+                        etiqueta="Redefinir la reparacion del Detalle",
+                        roles=(RolUsuario.RECEPCION,),
+                        detalle_id=detalle.id,
+                    )
+                )
+            else:
+                acciones.append(
+                    AccionDisponible(
+                        codigo=ACCION_REVISAR_DETALLE,
+                        etiqueta="Realizar la revision tecnica del Detalle",
+                        roles=(RolUsuario.TECNICO,),
+                        detalle_id=detalle.id,
+                    )
+                )
+
     if estado is EstadoWorkflow.REQUERIMIENTO:
         acciones.append(
             AccionDisponible(
@@ -346,6 +385,17 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             AccionDisponible(
                 codigo=ACCION_INTERRUMPIR_EJECUCION,
                 etiqueta="Interrumpir la ejecucion",
+                roles=(RolUsuario.TECNICO,),
+                detalle_id=en_curso.reparacion_detail_id,
+                ejecucion_id=en_curso.id,
+            )
+        )
+        # EXC-REP-004: tercer resultado de PROC-REP-200. Igual que los
+        # otros dos, solo lo acepta el tecnico propietario (service).
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_REQUIERE_REDEFINICION,
+                etiqueta="El Detalle requiere redefinicion",
                 roles=(RolUsuario.TECNICO,),
                 detalle_id=en_curso.reparacion_detail_id,
                 ejecucion_id=en_curso.id,

@@ -34,12 +34,18 @@ from .inventario import InsumoUtilizado, MovimientoInsumo
 from .orden_reparacion import OrdenReparacion
 from .pagos import Pago, ResumenPago
 from .personas import Cliente, Usuario
-from .reparacion import EjecucionReparacion, ReparacionDetail, TomaOrden
+from .reparacion import (
+    DefinicionAnteriorDetalle,
+    EjecucionReparacion,
+    ReparacionDetail,
+    TomaOrden,
+)
 from .workflow import HistorialWorkflow
 
 __all__ = [
     # Enums
     "CondicionReparacionDetail",
+    "DefinicionAnteriorDetalle",
     "EstadoControl",
     "EstadoEjecucion",
     "EstadoPago",

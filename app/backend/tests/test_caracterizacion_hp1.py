@@ -197,6 +197,13 @@ def test_en_reparacion():
             flujo_mvp.DETALLE_ID,
             ejecucion_id,
         ),
+        # Slice 9 (EXC-REP-004): el tercer resultado de PROC-REP-200.
+        (
+            "REQUIERE_REDEFINICION",
+            (RolUsuario.TECNICO,),
+            flujo_mvp.DETALLE_ID,
+            ejecucion_id,
+        ),
         ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None, None),
     ]
     assert _alcanzados(orden) == [

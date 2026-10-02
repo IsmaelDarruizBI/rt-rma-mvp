@@ -149,6 +149,30 @@ export function PanelOrdenes() {
           observaciones || null,
         ),
       ),
+    requerirRedefinicion: (
+      ejecucionId,
+      insumosUtilizados,
+      motivo,
+      observaciones,
+    ) =>
+      void ejecutarComando(() =>
+        api.requerirRedefinicion(
+          idOrden,
+          ejecucionId,
+          idActor,
+          insumosUtilizados,
+          motivo,
+          observaciones || null,
+        ),
+      ),
+    revisarDetalle: (detalleId, resultado) =>
+      void ejecutarComando(() =>
+        api.revisarDetalle(idOrden, detalleId, idActor, resultado),
+      ),
+    redefinirDetalle: (detalleId, tipoId) =>
+      void ejecutarComando(() =>
+        api.redefinirDetalle(idOrden, detalleId, idActor, tipoId),
+      ),
     aprobarControl: (detalleId, observaciones) =>
       void ejecutarComando(() =>
         api.aprobarControl(idOrden, idActor, detalleId, observaciones || null),

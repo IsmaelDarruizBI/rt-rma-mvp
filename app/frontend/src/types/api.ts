@@ -119,8 +119,20 @@ export interface Detalle {
   observaciones: string | null;
   /** Detalle de la Orden origen que motiva esta garantía (HP-REP-003). */
   detalle_origen_id: string | null;
+  /** Definiciones reemplazadas por PROC-REP-127 (EXC-REP-004). */
+  definiciones_anteriores: DefinicionAnterior[];
   /** Resuelto por la API contra el catálogo; no vive en el dominio. */
   insumos_previstos: InsumoPrevisto[];
+}
+
+/** Definición de un Detalle reemplazada por PROC-REP-127 (BR-REP-015). */
+export interface DefinicionAnterior {
+  tipo_reparacion_id: string;
+  precio: string;
+  puntaje: number;
+  garantia_dias: number;
+  reemplazada_en: string;
+  usuario_id: string;
 }
 
 export interface Toma {
@@ -147,6 +159,8 @@ export interface Ejecucion {
   fin: string | null;
   insumos_utilizados: InsumoUtilizado[];
   observaciones: string | null;
+  /** PROC-REP-200 "Requiere redefinicion" (EXC-REP-004). */
+  motivo_redefinicion: string | null;
 }
 
 export interface Pago {

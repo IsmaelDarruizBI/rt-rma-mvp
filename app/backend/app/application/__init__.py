@@ -58,12 +58,14 @@ from .recursos import (
     forzar_detalle_por_recursos,
     revalidar_recursos,
 )
+from .redefinicion import redefinir_detalle, revisar_detalle
 from .revision import realizar_revision
 from .taller import (
     completar_ejecucion,
     iniciar_detalle,
     interrumpir_ejecucion,
     liberar_orden,
+    requerir_redefinicion_ejecucion,
     tomar_orden_en_estacion,
 )
 
@@ -108,6 +110,9 @@ __all__ = [
     "liberar_orden",
     "completar_ejecucion",
     "interrumpir_ejecucion",
+    "requerir_redefinicion_ejecucion",
+    "revisar_detalle",
+    "redefinir_detalle",
     "aprobar_control",
     "notificar",
     "registrar_pago_de_orden",

@@ -96,8 +96,8 @@ class CondicionReparacionDetail(str, Enum):
 
     ``BLOQUEADO_POR_RECURSOS`` lo fija PROC-REP-080 por Detalle
     (EXC-REP-001) y se reevalua en cada revalidacion. ``REQUIERE_DEFINICION``
-    (EXC-REP-004) todavia no esta conectado a ningun comando: PROC-REP-080
-    no lo pisa. El resolver ya sabe clasificar ambos.
+    (EXC-REP-004) lo asigna PROC-REP-200 "Requiere redefinicion" y lo quita
+    PROC-REP-127; PROC-REP-080 no lo pisa. El resolver clasifica ambos.
     """
 
     SIN_BLOQUEO = "SIN_BLOQUEO"
