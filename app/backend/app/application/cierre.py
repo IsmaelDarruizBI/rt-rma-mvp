@@ -13,7 +13,7 @@ precondicion del comando y va derecho a PROC-REP-280.
 
 from decimal import Decimal
 
-from app.domain.models import EstadoControl, EstadoWorkflow, OrdenReparacion
+from app.domain.models import EstadoControl, OrdenReparacion
 from app.services import (
     PrecondicionInvalidaError,
     aprobar_control_tecnico,
@@ -23,6 +23,7 @@ from app.services import (
     entregar_equipo,
     generar_comprobante_final,
     informar_resultado_rt,
+    lista_para_cierre,
     marcar_reparacion_lista,
     notificar_cliente,
     registrar_pago,
@@ -186,10 +187,10 @@ def entregar(
 
     orden = contexto.ordenes.obtener(orden_id)
 
-    if orden.estado_workflow is not EstadoWorkflow.REPARACION_LISTA:
+    if not lista_para_cierre(orden):
         raise PrecondicionInvalidaError(
-            f"Solo se entrega una Orden REPARACION_LISTA; esta en "
-            f"{orden.estado_workflow.value}."
+            f"Solo se entrega una Orden con resultado (REPARACION_LISTA o "
+            f"SIN_REPARACION); esta en {orden.estado_workflow.value}."
         )
     if orden.current_process != "PROC-REP-265":
         raise PrecondicionInvalidaError(

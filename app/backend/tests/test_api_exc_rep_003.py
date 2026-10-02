@@ -36,7 +36,7 @@ from tests.test_api_hp_rep_002 import (
     TECNICO,
     _crear_orden_rt,
 )
-from tests.test_api_hp_rep_003 import _orden_entregada
+from tests.test_api_hp_rep_003 import _garantia_definida, _orden_entregada
 from tests.test_api_var_rep_001_002 import _crear_orden as _crear_orden_cliente
 
 
@@ -146,8 +146,13 @@ def test_caso_a_det_a_falla_det_b_sigue_trabajable(tmp_path):
             orden["estado_workflow"] == antes["estado_workflow"] == ("EN_COLA")
         )
         assert orden["current_process"] == "PROC-REP-211"
-        # Acciones: iniciar B + liberar (sin 100/110/120).
-        assert _sin_pago(orden) == ["INICIAR_DETALLE", "LIBERAR_ORDEN"]
+        # Acciones: iniciar B + liberar (sin 100/110/120) y, transversal,
+        # el override del Detalle bloqueado (BR-REP-003).
+        assert _sin_pago(orden) == [
+            "INICIAR_DETALLE",
+            "LIBERAR_ORDEN",
+            "OVERRIDE_RECURSOS",
+        ]
         (iniciar,) = [
             a
             for a in orden["acciones_disponibles"]
@@ -246,7 +251,7 @@ def test_caso_b_unico_detalle_211_pendiente_recursos_cierra_toma_y_va_a_120(
         assert (
             orden["estado_workflow"] == antes["estado_workflow"] == ("EN_COLA")
         )
-        assert _sin_pago(orden) == ["REVALIDAR_RECURSOS"]
+        assert _sin_pago(orden) == ["REVALIDAR_RECURSOS", "OVERRIDE_RECURSOS"]
 
 
 def test_el_progreso_muestra_186_y_120_con_evidencia_real(tmp_path):
@@ -504,17 +509,15 @@ def test_rt_interno_reserva_fallida_sin_pagos(tmp_path):
             "PROC-REP-211",
             "PROC-REP-120",
         ]
-        assert _codigos(orden) == ["REVALIDAR_RECURSOS"]  # RT: sin pagos
+        # RT: sin pagos.
+        assert _codigos(orden) == ["REVALIDAR_RECURSOS", "OVERRIDE_RECURSOS"]
         assert orden["ejecuciones"] == []
 
 
 def test_garantia_rma_reserva_fallida(tmp_path):
     with _cliente(tmp_path, stock="5") as cliente:
         origen = _orden_entregada(cliente)
-        garantia = cliente.post(
-            f"/api/orders/{origen['id']}/details/DET-001/warranty-rma",
-            json={"usuario_id": RECEPCION},
-        ).json()
+        garantia = _garantia_definida(cliente, origen["id"]).json()
         assert garantia["estado_workflow"] == "HABILITADA"
         _tomar(cliente, garantia["id"])
         _fijar_stock(tmp_path, **{INSUMO: 0})

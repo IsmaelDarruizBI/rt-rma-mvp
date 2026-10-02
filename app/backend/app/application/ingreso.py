@@ -1,27 +1,30 @@
 """Tramo de Recepcion: ingreso del equipo y definicion de la reparacion.
 
-Comandos, uno por accion humana de ACT-RECEP:
+Comandos, uno por intencion humana de ACT-RECEP:
 
     crear_orden          PROC-REP-010 -> 030 -> 040
-    definir_reparacion   PROC-REP-045 -> 070 -> 050 -> 060 -> 080 ->
-                         090 -> 140
-    crear_garantia_rma   PROC-REP-035 -> 040 -> 045 -> 070 -> 050 ->
-                         060 -> 080 -> 090 -> 140 (HP-REP-003)
+    definir_reparacion   agrega UN Detalle: PROC-REP-045 (Si, una vez)
+                         -> 070
     enviar_a_revision    PROC-REP-045 (No) -> 055 -> 050 -> 060 si
                          corresponde (VAR-REP-001/002)
-    crear_garantia_rma_en_revision
-                         PROC-REP-035 -> 040 -> 045 (No) -> 055 -> 050 ->
-                         060 (VAR-REP-001)
     definir_reparacion_desde_revision
-                         PROC-REP-068 (Si) -> 075 -> 080 -> 090 -> 140
+                         agrega UN Detalle: PROC-REP-068 (Si, una vez)
+                         -> 075
+    finalizar_definicion cierra la carga de Detalles: [050 -> 060 si
+                         todavia no se evaluo el comprobante] -> 080 ->
+                         090 -> 140 | 100
+    finalizar_sin_reparacion
+                         PROC-REP-068 (No) -> 069 (SIN_REPARACION)
+    iniciar_garantia_rma PROC-REP-035 (1..N Detalles origen) -> 040 ->
+                         045 (No) -> 055 -> 050 -> 060 (HP-REP-003)
 
-El corte entre ambos es la frontera del actor: entre 040 y 045 el
-proceso vuelve a pedirle algo a Recepcion (que reparacion se va a
-hacer), asi que son dos intenciones distintas y dos endpoints distintos.
-Dentro de cada comando, los nodos ACT-SYSTEM y las decisiones que
-siguen (050/060/080/090/140) se encadenan sin volver a preguntar.
+Agregar un Detalle y finalizar la definicion son intenciones distintas:
+agregar nunca genera comprobante, valida factibilidad ni habilita. Dentro
+de cada comando, los nodos ACT-SYSTEM y las decisiones que siguen se
+encadenan sin volver a preguntar.
 """
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from app.domain.models import Cliente, Equipo, OrdenReparacion
@@ -32,9 +35,11 @@ from app.services import (
     crear_orden_rt_interno,
     definir_reparacion_detail,
     definir_reparacion_detail_luego_revision,
+    exigir_definicion_finalizable,
     generar_comprobante_recepcion,
     habilitar_orden,
     marcar_orden_en_revision,
+    registrar_finalizacion_sin_reparacion,
     validar_factibilidad_detalles,
 )
 
@@ -113,42 +118,20 @@ def definir_reparacion(
     usuario_id: str,
     tipo_reparacion_id: str,
     observaciones: str | None = None,
-    finalizar_definicion: bool = True,
 ) -> OrdenReparacion:
-    """Recepcion define un Detalle de la reparacion (Multi-Detalle).
+    """Recepcion AGREGA un Detalle de la reparacion (Multi-Detalle).
 
-    Encadena PROC-REP-045 -> 070 (Detalle con precio snapshot) y, solo
-    cuando ``finalizar_definicion`` es verdadero, PROC-REP-050 -> 060
-    (comprobante de recepcion), PROC-REP-080 -> 090 (factibilidad) y
-    PROC-REP-140 (habilitar).
-
-    Una Orden puede recibir N Detalles: cada llamada agrega uno nuevo
-    mientras la Orden siga en REQUERIMIENTO. ``finalizar_definicion``
-    (default ``True``, aditivo) es la extension minima que permite
-    seguir agregando Detalles sin habilitar la Orden todavia -Recepcion
-    llama de nuevo con ``finalizar_definicion=False`` por cada Detalle
-    que todavia no es el ultimo, y con ``True`` (o el default) en el
-    ultimo-. Con un unico Detalle el comportamiento es identico al de
-    antes: HP-REP-001 no necesita ningun paso nuevo.
-
-    La factibilidad CONSULTA el stock global -lo que las demas Ordenes
-    tienen reservado- pero NO reserva nada (BR-REP-006): la reserva real
-    ocurre recien cuando un tecnico inicia el Detalle. Por eso este
-    comando no entra en la seccion critica de inventario: no escribe
-    stock ni compite por el.
-
-    Si ningun Detalle es trabajable, PROC-REP-090 da "Ninguno trabajable"
-    y la Orden queda detenida en PROC-REP-100 (EXC-REP-001): se persiste
-    con sus Detalles BLOQUEADO_POR_RECURSOS, sin error. Despues se espera y
-    revalida (``application.recursos``). El override (PROC-REP-130,
-    EXC-REP-002) no esta implementado.
+    Registra PROC-REP-045 ("Si", solo con el primer Detalle) -> 070, con
+    el precio snapshot del Tipo. Una sola intencion: no genera el
+    comprobante, no valida factibilidad ni habilita la Orden. La Orden
+    sigue en REQUERIMIENTO, lista para recibir otro Detalle o para que
+    Recepcion finalice la definicion (``finalizar_definicion``).
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     tipo = contexto.catalogos.obtener_tipo_reparacion(tipo_reparacion_id)
     fecha = contexto.ahora()
 
     orden = contexto.ordenes.obtener(orden_id)
-
     orden = definir_reparacion_detail(
         orden,
         detalle_id=siguiente_detalle_id(orden),
@@ -158,26 +141,43 @@ def definir_reparacion(
         observaciones=observaciones,
     )
 
-    if finalizar_definicion:
-        orden = _finalizar_definicion(contexto, orden, fecha=fecha)
-
     contexto.ordenes.guardar(orden)
     return orden
 
 
-def _finalizar_definicion(
+def finalizar_definicion(
     contexto: ApplicationContext,
-    orden: OrdenReparacion,
     *,
-    fecha: datetime,
+    orden_id: str,
+    usuario_id: str,
 ) -> OrdenReparacion:
-    """PROC-REP-050 -> 060 -> 080 -> 090 -> 140: de Detalles a HABILITADA.
+    """Recepcion cierra la carga de Detalles (FINALIZAR_DEFINICION).
 
-    Compartido por ``definir_reparacion`` y ``crear_garantia_rma``. El
-    tramo 080 -> 140 es ``_validar_y_habilitar``.
+    Exige ACT-RECEP, al menos un Detalle y la definicion todavia abierta.
+    Reutiliza los services existentes, sin duplicarlos:
+
+    - camino normal (REQUERIMIENTO): PROC-REP-050 -> 060 si corresponde y
+      despues 080 -> 090 -> 140 | 100;
+    - camino de revision (EN_REVISION, Detalles definidos por 075): el
+      comprobante ya se evaluo antes del diagnostico, asi que va directo a
+      080 -> 090 -> 140 | 100, sin regenerarlo.
+
+    La distincion sale del historial (PROC-REP-050 ya evaluado), no de un
+    flag. Si ningun Detalle es trabajable, la Orden queda en PROC-REP-100
+    (EXC-REP-001/002), sin error. Persiste una sola vez.
     """
-    orden = generar_comprobante_recepcion(orden, fecha=fecha)
-    return _validar_y_habilitar(contexto, orden, fecha=fecha)
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    orden = contexto.ordenes.obtener(orden_id)
+    exigir_definicion_finalizable(orden, usuario=usuario)
+
+    if not any(paso.process_id == "PROC-REP-050" for paso in orden.historial):
+        orden = generar_comprobante_recepcion(orden, fecha=fecha)
+    orden = _validar_y_habilitar(contexto, orden, fecha=fecha)
+
+    contexto.ordenes.guardar(orden)
+    return orden
 
 
 def _validar_y_habilitar(
@@ -209,58 +209,6 @@ def _validar_y_habilitar(
     return habilitar_orden(orden, fecha=fecha)
 
 
-def crear_garantia_rma(
-    contexto: ApplicationContext,
-    *,
-    orden_origen_id: str,
-    detalle_origen_id: str,
-    usuario_id: str,
-) -> OrdenReparacion:
-    """Recepcion genera la garantia RMA de un Detalle (HP-REP-003).
-
-    Encadena PROC-REP-035 -> 040 (Orden nueva vinculada), 045 -> 070
-    (un Detalle de garantia que referencia al Detalle origen) y, desde
-    ahi, 050 -> 060 -> 080 -> 090 -> 140 igual que ``definir_reparacion``.
-    Es un unico comando porque Recepcion ya eligio que Detalle reprocesar.
-
-    Devuelve la Orden NUEVA. La Orden origen solo se lee: no se vuelve a
-    guardar ni se modifica (BR-REP-019). El Detalle nuevo es del mismo
-    Tipo de Reparacion y toma un snapshot propio del catalogo actual.
-    """
-    usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    fecha = contexto.ahora()
-
-    orden_origen = contexto.ordenes.obtener(orden_origen_id)
-
-    with seccion_critica_inventario():
-        orden = crear_orden_garantia_rma(
-            orden_id=siguiente_orden_id(contexto.ordenes),
-            orden_origen=orden_origen,
-            detalle_origen_id=detalle_origen_id,
-            usuario=usuario,
-            fecha=fecha,
-        )
-        detalle_origen = next(
-            detalle
-            for detalle in orden_origen.reparaciones_detail
-            if detalle.id == detalle_origen_id
-        )
-        orden = definir_reparacion_detail(
-            orden,
-            detalle_id=siguiente_detalle_id(orden),
-            tipo_reparacion=contexto.catalogos.obtener_tipo_reparacion(
-                detalle_origen.tipo_reparacion_id
-            ),
-            usuario=usuario,
-            fecha=fecha,
-            detalle_origen_id=detalle_origen_id,
-        )
-        orden = _finalizar_definicion(contexto, orden, fecha=fecha)
-        contexto.ordenes.guardar(orden)
-
-    return orden
-
-
 def enviar_a_revision(
     contexto: ApplicationContext,
     *,
@@ -286,19 +234,23 @@ def enviar_a_revision(
     return orden
 
 
-def crear_garantia_rma_en_revision(
+def iniciar_garantia_rma(
     contexto: ApplicationContext,
     *,
     orden_origen_id: str,
-    detalle_origen_id: str,
+    detalle_origen_ids: Sequence[str],
     usuario_id: str,
 ) -> OrdenReparacion:
-    """Garantia RMA que entra directamente en revision (VAR-REP-001).
+    """Recepcion inicia la garantia RMA de una Orden ENTREGADA (HP-REP-003).
 
-    PROC-REP-035 -> 040 -> 045 (No) -> 055 -> 050 -> 060 y se detiene:
-    todavia no hay Detalles. La procedencia queda en ``orden_origen_id`` y
-    ``detalles_origen_ids``. Igual que HP-REP-003, la Orden origen solo
-    se lee: no se guarda ni se modifica.
+    Una unica entrada canonica: PROC-REP-035 (1..N Detalles origen) ->
+    040 -> 045 (No) -> 055 (EN_REVISION) -> 050 -> 060, y se detiene a
+    esperar la revision tecnica (PROC-REP-065). La revision es obligatoria
+    (BR-REP-019): no existe ningun camino que copie el Tipo del Detalle
+    origen y deje la garantia habilitada.
+
+    Devuelve la UNICA Orden NUEVA, sin Detalles propios todavia. La Orden
+    origen solo se lee: no se guarda ni se modifica.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
@@ -309,7 +261,7 @@ def crear_garantia_rma_en_revision(
         orden = crear_orden_garantia_rma(
             orden_id=siguiente_orden_id(contexto.ordenes),
             orden_origen=orden_origen,
-            detalle_origen_id=detalle_origen_id,
+            detalle_origen_ids=list(detalle_origen_ids),
             usuario=usuario,
             fecha=fecha,
         )
@@ -327,24 +279,24 @@ def definir_reparacion_desde_revision(
     usuario_id: str,
     tipo_reparacion_id: str,
     observaciones: str | None = None,
-    finalizar_definicion: bool = True,
     detalle_origen_id: str | None = None,
 ) -> OrdenReparacion:
-    """Recepcion define un Detalle luego de la revision (VAR-REP-001/002).
+    """Recepcion AGREGA un Detalle luego de la revision (075).
 
-    PROC-REP-068 (Si, una sola vez) -> 075 por Detalle y, con
-    ``finalizar_definicion``, 080 -> 090 -> 140. NO repite 050/060: el
-    comprobante se genero antes del diagnostico.
+    PROC-REP-068 ("Si", solo con el primer Detalle) -> 075. Una sola
+    intencion: no valida factibilidad ni habilita; la carga se cierra con
+    ``finalizar_definicion``. NO repite 050/060: el comprobante se genero
+    antes del diagnostico.
 
-    ``detalle_origen_id`` solo hace falta en una garantia con mas de un
-    Detalle origen identificado.
+    En una garantia RMA, ``detalle_origen_id`` elige a cual de los
+    Detalles origen de la Orden corresponde el Detalle nuevo (obligatorio
+    si hay mas de uno).
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     tipo = contexto.catalogos.obtener_tipo_reparacion(tipo_reparacion_id)
     fecha = contexto.ahora()
 
     orden = contexto.ordenes.obtener(orden_id)
-
     orden = definir_reparacion_detail_luego_revision(
         orden,
         detalle_id=siguiente_detalle_id(orden),
@@ -355,8 +307,36 @@ def definir_reparacion_desde_revision(
         detalle_origen_id=detalle_origen_id,
     )
 
-    if finalizar_definicion:
-        orden = _validar_y_habilitar(contexto, orden, fecha=fecha)
+    contexto.ordenes.guardar(orden)
+    return orden
+
+
+def finalizar_sin_reparacion(
+    contexto: ApplicationContext,
+    *,
+    orden_id: str,
+    usuario_id: str,
+    motivo: str,
+    observaciones: str | None = None,
+) -> OrdenReparacion:
+    """Recepcion finaliza la Orden SIN_REPARACION (068 No -> 069).
+
+    BR-REP-010: tras la revision tecnica, sin Detalles y con motivo
+    obligatorio. No crea Detalles ni precio (Subtotal 0) y no cambia el
+    estado de workflow. Despues sigue el cierre segun el Origen
+    (``application.cierre``: notificar o informar a Gestion RT).
+    """
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    orden = contexto.ordenes.obtener(orden_id)
+    orden = registrar_finalizacion_sin_reparacion(
+        orden,
+        usuario=usuario,
+        motivo=motivo,
+        observaciones=observaciones,
+        fecha=fecha,
+    )
 
     contexto.ordenes.guardar(orden)
     return orden

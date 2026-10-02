@@ -1,9 +1,11 @@
 """HP-REP-003 (garantia de reparacion RMA) componiendo services.
 
 La Orden de garantia nace de una Orden origen ENTREGADA (HP-REP-001
-completo), sin PROC-REP-010/030, y converge con el circuito tecnico
-normal. Su condicion comercial es NO_COBRABLE: nunca hay pagos ni
-PROC-REP-266, y el saldo nominal > 0 no es una deuda.
+completo) y de 1..N de sus Detalles, sin PROC-REP-010/030. La revision
+tecnica es obligatoria (BR-REP-019): 045 No -> 055 -> 050 -> 060 -> 065 ->
+068 Si -> 075, y recien al finalizar la definicion converge con el
+circuito tecnico normal. Su condicion comercial es NO_COBRABLE: nunca hay
+pagos ni PROC-REP-266, y el saldo nominal > 0 no es una deuda.
 """
 
 from decimal import Decimal
@@ -26,18 +28,22 @@ from app.services import (
     crear_orden_garantia_rma,
     definir_prioridad,
     definir_reparacion_detail,
+    definir_reparacion_detail_luego_revision,
     ejecutar_detalle,
     entregar_equipo,
     evaluar_situacion_orden,
+    exigir_definicion_finalizable,
     generar_comprobante_final,
     generar_comprobante_recepcion,
     generar_movimientos_inventario,
     habilitar_orden,
     ingresar_a_cola,
+    marcar_orden_en_revision,
     marcar_reparacion_lista,
     notificar_cliente,
     registrar_ejecucion_completada,
     registrar_pago,
+    registrar_revision_tecnica,
     reservar_insumos_e_iniciar_ejecucion,
     seleccionar_detalle,
     tomar_orden,
@@ -66,38 +72,53 @@ ORIGEN_ID = "OR-001"
 DETALLE_ORIGEN_ID = "DET-001"
 
 
-def _garantia_creada(origen: OrdenReparacion | None = None):
+def _garantia_creada(
+    origen: OrdenReparacion | None = None,
+    detalle_origen_ids: tuple[str, ...] = (DETALLE_ORIGEN_ID,),
+):
     """Hasta PROC-REP-040: REQUERIMIENTO, sin Detalles."""
     return crear_orden_garantia_rma(
         orden_id="OR-002",
         orden_origen=origen or flujo_mvp.orden_entregada(),
-        detalle_origen_id=DETALLE_ORIGEN_ID,
+        detalle_origen_ids=list(detalle_origen_ids),
         usuario=RECEPCION,
         fecha=t(300),
+    )
+
+
+def _garantia_revisada(
+    origen: OrdenReparacion | None = None,
+) -> OrdenReparacion:
+    """045 No -> 055 -> 050 -> 060 -> 065: la revision es obligatoria."""
+    orden = marcar_orden_en_revision(
+        _garantia_creada(origen), usuario=RECEPCION, fecha=t(301)
+    )
+    orden = generar_comprobante_recepcion(orden, fecha=t(302))
+    return registrar_revision_tecnica(
+        orden, usuario=TECNICO, resultado="Falla cubierta.", fecha=t(303)
     )
 
 
 def _garantia_habilitada(
     origen: OrdenReparacion | None = None,
 ) -> OrdenReparacion:
-    """Hasta PROC-REP-140."""
-    orden = definir_reparacion_detail(
-        _garantia_creada(origen),
+    """068 Si -> 075 y, al finalizar la definicion, 080 -> 090 -> 140."""
+    orden = definir_reparacion_detail_luego_revision(
+        _garantia_revisada(origen),
         detalle_id="DET-001",
         tipo_reparacion=TIPO_BATERIA,
         usuario=RECEPCION,
-        fecha=t(301),
-        detalle_origen_id=DETALLE_ORIGEN_ID,
+        fecha=t(304),
     )
-    orden = generar_comprobante_recepcion(orden, fecha=t(302))
+    exigir_definicion_finalizable(orden, usuario=RECEPCION)
     orden, factible = validar_factibilidad_detalles(
         orden,
         insumos=INSUMOS,
         insumos_previstos=INSUMOS_PREVISTOS,
-        fecha=t(303),
+        fecha=t(305),
     )
     assert factible
-    return habilitar_orden(orden, fecha=t(304))
+    return habilitar_orden(orden, fecha=t(306))
 
 
 def _garantia_lista_y_notificada(
@@ -108,28 +129,28 @@ def _garantia_lista_y_notificada(
         _garantia_habilitada(origen),
         prioridad=1,
         usuario=COORDINADOR,
-        fecha=t(305),
+        fecha=t(307),
     )
-    orden = ingresar_a_cola(orden, fecha=t(306))
+    orden = ingresar_a_cola(orden, fecha=t(308))
     orden, _ = validar_estacion_trabajo(
         orden,
         usuario=TECNICO,
         estacion_id=ESTACION.id,
         estaciones=ESTACIONES,
         compatibilidades=COMPATIBILIDADES,
-        fecha=t(307),
+        fecha=t(309),
     )
     orden = tomar_orden(
-        orden, usuario=TECNICO, estacion_id=ESTACION.id, fecha=t(308)
+        orden, usuario=TECNICO, estacion_id=ESTACION.id, fecha=t(310)
     )
     orden = seleccionar_detalle(
-        orden, detalle_id="DET-001", usuario=TECNICO, fecha=t(309)
+        orden, detalle_id="DET-001", usuario=TECNICO, fecha=t(311)
     )
     orden, _ = validar_compatibilidad_detalle(
         orden,
         detalle_id="DET-001",
         compatibilidades=COMPATIBILIDADES,
-        fecha=t(310),
+        fecha=t(312),
     )
     orden = reservar_insumos_e_iniciar_ejecucion(
         orden,
@@ -137,10 +158,10 @@ def _garantia_lista_y_notificada(
         usuario=TECNICO,
         insumos=INSUMOS,
         insumos_previstos=INSUMOS_PREVISTOS,
-        fecha=t(311),
+        fecha=t(313),
     )
     orden = ejecutar_detalle(
-        orden, detalle_id="DET-001", usuario=TECNICO, fecha=t(312)
+        orden, detalle_id="DET-001", usuario=TECNICO, fecha=t(314)
     )
     orden = registrar_ejecucion_completada(
         orden,
@@ -149,16 +170,16 @@ def _garantia_lista_y_notificada(
             InsumoUtilizado(insumo_id="INS-001", cantidad=Decimal("1"))
         ],
         usuario=TECNICO,
-        fecha=t(313),
+        fecha=t(315),
     )
     orden = generar_movimientos_inventario(
-        orden, ejecucion_id=orden.ejecuciones[0].id, fecha=t(314)
+        orden, ejecucion_id=orden.ejecuciones[0].id, fecha=t(316)
     )
-    orden, _ = evaluar_situacion_orden(orden, fecha=t(315))
-    orden = aprobar_control_tecnico(orden, usuario=RECEPCION, fecha=t(316))
-    orden = calcular_puntaje(orden, fecha=t(317))
-    orden = marcar_reparacion_lista(orden, fecha=t(318))
-    return notificar_cliente(orden, usuario=RECEPCION, fecha=t(319))
+    orden, _ = evaluar_situacion_orden(orden, fecha=t(317))
+    orden = aprobar_control_tecnico(orden, usuario=RECEPCION, fecha=t(318))
+    orden = calcular_puntaje(orden, fecha=t(319))
+    orden = marcar_reparacion_lista(orden, fecha=t(320))
+    return notificar_cliente(orden, usuario=RECEPCION, fecha=t(321))
 
 
 # --- Creacion ------------------------------------------------------------
@@ -201,7 +222,7 @@ def test_historial_inicial_es_035_y_040_sin_010_ni_030():
     ]
     assert f"orden_origen_id={ORIGEN_ID}" in orden.historial[0].observacion
     assert (
-        f"detalle_origen_id={DETALLE_ORIGEN_ID}"
+        f"detalles_origen_ids={DETALLE_ORIGEN_ID}"
         in orden.historial[0].observacion
     )
 
@@ -217,22 +238,39 @@ def test_detalle_de_garantia_vincula_al_origen_con_snapshot_propio():
     assert detalle.garantia_dias == TIPO_BATERIA.garantia_dias
 
 
-def test_recorrido_inicial_035_a_140():
+def test_recorrido_inicial_035_a_140_con_revision_obligatoria():
     orden = _garantia_habilitada()
 
     assert [p.referencia_id for p in orden.historial] == [
         "PROC-REP-035",
         "PROC-REP-040",
         "PROC-REP-045",
-        "PROC-REP-070",
+        "PROC-REP-055",
         "PROC-REP-050",
         "PROC-REP-060",
+        "PROC-REP-065",
+        "PROC-REP-068",
+        "PROC-REP-075",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",
     ]
+    assert orden.historial[2].observacion == "No"
     assert orden.estado_workflow is EstadoWorkflow.HABILITADA
     assert orden.documentos.comprobante_recepcion.generado
+
+
+def test_la_garantia_no_admite_la_definicion_directa_070():
+    """Sin bypass: el Tipo origen no se copia ni se define sin revision."""
+    for orden in (_garantia_creada(), _garantia_revisada()):
+        with pytest.raises(PrecondicionInvalidaError):
+            definir_reparacion_detail(
+                orden,
+                detalle_id="DET-001",
+                tipo_reparacion=TIPO_BATERIA,
+                usuario=RECEPCION,
+                fecha=t(304),
+            )
 
 
 def test_la_orden_origen_no_se_modifica():
@@ -258,14 +296,17 @@ def test_rechaza_orden_origen_no_entregada():
 
 
 def test_rechaza_detalle_origen_inexistente():
-    with pytest.raises(EntidadNoEncontradaError):
-        crear_orden_garantia_rma(
-            orden_id="OR-002",
-            orden_origen=flujo_mvp.orden_entregada(),
-            detalle_origen_id="DET-999",
-            usuario=RECEPCION,
-            fecha=t(300),
-        )
+    for seleccion in (("DET-999",), (DETALLE_ORIGEN_ID, "DET-999")):
+        with pytest.raises(EntidadNoEncontradaError, match="DET-999"):
+            _garantia_creada(detalle_origen_ids=seleccion)
+
+
+@pytest.mark.parametrize(
+    "seleccion", [(), (DETALLE_ORIGEN_ID, DETALLE_ORIGEN_ID)]
+)
+def test_rechaza_seleccion_vacia_o_repetida(seleccion):
+    with pytest.raises(PrecondicionInvalidaError):
+        _garantia_creada(detalle_origen_ids=seleccion)
 
 
 @pytest.mark.parametrize("usuario", [TECNICO, ADMINISTRADOR, COORDINADOR])
@@ -274,7 +315,7 @@ def test_rechaza_usuario_que_no_es_recepcion(usuario):
         crear_orden_garantia_rma(
             orden_id="OR-002",
             orden_origen=flujo_mvp.orden_entregada(),
-            detalle_origen_id=DETALLE_ORIGEN_ID,
+            detalle_origen_ids=[DETALLE_ORIGEN_ID],
             usuario=usuario,
             fecha=t(300),
         )
@@ -290,12 +331,12 @@ def test_rechaza_orden_origen_sin_cliente():
 # --- Acciones disponibles -------------------------------------------------
 
 
-def test_orden_entregada_publica_generar_garantia_por_detalle():
+def test_orden_entregada_publica_una_unica_garantia_a_nivel_orden():
     acciones = acciones_disponibles(flujo_mvp.orden_entregada())
 
+    # Una accion de Orden: la seleccion de 1..N Detalles es del formulario.
     assert [(a.codigo, a.roles, a.detalle_id) for a in acciones] == [
-        ("GENERAR_GARANTIA_RMA", (RECEPCION.rol,), DETALLE_ORIGEN_ID),
-        ("GENERAR_GARANTIA_RMA_REVISION", (RECEPCION.rol,), DETALLE_ORIGEN_ID),
+        ("INICIAR_GARANTIA_RMA", (RECEPCION.rol,), None),
     ]
 
 
@@ -304,7 +345,7 @@ def test_orden_no_entregada_no_publica_garantia():
         flujo_mvp.orden_creada(),
         flujo_mvp.orden_reparacion_lista(),
     ):
-        assert "GENERAR_GARANTIA_RMA" not in {
+        assert "INICIAR_GARANTIA_RMA" not in {
             a.codigo for a in acciones_disponibles(orden)
         }
 

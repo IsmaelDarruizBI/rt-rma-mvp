@@ -85,9 +85,9 @@ def reservar_insumos_e_iniciar_ejecucion(
     Esta funcion es el camino exitoso. La reserva fallida (PROC-REP-186,
     EXC-REP-003) la compone ``intentar_reserva_e_inicio``; aqui, sin
     override, la falta de stock solo se defiende con
-    RecursoNoDisponibleError. Con override (PROC-REP-130 de ESTE Detalle)
-    reserva igual, dejando el disponible negativo (el stock fisico solo
-    baja en PROC-REP-210).
+    RecursoNoDisponibleError. Con override vigente de ESTE Detalle
+    (ACC-REP-049, ``tiene_override_factibilidad``) reserva igual, dejando
+    el disponible negativo (el stock fisico solo baja en PROC-REP-210).
 
     Nodo ACT-SYSTEM. El ``usuario`` recibido es el tecnico de la toma
     activa, al que se atribuye la Ejecucion que se abre aqui.

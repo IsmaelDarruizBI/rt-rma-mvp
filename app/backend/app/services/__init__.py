@@ -85,11 +85,12 @@ from .pagos import (
     validar_condicion_entrega,
 )
 from .recursos import (
+    autorizar_override_recursos,
+    continuar_por_override,
     exigir_espera_por_recursos,
     marcar_pendiente_recursos,
     override_listo_para_habilitar,
     registrar_espera_recursos,
-    registrar_override_recursos,
     tiene_override_factibilidad,
 )
 from .redefinicion import (
@@ -102,12 +103,19 @@ from .redefinicion import (
 from .reparaciones import (
     aprobar_control_tecnico,
     calcular_puntaje,
+    definicion_finalizada,
     definir_reparacion_detail,
     definir_reparacion_detail_luego_revision,
+    exigir_definicion_finalizable,
     validar_factibilidad_detalles,
 )
 from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
-from .revisiones import registrar_revision_tecnica
+from .revisiones import (
+    finalizada_sin_reparacion,
+    lista_para_cierre,
+    registrar_finalizacion_sin_reparacion,
+    registrar_revision_tecnica,
+)
 from .tomas import (
     hay_ejecucion_activa,
     liberar_orden,
@@ -155,15 +163,21 @@ __all__ = [
     "exigir_espera_por_recursos",
     "marcar_pendiente_recursos",
     "override_listo_para_habilitar",
-    "registrar_override_recursos",
+    "autorizar_override_recursos",
+    "continuar_por_override",
     "tiene_override_factibilidad",
     "registrar_espera_recursos",
     # Revision tecnica (PROC-REP-065)
     "registrar_revision_tecnica",
+    "registrar_finalizacion_sin_reparacion",
+    "finalizada_sin_reparacion",
+    "lista_para_cierre",
     # Detalles de Reparacion
     "aprobar_control_tecnico",
     "calcular_puntaje",
     "definir_reparacion_detail",
+    "definicion_finalizada",
+    "exigir_definicion_finalizable",
     "definir_reparacion_detail_luego_revision",
     "validar_factibilidad_detalles",
     # Toma y seleccion

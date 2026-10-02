@@ -17,6 +17,8 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.fixtures.api_definicion import definir_y_finalizar
+
 from .test_api_hp_rep_001 import (
     ADMINISTRADOR,
     COORDINADOR,
@@ -35,8 +37,9 @@ from .test_api_hp_rep_001 import (
 def test_el_detalle_expone_el_nombre_del_tipo(cliente):  # noqa: F811
     """La UI muestra que reparacion es, no solo su ID tecnico."""
     orden_id = _crear_orden(cliente)
-    orden = cliente.post(
-        f"/api/orders/{orden_id}/details",
+    orden = definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     ).json()
 
@@ -49,8 +52,9 @@ def test_el_detalle_expone_el_nombre_del_tipo(cliente):  # noqa: F811
 def test_el_nombre_del_tipo_no_se_persiste(cliente, tmp_path):  # noqa: F811
     """Es dato de catalogo vigente, no del aggregate."""
     orden_id = _crear_orden(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
 
@@ -68,8 +72,9 @@ def test_el_nombre_del_tipo_no_se_persiste(cliente, tmp_path):  # noqa: F811
 def test_un_pago_temprano_es_un_anticipo(cliente):  # noqa: F811
     """BR-REP-017: el Pago es transversal, no espera la fase de cierre."""
     orden_id = _crear_orden(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
     antes = cliente.get(f"/api/orders/{orden_id}").json()
@@ -192,8 +197,9 @@ def test_anticipo_y_pago_conviven_en_la_misma_orden(cliente):  # noqa: F811
 def test_un_tecnico_no_puede_registrar_un_pago_por_http(cliente):  # noqa: F811
     """BR-REP-017: usuario ACTIVO AND rol != TECNICO, exigido en la API."""
     orden_id = _crear_orden(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
 
@@ -213,8 +219,9 @@ def test_un_tecnico_no_puede_registrar_un_pago_por_http(cliente):  # noqa: F811
 def test_el_anticipo_habilita_la_accion_de_pago_temprano(cliente):  # noqa: F811
     """Con saldo > 0 la UI debe poder ofrecer REGISTRAR_PAGO."""
     orden_id = _crear_orden(cliente)
-    orden = cliente.post(
-        f"/api/orders/{orden_id}/details",
+    orden = definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     ).json()
 
@@ -235,8 +242,9 @@ def test_el_anticipo_habilita_la_accion_de_pago_temprano(cliente):  # noqa: F811
 
 def _hasta_habilitada(cliente) -> str:  # noqa: F811
     orden_id = _crear_orden(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
     return orden_id
@@ -366,8 +374,9 @@ def test_el_happy_path_no_cambio_de_actores(cliente):  # noqa: F811
 def test_la_respuesta_incluye_los_pagos_para_la_ui(cliente):  # noqa: F811
     """El frontend arma el historial de pagos con lo que ya devuelve la API."""
     orden_id = _crear_orden(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
     cliente.post(

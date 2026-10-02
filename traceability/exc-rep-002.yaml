@@ -15,6 +15,15 @@
 # el stock fisico negativo (solo para ESE Detalle). 185/210 NO son nodos de este
 # Scenario: se declaran como consecuencia downstream (in_scenario: false).
 #
+# specs/019-mvp2-feedback: el override es una capacidad TRANSVERSAL por
+# Detalle (ACC-REP-049, accion funcional en el historial): la misma
+# autorizacion -misma validacion y misma vigencia- vale con la Orden detenida
+# en PROC-REP-100 (y ahi continua 110 Si -> 130 -> 140), en 120 o con
+# factibilidad parcial (Orden habilitada, en cola, tomada o en reparacion),
+# sin reiniciar el flujo: no vuelve a 140, no cierra la toma ni toca la
+# Ejecucion en curso, el workflow ni el stock. Vigencia: hasta un
+# PROC-REP-127 posterior del mismo Detalle (EXC-REP-004).
+#
 # Reutiliza TASK-REP-045 de hp-rep-001.yaml (mismo id y name; aqui con el trabajo
 # hecho). La reserva fallida sin override (PROC-REP-186) es EXC-REP-003
 # (traceability/exc-rep-003.yaml); EXC-REP-004 y EXC-REP-005 siguen
@@ -89,33 +98,35 @@ items:
   - {id: US-REP-032, type: user_story, name: "Como Coordinador RMA quiero forzar un Detalle bloqueado por recursos dejando un motivo registrado para que la Orden continue cuando el trabajo no puede esperar a que haya stock", status: IMPLEMENTED, priority: P1, actor: ACT-COORD}
   - {id: US-REP-033, type: user_story, name: "Como Coordinador RMA quiero que el Detalle forzado pueda reservarse y consumirse aunque el stock no alcance sin que eso habilite a los demas Detalles para asumir conscientemente la falta de stock", status: IMPLEMENTED, priority: P1, actor: ACT-COORD}
 
-  - {id: ACC-REP-049, type: system_action, name: "Registrar el override de un Detalle bloqueado por recursos (PROC-REP-110 Si y PROC-REP-130) por un Coordinador RMA con motivo y habilitar la Orden (PROC-REP-140) sin un PROC-REP-090 Si", status: IMPLEMENTED}
-  - {id: ACC-REP-050, type: system_action, name: "Publicar OVERRIDE_RECURSOS por cada Detalle bloqueado en PROC-REP-100 junto a ESPERAR_RECURSOS", status: IMPLEMENTED}
+  - {id: ACC-REP-049, type: system_action, name: "Autorizar el override de recursos de UN Detalle bloqueado (capacidad transversal ACC-REP-049, Coordinador RMA con motivo) en PROC-REP-100 en 120 o con factibilidad parcial; solo en PROC-REP-100 continuar 110 Si y 130 y habilitar la Orden (PROC-REP-140) sin un PROC-REP-090 Si", status: IMPLEMENTED}
+  - {id: ACC-REP-050, type: system_action, name: "Publicar OVERRIDE_RECURSOS por cada Detalle bloqueado por recursos: en PROC-REP-100 junto a ESPERAR_RECURSOS, en 120 junto a REVALIDAR_RECURSOS y con factibilidad parcial despues de las acciones del taller", status: IMPLEMENTED}
   - {id: ACC-REP-051, type: system_action, name: "Reservar (PROC-REP-185) y consumir (PROC-REP-210) un Detalle con override aunque falten recursos, con el stock fisico posiblemente negativo", status: IMPLEMENTED}
 
-  - {id: FR-REP-112, type: functional_requirement, name: "El override solo lo realiza un Coordinador RMA activo con motivo obligatorio sobre un Detalle DEFINIDO y BLOQUEADO_POR_RECURSOS desde PROC-REP-100", status: IMPLEMENTED}
-  - {id: FR-REP-113, type: functional_requirement, name: "El override registra usuario fecha Detalle especifico validacion ignorada y motivo en PROC-REP-110 Si y PROC-REP-130 sin flag en el Detalle", status: IMPLEMENTED}
+  - {id: FR-REP-112, type: functional_requirement, name: "El override solo lo realiza un Coordinador RMA activo con motivo obligatorio sobre un Detalle DEFINIDO y BLOQUEADO_POR_RECURSOS, con la Orden en PROC-REP-100 en 120 o con factibilidad parcial", status: IMPLEMENTED}
+  - {id: FR-REP-113, type: functional_requirement, name: "El override registra usuario fecha Detalle especifico validacion ignorada y motivo en la accion transversal ACC-REP-049 sin flag en el Detalle y en PROC-REP-100 agrega 110 Si y 130", status: IMPLEMENTED}
   - {id: FR-REP-114, type: functional_requirement, name: "Solo el Detalle forzado pasa a SIN_BLOQUEO y los demas Detalles bloqueados permanecen BLOQUEADO_POR_RECURSOS", status: IMPLEMENTED}
   - {id: FR-REP-115, type: functional_requirement, name: "La Orden se habilita desde PROC-REP-130 con un override valido sin fabricar un PROC-REP-090 Si y habilitar desde 100 o 110 sigue rechazado", status: IMPLEMENTED}
   - {id: FR-REP-116, type: functional_requirement, name: "El override no reserva ni modifica el stock fisico: solo registra la autorizacion", status: IMPLEMENTED}
   - {id: FR-REP-117, type: functional_requirement, name: "Con override del Detalle PROC-REP-185 reserva todas las previstas aunque no alcance y sin override no se omite la comprobacion (la reserva fallida la registra EXC-REP-003)", status: IMPLEMENTED}
   - {id: FR-REP-118, type: functional_requirement, name: "Con override del Detalle PROC-REP-210 puede dejar el stock fisico negativo la liberacion de reserva no descuenta y el override de un Detalle no habilita stock negativo para otro", status: IMPLEMENTED}
-  - {id: FR-REP-119, type: functional_requirement, name: "El backend publica OVERRIDE_RECURSOS para COORDINADOR_RMA por Detalle bloqueado en PROC-REP-100 y la UI solo ejecuta lo publicado", status: IMPLEMENTED}
+  - {id: FR-REP-119, type: functional_requirement, name: "El backend publica OVERRIDE_RECURSOS para COORDINADOR_RMA por Detalle bloqueado por recursos (en 100 en 120 y con factibilidad parcial) y la UI solo ejecuta lo publicado", status: IMPLEMENTED}
+  - {id: FR-REP-144, type: functional_requirement, name: "Con factibilidad parcial (Orden habilitada en cola tomada o en reparacion) el override solo registra la autorizacion del Detalle: no vuelve a PROC-REP-140 no cierra la toma ni toca la Ejecucion en curso el workflow ni el stock y queda vigente hasta un PROC-REP-127 posterior del mismo Detalle", status: IMPLEMENTED}
 
-  - {id: TR-REP-112, type: technical_requirement, name: "services.recursos.registrar_override_recursos valida COORDINADOR_RMA activo PROC-REP-100 Detalle DEFINIDO bloqueado y motivo no vacio registra 110 Si con usuario y 130 con usuario Detalle y motivo deja solo ese Detalle SIN_BLOQUEO y no crea movimientos", status: IMPLEMENTED}
-  - {id: TR-REP-113, type: technical_requirement, name: "services.recursos.tiene_override_factibilidad deriva el override del historial (PROC-REP-130 del Detalle) sin flag y es el unico lugar consultado por la factibilidad por 185 y por 210", status: IMPLEMENTED}
+  - {id: TR-REP-112, type: technical_requirement, name: "services.recursos.autorizar_override_recursos valida COORDINADOR_RMA activo Detalle existente DEFINIDO y BLOQUEADO_POR_RECURSOS y motivo no vacio, registra la accion funcional ACC-REP-049 con usuario Detalle validacion ignorada y motivo sin mover current_process y deja solo ese Detalle SIN_BLOQUEO sin crear movimientos; services.recursos.continuar_por_override registra 110 Si y 130 solo desde PROC-REP-100 con autorizacion vigente", status: IMPLEMENTED}
+  - {id: TR-REP-113, type: technical_requirement, name: "services.recursos.tiene_override_factibilidad deriva el override del historial (accion ACC-REP-049 del Detalle posterior a su ultimo PROC-REP-127) sin flag y es el unico lugar consultado por la factibilidad por 185 y por 210", status: IMPLEMENTED}
   - {id: TR-REP-114, type: technical_requirement, name: "services.ordenes.habilitar_orden acepta o bien PROC-REP-090 con ultimo resultado Si o bien PROC-REP-130 con override valido (override_listo_para_habilitar) y rechaza 100 y 110", status: IMPLEMENTED}
   - {id: TR-REP-115, type: technical_requirement, name: "services.ejecuciones.reservar_insumos_e_iniciar_ejecucion omite la comprobacion de disponibilidad solo para un Detalle con override y mantiene la atomicidad de reservas", status: IMPLEMENTED}
   - {id: TR-REP-116, type: technical_requirement, name: "services.inventario_global.aplicar_movimientos_inventario permite stock fisico negativo solo si el consumo proviene de un Detalle con override e Insumo.stock_fisico admite negativos", status: IMPLEMENTED}
-  - {id: TR-REP-117, type: technical_requirement, name: "application.recursos.forzar_detalle_por_recursos y POST /details/{id}/resources/override componen 110 Si 130 140 y persisten una sola vez con 404 409 y 422", status: IMPLEMENTED}
-  - {id: TR-REP-118, type: technical_requirement, name: "application.acciones.acciones_disponibles publica OVERRIDE_RECURSOS por Detalle bloqueado en PROC-REP-100 para COORDINADOR_RMA y application.progreso muestra 130 por evidencia", status: IMPLEMENTED}
+  - {id: TR-REP-117, type: technical_requirement, name: "application.recursos.forzar_detalle_por_recursos autoriza siempre y solo con la Orden en PROC-REP-100 compone 110 Si 130 140; POST /details/{id}/resources/override persiste una sola vez con 404 409 y 422", status: IMPLEMENTED}
+  - {id: TR-REP-118, type: technical_requirement, name: "application.acciones.acciones_disponibles publica OVERRIDE_RECURSOS por Detalle bloqueado por recursos para COORDINADOR_RMA (en 100 y 120 junto a esperar o revalidar y con factibilidad parcial despues de las acciones del taller) y application.progreso muestra 130 por evidencia", status: IMPLEMENTED}
   - {id: TR-REP-119, type: technical_requirement, name: "El frontend ejecuta OVERRIDE_RECURSOS con un motivo obligatorio solo con lo publicado por el backend", status: IMPLEMENTED}
 
   - {id: TASK-REP-195, type: task, name: "Permitir reserva y consumo con override: 185 sin comprobar disponibilidad y 210 con stock fisico negativo solo para el Detalle forzado", status: DONE}
   - {id: TASK-REP-196, type: task, name: "Publicar OVERRIDE_RECURSOS y mostrar PROC-REP-130 en el progreso", status: DONE}
   - {id: TASK-REP-197, type: task, name: "Frontend: formulario de motivo y accion de override", status: DONE}
+  - {id: TASK-REP-213, type: task, name: "Override como capacidad transversal por Detalle (ACC-REP-049): autorizar tambien con factibilidad parcial sin reiniciar el flujo y continuar 110 y 130 solo desde PROC-REP-100", status: DONE, spec: 019-mvp2-feedback}
 
-  - {id: CODE-REP-195, type: code_artifact, name: "services/recursos.py::registrar_override_recursos", status: IMPLEMENTED, source: "app/backend/app/services/recursos.py::registrar_override_recursos"}
+  - {id: CODE-REP-195, type: code_artifact, name: "services/recursos.py::autorizar_override_recursos", status: IMPLEMENTED, source: "app/backend/app/services/recursos.py::autorizar_override_recursos"}
   - {id: CODE-REP-196, type: code_artifact, name: "services/recursos.py::tiene_override_factibilidad", status: IMPLEMENTED, source: "app/backend/app/services/recursos.py::tiene_override_factibilidad"}
   - {id: CODE-REP-197, type: code_artifact, name: "services/recursos.py::override_listo_para_habilitar", status: IMPLEMENTED, source: "app/backend/app/services/recursos.py::override_listo_para_habilitar"}
   - {id: CODE-REP-198, type: code_artifact, name: "services/ordenes.py::habilitar_orden (gate 090 Si o 130 con override)", status: IMPLEMENTED, source: "app/backend/app/services/ordenes.py::habilitar_orden"}
@@ -127,12 +138,14 @@ items:
   - {id: CODE-REP-204, type: code_artifact, name: "application/acciones.py::acciones_disponibles (OVERRIDE_RECURSOS)", status: IMPLEMENTED, source: "app/backend/app/application/acciones.py::acciones_disponibles"}
   - {id: CODE-REP-205, type: code_artifact, name: "application/progreso.py::_con_espera_de_recursos (PROC-REP-130)", status: IMPLEMENTED, source: "app/backend/app/application/progreso.py::_con_espera_de_recursos"}
   - {id: CODE-REP-206, type: code_artifact, name: "frontend/src/features/ordenes-reparacion/AccionesOrden.tsx (OVERRIDE_RECURSOS)", status: IMPLEMENTED, source: "app/frontend/src/features/ordenes-reparacion/AccionesOrden.tsx"}
+  - {id: CODE-REP-244, type: code_artifact, name: "services/recursos.py::continuar_por_override", status: IMPLEMENTED, source: "app/backend/app/services/recursos.py::continuar_por_override"}
+  - {id: CODE-REP-245, type: code_artifact, name: "application/acciones.py::_overrides_de_recursos", status: IMPLEMENTED, source: "app/backend/app/application/acciones.py::_overrides_de_recursos"}
 
   - {id: TEST-REP-393, type: internal_test, name: "test_override_completo_090_ninguno_100_110_si_130_140", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_override_completo_090_ninguno_100_110_si_130_140"}
   - {id: TEST-REP-394, type: internal_test, name: "test_el_override_queda_trazado_con_usuario_fecha_detalle_y_motivo", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_el_override_queda_trazado_con_usuario_fecha_detalle_y_motivo"}
   - {id: TEST-REP-395, type: internal_test, name: "test_solo_un_coordinador_activo_puede_hacer_el_override", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_solo_un_coordinador_activo_puede_hacer_el_override"}
   - {id: TEST-REP-396, type: internal_test, name: "test_el_motivo_es_obligatorio", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_el_motivo_es_obligatorio"}
-  - {id: TEST-REP-397, type: internal_test, name: "test_el_override_solo_vale_desde_100_y_sobre_un_detalle_bloqueado", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_el_override_solo_vale_desde_100_y_sobre_un_detalle_bloqueado"}
+  - {id: TEST-REP-397, type: internal_test, name: "test_el_override_vale_sobre_un_detalle_bloqueado_y_continua_desde_100", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_el_override_vale_sobre_un_detalle_bloqueado_y_continua_desde_100"}
   - {id: TEST-REP-398, type: internal_test, name: "test_solo_el_detalle_forzado_pasa_a_sin_bloqueo", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_solo_el_detalle_forzado_pasa_a_sin_bloqueo"}
   - {id: TEST-REP-399, type: internal_test, name: "test_override_de_a_deja_a_iniciable_y_b_no_iniciable", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_override_de_a_deja_a_iniciable_y_b_no_iniciable"}
   - {id: TEST-REP-400, type: internal_test, name: "test_no_se_habilita_directo_desde_100_ni_desde_110", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_no_se_habilita_directo_desde_100_ni_desde_110"}
@@ -147,7 +160,7 @@ items:
   - {id: TEST-REP-409, type: internal_test, name: "test_sin_override_el_consumo_no_puede_dejar_stock_negativo", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_sin_override_el_consumo_no_puede_dejar_stock_negativo"}
   - {id: TEST-REP-410, type: internal_test, name: "test_el_override_de_un_detalle_no_habilita_negativo_para_otro", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_el_override_de_un_detalle_no_habilita_negativo_para_otro"}
   - {id: TEST-REP-411, type: internal_test, name: "test_en_100_se_publican_esperar_y_un_override_por_detalle_bloqueado", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_en_100_se_publican_esperar_y_un_override_por_detalle_bloqueado"}
-  - {id: TEST-REP-412, type: internal_test, name: "test_en_120_no_se_publica_el_override", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_en_120_no_se_publica_el_override"}
+  - {id: TEST-REP-412, type: internal_test, name: "test_en_120_el_override_sigue_publicado_por_detalle_bloqueado", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_en_120_el_override_sigue_publicado_por_detalle_bloqueado"}
   - {id: TEST-REP-413, type: internal_test, name: "test_el_progreso_muestra_130_solo_con_evidencia_de_override", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_el_progreso_muestra_130_solo_con_evidencia_de_override"}
   - {id: TEST-REP-414, type: internal_test, name: "test_cliente_externo_override_090_ninguno_100_110_si_130_140", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_cliente_externo_override_090_ninguno_100_110_si_130_140"}
   - {id: TEST-REP-415, type: internal_test, name: "test_solo_el_coordinador_rma_puede_hacer_el_override", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_solo_el_coordinador_rma_puede_hacer_el_override"}
@@ -160,9 +173,14 @@ items:
   - {id: TEST-REP-422, type: internal_test, name: "test_sin_override_iniciar_con_stock_insuficiente_registra_186", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_sin_override_iniciar_con_stock_insuficiente_registra_186"}
   - {id: TEST-REP-423, type: internal_test, name: "test_rt_interno_override_sin_comprobante_ni_pagos", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_rt_interno_override_sin_comprobante_ni_pagos"}
   - {id: TEST-REP-424, type: internal_test, name: "test_garantia_rma_override_conserva_origen_y_no_toca_la_orden_origen", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_garantia_rma_override_conserva_origen_y_no_toca_la_orden_origen"}
+  - {id: TEST-REP-538, type: internal_test, name: "test_override_con_factibilidad_parcial_y_orden_tomada_no_reinicia", status: PASSING, source: "app/backend/tests/test_exc_rep_002.py::test_override_con_factibilidad_parcial_y_orden_tomada_no_reinicia"}
+  - {id: TEST-REP-539, type: internal_test, name: "test_override_con_factibilidad_parcial_y_orden_tomada_no_reinicia", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_override_con_factibilidad_parcial_y_orden_tomada_no_reinicia"}
+  - {id: TEST-REP-540, type: internal_test, name: "test_override_parcial_valida_y_no_deja_efectos", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_override_parcial_valida_y_no_deja_efectos"}
+  - {id: TEST-REP-541, type: internal_test, name: "test_override_en_120_autoriza_el_detalle_sin_mover_el_proceso", status: PASSING, source: "app/backend/tests/test_api_exc_rep_002.py::test_override_en_120_autoriza_el_detalle_sin_mover_el_proceso"}
 
   - {id: UAT-REP-033, type: uat, name: "Un Coordinador RMA puede forzar un Detalle bloqueado por recursos dejando un motivo y la Orden continua sin esperar el stock", status: PENDING}
   - {id: UAT-REP-034, type: uat, name: "El Detalle forzado puede iniciarse y consumirse aunque el stock no alcance sin que eso habilite a otros Detalles bloqueados", status: PENDING}
+  - {id: UAT-REP-043, type: uat, name: "Con la Orden tomada y otro Detalle en curso un Coordinador RMA autoriza el override de un Detalle bloqueado y la Orden sigue en el mismo punto con la misma toma y la misma Ejecucion", status: PENDING}
 
 links:
 
@@ -311,3 +329,30 @@ links:
 
   - {from: UAT-REP-033, to: US-REP-032, relationship: accepts}
   - {from: UAT-REP-034, to: US-REP-033, relationship: accepts}
+
+  # specs/019-mvp2-feedback: override transversal por Detalle (factibilidad parcial).
+  - {from: FR-REP-144, to: ACC-REP-049, relationship: derives_from}
+  - {from: TR-REP-112, to: FR-REP-144, relationship: satisfies}
+  - {from: TR-REP-113, to: FR-REP-144, relationship: satisfies}
+  - {from: TR-REP-117, to: FR-REP-144, relationship: satisfies}
+  - {from: TR-REP-118, to: FR-REP-144, relationship: satisfies}
+  - {from: TASK-REP-213, to: TR-REP-112, relationship: implements}
+  - {from: TASK-REP-213, to: TR-REP-113, relationship: implements}
+  - {from: TASK-REP-213, to: TR-REP-117, relationship: implements}
+  - {from: TASK-REP-213, to: TR-REP-118, relationship: implements}
+  - {from: CODE-REP-195, to: TASK-REP-213, relationship: produced_by}
+  - {from: CODE-REP-244, to: TASK-REP-213, relationship: produced_by}
+  - {from: CODE-REP-244, to: TR-REP-112, relationship: implements}
+  - {from: CODE-REP-245, to: TASK-REP-213, relationship: produced_by}
+  - {from: CODE-REP-245, to: TR-REP-118, relationship: implements}
+  - {from: TEST-REP-397, to: CODE-REP-244, relationship: exercises}
+  - {from: TEST-REP-538, to: FR-REP-144, relationship: verifies}
+  - {from: TEST-REP-538, to: CODE-REP-195, relationship: exercises}
+  - {from: TEST-REP-539, to: FR-REP-144, relationship: verifies}
+  - {from: TEST-REP-539, to: CODE-REP-202, relationship: exercises}
+  - {from: TEST-REP-540, to: FR-REP-112, relationship: verifies}
+  - {from: TEST-REP-540, to: FR-REP-144, relationship: verifies}
+  - {from: TEST-REP-541, to: FR-REP-144, relationship: verifies}
+  - {from: TEST-REP-541, to: CODE-REP-245, relationship: exercises}
+  - {from: UAT-REP-043, to: US-REP-032, relationship: accepts}
+  - {from: UAT-REP-043, to: FR-REP-144, relationship: accepts}

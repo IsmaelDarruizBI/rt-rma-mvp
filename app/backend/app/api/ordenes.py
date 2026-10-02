@@ -17,20 +17,22 @@ from app.application import (
     acciones_disponibles,
     aprobar_control,
     completar_ejecucion,
-    crear_garantia_rma,
-    crear_garantia_rma_en_revision,
     crear_orden,
     crear_orden_rt,
     definir_reparacion,
     definir_reparacion_desde_revision,
+    detalles_origen_de,
     devolver_rt,
     encolar_orden,
     entregar,
     enviar_a_revision,
     esperar_recursos,
+    finalizar_definicion,
+    finalizar_sin_reparacion,
     forzar_detalle_por_recursos,
     informar_rt,
     iniciar_detalle,
+    iniciar_garantia_rma,
     insumos_previstos_por_detalle,
     interrumpir_ejecucion,
     liberar_orden,
@@ -61,8 +63,10 @@ from .schemas import (
     EncolarIn,
     EntregarIn,
     EnviarARevisionIn,
-    GarantiaRmaIn,
+    FinalizarDefinicionIn,
+    FinalizarSinReparacionIn,
     IniciarDetalleIn,
+    IniciarGarantiaRmaIn,
     InterrumpirEjecucionIn,
     LiberarOrdenIn,
     NotificarIn,
@@ -86,7 +90,8 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
 
     Los insumos previstos se resuelven contra el catalogo al responder.
     Con ellos la UI puede proponer que confirmar en PROC-REP-200 sin
-    conocer ningun ID de insumo.
+    conocer ningun ID de insumo. Lo mismo con los Detalles origen de una
+    garantia RMA: su Tipo se lee de la Orden origen.
     """
     return OrdenOut.desde_dominio(
         orden,
@@ -94,6 +99,7 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
         acciones=acciones_disponibles(orden),
         insumos_previstos=insumos_previstos_por_detalle(contexto, orden),
         nombres_de_tipo=nombres_de_tipo_por_detalle(contexto, orden),
+        detalles_origen=detalles_origen_de(contexto, orden),
     )
 
 
@@ -174,17 +180,11 @@ def post_definir_reparacion(
     cuerpo: DefinirReparacionIn,
     contexto: ContextoDep,
 ) -> OrdenOut:
-    """Definir la reparacion requerida (ACT-RECEP).
+    """Agregar UN Detalle de la reparacion (ACT-RECEP).
 
-    Compone PROC-REP-045 -> 070 y, si ``finalizar_definicion`` es
-    verdadero (default), tambien 050 -> 060 -> 080 -> 090 -> 140:
-    despues de definir el Detalle, todo lo que sigue hasta HABILITADA es
-    automatico y no cruza otra decision humana. La factibilidad (080)
-    consulta el stock global y NO reserva.
-
-    Con ``finalizar_definicion=False`` (Multi-Detalle) la Orden sigue en
-    REQUERIMIENTO, lista para recibir otro Detalle con una nueva llamada
-    a este mismo endpoint.
+    Compone PROC-REP-045 (Si, con el primer Detalle) -> 070. No genera el
+    comprobante, no valida factibilidad ni habilita: la Orden sigue en
+    REQUERIMIENTO lista para otro Detalle o para finalizar la definicion.
     """
     orden = definir_reparacion(
         contexto,
@@ -192,56 +192,49 @@ def post_definir_reparacion(
         usuario_id=cuerpo.usuario_id,
         tipo_reparacion_id=cuerpo.tipo_reparacion_id,
         observaciones=cuerpo.observaciones,
-        finalizar_definicion=cuerpo.finalizar_definicion,
     )
     return _salida(orden, contexto)
 
 
-@router.post(
-    "/{orden_origen_id}/details/{detalle_origen_id}/warranty-rma",
-    status_code=status.HTTP_201_CREATED,
-)
-def post_generar_garantia_rma(
-    orden_origen_id: str,
-    detalle_origen_id: str,
-    cuerpo: GarantiaRmaIn,
+@router.post("/{orden_id}/definition/finalize")
+def post_finalizar_definicion(
+    orden_id: str,
+    cuerpo: FinalizarDefinicionIn,
     contexto: ContextoDep,
 ) -> OrdenOut:
-    """Generar la garantia RMA de un Detalle (ACT-RECEP, HP-REP-003).
+    """Finalizar la definicion de la reparacion (ACT-RECEP).
 
-    Compone PROC-REP-035 -> 040 -> 045 -> 070 -> 050 -> 060 -> 080 ->
-    090 -> 140. Devuelve la NUEVA Orden de garantia; la Orden origen no
-    se modifica.
+    Exige al menos un Detalle. Compone [050 -> 060, solo si el comprobante
+    todavia no se evaluo] -> 080 -> 090 -> 140, o se detiene en 100 si
+    ningun Detalle es trabajable. La factibilidad (080) consulta el stock
+    global y NO reserva.
     """
-    orden = crear_garantia_rma(
-        contexto,
-        orden_origen_id=orden_origen_id,
-        detalle_origen_id=detalle_origen_id,
-        usuario_id=cuerpo.usuario_id,
+    orden = finalizar_definicion(
+        contexto, orden_id=orden_id, usuario_id=cuerpo.usuario_id
     )
     return _salida(orden, contexto)
 
 
 @router.post(
-    "/{orden_origen_id}/details/{detalle_origen_id}/warranty-rma/review",
+    "/{orden_origen_id}/warranty-rma",
     status_code=status.HTTP_201_CREATED,
 )
-def post_generar_garantia_rma_en_revision(
+def post_iniciar_garantia_rma(
     orden_origen_id: str,
-    detalle_origen_id: str,
-    cuerpo: GarantiaRmaIn,
+    cuerpo: IniciarGarantiaRmaIn,
     contexto: ContextoDep,
 ) -> OrdenOut:
-    """Generar una garantia RMA que entra en revision (VAR-REP-001).
+    """Iniciar la garantia RMA de una Orden entregada (ACT-RECEP).
 
-    Compone PROC-REP-035 -> 040 -> 045 (No) -> 055 -> 050 -> 060 y se
-    detiene: la NUEVA Orden queda EN_REVISION, sin Detalles. La Orden
+    HP-REP-003. Con 1..N Detalles origen compone PROC-REP-035 -> 040 ->
+    045 (No) -> 055 -> 050 -> 060 y se detiene: la NUEVA Orden queda
+    EN_REVISION, sin Detalles, esperando la revision tecnica. La Orden
     origen no se modifica.
     """
-    orden = crear_garantia_rma_en_revision(
+    orden = iniciar_garantia_rma(
         contexto,
         orden_origen_id=orden_origen_id,
-        detalle_origen_id=detalle_origen_id,
+        detalle_origen_ids=cuerpo.detalle_origen_ids,
         usuario_id=cuerpo.usuario_id,
     )
     return _salida(orden, contexto)
@@ -289,10 +282,10 @@ def post_definir_reparacion_desde_revision(
     cuerpo: DefinirReparacionDesdeRevisionIn,
     contexto: ContextoDep,
 ) -> OrdenOut:
-    """Definir la reparacion luego de la revision (ACT-RECEP).
+    """Agregar UN Detalle luego de la revision (ACT-RECEP).
 
-    Compone PROC-REP-068 (Si) -> 075 y, con ``finalizar_definicion``,
-    080 -> 090 -> 140. No repite el comprobante.
+    Compone PROC-REP-068 (Si, con el primer Detalle) -> 075. La carga se
+    cierra con ``/definition/finalize``, que no repite el comprobante.
     """
     orden = definir_reparacion_desde_revision(
         contexto,
@@ -300,8 +293,28 @@ def post_definir_reparacion_desde_revision(
         usuario_id=cuerpo.usuario_id,
         tipo_reparacion_id=cuerpo.tipo_reparacion_id,
         observaciones=cuerpo.observaciones,
-        finalizar_definicion=cuerpo.finalizar_definicion,
         detalle_origen_id=cuerpo.detalle_origen_id,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/review/without-repair")
+def post_finalizar_sin_reparacion(
+    orden_id: str,
+    cuerpo: FinalizarSinReparacionIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Finalizar la Orden sin reparacion (ACT-RECEP, BR-REP-010).
+
+    Compone PROC-REP-068 (No) -> 069 (SIN_REPARACION). Sin Detalles ni
+    precio. El cierre sigue segun el Origen: ``/notify`` o ``/inform-rt``.
+    """
+    orden = finalizar_sin_reparacion(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        motivo=cuerpo.motivo,
+        observaciones=cuerpo.observaciones,
     )
     return _salida(orden, contexto)
 
@@ -313,10 +326,13 @@ def post_override_recursos(
     cuerpo: OverrideRecursosIn,
     contexto: ContextoDep,
 ) -> OrdenOut:
-    """Forzar un Detalle bloqueado por recursos (ACT-COORD, EXC-REP-002).
+    """Override de recursos de un Detalle bloqueado (ACT-COORD, BR-REP-003).
 
-    Compone PROC-REP-110 (Si) -> 130 -> 140 sobre ESE Detalle. Solo
-    registra la autorizacion: no reserva ni toca el stock.
+    Capacidad transversal (ACC-REP-049): registra la autorizacion sobre
+    ESE Detalle sin reservar ni tocar el stock, tambien con factibilidad
+    parcial (Orden habilitada, en cola o tomada), sin reiniciar el flujo.
+    Solo si la Orden esta detenida en PROC-REP-100 continua 110 (Si) ->
+    130 -> 140.
     """
     orden = forzar_detalle_por_recursos(
         contexto,

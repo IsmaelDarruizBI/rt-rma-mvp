@@ -12,6 +12,7 @@ Todos los services devuelven una Orden nueva; la recibida nunca se
 modifica.
 """
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from app.domain.models import (
@@ -36,6 +37,7 @@ from .pagos import condicion_entrega_cumplida
 from .recursos import marcar_pendiente_recursos, override_listo_para_habilitar
 from .redefinicion import marcar_pendiente_revision
 from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
+from .revisiones import finalizada_sin_reparacion, lista_para_cierre
 from .workflow import registrar_paso
 
 # Nodos que PROC-REP V1.3 declara con ``actores_alternativos``:
@@ -182,22 +184,23 @@ def crear_orden_garantia_rma(
     *,
     orden_id: str,
     orden_origen: OrdenReparacion,
-    detalle_origen_id: str,
+    detalle_origen_ids: Sequence[str],
     usuario: Usuario,
     fecha: datetime,
 ) -> OrdenReparacion:
     """PROC-REP-035 -> PROC-REP-040 (HP-REP-003, BR-REP-019).
 
-    Crea una NUEVA Orden de garantia RMA a partir de una Orden origen
-    ENTREGADA. La Orden origen no se reabre ni se modifica: solo se leen
-    su Cliente y su Equipo (copiados en profundidad, sin compartir
-    instancias) y se guarda su ID en ``orden_origen_id``. No se copia
-    historia tecnica (tomas, ejecuciones, movimientos, pagos,
-    documentos, historial).
+    Crea UNA NUEVA Orden de garantia RMA a partir de una Orden origen
+    ENTREGADA y de uno o mas de sus Detalles (1..N): no una Orden por
+    Detalle. La Orden origen no se reabre ni se modifica: solo se leen su
+    Cliente y su Equipo (copiados en profundidad, sin compartir
+    instancias); la Orden nueva guarda ``orden_origen_id`` y
+    ``detalles_origen_ids``. No se copia historia tecnica (tomas,
+    ejecuciones, movimientos, pagos, documentos, historial) ni ningun
+    Tipo de Reparacion: la revision tecnica es obligatoria y los Detalles
+    nuevos se definen despues (PROC-REP-075).
 
-    No registra PROC-REP-010 ni PROC-REP-030: no es un alta nueva. El
-    Detalle de garantia lo crea despues ``definir_reparacion_detail``
-    con ``detalle_origen_id``.
+    No registra PROC-REP-010 ni PROC-REP-030: no es un alta nueva.
 
     Fuera de alcance (BR-REP-019 los deja pendientes): vigencia de la
     garantia, motivo valido, cantidad maxima de garantias.
@@ -210,18 +213,25 @@ def crear_orden_garantia_rma(
             f"{orden_origen.id} esta en "
             f"{orden_origen.estado_workflow.value}."
         )
-    if not any(
-        detalle.id == detalle_origen_id
-        for detalle in orden_origen.reparaciones_detail
-    ):
-        raise EntidadNoEncontradaError(
-            f"La Orden {orden_origen.id} no tiene un Detalle "
-            f"{detalle_origen_id}."
-        )
     if orden_origen.cliente is None:
         raise PrecondicionInvalidaError(
             f"La Orden origen {orden_origen.id} no tiene Cliente: no hay "
             f"a quien otorgarle la garantia."
+        )
+    if not detalle_origen_ids:
+        raise PrecondicionInvalidaError(
+            "La garantia exige al menos un Detalle origen."
+        )
+    if len(set(detalle_origen_ids)) != len(detalle_origen_ids):
+        raise PrecondicionInvalidaError(
+            "Los Detalles origen de la garantia no pueden repetirse."
+        )
+    existentes = {detalle.id for detalle in orden_origen.reparaciones_detail}
+    ajenos = [d for d in detalle_origen_ids if d not in existentes]
+    if ajenos:
+        raise EntidadNoEncontradaError(
+            f"La Orden {orden_origen.id} no tiene los Detalles "
+            f"{', '.join(ajenos)}."
         )
 
     orden = OrdenReparacion(
@@ -232,7 +242,7 @@ def crear_orden_garantia_rma(
         cliente=orden_origen.cliente.model_copy(deep=True),
         equipo=orden_origen.equipo.model_copy(deep=True),
         orden_origen_id=orden_origen.id,
-        detalles_origen_ids=[detalle_origen_id],
+        detalles_origen_ids=list(detalle_origen_ids),
         resumen_pago=ResumenPago(),
         documentos=DocumentosOrden(),
         created_at=fecha,
@@ -247,7 +257,7 @@ def crear_orden_garantia_rma(
         usuario_id=usuario.id,
         observacion=(
             f"orden_origen_id={orden_origen.id}; "
-            f"detalle_origen_id={detalle_origen_id}"
+            f"detalles_origen_ids={','.join(detalle_origen_ids)}"
         ),
     )
     return registrar_paso(
@@ -265,8 +275,10 @@ def marcar_orden_en_revision(
     usuario: Usuario,
     fecha: datetime,
 ) -> OrdenReparacion:
-    """PROC-REP-045 ("No") -> PROC-REP-055 (VAR-REP-001/002).
+    """PROC-REP-045 ("No") -> PROC-REP-055 (VAR-REP-001/002, HP-REP-003).
 
+    En una garantia RMA es siempre el camino (revision obligatoria,
+    BR-REP-019); en los demas Origenes, cuando no se trae diagnostico.
     Todavia no se conocen los Detalles: la Orden pasa a EN_REVISION, un
     hito de workflow que significa "espera o atraviesa una revision
     tecnica antes de poder definir sus Detalles". NO implica que la
@@ -559,13 +571,15 @@ def notificar_cliente(
     Notificacion ni integra ningun canal de mensajeria.
 
     PROC-REP-250 es una decision sin actor; PROC-REP-260 es ACT-RECEP.
+    Se alcanza tanto con la reparacion lista (240) como con una Orden
+    finalizada SIN_REPARACION (069): ``lista_para_cierre``.
     """
     validar_actor(usuario, RolUsuario.RECEPCION)
 
-    if orden.estado_workflow is not EstadoWorkflow.REPARACION_LISTA:
+    if not lista_para_cierre(orden):
         raise PrecondicionInvalidaError(
-            f"Solo se notifica una Orden REPARACION_LISTA; "
-            f"esta en {orden.estado_workflow.value}."
+            f"Solo se notifica una Orden con resultado (REPARACION_LISTA o "
+            f"SIN_REPARACION); esta en {orden.estado_workflow.value}."
         )
 
     nueva_orden = registrar_paso(
@@ -608,10 +622,10 @@ def entregar_equipo(
     """
     validar_alguno_de(usuario, ROLES_ENTREGA)
 
-    if orden.estado_workflow is not EstadoWorkflow.REPARACION_LISTA:
+    if not lista_para_cierre(orden):
         raise PrecondicionInvalidaError(
-            f"Solo se entrega una Orden REPARACION_LISTA; "
-            f"esta en {orden.estado_workflow.value}."
+            f"Solo se entrega una Orden con resultado (REPARACION_LISTA o "
+            f"SIN_REPARACION); esta en {orden.estado_workflow.value}."
         )
     if not condicion_entrega_cumplida(orden):
         raise PrecondicionInvalidaError(
@@ -621,7 +635,11 @@ def entregar_equipo(
         raise PrecondicionInvalidaError(
             "Falta generar el comprobante final (PROC-REP-280)."
         )
-    if not orden.documentos.garantia_reparacion.generado:
+    # Una Orden SIN_REPARACION no emite garantia de reparacion (PROC-REP-280).
+    if (
+        not finalizada_sin_reparacion(orden)
+        and not orden.documentos.garantia_reparacion.generado
+    ):
         raise PrecondicionInvalidaError(
             "Falta generar la garantia de reparacion (PROC-REP-280)."
         )
@@ -677,10 +695,10 @@ def informar_resultado_rt(
             f"Informar a Gestion RT es exclusivo de RT_INTERNO, no de "
             f"{orden.origen.value}."
         )
-    if orden.estado_workflow is not EstadoWorkflow.REPARACION_LISTA:
+    if not lista_para_cierre(orden):
         raise PrecondicionInvalidaError(
-            f"Solo se informa a RT una Orden REPARACION_LISTA; "
-            f"esta en {orden.estado_workflow.value}."
+            f"Solo se informa a RT una Orden con resultado (REPARACION_LISTA "
+            f"o SIN_REPARACION); esta en {orden.estado_workflow.value}."
         )
 
     nueva_orden = registrar_paso(

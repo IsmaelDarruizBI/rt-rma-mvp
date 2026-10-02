@@ -43,11 +43,11 @@ from app.services import (
     generar_movimientos_inventario,
     habilitar_orden,
     marcar_pendiente_revision,
+    registrar_accion_funcional,
     registrar_ejecucion_completada,
     registrar_ejecucion_interrumpida,
     registrar_ejecucion_requiere_redefinicion,
     registrar_espera_recursos,
-    registrar_override_recursos,
     registrar_pago,
     registrar_paso,
     reservas_activas,
@@ -58,6 +58,7 @@ from app.services import (
 from app.services import (
     redefinir_detalle as redefinir_detalle_servicio,
 )
+from app.services.recursos import ACCION_AUTORIZAR_OVERRIDE
 from app.storage import JsonOrdenReparacionRepository
 from tests.fixtures.catalogos_mvp import (
     ADMINISTRADOR,
@@ -67,6 +68,7 @@ from tests.fixtures.catalogos_mvp import (
     TIPO_BATERIA,
     t,
 )
+from tests.fixtures.override import override_en_100
 from tests.test_exc_rep_001 import (
     PREVISTOS,
     TIPO_PANTALLA,
@@ -622,7 +624,7 @@ def test_127_valida_rol_y_tipo_activo():
 def _con_override_y_ejecucion():
     orden, factible = _validar(_con_detalles(TIPO_BATERIA), _insumos(a="0"))
     assert factible is False
-    orden = registrar_override_recursos(
+    orden = override_en_100(
         orden,
         detalle_id="DET-001",
         usuario=COORDINADOR,
@@ -656,13 +658,13 @@ def test_un_127_invalida_el_override_anterior():
     )
 
 
-def test_un_130_posterior_al_127_es_valido():
+def test_un_override_posterior_al_127_es_valido():
     orden = _con_override_y_ejecucion()
     orden, _ = _requiere_redefinicion(orden)
     orden = _redefinir(_revisar(orden), tipo=TIPO_BATERIA)
     orden, _ = _validar(orden, _insumos(a="0"), minuto=95)
 
-    forzada = registrar_override_recursos(
+    forzada = override_en_100(
         orden,
         detalle_id="DET-001",
         usuario=COORDINADOR,
@@ -678,17 +680,20 @@ def test_un_130_posterior_al_127_es_valido():
 
 def test_el_127_de_otro_detalle_no_invalida_el_override():
     orden = _con_detalles(TIPO_BATERIA, TIPO_PANTALLA)
-    for proceso, detalle_id in (
-        ("PROC-REP-130", "DET-002"),
-        ("PROC-REP-127", "DET-001"),
-    ):
-        orden = registrar_paso(
-            orden,
-            process_id=proceso,
-            accion="X",
-            fecha=t(20),
-            reparacion_detail_id=detalle_id,
-        )
+    orden = registrar_accion_funcional(
+        orden,
+        accion_id=ACCION_AUTORIZAR_OVERRIDE,
+        accion="AUTORIZAR_OVERRIDE_RECURSOS",
+        fecha=t(20),
+        reparacion_detail_id="DET-002",
+    )
+    orden = registrar_paso(
+        orden,
+        process_id="PROC-REP-127",
+        accion="X",
+        fecha=t(20),
+        reparacion_detail_id="DET-001",
+    )
     assert tiene_override_factibilidad(orden, "DET-002")
     assert not tiene_override_factibilidad(orden, "DET-001")
 

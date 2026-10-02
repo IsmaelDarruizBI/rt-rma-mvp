@@ -20,7 +20,10 @@ from app.domain.models import (
     TipoReparacion,
     Usuario,
 )
-from app.repositories import PersistenciaError
+from app.repositories import (
+    EntidadPersistidaNoEncontradaError,
+    PersistenciaError,
+)
 
 from .contexto import ApplicationContext
 
@@ -38,6 +41,20 @@ class InsumoPrevisto:
     codigo: str
     nombre: str
     cantidad_prevista: Decimal
+
+
+@dataclass(frozen=True)
+class DetalleOrigen:
+    """Detalle de la Orden origen de una garantia RMA, para presentacion.
+
+    No se persiste en la Orden de garantia: esta solo guarda
+    ``detalles_origen_ids``. El Tipo se resuelve al leer, desde la Orden
+    origen (BR-REP-019), para que la UI pueda mostrar "DET-001 · Cambio de
+    bateria" sin duplicar el snapshot del Detalle original.
+    """
+
+    id: str
+    tipo_reparacion_nombre: str
 
 
 def listar_ordenes(contexto: ApplicationContext) -> list[OrdenReparacion]:
@@ -160,3 +177,30 @@ def nombres_de_tipo_por_detalle(
         )
         for detalle in orden.reparaciones_detail
     }
+
+
+def detalles_origen_de(
+    contexto: ApplicationContext,
+    orden: OrdenReparacion,
+) -> list[DetalleOrigen]:
+    """Detalles origen de una garantia RMA, con el nombre de su Tipo.
+
+    Se leen de la Orden origen (que nunca se modifica). Si esa Orden o un
+    Detalle ya no se encuentra, se devuelve el ID como nombre en vez de
+    romper la lectura.
+    """
+    if orden.orden_origen_id is None or not orden.detalles_origen_ids:
+        return []
+    try:
+        origen = contexto.ordenes.obtener(orden.orden_origen_id)
+    except EntidadPersistidaNoEncontradaError:
+        nombres: dict[str, str] = {}
+    else:
+        nombres = nombres_de_tipo_por_detalle(contexto, origen)
+    return [
+        DetalleOrigen(
+            id=detalle_id,
+            tipo_reparacion_nombre=nombres.get(detalle_id, detalle_id),
+        )
+        for detalle_id in orden.detalles_origen_ids
+    ]

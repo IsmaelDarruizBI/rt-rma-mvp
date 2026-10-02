@@ -50,8 +50,10 @@ export function CabeceraOrden({ orden }: { orden: Orden }) {
           {orden.orden_origen_id && (
             <p style={{ margin: "0.2rem 0 0", color: colores.suave }}>
               Origen garantía: {orden.orden_origen_id}
-              {orden.detalles_origen_ids.length > 0 &&
-                ` / ${orden.detalles_origen_ids.join(", ")}`}
+              {orden.detalles_origen.length > 0 &&
+                ` / ${orden.detalles_origen
+                  .map((origen) => nombreDetalleOrigen(orden, origen.id))
+                  .join(", ")}`}
             </p>
           )}
         </div>
@@ -70,6 +72,12 @@ export function CabeceraOrden({ orden }: { orden: Orden }) {
           >
             {orden.estado_workflow}
           </Etiqueta>
+          {orden.finalizada_sin_reparacion && (
+            <>
+              {" "}
+              <Etiqueta color={colores.alerta}>SIN_REPARACION</Etiqueta>
+            </>
+          )}
           <p
             style={{
               margin: "0.4rem 0 0",
@@ -203,13 +211,34 @@ function PagosOrden({ orden }: { orden: Orden }) {
   );
 }
 
+/** "DET-001 · Cambio de batería": el nombre lo resuelve la API. */
+function nombreDetalleOrigen(orden: Orden, detalleOrigenId: string): string {
+  const origen = orden.detalles_origen.find(
+    (candidato) => candidato.id === detalleOrigenId,
+  );
+  return origen
+    ? `${origen.id} · ${origen.tipo_reparacion_nombre}`
+    : detalleOrigenId;
+}
+
 export function DetallesOrden({ orden }: { orden: Orden }) {
   if (orden.reparaciones_detail.length === 0) {
+    // PROC-REP-069: la conclusión y su motivo quedan en el historial.
+    const conclusion = orden.finalizada_sin_reparacion
+      ? orden.historial.find((paso) => paso.referencia_id === "PROC-REP-069")
+      : undefined;
     return (
       <Panel titulo="Detalles de reparación">
         <p style={{ margin: 0, color: colores.suave, fontSize: "0.9rem" }}>
-          Todavía no se definió ninguna reparación.
+          {orden.finalizada_sin_reparacion
+            ? "La revisión concluyó sin reparación: no hay Detalles."
+            : "Todavía no se definió ninguna reparación."}
         </p>
+        {conclusion?.observacion && (
+          <p style={{ margin: "0.3rem 0 0", fontSize: "0.85rem" }}>
+            {conclusion.observacion}
+          </p>
+        )}
       </Panel>
     );
   }
@@ -258,7 +287,7 @@ export function DetallesOrden({ orden }: { orden: Orden }) {
               {detalle.detalle_origen_id && (
                 <div style={{ fontSize: "0.75rem", color: colores.suave }}>
                   Origen garantía: {orden.orden_origen_id} /{" "}
-                  {detalle.detalle_origen_id}
+                  {nombreDetalleOrigen(orden, detalle.detalle_origen_id)}
                 </div>
               )}
               <div
@@ -408,72 +437,75 @@ export function EjecucionesOrden({ orden }: { orden: Orden }) {
 export function HistorialOrden({ orden }: { orden: Orden }) {
   return (
     <Panel titulo="Historial">
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          fontSize: "0.82rem",
-        }}
-      >
-        <thead>
-          <tr style={{ textAlign: "left", color: colores.suave }}>
-            <th style={{ padding: "0.2rem 0" }}>Fecha</th>
-            <th>Referencia</th>
-            <th>Acción</th>
-            <th>Usuario</th>
-            <th>Detalle</th>
-          </tr>
-        </thead>
-        <tbody>
-          {orden.historial.map((paso, indice) => {
-            const transversal =
-              paso.tipo_referencia === "FUNCTIONAL_ACTION";
-            return (
-              <tr
-                key={`${paso.referencia_id}-${indice}`}
-                style={{ borderTop: `1px solid ${colores.borde}` }}
-              >
-                <td style={{ padding: "0.3rem 0", whiteSpace: "nowrap" }}>
-                  {fechaCorta(paso.fecha)}
-                </td>
-                <td style={{ whiteSpace: "nowrap" }}>
-                  <span
-                    title={
-                      transversal
-                        ? "Capacidad transversal: no avanza el proceso"
-                        : "Nodo del Business Process"
-                    }
-                    style={{
-                      display: "inline-block",
-                      marginRight: "0.4rem",
-                      padding: "0.05rem 0.3rem",
-                      borderRadius: 3,
-                      fontSize: "0.65rem",
-                      fontWeight: 700,
-                      color: "#fff",
-                      background: transversal
-                        ? colores.alerta
-                        : colores.acento,
-                    }}
-                  >
-                    {transversal ? "ACC" : "PROC"}
-                  </span>
-                  <span style={{ fontFamily: "ui-monospace, monospace" }}>
-                    {paso.referencia_id}
-                  </span>
-                </td>
-                <td>{paso.accion}</td>
-                <td style={{ color: colores.suave }}>
-                  {paso.usuario_id ?? "sistema"}
-                </td>
-                <td style={{ color: colores.suave }}>
-                  {paso.observacion ?? ""}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      {/* En pantallas angostas la tabla se desplaza dentro del panel. */}
+      <div style={{ overflowX: "auto" }}>
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            fontSize: "0.82rem",
+          }}
+        >
+          <thead>
+            <tr style={{ textAlign: "left", color: colores.suave }}>
+              <th style={{ padding: "0.2rem 0" }}>Fecha</th>
+              <th>Referencia</th>
+              <th>Acción</th>
+              <th>Usuario</th>
+              <th>Detalle</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orden.historial.map((paso, indice) => {
+              const transversal =
+                paso.tipo_referencia === "FUNCTIONAL_ACTION";
+              return (
+                <tr
+                  key={`${paso.referencia_id}-${indice}`}
+                  style={{ borderTop: `1px solid ${colores.borde}` }}
+                >
+                  <td style={{ padding: "0.3rem 0", whiteSpace: "nowrap" }}>
+                    {fechaCorta(paso.fecha)}
+                  </td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <span
+                      title={
+                        transversal
+                          ? "Capacidad transversal: no avanza el proceso"
+                          : "Nodo del Business Process"
+                      }
+                      style={{
+                        display: "inline-block",
+                        marginRight: "0.4rem",
+                        padding: "0.05rem 0.3rem",
+                        borderRadius: 3,
+                        fontSize: "0.65rem",
+                        fontWeight: 700,
+                        color: "#fff",
+                        background: transversal
+                          ? colores.alerta
+                          : colores.acento,
+                      }}
+                    >
+                      {transversal ? "ACC" : "PROC"}
+                    </span>
+                    <span style={{ fontFamily: "ui-monospace, monospace" }}>
+                      {paso.referencia_id}
+                    </span>
+                  </td>
+                  <td>{paso.accion}</td>
+                  <td style={{ color: colores.suave }}>
+                    {paso.usuario_id ?? "sistema"}
+                  </td>
+                  <td style={{ color: colores.suave }}>
+                    {paso.observacion ?? ""}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </Panel>
   );
 }

@@ -83,7 +83,7 @@ def test_requerimiento_sin_detalles():
     orden = flujo_mvp.orden_creada()
 
     assert _codigos_y_roles(orden) == [
-        ("DEFINIR_REPARACION", (RolUsuario.RECEPCION,), None),
+        ("AGREGAR_DETALLE", (RolUsuario.RECEPCION,), None),
         # Slice 4: la otra rama de PROC-REP-045 (Detalles no conocidos).
         ("ENVIAR_A_REVISION", (RolUsuario.RECEPCION,), None),
     ]
@@ -392,11 +392,10 @@ def test_reparacion_lista_sin_saldo():
 def test_entregada():
     orden = flujo_mvp.orden_entregada()
 
-    # Slice 3 (HP-REP-003): una Orden ENTREGADA con Cliente ofrece a
-    # Recepcion generar la garantia RMA de cada Detalle; ya no es [].
+    # HP-REP-003: una Orden ENTREGADA con Cliente ofrece a Recepcion
+    # iniciar UNA garantia RMA (eligiendo 1..N Detalles en el formulario).
     assert _codigos_y_roles(orden) == [
-        ("GENERAR_GARANTIA_RMA", (RolUsuario.RECEPCION,), "DET-001"),
-        ("GENERAR_GARANTIA_RMA_REVISION", (RolUsuario.RECEPCION,), "DET-001"),
+        ("INICIAR_GARANTIA_RMA", (RolUsuario.RECEPCION,), None),
     ]
     assert _alcanzados(orden) == [
         "PROC-REP-010",
@@ -440,3 +439,19 @@ def test_hp1_212_queda_entre_180_y_181():
 
     assert ruta.index("PROC-REP-212") == ruta.index("PROC-REP-180") + 1
     assert ruta.index("PROC-REP-181") == ruta.index("PROC-REP-212") + 1
+
+
+def test_la_fachada_happy_path_sigue_importable_y_reexporta_lo_mismo():
+    """``application/happy_path.py`` sigue siendo la fachada del refactor.
+
+    Excepcion deliberada al import por paquete: lo que se protege aca es
+    justamente que el modulo interno siga importando y re-exportando los
+    mismos objetos que ``acciones`` y ``progreso``.
+    """
+    from app.application import acciones, happy_path
+
+    for nombre in happy_path.__all__:
+        assert hasattr(happy_path, nombre), nombre
+    assert happy_path.acciones_disponibles is acciones.acciones_disponibles
+    assert happy_path.progreso is progreso
+    assert happy_path.ACCION_AGREGAR_DETALLE == "AGREGAR_DETALLE"

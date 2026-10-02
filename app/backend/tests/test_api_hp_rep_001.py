@@ -27,6 +27,7 @@ from app.domain.models import (
 )
 from app.main import create_app
 from app.storage.json.base import escribir_json_atomico
+from tests.fixtures.api_definicion import definir_y_finalizar
 
 RECEPCION = "RECEP-001"
 COORDINADOR = "COORD-001"
@@ -132,8 +133,9 @@ def _hasta_ejecucion_iniciada(cliente: TestClient) -> tuple[str, str, str]:
     """Lleva una Orden hasta tener una Ejecucion en curso."""
     orden_id = _crear_orden(cliente)
 
-    cuerpo = cliente.post(
-        f"/api/orders/{orden_id}/details",
+    cuerpo = definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     ).json()
     detalle_id = cuerpo["reparaciones_detail"][0]["id"]
@@ -193,8 +195,9 @@ def test_hp_rep_001_end_to_end_por_http(cliente):
     assert orden["resumen"]["estado_pago"] == "PENDIENTE"
 
     # PROC-REP-045 -> 070 -> 050 -> 060 -> 080 -> 090 -> 140
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/details",
+    respuesta = definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
     assert respuesta.status_code == 200, respuesta.text
@@ -308,8 +311,9 @@ def test_hp_rep_001_end_to_end_por_http(cliente):
 def test_el_historial_llega_al_frontend(cliente):
     """La UI muestra el recorrido con los IDs funcionales reales."""
     orden_id = _crear_orden(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
 
@@ -396,8 +400,9 @@ def test_rol_incorrecto_devuelve_409(cliente, usuario_id, descripcion):
 
 def test_rol_incorrecto_al_tomar_la_orden_devuelve_409(cliente):
     orden_id = _crear_orden(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
     cliente.post(
@@ -450,8 +455,9 @@ def test_entregar_con_saldo_pendiente_devuelve_409(cliente):
 def _hasta_tomada(cliente: TestClient) -> tuple[str, str]:
     """Orden lista para que un tecnico inicie un Detalle."""
     orden_id = _crear_orden(cliente)
-    cuerpo = cliente.post(
-        f"/api/orders/{orden_id}/details",
+    cuerpo = definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
     assert cuerpo.status_code == 200, cuerpo.text
@@ -479,8 +485,9 @@ def test_la_factibilidad_bloquea_cuando_el_stock_ya_esta_reservado(tmp_path):
         _hasta_ejecucion_iniciada(cliente)
 
         segunda = _crear_orden(cliente)
-        respuesta = cliente.post(
-            f"/api/orders/{segunda}/details",
+        respuesta = definir_y_finalizar(
+            cliente,
+            segunda,
             json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
         )
 
@@ -599,8 +606,9 @@ def test_los_catalogos_demo_versionados_no_se_tocan(cliente, tmp_path):
 def test_el_detalle_expone_sus_insumos_previstos(cliente):
     """La UI recibe qué insumos confirmar, sin conocer IDs de catálogo."""
     orden_id = _crear_orden(cliente)
-    orden = cliente.post(
-        f"/api/orders/{orden_id}/details",
+    orden = definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     ).json()
 
@@ -618,8 +626,9 @@ def test_el_detalle_expone_sus_insumos_previstos(cliente):
 def test_los_insumos_previstos_viajan_en_cada_lectura(cliente):
     """Están en el GET, no solo en la respuesta del comando."""
     orden_id = _crear_orden(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
 
@@ -640,8 +649,9 @@ def test_un_tipo_sin_insumos_previstos_devuelve_lista_vacia(tmp_path):
 
     with TestClient(create_app(Settings(data_dir=tmp_path))) as cliente:
         orden_id = _crear_orden(cliente)
-        orden = cliente.post(
-            f"/api/orders/{orden_id}/details",
+        orden = definir_y_finalizar(
+            cliente,
+            orden_id,
             json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
         ).json()
 
@@ -653,8 +663,9 @@ def test_los_insumos_previstos_no_se_persisten_en_la_orden(cliente, tmp_path):
     import json
 
     orden_id = _crear_orden(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
 
@@ -720,8 +731,9 @@ def test_una_relacion_a_insumo_inexistente_falla_explicitamente(tmp_path):
     _sembrar_catalogos(tmp_path)
     with TestClient(create_app(Settings(data_dir=tmp_path))) as cliente:
         orden_id = _crear_orden(cliente)
-        cliente.post(
-            f"/api/orders/{orden_id}/details",
+        definir_y_finalizar(
+            cliente,
+            orden_id,
             json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
         )
 
@@ -748,8 +760,9 @@ def test_un_tipo_sin_relaciones_no_es_un_catalogo_roto(tmp_path):
     _sembrar_catalogos(tmp_path)
     with TestClient(create_app(Settings(data_dir=tmp_path))) as cliente:
         orden_id = _crear_orden(cliente)
-        cliente.post(
-            f"/api/orders/{orden_id}/details",
+        definir_y_finalizar(
+            cliente,
+            orden_id,
             json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
         )
 
@@ -769,8 +782,9 @@ def test_el_catalogo_roto_responde_500_sin_filtrar_detalle(tmp_path):
     _sembrar_catalogos(tmp_path)
     with TestClient(create_app(Settings(data_dir=tmp_path))) as cliente:
         orden_id = _crear_orden(cliente)
-        cliente.post(
-            f"/api/orders/{orden_id}/details",
+        definir_y_finalizar(
+            cliente,
+            orden_id,
             json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
         )
 

@@ -35,9 +35,8 @@ from app.services import (
     habilitar_orden,
     ingresar_a_cola,
     intentar_reserva_e_inicio,
+    registrar_accion_funcional,
     registrar_espera_recursos,
-    registrar_override_recursos,
-    registrar_paso,
     registrar_reserva_fallida,
     reservar_insumos_e_iniciar_ejecucion,
     seleccionar_detalle,
@@ -45,6 +44,7 @@ from app.services import (
     validar_compatibilidad_detalle,
     validar_estacion_trabajo,
 )
+from app.services.recursos import ACCION_AUTORIZAR_OVERRIDE
 from tests.fixtures.catalogos_mvp import (
     COMPATIBILIDADES,
     COORDINADOR,
@@ -54,6 +54,7 @@ from tests.fixtures.catalogos_mvp import (
     TIPO_BATERIA,
     t,
 )
+from tests.fixtures.override import override_en_100
 from tests.test_api_exc_rep_001 import _cliente
 from tests.test_api_exc_rep_002 import _tomar
 from tests.test_api_exc_rep_003 import _definir
@@ -204,6 +205,8 @@ def test_caso_a_det_a_falla_y_det_b_sigue_trabajable():
     assert codigos == [
         ("INICIAR_DETALLE", "DET-002"),
         ("LIBERAR_ORDEN", None),
+        # Transversal (BR-REP-003): el bloqueado puede autorizarse.
+        ("OVERRIDE_RECURSOS", "DET-001"),
     ]
 
 
@@ -237,7 +240,7 @@ def test_caso_b_unico_detalle_211_cierra_la_toma_y_va_a_120():
         a.codigo
         for a in acciones_disponibles(orden)
         if a.codigo != "REGISTRAR_PAGO"
-    ] == ["REVALIDAR_RECURSOS"]
+    ] == ["REVALIDAR_RECURSOS", "OVERRIDE_RECURSOS"]
 
 
 def test_primer_intento_en_cola_y_con_trabajo_previo_en_reparacion():
@@ -313,7 +316,7 @@ def test_con_stock_suficiente_se_delega_en_la_reserva_exitosa():
 
 def test_con_override_del_mismo_detalle_reserva_sin_reserva_fallida():
     orden, _ = _validar(_con_detalles(TIPO_BATERIA), _insumos(a="0"))
-    orden = registrar_override_recursos(
+    orden = override_en_100(
         orden,
         detalle_id="DET-001",
         usuario=COORDINADOR,
@@ -352,11 +355,11 @@ def _encolar_y_tomar(orden):
 
 def test_el_override_de_otro_detalle_no_cuenta():
     orden = _seleccionar(_en_toma(TIPO_BATERIA, TIPO_PANTALLA))
-    # Override registrado solo para DET-002 (el historial es la fuente).
-    orden = registrar_paso(
+    # Autorizacion registrada solo para DET-002 (el historial es la fuente).
+    orden = registrar_accion_funcional(
         orden,
-        process_id="PROC-REP-130",
-        accion="REGISTRAR_OVERRIDE",
+        accion_id=ACCION_AUTORIZAR_OVERRIDE,
+        accion="AUTORIZAR_OVERRIDE_RECURSOS",
         fecha=t(64),
         usuario_id=COORDINADOR.id,
         reparacion_detail_id="DET-002",
@@ -493,7 +496,7 @@ def test_003_120_revalida_100_override_130_140_en_cola():
     orden, factible = _validar(_a_120_en_cola(), _insumos(a="0"), minuto=70)
     assert factible is False and orden.current_process == "PROC-REP-100"
 
-    orden = registrar_override_recursos(
+    orden = override_en_100(
         orden,
         detalle_id="DET-001",
         usuario=COORDINADOR,

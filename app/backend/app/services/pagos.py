@@ -27,6 +27,7 @@ from app.domain.politicas import CondicionComercial, politica_de
 from .autorizacion import validar_alguno_de
 from .exceptions import PrecondicionInvalidaError
 from .identificadores import nuevo_id
+from .revisiones import lista_para_cierre
 from .workflow import registrar_accion_funcional, registrar_paso
 
 # Capacidad transversal de FEAT-REP-007 / BR-REP-017-A. Tiene ID de
@@ -183,10 +184,11 @@ def validar_condicion_entrega(
     Se evalua antes de generar el comprobante final (PROC-REP-280), para
     que el comprobante refleje siempre el saldo definitivo.
     """
-    if orden.estado_workflow is not EstadoWorkflow.REPARACION_LISTA:
+    if not lista_para_cierre(orden):
         raise PrecondicionInvalidaError(
-            f"La condicion de entrega se evalua sobre una Orden "
-            f"REPARACION_LISTA; esta en {orden.estado_workflow.value}."
+            f"La condicion de entrega se evalua sobre una Orden con "
+            f"resultado (REPARACION_LISTA o SIN_REPARACION); esta en "
+            f"{orden.estado_workflow.value}."
         )
     politica = politica_de(orden.origen)
     if not politica.requiere_entrega_cliente:

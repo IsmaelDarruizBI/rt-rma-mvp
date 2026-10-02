@@ -435,6 +435,19 @@ aqui en vez de agregarse como nodos:
   puede autorizarla, registrando fecha/hora y motivo obligatorio
   (BR-REP-016). No modifica el precio original del Detalle, que
   permanece como dato historico dentro del Subtotal.
+- **Override de recursos de un Detalle** (MVP v2, BR-REP-003): unicamente
+  ACT-COORD puede autorizarlo, con motivo obligatorio, sobre cualquier
+  Detalle PENDIENTE con condicion BLOQUEADO_POR_RECURSOS. Registra
+  usuario, fecha, Detalle, validacion ignorada y motivo; no reserva ni
+  consume stock. No exige que toda la Orden este bloqueada: tambien
+  aplica con factibilidad parcial (otros Detalles trabajables, Orden
+  habilitada, en cola, tomada o en reparacion), y ahi no reinicia el
+  proceso (no vuelve a PROC-REP-140, no cierra la toma ni toca la
+  Ejecucion en curso). Solo cuando la Orden esta detenida en PROC-REP-100
+  ("ningun Detalle trabajable") la autorizacion resuelve PROC-REP-110 = Si
+  y la Orden continua 130 -> 140. Es una unica capacidad: misma
+  validacion y misma vigencia (la autorizacion vale mientras no exista un
+  PROC-REP-127 posterior del mismo Detalle).
 
 ### Registrar Pago (transversal) vs. Completar Cobro (secuencial)
 
@@ -885,8 +898,10 @@ HP-REP-002:
 
 ```text
 HP-REP-001: necesidad nueva -> registrar cliente/equipo -> crear OR -> ... -> cobro -> saldo -> entrega
-HP-REP-003: OR origen finalizada -> generar garantia -> recuperar cliente/equipo/origen
-            -> crear NUEVA OR vinculada -> ... -> (sin cobro, sin saldo) -> entrega
+HP-REP-003: OR origen finalizada -> iniciar garantia (1..N Detalles origen)
+            -> recuperar cliente/equipo/origen -> crear NUEVA OR vinculada
+            -> EN_REVISION -> revision tecnica obligatoria -> definir Detalles
+            -> ... -> (sin cobro, sin saldo) -> entrega
 ```
 
 - **Evento inicial propio**: `EVT-REP-002` "Una Orden de Reparacion finalizada
@@ -899,9 +914,16 @@ HP-REP-003: OR origen finalizada -> generar garantia -> recuperar cliente/equipo
   fallaron, y recupera cliente y equipo de ella (no hay alta nueva, por eso
   no pasa por `PROC-REP-030`). `PROC-REP-040` crea una NUEVA Orden con origen
   RMA_GARANTIA_REPARACION, condicion NO_COBRABLE y referencia a la Orden
-  origen; `PROC-REP-070` crea cada Detalle nuevo referenciando su Detalle
-  origen. La Orden origen NO se reabre y conserva su estado: no se crearon
-  estados como REABIERTA_POR_GARANTIA.
+  origen y a los 1..N Detalles origen seleccionados (una unica Orden por
+  inicio, no una por Detalle). **Revision obligatoria (MVP v2)**: la Orden
+  nueva nace sin Detalles y EN_REVISION (`PROC-REP-045` = No -> 055 -> 050
+  -> 060), el tecnico la revisa (065) y Recepcion define los Detalles de
+  garantia (068 Si -> 075), cada uno vinculado a uno de los Detalles
+  origen sin relacion 1:1; si la revision no permite definir reparacion,
+  concluye SIN_REPARACION (068 No -> 069). Ya no existe el camino que
+  copiaba directamente el Tipo del Detalle origen (045 Si -> 070). La
+  Orden origen NO se reabre y conserva su estado: no se crearon estados
+  como REABIERTA_POR_GARANTIA.
 - **Trazabilidad en ambos niveles** (`BR-REP-019`): Orden nueva -> Orden
   origen y Detalle nuevo -> Detalle origen. Esto RESUELVE el pendiente
   "Orden origen vs. Detalle origen". Sigue pendiente el modelo tecnico
@@ -1054,7 +1076,7 @@ campo `source_candidate`: la relacion queda documentada aqui y en la
 
 | Scenario | Tipo | Candidate(s) origen | applies_to |
 |---|---|---|---|
-| `VAR-REP-001` Ingreso sin diagnostico, con comprobante | VARIANT | CAND-REP-007, CAND-REP-016 | HP-REP-001, HP-REP-003 |
+| `VAR-REP-001` Ingreso sin diagnostico, con comprobante | VARIANT | CAND-REP-007, CAND-REP-016 | HP-REP-001 (en HP-REP-003 la revision es obligatoria y forma parte del Happy Path) |
 | `VAR-REP-002` Ingreso sin diagnostico, sin comprobante (RT) | VARIANT | CAND-REP-007, CAND-REP-009 | HP-REP-002 |
 | `VAR-REP-003` Ejecucion interrumpida | VARIANT | CAND-REP-027 | HP-REP-001/002/003 |
 | `EXC-REP-001` Recursos insuficientes, en espera | EXCEPTION | CAND-REP-018 | HP-REP-001/002/003 |
@@ -1165,6 +1187,12 @@ deliberadamente fuera de alcance de esta revision:
   tratamiento del pago excedente (devolucion/reembolso, credito a favor),
   y aceptacion/aprobacion comercial del cliente ante un aumento de precio
   (presupuesto). No bloquea EXC-REP-004.
+- **PENDING BUSINESS DECISION (MVP v2): paralelismo de Detalles /
+  Ejecuciones.** Pregunta abierta al cliente: un mismo equipo, puede tener
+  varias reparaciones trabajandose simultaneamente? Hasta tener respuesta
+  se mantiene BR-REP-007 (maximo una Ejecucion activa por Orden) y
+  BR-REP-018 sin cambios: no se inician varios Detalles en paralelo ni
+  varias Ejecuciones simultaneas.
 - Reporting por tecnico (a futuro, sin agregar nodos al Business
   Process): OR actualmente tomadas, OR trabajadas, OR liberadas, Detalles
   completados, trabajos pendientes. El historial de toma/liberacion

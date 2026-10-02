@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from app.application import (
     AccionDisponible,
+    DetalleOrigen,
     InsumoPrevisto,
     PasoProgreso,
 )
@@ -51,7 +52,7 @@ from app.domain.models import (
     Usuario,
 )
 from app.domain.politicas import politica_de
-from app.services import nuevo_id
+from app.services import finalizada_sin_reparacion, nuevo_id
 
 # --- Catalogos ---------------------------------------------------------
 
@@ -161,16 +162,22 @@ class CrearOrdenRtIn(BaseModel):
 class DefinirReparacionIn(BaseModel):
     """``POST /api/orders/{id}/details`` (ACT-RECEP).
 
-    ``finalizar_definicion`` (default ``True``) es aditivo: en ``False``
-    agrega el Detalle sin generar el comprobante, validar factibilidad
-    ni habilitar la Orden todavia, para permitir definir mas de un
-    Detalle (Multi-Detalle) antes de cerrar esa etapa.
+    Agrega UN Detalle (PROC-REP-070). No finaliza la definicion: eso es
+    otra intencion, ``POST /api/orders/{id}/definition/finalize``.
     """
 
     usuario_id: str = Field(min_length=1)
     tipo_reparacion_id: str = Field(min_length=1)
     observaciones: str | None = None
-    finalizar_definicion: bool = True
+
+
+class FinalizarDefinicionIn(BaseModel):
+    """``POST /api/orders/{id}/definition/finalize`` (ACT-RECEP).
+
+    Cierra la carga de Detalles: [050 -> 060] -> 080 -> 090 -> 140 | 100.
+    """
+
+    usuario_id: str = Field(min_length=1)
 
 
 class EncolarIn(BaseModel):
@@ -304,14 +311,16 @@ class EntregarIn(BaseModel):
     usuario_id: str = Field(min_length=1)
 
 
-class GarantiaRmaIn(BaseModel):
-    """``POST /api/orders/{id}/details/{detalle_id}/warranty-rma``.
+class IniciarGarantiaRmaIn(BaseModel):
+    """``POST /api/orders/{orden_origen_id}/warranty-rma`` (ACT-RECEP).
 
-    Recepcion genera la garantia RMA de un Detalle de una Orden ENTREGADA
-    (HP-REP-003).
+    Recepcion inicia UNA garantia RMA de una Orden ENTREGADA eligiendo
+    1..N de sus Detalles (HP-REP-003). La unicidad y la pertenencia de los
+    IDs las valida el dominio (409), no el DTO.
     """
 
     usuario_id: str = Field(min_length=1)
+    detalle_origen_ids: list[str] = Field(min_length=1)
 
 
 class OverrideRecursosIn(BaseModel):
@@ -341,15 +350,27 @@ class RevisionTecnicaIn(BaseModel):
 class DefinirReparacionDesdeRevisionIn(BaseModel):
     """``POST /api/orders/{id}/review/details`` (ACT-RECEP, PROC-REP-075).
 
-    ``detalle_origen_id`` solo hace falta en una garantia RMA con mas de
-    un Detalle origen identificado.
+    Agrega UN Detalle luego de la revision. ``detalle_origen_id`` elige,
+    en una garantia RMA, a cual de sus Detalles origen corresponde
+    (obligatorio si hay mas de uno).
     """
 
     usuario_id: str = Field(min_length=1)
     tipo_reparacion_id: str = Field(min_length=1)
     observaciones: str | None = None
-    finalizar_definicion: bool = True
     detalle_origen_id: str | None = None
+
+
+class FinalizarSinReparacionIn(BaseModel):
+    """``POST /api/orders/{id}/review/without-repair`` (ACT-RECEP).
+
+    PROC-REP-068 (No) -> 069: la revision concluye SIN_REPARACION. El
+    motivo es obligatorio (BR-REP-010); las observaciones, opcionales.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    motivo: str = Field(min_length=1)
+    observaciones: str | None = None
 
 
 class DevolverRtIn(BaseModel):
@@ -670,6 +691,13 @@ class OrdenResumenOut(BaseModel):
         )
 
 
+class DetalleOrigenOut(BaseModel):
+    """Detalle de la Orden origen de una garantia RMA (presentacion)."""
+
+    id: str
+    tipo_reparacion_nombre: str
+
+
 class OrdenOut(BaseModel):
     """La Orden completa tal como la consume el frontend."""
 
@@ -683,6 +711,11 @@ class OrdenOut(BaseModel):
     referencia_rt: str | None
     orden_origen_id: str | None
     detalles_origen_ids: list[str]
+    # Presentacion (BR-REP-019): Tipo de cada Detalle origen, resuelto al
+    # leer desde la Orden origen. No se persiste en la garantia.
+    detalles_origen: list[DetalleOrigenOut] = Field(default_factory=list)
+    # PROC-REP-069: derivado del historial, no es un estado de workflow.
+    finalizada_sin_reparacion: bool = False
     reparaciones_detail: list[DetalleOut]
     tomas: list[TomaOut]
     ejecuciones: list[EjecucionOut]
@@ -705,6 +738,7 @@ class OrdenOut(BaseModel):
         insumos_previstos: Mapping[str, Sequence[InsumoPrevisto]]
         | None = None,
         nombres_de_tipo: Mapping[str, str] | None = None,
+        detalles_origen: Sequence[DetalleOrigen] = (),
     ) -> "OrdenOut":
         return cls(
             id=orden.id,
@@ -721,6 +755,14 @@ class OrdenOut(BaseModel):
             referencia_rt=orden.referencia_rt,
             orden_origen_id=orden.orden_origen_id,
             detalles_origen_ids=list(orden.detalles_origen_ids),
+            detalles_origen=[
+                DetalleOrigenOut(
+                    id=origen.id,
+                    tipo_reparacion_nombre=origen.tipo_reparacion_nombre,
+                )
+                for origen in detalles_origen
+            ],
+            finalizada_sin_reparacion=finalizada_sin_reparacion(orden),
             reparaciones_detail=[
                 DetalleOut.desde_dominio(
                     detalle,

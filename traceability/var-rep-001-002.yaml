@@ -2,8 +2,9 @@
 #
 # Unidad de implementacion unica, DOS Scenarios de negocio independientes.
 # VAR-REP-001 (ingreso sin diagnostico conocido, CON comprobante) aplica a
-# CLIENTE_EXTERNO y RMA_GARANTIA_REPARACION; VAR-REP-002 (SIN comprobante)
-# aplica a RT_INTERNO. Comparten la misma capacidad: PROC-REP-045 = No ->
+# CLIENTE_EXTERNO; VAR-REP-002 (SIN comprobante) aplica a RT_INTERNO. En una
+# garantia RMA la revision es obligatoria y forma parte de HP-REP-003
+# (traceability/hp-rep-003.yaml, specs/019-mvp2-feedback). Comparten la misma capacidad: PROC-REP-045 = No ->
 # 055 (EN_REVISION) -> 050 [-> 060 segun PoliticaOrigen] -> 065 -> 068 (Si)
 # -> 075 -> 080 -> 090 -> 140. Por eso comparten US/ACC/FR/TR/TASK/CODE/TEST
 # y se agrupan en un solo archivo (regla en traceability/README.md). Cada
@@ -22,7 +23,12 @@
 # Continua la numeracion global: US-REP-022, ACC-REP-035, FR-REP-086,
 # TR-REP-086, TASK-REP-178, CODE-REP-156, TEST-REP-287, UAT-REP-022.
 #
-# Fuera de alcance: PROC-REP-068 No / 069 (SIN_REPARACION), OrdenRevision,
+# specs/019-mvp2-feedback agrega aqui PROC-REP-068 No -> 069 (SIN_REPARACION,
+# BR-REP-010) reutilizando TASK-REP-028 y TASK-REP-138 de hp-rep-001.yaml, y
+# separa agregar un Detalle (075) de finalizar la definicion. Los artefactos
+# de la garantia "para revision" quedan SUPERSEDED: hay un unico inicio.
+#
+# Fuera de alcance: OrdenRevision,
 # RT_GARANTIA_VENTA, EXC-REP-001..005 (incluida EXC-REP-004, revision
 # posterior de un Detalle ya existente), cancelacion, PostgreSQL.
 #
@@ -93,6 +99,7 @@ items:
   - {id: PROC-REP-065, type: process_node, name: "Realizar revision tecnica", node_type: activity, actor: ACT-TECH, status: draft, in_scenario: true, implemented: true}
   - {id: PROC-REP-068, type: process_node, name: "Se pudo definir la reparacion requerida", node_type: decision, status: draft, in_scenario: true, implemented: true}
   - {id: PROC-REP-075, type: process_node, name: "Definir Detalles de reparacion luego de revision", node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: true, implemented: true}
+  - {id: PROC-REP-069, type: process_node, name: "Registrar finalizacion sin reparacion", node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: false, implemented: true, note: "068 No -> 069 (specs/019-mvp2-feedback). No es un paso de VAR-REP-001/002: es la otra salida de la revision."}
   - {id: PROC-REP-080, type: process_node, name: "Validar factibilidad por Detalle", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
   - {id: PROC-REP-090, type: process_node, name: "Existe al menos un Detalle trabajable", node_type: decision, status: draft, in_scenario: true, implemented: true}
   - {id: PROC-REP-140, type: process_node, name: "Habilitar Orden de Reparacion", node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: true, implemented: true}
@@ -101,48 +108,61 @@ items:
   - {id: BR-REP-015, type: business_rule, name: "Precio snapshot y Subtotal", status: draft, coverage: PARTIAL}
   - {id: BR-REP-016, type: business_rule, name: "Ajustes Comerciales y Cortesia", status: draft, coverage: PARTIAL}
   - {id: BR-REP-019, type: business_rule, name: "Garantia RMA - Orden nueva vinculada y Detalle origen", status: draft, coverage: PARTIAL}
+  - {id: BR-REP-010, type: business_rule, name: "Finalizacion sin reparacion trazable", status: draft, coverage: PARTIAL}
+
+  # TASK-REP-028 y TASK-REP-138 se REUTILIZAN de hp-rep-001.yaml (mismo id, type y name).
+  - {id: TASK-REP-028, type: task, name: "Implementar PROC-REP-069 (SIN_REPARACION, BR-REP-010), con motivo obligatorio y Subtotal = 0", status: DONE, note: "Implementada en specs/019-mvp2-feedback."}
+  - {id: TASK-REP-138, type: task, name: "Implementar el comprobante final para una Orden SIN_REPARACION (BR-REP-010): sin garantia y con subtotal cero", status: DONE, note: "Implementada en specs/019-mvp2-feedback."}
 
   - {id: US-REP-023, type: user_story, name: "Como Recepcionista quiero enviar a revision tecnica una Orden cuya reparacion todavia no se conoce, con o sin comprobante de recepcion segun su Origen, para ingresar el equipo sin inventar un Detalle de diagnostico", status: IMPLEMENTED, priority: P1, actor: ACT-RECEP}
   - {id: US-REP-024, type: user_story, name: "Como Tecnico quiero registrar el resultado de la revision de una Orden EN_REVISION para que Recepcion pueda definir la reparacion requerida", status: IMPLEMENTED, priority: P1, actor: ACT-TECH}
   - {id: US-REP-025, type: user_story, name: "Como Recepcionista quiero definir uno o mas Detalles de reparacion a partir del resultado de la revision para continuar el circuito normal de la Orden sin repetir el comprobante", status: IMPLEMENTED, priority: P1, actor: ACT-RECEP}
-  - {id: US-REP-026, type: user_story, name: "Como Recepcionista quiero generar una garantia RMA de un Detalle entregado que todavia necesita diagnostico para que la nueva Orden quede en revision vinculada a la Orden y al Detalle de origen", status: IMPLEMENTED, priority: P1, actor: ACT-RECEP}
+  - {id: US-REP-026, type: user_story, name: "Como Recepcionista quiero iniciar una garantia RMA de uno o mas Detalles entregados que siempre pasa por revision tecnica para que la nueva Orden quede vinculada a la Orden y a los Detalles de origen", status: IMPLEMENTED, priority: P1, actor: ACT-RECEP}
+  - {id: US-REP-038, type: user_story, name: "Como Recepcionista quiero concluir una Orden revisada sin reparacion dejando un motivo para cerrarla segun su Origen sin inventar un Detalle ni un precio", status: IMPLEMENTED, priority: P1, actor: ACT-RECEP}
 
   - {id: ACC-REP-036, type: system_action, name: "Enviar una Orden REQUERIMIENTO sin Detalles a EN_REVISION (PROC-REP-045 No, 055) y generar el comprobante de recepcion segun la politica del Origen (050 y 060)", status: IMPLEMENTED}
   - {id: ACC-REP-037, type: system_action, name: "Registrar la revision tecnica de una Orden EN_REVISION (PROC-REP-065) con tecnico, fecha y resultado en el historial", status: IMPLEMENTED}
-  - {id: ACC-REP-038, type: system_action, name: "Definir Detalles luego de la revision (PROC-REP-068 Si y PROC-REP-075 por Detalle) y continuar con factibilidad y habilitacion (080 090 140)", status: IMPLEMENTED}
-  - {id: ACC-REP-039, type: system_action, name: "Crear una NUEVA Orden de garantia RMA directamente EN_REVISION (PROC-REP-035 040 045 No 055 050 060) con la procedencia identificada", status: IMPLEMENTED}
-  - {id: ACC-REP-040, type: system_action, name: "Publicar desde el backend ENVIAR_A_REVISION REALIZAR_REVISION DEFINIR_REPARACION_DESDE_REVISION y GENERAR_GARANTIA_RMA_REVISION segun el estado real de la Orden", status: IMPLEMENTED}
+  - {id: ACC-REP-038, type: system_action, name: "Agregar Detalles luego de la revision (PROC-REP-068 Si una vez y PROC-REP-075 por Detalle) y al finalizar la definicion continuar con factibilidad y habilitacion (080 090 140)", status: IMPLEMENTED}
+  - {id: ACC-REP-039, type: system_action, name: "Crear la NUEVA Orden de garantia RMA de 1..N Detalles origen siempre EN_REVISION (PROC-REP-035 040 045 No 055 050 060) con la procedencia identificada", status: IMPLEMENTED}
+  - {id: ACC-REP-040, type: system_action, name: "Publicar desde el backend ENVIAR_A_REVISION REALIZAR_REVISION AGREGAR_DETALLE_DESDE_REVISION FINALIZAR_DEFINICION y FINALIZAR_SIN_REPARACION segun el estado real de la Orden", status: IMPLEMENTED}
+  - {id: ACC-REP-059, type: system_action, name: "Finalizar la Orden SIN_REPARACION tras la revision (PROC-REP-068 No y 069) con motivo obligatorio sin Detalles ni precio y cerrarla por su Origen (notificar y entregar sin cobro ni garantia de reparacion o informar y devolver a Gestion RT)", status: IMPLEMENTED}
 
   - {id: FR-REP-087, type: functional_requirement, name: "Una Orden EN_REVISION admite cero Detalles y no usa ningun Detalle ficticio de diagnostico", status: IMPLEMENTED}
   - {id: FR-REP-088, type: functional_requirement, name: "El comprobante de recepcion durante la revision depende solo de la politica del Origen: PROC-REP-060 para CLIENTE_EXTERNO y RMA_GARANTIA_REPARACION, ninguno para RT_INTERNO", status: IMPLEMENTED}
   - {id: FR-REP-089, type: functional_requirement, name: "La revision tecnica queda registrada en el historial con el tecnico la fecha y un resultado de texto no vacio, una sola vez por Orden", status: IMPLEMENTED}
-  - {id: FR-REP-090, type: functional_requirement, name: "Definir Detalles luego de la revision registra PROC-REP-068 una sola vez y PROC-REP-075 por Detalle con el mismo snapshot que PROC-REP-070 sin repetir el comprobante", status: IMPLEMENTED}
-  - {id: FR-REP-091, type: functional_requirement, name: "La garantia RMA en revision conserva la procedencia estructurada de la Orden origen y de los Detalles origen sin modificar la Orden origen", status: IMPLEMENTED}
-  - {id: FR-REP-092, type: functional_requirement, name: "Cada Detalle de una garantia definido luego de la revision referencia su Detalle origen tomado de la procedencia estructurada y nunca del historial", status: IMPLEMENTED}
+  - {id: FR-REP-090, type: functional_requirement, name: "Agregar Detalles luego de la revision registra PROC-REP-068 una sola vez y PROC-REP-075 por Detalle con el mismo snapshot que PROC-REP-070 y finalizar la definicion no repite el comprobante", status: IMPLEMENTED}
+  - {id: FR-REP-091, type: functional_requirement, name: "La garantia RMA conserva la procedencia estructurada de la Orden origen y de sus 1..N Detalles origen sin modificar la Orden origen", status: IMPLEMENTED}
+  - {id: FR-REP-092, type: functional_requirement, name: "Cada Detalle de una garantia definido luego de la revision referencia uno de los Detalles origen seleccionados (elegido explicitamente si hay mas de uno y sin relacion 1:1) tomado de la procedencia estructurada y nunca del historial", status: IMPLEMENTED}
   - {id: FR-REP-093, type: functional_requirement, name: "El backend publica las acciones del circuito de revision por rol y estado y la UI solo muestra las publicadas", status: IMPLEMENTED}
   - {id: FR-REP-094, type: functional_requirement, name: "El progreso de una Orden que paso por PROC-REP-055 muestra la ruta de revision de su Origen", status: IMPLEMENTED}
+  - {id: FR-REP-139, type: functional_requirement, name: "SIN_REPARACION la registra solo Recepcion tras la revision tecnica y sin Detalles, una sola vez, con motivo obligatorio y observaciones opcionales: 068 No y 069 sin Tipo ficticio ni Detalles ni precio (Subtotal 0) y sin un estado de workflow nuevo", status: IMPLEMENTED}
+  - {id: FR-REP-140, type: functional_requirement, name: "Una Orden SIN_REPARACION cierra por su Origen: CLIENTE_EXTERNO y RMA 250 260 265 280 (sin garantia de reparacion) 270 sin ofrecer pago y RT_INTERNO 250 290 270", status: IMPLEMENTED}
 
-  - {id: TR-REP-087, type: technical_requirement, name: "OrdenReparacion.detalles_origen_ids es list[str] con default vacio compatible con el JSON anterior y la completan crear_orden_garantia_rma y la garantia directa", status: IMPLEMENTED}
+  - {id: TR-REP-087, type: technical_requirement, name: "OrdenReparacion.detalles_origen_ids es list[str] con default vacio compatible con el JSON anterior y la completa crear_orden_garantia_rma con los 1..N Detalles origen", status: IMPLEMENTED}
   - {id: TR-REP-088, type: technical_requirement, name: "services.ordenes.marcar_orden_en_revision exige RECEPCION Orden REQUERIMIENTO recien creada y sin Detalles y registra PROC-REP-045 No y PROC-REP-055 (ACT-SYSTEM) fijando EN_REVISION", status: IMPLEMENTED}
   - {id: TR-REP-089, type: technical_requirement, name: "application.ingreso.enviar_a_revision reutiliza generar_comprobante_recepcion gobernado por PoliticaOrigen y POST /api/orders/{id}/send-to-review lo expone", status: IMPLEMENTED}
   - {id: TR-REP-090, type: technical_requirement, name: "services.revisiones.registrar_revision_tecnica es una capacidad sin entidad persistida (frontera reemplazable por un futuro OrdenRevision) que valida TECNICO EN_REVISION y no repeticion y application.revision.realizar_revision y POST /technical-review la exponen", status: IMPLEMENTED}
   - {id: TR-REP-091, type: technical_requirement, name: "services.reparaciones.definir_reparacion_detail_luego_revision registra 068 una vez y 075 por Detalle compartiendo el helper de snapshot con PROC-REP-070 y resuelve el Detalle origen desde detalles_origen_ids", status: IMPLEMENTED}
-  - {id: TR-REP-092, type: technical_requirement, name: "application.ingreso.definir_reparacion_desde_revision y POST /review/details continuan con el helper _validar_y_habilitar (080 090 140) sin repetir 050 y 060 y habilitar_orden acepta EN_REVISION con Detalles pero solo si la Orden viene de PROC-REP-090 con resultado Si", status: IMPLEMENTED}
-  - {id: TR-REP-093, type: technical_requirement, name: "application.ingreso.crear_garantia_rma_en_revision y POST /warranty-rma/review crean la Orden garantia EN_REVISION sin guardar la Orden origen", status: IMPLEMENTED}
-  - {id: TR-REP-094, type: technical_requirement, name: "application.acciones.acciones_disponibles publica ENVIAR_A_REVISION REALIZAR_REVISION DEFINIR_REPARACION_DESDE_REVISION y GENERAR_GARANTIA_RMA_REVISION derivados de estado historial y PoliticaOrigen sin ramas por Scenario", status: IMPLEMENTED}
+  - {id: TR-REP-092, type: technical_requirement, name: "application.ingreso.definir_reparacion_desde_revision y POST /review/details agregan UN Detalle (068 una vez y 075); application.ingreso.finalizar_definicion continua con el helper _validar_y_habilitar (080 090 140) sin repetir 050 y 060 y habilitar_orden acepta EN_REVISION con Detalles pero solo si la Orden viene de PROC-REP-090 con resultado Si", status: IMPLEMENTED}
+  - {id: TR-REP-093, type: technical_requirement, name: "La garantia RMA siempre se crea EN_REVISION por application.ingreso.iniciar_garantia_rma y POST /api/orders/{orden_origen_id}/warranty-rma sin guardar la Orden origen; los endpoints por Detalle (directo y /review) se eliminaron", status: IMPLEMENTED}
+  - {id: TR-REP-094, type: technical_requirement, name: "application.acciones.acciones_disponibles publica ENVIAR_A_REVISION REALIZAR_REVISION AGREGAR_DETALLE_DESDE_REVISION FINALIZAR_DEFINICION y FINALIZAR_SIN_REPARACION derivados de estado historial y PoliticaOrigen sin ramas por Scenario", status: IMPLEMENTED}
   - {id: TR-REP-095, type: technical_requirement, name: "application.progreso._con_revision deriva la ruta de revision de la ruta del Origen cuando PROC-REP-055 esta en el historial sin guardar ningun id de Scenario", status: IMPLEMENTED}
   - {id: TR-REP-096, type: technical_requirement, name: "El frontend ejecuta solo las acciones publicadas y muestra EN_REVISION y los Detalles origen sin logica de negocio propia", status: IMPLEMENTED}
+  - {id: TR-REP-138, type: technical_requirement, name: "services.revisiones.registrar_finalizacion_sin_reparacion valida ACT-RECEP EN_REVISION 065 registrado sin 069 previo sin Detalles y motivo no vacio y registra 068 No y 069; finalizada_sin_reparacion se deriva del historial; application.ingreso.finalizar_sin_reparacion y POST /review/without-repair la exponen", status: IMPLEMENTED}
+  - {id: TR-REP-139, type: technical_requirement, name: "lista_para_cierre (REPARACION_LISTA o 069) reemplaza a REPARACION_LISTA en notificar_cliente validar_condicion_entrega generar_comprobante_final (sin garantia si es SIN_REPARACION) entregar_equipo informar_resultado_rt application.cierre.entregar y acciones_disponibles; application.progreso salta de 069 a 250", status: IMPLEMENTED}
+  - {id: TR-REP-140, type: technical_requirement, name: "El frontend ofrece Finalizar sin reparacion con motivo obligatorio y observaciones y muestra la conclusion SIN_REPARACION derivada por el backend (finalizada_sin_reparacion)", status: IMPLEMENTED}
 
-  - {id: TASK-REP-179, type: task, name: "Agregar detalles_origen_ids a OrdenReparacion y completarlo en la garantia directa", status: DONE}
+  - {id: TASK-REP-179, type: task, name: "Agregar detalles_origen_ids a OrdenReparacion y completarlo en la garantia directa", status: DONE, note: "La garantia directa se elimino en specs/019-mvp2-feedback."}
   - {id: TASK-REP-180, type: task, name: "Implementar services.ordenes.marcar_orden_en_revision y habilitar_orden desde EN_REVISION", status: DONE}
   - {id: TASK-REP-181, type: task, name: "Implementar application.ingreso.enviar_a_revision y su endpoint", status: DONE}
   - {id: TASK-REP-182, type: task, name: "Implementar services.revisiones y application.revision con su endpoint", status: DONE}
   - {id: TASK-REP-183, type: task, name: "Implementar definir_reparacion_detail_luego_revision con el helper de snapshot compartido", status: DONE}
   - {id: TASK-REP-184, type: task, name: "Implementar definir_reparacion_desde_revision y separar _validar_y_habilitar de _finalizar_definicion", status: DONE}
-  - {id: TASK-REP-185, type: task, name: "Implementar crear_garantia_rma_en_revision y su endpoint", status: DONE}
+  - {id: TASK-REP-185, type: task, name: "Implementar crear_garantia_rma_en_revision y su endpoint", status: DONE, note: "Unificada en specs/019-mvp2-feedback: un unico inicio de garantia (iniciar_garantia_rma, TASK-REP-211) que siempre entra en revision."}
   - {id: TASK-REP-186, type: task, name: "Publicar las acciones del circuito de revision en acciones_disponibles", status: DONE}
   - {id: TASK-REP-187, type: task, name: "Derivar la ruta de progreso de la variante de revision", status: DONE}
   - {id: TASK-REP-188, type: task, name: "Frontend: tipos, cliente API y formularios del circuito de revision", status: DONE}
+  - {id: TASK-REP-210, type: task, name: "Frontend: formulario SIN_REPARACION y etiqueta derivada", status: DONE, spec: 019-mvp2-feedback}
 
   - {id: CODE-REP-157, type: code_artifact, name: "domain/models/orden_reparacion.py::OrdenReparacion.detalles_origen_ids", status: IMPLEMENTED, source: "app/backend/app/domain/models/orden_reparacion.py::OrdenReparacion"}
   - {id: CODE-REP-158, type: code_artifact, name: "services/ordenes.py::marcar_orden_en_revision", status: IMPLEMENTED, source: "app/backend/app/services/ordenes.py::marcar_orden_en_revision"}
@@ -152,10 +172,16 @@ items:
   - {id: CODE-REP-162, type: code_artifact, name: "services/reparaciones.py::definir_reparacion_detail_luego_revision", status: IMPLEMENTED, source: "app/backend/app/services/reparaciones.py::definir_reparacion_detail_luego_revision"}
   - {id: CODE-REP-163, type: code_artifact, name: "application/ingreso.py::definir_reparacion_desde_revision", status: IMPLEMENTED, source: "app/backend/app/application/ingreso.py::definir_reparacion_desde_revision"}
   - {id: CODE-REP-164, type: code_artifact, name: "application/ingreso.py::_validar_y_habilitar", status: IMPLEMENTED, source: "app/backend/app/application/ingreso.py::_validar_y_habilitar"}
-  - {id: CODE-REP-165, type: code_artifact, name: "application/ingreso.py::crear_garantia_rma_en_revision", status: IMPLEMENTED, source: "app/backend/app/application/ingreso.py::crear_garantia_rma_en_revision"}
+  - {id: CODE-REP-165, type: code_artifact, name: "application/ingreso.py::crear_garantia_rma_en_revision", status: SUPERSEDED, source: "app/backend/app/application/ingreso.py::crear_garantia_rma_en_revision", note: "Eliminado en specs/019-mvp2-feedback: unificado en application/ingreso.py::iniciar_garantia_rma (CODE-REP-147)."}
   - {id: CODE-REP-166, type: code_artifact, name: "application/acciones.py::acciones_disponibles (circuito de revision)", status: IMPLEMENTED, source: "app/backend/app/application/acciones.py::acciones_disponibles"}
   - {id: CODE-REP-167, type: code_artifact, name: "application/progreso.py::_con_revision", status: IMPLEMENTED, source: "app/backend/app/application/progreso.py::_con_revision"}
   - {id: CODE-REP-168, type: code_artifact, name: "frontend/src/features/ordenes-reparacion/AccionesOrden.tsx (circuito de revision)", status: IMPLEMENTED, source: "app/frontend/src/features/ordenes-reparacion/AccionesOrden.tsx"}
+  - {id: CODE-REP-235, type: code_artifact, name: "services/revisiones.py::registrar_finalizacion_sin_reparacion", status: IMPLEMENTED, source: "app/backend/app/services/revisiones.py::registrar_finalizacion_sin_reparacion"}
+  - {id: CODE-REP-236, type: code_artifact, name: "services/revisiones.py::lista_para_cierre", status: IMPLEMENTED, source: "app/backend/app/services/revisiones.py::lista_para_cierre"}
+  - {id: CODE-REP-237, type: code_artifact, name: "application/ingreso.py::finalizar_sin_reparacion", status: IMPLEMENTED, source: "app/backend/app/application/ingreso.py::finalizar_sin_reparacion"}
+  - {id: CODE-REP-238, type: code_artifact, name: "api/ordenes.py::post_finalizar_sin_reparacion", status: IMPLEMENTED, source: "app/backend/app/api/ordenes.py::post_finalizar_sin_reparacion"}
+  - {id: CODE-REP-239, type: code_artifact, name: "application/progreso.py::_sin_reparacion", status: IMPLEMENTED, source: "app/backend/app/application/progreso.py::_sin_reparacion"}
+  - {id: CODE-REP-240, type: code_artifact, name: "frontend/src/features/ordenes-reparacion/AccionesOrden.tsx::FormularioSinReparacion", status: IMPLEMENTED, source: "app/frontend/src/features/ordenes-reparacion/AccionesOrden.tsx"}
 
   - {id: TEST-REP-288, type: internal_test, name: "test_enviar_a_revision_deja_la_orden_en_revision_sin_detalles", status: PASSING, source: "app/backend/tests/test_var_rep_001_002.py::test_enviar_a_revision_deja_la_orden_en_revision_sin_detalles"}
   - {id: TEST-REP-289, type: internal_test, name: "test_el_comprobante_depende_solo_de_la_politica_del_origen", status: PASSING, source: "app/backend/tests/test_var_rep_001_002.py::test_el_comprobante_depende_solo_de_la_politica_del_origen"}
@@ -171,7 +197,7 @@ items:
   - {id: TEST-REP-299, type: internal_test, name: "test_acciones_a_lo_largo_de_la_revision", status: PASSING, source: "app/backend/tests/test_var_rep_001_002.py::test_acciones_a_lo_largo_de_la_revision"}
   - {id: TEST-REP-300, type: internal_test, name: "test_enviar_a_revision_no_se_ofrece_con_detalles_ya_definidos", status: PASSING, source: "app/backend/tests/test_var_rep_001_002.py::test_enviar_a_revision_no_se_ofrece_con_detalles_ya_definidos"}
   - {id: TEST-REP-301, type: internal_test, name: "test_rt_en_revision_ofrece_las_mismas_acciones_sin_garantia", status: PASSING, source: "app/backend/tests/test_var_rep_001_002.py::test_rt_en_revision_ofrece_las_mismas_acciones_sin_garantia", scenario: VAR-REP-002}
-  - {id: TEST-REP-302, type: internal_test, name: "test_orden_entregada_publica_ambas_garantias_y_nada_mas", status: PASSING, source: "app/backend/tests/test_var_rep_001_002.py::test_orden_entregada_publica_ambas_garantias_y_nada_mas"}
+  - {id: TEST-REP-302, type: internal_test, name: "test_orden_entregada_publica_solo_iniciar_garantia", status: PASSING, source: "app/backend/tests/test_var_rep_001_002.py::test_orden_entregada_publica_solo_iniciar_garantia"}
   - {id: TEST-REP-303, type: internal_test, name: "test_progreso_de_revision_por_origen", status: PASSING, source: "app/backend/tests/test_var_rep_001_002.py::test_progreso_de_revision_por_origen"}
   - {id: TEST-REP-304, type: internal_test, name: "test_progreso_happy_path_no_cambia_sin_055", status: PASSING, source: "app/backend/tests/test_var_rep_001_002.py::test_progreso_happy_path_no_cambia_sin_055"}
   - {id: TEST-REP-305, type: internal_test, name: "test_json_previo_sin_detalles_origen_ids_carga_con_default_vacio", status: PASSING, source: "app/backend/tests/test_var_rep_001_002.py::test_json_previo_sin_detalles_origen_ids_carga_con_default_vacio"}
@@ -180,27 +206,39 @@ items:
   - {id: TEST-REP-308, type: internal_test, name: "test_var_rep_001_cliente_externo_de_punta_a_punta", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_var_rep_001_cliente_externo_de_punta_a_punta", scenario: VAR-REP-001}
   - {id: TEST-REP-309, type: internal_test, name: "test_progreso_de_la_variante_refleja_la_revision", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_progreso_de_la_variante_refleja_la_revision", scenario: VAR-REP-001}
   - {id: TEST-REP-310, type: internal_test, name: "test_var_rep_002_rt_interno_sin_comprobante", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_var_rep_002_rt_interno_sin_comprobante", scenario: VAR-REP-002}
-  - {id: TEST-REP-311, type: internal_test, name: "test_garantia_rma_en_revision_de_punta_a_punta", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_garantia_rma_en_revision_de_punta_a_punta", scenario: VAR-REP-001}
-  - {id: TEST-REP-312, type: internal_test, name: "test_garantia_directa_completa_detalles_origen_ids", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_garantia_directa_completa_detalles_origen_ids"}
+  - {id: TEST-REP-311, type: internal_test, name: "test_garantia_toma_el_snapshot_vigente_al_definir_luego_de_revision", status: PASSING, source: "app/backend/tests/test_api_hp_rep_003.py::test_garantia_toma_el_snapshot_vigente_al_definir_luego_de_revision", scenario: HP-REP-003}
+  - {id: TEST-REP-312, type: internal_test, name: "test_garantia_de_varios_detalles_crea_una_unica_orden", status: PASSING, source: "app/backend/tests/test_api_hp_rep_003.py::test_garantia_de_varios_detalles_crea_una_unica_orden", scenario: HP-REP-003}
   - {id: TEST-REP-313, type: internal_test, name: "test_multidetalle_luego_de_revision", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_multidetalle_luego_de_revision"}
   - {id: TEST-REP-314, type: internal_test, name: "test_send_to_review_solo_recepcion", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_send_to_review_solo_recepcion"}
   - {id: TEST-REP-315, type: internal_test, name: "test_technical_review_solo_tecnico", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_technical_review_solo_tecnico"}
   - {id: TEST-REP-316, type: internal_test, name: "test_definir_desde_revision_solo_recepcion", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_definir_desde_revision_solo_recepcion"}
-  - {id: TEST-REP-317, type: internal_test, name: "test_garantia_en_revision_solo_recepcion", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_garantia_en_revision_solo_recepcion"}
+  - {id: TEST-REP-317, type: internal_test, name: "test_garantia_en_revision_solo_recepcion", status: SUPERSEDED, source: "app/backend/tests/test_api_var_rep_001_002.py::test_garantia_en_revision_solo_recepcion", note: "Eliminado en specs/019-mvp2-feedback: cubierto por TEST-REP-281 sobre el endpoint unico."}
   - {id: TEST-REP-318, type: internal_test, name: "test_enviar_a_revision_con_detalles_o_fuera_de_requerimiento", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_enviar_a_revision_con_detalles_o_fuera_de_requerimiento"}
   - {id: TEST-REP-319, type: internal_test, name: "test_revision_tecnica_negativos", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_revision_tecnica_negativos"}
   - {id: TEST-REP-320, type: internal_test, name: "test_definir_desde_revision_negativos", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_definir_desde_revision_negativos"}
-  - {id: TEST-REP-321, type: internal_test, name: "test_garantia_en_revision_negativos", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_garantia_en_revision_negativos"}
-  - {id: TEST-REP-322, type: internal_test, name: "test_garantia_directa_sigue_igual", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_garantia_directa_sigue_igual"}
+  - {id: TEST-REP-321, type: internal_test, name: "test_garantia_en_revision_negativos", status: SUPERSEDED, source: "app/backend/tests/test_api_var_rep_001_002.py::test_garantia_en_revision_negativos", note: "Eliminado en specs/019-mvp2-feedback: cubierto por TEST-REP-282 y TEST-REP-283 sobre el endpoint unico."}
+  - {id: TEST-REP-322, type: internal_test, name: "test_garantia_directa_sigue_igual", status: SUPERSEDED, source: "app/backend/tests/test_api_var_rep_001_002.py::test_garantia_directa_sigue_igual", note: "Eliminado en specs/019-mvp2-feedback: la garantia directa se elimino; su ausencia la verifica TEST-REP-534."}
   - {id: TEST-REP-323, type: internal_test, name: "test_hp1_no_registra_nodos_de_revision", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_hp1_no_registra_nodos_de_revision"}
   - {id: TEST-REP-324, type: internal_test, name: "test_habilitar_no_permite_saltear_080_090_desde_revision", status: PASSING, source: "app/backend/tests/test_var_rep_001_002.py::test_habilitar_no_permite_saltear_080_090_desde_revision"}
   - {id: TEST-REP-325, type: internal_test, name: "test_habilitar_funciona_desde_revision_tras_080_090_si", status: PASSING, source: "app/backend/tests/test_var_rep_001_002.py::test_habilitar_funciona_desde_revision_tras_080_090_si"}
   - {id: TEST-REP-326, type: internal_test, name: "test_factibilidad_fallida_luego_de_revision_no_habilita", status: PASSING, source: "app/backend/tests/test_api_var_rep_001_002.py::test_factibilidad_fallida_luego_de_revision_no_habilita"}
+  - {id: TEST-REP-521, type: internal_test, name: "test_cliente_externo_sin_reparacion_de_punta_a_punta", status: PASSING, source: "app/backend/tests/test_api_sin_reparacion.py::test_cliente_externo_sin_reparacion_de_punta_a_punta"}
+  - {id: TEST-REP-522, type: internal_test, name: "test_garantia_rma_sin_reparacion_cierra_no_cobrable", status: PASSING, source: "app/backend/tests/test_api_sin_reparacion.py::test_garantia_rma_sin_reparacion_cierra_no_cobrable"}
+  - {id: TEST-REP-523, type: internal_test, name: "test_rt_interno_sin_reparacion_informa_y_devuelve", status: PASSING, source: "app/backend/tests/test_api_sin_reparacion.py::test_rt_interno_sin_reparacion_informa_y_devuelve"}
+  - {id: TEST-REP-524, type: internal_test, name: "test_sin_reparacion_exige_motivo", status: PASSING, source: "app/backend/tests/test_api_sin_reparacion.py::test_sin_reparacion_exige_motivo"}
+  - {id: TEST-REP-525, type: internal_test, name: "test_sin_reparacion_solo_recepcion", status: PASSING, source: "app/backend/tests/test_api_sin_reparacion.py::test_sin_reparacion_solo_recepcion"}
+  - {id: TEST-REP-526, type: internal_test, name: "test_sin_reparacion_solo_tras_065_sin_detalles_y_una_vez", status: PASSING, source: "app/backend/tests/test_api_sin_reparacion.py::test_sin_reparacion_solo_tras_065_sin_detalles_y_una_vez"}
+  - {id: TEST-REP-527, type: internal_test, name: "test_sin_reparacion_registra_068_no_y_069_sin_detalles_ni_estado_nuevo", status: PASSING, source: "app/backend/tests/test_definicion_y_sin_reparacion.py::test_sin_reparacion_registra_068_no_y_069_sin_detalles_ni_estado_nuevo"}
+  - {id: TEST-REP-528, type: internal_test, name: "test_sin_reparacion_sin_observaciones", status: PASSING, source: "app/backend/tests/test_definicion_y_sin_reparacion.py::test_sin_reparacion_sin_observaciones"}
+  - {id: TEST-REP-529, type: internal_test, name: "test_sin_reparacion_exige_motivo", status: PASSING, source: "app/backend/tests/test_definicion_y_sin_reparacion.py::test_sin_reparacion_exige_motivo"}
+  - {id: TEST-REP-530, type: internal_test, name: "test_sin_reparacion_guards", status: PASSING, source: "app/backend/tests/test_definicion_y_sin_reparacion.py::test_sin_reparacion_guards"}
+  - {id: TEST-REP-531, type: internal_test, name: "test_lista_para_cierre_sin_069_sigue_siendo_reparacion_lista", status: PASSING, source: "app/backend/tests/test_definicion_y_sin_reparacion.py::test_lista_para_cierre_sin_069_sigue_siendo_reparacion_lista"}
 
   - {id: UAT-REP-023, type: uat, name: "Recepcion puede dejar ingresado un equipo cuya falla no se conoce sin que el sistema invente un Detalle de diagnostico", status: PENDING}
   - {id: UAT-REP-024, type: uat, name: "El tecnico puede registrar el resultado de la revision de una Orden en revision", status: PENDING}
   - {id: UAT-REP-025, type: uat, name: "Recepcion define los Detalles luego de la revision sin que se repita el comprobante de recepcion", status: PENDING}
   - {id: UAT-REP-026, type: uat, name: "Recepcion puede generar una garantia RMA para revision que queda vinculada a la Orden y al Detalle de origen", status: PENDING}
+  - {id: UAT-REP-041, type: uat, name: "Recepcion concluye una Orden revisada sin reparacion con un motivo y la Orden se cierra segun su Origen sin cobro ni garantia de reparacion", status: PENDING}
 
 links:
 
@@ -385,3 +423,45 @@ links:
   - {from: UAT-REP-024, to: US-REP-024, relationship: accepts}
   - {from: UAT-REP-025, to: US-REP-025, relationship: accepts}
   - {from: UAT-REP-026, to: US-REP-026, relationship: accepts}
+
+  # specs/019-mvp2-feedback: SIN_REPARACION (068 No -> 069) y cierre por Origen.
+  - {from: PROC-REP-069, to: PROC-REP, relationship: belongs_to}
+  - {from: US-REP-038, to: FEAT-REP-002, relationship: belongs_to}
+  - {from: ACC-REP-059, to: US-REP-038, relationship: realizes}
+  - {from: ACC-REP-059, to: PROC-REP-068, relationship: covers}
+  - {from: ACC-REP-059, to: PROC-REP-069, relationship: covers}
+  - {from: ACC-REP-059, to: BR-REP-010, relationship: governed_by}
+  - {from: FR-REP-139, to: ACC-REP-059, relationship: derives_from}
+  - {from: FR-REP-140, to: ACC-REP-059, relationship: derives_from}
+  - {from: TR-REP-138, to: FR-REP-139, relationship: satisfies}
+  - {from: TR-REP-139, to: FR-REP-140, relationship: satisfies}
+  - {from: TR-REP-140, to: FR-REP-139, relationship: satisfies}
+  - {from: TASK-REP-028, to: TR-REP-138, relationship: implements}
+  - {from: TASK-REP-138, to: TR-REP-139, relationship: implements}
+  - {from: TASK-REP-210, to: TR-REP-140, relationship: implements}
+  - {from: CODE-REP-235, to: TASK-REP-028, relationship: produced_by}
+  - {from: CODE-REP-235, to: TR-REP-138, relationship: implements}
+  - {from: CODE-REP-236, to: TASK-REP-138, relationship: produced_by}
+  - {from: CODE-REP-236, to: TR-REP-139, relationship: implements}
+  - {from: CODE-REP-237, to: TASK-REP-028, relationship: produced_by}
+  - {from: CODE-REP-237, to: TR-REP-138, relationship: implements}
+  - {from: CODE-REP-238, to: TASK-REP-028, relationship: produced_by}
+  - {from: CODE-REP-238, to: TR-REP-138, relationship: implements}
+  - {from: CODE-REP-239, to: TASK-REP-138, relationship: produced_by}
+  - {from: CODE-REP-239, to: TR-REP-139, relationship: implements}
+  - {from: CODE-REP-240, to: TASK-REP-210, relationship: produced_by}
+  - {from: CODE-REP-240, to: TR-REP-140, relationship: implements}
+  - {from: TEST-REP-521, to: FR-REP-140, relationship: verifies}
+  - {from: TEST-REP-521, to: CODE-REP-238, relationship: exercises}
+  - {from: TEST-REP-522, to: FR-REP-140, relationship: verifies}
+  - {from: TEST-REP-523, to: FR-REP-140, relationship: verifies}
+  - {from: TEST-REP-524, to: FR-REP-139, relationship: verifies}
+  - {from: TEST-REP-525, to: FR-REP-139, relationship: verifies}
+  - {from: TEST-REP-526, to: FR-REP-139, relationship: verifies}
+  - {from: TEST-REP-527, to: FR-REP-139, relationship: verifies}
+  - {from: TEST-REP-527, to: CODE-REP-235, relationship: exercises}
+  - {from: TEST-REP-528, to: CODE-REP-235, relationship: exercises}
+  - {from: TEST-REP-529, to: TR-REP-138, relationship: verifies}
+  - {from: TEST-REP-530, to: TR-REP-138, relationship: verifies}
+  - {from: TEST-REP-531, to: CODE-REP-236, relationship: exercises}
+  - {from: UAT-REP-041, to: US-REP-038, relationship: accepts}

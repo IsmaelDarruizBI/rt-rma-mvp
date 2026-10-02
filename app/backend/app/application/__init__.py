@@ -32,7 +32,9 @@ from .cierre import (
 from .cola import encolar_orden
 from .concurrencia import LOCK_INVENTARIO, seccion_critica_inventario
 from .consultas import (
+    DetalleOrigen,
     InsumoPrevisto,
+    detalles_origen_de,
     insumos_previstos_por_detalle,
     listar_estaciones,
     listar_ordenes,
@@ -44,13 +46,14 @@ from .consultas import (
 from .contexto import ApplicationContext, construir_contexto
 from .identificadores import siguiente_detalle_id, siguiente_orden_id
 from .ingreso import (
-    crear_garantia_rma,
-    crear_garantia_rma_en_revision,
     crear_orden,
     crear_orden_rt,
     definir_reparacion,
     definir_reparacion_desde_revision,
     enviar_a_revision,
+    finalizar_definicion,
+    finalizar_sin_reparacion,
+    iniciar_garantia_rma,
 )
 from .progreso import PasoProgreso, progreso
 from .recursos import (
@@ -78,6 +81,8 @@ __all__ = [
     "siguiente_detalle_id",
     "siguiente_orden_id",
     # Lecturas
+    "DetalleOrigen",
+    "detalles_origen_de",
     "listar_estaciones",
     "InsumoPrevisto",
     "insumos_previstos_por_detalle",
@@ -95,10 +100,11 @@ __all__ = [
     # Comandos
     "crear_orden",
     "crear_orden_rt",
-    "crear_garantia_rma",
-    "crear_garantia_rma_en_revision",
     "definir_reparacion",
     "definir_reparacion_desde_revision",
+    "finalizar_definicion",
+    "finalizar_sin_reparacion",
+    "iniciar_garantia_rma",
     "enviar_a_revision",
     "realizar_revision",
     "esperar_recursos",

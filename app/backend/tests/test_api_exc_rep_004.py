@@ -12,6 +12,10 @@ from decimal import Decimal
 import pytest
 
 from tests import test_multidetalle as multi
+from tests.fixtures.api_definicion import (
+    definir_y_finalizar,
+    finalizar_definicion,
+)
 from tests.test_api_exc_rep_001 import (
     _cliente,
     _cliente_multi,
@@ -27,7 +31,7 @@ from tests.test_api_hp_rep_002 import (
     TECNICO,
     _crear_orden_rt,
 )
-from tests.test_api_hp_rep_003 import _orden_entregada
+from tests.test_api_hp_rep_003 import _garantia_definida, _orden_entregada
 
 MOTIVO = "La placa esta danada: no alcanza con cambiar la bateria."
 
@@ -121,8 +125,9 @@ def _hasta_en_ejecucion(tmp_path, a="2", b="2"):
     """Un Detalle (bateria) en ejecucion. Devuelve (cliente, orden, ejec.)."""
     cliente = _cliente_multi(tmp_path, a=a, b=b)
     orden_id = multi._crear_orden(cliente)
-    definida = cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definida = definir_y_finalizar(
+        cliente,
+        orden_id,
         json={
             "usuario_id": multi.RECEPCION,
             "tipo_reparacion_id": multi.TIPO_BATERIA,
@@ -251,18 +256,15 @@ def test_caso_b_sin_stock_tras_127_va_a_100_y_admite_override(tmp_path):
 def test_caso_a_multidetalle_continua_b_y_despues_entra_a_125(tmp_path):
     with _cliente_multi(tmp_path, a="2", b="2") as cliente:
         orden_id = multi._crear_orden(cliente)
-        for tipo, finalizar in (
-            (multi.TIPO_BATERIA, False),
-            (multi.TIPO_PANTALLA, True),
-        ):
+        for tipo in (multi.TIPO_BATERIA, multi.TIPO_PANTALLA):
             cliente.post(
                 f"/api/orders/{orden_id}/details",
                 json={
                     "usuario_id": multi.RECEPCION,
                     "tipo_reparacion_id": tipo,
-                    "finalizar_definicion": finalizar,
                 },
             )
+        finalizar_definicion(cliente, orden_id, multi.RECEPCION)
         _encolar_y_tomar(cliente, orden_id)
         ejecucion_a = _iniciar(cliente, orden_id, "DET-001")
 
@@ -391,10 +393,7 @@ def test_redefine_404_409_422(tmp_path):
 def test_garantia_rma_conserva_vinculo_al_detalle_origen(tmp_path):
     with _cliente(tmp_path, stock="5") as cliente:
         origen = _orden_entregada(cliente)
-        garantia = cliente.post(
-            f"/api/orders/{origen['id']}/details/DET-001/warranty-rma",
-            json={"usuario_id": RECEPCION},
-        ).json()
+        garantia = _garantia_definida(cliente, origen["id"]).json()
         assert garantia["estado_workflow"] == "HABILITADA"
         _tomar(cliente, garantia["id"])
         iniciada = cliente.post(
@@ -434,8 +433,9 @@ def test_garantia_rma_conserva_vinculo_al_detalle_origen(tmp_path):
 def test_rt_interno_redefinicion_sin_pagos(tmp_path, stock_pantalla):
     with _cliente_multi(tmp_path, a="2", b=stock_pantalla) as cliente:
         orden_id = _crear_orden_rt(cliente)
-        cliente.post(
-            f"/api/orders/{orden_id}/details",
+        definir_y_finalizar(
+            cliente,
+            orden_id,
             json={
                 "usuario_id": multi.RECEPCION,
                 "tipo_reparacion_id": multi.TIPO_BATERIA,

@@ -3,10 +3,12 @@
     esperar_recursos     PROC-REP-110 (No) -> 120
     revalidar_recursos   PROC-REP-120 -> 080 -> 090 [-> 140 | -> 100]
     forzar_detalle_por_recursos
-                         PROC-REP-110 (Si) -> 130 -> 140     (EXC-REP-002)
+                         autorizacion transversal del Detalle (EXC-REP-002)
+                         [en PROC-REP-100: 110 (Si) -> 130 -> 140]
 
-Son eventos de sistema, sin actor humano: PROC-REP-120 es ACT-SYSTEM y la
-rama No de PROC-REP-110 no declara actor. En el MVP un boton dispara
+Esperar y revalidar son eventos de sistema, sin actor humano: PROC-REP-120
+es ACT-SYSTEM y la rama No de PROC-REP-110 no declara actor. El override es
+de ACT-COORD. En el MVP un boton dispara
 manualmente el evento de revalidacion ("cambio de disponibilidad de
 insumos") que V1.3 describe.
 
@@ -16,10 +18,11 @@ desde PROC-REP-211 en otros slices.
 
 from app.domain.models import OrdenReparacion
 from app.services import (
+    autorizar_override_recursos,
+    continuar_por_override,
     exigir_espera_por_recursos,
     habilitar_orden,
     registrar_espera_recursos,
-    registrar_override_recursos,
 )
 
 from .contexto import ApplicationContext
@@ -73,26 +76,36 @@ def forzar_detalle_por_recursos(
     usuario_id: str,
     motivo: str,
 ) -> OrdenReparacion:
-    """Un Coordinador fuerza UN Detalle bloqueado (110 Si -> 130 -> 140).
+    """Un Coordinador autoriza el override de UN Detalle bloqueado.
 
-    BR-REP-003 / EXC-REP-002: autoriza que ese Detalle continue aunque no
-    haya recursos suficientes. Solo registra la autorizacion: no reserva ni
-    descuenta stock (la reserva es PROC-REP-185 y el consumo PROC-REP-210,
-    donde el override habilita un disponible / stock negativo). Habilita la
-    Orden sin fabricar un 090 "Si" y persiste una sola vez.
+    BR-REP-003 / EXC-REP-002: capacidad transversal por Detalle. Siempre
+    registra la misma autorizacion (``autorizar_override_recursos``) y deja
+    ese Detalle SIN_BLOQUEO; no reserva ni descuenta stock (la reserva es
+    PROC-REP-185 y el consumo PROC-REP-210, donde el override habilita un
+    disponible / stock negativo).
+
+    Solo si la Orden esta detenida en PROC-REP-100 ("ningun Detalle
+    trabajable") el proceso continua 110 "Si" -> 130 -> 140, sin fabricar
+    un 090 "Si". Con factibilidad parcial (Orden habilitada, en cola,
+    tomada o en reparacion) no se recorre ningun nodo: no vuelve a 140, no
+    cierra la toma ni toca la Ejecucion en curso. Persiste una sola vez.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
     orden = contexto.ordenes.obtener(orden_id)
-    orden = registrar_override_recursos(
+    orden = autorizar_override_recursos(
         orden,
         detalle_id=detalle_id,
         usuario=usuario,
         motivo=motivo,
         fecha=fecha,
     )
-    orden = habilitar_orden(orden, fecha=fecha)
+    if orden.current_process == "PROC-REP-100":
+        orden = continuar_por_override(
+            orden, detalle_id=detalle_id, usuario=usuario, fecha=fecha
+        )
+        orden = habilitar_orden(orden, fecha=fecha)
 
     contexto.ordenes.guardar(orden)
     return orden

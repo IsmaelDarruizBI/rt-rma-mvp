@@ -98,7 +98,7 @@ items:
   - {id: FR-REP-096, type: functional_requirement, name: "El inventario de una Ejecucion interrumpida consume lo utilizado y libera lo reservado que no se uso sin dejar reservas activas (DESPERDICIO queda fuera de alcance)", status: IMPLEMENTED}
   - {id: FR-REP-097, type: functional_requirement, name: "Solo se concilia el inventario de una Ejecucion terminada (COMPLETADO o INTERRUMPIDO), nunca de una EN_PROGRESO", status: IMPLEMENTED}
   - {id: FR-REP-098, type: functional_requirement, name: "Tras interrumpir la situacion de la Orden sale del resolver (ABIERTA_TRABAJABLE con un Detalle trabajable) y la toma sigue activa", status: IMPLEMENTED}
-  - {id: FR-REP-099, type: functional_requirement, name: "El backend publica INTERRUMPIR_EJECUCION para el tecnico con Ejecucion activa y la UI solo muestra la publicada", status: IMPLEMENTED}
+  - {id: FR-REP-099, type: functional_requirement, name: "El backend publica INTERRUMPIR_EJECUCION para el tecnico con Ejecucion activa y la UI solo muestra la publicada, proponiendo 0 como lo usado al interrumpir y lo previsto al completar", status: IMPLEMENTED}
   - {id: FR-REP-100, type: functional_requirement, name: "Continuar un Detalle interrumpido crea una Ejecucion nueva con su propio id toma tecnico e insumos sin sobrescribir las anteriores", status: IMPLEMENTED}
 
   - {id: TR-REP-097, type: technical_requirement, name: "EstadoEjecucion agrega INTERRUMPIDO de forma aditiva: el JSON con EN_PROGRESO o COMPLETADO sigue cargando y una Ejecucion interrumpida hace round-trip con fin insumos y observaciones", status: IMPLEMENTED}
@@ -106,12 +106,13 @@ items:
   - {id: TR-REP-099, type: technical_requirement, name: "services.inventario.generar_movimientos_inventario rechaza una Ejecucion EN_PROGRESO con PrecondicionInvalidaError y concilia COMPLETADO e INTERRUMPIDO con el mismo mecanismo de CONSUMO y LIBERACION_RESERVA", status: IMPLEMENTED}
   - {id: TR-REP-100, type: technical_requirement, name: "application.taller.interrumpir_ejecucion y POST /executions/{id}/interrupt componen 190 200 210 211 con el helper _cerrar_ejecucion compartido con completar_ejecucion dentro de la seccion critica de inventario y dejan el resultado de 211 al resolver", status: IMPLEMENTED}
   - {id: TR-REP-101, type: technical_requirement, name: "application.acciones.acciones_disponibles publica INTERRUMPIR_EJECUCION para TECNICO con detalle_id y ejecucion_id mientras hay una Ejecucion activa", status: IMPLEMENTED}
-  - {id: TR-REP-102, type: technical_requirement, name: "El frontend ejecuta INTERRUMPIR_EJECUCION con el formulario de insumos reales y lista las Ejecuciones con su estado real", status: IMPLEMENTED}
+  - {id: TR-REP-102, type: technical_requirement, name: "El frontend ejecuta INTERRUMPIR_EJECUCION con el formulario de insumos reales en modo explicito (completar propone lo previsto, interrumpir propone 0, redefinir conserva lo previsto y exige motivo), muestra Completar e Interrumpir lado a lado en escritorio y apiladas en pantallas angostas y lista las Ejecuciones con su estado real", status: IMPLEMENTED}
   - {id: TR-REP-103, type: technical_requirement, name: "Una Ejecucion terminal nunca se reabre: continuar el Detalle usa seleccionar_detalle y reservar_insumos_e_iniciar_ejecucion existentes y crea una Ejecucion nueva sin calcular insumo restante entre Ejecuciones", status: IMPLEMENTED}
 
   - {id: TASK-REP-189, type: task, name: "Exigir una Ejecucion terminada en generar_movimientos_inventario (gate de PROC-REP-210)", status: DONE}
   - {id: TASK-REP-190, type: task, name: "Publicar INTERRUMPIR_EJECUCION en acciones_disponibles", status: DONE}
   - {id: TASK-REP-191, type: task, name: "Frontend: tipos, cliente API, formulario y listado de Ejecuciones", status: DONE}
+  - {id: TASK-REP-214, type: task, name: "Frontend: FormularioEjecucion con modo explicito y Completar e Interrumpir lado a lado (apiladas en mobile)", status: DONE, spec: 019-mvp2-feedback}
 
   - {id: CODE-REP-169, type: code_artifact, name: "domain/models/enums.py::EstadoEjecucion.INTERRUMPIDO", status: IMPLEMENTED, source: "app/backend/app/domain/models/enums.py::EstadoEjecucion"}
   - {id: CODE-REP-170, type: code_artifact, name: "services/ejecuciones.py::registrar_ejecucion_interrumpida", status: IMPLEMENTED, source: "app/backend/app/services/ejecuciones.py::registrar_ejecucion_interrumpida"}
@@ -122,6 +123,8 @@ items:
   - {id: CODE-REP-175, type: code_artifact, name: "api/ordenes.py::post_interrumpir_ejecucion", status: IMPLEMENTED, source: "app/backend/app/api/ordenes.py::post_interrumpir_ejecucion"}
   - {id: CODE-REP-176, type: code_artifact, name: "application/acciones.py::acciones_disponibles (INTERRUMPIR_EJECUCION)", status: IMPLEMENTED, source: "app/backend/app/application/acciones.py::acciones_disponibles"}
   - {id: CODE-REP-177, type: code_artifact, name: "frontend/src/features/ordenes-reparacion/AccionesOrden.tsx (INTERRUMPIR_EJECUCION)", status: IMPLEMENTED, source: "app/frontend/src/features/ordenes-reparacion/AccionesOrden.tsx"}
+  - {id: CODE-REP-246, type: code_artifact, name: "frontend/src/features/ordenes-reparacion/AccionesOrden.tsx::FormularioEjecucion (modo) y agruparEnPares", status: IMPLEMENTED, source: "app/frontend/src/features/ordenes-reparacion/AccionesOrden.tsx"}
+  - {id: CODE-REP-247, type: code_artifact, name: "frontend PanelOrdenes.tsx (grilla minmax) y DetalleOrden.tsx::HistorialOrden (desplazamiento horizontal)", status: IMPLEMENTED, source: "app/frontend/src/features/ordenes-reparacion/PanelOrdenes.tsx"}
 
   - {id: TEST-REP-330, type: internal_test, name: "test_interrumpir_deja_la_ejecucion_terminal_y_el_detalle_definido", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_interrumpir_deja_la_ejecucion_terminal_y_el_detalle_definido"}
   - {id: TEST-REP-331, type: internal_test, name: "test_interrumpir_no_cierra_la_toma", status: PASSING, source: "app/backend/tests/test_var_rep_003.py::test_interrumpir_no_cierra_la_toma"}
@@ -153,6 +156,7 @@ items:
 
   - {id: UAT-REP-027, type: uat, name: "El tecnico puede interrumpir una Ejecucion conservando lo realizado y dejando el Detalle disponible para continuar", status: PENDING}
   - {id: UAT-REP-028, type: uat, name: "El mismo u otro tecnico puede continuar posteriormente el Detalle mediante una nueva Ejecucion sin perder la anterior", status: PENDING}
+  - {id: UAT-REP-044, type: uat, name: "El tecnico ve Completar e Interrumpir lado a lado (apiladas en mobile) con lo previsto propuesto al completar y 0 al interrumpir", status: PENDING}
 
 links:
 
@@ -281,3 +285,12 @@ links:
 
   - {from: UAT-REP-027, to: US-REP-027, relationship: accepts}
   - {from: UAT-REP-028, to: US-REP-028, relationship: accepts}
+
+  # specs/019-mvp2-feedback: UI de la Ejecucion.
+  - {from: TASK-REP-214, to: TR-REP-102, relationship: implements}
+  - {from: CODE-REP-246, to: TASK-REP-214, relationship: produced_by}
+  - {from: CODE-REP-246, to: TR-REP-102, relationship: implements}
+  - {from: CODE-REP-247, to: TASK-REP-214, relationship: produced_by}
+  - {from: CODE-REP-247, to: TR-REP-102, relationship: implements}
+  - {from: UAT-REP-044, to: US-REP-027, relationship: accepts}
+  - {from: UAT-REP-044, to: FR-REP-099, relationship: accepts}

@@ -37,9 +37,9 @@ class Insumo(BaseModel):
     codigo: str
     nombre: str
     # Puede ser negativo: un override de factibilidad autorizado (BR-REP-003,
-    # PROC-REP-130) permite consumir sin stock suficiente. La proteccion
-    # vive en los services (solo un Detalle con override puede llevarlo a
-    # negativo), no en el tipo.
+    # ACC-REP-049) permite consumir sin stock suficiente. La proteccion
+    # vive en los services (solo un Detalle con override vigente puede
+    # llevarlo a negativo), no en el tipo.
     stock_fisico: Decimal
     activo: bool = True
 

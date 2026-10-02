@@ -104,10 +104,12 @@ export function PanelOrdenes() {
   const idOrden = orden?.id ?? "";
 
   const ejecutor: EjecutorAcciones = {
-    definirReparacion: (tipoId, finalizarDefinicion) =>
+    agregarDetalle: (tipoId) =>
       void ejecutarComando(() =>
-        api.definirReparacion(idOrden, idActor, tipoId, finalizarDefinicion),
+        api.definirReparacion(idOrden, idActor, tipoId),
       ),
+    finalizarDefinicion: () =>
+      void ejecutarComando(() => api.finalizarDefinicion(idOrden, idActor)),
     encolar: (prioridad) =>
       void ejecutarComando(() =>
         api.encolar(idOrden, idActor, prioridad),
@@ -195,22 +197,28 @@ export function PanelOrdenes() {
       void ejecutarComando(() =>
         api.realizarRevision(idOrden, idActor, resultado),
       ),
-    definirReparacionDesdeRevision: (tipoId, finalizarDefinicion) =>
+    agregarDetalleDesdeRevision: (tipoId, detalleOrigenId) =>
       void ejecutarComando(() =>
         api.definirReparacionDesdeRevision(
           idOrden,
           idActor,
           tipoId,
-          finalizarDefinicion,
+          detalleOrigenId,
         ),
       ),
-    generarGarantiaRmaEnRevision: (detalleId) =>
+    finalizarSinReparacion: (motivo, observaciones) =>
       void ejecutarComando(() =>
-        api.generarGarantiaRmaEnRevision(idOrden, detalleId, idActor),
+        api.finalizarSinReparacion(
+          idOrden,
+          idActor,
+          motivo,
+          observaciones || null,
+        ),
       ),
-    generarGarantiaRma: (detalleId) =>
+    // Devuelve la NUEVA Orden de garantía: queda abierta en pantalla.
+    iniciarGarantiaRma: (detalleOrigenIds) =>
       void ejecutarComando(() =>
-        api.generarGarantiaRma(idOrden, detalleId, idActor),
+        api.iniciarGarantiaRma(idOrden, idActor, detalleOrigenIds),
       ),
   };
 
@@ -252,9 +260,16 @@ export function PanelOrdenes() {
             Jerarquia vertical, cada bloque a ancho completo:
             Datos OR -> Detalles -> Accion -> Resumen comercial ->
             Progreso -> Historial. Detalles y Resumen ya no compiten
-            horizontalmente.
+            horizontalmente. minmax(0, 1fr): ningun contenido ancho (p. ej.
+            el Historial) ensancha la pantalla en mobile.
           */}
-          <div style={{ display: "grid", gap: "0.75rem" }}>
+          <div
+            style={{
+              display: "grid",
+              gap: "0.75rem",
+              gridTemplateColumns: "minmax(0, 1fr)",
+            }}
+          >
             <CabeceraOrden orden={orden} />
             <DetallesOrden orden={orden} />
             <EjecucionesOrden orden={orden} />

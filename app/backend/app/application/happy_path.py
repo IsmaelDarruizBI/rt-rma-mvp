@@ -16,9 +16,9 @@ pena romper importaciones existentes por una reorganizacion interna:
 """
 
 from .acciones import (
+    ACCION_AGREGAR_DETALLE,
     ACCION_APROBAR_CONTROL,
     ACCION_COMPLETAR_EJECUCION,
-    ACCION_DEFINIR_REPARACION,
     ACCION_ENCOLAR,
     ACCION_ENTREGAR,
     ACCION_INICIAR_DETALLE,
@@ -36,7 +36,7 @@ from .progreso import nodos_alcanzados, progreso
 __all__ = [
     "NODOS_HAPPY_PATH",
     "PasoHappyPath",
-    "ACCION_DEFINIR_REPARACION",
+    "ACCION_AGREGAR_DETALLE",
     "ACCION_ENCOLAR",
     "ACCION_TOMAR",
     "ACCION_INICIAR_DETALLE",

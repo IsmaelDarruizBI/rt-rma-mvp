@@ -5,8 +5,8 @@ Detalle, que sigue verde sin cambios). Este archivo recorre el mismo
 Happy Path pero con dos Detalles, por HTTP de punta a punta:
 
     crear Orden
-    -> definir DET-001 (finalizar_definicion=False)
-    -> definir DET-002 (finaliza: comprobante + factibilidad + habilita)
+    -> agregar DET-001 -> agregar DET-002
+    -> finalizar la definicion (comprobante + factibilidad + habilita)
     -> priorizar -> cola -> tecnico toma
     -> selecciona DET-001 -> inicia -> completa
     -> resolver = ABIERTA_TRABAJABLE (misma toma continua, BR-REP-018)
@@ -42,6 +42,7 @@ from app.domain.models import (
 )
 from app.main import create_app
 from app.storage.json.base import escribir_json_atomico
+from tests.fixtures.api_definicion import definir_y_finalizar
 
 RECEPCION = "RECEP-001"
 COORDINADOR = "COORD-001"
@@ -184,7 +185,6 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
         json={
             "usuario_id": RECEPCION,
             "tipo_reparacion_id": TIPO_BATERIA,
-            "finalizar_definicion": False,
         },
     )
     assert respuesta.status_code == 200, respuesta.text
@@ -192,14 +192,17 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
     assert orden["estado_workflow"] == "REQUERIMIENTO"
     assert len(orden["reparaciones_detail"]) == 1
     det1 = orden["reparaciones_detail"][0]["id"]
-    # Recepcion todavia puede seguir definiendo Detalles.
+    # Recepcion puede agregar otro Detalle o finalizar la definicion:
+    # dos intenciones distintas, publicadas por el backend.
     codigos = [a["codigo"] for a in orden["acciones_disponibles"]]
-    assert "DEFINIR_REPARACION" in codigos
+    assert codigos[:2] == ["AGREGAR_DETALLE", "FINALIZAR_DEFINICION"]
+    assert "ENVIAR_A_REVISION" not in codigos
     # Sin finalizar, el comprobante y la habilitacion todavia no corren.
     assert orden["documentos"]["comprobante_recepcion"]["generado"] is False
 
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/details",
+    respuesta = definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO_PANTALLA},
     )
     assert respuesta.status_code == 200, respuesta.text
@@ -222,7 +225,7 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
     assert d2["garantia_dias"] == 60
     assert orden["resumen"]["total"] == "130000"
 
-    # Un unico comprobante de recepcion, aunque hubo 2 llamadas a /details.
+    # Un unico comprobante de recepcion, aunque hubo 2 Detalles agregados.
     assert orden["documentos"]["comprobante_recepcion"]["generado"] is True
     comprobantes = [
         p for p in orden["historial"] if p["process_id"] == "PROC-REP-060"
@@ -461,16 +464,17 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
 
 
 def test_hp_rep_001_un_solo_detalle_sigue_igual(cliente):
-    """Compatibilidad: HP-REP-001 con 1 Detalle no cambia de comportamiento.
+    """HP-REP-001 con 1 Detalle: agregar y finalizar dejan la Orden lista.
 
-    Con ``finalizar_definicion`` en su default (``True``), una unica
-    llamada a ``POST /details`` sigue agregando el Detalle Y habilitando
-    la Orden en el mismo paso, exactamente como antes de Multi-Detalle.
+    Agregar el unico Detalle y finalizar la definicion son dos
+    intenciones; juntas producen el mismo resultado que antes: comprobante
+    generado y Orden HABILITADA.
     """
     orden_id = _crear_orden(cliente)
 
-    orden = cliente.post(
-        f"/api/orders/{orden_id}/details",
+    orden = definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO_BATERIA},
     ).json()
 
@@ -492,11 +496,11 @@ def test_liberar_orden_devuelve_la_orden_a_en_cola(cliente):
         json={
             "usuario_id": RECEPCION,
             "tipo_reparacion_id": TIPO_BATERIA,
-            "finalizar_definicion": False,
         },
     )
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO_PANTALLA},
     )
     cliente.post(
@@ -545,11 +549,11 @@ def test_control_tecnico_rechaza_si_algun_detalle_no_es_terminal(cliente):
         json={
             "usuario_id": RECEPCION,
             "tipo_reparacion_id": TIPO_BATERIA,
-            "finalizar_definicion": False,
         },
     )
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO_PANTALLA},
     )
     cliente.post(

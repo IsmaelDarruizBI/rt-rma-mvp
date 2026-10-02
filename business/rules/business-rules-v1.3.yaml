@@ -34,26 +34,40 @@ rules:
   - id: BR-REP-003
     name: Override justificado
     description: >
-      Si un usuario autorizado fuerza un Detalle de Reparacion que no
-      supero la validacion de factibilidad, debe registrarse usuario,
-      fecha, el Detalle especifico, la validacion ignorada y el motivo.
-      El override se aplica puntualmente sobre ese Detalle, no sobre la
-      Orden en abstracto. Aclaracion confirmada con negocio: el override
-      autoriza explicitamente que ese Detalle continue aunque no haya
-      stock suficiente, y habilita la reserva (PROC-REP-185) y el consumo
-      (PROC-REP-210) posteriores de ESE Detalle aunque la disponibilidad o
-      el stock fisico resultantes sean negativos. El override solo
-      registra la autorizacion (PROC-REP-130): no reserva ni descuenta
-      stock; la reserva y el consumo ocurren en sus nodos habituales. El
-      override de un Detalle nunca habilita stock negativo para otro.
-      Vigencia: un override de factibilidad es valido solamente mientras
+      Si un usuario autorizado fuerza un Detalle de Reparacion que no supero
+      la validacion de factibilidad, debe registrarse usuario, fecha, el
+      Detalle especifico, la validacion ignorada y el motivo. El override se
+      aplica puntualmente sobre ese Detalle, no sobre la Orden en abstracto.
+      Aclaracion confirmada con negocio: el override autoriza explicitamente
+      que ese Detalle continue aunque no haya stock suficiente, y habilita la
+      reserva (PROC-REP-185) y el consumo (PROC-REP-210) posteriores de ESE
+      Detalle aunque la disponibilidad o el stock fisico resultantes sean
+      negativos. El override solo registra la autorizacion: no reserva ni
+      descuenta stock; la reserva y el consumo ocurren en sus nodos
+      habituales. El override de un Detalle nunca habilita stock negativo para
+      otro. Vigencia: un override de factibilidad es valido solamente mientras
       siga vigente la definicion tecnica sobre la que fue autorizado. Es
-      valido el override cuyo PROC-REP-130 ocurrio DESPUES del ultimo
+      valido el override cuya autorizacion ocurrio DESPUES del ultimo
       PROC-REP-127 del mismo Detalle; cualquier PROC-REP-127 invalida los
-      overrides anteriores, incluso si Recepcion vuelve a elegir el mismo
-      Tipo de Reparacion (es una nueva confirmacion de la definicion y una
-      nueva factibilidad en PROC-REP-080: si hace falta forzar de nuevo,
-      debe existir una nueva autorizacion consciente).
+      overrides anteriores, incluso si Recepcion vuelve a elegir el mismo Tipo
+      de Reparacion (es una nueva confirmacion de la definicion y una nueva
+      factibilidad en PROC-REP-080: si hace falta forzar de nuevo, debe
+      existir una nueva autorizacion consciente). Alcance (MVP v2): la
+      autorizacion de override es una capacidad TRANSVERSAL por Detalle, como
+      Registrar Pago (BR-REP-017-A): esta disponible para cualquier Detalle
+      PENDIENTE (DEFINIDO) con condicion BLOQUEADO_POR_RECURSOS, sin exigir
+      que toda la Orden este bloqueada. Puede ocurrir en el circuito 'ningun
+      Detalle trabajable' (PROC-REP-100 -> 110 Si -> 130 -> 140) o con
+      factibilidad parcial, cuando otros Detalles ya son trabajables y la
+      Orden esta habilitada, en cola, tomada o en reparacion. Fuera del
+      circuito de PROC-REP-100 no reinicia el proceso: no vuelve a
+      PROC-REP-140, no cierra una toma activa, no altera una Ejecucion en
+      curso ni cambia el estado de workflow; el Detalle autorizado queda
+      SIN_BLOQUEO, disponible para iniciarse segun las reglas vigentes
+      (BR-REP-007). Solo el Coordinador RMA (ACT-COORD) puede autorizarla y el
+      motivo es obligatorio. Es una unica capacidad con una unica validacion y
+      una unica forma de determinar su vigencia, cualquiera sea el momento en
+      que ocurre.
     status: draft
 
   - id: BR-REP-004
@@ -453,17 +467,27 @@ rules:
   - id: BR-REP-019
     name: Garantia RMA - Orden nueva vinculada y Detalle origen
     description: >
-      Una Orden de garantia RMA (origen RMA_GARANTIA_REPARACION) debe
-      crearse como una NUEVA Orden vinculada a una Orden origen ya
-      finalizada (ENTREGADA). La Orden origen NO se reabre ni se reutiliza
+      Una Orden de garantia RMA (origen RMA_GARANTIA_REPARACION) debe crearse
+      como una NUEVA Orden vinculada a una Orden origen ya finalizada
+      (ENTREGADA). La Orden origen NO se reabre ni se reutiliza
       transaccionalmente: permanece historicamente inmutable y conserva su
       estado; la relacion entre ambas Ordenes resuelve la trazabilidad sin
       modificarla (no se crean estados como REABIERTA_POR_GARANTIA). Cada
       Detalle de garantia debe poder identificar el Detalle original que
-      origina el reproceso: la trazabilidad es en ambos niveles (Orden
-      nueva -> Orden origen; Detalle nuevo -> Detalle origen), y resuelve el
+      origina el reproceso: la trazabilidad es en ambos niveles (Orden nueva
+      -> Orden origen; Detalle nuevo -> Detalle origen), y resuelve el
       pendiente de vinculacion Orden vs. Detalle. Cliente y equipo se
       recuperan de la Orden origen (no es un alta nueva). La condicion
       comercial de la Orden es NO_COBRABLE (BR-REP-016). Queda pendiente
       definir las reglas de garantia RMA configurable y de garantia vencida.
+      Revision obligatoria y multi-Detalle (MVP v2): toda garantia RMA pasa
+      por revision tecnica antes de definir que reparacion se realiza
+      (PROC-REP-045 = No -> 055 -> 065 -> 068). La nueva Orden nace
+      EN_REVISION y sin Detalles propios; tras la revision, Recepcion define
+      uno o mas Detalles nuevos (PROC-REP-075) o finaliza SIN_REPARACION
+      (PROC-REP-069). Una unica Orden de garantia puede originarse en uno o
+      mas Detalles de la misma Orden origen (no se crea una Orden de garantia
+      por Detalle). Cada Detalle nuevo referencia uno de los Detalles origen
+      identificados; no se impone una relacion 1:1 (un Detalle origen puede
+      originar mas de un Detalle nuevo).
     status: draft

@@ -1,8 +1,14 @@
 """Detalles de Reparacion: definicion, factibilidad, control y puntaje.
 
-Nodos cubiertos: PROC-REP-045/070 (definir Detalles), PROC-REP-080/090
-(factibilidad), PROC-REP-220/230 (control tecnico) y PROC-REP-245
-(puntaje).
+Nodos cubiertos: PROC-REP-045/070 y PROC-REP-068/075 (agregar Detalles),
+PROC-REP-080/090 (factibilidad), PROC-REP-220/230 (control tecnico) y
+PROC-REP-245 (puntaje).
+
+Agregar un Detalle y finalizar la definicion son intenciones distintas:
+los ``definir_reparacion_detail*`` solo agregan; la definicion se cierra
+con ``exigir_definicion_finalizable`` + factibilidad (``application``), y
+queda cerrada desde que se valida la factibilidad (PROC-REP-080,
+``definicion_finalizada``).
 
 Features: FEAT-REP-002, FEAT-REP-003, FEAT-REP-006, FEAT-REP-007 (el
 precio snapshot se registra al crear el Detalle).
@@ -32,8 +38,56 @@ from .autorizacion import validar_actor
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .inventario import faltantes_del_detalle
 from .recursos import tiene_override_factibilidad
-from .revisiones import revision_tecnica_realizada
+from .revisiones import finalizada_sin_reparacion, revision_tecnica_realizada
 from .workflow import registrar_paso
+
+
+def definicion_finalizada(orden: OrdenReparacion) -> bool:
+    """La carga de Detalles ya se cerro: la Orden paso por PROC-REP-080.
+
+    Vale para los dos caminos de definicion (070 y 075): en ambos la
+    factibilidad es lo primero que ocurre al finalizar. Derivado del
+    historial, sin flag persistido.
+    """
+    return any(paso.process_id == "PROC-REP-080" for paso in orden.historial)
+
+
+def _exigir_definicion_abierta(orden: OrdenReparacion) -> None:
+    if definicion_finalizada(orden):
+        raise PrecondicionInvalidaError(
+            "La definicion de Detalles ya fue finalizada: no se agregan "
+            "mas Detalles."
+        )
+
+
+def exigir_definicion_finalizable(
+    orden: OrdenReparacion,
+    *,
+    usuario: Usuario,
+) -> None:
+    """Precondiciones de "Finalizar definicion" (ACT-RECEP).
+
+    Cierra la carga de Detalles de una Orden en REQUERIMIENTO (camino
+    070) o EN_REVISION ya revisada (camino 075): exige al menos un
+    Detalle y que la definicion siga abierta. Lo que sigue (comprobante si
+    corresponde, factibilidad, habilitacion o espera de recursos) lo
+    compone la capa de aplicacion reutilizando los services existentes.
+    """
+    validar_actor(usuario, RolUsuario.RECEPCION)
+
+    if orden.estado_workflow not in (
+        EstadoWorkflow.REQUERIMIENTO,
+        EstadoWorkflow.EN_REVISION,
+    ):
+        raise PrecondicionInvalidaError(
+            f"Solo se finaliza la definicion de una Orden en REQUERIMIENTO "
+            f"o EN_REVISION; esta en {orden.estado_workflow.value}."
+        )
+    _exigir_definicion_abierta(orden)
+    if not orden.reparaciones_detail:
+        raise PrecondicionInvalidaError(
+            "No se puede finalizar la definicion sin al menos un Detalle."
+        )
 
 
 def definir_reparacion_detail(
@@ -44,7 +98,6 @@ def definir_reparacion_detail(
     usuario: Usuario,
     fecha: datetime,
     observaciones: str | None = None,
-    detalle_origen_id: str | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-045 ("Si") -> PROC-REP-070 (FEAT-REP-002 / FEAT-REP-007).
 
@@ -60,10 +113,15 @@ def definir_reparacion_detail(
     El Detalle nace DEFINIDO con control PENDIENTE. La decision
     PROC-REP-045 se registra una sola vez, al definir el primer Detalle.
 
-    Cubre el camino "los Detalles se conocen desde el ingreso". La
-    revision tecnica previa (PROC-REP-075) es
-    ``definir_reparacion_detail_luego_revision``; la redefinicion de un
-    Detalle existente (PROC-REP-127) vive en ``services.redefinicion``.
+    Cubre el camino "los Detalles se conocen desde el ingreso". Solo
+    AGREGA el Detalle: no genera comprobante, no valida factibilidad ni
+    habilita (eso es "Finalizar definicion"). La revision tecnica previa
+    (PROC-REP-075) es ``definir_reparacion_detail_luego_revision``; la
+    redefinicion de un Detalle existente (PROC-REP-127) vive en
+    ``services.redefinicion``.
+
+    Una garantia RMA nunca pasa por aqui: su revision tecnica es
+    obligatoria (BR-REP-019) y define sus Detalles por PROC-REP-075.
     """
     validar_actor(usuario, RolUsuario.RECEPCION)
 
@@ -72,6 +130,12 @@ def definir_reparacion_detail(
             f"Solo se definen Detalles sobre una Orden en REQUERIMIENTO; "
             f"esta en {orden.estado_workflow.value}."
         )
+    if orden.origen is OrigenOrden.RMA_GARANTIA_REPARACION:
+        raise PrecondicionInvalidaError(
+            "Una garantia RMA define sus Detalles luego de la revision "
+            "tecnica obligatoria (PROC-REP-075, BR-REP-019)."
+        )
+    _exigir_definicion_abierta(orden)
     if not tipo_reparacion.activo:
         raise PrecondicionInvalidaError(
             f"El Tipo de Reparacion {tipo_reparacion.id} no esta activo."
@@ -105,7 +169,7 @@ def definir_reparacion_detail(
             detalle_id=detalle_id,
             tipo_reparacion=tipo_reparacion,
             observaciones=observaciones,
-            detalle_origen_id=detalle_origen_id,
+            detalle_origen_id=None,
         )
     )
     return nueva_orden
@@ -154,12 +218,15 @@ def definir_reparacion_detail_luego_revision(
     ni PROC-REP-070.
 
     PROC-REP-068 se registra una sola vez, con el primer Detalle; cada
-    Detalle registra su propio PROC-REP-075 (Multi-Detalle). El camino
-    "No" (PROC-REP-069, SIN_REPARACION) no esta implementado.
+    Detalle registra su propio PROC-REP-075 (Multi-Detalle). Solo AGREGA:
+    la definicion se cierra con "Finalizar definicion". El camino "No"
+    (PROC-REP-069, SIN_REPARACION) es
+    ``services.revisiones.registrar_finalizacion_sin_reparacion``.
 
-    En una garantia RMA cada Detalle referencia a su Detalle origen
-    tomado de ``orden.detalles_origen_ids`` -nunca del historial-: con
-    exactamente uno se usa ese; con mas de uno hay que indicarlo.
+    En una garantia RMA cada Detalle referencia a uno de los Detalles
+    origen de ``orden.detalles_origen_ids`` -nunca del historial-: con
+    exactamente uno se usa ese; con mas de uno hay que indicarlo. No hay
+    relacion 1:1: un Detalle origen puede originar mas de un Detalle.
     """
     validar_actor(usuario, RolUsuario.RECEPCION)
 
@@ -173,6 +240,11 @@ def definir_reparacion_detail_luego_revision(
             "Falta la revision tecnica (PROC-REP-065) antes de definir "
             "los Detalles."
         )
+    if finalizada_sin_reparacion(orden):
+        raise PrecondicionInvalidaError(
+            "La Orden ya finalizo SIN_REPARACION (PROC-REP-069)."
+        )
+    _exigir_definicion_abierta(orden)
     if not tipo_reparacion.activo:
         raise PrecondicionInvalidaError(
             f"El Tipo de Reparacion {tipo_reparacion.id} no esta activo."

@@ -126,7 +126,7 @@ items:
   - {id: PROC-REP-055, type: process_node, name: Marcar Orden en revision, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: false}
   - {id: PROC-REP-065, type: process_node, name: Realizar revision tecnica, node_type: activity, actor: ACT-TECH, status: draft, in_scenario: false, implemented: false}
   - {id: PROC-REP-068, type: process_node, name: Se pudo definir la reparacion requerida, node_type: decision, status: draft, in_scenario: false, implemented: false}
-  - {id: PROC-REP-069, type: process_node, name: Registrar finalizacion sin reparacion, node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: false, implemented: false}
+  - {id: PROC-REP-069, type: process_node, name: Registrar finalizacion sin reparacion, node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: false, implemented: false, note: "Implementado en specs/019-mvp2-feedback (068 No -> 069, SIN_REPARACION); la cadena vive en traceability/var-rep-001-002.yaml. No es nodo de HP-REP-001."}
   - {id: PROC-REP-075, type: process_node, name: Definir Detalles de reparacion luego de revision, node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: false, implemented: false}
   - {id: PROC-REP-100, type: process_node, name: Registrar advertencia de faltante, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: false}
   - {id: PROC-REP-110, type: process_node, name: Usuario autorizado fuerza el Detalle bloqueado, node_type: decision, status: draft, in_scenario: false, implemented: false}
@@ -156,7 +156,7 @@ items:
   - {id: BR-REP-007, type: business_rule, name: Concurrencia de Ejecucion en la Orden, status: draft, coverage: IMPLEMENTED}
   - {id: BR-REP-008, type: business_rule, name: Control tecnico por Recepcion y retrabajo por Detalle, status: draft, coverage: PARTIAL}
   - {id: BR-REP-009, type: business_rule, name: Puntaje por Detalle, status: draft, coverage: PARTIAL}
-  - {id: BR-REP-010, type: business_rule, name: Finalizacion sin reparacion trazable, status: draft, coverage: NOT_IMPLEMENTED}
+  - {id: BR-REP-010, type: business_rule, name: Finalizacion sin reparacion trazable, status: draft, coverage: PARTIAL}
   - {id: BR-REP-011, type: business_rule, name: Compatibilidad de estacion de trabajo, status: draft, coverage: PARTIAL}
   - {id: BR-REP-012, type: business_rule, name: Estado agregado de la Orden como calculo derivado, status: draft, coverage: PARTIAL}
   - {id: BR-REP-013, type: business_rule, name: Orden sin Detalles (caso inicial), status: draft, coverage: PARTIAL}
@@ -298,6 +298,7 @@ items:
   - {id: FR-REP-068, type: functional_requirement, name: Ofrecer una accion INICIAR_DETALLE por cada Detalle DEFINIDO y SIN_BLOQUEO de la Orden sin elegir arbitrariamente uno solo cuando hay varios trabajables, status: IMPLEMENTED}
   - {id: FR-REP-069, type: functional_requirement, name: "Preguntar siempre -con toma activa y sin Ejecucion en curso- si el tecnico quiere iniciar un Detalle (PROC-REP-212) o liberar la Orden (PROC-REP-213), tanto inmediatamente despues de tomarla como despues de completar un Detalle con otro todavia trabajable; devolver la Orden a EN_COLA sin cerrar la toma automaticamente mientras quede trabajo", status: IMPLEMENTED}
   - {id: FR-REP-070, type: functional_requirement, name: "Aprobar el control tecnico Detalle por Detalle (detalle_id opcional) solo cuando la Orden entera es terminal, marcando REPARACION_LISTA (PROC-REP-230/245/240) unicamente cuando esa aprobacion deja todos los Detalles con control APROBADO -nunca en una aprobacion parcial", status: IMPLEMENTED}
+  - {id: FR-REP-138, type: functional_requirement, name: "Agregar un Detalle y finalizar la definicion son intenciones distintas publicadas por el backend: con cero Detalles AGREGAR_DETALLE y ENVIAR_A_REVISION y con al menos uno AGREGAR_DETALLE y FINALIZAR_DEFINICION; finalizar exige ACT-RECEP y al menos un Detalle, se hace una sola vez y es lo unico que genera comprobante valida factibilidad y habilita", status: IMPLEMENTED}
   - {id: FR-REP-071, type: functional_requirement, name: "Rechazar a nivel backend -no solo ocultar en la UI- la seleccion o el inicio de un Detalle DEFINIDO pero bloqueado (BLOQUEADO_POR_RECURSOS o REQUIERE_DEFINICION): solo DEFINIDO+SIN_BLOQUEO es trabajable", status: IMPLEMENTED}
 
   # ================================================================== #
@@ -372,7 +373,9 @@ items:
   - {id: TR-REP-064, type: technical_requirement, name: ROLES_PAGO (services/pagos.py) es la fuente unica de roles autorizados para Registrar Pago consumida por el backend y por acciones_disponibles, status: IMPLEMENTED}
 
   # --- Slice 1 (Multi-Detalle operativo). spec: 010-slice1-multidetalle #
-  - {id: TR-REP-065, type: technical_requirement, name: application.ingreso.definir_reparacion acepta finalizar_definicion (bool, default True, aditivo) agrega el Detalle siempre y solo genera comprobante valida factibilidad y habilita la Orden cuando es verdadero, status: IMPLEMENTED}
+  - {id: TR-REP-065, type: technical_requirement, name: "application.ingreso.definir_reparacion agrega UN Detalle (045 Si una sola vez y 070) sin generar comprobante validar factibilidad ni habilitar; la carga se cierra con application.ingreso.finalizar_definicion (el flag finalizar_definicion se elimino)", default True, aditivo) agrega el Detalle siempre y solo genera comprobante valida factibilidad y habilita la Orden cuando es verdadero, status: IMPLEMENTED}
+  - {id: TR-REP-136, type: technical_requirement, name: "application.ingreso.finalizar_definicion compone [050 060 solo si el comprobante no se evaluo] 080 090 140 o 100 reutilizando generar_comprobante_recepcion y _validar_y_habilitar; services.reparaciones.exigir_definicion_finalizable exige ACT-RECEP REQUERIMIENTO o EN_REVISION tras 065 definicion abierta (definicion_finalizada se deriva de PROC-REP-080) y al menos un Detalle; POST /api/orders/{id}/definition/finalize la expone", status: IMPLEMENTED}
+  - {id: TR-REP-137, type: technical_requirement, name: "application.acciones.acciones_disponibles publica AGREGAR_DETALLE y FINALIZAR_DEFINICION o ENVIAR_A_REVISION segun haya Detalles y el frontend agrega Detalles sin casilla y finaliza con un boton propio que muestra los Detalles cargados", status: IMPLEMENTED}
   - {id: TR-REP-066, type: technical_requirement, name: application.acciones.detalles_trabajables enumera todos los Detalles DEFINIDO y SIN_BLOQUEO acciones_disponibles emite un AccionDisponible INICIAR_DETALLE por cada uno en vez de elegir el primero, status: IMPLEMENTED}
   - {id: TR-REP-067, type: technical_requirement, name: "PROC-REP-212 (¿iniciar un Detalle de reparacion?) se registra en seleccionar_detalle/liberar_orden SOLO cuando la Orden realmente viene de esa decision -current_process en {PROC-REP-180, PROC-REP-211}-: seleccionar_detalle encadena 212 [Si] -> 181 unicamente en ese caso (una reentrada a 181 sin volver a pasar por 180/211 no duplica 212); liberar_orden encadena 212 [No] -> 213 -> 170 (ACT-SYSTEM), cierra la toma con fecha/hora y deja estado_workflow=EN_COLA y current_process=PROC-REP-170. Ninguna decision queda como estado persistido: solo el historial la representa (BR-REP-018)", status: IMPLEMENTED}
   - {id: TR-REP-068, type: technical_requirement, name: "services.reparaciones.aprobar_control_tecnico exige que TODOS los Detalles de la Orden esten COMPLETO antes de aprobar ninguno (PROC-REP-220 solo se alcanza con la Orden terminal); con detalle_id opcional aprueba solo ese Detalle, que aporta su puntaje a OrdenReparacion.puntaje_total de inmediato (BR-REP-009, computed field). Una aprobacion parcial registra UNICAMENTE PROC-REP-220 -nunca PROC-REP-230, que solo se registra (observacion Si) cuando esa aprobacion deja TODOS los Detalles APROBADO-: PROC-REP-230=No significaria un Detalle RECHAZADO (fuera de scope), no 'todavia falta aprobar otro'. application.cierre.aprobar_control solo encadena PROC-REP-245 (consolidacion final, no crea el puntaje por Detalle) y PROC-REP-240 en ese mismo caso", status: IMPLEMENTED}
@@ -430,7 +433,7 @@ items:
   - {id: TASK-REP-025, type: task, name: "[US-REP-003] Garantizar que definir_reparacion_detail no muta la Orden recibida", status: DONE, spec: 002-feat-rep-002-hp-slice}
   - {id: TASK-REP-026, type: task, name: "Implementar la rama No de PROC-REP-045 y PROC-REP-055 (Orden EN_REVISION), incluyendo el hito EN_REVISION en EstadoWorkflow", status: NOT_IMPLEMENTED, spec: 002-feat-rep-002-hp-slice}
   - {id: TASK-REP-027, type: task, name: "Implementar PROC-REP-065 (revision tecnica de la Orden) y PROC-REP-068 (decision sobre el resultado)", status: NOT_IMPLEMENTED, spec: 002-feat-rep-002-hp-slice}
-  - {id: TASK-REP-028, type: task, name: "Implementar PROC-REP-069 (SIN_REPARACION, BR-REP-010), con motivo obligatorio y Subtotal = 0", status: NOT_IMPLEMENTED, spec: 002-feat-rep-002-hp-slice}
+  - {id: TASK-REP-028, type: task, name: "Implementar PROC-REP-069 (SIN_REPARACION, BR-REP-010), con motivo obligatorio y Subtotal = 0", status: DONE, spec: 002-feat-rep-002-hp-slice, note: "Implementada en specs/019-mvp2-feedback: cadena en traceability/var-rep-001-002.yaml; aqui extiende el cierre por Origen (TR-REP-062)."}
   - {id: TASK-REP-029, type: task, name: "Implementar PROC-REP-075 (definir Detalles luego de la revision tecnica)", status: NOT_IMPLEMENTED, spec: 002-feat-rep-002-hp-slice}
   - {id: TASK-REP-030, type: task, name: "Implementar el circuito de Detalle pendiente de revision: PROC-REP-125 → PROC-REP-126 → PROC-REP-127, con la condicion REQUIERE_DEFINICION del Detalle", status: DONE, spec: 002-feat-rep-002-hp-slice, note: "Implementada en specs/018-slice9-exc-rep-004 (EXC-REP-004); ver traceability/exc-rep-004.yaml."}
   - {id: TASK-REP-031, type: task, name: "Ejercitar end-to-end una Orden con mas de un Detalle (el modelo lo soporta; HP-REP-001 tiene detail_count = 1)", status: NOT_IMPLEMENTED, spec: 002-feat-rep-002-hp-slice}
@@ -540,7 +543,7 @@ items:
   - {id: TASK-REP-135, type: task, name: "Implementar la rama No de PROC-REP-250 (Ordenes que no requieren entrega al cliente, RT_INTERNO)", status: NOT_IMPLEMENTED, spec: 008-feat-rep-008-hp-slice}
   - {id: TASK-REP-136, type: task, name: "Implementar PROC-REP-290 (informar el resultado al sistema de Gestion RT)", status: NOT_IMPLEMENTED, spec: 008-feat-rep-008-hp-slice}
   - {id: TASK-REP-137, type: task, name: "Definir el estado terminal de RT_INTERNO (pendiente declarado en docs/discovery/README.md)", status: NOT_IMPLEMENTED, spec: 008-feat-rep-008-hp-slice}
-  - {id: TASK-REP-138, type: task, name: "Implementar el comprobante final para una Orden SIN_REPARACION (BR-REP-010): sin garantia y con subtotal cero", status: NOT_IMPLEMENTED, spec: 008-feat-rep-008-hp-slice}
+  - {id: TASK-REP-138, type: task, name: "Implementar el comprobante final para una Orden SIN_REPARACION (BR-REP-010): sin garantia y con subtotal cero", status: DONE, spec: 008-feat-rep-008-hp-slice, note: "Implementada en specs/019-mvp2-feedback: generar_comprobante_final acepta lista_para_cierre y una Orden SIN_REPARACION no genera garantia de reparacion."}
   - {id: TASK-REP-139, type: task, name: "Materializar el contenido desglosado del comprobante final (Detalles, ajustes, pagos, saldo). Hoy solo se registra el hecho 'generado + fecha'", status: NOT_IMPLEMENTED, spec: 008-feat-rep-008-hp-slice}
   - {id: TASK-REP-140, type: task, name: "Integrar la notificacion al cliente con un canal real (WhatsApp, chatbot o portal). Hoy solo se registra el hecho", status: NOT_IMPLEMENTED, spec: 008-feat-rep-008-hp-slice}
   - {id: TASK-REP-141, type: task, name: "Implementar la garantia de reparacion a nivel Detalle (hoy se relaciona a nivel Orden)", status: NOT_IMPLEMENTED, spec: 008-feat-rep-008-hp-slice}
@@ -564,7 +567,8 @@ items:
   - {id: TASK-REP-157, type: task, name: "[US-REP-012] Centralizar ROLES_PAGO en services/pagos.py y exigirlo tanto en registrar_pago como en la accion REGISTRAR_PAGO publicada por acciones_disponibles", status: DONE, spec: 009-mvp2-foundation}
 
   # --- Slice 1 (Multi-Detalle operativo). spec: 010-slice1-multidetalle #
-  - {id: TASK-REP-158, type: task, name: "[US-REP-003] Permitir multiples llamadas a definir_reparacion_detail antes de habilitar, agregando finalizar_definicion aditivo a application.ingreso.definir_reparacion", status: DONE, spec: 010-slice1-multidetalle}
+  - {id: TASK-REP-158, type: task, name: "[US-REP-003] Permitir multiples llamadas a definir_reparacion_detail antes de habilitar, agregando finalizar_definicion aditivo a application.ingreso.definir_reparacion", status: DONE, spec: 010-slice1-multidetalle, note: "Superada en specs/019-mvp2-feedback: el flag finalizar_definicion se elimino y finalizar la definicion es un comando propio (TASK-REP-209)."}
+  - {id: TASK-REP-209, type: task, name: "Separar agregar Detalle de finalizar la definicion: comando endpoint y accion FINALIZAR_DEFINICION sin el flag finalizar_definicion", status: DONE, spec: 019-mvp2-feedback}
   - {id: TASK-REP-159, type: task, name: "[US-REP-007] Enumerar todos los Detalles trabajables en acciones_disponibles (detalles_trabajables) en vez de elegir el primero", status: DONE, spec: 010-slice1-multidetalle}
   - {id: TASK-REP-160, type: task, name: "[US-REP-010] Aprobar control tecnico por Detalle (detalle_id opcional) y marcar REPARACION_LISTA solo cuando todos quedan APROBADO", status: DONE, spec: 010-slice1-multidetalle}
   - {id: TASK-REP-161, type: task, name: "[US-REP-007] Alinear los guards de backend (seleccionar_detalle, validar_estacion_trabajo, reservar_insumos_e_iniciar_ejecucion) con la definicion de Detalle trabajable (DEFINIDO+SIN_BLOQUEO), para que un intento directo de API no pueda saltear lo que acciones_disponibles ya oculta", status: DONE, spec: 010-slice1-multidetalle}
@@ -706,6 +710,11 @@ items:
 
   # --- Slice 1 (Multi-Detalle operativo). spec: 010-slice1-multidetalle #
   - {id: CODE-REP-121, type: code_artifact, name: "app/backend/app/application/ingreso.py::definir_reparacion", status: IMPLEMENTED, source: "app/backend/app/application/ingreso.py::definir_reparacion"}
+  - {id: CODE-REP-230, type: code_artifact, name: "application/ingreso.py::finalizar_definicion", status: IMPLEMENTED, source: "app/backend/app/application/ingreso.py::finalizar_definicion"}
+  - {id: CODE-REP-231, type: code_artifact, name: "services/reparaciones.py::exigir_definicion_finalizable", status: IMPLEMENTED, source: "app/backend/app/services/reparaciones.py::exigir_definicion_finalizable"}
+  - {id: CODE-REP-232, type: code_artifact, name: "services/reparaciones.py::definicion_finalizada", status: IMPLEMENTED, source: "app/backend/app/services/reparaciones.py::definicion_finalizada"}
+  - {id: CODE-REP-233, type: code_artifact, name: "api/ordenes.py::post_finalizar_definicion", status: IMPLEMENTED, source: "app/backend/app/api/ordenes.py::post_finalizar_definicion"}
+  - {id: CODE-REP-234, type: code_artifact, name: "frontend/src/features/ordenes-reparacion/AccionesOrden.tsx::FormularioAgregarDetalle y FormularioFinalizarDefinicion", status: IMPLEMENTED, source: "app/frontend/src/features/ordenes-reparacion/AccionesOrden.tsx"}
   - {id: CODE-REP-122, type: code_artifact, name: "app/backend/app/application/acciones.py::detalles_trabajables", status: IMPLEMENTED, source: "app/backend/app/application/acciones.py::detalles_trabajables"}
   - {id: CODE-REP-123, type: code_artifact, name: "app/backend/app/services/tomas.py::liberar_orden", status: IMPLEMENTED, source: "app/backend/app/services/tomas.py::liberar_orden"}
   - {id: CODE-REP-124, type: code_artifact, name: "app/backend/app/application/taller.py::liberar_orden", status: IMPLEMENTED, source: "app/backend/app/application/taller.py::liberar_orden"}
@@ -738,6 +747,7 @@ items:
   - {id: UAT-REP-014, type: uat, name: El importe a cobrar y el saldo son siempre confiables sin reconciliacion manual, status: PENDING}
   - {id: UAT-REP-015, type: uat, name: El cliente es notificado de que su equipo esta listo, status: PENDING}
   - {id: UAT-REP-016, type: uat, name: El equipo se entrega con comprobante y garantia y la Orden queda cerrada, status: PENDING}
+  - {id: UAT-REP-040, type: uat, name: "Recepcion agrega los Detalles de a uno y recien al tocar Finalizar definicion se genera el comprobante se valida la factibilidad y se habilita la Orden", status: PENDING}
 
   # ================================================================== #
   # Internal Tests. Se REFERENCIAN los tests existentes por archivo +  #
@@ -985,6 +995,16 @@ items:
   - {id: TEST-REP-327, type: internal_test, name: "test_habilitar_no_permite_saltear_la_factibilidad_desde_070", status: PASSING, source: "app/backend/tests/test_services_invariantes.py::test_habilitar_no_permite_saltear_la_factibilidad_desde_070"}
   - {id: TEST-REP-328, type: internal_test, name: "test_habilitar_funciona_tras_090_si", status: PASSING, source: "app/backend/tests/test_services_invariantes.py::test_habilitar_funciona_tras_090_si"}
   - {id: TEST-REP-329, type: internal_test, name: "test_habilitar_rechaza_090_con_faltantes", status: PASSING, source: "app/backend/tests/test_services_invariantes.py::test_habilitar_rechaza_090_con_faltantes"}
+  - {id: TEST-REP-511, type: internal_test, name: "test_agregar_no_finaliza_y_finalizar_cierra_la_definicion", status: PASSING, source: "app/backend/tests/test_api_definicion.py::test_agregar_no_finaliza_y_finalizar_cierra_la_definicion"}
+  - {id: TEST-REP-512, type: internal_test, name: "test_finalizar_sin_detalles_es_un_conflicto_sin_efectos", status: PASSING, source: "app/backend/tests/test_api_definicion.py::test_finalizar_sin_detalles_es_un_conflicto_sin_efectos"}
+  - {id: TEST-REP-513, type: internal_test, name: "test_finalizar_solo_recepcion", status: PASSING, source: "app/backend/tests/test_api_definicion.py::test_finalizar_solo_recepcion"}
+  - {id: TEST-REP-514, type: internal_test, name: "test_finalizar_valida_orden_y_request", status: PASSING, source: "app/backend/tests/test_api_definicion.py::test_finalizar_valida_orden_y_request"}
+  - {id: TEST-REP-515, type: internal_test, name: "test_sin_stock_finalizar_deja_la_orden_en_100_sin_error", status: PASSING, source: "app/backend/tests/test_api_definicion.py::test_sin_stock_finalizar_deja_la_orden_en_100_sin_error"}
+  - {id: TEST-REP-516, type: internal_test, name: "test_camino_de_revision_finaliza_sin_regenerar_el_comprobante", status: PASSING, source: "app/backend/tests/test_api_definicion.py::test_camino_de_revision_finaliza_sin_regenerar_el_comprobante"}
+  - {id: TEST-REP-517, type: internal_test, name: "test_el_campo_finalizar_definicion_ya_no_existe", status: PASSING, source: "app/backend/tests/test_api_definicion.py::test_el_campo_finalizar_definicion_ya_no_existe"}
+  - {id: TEST-REP-518, type: internal_test, name: "test_la_definicion_se_finaliza_al_validar_la_factibilidad", status: PASSING, source: "app/backend/tests/test_definicion_y_sin_reparacion.py::test_la_definicion_se_finaliza_al_validar_la_factibilidad"}
+  - {id: TEST-REP-519, type: internal_test, name: "test_finalizar_exige_recepcion_un_detalle_y_definicion_abierta", status: PASSING, source: "app/backend/tests/test_definicion_y_sin_reparacion.py::test_finalizar_exige_recepcion_un_detalle_y_definicion_abierta"}
+  - {id: TEST-REP-520, type: internal_test, name: "test_finalizar_desde_revision_exige_el_065_y_un_detalle", status: PASSING, source: "app/backend/tests/test_definicion_y_sin_reparacion.py::test_finalizar_desde_revision_exige_el_065_y_un_detalle"}
 
 links:
 
@@ -2657,3 +2677,39 @@ links:
   - {from: TEST-REP-328, to: CODE-REP-047, relationship: exercises}
   - {from: TEST-REP-329, to: TR-REP-027, relationship: verifies}
   - {from: TEST-REP-329, to: CODE-REP-047, relationship: exercises}
+
+  # specs/019-mvp2-feedback: agregar Detalle y finalizar la definicion; 069 implementado (cadena en var-rep-001-002.yaml).
+  - {from: FR-REP-138, to: ACC-REP-004, relationship: derives_from}
+  - {from: FR-REP-138, to: ACC-REP-005, relationship: derives_from}
+  - {from: TR-REP-136, to: FR-REP-138, relationship: satisfies}
+  - {from: TR-REP-137, to: FR-REP-138, relationship: satisfies}
+  - {from: TASK-REP-209, to: TR-REP-065, relationship: implements}
+  - {from: TASK-REP-209, to: TR-REP-136, relationship: implements}
+  - {from: TASK-REP-209, to: TR-REP-137, relationship: implements}
+  - {from: TASK-REP-028, to: TR-REP-062, relationship: implements}
+  - {from: TASK-REP-138, to: TR-REP-046, relationship: implements}
+  - {from: CODE-REP-230, to: TASK-REP-209, relationship: produced_by}
+  - {from: CODE-REP-230, to: TR-REP-136, relationship: implements}
+  - {from: CODE-REP-231, to: TASK-REP-209, relationship: produced_by}
+  - {from: CODE-REP-231, to: TR-REP-136, relationship: implements}
+  - {from: CODE-REP-232, to: TASK-REP-209, relationship: produced_by}
+  - {from: CODE-REP-232, to: TR-REP-136, relationship: implements}
+  - {from: CODE-REP-233, to: TASK-REP-209, relationship: produced_by}
+  - {from: CODE-REP-233, to: TR-REP-136, relationship: implements}
+  - {from: CODE-REP-234, to: TASK-REP-209, relationship: produced_by}
+  - {from: CODE-REP-234, to: TR-REP-137, relationship: implements}
+  - {from: TEST-REP-511, to: FR-REP-138, relationship: verifies}
+  - {from: TEST-REP-511, to: CODE-REP-230, relationship: exercises}
+  - {from: TEST-REP-511, to: CODE-REP-121, relationship: exercises}
+  - {from: TEST-REP-512, to: FR-REP-138, relationship: verifies}
+  - {from: TEST-REP-513, to: FR-REP-138, relationship: verifies}
+  - {from: TEST-REP-514, to: TR-REP-136, relationship: verifies}
+  - {from: TEST-REP-514, to: CODE-REP-233, relationship: exercises}
+  - {from: TEST-REP-515, to: TR-REP-136, relationship: verifies}
+  - {from: TEST-REP-516, to: TR-REP-136, relationship: verifies}
+  - {from: TEST-REP-517, to: TR-REP-065, relationship: verifies}
+  - {from: TEST-REP-518, to: CODE-REP-232, relationship: exercises}
+  - {from: TEST-REP-519, to: CODE-REP-231, relationship: exercises}
+  - {from: TEST-REP-520, to: CODE-REP-231, relationship: exercises}
+  - {from: UAT-REP-040, to: US-REP-003, relationship: accepts}
+  - {from: UAT-REP-040, to: FR-REP-138, relationship: accepts}

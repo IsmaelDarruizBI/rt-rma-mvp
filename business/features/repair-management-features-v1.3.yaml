@@ -93,7 +93,9 @@ features:
         - Obtener contexto de equipos internos de Rosario Tecno
         - Recibir referencias de garantias de venta
         - Registrar o identificar cliente y equipo
-        - Relacionar una garantia de reparacion con la Orden original
+        - Relacionar una garantia de reparacion con la Orden original y con
+          uno o mas Detalles origen (una unica Orden de garantia por
+          inicio, BR-REP-019)
         - Crear la Orden de Reparacion con cantidad_detalles = 0
         - Asignar el estado inicial REQUERIMIENTO
         - Generar comprobante de recepcion cuando corresponda
@@ -180,6 +182,12 @@ features:
       includes:
         - Determinar si los Detalles de Reparacion ya son conocidos
         - Crear uno o mas Detalles de Reparacion, cada uno con su Tipo
+        - Agregar los Detalles de a uno y cerrar la definicion con una
+          accion explicita distinta (Finalizar definicion, al menos un
+          Detalle), que recien entonces continua a PROC-REP-050/080
+        - Hacer pasar toda garantia RMA por revision tecnica antes de
+          definir sus Detalles, vinculando cada Detalle nuevo a uno de los
+          Detalles origen identificados (sin relacion 1:1, BR-REP-019)
         - Registrar el precio snapshot correspondiente al crear un Detalle
         - Pasar la Orden a EN_REVISION cuando ningun Detalle es conocido
         - Realizar y registrar la revision tecnica inicial de la Orden
@@ -279,6 +287,10 @@ features:
           del override (solo registra la autorizacion; la reserva y el
           consumo posteriores, de FEAT-REP-005, quedan habilitados para ese
           Detalle segun BR-REP-003 y BR-REP-006)
+        - Ofrecer el override como capacidad transversal por Detalle
+          bloqueado por recursos, tambien con factibilidad parcial y con la
+          Orden ya habilitada, en cola, tomada o en reparacion, sin
+          reiniciar el proceso (BR-REP-003)
         - Habilitar la Orden cuando exista al menos un Detalle trabajable
 
       excludes:

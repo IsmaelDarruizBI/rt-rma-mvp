@@ -164,7 +164,7 @@ items:
   - {id: TEST-REP-489, type: internal_test, name: "test_una_revision_de_un_ciclo_anterior_no_habilita_127", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_una_revision_de_un_ciclo_anterior_no_habilita_127"}
   - {id: TEST-REP-490, type: internal_test, name: "test_127_valida_rol_y_tipo_activo", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_127_valida_rol_y_tipo_activo"}
   - {id: TEST-REP-491, type: internal_test, name: "test_un_127_invalida_el_override_anterior", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_un_127_invalida_el_override_anterior"}
-  - {id: TEST-REP-492, type: internal_test, name: "test_un_130_posterior_al_127_es_valido", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_un_130_posterior_al_127_es_valido"}
+  - {id: TEST-REP-492, type: internal_test, name: "test_un_override_posterior_al_127_es_valido", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_un_override_posterior_al_127_es_valido"}
   - {id: TEST-REP-493, type: internal_test, name: "test_el_127_de_otro_detalle_no_invalida_el_override", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_el_127_de_otro_detalle_no_invalida_el_override"}
   - {id: TEST-REP-494, type: internal_test, name: "test_127_y_080_con_stock_habilita", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_127_y_080_con_stock_habilita"}
   - {id: TEST-REP-495, type: internal_test, name: "test_el_nuevo_snapshot_cambia_total_y_saldo_incluso_negativo", status: PASSING, source: "app/backend/tests/test_exc_rep_004.py::test_el_nuevo_snapshot_cambia_total_y_saldo_incluso_negativo"}

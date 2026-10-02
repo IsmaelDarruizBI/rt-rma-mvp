@@ -238,6 +238,15 @@ export interface Accion {
   requiere_actor: boolean;
 }
 
+/**
+ * Detalle de la Orden origen de una garantía RMA (HP-REP-003). El nombre
+ * del Tipo lo resuelve la API leyendo la Orden origen; no se persiste.
+ */
+export interface DetalleOrigen {
+  id: string;
+  tipo_reparacion_nombre: string;
+}
+
 export interface OrdenResumen {
   id: string;
   origen: OrigenOrden;
@@ -271,6 +280,13 @@ export interface Orden {
   orden_origen_id: string | null;
   /** Detalles de la Orden origen identificados en PROC-REP-035 (garantía RMA). */
   detalles_origen_ids: string[];
+  /** Los mismos Detalles origen, con el nombre de su Tipo (presentación). */
+  detalles_origen: DetalleOrigen[];
+  /**
+   * PROC-REP-069: la revisión concluyó SIN_REPARACION. Lo deriva el backend
+   * del historial; no es un estado de workflow.
+   */
+  finalizada_sin_reparacion: boolean;
   reparaciones_detail: Detalle[];
   tomas: Toma[];
   ejecuciones: Ejecucion[];

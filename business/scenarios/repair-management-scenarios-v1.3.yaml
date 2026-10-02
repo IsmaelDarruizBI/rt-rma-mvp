@@ -610,23 +610,30 @@ scenarios:
 
     description: >
       Camino de referencia para una garantia de reparacion RMA: un cliente
-      vuelve porque una reparacion realizada previamente por RMA presenta
-      una falla cubierta por garantia. NO comienza como una reparacion
-      nueva comun sino desde una Orden origen ya finalizada (ENTREGADA):
-      el usuario selecciona "Generar garantia" (EVT-REP-002), se identifica
-      la Orden origen y el Detalle que fallo (PROC-REP-035), cliente y
-      equipo se recuperan de esa Orden (no hay alta nueva), y se crea una
-      NUEVA Orden con origen RMA_GARANTIA_REPARACION, condicion comercial
-      NO_COBRABLE y referencia a la Orden origen, cuyos Detalles referencian
-      cada Detalle origen. La Orden origen no se reabre y permanece
-      historicamente inmutable. El circuito tecnico converge con HP-REP-001
-      desde PROC-REP-040 y, como todo origen con entrega a cliente, recorre
-      PROC-REP-265 (validacion de condicion de entrega); a diferencia de
-      HP-REP-001, esa condicion se aprueba directamente por origen
-      NO_COBRABLE (no por Saldo = 0 ni por cortesia), sin cobro pendiente:
-      nunca entra en PROC-REP-266 ni registra pagos. Luego hay notificacion
-      y entrega fisica al cliente. Con un unico Detalle de
-      garantia, sin desvios operativos ni tecnicos.
+      vuelve porque una reparacion realizada previamente por RMA presenta una
+      falla cubierta por garantia. NO comienza como una reparacion nueva comun
+      sino desde una Orden origen ya finalizada (ENTREGADA): Recepcion inicia
+      la garantia sobre esa Orden (EVT-REP-002) seleccionando uno o mas
+      Detalles origen (PROC-REP-035), cliente y equipo se recuperan de esa
+      Orden (no hay alta nueva), y se crea UNA NUEVA Orden con origen
+      RMA_GARANTIA_REPARACION, condicion comercial NO_COBRABLE y referencia a
+      la Orden y a los Detalles origen. La Orden origen no se reabre y
+      permanece historicamente inmutable. La revision tecnica es obligatoria y
+      forma parte de este Happy Path: la Orden nueva nace sin Detalles y
+      EN_REVISION (PROC-REP-045 = No -> 055), genera su comprobante de
+      recepcion (050 -> 060), el tecnico la revisa (065) y, si se pudo definir
+      la reparacion (068 = Si), Recepcion define los Detalles de garantia
+      (075), cada uno vinculado a uno de los Detalles origen; despues el
+      circuito converge con HP-REP-001 desde PROC-REP-080 y, como todo origen
+      con entrega a cliente, recorre PROC-REP-265 (validacion de condicion de
+      entrega); a diferencia de HP-REP-001, esa condicion se aprueba
+      directamente por origen NO_COBRABLE (no por Saldo = 0 ni por cortesia),
+      sin cobro pendiente: nunca entra en PROC-REP-266 ni registra pagos.
+      Luego hay notificacion y entrega fisica al cliente. Si la revision no
+      permite definir una reparacion (068 = No), la Orden concluye
+      SIN_REPARACION (PROC-REP-069) con el mismo cierre al cliente y sin
+      garantia de reparacion nueva; ese desenlace no forma parte de este
+      camino de referencia.
 
     facts:
       - key: origin
@@ -644,11 +651,17 @@ scenarios:
       - key: new_customer_equipment_registration
         label: Alta nueva de cliente/equipo
         value: false
+      - key: origin_detail_count
+        label: Cantidad de Detalles origen seleccionados al iniciar
+        value: "1..N"
       - key: detail_count
-        label: Cantidad de Detalles de garantia
-        value: 1
+        label: Cantidad de Detalles de garantia definidos tras la revision
+        value: "1..N"
       - key: details_known_at_intake
         label: Detalle conocido desde el ingreso
+        value: false
+      - key: technical_review_required
+        label: Revision tecnica obligatoria antes de definir Detalles
         value: true
       - key: origin_detail_identified
         label: Detalle origen identificado
@@ -724,11 +737,11 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-045
-        to: PROC-REP-070
-        condition: Si
+        to: PROC-REP-055
+        condition: "No"
 
       - kind: PROCESS_EDGE
-        from: PROC-REP-070
+        from: PROC-REP-055
         to: PROC-REP-050
 
       - kind: PROCESS_EDGE
@@ -738,8 +751,21 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-060
+        to: PROC-REP-065
+        condition: Aun en revision
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-065
+        to: PROC-REP-068
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-068
+        to: PROC-REP-075
+        condition: Si
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-075
         to: PROC-REP-080
-        condition: Detalles definidos
 
       - kind: PROCESS_EDGE
         from: PROC-REP-080
@@ -848,6 +874,12 @@ scenarios:
         to: EVT-REP-999
 
     expected:
+      - key: technical_review_completed
+        label: Revision tecnica realizada antes de definir los Detalles
+        value: true
+      - key: details_defined_after_review
+        label: Detalles de garantia definidos luego de la revision
+        value: true
       - key: technical_aggregate
         label: Agregado tecnico de la Orden nueva
         value: COMPLETA
@@ -905,22 +937,23 @@ scenarios:
 
     applies_to:
       - HP-REP-001
-      - HP-REP-003
 
     description: >
-      Al momento del ingreso todavia no se conoce que Detalle(s) de
-      reparacion necesita el equipo (PROC-REP-045 = No): la Orden se marca
-      EN_REVISION (PROC-REP-055) en vez de definir Detalles de inmediato.
-      Aplica a origenes que SI requieren comprobante de recepcion
-      (CLIENTE_EXTERNO, RMA_GARANTIA_REPARACION): el comprobante se genera
-      igual (PROC-REP-060), mostrando "reparacion pendiente de
-      diagnostico" en vez de listar Detalles. La revision tecnica
+      Al momento del ingreso todavia no se conoce que Detalle(s) de reparacion
+      necesita el equipo (PROC-REP-045 = No): la Orden se marca EN_REVISION
+      (PROC-REP-055) en vez de definir Detalles de inmediato. Aplica a
+      CLIENTE_EXTERNO, que SI requiere comprobante de recepcion: el
+      comprobante se genera igual (PROC-REP-060), mostrando "reparacion
+      pendiente de diagnostico" en vez de listar Detalles. La revision tecnica
       posterior (PROC-REP-065/068) define los Detalles (PROC-REP-075) y el
-      recorrido se reincorpora a PROC-REP-080, exactamente donde HP-REP-001
-      y HP-REP-003 ya lo alcanzan desde su propio camino. Origen: analisis
-      estructural CAND-REP-007 (divergencia en PROC-REP-045) y
-      CAND-REP-016 (resolucion con comprobante), confirmados como Scenario
-      real en generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
+      recorrido se reincorpora a PROC-REP-080, exactamente donde HP-REP-001 ya
+      lo alcanza desde su propio camino. Para RMA_GARANTIA_REPARACION la
+      revision tecnica dejo de ser una divergencia: es obligatoria y forma
+      parte del Happy Path HP-REP-003 (BR-REP-019), por eso esta Variant ya no
+      aplica a ese origen. Origen: analisis estructural CAND-REP-007
+      (divergencia en PROC-REP-045) y CAND-REP-016 (resolucion con
+      comprobante), confirmados como Scenario real en
+      generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
       Contraparte sin comprobante: VAR-REP-002 (equipo RT_INTERNO).
 
     trigger:
@@ -1255,17 +1288,27 @@ scenarios:
       - HP-REP-003
 
     description: >
-      Misma situacion inicial que EXC-REP-001 (ningun Detalle trabajable
-      por falta de recursos), pero un usuario autorizado decide forzar
-      igualmente como trabajable el Detalle bloqueado (PROC-REP-110 = Si,
-      BR-REP-003): el override se registra sobre ese Detalle especifico
-      (PROC-REP-130) y la Orden continua el flujo normal hacia
-      PROC-REP-140, igual que si el recurso hubiera estado disponible.
-      Consecuencia posterior (BR-REP-003, aclaracion confirmada): al
-      iniciar y consumir ese Detalle, PROC-REP-185/210 -que no son nodos
-      de este Scenario- pueden dejar la disponibilidad y el stock fisico
-      negativos. Origen: analisis estructural CAND-REP-019, confirmado como Scenario
-      real en generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
+      Misma situacion inicial que EXC-REP-001 (ningun Detalle trabajable por
+      falta de recursos), pero un usuario autorizado decide forzar igualmente
+      como trabajable el Detalle bloqueado (PROC-REP-110 = Si, BR-REP-003): el
+      override se registra sobre ese Detalle especifico (PROC-REP-130) y la
+      Orden continua el flujo normal hacia PROC-REP-140, igual que si el
+      recurso hubiera estado disponible. Consecuencia posterior (BR-REP-003,
+      aclaracion confirmada): al iniciar y consumir ese Detalle,
+      PROC-REP-185/210 -que no son nodos de este Scenario- pueden dejar la
+      disponibilidad y el stock fisico negativos. Origen: analisis estructural
+      CAND-REP-019, confirmado como Scenario real en
+      generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
+      Override como capacidad transversal por Detalle (MVP v2, BR-REP-003): la
+      misma autorizacion tambien cubre la factibilidad parcial en
+      Multi-Detalle -un Detalle BLOQUEADO_POR_RECURSOS mientras otros ya son
+      trabajables y la Orden esta habilitada, en cola, tomada o en
+      reparacion-. En ese caso el Coordinador autoriza ese Detalle sin esperar
+      a que los demas terminen, la Orden no vuelve a PROC-REP-140, la toma y
+      la Ejecucion en curso no se tocan y el Detalle queda disponible para
+      iniciarse con las reglas vigentes. La trayectoria de este Scenario es la
+      del circuito 'ningun Detalle trabajable'; el paso FUNCTIONAL_ACTION
+      representa la autorizacion transversal.
 
     trigger:
       node: PROC-REP-090
@@ -1299,6 +1342,16 @@ scenarios:
         to: PROC-REP-100
         condition: Ninguno trabajable
 
+      - kind: FUNCTIONAL_ACTION
+        feature: FEAT-REP-003
+        name: Autorizar override de recursos de un Detalle
+        description: >
+          Capacidad transversal por Detalle (BR-REP-003): el Coordinador RMA
+          autoriza, con motivo obligatorio, un Detalle BLOQUEADO_POR_RECURSOS.
+          Registra usuario, fecha, Detalle, validacion ignorada y motivo; no
+          reserva ni consume stock. Aqui ocurre con la Orden detenida en
+          PROC-REP-100, por eso PROC-REP-110 resulta Si.
+
       - kind: PROCESS_EDGE
         from: PROC-REP-100
         to: PROC-REP-110
@@ -1315,6 +1368,12 @@ scenarios:
     expected:
       - key: detail_workable_after_override
         label: Detalle trabajable tras el override
+        value: true
+      - key: override_available_with_partial_feasibility
+        label: El override se ofrece por Detalle aunque otros Detalles sean trabajables
+        value: true
+      - key: flow_not_restarted_outside_no_workable_circuit
+        label: Fuera del circuito de PROC-REP-100 no reinicia el proceso ni cierra la toma
         value: true
       - key: order_continues_normal_flow
         label: La Orden continua el flujo normal (PROC-REP-140)

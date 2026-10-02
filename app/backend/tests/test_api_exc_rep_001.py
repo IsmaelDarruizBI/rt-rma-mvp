@@ -17,6 +17,10 @@ from app.core.config import Settings
 from app.main import create_app
 from app.storage.json.base import escribir_json_atomico
 from tests import test_multidetalle as multi
+from tests.fixtures.api_definicion import (
+    definir_desde_revision_y_finalizar,
+    definir_y_finalizar,
+)
 from tests.test_api_hp_rep_002 import (
     INSUMO,
     RECEPCION,
@@ -25,7 +29,11 @@ from tests.test_api_hp_rep_002 import (
     _crear_orden_rt,
     _sembrar_catalogos,
 )
-from tests.test_api_hp_rep_003 import _orden_entregada
+from tests.test_api_hp_rep_003 import (
+    _garantia_definida,
+    _iniciar_garantia,
+    _orden_entregada,
+)
 from tests.test_api_var_rep_001_002 import _crear_orden as _crear_orden_cliente
 from tests.test_api_var_rep_003 import _desde_cola, _interrumpir
 
@@ -61,8 +69,9 @@ def _codigos(orden: dict) -> list[str]:
 
 
 def _definir(cliente, orden_id):
-    return cliente.post(
-        f"/api/orders/{orden_id}/details",
+    return definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
 
@@ -112,7 +121,12 @@ def test_cliente_externo_sin_stock_espera_y_se_habilita_al_revalidar(tmp_path):
         # 110 No -> 120
         orden = _esperar(cliente, orden_id).json()
         assert _ids(orden)[-2:] == ["PROC-REP-110", "PROC-REP-120"]
-        assert _codigos(orden) == ["REVALIDAR_RECURSOS", "REGISTRAR_PAGO"]
+        # El override sigue disponible: es transversal (BR-REP-003).
+        assert _codigos(orden) == [
+            "REVALIDAR_RECURSOS",
+            "OVERRIDE_RECURSOS",
+            "REGISTRAR_PAGO",
+        ]
 
         # Sigue sin stock: 120 -> 080 -> 090 Ninguno -> 100.
         orden = _revalidar(cliente, orden_id).json()
@@ -229,7 +243,7 @@ def test_rt_interno_sin_stock_espera_sin_comprobante_ni_pagos(tmp_path):
 
         orden = _esperar(cliente, orden_id).json()
         assert _ids(orden)[-2:] == ["PROC-REP-110", "PROC-REP-120"]
-        assert _codigos(orden) == ["REVALIDAR_RECURSOS"]
+        assert _codigos(orden) == ["REVALIDAR_RECURSOS", "OVERRIDE_RECURSOS"]
 
         _fijar_stock(tmp_path, **{INSUMO: 1})
         orden = _revalidar(cliente, orden_id).json()
@@ -249,11 +263,8 @@ def test_garantia_rma_sin_stock_persiste_bloqueada_y_la_origen_no_cambia(
         foto = cliente.get(f"/api/orders/{origen['id']}").json()
         _fijar_stock(tmp_path, **{INSUMO: 0})
 
-        respuesta = cliente.post(
-            f"/api/orders/{origen['id']}/details/DET-001/warranty-rma",
-            json={"usuario_id": RECEPCION},
-        )
-        assert respuesta.status_code == 201, respuesta.text
+        respuesta = _garantia_definida(cliente, origen["id"])
+        assert respuesta.status_code == 200, respuesta.text
         orden = respuesta.json()
         assert orden["origen"] == "RMA_GARANTIA_REPARACION"
         assert orden["current_process"] == "PROC-REP-100"
@@ -278,24 +289,23 @@ def test_garantia_en_revision_sin_stock_no_repite_065_068_075(tmp_path):
     with _cliente(tmp_path, stock="5") as cliente:
         origen = _orden_entregada(cliente)
         _fijar_stock(tmp_path, **{INSUMO: 0})
-        orden = cliente.post(
-            f"/api/orders/{origen['id']}/details/DET-001/warranty-rma/review",
-            json={"usuario_id": RECEPCION},
-        ).json()
+        orden = _iniciar_garantia(cliente, origen["id"]).json()
         orden_id = orden["id"]
         cliente.post(
             f"/api/orders/{orden_id}/technical-review",
             json={"usuario_id": TECNICO, "resultado": "Falla de placa."},
         )
-        cliente.post(
-            f"/api/orders/{orden_id}/review/details",
+        definir_desde_revision_y_finalizar(
+            cliente,
+            orden_id,
             json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
         )
 
         orden = cliente.get(f"/api/orders/{orden_id}").json()
         assert orden["estado_workflow"] == "EN_REVISION"
         assert orden["current_process"] == "PROC-REP-100"
-        assert "DEFINIR_REPARACION_DESDE_REVISION" not in _codigos(orden)
+        assert "AGREGAR_DETALLE_DESDE_REVISION" not in _codigos(orden)
+        assert "FINALIZAR_DEFINICION" not in _codigos(orden)
 
         _esperar(cliente, orden_id)
         _fijar_stock(tmp_path, **{INSUMO: 1})
@@ -321,11 +331,11 @@ def _definir_dos(cliente, orden_id):
         json={
             "usuario_id": multi.RECEPCION,
             "tipo_reparacion_id": multi.TIPO_BATERIA,
-            "finalizar_definicion": False,
         },
     )
-    return cliente.post(
-        f"/api/orders/{orden_id}/details",
+    return definir_y_finalizar(
+        cliente,
+        orden_id,
         json={
             "usuario_id": multi.RECEPCION,
             "tipo_reparacion_id": multi.TIPO_PANTALLA,
@@ -493,7 +503,11 @@ def test_211_pendiente_de_recursos_pasa_directo_a_120_y_cierra_la_toma(
         assert "REVALIDAR_RECURSOS" in codigos
         for ausente in ("LIBERAR_ORDEN", "TOMAR", "INICIAR_DETALLE"):
             assert ausente not in codigos
-        assert set(codigos) <= {"REVALIDAR_RECURSOS", "REGISTRAR_PAGO"}
+        assert set(codigos) <= {
+            "REVALIDAR_RECURSOS",
+            "OVERRIDE_RECURSOS",
+            "REGISTRAR_PAGO",
+        }
 
 
 def test_revalidar_sin_stock_desde_211_vuelve_a_100_y_luego_espera(tmp_path):

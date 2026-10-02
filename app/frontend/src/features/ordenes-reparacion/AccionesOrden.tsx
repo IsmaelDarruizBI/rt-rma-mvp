@@ -17,9 +17,11 @@ import {
   Panel,
   colores,
   estiloInput,
+  importe,
 } from "../../components/ui";
 import type {
   Accion,
+  DetalleOrigen,
   Estacion,
   InsumoPrevisto,
   InsumoUtilizado,
@@ -29,10 +31,8 @@ import type {
 } from "../../types/api";
 
 export interface EjecutorAcciones {
-  definirReparacion: (
-    tipoReparacionId: string,
-    finalizarDefinicion: boolean,
-  ) => void;
+  agregarDetalle: (tipoReparacionId: string) => void;
+  finalizarDefinicion: () => void;
   encolar: (prioridad: number) => void;
   tomar: (estacionId: string) => void;
   iniciarDetalle: (detalleId: string) => void;
@@ -64,14 +64,14 @@ export interface EjecutorAcciones {
   entregar: () => void;
   informarRt: () => void;
   devolverRt: () => void;
-  generarGarantiaRma: (detalleId: string) => void;
+  iniciarGarantiaRma: (detalleOrigenIds: string[]) => void;
   enviarARevision: () => void;
   realizarRevision: (resultado: string) => void;
-  definirReparacionDesdeRevision: (
+  agregarDetalleDesdeRevision: (
     tipoReparacionId: string,
-    finalizarDefinicion: boolean,
+    detalleOrigenId: string | null,
   ) => void;
-  generarGarantiaRmaEnRevision: (detalleId: string) => void;
+  finalizarSinReparacion: (motivo: string, observaciones: string) => void;
 }
 
 interface Props {
@@ -108,22 +108,68 @@ export function AccionesOrden({
     );
   }
 
+  const renderizar = (accion: Accion) => (
+    <AccionUnica
+      key={accion.codigo + (accion.detalle_id ?? "")}
+      accion={accion}
+      actor={actor}
+      orden={orden}
+      tipos={tipos}
+      estaciones={estaciones}
+      ocupado={ocupado}
+      ejecutar={ejecutar}
+    />
+  );
+
   return (
     <Panel titulo="Acción disponible">
-      {acciones.map((accion) => (
-        <AccionUnica
-          key={accion.codigo + (accion.detalle_id ?? "")}
-          accion={accion}
-          actor={actor}
-          orden={orden}
-          tipos={tipos}
-          estaciones={estaciones}
-          ocupado={ocupado}
-          ejecutar={ejecutar}
-        />
-      ))}
+      {agruparEnPares(acciones).map((grupo) =>
+        grupo.length === 1 ? (
+          renderizar(grupo[0])
+        ) : (
+          <div
+            key={grupo.map((accion) => accion.codigo).join("|")}
+            style={{
+              display: "grid",
+              columnGap: "1rem",
+              // Lado a lado en escritorio; apiladas en pantallas angostas.
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+            }}
+          >
+            {grupo.map(renderizar)}
+          </div>
+        ),
+      )}
     </Panel>
   );
+}
+
+/**
+ * Completar e Interrumpir son las dos salidas habituales de la MISMA
+ * Ejecución (PROC-REP-200): se muestran juntas. Es solo presentación: qué
+ * acciones existen lo sigue decidiendo el backend.
+ */
+const CODIGOS_EN_PAR = new Set(["COMPLETAR_EJECUCION", "INTERRUMPIR_EJECUCION"]);
+
+function agruparEnPares(acciones: Accion[]): Accion[][] {
+  const grupos: Accion[][] = [];
+  for (const accion of acciones) {
+    const anterior = grupos[grupos.length - 1];
+    const empareja =
+      anterior !== undefined &&
+      anterior.length === 1 &&
+      CODIGOS_EN_PAR.has(anterior[0].codigo) &&
+      CODIGOS_EN_PAR.has(accion.codigo) &&
+      anterior[0].codigo !== accion.codigo &&
+      anterior[0].ejecucion_id === accion.ejecucion_id;
+    if (empareja) {
+      anterior.push(accion);
+    } else {
+      grupos.push([accion]);
+    }
+  }
+  return grupos;
 }
 
 function AccionUnica({
@@ -198,13 +244,23 @@ function FormularioAccion({
   ejecutar: EjecutorAcciones;
 }) {
   switch (accion.codigo) {
-    case "DEFINIR_REPARACION":
+    case "AGREGAR_DETALLE":
       return (
-        <FormularioDefinirReparacion
+        <FormularioAgregarDetalle
           tipos={tipos}
           cantidadDetallesActual={orden.reparaciones_detail.length}
+          detallesOrigen={[]}
           deshabilitado={deshabilitado}
-          onConfirmar={ejecutar.definirReparacion}
+          onConfirmar={(tipoId) => ejecutar.agregarDetalle(tipoId)}
+        />
+      );
+
+    case "FINALIZAR_DEFINICION":
+      return (
+        <FormularioFinalizarDefinicion
+          orden={orden}
+          deshabilitado={deshabilitado}
+          onConfirmar={ejecutar.finalizarDefinicion}
         />
       );
 
@@ -246,13 +302,22 @@ function FormularioAccion({
         />
       );
 
-    case "DEFINIR_REPARACION_DESDE_REVISION":
+    case "AGREGAR_DETALLE_DESDE_REVISION":
       return (
-        <FormularioDefinirReparacion
+        <FormularioAgregarDetalle
           tipos={tipos}
           cantidadDetallesActual={orden.reparaciones_detail.length}
+          detallesOrigen={orden.detalles_origen}
           deshabilitado={deshabilitado}
-          onConfirmar={ejecutar.definirReparacionDesdeRevision}
+          onConfirmar={ejecutar.agregarDetalleDesdeRevision}
+        />
+      );
+
+    case "FINALIZAR_SIN_REPARACION":
+      return (
+        <FormularioSinReparacion
+          deshabilitado={deshabilitado}
+          onConfirmar={ejecutar.finalizarSinReparacion}
         />
       );
 
@@ -292,6 +357,7 @@ function FormularioAccion({
     case "COMPLETAR_EJECUCION":
       return (
         <FormularioEjecucion
+          modo="completar"
           previstos={insumosPrevistosDe(orden, accion.ejecucion_id)}
           deshabilitado={deshabilitado || !accion.ejecucion_id}
           onConfirmar={(insumosUtilizados, observaciones) =>
@@ -308,9 +374,9 @@ function FormularioAccion({
     case "INTERRUMPIR_EJECUCION":
       return (
         <FormularioEjecucion
+          modo="interrumpir"
           previstos={insumosPrevistosDe(orden, accion.ejecucion_id)}
           deshabilitado={deshabilitado || !accion.ejecucion_id}
-          textoBoton="Interrumpir ejecución"
           onConfirmar={(insumosUtilizados, observaciones) =>
             accion.ejecucion_id &&
             ejecutar.interrumpirEjecucion(
@@ -325,10 +391,9 @@ function FormularioAccion({
     case "REQUIERE_REDEFINICION":
       return (
         <FormularioEjecucion
+          modo="redefinir"
           previstos={insumosPrevistosDe(orden, accion.ejecucion_id)}
           deshabilitado={deshabilitado || !accion.ejecucion_id}
-          textoBoton="Requiere redefinición"
-          pideMotivo
           onConfirmar={(insumosUtilizados, observaciones, motivo) =>
             accion.ejecucion_id &&
             ejecutar.requerirRedefinicion(
@@ -422,32 +487,13 @@ function FormularioAccion({
         </Boton>
       );
 
-    case "GENERAR_GARANTIA_RMA_REVISION":
+    case "INICIAR_GARANTIA_RMA":
       return (
-        <Boton
-          disabled={deshabilitado || accion.detalle_id === null}
-          onClick={() => {
-            if (accion.detalle_id !== null) {
-              ejecutar.generarGarantiaRmaEnRevision(accion.detalle_id);
-            }
-          }}
-        >
-          Generar garantía de {accion.detalle_id} para revisión
-        </Boton>
-      );
-
-    case "GENERAR_GARANTIA_RMA":
-      return (
-        <Boton
-          disabled={deshabilitado || accion.detalle_id === null}
-          onClick={() => {
-            if (accion.detalle_id !== null) {
-              ejecutar.generarGarantiaRma(accion.detalle_id);
-            }
-          }}
-        >
-          Generar garantía de {accion.detalle_id}
-        </Boton>
+        <FormularioGarantiaRma
+          orden={orden}
+          deshabilitado={deshabilitado}
+          onConfirmar={ejecutar.iniciarGarantiaRma}
+        />
       );
 
     case "DEVOLVER_RT":
@@ -469,76 +515,224 @@ function FormularioAccion({
 // --- Formularios --------------------------------------------------------
 
 /**
- * Definir Detalles de la reparación (Multi-Detalle).
+ * Agregar UN Detalle de la reparación (Multi-Detalle).
  *
- * "Finalizar la definición" viene tildado por defecto: con un solo
- * Detalle, confirmar se comporta exactamente como antes (agrega el
- * Detalle Y habilita la Orden en el mismo paso). Para cargar más de
- * uno, Recepción destilda la casilla en los Detalles que no son el
- * último — la Orden sigue en REQUERIMIENTO y el formulario se vuelve a
- * mostrar para el siguiente.
+ * Solo agrega: finalizar la definición es otra acción (otro botón), que
+ * el backend publica recién cuando hay al menos un Detalle. En una
+ * garantía RMA, luego de la revisión, se elige a cuál de los Detalles
+ * origen corresponde el nuevo (sin relación 1:1).
  */
-function FormularioDefinirReparacion({
+function FormularioAgregarDetalle({
   tipos,
   cantidadDetallesActual,
+  detallesOrigen,
   deshabilitado,
   onConfirmar,
 }: {
   tipos: TipoReparacion[];
   cantidadDetallesActual: number;
+  detallesOrigen: DetalleOrigen[];
   deshabilitado: boolean;
-  onConfirmar: (tipoReparacionId: string, finalizarDefinicion: boolean) => void;
+  onConfirmar: (tipoReparacionId: string, detalleOrigenId: string | null) => void;
 }) {
   const [tipoId, setTipoId] = useState(tipos[0]?.id ?? "");
-  const [finalizar, setFinalizar] = useState(true);
+  const [origenId, setOrigenId] = useState(detallesOrigen[0]?.id ?? "");
+  const pideOrigen = detallesOrigen.length > 0;
 
   return (
-    <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
-      <div style={{ flex: 1 }}>
-        <Campo
-          etiqueta={
-            cantidadDetallesActual > 0
-              ? `Tipo de reparación (Detalle ${cantidadDetallesActual + 1})`
-              : "Tipo de reparación"
-          }
-        >
+    <div>
+      {pideOrigen && (
+        <Campo etiqueta="Detalle origen de la garantía">
           <select
-            value={tipoId}
-            onChange={(evento) => setTipoId(evento.target.value)}
+            value={origenId}
+            onChange={(evento) => setOrigenId(evento.target.value)}
             disabled={deshabilitado}
             style={estiloInput}
           >
-            {tipos.map((tipo) => (
-              <option key={tipo.id} value={tipo.id}>
-                {tipo.nombre} — {tipo.precio}
+            {detallesOrigen.map((origen) => (
+              <option key={origen.id} value={origen.id}>
+                {origen.id} · {origen.tipo_reparacion_nombre}
               </option>
             ))}
           </select>
         </Campo>
+      )}
+      <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
+        <div style={{ flex: 1 }}>
+          <Campo
+            etiqueta={
+              cantidadDetallesActual > 0
+                ? `Tipo de reparación (Detalle ${cantidadDetallesActual + 1})`
+                : "Tipo de reparación"
+            }
+          >
+            <select
+              value={tipoId}
+              onChange={(evento) => setTipoId(evento.target.value)}
+              disabled={deshabilitado}
+              style={estiloInput}
+            >
+              {tipos.map((tipo) => (
+                <option key={tipo.id} value={tipo.id}>
+                  {tipo.nombre} — {tipo.precio}
+                </option>
+              ))}
+            </select>
+          </Campo>
+        </div>
+        <div style={{ marginBottom: "0.6rem" }}>
+          <Boton
+            disabled={deshabilitado || !tipoId || (pideOrigen && !origenId)}
+            onClick={() => onConfirmar(tipoId, pideOrigen ? origenId : null)}
+          >
+            Agregar Detalle
+          </Boton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Cierra la carga de Detalles. Muestra lo ya cargado para que Recepción
+ * confirme; comprobante, factibilidad y habilitación los resuelve el
+ * backend al finalizar.
+ */
+function FormularioFinalizarDefinicion({
+  orden,
+  deshabilitado,
+  onConfirmar,
+}: {
+  orden: Orden;
+  deshabilitado: boolean;
+  onConfirmar: () => void;
+}) {
+  return (
+    <div>
+      <p style={{ margin: "0 0 0.3rem", fontSize: "0.85rem" }}>
+        Detalles cargados ({orden.reparaciones_detail.length}):
+      </p>
+      <ul
+        style={{
+          margin: "0 0 0.6rem",
+          paddingLeft: "1.1rem",
+          fontSize: "0.85rem",
+          color: colores.suave,
+        }}
+      >
+        {orden.reparaciones_detail.map((detalle) => (
+          <li key={detalle.id}>
+            {detalle.id} · {detalle.tipo_reparacion_nombre} ·{" "}
+            {importe(detalle.precio)}
+          </li>
+        ))}
+      </ul>
+      <Boton disabled={deshabilitado} onClick={onConfirmar}>
+        Finalizar definición
+      </Boton>
+    </div>
+  );
+}
+
+/** PROC-REP-068 (No) -> 069: motivo obligatorio, observaciones opcionales. */
+function FormularioSinReparacion({
+  deshabilitado,
+  onConfirmar,
+}: {
+  deshabilitado: boolean;
+  onConfirmar: (motivo: string, observaciones: string) => void;
+}) {
+  const [motivo, setMotivo] = useState("");
+  const [observaciones, setObservaciones] = useState("");
+
+  return (
+    <div>
+      <Campo etiqueta="Motivo (obligatorio)">
+        <input
+          value={motivo}
+          onChange={(evento) => setMotivo(evento.target.value)}
+          disabled={deshabilitado}
+          style={estiloInput}
+        />
+      </Campo>
+      <Campo etiqueta="Observaciones">
+        <input
+          value={observaciones}
+          onChange={(evento) => setObservaciones(evento.target.value)}
+          disabled={deshabilitado}
+          style={estiloInput}
+        />
+      </Campo>
+      <Boton
+        disabled={deshabilitado || motivo.trim() === ""}
+        onClick={() => onConfirmar(motivo.trim(), observaciones.trim())}
+      >
+        Finalizar sin reparación
+      </Boton>
+    </div>
+  );
+}
+
+/**
+ * HP-REP-003: una única garantía RMA para 1..N Detalles de la Orden
+ * entregada. La revisión técnica es obligatoria: la Orden nueva nace en
+ * revisión y sus Detalles se definen después.
+ */
+function FormularioGarantiaRma({
+  orden,
+  deshabilitado,
+  onConfirmar,
+}: {
+  orden: Orden;
+  deshabilitado: boolean;
+  onConfirmar: (detalleOrigenIds: string[]) => void;
+}) {
+  const [elegidos, setElegidos] = useState<string[]>([]);
+
+  const alternar = (detalleId: string, marcado: boolean) =>
+    setElegidos((actuales) =>
+      marcado
+        ? [...actuales, detalleId]
+        : actuales.filter((id) => id !== detalleId),
+    );
+
+  return (
+    <div>
+      <p style={{ margin: "0 0 0.3rem", fontSize: "0.85rem" }}>
+        Detalles cubiertos por la garantía (al menos uno):
+      </p>
+      {orden.reparaciones_detail.map((detalle) => (
         <label
+          key={detalle.id}
           style={{
             display: "flex",
             alignItems: "center",
             gap: "0.4rem",
             fontSize: "0.85rem",
-            marginTop: "0.3rem",
+            marginBottom: "0.3rem",
           }}
         >
           <input
             type="checkbox"
-            checked={finalizar}
-            onChange={(evento) => setFinalizar(evento.target.checked)}
+            checked={elegidos.includes(detalle.id)}
+            onChange={(evento) => alternar(detalle.id, evento.target.checked)}
             disabled={deshabilitado}
           />
-          Finalizar la definición (habilita la Orden)
+          {detalle.id} · {detalle.tipo_reparacion_nombre}
         </label>
-      </div>
-      <div style={{ marginBottom: "0.6rem" }}>
+      ))}
+      <div style={{ marginTop: "0.4rem" }}>
         <Boton
-          disabled={deshabilitado || !tipoId}
-          onClick={() => onConfirmar(tipoId, finalizar)}
+          disabled={deshabilitado || elegidos.length === 0}
+          onClick={() =>
+            onConfirmar(
+              orden.reparaciones_detail
+                .map((detalle) => detalle.id)
+                .filter((id) => elegidos.includes(id)),
+            )
+          }
         >
-          Confirmar
+          Iniciar garantía RMA
         </Boton>
       </div>
     </div>
@@ -624,37 +818,70 @@ function FormularioPrioridad({
 }
 
 /**
+ * Salida de PROC-REP-200 que registra el formulario. Cada modo fija su
+ * propuesta inicial de cantidades:
+ *
+ * - completar:   lo previsto (el caso habitual es usar todo);
+ * - interrumpir: 0 (se registra solo lo realmente usado hasta ahora);
+ * - redefinir:   lo previsto, y exige un motivo (EXC-REP-004).
+ */
+type ModoEjecucion = "completar" | "interrumpir" | "redefinir";
+
+const MODOS_EJECUCION: Record<
+  ModoEjecucion,
+  {
+    textoBoton: string;
+    cantidadInicial: (previsto: InsumoPrevisto) => string;
+    pideMotivo: boolean;
+  }
+> = {
+  completar: {
+    textoBoton: "Completar ejecución",
+    cantidadInicial: (previsto) => previsto.cantidad_prevista,
+    pideMotivo: false,
+  },
+  interrumpir: {
+    textoBoton: "Interrumpir ejecución",
+    cantidadInicial: () => "0",
+    pideMotivo: false,
+  },
+  redefinir: {
+    textoBoton: "Requiere redefinición",
+    cantidadInicial: (previsto) => previsto.cantidad_prevista,
+    pideMotivo: true,
+  },
+};
+
+/**
  * PROC-REP-200: el técnico confirma o modifica lo realmente utilizado.
  *
- * Los insumos y sus cantidades vienen de la API (`insumos_previstos` del
- * Detalle). La UI propone la cantidad prevista y deja corregirla; si el
- * Detalle no prevé ninguno, se envía una lista vacía. Nunca inventa un
- * insumo ni conoce ningún ID de catálogo.
+ * Los insumos vienen de la API (`insumos_previstos` del Detalle). La UI
+ * propone una cantidad según el modo y deja corregirla; si el Detalle no
+ * prevé ninguno, se envía una lista vacía. Nunca inventa un insumo ni
+ * conoce ningún ID de catálogo.
  */
 function FormularioEjecucion({
+  modo,
   previstos,
   deshabilitado,
-  textoBoton = "Completar ejecución",
-  pideMotivo = false,
   onConfirmar,
 }: {
+  modo: ModoEjecucion;
   previstos: InsumoPrevisto[];
   deshabilitado: boolean;
-  textoBoton?: string;
-  /** EXC-REP-004: "Requiere redefinición" exige un motivo. */
-  pideMotivo?: boolean;
   onConfirmar: (
     insumosUtilizados: InsumoUtilizado[],
     observaciones: string,
     motivo: string,
   ) => void;
 }) {
+  const { textoBoton, cantidadInicial, pideMotivo } = MODOS_EJECUCION[modo];
   const [motivo, setMotivo] = useState("");
   const [cantidades, setCantidades] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       previstos.map((previsto) => [
         previsto.insumo_id,
-        previsto.cantidad_prevista,
+        cantidadInicial(previsto),
       ]),
     ),
   );
@@ -678,7 +905,7 @@ function FormularioEjecucion({
             color: colores.suave,
           }}
         >
-          Este Detalle no prevé insumos: se completará sin consumo.
+          Este Detalle no prevé insumos: se registrará sin consumo.
         </p>
       ) : (
         previstos.map((previsto) => (

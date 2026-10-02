@@ -10,11 +10,12 @@ se genera ningun PDF ni contenido.
 
 from datetime import datetime
 
-from app.domain.models import Documento, EstadoWorkflow, OrdenReparacion
+from app.domain.models import Documento, OrdenReparacion
 from app.domain.politicas import politica_de
 
 from .exceptions import PrecondicionInvalidaError
 from .pagos import condicion_entrega_cumplida
+from .revisiones import finalizada_sin_reparacion, lista_para_cierre
 from .workflow import registrar_paso
 
 
@@ -75,14 +76,15 @@ def generar_comprobante_final(
     Se genera DESPUES de que PROC-REP-265 confirma la condicion de
     entrega, para que el saldo informado sea el definitivo.
 
-    La garantia se emite unicamente si hubo reparacion. En el MVP
-    siempre la hay: SIN_REPARACION (PROC-REP-069, BR-REP-010) no esta
-    implementado.
+    La garantia de reparacion se emite unicamente si hubo reparacion: una
+    Orden SIN_REPARACION (PROC-REP-069, BR-REP-010) recibe el comprobante
+    final con Subtotal 0 y sin garantia.
     """
-    if orden.estado_workflow is not EstadoWorkflow.REPARACION_LISTA:
+    if not lista_para_cierre(orden):
         raise PrecondicionInvalidaError(
-            f"El comprobante final se emite sobre una Orden "
-            f"REPARACION_LISTA; esta en {orden.estado_workflow.value}."
+            f"El comprobante final se emite sobre una Orden con resultado "
+            f"(REPARACION_LISTA o SIN_REPARACION); esta en "
+            f"{orden.estado_workflow.value}."
         )
     if orden.current_process != "PROC-REP-265":
         raise PrecondicionInvalidaError(
@@ -96,19 +98,25 @@ def generar_comprobante_final(
             f"{orden.saldo}."
         )
 
+    sin_reparacion = finalizada_sin_reparacion(orden)
+    observacion = f"Total {orden.total} / Saldo {orden.saldo}"
+    if sin_reparacion:
+        observacion += " / SIN_REPARACION: sin garantia de reparacion"
+
     nueva_orden = registrar_paso(
         orden,
         process_id="PROC-REP-280",
         accion="GENERAR_COMPROBANTE_FINAL",
         fecha=fecha,
-        observacion=f"Total {orden.total} / Saldo {orden.saldo}",
+        observacion=observacion,
     )
     nueva_orden.documentos.comprobante_final = Documento(
         generado=True,
         fecha_generacion=fecha,
     )
-    nueva_orden.documentos.garantia_reparacion = Documento(
-        generado=True,
-        fecha_generacion=fecha,
-    )
+    if not sin_reparacion:
+        nueva_orden.documentos.garantia_reparacion = Documento(
+            generado=True,
+            fecha_generacion=fecha,
+        )
     return nueva_orden

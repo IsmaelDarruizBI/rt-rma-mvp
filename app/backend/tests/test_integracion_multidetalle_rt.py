@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
+from tests.fixtures.api_definicion import definir_y_finalizar
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     COORDINADOR,
@@ -50,8 +51,9 @@ TRAMO_TECNICO_HP2 = [
 
 def _recorrer_hp2_hasta_lista(cliente) -> str:
     orden_id = _crear_orden_rt(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
     cliente.post(
@@ -132,8 +134,9 @@ def test_progreso_rt_incluye_212_entre_180_y_181_y_consolida_puntaje(cliente):
 def test_hp2_conserva_acciones_multidetalle_con_toma_activa(cliente):
     """RT_INTERNO ofrece INICIAR_DETALLE por Detalle y LIBERAR_ORDEN."""
     orden_id = _crear_orden_rt(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
     cliente.post(
@@ -172,8 +175,9 @@ def test_pago_rt_409_y_cliente_externo_sigue_cobrando(cliente):
             },
         },
     ).json()
-    cliente.post(
-        f"/api/orders/{externa['id']}/details",
+    definir_y_finalizar(
+        cliente,
+        externa["id"],
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
     respuesta = cliente.post(

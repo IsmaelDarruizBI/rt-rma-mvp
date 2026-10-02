@@ -19,6 +19,10 @@ from app.domain.models import RolUsuario, Usuario
 from app.main import create_app
 from app.storage.json.base import escribir_json_atomico
 from tests import test_multidetalle as multi
+from tests.fixtures.api_definicion import (
+    definir_y_finalizar,
+    finalizar_definicion,
+)
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     COORDINADOR,
@@ -83,8 +87,9 @@ def _hasta_ejecucion(cliente, tecnico=TECNICO) -> tuple[str, str, str]:
             },
         },
     ).json()["id"]
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
     return _desde_cola(cliente, orden_id, tecnico)
@@ -339,8 +344,9 @@ def test_complete_conserva_su_contrato(cliente):
 
 def test_la_interrupcion_funciona_en_rt_interno(cliente):
     orden_id = _crear_orden_rt(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
     _, _, ejecucion_id = _desde_cola(cliente, orden_id)
@@ -354,10 +360,10 @@ def test_la_interrupcion_funciona_en_rt_interno(cliente):
 
 
 def test_la_interrupcion_funciona_en_garantia_rma(cliente):
-    from tests.test_api_hp_rep_003 import _generar_garantia, _orden_entregada
+    from tests.test_api_hp_rep_003 import _garantia_definida, _orden_entregada
 
     origen = _orden_entregada(cliente)
-    garantia = _generar_garantia(cliente, origen["id"], "DET-001").json()
+    garantia = _garantia_definida(cliente, origen["id"]).json()
     _, _, ejecucion_id = _desde_cola(cliente, garantia["id"])
 
     orden = _interrumpir(cliente, garantia["id"], ejecucion_id).json()
@@ -378,18 +384,15 @@ def test_multidetalle_interrumpir_uno_ofrece_los_trabajables(tmp_path):
 
     with TestClient(create_app(Settings(data_dir=tmp_path))) as cliente:
         orden_id = multi._crear_orden(cliente)
-        for tipo, final in (
-            (multi.TIPO_BATERIA, False),
-            (multi.TIPO_PANTALLA, True),
-        ):
+        for tipo in (multi.TIPO_BATERIA, multi.TIPO_PANTALLA):
             cliente.post(
                 f"/api/orders/{orden_id}/details",
                 json={
                     "usuario_id": multi.RECEPCION,
                     "tipo_reparacion_id": tipo,
-                    "finalizar_definicion": final,
                 },
             )
+        finalizar_definicion(cliente, orden_id, multi.RECEPCION)
         cliente.post(
             f"/api/orders/{orden_id}/queue",
             json={"usuario_id": multi.COORDINADOR, "prioridad": 1},

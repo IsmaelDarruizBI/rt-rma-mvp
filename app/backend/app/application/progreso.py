@@ -9,9 +9,10 @@ dentro de su recorrido de referencia.
 
 La ruta de referencia esta declarada por Origen en ``_RUTAS_POR_ORIGEN``:
 un dato explicito, no un interprete del Process Graph. CLIENTE_EXTERNO
-(HP-REP-001) y RT_INTERNO (HP-REP-002) tienen su propia ruta poblada;
-agregar la de HP-REP-003 en un slice futuro es agregar una entrada a
-este dict, sin tocar ``progreso()``.
+(HP-REP-001), RT_INTERNO (HP-REP-002) y RMA_GARANTIA_REPARACION
+(HP-REP-003) tienen su propia ruta poblada. Las variantes y excepciones
+se intercalan por evidencia real del historial, nunca por un id de
+Scenario guardado en la Orden.
 """
 
 from dataclasses import dataclass
@@ -59,15 +60,20 @@ _RUTA_CLIENTE_EXTERNO: tuple[tuple[str, str], ...] = (
 
 # Nodos de HP-REP-003 (RMA_GARANTIA_REPARACION), en el orden en que el
 # escenario los recorre. Parte de PROC-REP-035 (la Orden nace de una
-# Orden origen ENTREGADA: no hay 010 ni 030) y, como todo Origen con
-# entrega a cliente, recorre PROC-REP-265 pero nunca 266 (NO_COBRABLE).
+# Orden origen ENTREGADA: no hay 010 ni 030), la revision tecnica es
+# obligatoria (045 "No" -> 055 ... 065 -> 068 -> 075, BR-REP-019) y, como
+# todo Origen con entrega a cliente, recorre PROC-REP-265 pero nunca 266
+# (NO_COBRABLE).
 _RUTA_RMA_GARANTIA_REPARACION: tuple[tuple[str, str], ...] = (
     ("PROC-REP-035", "Identificar reparacion original en garantia"),
     ("PROC-REP-040", "Crear Orden"),
     ("PROC-REP-045", "Detalles conocidos"),
-    ("PROC-REP-070", "Definir Detalles"),
+    ("PROC-REP-055", "Marcar Orden en revision"),
     ("PROC-REP-050", "Requiere comprobante de recepcion"),
     ("PROC-REP-060", "Generar comprobante de recepcion"),
+    ("PROC-REP-065", "Realizar revision tecnica"),
+    ("PROC-REP-068", "Se pudo definir la reparacion requerida"),
+    ("PROC-REP-075", "Definir Detalles luego de revision"),
     ("PROC-REP-080", "Validar factibilidad"),
     ("PROC-REP-090", "Existe Detalle trabajable"),
     ("PROC-REP-140", "Habilitar Orden"),
@@ -131,8 +137,7 @@ _RUTA_RT_INTERNO: tuple[tuple[str, str], ...] = (
     ("EVT-REP-999", "Proceso finalizado"),
 )
 
-# Ruta de referencia por Origen. RMA_GARANTIA_REPARACION se agrega
-# cuando HP-REP-003 tenga su propio recorrido conectado.
+# Ruta de referencia por Origen.
 _RUTAS_POR_ORIGEN: dict[OrigenOrden, tuple[tuple[str, str], ...]] = {
     OrigenOrden.CLIENTE_EXTERNO: _RUTA_CLIENTE_EXTERNO,
     OrigenOrden.RT_INTERNO: _RUTA_RT_INTERNO,
@@ -245,8 +250,11 @@ def _con_revision(
 
     PROC-REP-045 "No" reemplaza PROC-REP-070 por 055, y entre el
     comprobante (050 [-> 060]) y 080 se intercala 065 -> 068 -> 075. De
-    080 en adelante converge con la ruta original.
+    080 en adelante converge con la ruta original. Una ruta que ya pasa
+    por revision (HP-REP-003) se devuelve tal cual.
     """
+    if any(process_id == "PROC-REP-055" for process_id, _ in ruta):
+        return ruta
     resultado: list[tuple[str, str]] = []
     for nodo in ruta:
         process_id = nodo[0]
@@ -267,6 +275,31 @@ _TRAMO_REVISION: tuple[tuple[str, str], ...] = (
 )
 
 
+_NODO_SIN_REPARACION = ("PROC-REP-069", "Finalizar sin reparacion")
+
+
+def _sin_reparacion(
+    ruta: tuple[tuple[str, str], ...],
+) -> tuple[tuple[str, str], ...]:
+    """PROC-REP-068 "No" -> 069 -> 250 (SIN_REPARACION, BR-REP-010).
+
+    Sin Detalles no hay definicion, factibilidad, cola, taller ni control:
+    de 069 la ruta salta directo al cierre por Origen (250 en adelante).
+    """
+    resultado: list[tuple[str, str]] = []
+    saltando = False
+    for nodo in ruta:
+        if nodo[0] == "PROC-REP-250":
+            saltando = False
+        if saltando:
+            continue
+        resultado.append(nodo)
+        if nodo[0] == "PROC-REP-068":
+            resultado.append(_NODO_SIN_REPARACION)
+            saltando = True
+    return tuple(resultado)
+
+
 def _ruta_esperada(orden: OrdenReparacion) -> tuple[tuple[str, str], ...]:
     """Ruta de referencia para mostrar el progreso de esta Orden.
 
@@ -280,6 +313,8 @@ def _ruta_esperada(orden: OrdenReparacion) -> tuple[tuple[str, str], ...]:
     alcanzados = nodos_alcanzados(orden)
     if "PROC-REP-055" in alcanzados:
         ruta = _con_revision(ruta)
+    if "PROC-REP-069" in alcanzados:
+        return _sin_reparacion(ruta)
     if "PROC-REP-100" in alcanzados:
         ruta = _con_espera_de_recursos(
             ruta, con_override="PROC-REP-130" in alcanzados

@@ -25,6 +25,7 @@ from app.domain.models import (
 )
 from app.main import create_app
 from app.storage.json.base import escribir_json_atomico
+from tests.fixtures.api_definicion import definir_y_finalizar
 
 RECEPCION = "RECEP-001"
 COORDINADOR = "COORD-001"
@@ -135,8 +136,9 @@ def test_hp_rep_002_end_to_end_por_http(cliente):
     orden_id = _crear_orden_rt(cliente)
 
     # PROC-REP-045 -> 070 -> 050 (No) -> 080 -> 090 -> 140
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/details",
+    respuesta = definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
     assert respuesta.status_code == 200, respuesta.text
@@ -292,8 +294,9 @@ def test_cliente_externo_sigue_funcionando_igual_junto_a_rt_interno(cliente):
     assert orden["cliente"]["nombre"] == "Cliente de Prueba"
     assert orden["resumen"]["condicion_comercial"] == "COBRABLE"
 
-    orden = cliente.post(
-        f"/api/orders/{orden['id']}/details",
+    orden = definir_y_finalizar(
+        cliente,
+        orden["id"],
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     ).json()
     assert orden["documentos"]["comprobante_recepcion"]["generado"] is True
@@ -309,8 +312,9 @@ def test_listado_muestra_referencia_rt_cuando_no_hay_cliente(cliente):
 
 def _hasta_reparacion_lista_rt(cliente: TestClient) -> str:
     orden_id = _crear_orden_rt(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
     cliente.post(
@@ -374,8 +378,9 @@ def test_registrar_pago_cliente_externo_no_se_ve_afectado(cliente):
         },
     ).json()
     orden_id = respuesta["id"]
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
+    definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )
 

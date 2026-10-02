@@ -228,7 +228,7 @@ check("2) el trigger es garantia sobre una reparacion anterior (EVT-REP-002, no 
   assert.equal(order[0], "EVT-REP-002");
   assert.ok(!order.includes("EVT-REP-001"));
   assert.match(nodeById.get("EVT-REP-002")?.name ?? "", /garantia/i);
-  assert.match(desc("EVT-REP-002"), /Generar garantia/);
+  assert.match(desc("EVT-REP-002"), /Iniciar garantia RMA/);
   // entry point: no incoming edges; converges into PROC-REP-035
   assert.ok(!processModel.edges.some((edge) => edge.to === "EVT-REP-002"));
   assert.ok(processModel.edges.some((edge) => edge.from === "EVT-REP-002" && edge.to === "PROC-REP-035"));
@@ -243,11 +243,11 @@ check("3) se identifica la Orden anterior (PROC-REP-035, Orden origen finalizada
   assert.equal(factOf(real("HP-REP-003"), "origin_order_finished"), true);
 });
 
-check("4) se identifica/referencia el Detalle origen (035 output, 070 + BR-REP-019)", () => {
+check("4) se identifica/referencia el Detalle origen (035 output, 075 + BR-REP-019)", () => {
   const node = nodeById.get("PROC-REP-035");
   assert.ok((node?.outputs ?? []).some((output) => /Detalle\(s\) origen/.test(output)));
-  assert.ok((nodeById.get("PROC-REP-070")?.rules ?? []).includes("BR-REP-019"));
-  assert.match(desc("PROC-REP-070"), /Detalle origen/);
+  assert.ok((nodeById.get("PROC-REP-075")?.rules ?? []).includes("BR-REP-019"));
+  assert.match(desc("PROC-REP-075"), /Detalle origen/);
   assert.match(ruleText("BR-REP-019"), /Detalle original/);
   assert.equal(factOf(real("HP-REP-003"), "origin_detail_identified"), true);
   assert.equal(expectedOf(real("HP-REP-003"), "new_detail_linked_to_origin_detail"), true);
@@ -319,11 +319,25 @@ check("11b) la condicion de entrega se aprueba por origen NO_COBRABLE: sin saldo
   assert.match(ruleText("BR-REP-017"), /mismo gate de condicion de entrega/);
 });
 
-check("12) mantiene price snapshot (070) sin que implique pago", () => {
-  assert.ok(traversedNodes(real("HP-REP-003")).has("PROC-REP-070"));
+check("12) mantiene price snapshot (075) sin que implique pago", () => {
+  assert.ok(traversedNodes(real("HP-REP-003")).has("PROC-REP-075"));
   assert.equal(factOf(real("HP-REP-003"), "price_snapshot_registered"), true);
   assert.equal(factOf(real("HP-REP-003"), "payment_required"), false);
-  assert.match(desc("PROC-REP-070"), /precio registrado no implica/i);
+  assert.match(desc("PROC-REP-075"), /precio registrado no implica/i);
+});
+
+check("12b) la revision tecnica es obligatoria: 045 No -> 055 -> ... -> 065 -> 068 Si -> 075, nunca 070", () => {
+  const scenario = real("HP-REP-003");
+  const order = orderOf(scenario);
+  for (const node of ["PROC-REP-055", "PROC-REP-065", "PROC-REP-068", "PROC-REP-075"]) {
+    assert.ok(order.includes(node), node);
+  }
+  assert.ok(!traversedNodes(scenario).has("PROC-REP-070"), "no copia el Tipo origen por 070");
+  assert.ok(order.indexOf("PROC-REP-065") < order.indexOf("PROC-REP-075"));
+  assert.equal(factOf(scenario, "details_known_at_intake"), false);
+  assert.equal(factOf(scenario, "technical_review_required"), true);
+  assert.equal(expectedOf(scenario, "technical_review_completed"), true);
+  assert.match(ruleText("BR-REP-019"), /revision tecnica/);
 });
 
 check("13) recorre notificacion al cliente (260)", () => {
@@ -389,19 +403,20 @@ check("Features activas de HP-REP-003 = 001..008 (sin 009), con razones reales",
   const { activeFeatureIds, activationReasons } = deriveScenarioFeatures(featuresModel, real("HP-REP-003"));
   assert.deepEqual(activeFeatureIds, [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `FEAT-REP-00${n}`));
   assert.ok(activationReasons["FEAT-REP-001"].some((r) => r.includes("PROC-REP-035")));
-  // FEAT-REP-007: own node 265 (delivery-condition gate) plus shared ALWAYS nodes (070, 280); never its own 266
+  // FEAT-REP-007: own node 265 (delivery-condition gate) plus shared ALWAYS nodes (075, 280); never its own 266.
+  // La garantia RMA define sus Detalles luego de la revision obligatoria (075), nunca por 070.
   const r7 = activationReasons["FEAT-REP-007"];
   assert.ok(r7.some((r) => r.includes("nodo propio PROC-REP-265")));
-  assert.ok(r7.some((r) => r.includes("PROC-REP-070") && r.includes("(ALWAYS)")));
+  assert.ok(r7.some((r) => r.includes("PROC-REP-075") && r.includes("(ALWAYS)")));
   assert.ok(r7.some((r) => r.includes("PROC-REP-280") && r.includes("(ALWAYS)")));
   assert.ok(!r7.some((r) => r.includes("PROC-REP-266")));
 });
 
-check("HP-REP-003 converge con HP-REP-001 desde PROC-REP-040 (mismo circuito tecnico)", () => {
+check("HP-REP-003 converge con HP-REP-001 desde PROC-REP-080 (tras la revision obligatoria)", () => {
   const a = orderOf(real("HP-REP-001"));
   const b = orderOf(real("HP-REP-003"));
   const tail = (o: string[], from: string, to: string): string[] => o.slice(o.indexOf(from), o.indexOf(to) + 1);
-  assert.deepEqual(tail(b, "PROC-REP-040", "PROC-REP-260"), tail(a, "PROC-REP-040", "PROC-REP-260"));
+  assert.deepEqual(tail(b, "PROC-REP-080", "PROC-REP-260"), tail(a, "PROC-REP-080", "PROC-REP-260"));
 });
 
 console.log("\nCasos negativos del validador\n");
@@ -618,11 +633,12 @@ check("VAR-REP-001/002 son la misma trayectoria de negocio (EN_REVISION al ingre
   assert.equal(real("VAR-REP-002").trigger?.node, "PROC-REP-045");
   assert.ok(traversedNodes(real("VAR-REP-001")).has("PROC-REP-060"), "con comprobante pasa por 060");
   assert.ok(!traversedNodes(real("VAR-REP-002")).has("PROC-REP-060"), "sin comprobante (RT_INTERNO) no pasa por 060");
-  assert.deepEqual(real("VAR-REP-001").applies_to, ["HP-REP-001", "HP-REP-003"]);
+  // En HP-REP-003 la revision es obligatoria (BR-REP-019): VAR-REP-001 ya no aplica a la garantia RMA.
+  assert.deepEqual(real("VAR-REP-001").applies_to, ["HP-REP-001"]);
   assert.deepEqual(real("VAR-REP-002").applies_to, ["HP-REP-002"]);
 });
 
-check("SIN_REPARACION tras EN_REVISION (CAND-REP-010/017) NO esta en el scope de MVP v2", () => {
+check("SIN_REPARACION tras EN_REVISION (CAND-REP-010/017) no es un Scenario propio: es el desenlace 068 No -> 069 de la revision (FEAT-REP-002)", () => {
   for (const id of [...MVP_V2_VARIANT_IDS, ...MVP_V2_EXCEPTION_IDS]) {
     assert.ok(!traversedNodes(real(id)).has("PROC-REP-069"), `${id} no deberia llegar a PROC-REP-069 (SIN_REPARACION)`);
   }

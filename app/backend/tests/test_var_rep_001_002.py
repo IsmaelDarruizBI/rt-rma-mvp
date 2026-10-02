@@ -55,7 +55,7 @@ def _garantia() -> OrdenReparacion:
     return crear_orden_garantia_rma(
         orden_id="OR-002",
         orden_origen=flujo_mvp.orden_entregada(),
-        detalle_origen_id="DET-001",
+        detalle_origen_ids=["DET-001"],
         usuario=RECEPCION,
         fecha=t(300),
     )
@@ -259,15 +259,27 @@ def test_un_origen_que_no_es_garantia_no_admite_detalle_origen():
 
 def test_acciones_a_lo_largo_de_la_revision():
     orden = flujo_mvp.orden_creada()
-    assert _codigos(orden) == ["DEFINIR_REPARACION", "ENVIAR_A_REVISION"]
+    assert _codigos(orden) == ["AGREGAR_DETALLE", "ENVIAR_A_REVISION"]
 
     orden = _en_revision(orden)
     assert _codigos(orden) == ["REALIZAR_REVISION"]
     assert acciones_disponibles(orden)[0].roles == (TECNICO.rol,)
 
+    # Sin Detalles: agregar uno o concluir SIN_REPARACION (068 No -> 069).
     orden = _revisada(flujo_mvp.orden_creada())
-    assert _codigos(orden) == ["DEFINIR_REPARACION_DESDE_REVISION"]
-    assert acciones_disponibles(orden)[0].roles == (RECEPCION.rol,)
+    assert _codigos(orden) == [
+        "AGREGAR_DETALLE_DESDE_REVISION",
+        "FINALIZAR_SIN_REPARACION",
+    ]
+    assert {a.roles for a in acciones_disponibles(orden)} == {(RECEPCION.rol,)}
+
+    # Con al menos un Detalle: agregar otro o finalizar la definicion.
+    orden = _definir(orden)
+    assert _codigos(orden) == [
+        "AGREGAR_DETALLE_DESDE_REVISION",
+        "FINALIZAR_DEFINICION",
+        "REGISTRAR_PAGO",
+    ]
 
 
 def test_enviar_a_revision_no_se_ofrece_con_detalles_ya_definidos():
@@ -284,20 +296,17 @@ def test_enviar_a_revision_no_se_ofrece_con_detalles_ya_definidos():
 
 def test_rt_en_revision_ofrece_las_mismas_acciones_sin_garantia():
     orden = flujo_rt.orden_rt_creada()
-    assert _codigos(orden) == ["DEFINIR_REPARACION", "ENVIAR_A_REVISION"]
+    assert _codigos(orden) == ["AGREGAR_DETALLE", "ENVIAR_A_REVISION"]
 
     orden = _en_revision(orden)
     assert _codigos(orden) == ["REALIZAR_REVISION"]
-    assert "GENERAR_GARANTIA_RMA_REVISION" not in _codigos(
-        flujo_rt.orden_rt_devuelta()
-    )
+    assert "INICIAR_GARANTIA_RMA" not in _codigos(flujo_rt.orden_rt_devuelta())
 
 
-def test_orden_entregada_publica_ambas_garantias_y_nada_mas():
-    assert _codigos(flujo_mvp.orden_entregada()) == [
-        "GENERAR_GARANTIA_RMA",
-        "GENERAR_GARANTIA_RMA_REVISION",
-    ]
+def test_orden_entregada_publica_solo_iniciar_garantia():
+    # Ya no hay una garantia "directa" y otra "para revision": la revision
+    # es obligatoria (BR-REP-019) y hay una sola accion de Orden.
+    assert _codigos(flujo_mvp.orden_entregada()) == ["INICIAR_GARANTIA_RMA"]
 
 
 # --- Progreso -------------------------------------------------------------

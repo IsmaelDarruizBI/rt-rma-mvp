@@ -65,22 +65,32 @@ export function crearOrdenRt(datos: DatosNuevaOrdenRt): Promise<Orden> {
 }
 
 /**
- * PROC-REP-045 -> 070 y, si `finalizarDefinicion` (default `true`),
- * también 050 -> 060 -> 080 -> 090 -> 140 (Recepción).
- *
- * Con `finalizarDefinicion=false` (Multi-Detalle) agrega el Detalle sin
- * habilitar la Orden todavía, para poder definir más de uno.
+ * PROC-REP-045 -> 070 (Recepción): agrega UN Detalle. No genera el
+ * comprobante, no valida factibilidad ni habilita: eso es
+ * `finalizarDefinicion`.
  */
 export function definirReparacion(
   ordenId: string,
   usuarioId: string,
   tipoReparacionId: string,
-  finalizarDefinicion = true,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/details`, {
     usuario_id: usuarioId,
     tipo_reparacion_id: tipoReparacionId,
-    finalizar_definicion: finalizarDefinicion,
+  });
+}
+
+/**
+ * Cierra la carga de Detalles (Recepción): [050 -> 060] -> 080 -> 090 ->
+ * 140 | 100. Exige al menos un Detalle; en el camino de revisión no
+ * regenera el comprobante.
+ */
+export function finalizarDefinicion(
+  ordenId: string,
+  usuarioId: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/definition/finalize`, {
+    usuario_id: usuarioId,
   });
 }
 
@@ -283,35 +293,20 @@ export function informarRt(ordenId: string): Promise<Orden> {
 }
 
 /**
- * PROC-REP-035 -> 040 -> 045 -> 070 -> 050 -> 060 -> 080 -> 090 -> 140
- * (Recepción, HP-REP-003). Devuelve la NUEVA Orden de garantía RMA; la
- * Orden origen no se modifica.
- */
-export function generarGarantiaRma(
-  ordenOrigenId: string,
-  detalleOrigenId: string,
-  usuarioId: string,
-): Promise<Orden> {
-  return post<Orden>(
-    `/api/orders/${ordenOrigenId}/details/${detalleOrigenId}/warranty-rma`,
-    { usuario_id: usuarioId },
-  );
-}
-
-/**
  * PROC-REP-035 -> 040 -> 045 (No) -> 055 -> 050 -> 060 (Recepción,
- * VAR-REP-001). Devuelve la NUEVA Orden de garantía, EN_REVISION y sin
- * Detalles.
+ * HP-REP-003). Una única garantía para 1..N Detalles de la Orden origen
+ * ENTREGADA. Devuelve la NUEVA Orden, EN_REVISION y sin Detalles: la
+ * revisión técnica es obligatoria. La Orden origen no se modifica.
  */
-export function generarGarantiaRmaEnRevision(
+export function iniciarGarantiaRma(
   ordenOrigenId: string,
-  detalleOrigenId: string,
   usuarioId: string,
+  detalleOrigenIds: string[],
 ): Promise<Orden> {
-  return post<Orden>(
-    `/api/orders/${ordenOrigenId}/details/${detalleOrigenId}/warranty-rma/review`,
-    { usuario_id: usuarioId },
-  );
+  return post<Orden>(`/api/orders/${ordenOrigenId}/warranty-rma`, {
+    usuario_id: usuarioId,
+    detalle_origen_ids: detalleOrigenIds,
+  });
 }
 
 /** PROC-REP-045 (No) -> 055 -> 050 [-> 060] (Recepción, VAR-REP-001/002). */
@@ -337,19 +332,38 @@ export function realizarRevision(
 }
 
 /**
- * PROC-REP-068 (Sí) -> 075 y, con `finalizarDefinicion`, 080 -> 090 ->
- * 140 (Recepción). No repite el comprobante.
+ * PROC-REP-068 (Sí) -> 075 (Recepción): agrega UN Detalle luego de la
+ * revisión. En una garantía RMA, `detalleOrigenId` indica a cuál de sus
+ * Detalles origen corresponde (`null` fuera de una garantía).
  */
 export function definirReparacionDesdeRevision(
   ordenId: string,
   usuarioId: string,
   tipoReparacionId: string,
-  finalizarDefinicion = true,
+  detalleOrigenId: string | null,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/review/details`, {
     usuario_id: usuarioId,
     tipo_reparacion_id: tipoReparacionId,
-    finalizar_definicion: finalizarDefinicion,
+    detalle_origen_id: detalleOrigenId,
+  });
+}
+
+/**
+ * PROC-REP-068 (No) -> 069 (Recepción): la revisión concluye
+ * SIN_REPARACION. El motivo es obligatorio. El cierre sigue según el
+ * Origen (notificar o informar a Gestión RT).
+ */
+export function finalizarSinReparacion(
+  ordenId: string,
+  usuarioId: string,
+  motivo: string,
+  observaciones: string | null,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/review/without-repair`, {
+    usuario_id: usuarioId,
+    motivo,
+    observaciones,
   });
 }
 
@@ -362,9 +376,11 @@ export function esperarRecursos(ordenId: string): Promise<Orden> {
 }
 
 /**
- * PROC-REP-110 (Sí) -> 130 -> 140 (Coordinador RMA, EXC-REP-002): fuerza UN
- * Detalle bloqueado por recursos. El motivo es obligatorio. Solo registra la
- * autorización: no reserva ni descuenta stock.
+ * Override de recursos de UN Detalle bloqueado (Coordinador RMA,
+ * BR-REP-003): capacidad transversal, también con factibilidad parcial.
+ * Solo con la Orden detenida en PROC-REP-100 continúa 110 (Sí) -> 130 ->
+ * 140. El motivo es obligatorio. Solo registra la autorización: no
+ * reserva ni descuenta stock.
  */
 export function overrideRecursos(
   ordenId: string,

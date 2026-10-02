@@ -2,9 +2,11 @@
 
     HTTP -> router -> application -> services -> repositories -> JSON
 
-VAR-REP-001 aplica a CLIENTE_EXTERNO y RMA_GARANTIA_REPARACION (con
-comprobante); VAR-REP-002 a RT_INTERNO (sin comprobante). La diferencia
-sale solo de ``PoliticaOrigen.requiere_comprobante_recepcion``.
+VAR-REP-001 aplica a CLIENTE_EXTERNO (con comprobante); VAR-REP-002 a
+RT_INTERNO (sin comprobante). La diferencia sale solo de
+``PoliticaOrigen.requiere_comprobante_recepcion``. En una garantia RMA la
+revision es obligatoria y forma parte de HP-REP-003
+(``test_api_hp_rep_003.py``).
 """
 
 from decimal import Decimal
@@ -16,6 +18,10 @@ from app.core.config import Settings
 from app.domain.models import TipoReparacion
 from app.main import create_app
 from app.storage.json.base import escribir_json_atomico
+from tests.fixtures.api_definicion import (
+    definir_desde_revision_y_finalizar,
+    definir_y_finalizar,
+)
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     COORDINADOR,
@@ -25,11 +31,7 @@ from tests.test_api_hp_rep_002 import (
     _crear_orden_rt,
     _sembrar_catalogos,
 )
-from tests.test_api_hp_rep_003 import (
-    _circuito_tecnico,
-    _generar_garantia,
-    _orden_entregada,
-)
+from tests.test_api_hp_rep_003 import _circuito_tecnico
 
 
 @pytest.fixture
@@ -69,14 +71,20 @@ def _revisar(cliente, orden_id, usuario=TECNICO, resultado="Falla de placa."):
     )
 
 
-def _definir(cliente, orden_id, usuario=RECEPCION, tipo=TIPO, final=True):
+def _agregar(cliente, orden_id, usuario=RECEPCION, tipo=TIPO):
+    """Agrega UN Detalle luego de la revision (068 Si -> 075)."""
     return cliente.post(
         f"/api/orders/{orden_id}/review/details",
-        json={
-            "usuario_id": usuario,
-            "tipo_reparacion_id": tipo,
-            "finalizar_definicion": final,
-        },
+        json={"usuario_id": usuario, "tipo_reparacion_id": tipo},
+    )
+
+
+def _definir(cliente, orden_id, usuario=RECEPCION, tipo=TIPO):
+    """Agrega UN Detalle luego de la revision y finaliza la definicion."""
+    return definir_desde_revision_y_finalizar(
+        cliente,
+        orden_id,
+        json={"usuario_id": usuario, "tipo_reparacion_id": tipo},
     )
 
 
@@ -94,7 +102,7 @@ def _codigos(orden: dict) -> list[str]:
 def test_var_rep_001_cliente_externo_de_punta_a_punta(cliente):
     orden_id = _crear_orden(cliente)
     assert _codigos(cliente.get(f"/api/orders/{orden_id}").json()) == [
-        "DEFINIR_REPARACION",
+        "AGREGAR_DETALLE",
         "ENVIAR_A_REVISION",
     ]
 
@@ -128,9 +136,12 @@ def test_var_rep_001_cliente_externo_de_punta_a_punta(cliente):
     assert paso_065["usuario_id"] == TECNICO
     assert paso_065["observacion"] == "Placa danada."
     assert orden["estado_workflow"] == "EN_REVISION"
-    assert _codigos(orden) == ["DEFINIR_REPARACION_DESDE_REVISION"]
+    assert _codigos(orden) == [
+        "AGREGAR_DETALLE_DESDE_REVISION",
+        "FINALIZAR_SIN_REPARACION",
+    ]
 
-    # 068 Si -> 075 -> 080 -> 090 -> 140 (sin 050/060 otra vez)
+    # 068 Si -> 075, y al finalizar 080 -> 090 -> 140 (sin 050/060 otra vez)
     respuesta = _definir(cliente, orden_id)
     assert respuesta.status_code == 200, respuesta.text
     orden = respuesta.json()
@@ -223,85 +234,6 @@ def test_var_rep_002_rt_interno_sin_comprobante(cliente):
     assert orden["current_process"] == "EVT-REP-999"
 
 
-# --- RMA_GARANTIA_REPARACION en revision --------------------------------
-
-
-def test_garantia_rma_en_revision_de_punta_a_punta(cliente, tmp_path):
-    origen = _orden_entregada(cliente)
-    origen_id = origen["id"]
-    foto_origen = cliente.get(f"/api/orders/{origen_id}").json()
-
-    respuesta = cliente.post(
-        f"/api/orders/{origen_id}/details/DET-001/warranty-rma/review",
-        json={"usuario_id": RECEPCION},
-    )
-    assert respuesta.status_code == 201, respuesta.text
-    orden = respuesta.json()
-    orden_id = orden["id"]
-
-    assert orden_id != origen_id
-    assert orden["origen"] == "RMA_GARANTIA_REPARACION"
-    assert orden["estado_workflow"] == "EN_REVISION"
-    assert orden["orden_origen_id"] == origen_id
-    assert orden["detalles_origen_ids"] == ["DET-001"]
-    assert orden["reparaciones_detail"] == []
-    assert orden["pagos"] == []
-    assert orden["cliente"] == origen["cliente"]
-    assert _ids(orden) == [
-        "PROC-REP-035",
-        "PROC-REP-040",
-        "PROC-REP-045",
-        "PROC-REP-055",
-        "PROC-REP-050",
-        "PROC-REP-060",
-    ]
-    assert orden["documentos"]["comprobante_recepcion"]["generado"] is True
-    assert cliente.get(f"/api/orders/{origen_id}").json() == foto_origen
-
-    # El catalogo cambia ANTES de PROC-REP-075: el Detalle toma el
-    # snapshot vigente, no el del Detalle historico.
-    escribir_json_atomico(
-        tmp_path / "catalogs" / "tipos_reparacion.json",
-        [
-            TipoReparacion(
-                id=TIPO,
-                nombre="Cambio bateria iPhone 14",
-                precio=Decimal("95000"),
-                puntaje=12,
-                garantia_dias=120,
-            ).model_dump(mode="json")
-        ],
-    )
-
-    assert _revisar(cliente, orden_id).status_code == 200
-    orden = _definir(cliente, orden_id).json()
-    assert orden["estado_workflow"] == "HABILITADA"
-    (detalle,) = orden["reparaciones_detail"]
-    assert detalle["detalle_origen_id"] == "DET-001"
-    assert Decimal(detalle["precio"]) == Decimal("95000")
-    assert detalle["puntaje"] == 12
-    assert detalle["garantia_dias"] == 120
-    assert origen["reparaciones_detail"][0]["precio"] == "80000"
-    assert "PROC-REP-070" not in _ids(orden)
-    assert _ids(orden).count("PROC-REP-060") == 1
-    assert orden["detalles_origen_ids"] == ["DET-001"]
-    assert cliente.get(f"/api/orders/{origen_id}").json() == foto_origen
-
-    # Converge con el circuito de garantia directa (NO_COBRABLE).
-    orden = _circuito_tecnico(cliente, orden_id)
-    assert orden["resumen"]["condicion_comercial"] == "NO_COBRABLE"
-    assert "REGISTRAR_PAGO" not in _codigos(orden)
-
-
-def test_garantia_directa_completa_detalles_origen_ids(cliente):
-    origen = _orden_entregada(cliente)
-    orden = _generar_garantia(cliente, origen["id"], "DET-001").json()
-
-    assert orden["detalles_origen_ids"] == ["DET-001"]
-    assert orden["reparaciones_detail"][0]["detalle_origen_id"] == "DET-001"
-    assert "PROC-REP-055" not in _ids(orden)
-
-
 # --- Multi-Detalle luego de revision -----------------------------------
 
 
@@ -310,15 +242,19 @@ def test_multidetalle_luego_de_revision(cliente):
     _enviar(cliente, orden_id)
     _revisar(cliente, orden_id)
 
-    orden = _definir(cliente, orden_id, final=False).json()
+    orden = _agregar(cliente, orden_id).json()
     assert orden["estado_workflow"] == "EN_REVISION"
+    # Con un Detalle ya no se ofrece SIN_REPARACION: se agrega otro o se
+    # finaliza la definicion.
     assert _codigos(orden) == [
-        "DEFINIR_REPARACION_DESDE_REVISION",
+        "AGREGAR_DETALLE_DESDE_REVISION",
+        "FINALIZAR_DEFINICION",
         "REGISTRAR_PAGO",
     ]
     assert _ids(orden)[-2:] == ["PROC-REP-068", "PROC-REP-075"]
+    assert "PROC-REP-080" not in _ids(orden)
 
-    orden = _definir(cliente, orden_id, final=True).json()
+    orden = _definir(cliente, orden_id).json()
     assert orden["estado_workflow"] == "HABILITADA"
     assert [d["id"] for d in orden["reparaciones_detail"]] == [
         "DET-001",
@@ -356,17 +292,6 @@ def test_definir_desde_revision_solo_recepcion(cliente, usuario):
     assert _definir(cliente, orden_id, usuario).status_code == 409
 
 
-@pytest.mark.parametrize("usuario", [TECNICO, COORDINADOR, ADMINISTRADOR])
-def test_garantia_en_revision_solo_recepcion(cliente, usuario):
-    origen = _orden_entregada(cliente)
-    respuesta = cliente.post(
-        f"/api/orders/{origen['id']}/details/DET-001/warranty-rma/review",
-        json={"usuario_id": usuario},
-    )
-    assert respuesta.status_code == 409, respuesta.text
-    assert len(cliente.get("/api/orders").json()) == 1
-
-
 # --- Negativos --------------------------------------------------------------
 
 
@@ -377,14 +302,14 @@ def test_enviar_a_revision_con_detalles_o_fuera_de_requerimiento(cliente):
         json={
             "usuario_id": RECEPCION,
             "tipo_reparacion_id": TIPO,
-            "finalizar_definicion": False,
         },
     )
     assert _enviar(cliente, orden_id).status_code == 409  # con Detalles
 
     otra = _crear_orden(cliente)
-    cliente.post(
-        f"/api/orders/{otra}/details",
+    definir_y_finalizar(
+        cliente,
+        otra,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     )  # queda HABILITADA
     assert _enviar(cliente, otra).status_code == 409  # fuera de REQUERIMIENTO
@@ -419,7 +344,7 @@ def test_definir_desde_revision_negativos(cliente, tmp_path):
     _enviar(cliente, orden_id)
 
     # Antes de PROC-REP-065.
-    assert _definir(cliente, orden_id).status_code == 409
+    assert _agregar(cliente, orden_id).status_code == 409
     # El endpoint normal (045 Si -> 070) no sirve sobre EN_REVISION.
     respuesta = cliente.post(
         f"/api/orders/{orden_id}/details",
@@ -441,7 +366,7 @@ def test_definir_desde_revision_negativos(cliente, tmp_path):
             ).model_dump(mode="json")
         ],
     )
-    assert _definir(cliente, orden_id, tipo="TR-OFF").status_code == 409
+    assert _agregar(cliente, orden_id, tipo="TR-OFF").status_code == 409
 
     # Un Detalle de una Orden que no es garantia no admite Detalle origen.
     respuesta = cliente.post(
@@ -455,50 +380,12 @@ def test_definir_desde_revision_negativos(cliente, tmp_path):
     assert respuesta.status_code == 409, respuesta.text
 
 
-def test_garantia_en_revision_negativos(cliente):
-    orden_id = _crear_orden(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/details",
-        json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
-    )
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/details/DET-001/warranty-rma/review",
-        json={"usuario_id": RECEPCION},
-    )
-    assert respuesta.status_code == 409, respuesta.text  # no ENTREGADA
-
-    origen = _orden_entregada(cliente)
-    respuesta = cliente.post(
-        f"/api/orders/{origen['id']}/details/DET-999/warranty-rma/review",
-        json={"usuario_id": RECEPCION},
-    )
-    assert respuesta.status_code == 404, respuesta.text
-
-
-def test_garantia_directa_sigue_igual(cliente):
-    origen = _orden_entregada(cliente)
-    respuesta = _generar_garantia(cliente, origen["id"], "DET-001")
-    assert respuesta.status_code == 201
-    orden = respuesta.json()
-    assert orden["estado_workflow"] == "HABILITADA"
-    assert _ids(orden) == [
-        "PROC-REP-035",
-        "PROC-REP-040",
-        "PROC-REP-045",
-        "PROC-REP-070",
-        "PROC-REP-050",
-        "PROC-REP-060",
-        "PROC-REP-080",
-        "PROC-REP-090",
-        "PROC-REP-140",
-    ]
-
-
 def test_hp1_no_registra_nodos_de_revision(cliente):
     """HP1 sigue sin 055/065/068/075 (045 Si -> 070)."""
     orden_id = _crear_orden(cliente)
-    orden = cliente.post(
-        f"/api/orders/{orden_id}/details",
+    orden = definir_y_finalizar(
+        cliente,
+        orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
     ).json()
     assert not {
@@ -538,7 +425,10 @@ def test_factibilidad_fallida_luego_de_revision_espera_recursos(tmp_path):
             "PROC-REP-100",
         ]
         assert "PROC-REP-140" not in _ids(orden)
-        assert "DEFINIR_REPARACION_DESDE_REVISION" not in _codigos(orden)
+        # La definicion ya se finalizo (080): no se agregan ni se finalizan
+        # Detalles otra vez.
+        assert "AGREGAR_DETALLE_DESDE_REVISION" not in _codigos(orden)
+        assert "FINALIZAR_DEFINICION" not in _codigos(orden)
         assert "ESPERAR_RECURSOS" in _codigos(orden)
 
         orden = cliente.post(f"/api/orders/{orden_id}/resources/wait").json()

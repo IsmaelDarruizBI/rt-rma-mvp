@@ -368,7 +368,12 @@ def test_acciones_en_100_y_120_priorizan_el_circuito_de_recursos():
     assert esperar.requiere_actor is False and esperar.roles == ()
 
     en_120 = _en_espera()
-    assert _codigos(en_120) == ["REVALIDAR_RECURSOS", "REGISTRAR_PAGO"]
+    # El override es transversal (BR-REP-003): sigue en 120.
+    assert _codigos(en_120) == [
+        "REVALIDAR_RECURSOS",
+        "OVERRIDE_RECURSOS",
+        "REGISTRAR_PAGO",
+    ]
     assert acciones_disponibles(en_120)[0].requiere_actor is False
 
     habilitada = habilitar_orden(
@@ -404,7 +409,8 @@ def test_en_revision_con_recursos_pendientes_no_ofrece_definir():
     )
 
     assert en_100.estado_workflow is EstadoWorkflow.EN_REVISION
-    assert "DEFINIR_REPARACION_DESDE_REVISION" not in _codigos(en_100)
+    assert "AGREGAR_DETALLE_DESDE_REVISION" not in _codigos(en_100)
+    assert "FINALIZAR_DEFINICION" not in _codigos(en_100)
     assert "ESPERAR_RECURSOS" in _codigos(en_100)
 
 

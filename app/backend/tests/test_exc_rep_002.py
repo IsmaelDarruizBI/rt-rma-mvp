@@ -1,9 +1,11 @@
 """EXC-REP-002 (recursos insuficientes, resuelto por override) en services.
 
-PROC-REP-090 "Ninguno trabajable" -> 100 -> 110 "Si" -> 130 -> 140. Un
-Coordinador RMA fuerza UN Detalle bloqueado (BR-REP-003); el override solo
+Un Coordinador RMA autoriza UN Detalle bloqueado (BR-REP-003): capacidad
+transversal (ACC-REP-049), con la Orden detenida en PROC-REP-100 o con
+factibilidad parcial. Solo en el circuito de 100 el proceso continua
+090 "Ninguno trabajable" -> 100 -> 110 "Si" -> 130 -> 140. El override solo
 REGISTRA la autorizacion en el historial: no reserva ni descuenta stock. Con
-override valido de ESE Detalle, PROC-REP-185 reserva aunque no alcance y
+override vigente de ESE Detalle, PROC-REP-185 reserva aunque no alcance y
 PROC-REP-210 puede dejar el stock fisico negativo; sin override se conserva
 el comportamiento anterior.
 """
@@ -29,13 +31,14 @@ from app.services import (
     PrecondicionInvalidaError,
     RecursoNoDisponibleError,
     aplicar_movimientos_inventario,
+    autorizar_override_recursos,
+    continuar_por_override,
     definir_prioridad,
     ejecutar_detalle,
     habilitar_orden,
     ingresar_a_cola,
     registrar_ejecucion_completada,
     registrar_espera_recursos,
-    registrar_override_recursos,
     reservar_insumos_e_iniciar_ejecucion,
     seleccionar_detalle,
     stock_disponible,
@@ -58,6 +61,7 @@ from tests.fixtures.catalogos_mvp import (
     TIPO_BATERIA,
     t,
 )
+from tests.fixtures.override import override_en_100
 from tests.test_exc_rep_001 import (
     PREVISTOS,
     TIPO_PANTALLA,
@@ -81,7 +85,8 @@ def _bloqueada(a="0", b="1", *tipos) -> OrdenReparacion:
 
 
 def _forzar(orden, detalle_id="DET-001", usuario=COORDINADOR, minuto=20):
-    return registrar_override_recursos(
+    """Override desde PROC-REP-100: autoriza y continua 110 Si -> 130."""
+    return override_en_100(
         orden,
         detalle_id=detalle_id,
         usuario=usuario,
@@ -100,10 +105,11 @@ def _habilitada_por_override(**kw) -> OrdenReparacion:
 def test_override_completo_090_ninguno_100_110_si_130_140():
     orden = _habilitada_por_override()
 
-    assert _ids(orden)[-6:] == [
+    assert _ids(orden)[-7:] == [
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-100",
+        "ACC-REP-049",
         "PROC-REP-110",
         "PROC-REP-130",
         "PROC-REP-140",
@@ -126,7 +132,17 @@ def test_override_completo_090_ninguno_100_110_si_130_140():
 def test_el_override_queda_trazado_con_usuario_fecha_detalle_y_motivo():
     orden = _forzar(_bloqueada(), minuto=22)
 
-    paso_110, paso_130 = orden.historial[-2:]
+    autorizacion, paso_110, paso_130 = orden.historial[-3:]
+    # La autorizacion es la accion funcional: no es un nodo del proceso.
+    assert autorizacion.es_accion_funcional
+    assert autorizacion.process_id is None
+    assert autorizacion.referencia_id == "ACC-REP-049"
+    assert autorizacion.usuario_id == COORDINADOR.id
+    assert autorizacion.fecha == t(22)
+    assert autorizacion.reparacion_detail_id == "DET-001"
+    assert MOTIVO in autorizacion.observacion
+    assert "Validacion ignorada" in autorizacion.observacion
+    assert "PROC-REP-080/090" in autorizacion.observacion
     assert (paso_110.referencia_id, paso_110.observacion) == (
         "PROC-REP-110",
         "Si",
@@ -136,9 +152,6 @@ def test_el_override_queda_trazado_con_usuario_fecha_detalle_y_motivo():
     assert paso_130.usuario_id == COORDINADOR.id
     assert paso_130.fecha == t(22)
     assert paso_130.reparacion_detail_id == "DET-001"
-    assert MOTIVO in paso_130.observacion
-    assert "Validacion ignorada" in paso_130.observacion
-    assert "PROC-REP-080/090" in paso_130.observacion
     assert tiene_override_factibilidad(orden, "DET-001") is True
     assert tiene_override_factibilidad(orden, "DET-002") is False
 
@@ -168,7 +181,7 @@ def test_solo_un_coordinador_activo_puede_hacer_el_override(usuario):
 @pytest.mark.parametrize("motivo", ["", "   ", "\n\t"])
 def test_el_motivo_es_obligatorio(motivo):
     with pytest.raises(PrecondicionInvalidaError, match="motivo"):
-        registrar_override_recursos(
+        autorizar_override_recursos(
             _bloqueada(),
             detalle_id="DET-001",
             usuario=COORDINADOR,
@@ -177,20 +190,89 @@ def test_el_motivo_es_obligatorio(motivo):
         )
 
 
-def test_el_override_solo_vale_desde_100_y_sobre_un_detalle_bloqueado():
-    with pytest.raises(PrecondicionInvalidaError, match="PROC-REP-100"):
-        _forzar(flujo_mvp.orden_con_factibilidad())
-    with pytest.raises(PrecondicionInvalidaError, match="PROC-REP-100"):
-        _forzar(registrar_espera_recursos(_bloqueada(), fecha=t(20)))  # 120
+def _autorizar(orden, detalle_id="DET-001", usuario=COORDINADOR, minuto=20):
+    return autorizar_override_recursos(
+        orden,
+        detalle_id=detalle_id,
+        usuario=usuario,
+        motivo=MOTIVO,
+        fecha=t(minuto),
+    )
+
+
+def test_el_override_vale_sobre_un_detalle_bloqueado_y_continua_desde_100():
+    # La autorizacion exige un Detalle PENDIENTE bloqueado por recursos.
+    with pytest.raises(PrecondicionInvalidaError, match="no esta bloqueado"):
+        _autorizar(flujo_mvp.orden_con_factibilidad())
     with pytest.raises(EntidadNoEncontradaError):
-        _forzar(_bloqueada(), detalle_id="DET-999")
+        _autorizar(_bloqueada(), detalle_id="DET-999")
 
     parcial, _ = _validar(
         _con_detalles(TIPO_BATERIA, TIPO_PANTALLA), _insumos(a="1", b="0")
     )
     assert parcial.current_process == "PROC-REP-090"  # hay uno trabajable
     with pytest.raises(PrecondicionInvalidaError):
-        _forzar(parcial)
+        _autorizar(parcial)  # DET-001 es trabajable: no hay que forzarlo
+
+    # Continuar 110 Si -> 130 solo desde 100 y con autorizacion vigente.
+    en_120 = _autorizar(registrar_espera_recursos(_bloqueada(), fecha=t(20)))
+    with pytest.raises(PrecondicionInvalidaError, match="PROC-REP-100"):
+        continuar_por_override(
+            en_120, detalle_id="DET-001", usuario=COORDINADOR, fecha=t(21)
+        )
+    with pytest.raises(PrecondicionInvalidaError, match="autorizacion"):
+        continuar_por_override(
+            _bloqueada(),
+            detalle_id="DET-001",
+            usuario=COORDINADOR,
+            fecha=t(21),
+        )
+    with pytest.raises(PrecondicionInvalidaError):
+        continuar_por_override(
+            _autorizar(_bloqueada()),
+            detalle_id="DET-001",
+            usuario=TECNICO,
+            fecha=t(21),
+        )
+
+
+def test_override_con_factibilidad_parcial_y_orden_tomada_no_reinicia():
+    """Transversal: autoriza el Detalle sin tocar toma, Ejecucion ni flujo."""
+    insumos = _insumos(a="0", b="1", c="1")
+    parcial, factible = _validar(
+        _con_detalles(TIPO_BATERIA, TIPO_PANTALLA), insumos
+    )
+    assert factible is True
+    en_curso = _reservar(
+        _seleccionar(
+            _en_toma(habilitar_orden(parcial, fecha=t(20))), "DET-002"
+        ),
+        insumos,
+        detalle_id="DET-002",
+    )
+    en_curso = ejecutar_detalle(
+        en_curso, detalle_id="DET-002", usuario=TECNICO, fecha=t(66)
+    )
+    assert en_curso.estado_workflow is EstadoWorkflow.EN_REPARACION
+    foto = en_curso.model_copy(deep=True)
+
+    orden = _autorizar(en_curso, minuto=67)
+
+    # Solo se agrega la autorizacion (ACC-REP-049): ni 110/130 ni 140.
+    assert orden.historial[:-1] == foto.historial
+    assert orden.historial[-1].referencia_id == "ACC-REP-049"
+    assert orden.historial[-1].reparacion_detail_id == "DET-001"
+    assert orden.current_process == foto.current_process
+    assert orden.estado_workflow is EstadoWorkflow.EN_REPARACION
+    assert orden.tomas == foto.tomas
+    assert orden.ejecuciones == foto.ejecuciones
+    assert orden.movimientos_insumo == foto.movimientos_insumo
+    a, b = orden.reparaciones_detail
+    assert a.condicion is CondicionReparacionDetail.SIN_BLOQUEO
+    assert b == foto.reparaciones_detail[1]
+    assert tiene_override_factibilidad(orden, "DET-001") is True
+    # La Orden original no se modifica (copia).
+    assert en_curso == foto
 
 
 # --- Solo el Detalle objetivo; Multi-Detalle ---
@@ -555,7 +637,8 @@ def test_en_100_se_publican_esperar_y_un_override_por_detalle_bloqueado():
         ("DET-002", (RolUsuario.COORDINADOR_RMA,)),
     ]
     for ausente in (
-        "DEFINIR_REPARACION",
+        "AGREGAR_DETALLE",
+        "FINALIZAR_DEFINICION",
         "ENCOLAR",
         "TOMAR",
         "INICIAR_DETALLE",
@@ -563,11 +646,17 @@ def test_en_100_se_publican_esperar_y_un_override_por_detalle_bloqueado():
         assert ausente not in [a.codigo for a in acciones]
 
 
-def test_en_120_no_se_publica_el_override():
+def test_en_120_el_override_sigue_publicado_por_detalle_bloqueado():
     en_120 = registrar_espera_recursos(_bloqueada(), fecha=t(20))
     codigos = [a.codigo for a in acciones_disponibles(en_120)]
-    assert "REVALIDAR_RECURSOS" in codigos
-    assert "OVERRIDE_RECURSOS" not in codigos
+    assert codigos[:2] == ["REVALIDAR_RECURSOS", "OVERRIDE_RECURSOS"]
+
+    # Autorizado, deja de publicarse y el proceso no se mueve de 120.
+    autorizada = _autorizar(en_120, minuto=21)
+    assert autorizada.current_process == "PROC-REP-120"
+    assert "OVERRIDE_RECURSOS" not in [
+        a.codigo for a in acciones_disponibles(autorizada)
+    ]
 
 
 def test_el_progreso_muestra_130_solo_con_evidencia_de_override():

@@ -40,13 +40,19 @@ from app.services import (
 )
 from app.services.ordenes import ROLES_ENTREGA, ROLES_PRIORIZACION
 from app.services.pagos import ROLES_PAGO, condicion_entrega_cumplida
-from app.services.revisiones import revision_tecnica_realizada
+from app.services.reparaciones import definicion_finalizada
+from app.services.revisiones import (
+    finalizada_sin_reparacion,
+    lista_para_cierre,
+    revision_tecnica_realizada,
+)
 
 from .progreso import nodos_alcanzados
 
 # Codigos de accion que la API expone. Cada uno es exactamente un
 # endpoint de comando.
-ACCION_DEFINIR_REPARACION = "DEFINIR_REPARACION"
+ACCION_AGREGAR_DETALLE = "AGREGAR_DETALLE"
+ACCION_FINALIZAR_DEFINICION = "FINALIZAR_DEFINICION"
 ACCION_ENCOLAR = "ENCOLAR"
 ACCION_TOMAR = "TOMAR"
 ACCION_INICIAR_DETALLE = "INICIAR_DETALLE"
@@ -59,11 +65,11 @@ ACCION_REGISTRAR_PAGO = "REGISTRAR_PAGO"
 ACCION_ENTREGAR = "ENTREGAR"
 ACCION_INFORMAR_RT = "INFORMAR_RT"
 ACCION_DEVOLVER_RT = "DEVOLVER_RT"
-ACCION_GENERAR_GARANTIA_RMA = "GENERAR_GARANTIA_RMA"
+ACCION_INICIAR_GARANTIA_RMA = "INICIAR_GARANTIA_RMA"
 ACCION_ENVIAR_A_REVISION = "ENVIAR_A_REVISION"
 ACCION_REALIZAR_REVISION = "REALIZAR_REVISION"
-ACCION_DEFINIR_REPARACION_DESDE_REVISION = "DEFINIR_REPARACION_DESDE_REVISION"
-ACCION_GENERAR_GARANTIA_RMA_REVISION = "GENERAR_GARANTIA_RMA_REVISION"
+ACCION_AGREGAR_DETALLE_DESDE_REVISION = "AGREGAR_DETALLE_DESDE_REVISION"
+ACCION_FINALIZAR_SIN_REPARACION = "FINALIZAR_SIN_REPARACION"
 ACCION_ESPERAR_RECURSOS = "ESPERAR_RECURSOS"
 ACCION_REVALIDAR_RECURSOS = "REVALIDAR_RECURSOS"
 ACCION_OVERRIDE_RECURSOS = "OVERRIDE_RECURSOS"
@@ -168,12 +174,35 @@ def _detalles_en_espera_de_control(orden: OrdenReparacion) -> list[str]:
     ]
 
 
+def _overrides_de_recursos(
+    orden: OrdenReparacion,
+) -> list[AccionDisponible]:
+    """EXC-REP-002 / BR-REP-003: override, capacidad transversal por Detalle.
+
+    Una accion de Coordinador RMA por cada Detalle PENDIENTE (DEFINIDO)
+    bloqueado por recursos, este la Orden detenida en PROC-REP-100/120 o
+    con factibilidad parcial (habilitada, en cola, tomada o en reparacion).
+    """
+    return [
+        AccionDisponible(
+            codigo=ACCION_OVERRIDE_RECURSOS,
+            etiqueta="Forzar el Detalle bloqueado (override)",
+            roles=(RolUsuario.COORDINADOR_RMA,),
+            detalle_id=detalle.id,
+        )
+        for detalle in orden.reparaciones_detail
+        if detalle.estado is EstadoReparacionDetail.DEFINIDO
+        and detalle.condicion
+        is CondicionReparacionDetail.BLOQUEADO_POR_RECURSOS
+    ]
+
+
 def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
     """Acciones humanas que corresponden al estado actual de la Orden.
 
-    Una Orden ENTREGADA solo admite GENERAR_GARANTIA_RMA y
-    GENERAR_GARANTIA_RMA_REVISION (uno de cada por Detalle, si tiene
-    Cliente): su proceso termino. Lo mismo
+    Una Orden ENTREGADA solo admite INICIAR_GARANTIA_RMA (una unica
+    accion a nivel Orden, si tiene Cliente y Detalles que puedan originar
+    la garantia): su proceso termino. Lo mismo
     vale para RT_INTERNO al llegar a EVT-REP-999: ese origen no pasa por
     ENTREGADA (el estado terminal sigue pendiente de definicion, ver
     ``devolver_equipo_rt``), asi que el fin de proceso se detecta por
@@ -183,28 +212,19 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
         orden.estado_workflow is EstadoWorkflow.ENTREGADA
         and orden.cliente is not None
     ):
-        # HP-REP-003 / VAR-REP-001: el proceso de ESTA Orden termino,
-        # pero Recepcion puede generar una garantia RMA de cualquiera de
-        # sus Detalles, ya con reparacion conocida o para revision.
-        garantias: list[AccionDisponible] = []
-        for detalle in orden.reparaciones_detail:
-            garantias.append(
-                AccionDisponible(
-                    codigo=ACCION_GENERAR_GARANTIA_RMA,
-                    etiqueta="Generar garantia RMA del Detalle",
-                    roles=(RolUsuario.RECEPCION,),
-                    detalle_id=detalle.id,
-                )
+        # HP-REP-003: el proceso de ESTA Orden termino, pero Recepcion
+        # puede iniciar UNA garantia RMA eligiendo 1..N de sus Detalles
+        # (la seleccion es del formulario, no una accion por Detalle). La
+        # garantia siempre entra en revision tecnica (BR-REP-019).
+        if not orden.reparaciones_detail:
+            return []
+        return [
+            AccionDisponible(
+                codigo=ACCION_INICIAR_GARANTIA_RMA,
+                etiqueta="Iniciar garantia RMA",
+                roles=(RolUsuario.RECEPCION,),
             )
-            garantias.append(
-                AccionDisponible(
-                    codigo=ACCION_GENERAR_GARANTIA_RMA_REVISION,
-                    etiqueta="Generar garantia RMA para revision del Detalle",
-                    roles=(RolUsuario.RECEPCION,),
-                    detalle_id=detalle.id,
-                )
-            )
-        return garantias
+        ]
 
     if (
         orden.estado_workflow is EstadoWorkflow.ENTREGADA
@@ -227,6 +247,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
         "PROC-REP-100",
         "PROC-REP-120",
     )
+    overrides = _overrides_de_recursos(orden)
     if en_recursos:
         estado = None
         acciones.append(
@@ -245,24 +266,9 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 requiere_actor=False,
             )
         )
-        # EXC-REP-002: en PROC-REP-100 conviven las dos decisiones de
-        # PROC-REP-110: esperar (sin actor) o forzar un Detalle bloqueado
-        # (Coordinador RMA, uno por Detalle).
-        if orden.current_process == "PROC-REP-100":
-            for detalle in orden.reparaciones_detail:
-                if (
-                    detalle.estado is EstadoReparacionDetail.DEFINIDO
-                    and detalle.condicion
-                    is CondicionReparacionDetail.BLOQUEADO_POR_RECURSOS
-                ):
-                    acciones.append(
-                        AccionDisponible(
-                            codigo=ACCION_OVERRIDE_RECURSOS,
-                            etiqueta="Forzar el Detalle bloqueado (override)",
-                            roles=(RolUsuario.COORDINADOR_RMA,),
-                            detalle_id=detalle.id,
-                        )
-                    )
+        # En PROC-REP-100 el override convive con "esperar" (las dos ramas
+        # de PROC-REP-110); en 120 autoriza el Detalle hasta revalidar.
+        acciones.extend(overrides)
 
     # EXC-REP-004: en PROC-REP-125/126 cada Detalle pendiente se revisa
     # (Tecnico, PROC-REP-126) y, ya revisado en su ciclo actual, se
@@ -292,27 +298,42 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                     )
                 )
 
-    if estado is EstadoWorkflow.REQUERIMIENTO:
+    # Definicion de Detalles: agregar y finalizar son acciones distintas.
+    # La definicion se cierra al validar la factibilidad (PROC-REP-080).
+    definicion_abierta = not definicion_finalizada(orden)
+
+    if estado is EstadoWorkflow.REQUERIMIENTO and definicion_abierta:
         acciones.append(
             AccionDisponible(
-                codigo=ACCION_DEFINIR_REPARACION,
-                etiqueta="Definir la reparacion",
+                codigo=ACCION_AGREGAR_DETALLE,
+                etiqueta="Agregar un Detalle de reparacion",
                 roles=(RolUsuario.RECEPCION,),
             )
         )
-        # PROC-REP-045 tiene dos ramas: Detalles conocidos (arriba) o no
-        # (revision). Con Detalles ya definidos (Multi-Detalle) solo la
-        # primera sigue abierta.
-        if not orden.reparaciones_detail:
-            acciones.append(
-                AccionDisponible(
-                    codigo=ACCION_ENVIAR_A_REVISION,
-                    etiqueta="Enviar a revision tecnica (sin diagnostico)",
-                    roles=(RolUsuario.RECEPCION,),
-                )
+        # PROC-REP-045 tiene dos ramas: Detalles conocidos o revision. Con
+        # al menos un Detalle cargado la revision ya no corresponde y se
+        # puede cerrar la carga.
+        acciones.append(
+            AccionDisponible(
+                codigo=(
+                    ACCION_FINALIZAR_DEFINICION
+                    if orden.reparaciones_detail
+                    else ACCION_ENVIAR_A_REVISION
+                ),
+                etiqueta=(
+                    "Finalizar la definicion"
+                    if orden.reparaciones_detail
+                    else "Enviar a revision tecnica (sin diagnostico)"
+                ),
+                roles=(RolUsuario.RECEPCION,),
             )
+        )
 
-    if estado is EstadoWorkflow.EN_REVISION:
+    if (
+        estado is EstadoWorkflow.EN_REVISION
+        and definicion_abierta
+        and not finalizada_sin_reparacion(orden)
+    ):
         if not revision_tecnica_realizada(orden):
             acciones.append(
                 AccionDisponible(
@@ -324,8 +345,25 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
         else:
             acciones.append(
                 AccionDisponible(
-                    codigo=ACCION_DEFINIR_REPARACION_DESDE_REVISION,
-                    etiqueta="Definir la reparacion luego de la revision",
+                    codigo=ACCION_AGREGAR_DETALLE_DESDE_REVISION,
+                    etiqueta="Agregar un Detalle luego de la revision",
+                    roles=(RolUsuario.RECEPCION,),
+                )
+            )
+            # PROC-REP-068: sin Detalles todavia se puede concluir
+            # SIN_REPARACION (069); con al menos uno, solo finalizar.
+            acciones.append(
+                AccionDisponible(
+                    codigo=(
+                        ACCION_FINALIZAR_DEFINICION
+                        if orden.reparaciones_detail
+                        else ACCION_FINALIZAR_SIN_REPARACION
+                    ),
+                    etiqueta=(
+                        "Finalizar la definicion"
+                        if orden.reparaciones_detail
+                        else "Finalizar sin reparacion"
+                    ),
                     roles=(RolUsuario.RECEPCION,),
                 )
             )
@@ -402,7 +440,15 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             )
         )
 
-    lista = estado is EstadoWorkflow.REPARACION_LISTA
+    # Factibilidad parcial: el override se ofrece igual, despues de las
+    # acciones propias del taller, sin exigir que toda la Orden este
+    # bloqueada ni reiniciar nada (BR-REP-003).
+    if not en_recursos:
+        acciones.extend(overrides)
+
+    # REPARACION_LISTA (240) o SIN_REPARACION (069): ambos siguen al
+    # cierre por Origen (PROC-REP-250).
+    lista = lista_para_cierre(orden)
     if not lista:
         for pendiente in _detalles_en_espera_de_control(orden):
             acciones.append(

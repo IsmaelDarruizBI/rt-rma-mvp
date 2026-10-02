@@ -107,14 +107,15 @@ nodes:
     description: >
       Evento de inicio propio de la garantia de reparacion RMA (Happy Path
       HP-REP-003). A diferencia de EVT-REP-001 (surge una necesidad de
-      reparacion NUEVA), aqui el disparador es que una reparacion ya
-      realizada por RMA -en una Orden ya finalizada- presenta una falla
-      cubierta por garantia, y el usuario selecciona "Generar garantia"
-      sobre esa Orden. No es un alta de cliente ni de equipo: ambos ya
-      existen en la Orden origen. Converge directamente en PROC-REP-035,
-      sin pasar por PROC-REP-010 (el origen ya es conocido). La Orden
-      origen se considera finalizada cuando llego a ENTREGADA; el modelo
-      no define un estado CERRADA aparte y esta iteracion no lo crea.
+      reparacion NUEVA), aqui el disparador es que una reparacion ya realizada
+      por RMA -en una Orden ya finalizada- presenta una falla cubierta por
+      garantia, y Recepcion inicia la garantia sobre esa Orden ("Iniciar
+      garantia RMA", una unica accion a nivel Orden) seleccionando uno o mas
+      Detalles origen. No es un alta de cliente ni de equipo: ambos ya existen
+      en la Orden origen. Converge directamente en PROC-REP-035, sin pasar por
+      PROC-REP-010 (el origen ya es conocido). La Orden origen se considera
+      finalizada cuando llego a ENTREGADA; el modelo no define un estado
+      CERRADA aparte y esta iteracion no lo crea.
 
   - id: PROC-REP-010
     type: decision
@@ -186,21 +187,26 @@ nodes:
     actor: ACT-RECEP
     description: >
       Origen RMA_GARANTIA_REPARACION. Representa a un cliente que vuelve
-      porque falla una reparacion realizada anteriormente por RMA. Parte
-      de una Orden de Reparacion origen ya finalizada (ENTREGADA), que NO
-      se reabre y permanece historicamente inmutable. Se identifica (1) la
-      Orden origen y (2) el/los Detalle(s) especificos de esa Orden que
-      originan la garantia. Cliente y equipo se RECUPERAN de la Orden origen:
+      porque falla una reparacion realizada anteriormente por RMA. Parte de
+      una Orden de Reparacion origen ya finalizada (ENTREGADA), que NO se
+      reabre y permanece historicamente inmutable. Se identifica (1) la Orden
+      origen y (2) uno o mas Detalles especificos de esa Orden que originan la
+      garantia (1..N): una unica Orden de garantia puede nacer de varios
+      Detalles de la misma Orden origen; no se crea una Orden de garantia por
+      cada Detalle. Cliente y equipo se RECUPERAN de la Orden origen:
       funcionalmente no es un nuevo alta de cliente/equipo (por eso no pasa
-      por PROC-REP-030), aunque la nueva Orden pueda copiar/referenciar
-      los datos que necesite para su propia consistencia historica. Es el
-      unico nodo de identificacion de origen para este Happy Path: se
-      alcanza desde EVT-REP-002 (parte de una Orden finalizada) o, como
-      entrada alternativa, desde PROC-REP-010 cuando Recepcion identifica
-      la garantia. La vinculacion es en ambos niveles: la nueva Orden
-      referencia la Orden origen y cada Detalle de garantia referenciara su
-      Detalle origen (BR-REP-019); esa referencia a nivel Detalle se
-      materializa al definir los Detalles en PROC-REP-070.
+      por PROC-REP-030), aunque la nueva Orden pueda copiar/referenciar los
+      datos que necesite para su propia consistencia historica. Es el unico
+      nodo de identificacion de origen para este Happy Path: se alcanza desde
+      EVT-REP-002 (parte de una Orden finalizada) o, como entrada alternativa,
+      desde PROC-REP-010 cuando Recepcion identifica la garantia. La
+      vinculacion es en ambos niveles: la nueva Orden referencia la Orden
+      origen y los Detalles origen identificados, y cada Detalle de garantia
+      referenciara uno de esos Detalles origen (BR-REP-019). Toda garantia RMA
+      pasa por revision tecnica antes de definir que reparacion se realiza
+      (PROC-REP-045 = No -> PROC-REP-055): la referencia a nivel Detalle se
+      materializa recien al definir los Detalles luego de esa revision
+      (PROC-REP-075), y la Orden nueva nace sin Detalles propios.
     inputs:
       - Orden de Reparacion origen finalizada
     outputs:
@@ -239,10 +245,13 @@ nodes:
     type: decision
     name: Se conocen los Detalles de reparacion requeridos
     description: >
-      Distingue si, al momento del ingreso, ya se sabe que Detalle o
-      Detalles de reparacion necesita el equipo (por ejemplo "cambio de
-      bateria" y "cambio de pantalla"). Reemplaza conceptualmente a la
-      version singular de V1.2 ("se conoce la reparacion requerida").
+      Distingue si, al momento del ingreso, ya se sabe que Detalle o Detalles
+      de reparacion necesita el equipo (por ejemplo "cambio de bateria" y
+      "cambio de pantalla"). Reemplaza conceptualmente a la version singular
+      de V1.2 ("se conoce la reparacion requerida"). En una garantia RMA
+      (RMA_GARANTIA_REPARACION) la respuesta es siempre No: la revision
+      tecnica es obligatoria antes de definir que reparacion se realiza
+      (BR-REP-019), aunque los Detalles origen ya esten identificados.
 
   - id: PROC-REP-050
     type: decision
@@ -342,17 +351,17 @@ nodes:
     name: Definir Detalles de reparacion requeridos
     actor: ACT-RECEP
     description: >
-      Se registran uno o mas Detalles de Reparacion (cantidad_detalles
-      pasa de 0 a >=1), cada uno con su Tipo de Reparacion y, en
-      consecuencia, su precio snapshot vigente (BR-REP-015). Reemplaza a
-      la version singular de V1.2 ("definir requerimiento de reparacion"):
-      una misma Orden puede tener, por ejemplo, un Detalle de cambio de
-      bateria y otro de cambio de pantalla. En una garantia RMA, cada
-      Detalle nuevo se genera a partir de un Detalle origen identificado en
-      PROC-REP-035 y lo referencia (BR-REP-019); conserva igualmente su Tipo
-      de Reparacion y su precio snapshot. El precio snapshot existe en
-      todo Detalle, cualquiera sea el origen: precio registrado no implica
-      pago requerido (la condicion NO_COBRABLE del origen determina que no
+      Se registran uno o mas Detalles de Reparacion (cantidad_detalles pasa de
+      0 a >=1), cada uno con su Tipo de Reparacion y, en consecuencia, su
+      precio snapshot vigente (BR-REP-015). Reemplaza a la version singular de
+      V1.2 ("definir requerimiento de reparacion"): una misma Orden puede
+      tener, por ejemplo, un Detalle de cambio de bateria y otro de cambio de
+      pantalla. Recepcion agrega los Detalles de a uno; agregar un Detalle NO
+      cierra la definicion: la carga se cierra con una accion explicita
+      distinta ("Finalizar definicion", que exige al menos un Detalle) y
+      recien entonces el proceso continua a PROC-REP-050. El precio snapshot
+      existe en todo Detalle, cualquiera sea el origen: precio registrado no
+      implica pago requerido (la condicion comercial del origen determina si
       se cobra).
     inputs:
       - Orden de Reparacion
@@ -360,7 +369,6 @@ nodes:
       - Detalle(s) de Reparacion creados, cada uno con Tipo y precio snapshot
     rules:
       - BR-REP-001
-      - BR-REP-019
 
   - id: PROC-REP-075
     type: activity
@@ -369,13 +377,25 @@ nodes:
     description: >
       Recepcion utiliza el resultado de la revision tecnica (PROC-REP-065)
       para definir los Detalles de Reparacion requeridos de una Orden que
-      estaba EN_REVISION (misma logica que PROC-REP-070).
+      estaba EN_REVISION (misma logica que PROC-REP-070): cada uno con su Tipo
+      de Reparacion y su precio snapshot vigente (BR-REP-015). Tambien aqui
+      los Detalles se agregan de a uno y la carga se cierra con la accion
+      explicita "Finalizar definicion"; recien entonces el proceso continua a
+      PROC-REP-080, sin regenerar el comprobante de recepcion (se emitio antes
+      del diagnostico). En una garantia RMA -que siempre pasa por aqui- cada
+      Detalle nuevo referencia uno de los Detalles origen identificados en
+      PROC-REP-035 (BR-REP-019); no se impone una relacion 1:1: un mismo
+      Detalle origen puede originar mas de un Detalle nuevo. El precio
+      snapshot existe en todo Detalle, cualquiera sea el origen: precio
+      registrado no implica pago requerido (la condicion NO_COBRABLE del
+      origen determina que no se cobra).
     inputs:
       - Resultado de revision tecnica
     outputs:
       - Detalle(s) de Reparacion creados, cada uno con Tipo y precio snapshot
     rules:
       - BR-REP-001
+      - BR-REP-019
 
   - id: PROC-REP-080
     type: activity
@@ -419,10 +439,13 @@ nodes:
     type: decision
     name: Usuario autorizado fuerza el Detalle bloqueado
     description: >
-      Distingue si un usuario autorizado decide forzar igualmente como
-      trabajable un Detalle que no supero la validacion de factibilidad.
-      El override se registra sobre ese Detalle especifico (BR-REP-003),
-      no sobre la Orden en abstracto.
+      Decision del circuito "ningun Detalle trabajable" (PROC-REP-100):
+      distingue si un usuario autorizado decide forzar igualmente como
+      trabajable un Detalle bloqueado por recursos. Es "Si" cuando el
+      Coordinador autoriza el override de un Detalle mediante la capacidad
+      transversal de override de recursos (BR-REP-003): la autorizacion se
+      registra sobre ese Detalle especifico, no sobre la Orden en abstracto.
+      Es "No" cuando se decide esperar (PROC-REP-120).
 
   - id: PROC-REP-120
     type: activity
@@ -545,10 +568,18 @@ nodes:
     name: Registrar override
     actor: ACT-COORD
     description: >
-      Un usuario autorizado decide continuar a pesar de que un Detalle no
-      supero la validacion de factibilidad, y debe registrar el motivo.
-      Mismo rol/actor y misma Business Rule que en V1.2; el dato que
-      registra ahora identifica el Detalle especifico.
+      En el circuito "ningun Detalle trabajable" (PROC-REP-100 -> 110 Si),
+      registra que la Orden continua hacia la habilitacion (PROC-REP-140)
+      gracias a la autorizacion de override de un Detalle especifico. La
+      autorizacion en si -usuario, fecha, Detalle, validacion ignorada y
+      motivo (BR-REP-003)- es una capacidad transversal por Detalle
+      documentada fuera del grafo (docs/discovery/README.md, "Capacidades
+      transversales"): tambien puede ocurrir sobre un Detalle bloqueado por
+      recursos mientras otros Detalles de la Orden son trabajables
+      (factibilidad parcial, con la Orden habilitada, en cola, tomada o en
+      reparacion). En ese caso no se recorre este nodo ni se altera la
+      posicion del flujo: el Detalle simplemente queda disponible. Mismo
+      rol/actor (ACT-COORD) y misma Business Rule que en V1.2.
     outputs:
       - Usuario responsable
       - Fecha
