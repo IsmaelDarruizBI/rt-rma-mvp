@@ -3,6 +3,8 @@
  *
  * Crear una Orden es la única acción que no parte de una Orden
  * existente, así que vive acá (PROC-REP-010 -> 030 -> 040, ACT-RECEP).
+ * El alta es un único bloque: primero se elige el origen y después se
+ * muestra solo el formulario de ese origen.
  */
 
 import { useState } from "react";
@@ -105,6 +107,61 @@ export function ListadoOrdenes({
   );
 }
 
+/**
+ * Origen elegido en el alta manual. RMA_GARANTIA_REPARACION no está:
+ * no se crea desde cero, nace de una Orden entregada (HP-REP-003).
+ */
+type OrigenAlta = "" | "CLIENTE_EXTERNO" | "RT_INTERNO";
+
+/**
+ * Bloque "Nueva Orden": selector de origen y, debajo, solo el
+ * formulario de ese origen. Cambiar el origen no envía nada al backend.
+ */
+export function FormularioAltaOrden({
+  actor,
+  ocupado,
+  onCrearClienteExterno,
+  onCrearRtInterno,
+}: {
+  actor: Usuario | null;
+  ocupado: boolean;
+  onCrearClienteExterno: (datos: DatosNuevaOrden) => void;
+  onCrearRtInterno: (datos: DatosNuevaOrdenRt) => void;
+}) {
+  const [origen, setOrigen] = useState<OrigenAlta>("");
+
+  return (
+    <Panel titulo="Nueva Orden">
+      <Campo etiqueta="Origen del equipo">
+        <select
+          value={origen}
+          onChange={(evento) => setOrigen(evento.target.value as OrigenAlta)}
+          style={estiloInput}
+        >
+          <option value="">Seleccioná un origen...</option>
+          <option value="CLIENTE_EXTERNO">Cliente externo</option>
+          <option value="RT_INTERNO">Equipo RT interno</option>
+        </select>
+      </Campo>
+      {origen === "CLIENTE_EXTERNO" && (
+        <FormularioNuevaOrden
+          actor={actor}
+          ocupado={ocupado}
+          onCrear={onCrearClienteExterno}
+        />
+      )}
+      {origen === "RT_INTERNO" && (
+        <FormularioNuevaOrdenRt
+          actor={actor}
+          ocupado={ocupado}
+          onCrear={onCrearRtInterno}
+        />
+      )}
+    </Panel>
+  );
+}
+
+/** Campos del alta de cliente externo (dentro de "Nueva Orden"). */
 export function FormularioNuevaOrden({
   actor,
   ocupado,
@@ -124,7 +181,7 @@ export function FormularioNuevaOrden({
   const completo = nombre && telefono && marca && modelo && falla;
 
   return (
-    <Panel titulo="Nueva Orden (cliente externo)">
+    <div>
       {!esRecepcion && (
         <p
           style={{
@@ -188,10 +245,11 @@ export function FormularioNuevaOrden({
       >
         Crear Orden
       </Boton>
-    </Panel>
+    </div>
   );
 }
 
+/** Campos del alta de equipo RT interno (dentro de "Nueva Orden"). */
 export function FormularioNuevaOrdenRt({
   actor,
   ocupado,
@@ -210,7 +268,7 @@ export function FormularioNuevaOrdenRt({
   const completo = marca && modelo && falla && referenciaRt;
 
   return (
-    <Panel titulo="Nueva Orden (equipo RT interno)">
+    <div>
       {!esRecepcion && (
         <p
           style={{
@@ -267,7 +325,7 @@ export function FormularioNuevaOrdenRt({
       >
         Crear Orden RT
       </Boton>
-    </Panel>
+    </div>
   );
 }
 

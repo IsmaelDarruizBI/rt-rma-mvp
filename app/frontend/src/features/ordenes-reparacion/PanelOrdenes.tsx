@@ -29,8 +29,7 @@ import {
   ResumenComercialOrden,
 } from "./DetalleOrden";
 import {
-  FormularioNuevaOrden,
-  FormularioNuevaOrdenRt,
+  FormularioAltaOrden,
   ListadoOrdenes,
   SelectorActor,
 } from "./ListadoOrdenes";
@@ -281,17 +280,13 @@ export function PanelOrdenes() {
           }}
         >
           <ListadoOrdenes ordenes={ordenes} onAbrir={abrirOrden} />
-          <FormularioNuevaOrden
+          <FormularioAltaOrden
             actor={actor}
             ocupado={ocupado}
-            onCrear={(datos) =>
+            onCrearClienteExterno={(datos) =>
               void ejecutarComando(() => api.crearOrden(datos))
             }
-          />
-          <FormularioNuevaOrdenRt
-            actor={actor}
-            ocupado={ocupado}
-            onCrear={(datos) =>
+            onCrearRtInterno={(datos) =>
               void ejecutarComando(() => api.crearOrdenRt(datos))
             }
           />
