@@ -14,8 +14,11 @@ from fastapi import APIRouter, status
 
 from app.application import (
     ApplicationContext,
+    acciones_de_cancelacion,
     acciones_disponibles,
     aprobar_control,
+    cancelar_detalle,
+    cancelar_orden,
     completar_ejecucion,
     crear_orden,
     crear_orden_rt,
@@ -30,6 +33,7 @@ from app.application import (
     finalizar_definicion,
     finalizar_sin_reparacion,
     forzar_detalle_por_recursos,
+    impacto_override,
     informar_rt,
     iniciar_detalle,
     iniciar_garantia_rma,
@@ -42,7 +46,9 @@ from app.application import (
     obtener_orden,
     progreso,
     realizar_revision,
+    rechazar_control,
     redefinir_detalle,
+    registrar_devolucion,
     registrar_pago_de_orden,
     requerir_redefinicion_ejecucion,
     revalidar_recursos,
@@ -54,6 +60,8 @@ from app.domain.models import OrdenReparacion
 from .dependencias import ContextoDep
 from .schemas import (
     AprobarControlIn,
+    CancelarDetalleIn,
+    CancelarOrdenIn,
     CompletarEjecucionIn,
     CrearOrdenIn,
     CrearOrdenRtIn,
@@ -65,6 +73,7 @@ from .schemas import (
     EnviarARevisionIn,
     FinalizarDefinicionIn,
     FinalizarSinReparacionIn,
+    ImpactoOverrideOut,
     IniciarDetalleIn,
     IniciarGarantiaRmaIn,
     InterrumpirEjecucionIn,
@@ -75,7 +84,9 @@ from .schemas import (
     OrdenResumenOut,
     OverrideRecursosIn,
     PagoIn,
+    RechazarControlIn,
     RedefinirDetalleIn,
+    RegistrarDevolucionIn,
     RequiereRedefinicionIn,
     RevisionDetalleIn,
     RevisionTecnicaIn,
@@ -100,6 +111,7 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
         insumos_previstos=insumos_previstos_por_detalle(contexto, orden),
         nombres_de_tipo=nombres_de_tipo_por_detalle(contexto, orden),
         detalles_origen=detalles_origen_de(contexto, orden),
+        acciones_cancelacion=acciones_de_cancelacion(orden),
     )
 
 
@@ -131,6 +143,23 @@ def get_ordenes(contexto: ContextoDep) -> list[OrdenResumenOut]:
 def get_orden(orden_id: str, contexto: ContextoDep) -> OrdenOut:
     """Una Orden con su detalle completo."""
     return _salida(obtener_orden(contexto, orden_id), contexto)
+
+
+@router.get("/{orden_id}/details/{detalle_id}/resources/override-preview")
+def get_impacto_override(
+    orden_id: str,
+    detalle_id: str,
+    contexto: ContextoDep,
+) -> ImpactoOverrideOut:
+    """Impacto en el stock de forzar el Detalle (E3, solo lectura).
+
+    Stock fisico, reservado por otras Ordenes y por esta, disponible,
+    requerido y disponible resultante de cada insumo previsto. Es lo que
+    el Coordinador confirma con ``confirmado: true`` en el override.
+    """
+    return ImpactoOverrideOut.desde_aplicacion(
+        impacto_override(contexto, orden_id=orden_id, detalle_id=detalle_id)
+    )
 
 
 # --- Comandos del Happy Path -------------------------------------------
@@ -332,7 +361,8 @@ def post_override_recursos(
     ESE Detalle sin reservar ni tocar el stock, tambien con factibilidad
     parcial (Orden habilitada, en cola o tomada), sin reiniciar el flujo.
     Solo si la Orden esta detenida en PROC-REP-100 continua 110 (Si) ->
-    130 -> 140.
+    130 -> 140. Exige ``confirmado: true`` (E3): sin confirmacion
+    explicita del impacto responde 409 CONFIRMACION_REQUERIDA.
     """
     orden = forzar_detalle_por_recursos(
         contexto,
@@ -340,6 +370,7 @@ def post_override_recursos(
         detalle_id=detalle_id,
         usuario_id=cuerpo.usuario_id,
         motivo=cuerpo.motivo,
+        confirmado=cuerpo.confirmado,
     )
     return _salida(orden, contexto)
 
@@ -567,6 +598,91 @@ def post_aprobar_control(
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
         detalle_id=cuerpo.detalle_id,
+        observaciones=cuerpo.observaciones,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/control/reject")
+def post_rechazar_control(
+    orden_id: str,
+    cuerpo: RechazarControlIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Rechazar el control de UN Detalle (ACT-RECEP).
+
+    Compone PROC-REP-220 -> 230 ("No") -> 235 -> 211: el Detalle se
+    reabre para retrabajo -una Ejecucion nueva- y la Orden vuelve a la
+    cola. El motivo es obligatorio.
+    """
+    orden = rechazar_control(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        detalle_id=cuerpo.detalle_id,
+        motivo=cuerpo.motivo,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/details/{detalle_id}/cancel")
+def post_cancelar_detalle(
+    orden_id: str,
+    detalle_id: str,
+    cuerpo: CancelarDetalleIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Cancelar UN Detalle pendiente (PROC-REP-300 -> 211, BR-REP-014).
+
+    Nunca uno COMPLETO ni con una Ejecucion activa. Motivo obligatorio.
+    """
+    orden = cancelar_detalle(
+        contexto,
+        orden_id=orden_id,
+        detalle_id=detalle_id,
+        usuario_id=cuerpo.usuario_id,
+        motivo=cuerpo.motivo,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/cancel")
+def post_cancelar_orden(
+    orden_id: str,
+    cuerpo: CancelarOrdenIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Cancelar la Orden / sus trabajos pendientes (PROC-REP-305 / 306).
+
+    Cancela los Detalles pendientes; lo realizado sigue al cierre. Sin
+    trabajo realizado la Orden queda CANCELADA. Con una Ejecucion activa
+    no se cancela nada (409). Motivo obligatorio.
+    """
+    orden = cancelar_orden(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        motivo=cuerpo.motivo,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/return-equipment")
+def post_registrar_devolucion(
+    orden_id: str,
+    cuerpo: RegistrarDevolucionIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Devolver el equipo de una Orden CANCELADA (PROC-REP-270 -> fin).
+
+    Sin cobro, comprobante final ni garantia; la Orden sigue CANCELADA y
+    queda cerrada.
+    """
+    orden = registrar_devolucion(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        recibido_por=cuerpo.recibido_por,
         observaciones=cuerpo.observaciones,
     )
     return _salida(orden, contexto)

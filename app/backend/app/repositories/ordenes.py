@@ -27,6 +27,10 @@ class OrdenReparacionRepository(Protocol):
 
         Es idempotente: guardar dos veces la misma Orden deja una sola
         copia.
+
+        Nunca pisa en silencio otra escritura (E4): si la version guardada
+        cambio desde que se leyo la que llega -o ya esta cerrada-, lanza
+        ``ConflictoDeEscrituraError`` y no escribe nada.
         """
         ...
 

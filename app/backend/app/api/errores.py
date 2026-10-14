@@ -13,7 +13,13 @@ Correspondencia:
     PrecondicionInvalidaError          -> 409  (la Orden no admite esto ahora)
     RecursoNoDisponibleError           -> 409  (no alcanza el stock)
     RequestValidationError             -> 422  (el request esta mal formado)
+    ConflictoDeEscrituraError          -> 409  (la Orden cambio: recargar)
     PersistenciaError / RepositoryError-> 500  (fallo de infraestructura)
+
+Las especializaciones de ``PrecondicionInvalidaError`` (Orden cerrada,
+toma de otro tecnico, confirmacion requerida) siguen siendo 409, pero
+viajan con su propio ``codigo`` para que la UI pueda reaccionar sin
+interpretar el mensaje.
 
 El 500 nunca incluye el mensaje original: un fallo de E/S puede filtrar
 rutas del servidor, y un catalogo inconsistente puede filtrar IDs y
@@ -30,6 +36,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.repositories import (
+    ConflictoDeEscrituraError,
     EntidadPersistidaNoEncontradaError,
     RepositoryError,
 )
@@ -82,9 +89,7 @@ def registrar_manejadores_de_error(application: FastAPI) -> None:
         _: Request,
         error: PrecondicionInvalidaError,
     ) -> JSONResponse:
-        return _respuesta(
-            "PRECONDICION_INVALIDA", str(error), status.HTTP_409_CONFLICT
-        )
+        return _respuesta(error.codigo, str(error), status.HTTP_409_CONFLICT)
 
     @application.exception_handler(RecursoNoDisponibleError)
     async def _sin_recurso(
@@ -117,6 +122,14 @@ def registrar_manejadores_de_error(application: FastAPI) -> None:
             f"Los datos enviados no son validos. {detalles}".strip(),
             status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
+
+    @application.exception_handler(ConflictoDeEscrituraError)
+    async def _conflicto_de_escritura(
+        _: Request,
+        error: ConflictoDeEscrituraError,
+    ) -> JSONResponse:
+        """E4: una version obsoleta no se guardo. No es un 500."""
+        return _respuesta(error.codigo, str(error), status.HTTP_409_CONFLICT)
 
     @application.exception_handler(RepositoryError)
     async def _persistencia(

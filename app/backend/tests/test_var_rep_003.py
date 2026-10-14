@@ -419,6 +419,11 @@ def test_json_previo_con_ejecuciones_en_progreso_y_completadas_sigue_cargando(
         EstadoEjecucion.EN_PROGRESO
     )
 
+    # Las dos fixtures se arman por separado (IDs de Ejecucion y toma
+    # distintos): la segunda NO extiende la version guardada. Desde E4 el
+    # repository no pisa en silencio una version que no deriva de la
+    # persistida, asi que se borra el archivo antes de escribir la otra.
+    (repo.directorio / "OR-001.json").unlink()
     repo.guardar(flujo_mvp.orden_entregada())
     assert repo.obtener("OR-001").ejecuciones[0].estado is (
         EstadoEjecucion.COMPLETADO

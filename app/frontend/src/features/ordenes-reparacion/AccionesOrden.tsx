@@ -9,7 +9,7 @@
  * igual (PROC-REP V1.3 define el actor de cada nodo).
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Boton,
@@ -23,12 +23,14 @@ import type {
   Accion,
   DetalleOrigen,
   Estacion,
+  ImpactoOverride,
   InsumoPrevisto,
   InsumoUtilizado,
   Orden,
   TipoReparacion,
   Usuario,
 } from "../../types/api";
+import { nombreDeUsuario } from "./DetalleOrden";
 
 export interface EjecutorAcciones {
   agregarDetalle: (tipoReparacionId: string) => void;
@@ -43,6 +45,9 @@ export interface EjecutorAcciones {
   ) => void;
   esperarRecursos: () => void;
   revalidarRecursos: () => void;
+  /** E3: impacto en el stock, para mostrarlo ANTES de confirmar. */
+  consultarImpactoOverride: (detalleId: string) => Promise<ImpactoOverride>;
+  /** Solo se llama con la confirmación explícita del impacto (E3). */
   overrideRecursos: (detalleId: string, motivo: string) => void;
   interrumpirEjecucion: (
     ejecucionId: string,
@@ -72,20 +77,63 @@ export interface EjecutorAcciones {
     detalleOrigenId: string | null,
   ) => void;
   finalizarSinReparacion: (motivo: string, observaciones: string) => void;
+  /** PROC-REP-235: reabre el Detalle para retrabajo. */
+  rechazarControl: (detalleId: string, motivo: string) => void;
+  /** PROC-REP-270 sobre una Orden CANCELADA. */
+  registrarDevolucion: (recibidoPor: string, observaciones: string) => void;
+  /** PROC-REP-300. */
+  cancelarDetalle: (detalleId: string, motivo: string) => void;
+  /** PROC-REP-305 / 306 (pide confirmación antes). */
+  cancelarOrden: (motivo: string) => void;
 }
 
 interface Props {
   orden: Orden;
   actor: Usuario | null;
+  usuarios: Usuario[];
   tipos: TipoReparacion[];
   estaciones: Estacion[];
   ocupado: boolean;
   ejecutar: EjecutorAcciones;
 }
 
+/**
+ * E1: una Orden cerrada solo se consulta. El backend ya no ofrece
+ * acciones operativas (solo iniciar una garantía RMA, que crea OTRA Orden)
+ * y las rechaza igual si llegan; esto solo lo explica.
+ */
+function AvisoOrdenCerrada({ orden }: { orden: Orden }) {
+  const situacion =
+    orden.estado_workflow === "ENTREGADA"
+      ? "fue entregada"
+      : orden.estado_workflow === "CANCELADA"
+        ? orden.devolucion
+          ? `fue cancelada y el equipo se devolvió a ${orden.devolucion.recibido_por}`
+          : "fue cancelada (el equipo no había quedado en custodia)"
+        : "fue devuelta a Gestión RT";
+  return (
+    <p
+      role="status"
+      style={{
+        margin: "0 0 0.75rem",
+        padding: "0.6rem 0.8rem",
+        borderRadius: 6,
+        border: `1px solid ${colores.ok}`,
+        background: "#f3faf4",
+        color: colores.texto,
+        fontSize: "0.85rem",
+      }}
+    >
+      <strong>Orden cerrada:</strong> {situacion}. Se puede consultar, pero
+      no admite acciones operativas.
+    </p>
+  );
+}
+
 export function AccionesOrden({
   orden,
   actor,
+  usuarios,
   tipos,
   estaciones,
   ocupado,
@@ -94,16 +142,15 @@ export function AccionesOrden({
   const acciones = orden.acciones_disponibles;
 
   if (acciones.length === 0) {
-    const terminada =
-      orden.estado_workflow === "ENTREGADA" ||
-      orden.current_process === "EVT-REP-999";
     return (
       <Panel titulo="Acción disponible">
-        <p style={{ margin: 0, color: colores.suave, fontSize: "0.9rem" }}>
-          {terminada
-            ? "La Orden llegó al fin del proceso. El Happy Path terminó."
-            : "No hay acciones disponibles para el estado actual."}
-        </p>
+        {orden.cerrada ? (
+          <AvisoOrdenCerrada orden={orden} />
+        ) : (
+          <p style={{ margin: 0, color: colores.suave, fontSize: "0.9rem" }}>
+            No hay acciones disponibles para el estado actual.
+          </p>
+        )}
       </Panel>
     );
   }
@@ -113,6 +160,7 @@ export function AccionesOrden({
       key={accion.codigo + (accion.detalle_id ?? "")}
       accion={accion}
       actor={actor}
+      usuarios={usuarios}
       orden={orden}
       tipos={tipos}
       estaciones={estaciones}
@@ -123,6 +171,23 @@ export function AccionesOrden({
 
   return (
     <Panel titulo="Acción disponible">
+      {orden.cerrada && <AvisoOrdenCerrada orden={orden} />}
+      {orden.devolucion_pendiente && (
+        <p
+          role="status"
+          style={{
+            margin: "0 0 0.75rem",
+            padding: "0.6rem 0.8rem",
+            borderRadius: 6,
+            border: `1px solid ${colores.alerta}`,
+            background: "#fff8e6",
+            fontSize: "0.85rem",
+          }}
+        >
+          <strong>Orden cancelada:</strong> el equipo sigue en custodia.
+          Registrá su devolución para cerrar la Orden (sin cobro).
+        </p>
+      )}
       {agruparEnPares(acciones).map((grupo) =>
         grupo.length === 1 ? (
           renderizar(grupo[0])
@@ -146,11 +211,77 @@ export function AccionesOrden({
 }
 
 /**
- * Completar e Interrumpir son las dos salidas habituales de la MISMA
- * Ejecución (PROC-REP-200): se muestran juntas. Es solo presentación: qué
- * acciones existen lo sigue decidiendo el backend.
+ * Cancelaciones de la Orden (PROC-REP-300/305/306), aparte de la acción del
+ * flujo: son capacidades excepcionales, posibles en casi cualquier etapa.
+ * Las publica el backend en `acciones_cancelacion`; acá solo se muestran,
+ * con las mismas reglas de rol que el resto. Cancelar la Orden completa
+ * pide confirmación.
  */
-const CODIGOS_EN_PAR = new Set(["COMPLETAR_EJECUCION", "INTERRUMPIR_EJECUCION"]);
+export function CancelacionesOrden({
+  orden,
+  actor,
+  usuarios,
+  tipos,
+  estaciones,
+  ocupado,
+  ejecutar,
+}: Props) {
+  if (orden.acciones_cancelacion.length === 0) return null;
+  return (
+    <Panel titulo="Cancelaciones">
+      <p
+        style={{
+          margin: "0 0 0.75rem",
+          fontSize: "0.8rem",
+          color: colores.suave,
+        }}
+      >
+        Cancelar no borra nada: el Detalle queda CANCELADO con su motivo y
+        deja de cobrarse. Lo ya realizado no se cancela.
+      </p>
+      {orden.acciones_cancelacion.map((accion) => (
+        <AccionUnica
+          key={accion.codigo + (accion.detalle_id ?? "")}
+          accion={accion}
+          actor={actor}
+          usuarios={usuarios}
+          orden={orden}
+          tipos={tipos}
+          estaciones={estaciones}
+          ocupado={ocupado}
+          ejecutar={ejecutar}
+        />
+      ))}
+    </Panel>
+  );
+}
+
+/**
+ * Pares que se muestran juntos porque son las dos salidas de lo MISMO:
+ * Completar e Interrumpir de una Ejecución (PROC-REP-200), y Aprobar o
+ * Rechazar el control de un Detalle (PROC-REP-220/230). Es solo
+ * presentación: qué acciones existen lo sigue decidiendo el backend.
+ */
+const PARES: [Set<string>, (accion: Accion) => string | null][] = [
+  [
+    new Set(["COMPLETAR_EJECUCION", "INTERRUMPIR_EJECUCION"]),
+    (accion) => accion.ejecucion_id,
+  ],
+  [
+    new Set(["APROBAR_CONTROL", "RECHAZAR_CONTROL"]),
+    (accion) => accion.detalle_id,
+  ],
+];
+
+function emparejan(anterior: Accion, accion: Accion): boolean {
+  return PARES.some(
+    ([codigos, clave]) =>
+      codigos.has(anterior.codigo) &&
+      codigos.has(accion.codigo) &&
+      anterior.codigo !== accion.codigo &&
+      clave(anterior) === clave(accion),
+  );
+}
 
 function agruparEnPares(acciones: Accion[]): Accion[][] {
   const grupos: Accion[][] = [];
@@ -159,10 +290,7 @@ function agruparEnPares(acciones: Accion[]): Accion[][] {
     const empareja =
       anterior !== undefined &&
       anterior.length === 1 &&
-      CODIGOS_EN_PAR.has(anterior[0].codigo) &&
-      CODIGOS_EN_PAR.has(accion.codigo) &&
-      anterior[0].codigo !== accion.codigo &&
-      anterior[0].ejecucion_id === accion.ejecucion_id;
+      emparejan(anterior[0], accion);
     if (empareja) {
       anterior.push(accion);
     } else {
@@ -175,6 +303,7 @@ function agruparEnPares(acciones: Accion[]): Accion[][] {
 function AccionUnica({
   accion,
   actor,
+  usuarios,
   orden,
   tipos,
   estaciones,
@@ -188,10 +317,16 @@ function AccionUnica({
   // requiere_actor: false marca un nodo actor: ACT-SYSTEM (p. ej.
   // Informar a Gestión RT): no hay ningún actor humano que elegir, así
   // que ni la habilitación ni el mensaje de rol dependen del actor demo.
-  const habilitada =
+  const rolHabilitado =
     !accion.requiere_actor ||
     (actor !== null &&
       (accion.roles.length === 0 || accion.roles.includes(actor.rol)));
+  // E2: las acciones técnicas sobre la toma son solo de su titular.
+  const titularAjeno =
+    accion.usuario_id !== null &&
+    actor !== null &&
+    accion.usuario_id !== actor.id;
+  const habilitada = rolHabilitado && !titularAjeno;
 
   return (
     <div
@@ -204,7 +339,7 @@ function AccionUnica({
       <p style={{ margin: "0 0 0.5rem", fontWeight: 600 }}>
         {accion.etiqueta}
       </p>
-      {!habilitada && accion.requiere_actor && (
+      {!rolHabilitado && accion.requiere_actor && (
         <p
           style={{
             margin: "0 0 0.5rem",
@@ -214,6 +349,19 @@ function AccionUnica({
         >
           Requiere el rol {accion.roles.join(" o ") || "—"}. Cambiá el
           actor demo para ejecutarla.
+        </p>
+      )}
+      {rolHabilitado && titularAjeno && (
+        <p
+          style={{
+            margin: "0 0 0.5rem",
+            fontSize: "0.8rem",
+            color: colores.alerta,
+          }}
+        >
+          Orden tomada por otro técnico:{" "}
+          {nombreDeUsuario(usuarios, accion.usuario_id)}. Solo el titular de
+          la toma puede operarla.
         </p>
       )}
       <FormularioAccion
@@ -275,7 +423,9 @@ function FormularioAccion({
       return (
         <FormularioMotivoOverride
           deshabilitado={deshabilitado || accion.detalle_id === null}
+          orden={orden}
           detalleId={accion.detalle_id}
+          consultarImpacto={ejecutar.consultarImpactoOverride}
           onConfirmar={ejecutar.overrideRecursos}
         />
       );
@@ -503,6 +653,52 @@ function FormularioAccion({
         </Boton>
       );
 
+    case "RECHAZAR_CONTROL":
+      return (
+        <FormularioMotivo
+          deshabilitado={deshabilitado || accion.detalle_id === null}
+          etiqueta="Motivo del rechazo (obligatorio)"
+          textoBoton={`Rechazar control del Detalle ${accion.detalle_id ?? ""}`}
+          onConfirmar={(motivo) =>
+            accion.detalle_id &&
+            ejecutar.rechazarControl(accion.detalle_id, motivo)
+          }
+        />
+      );
+
+    case "REGISTRAR_DEVOLUCION":
+      return (
+        <FormularioDevolucion
+          orden={orden}
+          deshabilitado={deshabilitado}
+          onConfirmar={ejecutar.registrarDevolucion}
+        />
+      );
+
+    case "CANCELAR_DETALLE":
+      return (
+        <FormularioMotivo
+          deshabilitado={deshabilitado || accion.detalle_id === null}
+          etiqueta={`Motivo de la cancelación de ${accion.detalle_id ?? ""} (obligatorio)`}
+          textoBoton={`Cancelar el Detalle ${accion.detalle_id ?? ""}`}
+          onConfirmar={(motivo) =>
+            accion.detalle_id &&
+            ejecutar.cancelarDetalle(accion.detalle_id, motivo)
+          }
+        />
+      );
+
+    case "CANCELAR_ORDEN":
+      return (
+        <FormularioMotivo
+          deshabilitado={deshabilitado}
+          etiqueta="Motivo de la cancelación de la Orden (obligatorio)"
+          textoBoton="Cancelar la Orden"
+          confirmar={() => window.confirm(mensajeCancelarOrden(orden))}
+          onConfirmar={ejecutar.cancelarOrden}
+        />
+      );
+
     default:
       return (
         <p style={{ margin: 0, fontSize: "0.85rem", color: colores.suave }}>
@@ -513,6 +709,112 @@ function FormularioAccion({
 }
 
 // --- Formularios --------------------------------------------------------
+
+/** Texto de la confirmación antes de cancelar la Orden completa. */
+function mensajeCancelarOrden(orden: Orden): string {
+  const pendientes = orden.reparaciones_detail.filter(
+    (detalle) => detalle.estado === "DEFINIDO",
+  ).length;
+  const completos = orden.reparaciones_detail.filter(
+    (detalle) => detalle.estado === "COMPLETO",
+  ).length;
+  if (orden.reparaciones_detail.length === 0) {
+    return `¿Cancelar la Orden ${orden.id}? No tiene Detalles: queda CANCELADA.`;
+  }
+  return (
+    `¿Cancelar la Orden ${orden.id}? Se cancelan ${pendientes} trabajo(s) ` +
+    "pendiente(s). " +
+    (completos > 0
+      ? `Los ${completos} Detalle(s) ya realizados no se cancelan y siguen ` +
+        "al control y la entrega."
+      : "Sin trabajo realizado, la Orden queda CANCELADA.")
+  );
+}
+
+/**
+ * Un motivo obligatorio y un botón. `confirmar` (opcional) se consulta
+ * antes de enviar: si devuelve `false`, no se hace nada.
+ */
+function FormularioMotivo({
+  deshabilitado,
+  etiqueta,
+  textoBoton,
+  confirmar,
+  onConfirmar,
+}: {
+  deshabilitado: boolean;
+  etiqueta: string;
+  textoBoton: string;
+  confirmar?: () => boolean;
+  onConfirmar: (motivo: string) => void;
+}) {
+  const [motivo, setMotivo] = useState("");
+
+  return (
+    <div>
+      <Campo etiqueta={etiqueta}>
+        <input
+          value={motivo}
+          onChange={(evento) => setMotivo(evento.target.value)}
+          disabled={deshabilitado}
+          style={estiloInput}
+        />
+      </Campo>
+      <Boton
+        disabled={deshabilitado || motivo.trim() === ""}
+        onClick={() => {
+          if (confirmar && !confirmar()) return;
+          onConfirmar(motivo.trim());
+        }}
+      >
+        {textoBoton}
+      </Boton>
+    </div>
+  );
+}
+
+/** Devolución física del equipo de una Orden CANCELADA: quién lo recibe. */
+function FormularioDevolucion({
+  orden,
+  deshabilitado,
+  onConfirmar,
+}: {
+  orden: Orden;
+  deshabilitado: boolean;
+  onConfirmar: (recibidoPor: string, observaciones: string) => void;
+}) {
+  const [recibidoPor, setRecibidoPor] = useState(
+    orden.cliente?.nombre ?? "Gestión RT",
+  );
+  const [observaciones, setObservaciones] = useState("");
+
+  return (
+    <div>
+      <Campo etiqueta="Recibe el equipo (obligatorio)">
+        <input
+          value={recibidoPor}
+          onChange={(evento) => setRecibidoPor(evento.target.value)}
+          disabled={deshabilitado}
+          style={estiloInput}
+        />
+      </Campo>
+      <Campo etiqueta="Observaciones">
+        <input
+          value={observaciones}
+          onChange={(evento) => setObservaciones(evento.target.value)}
+          disabled={deshabilitado}
+          style={estiloInput}
+        />
+      </Campo>
+      <Boton
+        disabled={deshabilitado || recibidoPor.trim() === ""}
+        onClick={() => onConfirmar(recibidoPor.trim(), observaciones.trim())}
+      >
+        Registrar la devolución (sin cobro)
+      </Boton>
+    </div>
+  );
+}
 
 /**
  * Agregar UN Detalle de la reparación (Multi-Detalle).
@@ -977,20 +1279,69 @@ function insumosPrevistosDe(
   return detalle?.insumos_previstos ?? [];
 }
 
+/**
+ * E3: antes de forzar el Detalle se muestra el impacto en el stock -físico,
+ * reservado, disponible, requerido y resultante- y se exige confirmarlo
+ * explícitamente. El backend también exige la confirmación: esto no es la
+ * única protección, y las reservas de otras Órdenes nunca se tocan.
+ */
 function FormularioMotivoOverride({
   deshabilitado,
+  orden,
   detalleId,
+  consultarImpacto,
   onConfirmar,
 }: {
   deshabilitado: boolean;
+  orden: Orden;
   detalleId: string | null;
+  consultarImpacto: (detalleId: string) => Promise<ImpactoOverride>;
   onConfirmar: (detalleId: string, motivo: string) => void;
 }) {
   const [motivo, setMotivo] = useState("");
+  const [confirmado, setConfirmado] = useState(false);
+  const [impacto, setImpacto] = useState<ImpactoOverride | null>(null);
+  const [errorImpacto, setErrorImpacto] = useState<string | null>(null);
+
+  // Se recalcula cada vez que la Orden cambia: el stock y las reservas
+  // pudieron moverse, y una confirmación vieja ya no vale.
+  useEffect(() => {
+    if (detalleId === null) return;
+    let vigente = true;
+    setImpacto(null);
+    setConfirmado(false);
+    setErrorImpacto(null);
+    consultarImpacto(detalleId)
+      .then((resultado) => vigente && setImpacto(resultado))
+      .catch(
+        (fallo: unknown) =>
+          vigente &&
+          setErrorImpacto(
+            fallo instanceof Error
+              ? fallo.message
+              : "No se pudo calcular el impacto en el stock.",
+          ),
+      );
+    return () => {
+      vigente = false;
+    };
+    // consultarImpacto se recrea en cada render del panel: lo que importa
+    // es la Orden (id y version) y el Detalle.
+  }, [orden.id, orden.updated_at, detalleId]);
+
+  const listo =
+    !deshabilitado &&
+    detalleId !== null &&
+    impacto !== null &&
+    confirmado &&
+    motivo.trim() !== "";
 
   return (
     <div>
-      <Campo etiqueta={`Motivo del override del Detalle ${detalleId ?? ""} (obligatorio)`}>
+      <ImpactoEnStock impacto={impacto} error={errorImpacto} />
+      <Campo
+        etiqueta={`Motivo del override del Detalle ${detalleId ?? ""} (obligatorio)`}
+      >
         <input
           value={motivo}
           onChange={(evento) => setMotivo(evento.target.value)}
@@ -998,12 +1349,130 @@ function FormularioMotivoOverride({
           style={estiloInput}
         />
       </Campo>
+      <label
+        style={{
+          display: "flex",
+          gap: "0.5rem",
+          alignItems: "flex-start",
+          margin: "0 0 0.6rem",
+          fontSize: "0.85rem",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={confirmado}
+          onChange={(evento) => setConfirmado(evento.target.checked)}
+          disabled={deshabilitado || impacto === null}
+        />
+        <span>
+          Confirmo el override con este impacto en el stock
+          {impacto?.deja_disponible_negativo
+            ? ", aunque el disponible quede en negativo."
+            : "."}
+        </span>
+      </label>
       <Boton
-        disabled={deshabilitado || motivo.trim() === "" || detalleId === null}
-        onClick={() => detalleId !== null && onConfirmar(detalleId, motivo.trim())}
+        disabled={!listo}
+        onClick={() =>
+          detalleId !== null && listo && onConfirmar(detalleId, motivo.trim())
+        }
       >
         Forzar el Detalle (override)
       </Boton>
+    </div>
+  );
+}
+
+function ImpactoEnStock({
+  impacto,
+  error,
+}: {
+  impacto: ImpactoOverride | null;
+  error: string | null;
+}) {
+  if (error) {
+    return (
+      <p style={{ margin: "0 0 0.6rem", color: colores.error }}>{error}</p>
+    );
+  }
+  if (impacto === null) {
+    return (
+      <p style={{ margin: "0 0 0.6rem", color: colores.suave }}>
+        Calculando el impacto en el stock…
+      </p>
+    );
+  }
+
+  const celda = { padding: "0.25rem 0.5rem", textAlign: "right" as const };
+  return (
+    <div style={{ margin: "0 0 0.75rem" }}>
+      {impacto.insumos.length === 0 ? (
+        <p style={{ margin: "0 0 0.4rem", color: colores.suave }}>
+          El Detalle no prevé insumos.
+        </p>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table
+            style={{
+              borderCollapse: "collapse",
+              fontSize: "0.8rem",
+              width: "100%",
+            }}
+          >
+            <thead>
+              <tr style={{ color: colores.suave }}>
+                <th style={{ ...celda, textAlign: "left" }}>Insumo</th>
+                <th style={celda}>Físico</th>
+                <th style={celda}>Reservado otras OR</th>
+                <th style={celda}>Reservado esta OR</th>
+                <th style={celda}>Disponible</th>
+                <th style={celda}>Requerido</th>
+                <th style={celda}>Disponible resultante</th>
+              </tr>
+            </thead>
+            <tbody>
+              {impacto.insumos.map((insumo) => (
+                <tr
+                  key={insumo.insumo_id}
+                  style={{ borderTop: `1px solid ${colores.borde}` }}
+                >
+                  <td style={{ ...celda, textAlign: "left" }}>
+                    {insumo.nombre} ({insumo.codigo})
+                  </td>
+                  <td style={celda}>{insumo.stock_fisico}</td>
+                  <td style={celda}>{insumo.reservado_otras_ordenes}</td>
+                  <td style={celda}>{insumo.reservado_esta_orden}</td>
+                  <td style={celda}>{insumo.disponible}</td>
+                  <td style={celda}>{insumo.requerido}</td>
+                  <td
+                    style={{
+                      ...celda,
+                      fontWeight: 600,
+                      color:
+                        Number(insumo.disponible_resultante) < 0
+                          ? colores.error
+                          : colores.ok,
+                    }}
+                  >
+                    {insumo.disponible_resultante}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p
+        style={{
+          margin: "0.4rem 0 0",
+          fontSize: "0.8rem",
+          color: impacto.deja_disponible_negativo
+            ? colores.error
+            : colores.suave,
+        }}
+      >
+        {impacto.advertencia}
+      </p>
     </div>
   );
 }

@@ -27,7 +27,9 @@ from app.domain.models import (
     Insumo,
     OrdenReparacion,
     OrigenOrden,
+    RegistroControlTecnico,
     ReparacionDetail,
+    ResultadoControl,
     RolUsuario,
     TipoReparacion,
     TipoReparacionInsumos,
@@ -428,48 +430,55 @@ def validar_factibilidad_detalles(
     return nueva_orden, False
 
 
-def aprobar_control_tecnico(
-    orden: OrdenReparacion,
-    *,
-    usuario: Usuario,
-    fecha: datetime,
-    detalle_id: str | None = None,
-    observaciones: str | None = None,
-) -> OrdenReparacion:
-    """PROC-REP-220 -> PROC-REP-230: Recepcion aprueba (BR-REP-008).
+_TERMINALES = (
+    EstadoReparacionDetail.COMPLETO,
+    EstadoReparacionDetail.CANCELADO,
+)
 
-    PROC-REP-220 solo se alcanza cuando la Orden entera es terminal
-    (todos sus Detalles COMPLETO): es el mismo requisito que
-    ``resolver_situacion_orden`` exige para clasificar ``COMPLETA``
-    (BR-REP-012). Por eso esta precondicion se exige siempre, con o sin
-    ``detalle_id`` -no alcanza con que el Detalle puntual este COMPLETO
-    si todavia queda otro DEFINIDO o EN_PROGRESO-.
 
-    Recepcion controla la Orden completa pero aprueba Detalle por
-    Detalle (Multi-Detalle): con ``detalle_id`` aprueba unicamente ese
-    Detalle; sin ``detalle_id`` preserva el comportamiento anterior
-    (aprueba todos los Detalles de una vez). El MVP implementa solo la
-    aprobacion: el rechazo y el retrabajo (PROC-REP-235) no estan
-    implementados.
+def control_tecnico_completo(orden: OrdenReparacion) -> bool:
+    """Todos los Detalles vigentes tienen el control APROBADO.
 
-    No cambia el estado tecnico del Detalle: sigue COMPLETO. La
-    aprobacion es otra dimension y vive en ``control_estado``.
-
-    PROC-REP-230 ("todos los Detalles fueron aprobados") solo se
-    registra cuando, despues de esta aprobacion, TODOS los Detalles de
-    la Orden quedan APROBADO -en ese caso, siempre con observacion
-    "Si": "No" significaria que un Detalle fue RECHAZADO, y el rechazo
-    esta fuera de scope (EXC-REP-005). Una aprobacion parcial (todavia
-    queda otro Detalle PENDIENTE) NO registra PROC-REP-230: eso no es
-    "No", es simplemente que la decision todavia no se tomo. El caller
-    (``application.cierre.aprobar_control``) sigue el mismo criterio
-    para PROC-REP-245/240.
-
-    PROC-REP-220 es ACT-RECEP: el control lo hace Recepcion, no el
-    tecnico que ejecuto el trabajo.
+    Los CANCELADO no se controlan (no se hicieron). Hace falta al menos un
+    Detalle aprobado: una Orden toda cancelada no llega a REPARACION_LISTA.
     """
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    vigentes = [
+        detalle
+        for detalle in orden.reparaciones_detail
+        if detalle.estado is not EstadoReparacionDetail.CANCELADO
+    ]
+    return bool(vigentes) and all(
+        detalle.control_estado is EstadoControl.APROBADO
+        for detalle in vigentes
+    )
 
+
+def pendiente_de_retrabajo(detalle: ReparacionDetail) -> bool:
+    """El Detalle fue reabierto por un control rechazado y no se rehizo.
+
+    Se deriva de ``controles`` (el ultimo registrado es un rechazo) y del
+    estado: deja de estar pendiente cuando el retrabajo termina (COMPLETO),
+    aunque su nuevo control todavia no se haya hecho.
+    """
+    return (
+        detalle.estado
+        in (
+            EstadoReparacionDetail.DEFINIDO,
+            EstadoReparacionDetail.EN_PROGRESO,
+        )
+        and bool(detalle.controles)
+        and detalle.controles[-1].resultado is ResultadoControl.RECHAZADO
+    )
+
+
+def _exigir_orden_en_control(orden: OrdenReparacion) -> None:
+    """PROC-REP-220 se alcanza con la Orden entera terminal (BR-REP-012).
+
+    Todos sus Detalles COMPLETO o CANCELADO y al menos uno COMPLETO, sin
+    Ejecucion activa: el mismo requisito que ``resolver_situacion_orden``
+    exige para clasificar ``COMPLETA``. No alcanza con que el Detalle
+    puntual este COMPLETO si todavia queda otro DEFINIDO o EN_PROGRESO.
+    """
     if not orden.reparaciones_detail:
         raise PrecondicionInvalidaError("No hay Detalles que controlar.")
     if any(
@@ -480,30 +489,120 @@ def aprobar_control_tecnico(
             "No se puede controlar con una Ejecucion activa."
         )
     if any(
-        detalle.estado is not EstadoReparacionDetail.COMPLETO
+        detalle.estado not in _TERMINALES
         for detalle in orden.reparaciones_detail
     ):
         raise PrecondicionInvalidaError(
             "El control tecnico (PROC-REP-220) solo se alcanza cuando "
-            "todos los Detalles de la Orden estan COMPLETO."
+            "todos los Detalles de la Orden estan terminados (COMPLETO o "
+            "CANCELADO)."
+        )
+    if not any(
+        detalle.estado is EstadoReparacionDetail.COMPLETO
+        for detalle in orden.reparaciones_detail
+    ):
+        raise PrecondicionInvalidaError(
+            "No hay trabajo realizado que controlar: todos los Detalles "
+            "estan CANCELADO."
         )
 
-    if detalle_id is not None:
-        detalle_objetivo = next(
-            (
-                detalle
-                for detalle in orden.reparaciones_detail
-                if detalle.id == detalle_id
-            ),
-            None,
+
+def _detalle_a_controlar(
+    orden: OrdenReparacion,
+    detalle_id: str,
+) -> ReparacionDetail:
+    """El Detalle existe, se realizo y su control sigue pendiente (E14)."""
+    detalle = next(
+        (d for d in orden.reparaciones_detail if d.id == detalle_id), None
+    )
+    if detalle is None:
+        raise EntidadNoEncontradaError(
+            f"La Orden no tiene el Detalle {detalle_id}"
         )
-        if detalle_objetivo is None:
-            raise EntidadNoEncontradaError(
-                f"La Orden no tiene el Detalle {detalle_id}"
-            )
+    if detalle.estado is EstadoReparacionDetail.CANCELADO:
+        raise PrecondicionInvalidaError(
+            f"El Detalle {detalle_id} esta CANCELADO: no se controla."
+        )
+    if detalle.control_estado is EstadoControl.APROBADO:
+        raise PrecondicionInvalidaError(
+            f"El Detalle {detalle_id} ya fue aprobado por "
+            f"{detalle.control_usuario_id} el {detalle.control_fecha}: un "
+            "control registrado no se vuelve a escribir."
+        )
+    return detalle
+
+
+def _ultima_ejecucion_completada(
+    orden: OrdenReparacion,
+    detalle_id: str,
+) -> str | None:
+    """La Ejecucion cuyo resultado se controla ahora."""
+    completadas = [
+        ejecucion.id
+        for ejecucion in orden.ejecuciones
+        if ejecucion.reparacion_detail_id == detalle_id
+        and ejecucion.estado is EstadoEjecucion.COMPLETADO
+    ]
+    return completadas[-1] if completadas else None
+
+
+def aprobar_control_tecnico(
+    orden: OrdenReparacion,
+    *,
+    usuario: Usuario,
+    fecha: datetime,
+    detalle_id: str | None = None,
+    observaciones: str | None = None,
+) -> OrdenReparacion:
+    """PROC-REP-220 -> PROC-REP-230: Recepcion aprueba (BR-REP-008).
+
+    PROC-REP-220 solo se alcanza con la Orden entera terminal
+    (``_exigir_orden_en_control``), con o sin ``detalle_id``.
+
+    Recepcion controla la Orden completa pero aprueba Detalle por
+    Detalle (Multi-Detalle): con ``detalle_id`` aprueba unicamente ese
+    Detalle; sin ``detalle_id`` aprueba de una vez todos los que todavia
+    tienen el control PENDIENTE. El rechazo es
+    ``rechazar_control_tecnico`` (PROC-REP-235).
+
+    E14: una aprobacion registrada no se vuelve a escribir. Aprobar un
+    Detalle ya APROBADO es un conflicto, y la aprobacion en bloque no toca
+    los ya aprobados. Cada aprobacion agrega un registro a
+    ``ReparacionDetail.controles`` -con la Ejecucion que se controlo- y
+    nunca reemplaza uno anterior: aprobar despues de un retrabajo es un
+    control nuevo.
+
+    No cambia el estado tecnico del Detalle: sigue COMPLETO. La
+    aprobacion es otra dimension y vive en ``control_estado``.
+
+    PROC-REP-230 ("todos los Detalles fueron aprobados") solo se
+    registra con "Si" cuando, despues de esta aprobacion, todos los
+    Detalles vigentes (no CANCELADO) quedan APROBADO. Una aprobacion
+    parcial no registra PROC-REP-230: la decision todavia no se tomo. El
+    caller (``application.cierre.aprobar_control``) sigue el mismo
+    criterio para PROC-REP-245/240.
+
+    PROC-REP-220 es ACT-RECEP: el control lo hace Recepcion, no el
+    tecnico que ejecuto el trabajo.
+    """
+    validar_actor(usuario, RolUsuario.RECEPCION)
+    _exigir_orden_en_control(orden)
+
+    if detalle_id is not None:
+        _detalle_a_controlar(orden, detalle_id)
         objetivo_ids = {detalle_id}
     else:
-        objetivo_ids = {detalle.id for detalle in orden.reparaciones_detail}
+        objetivo_ids = {
+            detalle.id
+            for detalle in orden.reparaciones_detail
+            if detalle.estado is EstadoReparacionDetail.COMPLETO
+            and detalle.control_estado is EstadoControl.PENDIENTE
+        }
+        if not objetivo_ids:
+            raise PrecondicionInvalidaError(
+                "No queda ningun Detalle con el control pendiente: un "
+                "control registrado no se vuelve a escribir."
+            )
 
     nueva_orden = registrar_paso(
         orden,
@@ -520,16 +619,22 @@ def aprobar_control_tecnico(
             detalle.control_usuario_id = usuario.id
             detalle.control_fecha = fecha
             detalle.control_observaciones = observaciones
+            detalle.controles.append(
+                RegistroControlTecnico(
+                    resultado=ResultadoControl.APROBADO,
+                    usuario_id=usuario.id,
+                    fecha=fecha,
+                    observaciones=observaciones,
+                    ejecucion_id=_ultima_ejecucion_completada(
+                        nueva_orden, detalle.id
+                    ),
+                )
+            )
 
-    todos_aprobados = all(
-        detalle.control_estado is EstadoControl.APROBADO
-        for detalle in nueva_orden.reparaciones_detail
-    )
-    if not todos_aprobados:
-        # Todavia falta aprobar otro Detalle: eso NO es PROC-REP-230 =
-        # "No" -ese resultado significa que un Detalle fue RECHAZADO
-        # (fuera de scope, EXC-REP-005), no "falta controlar otro". No
-        # se registra la decision hasta que de verdad se tome.
+    if not control_tecnico_completo(nueva_orden):
+        # Todavia falta controlar otro Detalle: eso NO es PROC-REP-230 =
+        # "No" -ese resultado es un rechazo (PROC-REP-235)-. No se
+        # registra la decision hasta que de verdad se tome.
         return nueva_orden
 
     return registrar_paso(
@@ -540,6 +645,88 @@ def aprobar_control_tecnico(
         usuario_id=usuario.id,
         observacion="Si",
     )
+
+
+def rechazar_control_tecnico(
+    orden: OrdenReparacion,
+    *,
+    detalle_id: str,
+    usuario: Usuario,
+    motivo: str,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """PROC-REP-220 -> 230 ("No") -> 235: Recepcion rechaza UN Detalle.
+
+    BR-REP-008 / ACT-RECEP. Mismas precondiciones que la aprobacion (Orden
+    terminal, Detalle COMPLETO con el control pendiente) mas un motivo
+    obligatorio. PROC-REP-235 identifica el Detalle a retrabajar: vuelve a
+    PENDIENTE (DEFINIDO) y su control vigente vuelve a PENDIENTE; el
+    rechazo queda en ``controles`` con la Ejecucion rechazada. Solo se
+    reabre ESE Detalle: los aprobados siguen aprobados y los demas no se
+    tocan.
+
+    No crea una Ejecucion ni reserva insumos: el retrabajo es una
+    Ejecucion NUEVA que el tecnico inicia despues (PROC-REP-185, que
+    vuelve a validar el stock). Las Ejecuciones y movimientos anteriores
+    se conservan. Que sigue lo decide el resolver (PROC-REP-211), que
+    compone el caller (``application.cierre.rechazar_control``).
+    """
+    validar_actor(usuario, RolUsuario.RECEPCION)
+    if not motivo.strip():
+        raise PrecondicionInvalidaError(
+            "El rechazo del control exige un motivo (BR-REP-008)."
+        )
+    _exigir_orden_en_control(orden)
+    _detalle_a_controlar(orden, detalle_id)
+
+    motivo = motivo.strip()
+    ejecucion_id = _ultima_ejecucion_completada(orden, detalle_id)
+
+    nueva_orden = registrar_paso(
+        orden,
+        process_id="PROC-REP-220",
+        accion="REALIZAR_CONTROL_TECNICO",
+        fecha=fecha,
+        usuario_id=usuario.id,
+        reparacion_detail_id=detalle_id,
+        observacion=f"Rechazado: {motivo}",
+    )
+    nueva_orden = registrar_paso(
+        nueva_orden,
+        process_id="PROC-REP-230",
+        accion="TODOS_LOS_DETALLES_APROBADOS",
+        fecha=fecha,
+        usuario_id=usuario.id,
+        observacion="No",
+    )
+    nueva_orden = registrar_paso(
+        nueva_orden,
+        process_id="PROC-REP-235",
+        accion="IDENTIFICAR_DETALLES_A_RETRABAJAR",
+        fecha=fecha,
+        usuario_id=usuario.id,
+        reparacion_detail_id=detalle_id,
+        observacion=f"Retrabajo: {motivo}",
+    )
+
+    detalle = next(
+        d for d in nueva_orden.reparaciones_detail if d.id == detalle_id
+    )
+    detalle.controles.append(
+        RegistroControlTecnico(
+            resultado=ResultadoControl.RECHAZADO,
+            usuario_id=usuario.id,
+            fecha=fecha,
+            observaciones=motivo,
+            ejecucion_id=ejecucion_id,
+        )
+    )
+    detalle.estado = EstadoReparacionDetail.DEFINIDO
+    detalle.control_estado = EstadoControl.PENDIENTE
+    detalle.control_usuario_id = None
+    detalle.control_fecha = None
+    detalle.control_observaciones = None
+    return nueva_orden
 
 
 def calcular_puntaje(

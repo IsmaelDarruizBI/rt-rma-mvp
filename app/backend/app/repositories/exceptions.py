@@ -17,3 +17,14 @@ class EntidadPersistidaNoEncontradaError(RepositoryError):
 
 class PersistenciaError(RepositoryError):
     """No se pudo leer o escribir: contenido invalido o error de E/S."""
+
+
+class ConflictoDeEscrituraError(RepositoryError):
+    """Se intento guardar una version obsoleta de la entidad (E4).
+
+    La version persistida cambio despues de que la operacion la leyo, o
+    ya esta cerrada. No es un fallo de infraestructura: la API lo responde
+    como conflicto (409) para que el usuario recargue y reintente.
+    """
+
+    codigo = "CONFLICTO_CONCURRENTE"

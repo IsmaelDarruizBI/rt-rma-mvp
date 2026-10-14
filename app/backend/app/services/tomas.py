@@ -37,7 +37,11 @@ from app.domain.models import (
 )
 
 from .autorizacion import actor_valido, validar_actor
-from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
+from .exceptions import (
+    EntidadNoEncontradaError,
+    PrecondicionInvalidaError,
+    TomaDeOtroTecnicoError,
+)
 from .identificadores import nuevo_id
 from .workflow import registrar_paso
 
@@ -48,6 +52,35 @@ def toma_activa(orden: OrdenReparacion) -> TomaOrden | None:
         if toma.estado is EstadoTomaOrden.ACTIVA:
             return toma
     return None
+
+
+def validar_titular_de_la_toma(
+    orden: OrdenReparacion,
+    usuario: Usuario,
+    *,
+    sin_toma: str = "La Orden no tiene una toma activa.",
+) -> TomaOrden:
+    """La toma activa existe y es de ``usuario`` (E2, BR-REP-018).
+
+    Decision de negocio E2 (MVP v2): mientras dura la toma, la Orden esta
+    bajo la responsabilidad operativa de ese tecnico. Es la validacion
+    comun de toda accion tecnica sobre la toma -iniciar (181/185),
+    completar o interrumpir (190/200) y liberar (212/213)-: otro tecnico
+    puede consultar la Orden y ver quien la tiene, pero no operarla hasta
+    que se libere.
+
+    ``sin_toma`` es el mensaje del caller para cuando no hay toma activa.
+    """
+    toma = toma_activa(orden)
+    if toma is None:
+        raise PrecondicionInvalidaError(sin_toma)
+    if toma.usuario_id != usuario.id:
+        raise TomaDeOtroTecnicoError(
+            f"Orden tomada por otro tecnico: {toma.usuario_id} "
+            f"(estacion {toma.estacion_id}). Solo el titular de la toma "
+            f"puede operarla; {usuario.id} puede consultarla."
+        )
+    return toma
 
 
 def hay_ejecucion_activa(orden: OrdenReparacion) -> bool:
@@ -126,8 +159,12 @@ def validar_estacion_trabajo(
         motivo = "La Orden ya tiene una Ejecucion activa"
         return _registrar_validacion_estacion(orden, fecha, usuario, motivo)
 
-    if toma_activa(orden) is not None:
-        motivo = "La Orden ya esta tomada por otro tecnico"
+    tomada = toma_activa(orden)
+    if tomada is not None:
+        motivo = (
+            f"La Orden ya esta tomada por {tomada.usuario_id} "
+            f"(estacion {tomada.estacion_id})"
+        )
         return _registrar_validacion_estacion(orden, fecha, usuario, motivo)
 
     trabajables = [
@@ -282,6 +319,8 @@ def seleccionar_detalle(
     (``REQUIERE_DEFINICION`` o ``BLOQUEADO_POR_RECURSOS``) se rechaza
     aca tambien, aunque el caller no haya consultado antes las acciones
     disponibles.
+
+    Solo el titular de la toma activa selecciona (E2).
     """
     validar_actor(usuario, RolUsuario.TECNICO)
 
@@ -296,10 +335,11 @@ def seleccionar_detalle(
             f"El Detalle {detalle_id} no es trabajable "
             f"(condicion {detalle.condicion.value})."
         )
-    if toma_activa(orden) is None:
-        raise PrecondicionInvalidaError(
-            "Hay que tomar la Orden antes de seleccionar un Detalle."
-        )
+    validar_titular_de_la_toma(
+        orden,
+        usuario,
+        sin_toma="Hay que tomar la Orden antes de seleccionar un Detalle.",
+    )
 
     nueva_orden = orden
     if orden.current_process in _ORIGENES_DE_LA_DECISION_212:
@@ -332,14 +372,17 @@ def liberar_orden(
     fin), registra el regreso a la cola (PROC-REP-170, ACT-SYSTEM) y
     deja la Orden EN_COLA. Nunca se sobrescribe el historial de
     participaciones anteriores.
+
+    Solo libera el titular de la toma (E2): otro tecnico no puede
+    sacarsela.
     """
     validar_actor(usuario, RolUsuario.TECNICO)
 
-    toma = toma_activa(orden)
-    if toma is None:
-        raise PrecondicionInvalidaError(
-            "La Orden no tiene una toma activa para liberar."
-        )
+    validar_titular_de_la_toma(
+        orden,
+        usuario,
+        sin_toma="La Orden no tiene una toma activa para liberar.",
+    )
     if hay_ejecucion_activa(orden):
         raise PrecondicionInvalidaError(
             "No se puede liberar la Orden con una Ejecucion activa."

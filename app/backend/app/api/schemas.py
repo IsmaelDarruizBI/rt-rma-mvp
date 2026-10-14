@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from app.application import (
     AccionDisponible,
     DetalleOrigen,
+    ImpactoOverride,
     InsumoPrevisto,
     PasoProgreso,
 )
@@ -44,6 +45,7 @@ from app.domain.models import (
     OrdenReparacion,
     OrigenOrden,
     ReparacionDetail,
+    ResultadoControl,
     RolUsuario,
     TipoPago,
     TipoReferenciaHistorial,
@@ -52,7 +54,13 @@ from app.domain.models import (
     Usuario,
 )
 from app.domain.politicas import politica_de
-from app.services import finalizada_sin_reparacion, nuevo_id
+from app.services import (
+    devolucion_pendiente,
+    finalizada_sin_reparacion,
+    nuevo_id,
+    pendiente_de_retrabajo,
+    toma_activa,
+)
 
 # --- Catalogos ---------------------------------------------------------
 
@@ -327,11 +335,15 @@ class OverrideRecursosIn(BaseModel):
     """``POST /api/orders/{id}/details/{detalle_id}/resources/override``.
 
     Override de factibilidad por recursos (ACT-COORD, BR-REP-003): el
-    motivo es obligatorio.
+    motivo es obligatorio. ``confirmado`` (E3) es la confirmacion
+    explicita del impacto en el stock que la UI muestra antes
+    (``GET .../resources/override-preview``): sin ella el backend no
+    aplica nada y responde 409 CONFIRMACION_REQUERIDA.
     """
 
     usuario_id: str = Field(min_length=1)
     motivo: str = Field(min_length=1)
+    confirmado: bool = False
 
 
 class EnviarARevisionIn(BaseModel):
@@ -377,6 +389,43 @@ class DevolverRtIn(BaseModel):
     """``POST /api/orders/{id}/return-rt`` (PROC-REP-270, HP-REP-002)."""
 
     usuario_id: str = Field(min_length=1)
+
+
+class RechazarControlIn(BaseModel):
+    """``POST /api/orders/{id}/control/reject`` (ACT-RECEP, PROC-REP-235).
+
+    Rechaza el control de UN Detalle: ``detalle_id`` y ``motivo`` son
+    obligatorios.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    detalle_id: str = Field(min_length=1)
+    motivo: str = Field(min_length=1)
+
+
+class CancelarDetalleIn(BaseModel):
+    """``POST /api/orders/{id}/details/{detalle_id}/cancel`` (PROC-REP-300)."""
+
+    usuario_id: str = Field(min_length=1)
+    motivo: str = Field(min_length=1)
+
+
+class CancelarOrdenIn(BaseModel):
+    """``POST /api/orders/{id}/cancel`` (PROC-REP-305 / 306)."""
+
+    usuario_id: str = Field(min_length=1)
+    motivo: str = Field(min_length=1)
+
+
+class RegistrarDevolucionIn(BaseModel):
+    """``POST /api/orders/{id}/return-equipment`` (PROC-REP-270, CANCELADA).
+
+    ``recibido_por``: quien recibe el equipo (el cliente o Gestion RT).
+    """
+
+    usuario_id: str = Field(min_length=1)
+    recibido_por: str = Field(min_length=1)
+    observaciones: str | None = None
 
 
 # --- Salida ------------------------------------------------------------
@@ -436,11 +485,32 @@ class DefinicionAnteriorOut(BaseModel):
     usuario_id: str
 
 
+class ControlTecnicoOut(BaseModel):
+    """Un control tecnico registrado: aprobacion o rechazo (E14)."""
+
+    resultado: ResultadoControl
+    usuario_id: str
+    fecha: datetime
+    observaciones: str | None = None
+    ejecucion_id: str | None = None
+
+
+class CancelacionOut(BaseModel):
+    """Quien cancelo el Detalle, cuando y por que (PROC-REP-300/305)."""
+
+    usuario_id: str
+    fecha: datetime
+    motivo: str
+
+
 class DetalleOut(BaseModel):
     """Detalle de Reparacion con su snapshot comercial.
 
     ``definiciones_anteriores`` (EXC-REP-004) son las definiciones que
     PROC-REP-127 reemplazo, de la mas antigua a la mas reciente.
+    ``controles`` son todos los controles tecnicos registrados, en orden;
+    ``pendiente_de_retrabajo`` indica un Detalle reabierto por un rechazo
+    que todavia no se rehizo. ``cancelacion`` solo viene en un CANCELADO.
     """
 
     id: str
@@ -460,6 +530,9 @@ class DetalleOut(BaseModel):
     definiciones_anteriores: list[DefinicionAnteriorOut] = Field(
         default_factory=list
     )
+    controles: list[ControlTecnicoOut] = Field(default_factory=list)
+    pendiente_de_retrabajo: bool = False
+    cancelacion: CancelacionOut | None = None
     insumos_previstos: list[InsumoPrevistoOut] = Field(default_factory=list)
 
     @classmethod
@@ -471,6 +544,7 @@ class DetalleOut(BaseModel):
     ) -> "DetalleOut":
         return cls(
             **detalle.model_dump(),
+            pendiente_de_retrabajo=pendiente_de_retrabajo(detalle),
             tipo_reparacion_nombre=(
                 tipo_reparacion_nombre or detalle.tipo_reparacion_id
             ),
@@ -540,6 +614,15 @@ class DocumentosOut(BaseModel):
     comprobante_recepcion: DocumentoOut
     comprobante_final: DocumentoOut
     garantia_reparacion: DocumentoOut
+
+
+class DevolucionOut(BaseModel):
+    """Devolucion fisica del equipo de una Orden CANCELADA (PROC-REP-270)."""
+
+    entregado_por: str
+    recibido_por: str
+    fecha: datetime
+    observaciones: str | None = None
 
 
 class ResumenComercialOut(BaseModel):
@@ -623,6 +706,11 @@ class AccionOut(BaseModel):
     ejemplo Informar a Gestion RT, PROC-REP-290): no hay ningun actor
     humano que autorizar, y el comando correspondiente no recibe
     ``usuario_id``.
+
+    ``usuario_id`` (E2), cuando viene, es la UNICA persona que puede
+    ejecutar la accion: el titular de la toma activa en las acciones
+    tecnicas. La UI la deshabilita para cualquier otro usuario; el
+    backend igual lo rechaza (409 TOMA_DE_OTRO_TECNICO).
     """
 
     codigo: str
@@ -631,6 +719,7 @@ class AccionOut(BaseModel):
     detalle_id: str | None = None
     ejecucion_id: str | None = None
     requiere_actor: bool = True
+    usuario_id: str | None = None
 
     @classmethod
     def desde_dominio(cls, accion: AccionDisponible) -> "AccionOut":
@@ -641,6 +730,7 @@ class AccionOut(BaseModel):
             detalle_id=accion.detalle_id,
             ejecucion_id=accion.ejecucion_id,
             requiere_actor=accion.requiere_actor,
+            usuario_id=accion.usuario_id,
         )
 
 
@@ -691,6 +781,67 @@ class OrdenResumenOut(BaseModel):
         )
 
 
+class ImpactoStockInsumoOut(BaseModel):
+    """Un insumo previsto ante el override: lo que se confirma (E3).
+
+    ``disponible = stock_fisico - reservado_otras_ordenes -
+    reservado_esta_orden`` y ``disponible_resultante = disponible -
+    requerido``.
+    """
+
+    insumo_id: str
+    codigo: str
+    nombre: str
+    stock_fisico: Decimal
+    reservado_otras_ordenes: Decimal
+    reservado_esta_orden: Decimal
+    disponible: Decimal
+    requerido: Decimal
+    disponible_resultante: Decimal
+
+
+class ImpactoOverrideOut(BaseModel):
+    """``GET .../details/{detalle_id}/resources/override-preview`` (E3)."""
+
+    orden_id: str
+    detalle_id: str
+    insumos: list[ImpactoStockInsumoOut]
+    deja_disponible_negativo: bool
+    hay_reservas_de_otras_ordenes: bool
+    advertencia: str
+
+    @classmethod
+    def desde_aplicacion(
+        cls, impacto: ImpactoOverride
+    ) -> "ImpactoOverrideOut":
+        return cls(
+            orden_id=impacto.orden_id,
+            detalle_id=impacto.detalle_id,
+            insumos=[
+                ImpactoStockInsumoOut(
+                    insumo_id=insumo.insumo_id,
+                    codigo=insumo.codigo,
+                    nombre=insumo.nombre,
+                    stock_fisico=insumo.stock_fisico,
+                    reservado_otras_ordenes=insumo.reservado_otras_ordenes,
+                    reservado_esta_orden=insumo.reservado_esta_orden,
+                    disponible=insumo.disponible,
+                    requerido=insumo.requerido,
+                    disponible_resultante=insumo.disponible_resultante,
+                )
+                for insumo in impacto.insumos
+            ],
+            deja_disponible_negativo=impacto.deja_disponible_negativo,
+            hay_reservas_de_otras_ordenes=impacto.hay_reservas_de_otras_ordenes,
+            advertencia=impacto.advertencia,
+        )
+
+
+def _toma_activa_out(orden: OrdenReparacion) -> TomaOut | None:
+    toma = toma_activa(orden)
+    return TomaOut.desde_dominio(toma) if toma is not None else None
+
+
 class DetalleOrigenOut(BaseModel):
     """Detalle de la Orden origen de una garantia RMA (presentacion)."""
 
@@ -716,8 +867,15 @@ class OrdenOut(BaseModel):
     detalles_origen: list[DetalleOrigenOut] = Field(default_factory=list)
     # PROC-REP-069: derivado del historial, no es un estado de workflow.
     finalizada_sin_reparacion: bool = False
+    # E1: la Orden termino su proceso (entregada o devuelta a Gestion RT)
+    # y solo puede consultarse. Derivado, no se persiste.
+    cerrada: bool = False
     reparaciones_detail: list[DetalleOut]
     tomas: list[TomaOut]
+    # E2: la toma vigente (tecnico, estacion, inicio), si la hay. Derivada
+    # de ``tomas``: es lo que cualquier usuario necesita ver para saber
+    # quien tiene la Orden.
+    toma_activa: TomaOut | None = None
     ejecuciones: list[EjecucionOut]
     pagos: list[PagoOut]
     documentos: DocumentosOut
@@ -725,6 +883,12 @@ class OrdenOut(BaseModel):
     historial: list[HistorialOut]
     progreso: list[PasoProgresoOut]
     acciones_disponibles: list[AccionOut]
+    # Cancelaciones posibles ahora (PROC-REP-300/305/306): capacidades
+    # excepcionales, separadas de la accion del flujo.
+    acciones_cancelacion: list[AccionOut] = Field(default_factory=list)
+    # Orden CANCELADA: devolucion fisica del equipo (registrada o pendiente).
+    devolucion: DevolucionOut | None = None
+    devolucion_pendiente: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -739,6 +903,7 @@ class OrdenOut(BaseModel):
         | None = None,
         nombres_de_tipo: Mapping[str, str] | None = None,
         detalles_origen: Sequence[DetalleOrigen] = (),
+        acciones_cancelacion: Sequence[AccionDisponible] = (),
     ) -> "OrdenOut":
         return cls(
             id=orden.id,
@@ -763,6 +928,7 @@ class OrdenOut(BaseModel):
                 for origen in detalles_origen
             ],
             finalizada_sin_reparacion=finalizada_sin_reparacion(orden),
+            cerrada=orden.esta_cerrada,
             reparaciones_detail=[
                 DetalleOut.desde_dominio(
                     detalle,
@@ -772,6 +938,7 @@ class OrdenOut(BaseModel):
                 for detalle in orden.reparaciones_detail
             ],
             tomas=[TomaOut.desde_dominio(toma) for toma in orden.tomas],
+            toma_activa=_toma_activa_out(orden),
             ejecuciones=[
                 EjecucionOut.desde_dominio(ejecucion)
                 for ejecucion in orden.ejecuciones
@@ -800,6 +967,16 @@ class OrdenOut(BaseModel):
             acciones_disponibles=[
                 AccionOut.desde_dominio(accion) for accion in acciones
             ],
+            acciones_cancelacion=[
+                AccionOut.desde_dominio(accion)
+                for accion in acciones_cancelacion
+            ],
+            devolucion=(
+                DevolucionOut(**orden.devolucion.model_dump())
+                if orden.devolucion is not None
+                else None
+            ),
+            devolucion_pendiente=devolucion_pendiente(orden),
             created_at=orden.created_at,
             updated_at=orden.updated_at,
         )

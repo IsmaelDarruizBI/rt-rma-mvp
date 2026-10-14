@@ -12,6 +12,7 @@ from app.domain.models import OrdenReparacion
 from app.services import definir_prioridad, ingresar_a_cola
 
 from .contexto import ApplicationContext
+from .modificacion import orden_para_modificar
 
 
 def encolar_orden(
@@ -25,11 +26,10 @@ def encolar_orden(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
-    orden = definir_prioridad(
-        orden, prioridad=prioridad, usuario=usuario, fecha=fecha
-    )
-    orden = ingresar_a_cola(orden, fecha=fecha)
-
-    contexto.ordenes.guardar(orden)
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = definir_prioridad(
+            orden, prioridad=prioridad, usuario=usuario, fecha=fecha
+        )
+        orden = ingresar_a_cola(orden, fecha=fecha)
+        contexto.ordenes.guardar(orden)
     return orden

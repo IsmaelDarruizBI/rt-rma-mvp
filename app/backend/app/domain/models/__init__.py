@@ -24,12 +24,13 @@ from .enums import (
     EstadoTomaOrden,
     EstadoWorkflow,
     OrigenOrden,
+    ResultadoControl,
     RolUsuario,
     TipoMovimientoInsumo,
     TipoPago,
     TipoReferenciaHistorial,
 )
-from .equipos import Equipo
+from .equipos import DevolucionEquipo, Equipo
 from .inventario import InsumoUtilizado, MovimientoInsumo
 from .orden_reparacion import OrdenReparacion
 from .pagos import Pago, ResumenPago
@@ -37,6 +38,8 @@ from .personas import Cliente, Usuario
 from .reparacion import (
     DefinicionAnteriorDetalle,
     EjecucionReparacion,
+    RegistroCancelacion,
+    RegistroControlTecnico,
     ReparacionDetail,
     TomaOrden,
 )
@@ -53,12 +56,14 @@ __all__ = [
     "EstadoTomaOrden",
     "EstadoWorkflow",
     "OrigenOrden",
+    "ResultadoControl",
     "RolUsuario",
     "TipoMovimientoInsumo",
     "TipoPago",
     "TipoReferenciaHistorial",
     # Personas y equipo
     "Cliente",
+    "DevolucionEquipo",
     "Equipo",
     "Usuario",
     # Catalogos
@@ -69,6 +74,8 @@ __all__ = [
     "TipoReparacionInsumos",
     # Trabajo tecnico
     "EjecucionReparacion",
+    "RegistroCancelacion",
+    "RegistroControlTecnico",
     "ReparacionDetail",
     "TomaOrden",
     # Inventario

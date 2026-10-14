@@ -48,8 +48,13 @@ class EstadoWorkflow(str, Enum):
     Orden espera o atraviesa una revision tecnica ANTES de poder definir
     sus Detalles (por eso admite cero Detalles). NO significa que la
     revision este embebida dentro de la Orden: ver
-    ``app.services.revisiones``. ``CANCELADA`` existe en V1.3 pero el MVP
-    todavia no la representa: la cancelacion esta fuera de scope de MVP v2.
+    ``app.services.revisiones``.
+
+    ``CANCELADA`` (BR-REP-014) la fija PROC-REP-211 cuando todos los
+    Detalles quedan CANCELADO, o PROC-REP-306 al cancelar una Orden sin
+    Detalles. NO equivale a ENTREGADA: si el equipo esta en custodia, su
+    devolucion fisica (PROC-REP-270) se registra despues, y recien ahi el
+    proceso termina (EVT-REP-999); la Orden sigue CANCELADA.
     """
 
     REQUERIMIENTO = "REQUERIMIENTO"
@@ -59,6 +64,7 @@ class EstadoWorkflow(str, Enum):
     EN_REPARACION = "EN_REPARACION"
     REPARACION_LISTA = "REPARACION_LISTA"
     ENTREGADA = "ENTREGADA"
+    CANCELADA = "CANCELADA"
 
 
 class EstadoReparacionDetail(str, Enum):
@@ -78,11 +84,16 @@ class EstadoReparacionDetail(str, Enum):
         DEFINIDO      ~= PENDIENTE (contrato)
         EN_PROGRESO   ~= EN_PROCESO (contrato)
         COMPLETO      == COMPLETO
+        CANCELADO     == CANCELADO (PROC-REP-300/305, BR-REP-014)
+
+    COMPLETO y CANCELADO son terminales. Un Detalle CANCELADO no se borra:
+    conserva Tipo, precio snapshot e historial, y deja de cobrarse.
     """
 
     DEFINIDO = "DEFINIDO"
     EN_PROGRESO = "EN_PROGRESO"
     COMPLETO = "COMPLETO"
+    CANCELADO = "CANCELADO"
 
 
 class CondicionReparacionDetail(str, Enum):
@@ -106,10 +117,22 @@ class CondicionReparacionDetail(str, Enum):
 
 
 class EstadoControl(str, Enum):
-    """Resultado del control tecnico sobre un Detalle (PROC-REP-220)."""
+    """Control tecnico VIGENTE de un Detalle (PROC-REP-220).
+
+    Describe el ciclo de control actual: un rechazo (PROC-REP-235) reabre
+    el Detalle y su control vuelve a PENDIENTE hasta el retrabajo. Lo que
+    paso en cada control queda en ``ReparacionDetail.controles``.
+    """
 
     PENDIENTE = "PENDIENTE"
     APROBADO = "APROBADO"
+
+
+class ResultadoControl(str, Enum):
+    """Resultado de UN control tecnico registrado (PROC-REP-220/235)."""
+
+    APROBADO = "APROBADO"
+    RECHAZADO = "RECHAZADO"
 
 
 class TipoMovimientoInsumo(str, Enum):

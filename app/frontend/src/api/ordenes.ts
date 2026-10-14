@@ -8,6 +8,7 @@
 
 import type {
   Estacion,
+  ImpactoOverride,
   InsumoUtilizado,
   Orden,
   OrdenResumen,
@@ -376,21 +377,39 @@ export function esperarRecursos(ordenId: string): Promise<Orden> {
 }
 
 /**
+ * Impacto en el stock de forzar el Detalle (E3, solo lectura): stock
+ * físico, reservado por otras Órdenes y por esta, disponible, requerido y
+ * disponible resultante. Es lo que se muestra antes de confirmar.
+ */
+export function obtenerImpactoOverride(
+  ordenId: string,
+  detalleId: string,
+): Promise<ImpactoOverride> {
+  return get<ImpactoOverride>(
+    `/api/orders/${ordenId}/details/${detalleId}/resources/override-preview`,
+  );
+}
+
+/**
  * Override de recursos de UN Detalle bloqueado (Coordinador RMA,
  * BR-REP-003): capacidad transversal, también con factibilidad parcial.
  * Solo con la Orden detenida en PROC-REP-100 continúa 110 (Sí) -> 130 ->
  * 140. El motivo es obligatorio. Solo registra la autorización: no
- * reserva ni descuenta stock.
+ * reserva ni descuenta stock, ni toca reservas de otras Órdenes.
+ *
+ * E3: `confirmado` es la confirmación explícita del impacto mostrado; sin
+ * ella el backend no aplica nada (409 CONFIRMACION_REQUERIDA).
  */
 export function overrideRecursos(
   ordenId: string,
   detalleId: string,
   usuarioId: string,
   motivo: string,
+  confirmado: boolean,
 ): Promise<Orden> {
   return post<Orden>(
     `/api/orders/${ordenId}/details/${detalleId}/resources/override`,
-    { usuario_id: usuarioId, motivo },
+    { usuario_id: usuarioId, motivo, confirmado },
   );
 }
 
@@ -400,6 +419,65 @@ export function overrideRecursos(
  */
 export function revalidarRecursos(ordenId: string): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/resources/revalidate`, {});
+}
+
+/**
+ * Rechaza el control de UN Detalle (PROC-REP-230 "No" -> 235): se reabre
+ * para retrabajo y la Orden vuelve a la cola. Motivo obligatorio.
+ */
+export function rechazarControl(
+  ordenId: string,
+  usuarioId: string,
+  detalleId: string,
+  motivo: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/control/reject`, {
+    usuario_id: usuarioId,
+    detalle_id: detalleId,
+    motivo,
+  });
+}
+
+/** Cancela UN Detalle pendiente (PROC-REP-300). Motivo obligatorio. */
+export function cancelarDetalle(
+  ordenId: string,
+  detalleId: string,
+  usuarioId: string,
+  motivo: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/details/${detalleId}/cancel`, {
+    usuario_id: usuarioId,
+    motivo,
+  });
+}
+
+/**
+ * Cancela los trabajos pendientes de la Orden (PROC-REP-305 / 306). Lo
+ * realizado sigue al cierre; sin trabajo realizado queda CANCELADA.
+ */
+export function cancelarOrden(
+  ordenId: string,
+  usuarioId: string,
+  motivo: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/cancel`, {
+    usuario_id: usuarioId,
+    motivo,
+  });
+}
+
+/** Devolución física del equipo de una Orden CANCELADA (PROC-REP-270). */
+export function registrarDevolucion(
+  ordenId: string,
+  usuarioId: string,
+  recibidoPor: string,
+  observaciones: string | null,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/return-equipment`, {
+    usuario_id: usuarioId,
+    recibido_por: recibidoPor,
+    observaciones,
+  });
 }
 
 /** PROC-REP-270 reutilizado (HP-REP-002, RT_INTERNO -> EVT-REP-999). */

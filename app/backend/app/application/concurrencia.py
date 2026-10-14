@@ -1,10 +1,29 @@
-"""Seccion critica de inventario del MVP.
+"""Seccion critica de las Ordenes y del inventario del MVP.
 
-PROC-REP-185 (reservar insumos e iniciar Ejecucion) es el unico nodo del
-Happy Path donde dos usuarios pueden pelearse la misma unidad de stock:
-la disponibilidad se calcula leyendo TODAS las Ordenes persistidas y,
-acto seguido, se escribe una RESERVA. Entre la lectura y la escritura no
-puede colarse otro pedido, o ambos creerian tener la ultima unidad.
+Un unico lock de proceso serializa TODA operacion que modifica una Orden
+o el stock (E4, MVP v2). Cubre la secuencia completa de cada comando, no
+solo la escritura:
+
+    cargar la Orden -> validar -> aplicar los services -> guardar
+
+Si el lock rodeara solo el guardado, dos pedidos podrian leer la misma
+version, validar cada uno contra ella y guardar uno detras del otro: el
+segundo pisaria al primero sin que nadie se entere. Lo usan:
+
+- ``orden_para_modificar`` (``app.application.modificacion``), por donde
+  pasa todo comando que cambia una Orden existente;
+- las altas, que numeran ``OR-XXXXXX`` sobre lo persistido;
+- PROC-REP-185 (reserva real) y PROC-REP-210 (consumo), que leen las
+  reservas de TODAS las Ordenes y reescriben el stock del catalogo.
+
+Es reentrante a proposito: un comando que ya esta en la seccion critica
+puede entrar de nuevo (por ejemplo, la reserva dentro de una Orden que se
+esta modificando) sin bloquearse a si mismo. Como es el UNICO lock de la
+capa de aplicacion, no hay orden de adquisicion que pueda trabarse.
+
+Por debajo, el repository JSON rechaza igual una version obsoleta
+(``ConflictoDeEscrituraError``): es la red por si algun camino se salteara
+esta seccion.
 
 ALCANCE Y LIMITACION DELIBERADA
 -------------------------------
@@ -18,13 +37,12 @@ Por eso el MVP se sirve con **un solo worker de uvicorn**:
 
     uvicorn app.main:app --workers 1
 
-Cuando el almacenamiento deje de ser JSON sobre el filesystem, la
-exclusion mutua debera resolverla el motor de persistencia (una
-transaccion, un ``SELECT ... FOR UPDATE``, un lock distribuido), no este
+JSON es el almacenamiento de las pruebas funcionales, no la solucion
+definitiva para operar con varias instancias. Cuando el almacenamiento
+deje de ser JSON sobre el filesystem, la exclusion mutua debera
+resolverla el motor de persistencia (una transaccion, un
+``SELECT ... FOR UPDATE``, un control de version en la base), no este
 modulo.
-
-Es reentrante a proposito: un caso de uso puede llamar a otro que
-tambien entre en la seccion critica sin bloquearse a si mismo.
 """
 
 import threading
@@ -35,16 +53,23 @@ LOCK_INVENTARIO = threading.RLock()
 
 
 @contextmanager
+def seccion_critica_ordenes() -> Iterator[None]:
+    """Serializa la lectura-validacion-escritura de una Orden (E4)."""
+    with LOCK_INVENTARIO:
+        yield
+
+
+@contextmanager
 def seccion_critica_inventario() -> Iterator[None]:
     """Serializa la lectura-validacion-escritura de stock reservado.
 
-    Cubre la secuencia completa, no solo la escritura:
+    Es la misma seccion critica que ``seccion_critica_ordenes``: un solo
+    lock para Ordenes e inventario. Se conserva el nombre en los comandos
+    que, ademas de su Orden, leen las reservas de las demas o reescriben
+    el stock del catalogo, para que eso quede explicito:
 
         cargar Orden -> cargar reservas globales -> validar
         disponibilidad -> generar RESERVA -> guardar Orden
-
-    Se usa en PROC-REP-185 y tambien en la coordinacion de
-    PROC-REP-210, que lee el stock fisico del catalogo y lo reescribe.
     """
     with LOCK_INVENTARIO:
         yield

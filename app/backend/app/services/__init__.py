@@ -21,6 +21,12 @@ from .autorizacion import (
     validar_alguno_de,
     validar_usuario_activo,
 )
+from .cancelaciones import (
+    ROLES_CANCELACION,
+    cancelar_detalle,
+    cancelar_orden,
+    registrar_devolucion_equipo,
+)
 from .documentos import (
     generar_comprobante_final,
     generar_comprobante_recepcion,
@@ -36,17 +42,22 @@ from .ejecuciones import (
     reservar_insumos_e_iniciar_ejecucion,
 )
 from .exceptions import (
+    ConfirmacionRequeridaError,
     DomainError,
     EntidadNoEncontradaError,
+    OrdenCerradaError,
     PrecondicionInvalidaError,
     RecursoNoDisponibleError,
+    TomaDeOtroTecnicoError,
 )
 from .identificadores import nuevo_id
 from .inventario import (
+    ImpactoStockInsumo,
     cantidad_pendiente,
     faltantes_del_detalle,
     generar_movimientos_inventario,
     hay_reservas_activas,
+    impacto_en_stock_del_detalle,
     insumos_previstos_de,
     inventario_aplicado,
     reservas_activas,
@@ -66,12 +77,16 @@ from .ordenes import (
     crear_orden_garantia_rma,
     crear_orden_rt_interno,
     definir_prioridad,
+    devolucion_pendiente,
     devolver_equipo_rt,
     entregar_equipo,
+    equipo_bajo_custodia,
     evaluar_situacion_orden,
+    exigir_orden_abierta,
     habilitar_orden,
     informar_resultado_rt,
     ingresar_a_cola,
+    marcar_orden_cancelada,
     marcar_orden_en_revision,
     marcar_reparacion_lista,
     notificar_cliente,
@@ -92,6 +107,7 @@ from .recursos import (
     override_listo_para_habilitar,
     registrar_espera_recursos,
     tiene_override_factibilidad,
+    validar_override_recursos,
 )
 from .redefinicion import (
     marcar_pendiente_revision,
@@ -103,10 +119,13 @@ from .redefinicion import (
 from .reparaciones import (
     aprobar_control_tecnico,
     calcular_puntaje,
+    control_tecnico_completo,
     definicion_finalizada,
     definir_reparacion_detail,
     definir_reparacion_detail_luego_revision,
     exigir_definicion_finalizable,
+    pendiente_de_retrabajo,
+    rechazar_control_tecnico,
     validar_factibilidad_detalles,
 )
 from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
@@ -124,6 +143,7 @@ from .tomas import (
     tomar_orden,
     validar_compatibilidad_detalle,
     validar_estacion_trabajo,
+    validar_titular_de_la_toma,
 )
 from .workflow import registrar_accion_funcional, registrar_paso
 
@@ -134,10 +154,13 @@ __all__ = [
     "validar_alguno_de",
     "validar_usuario_activo",
     # Errores de dominio
+    "ConfirmacionRequeridaError",
     "DomainError",
     "EntidadNoEncontradaError",
+    "OrdenCerradaError",
     "PrecondicionInvalidaError",
     "RecursoNoDisponibleError",
+    "TomaDeOtroTecnicoError",
     # Trazabilidad e identificadores
     "nuevo_id",
     "registrar_accion_funcional",
@@ -147,15 +170,24 @@ __all__ = [
     "crear_orden_garantia_rma",
     "crear_orden_rt_interno",
     "definir_prioridad",
+    "devolucion_pendiente",
     "devolver_equipo_rt",
     "entregar_equipo",
+    "equipo_bajo_custodia",
     "evaluar_situacion_orden",
+    "exigir_orden_abierta",
     "habilitar_orden",
     "informar_resultado_rt",
     "ingresar_a_cola",
+    "marcar_orden_cancelada",
     "marcar_orden_en_revision",
     "marcar_reparacion_lista",
     "notificar_cliente",
+    # Cancelacion y devolucion (PROC-REP-300/305/306/270)
+    "ROLES_CANCELACION",
+    "cancelar_detalle",
+    "cancelar_orden",
+    "registrar_devolucion_equipo",
     # Resolver puro de BR-REP-012
     "ResultadoEvaluacionOrden",
     "resolver_situacion_orden",
@@ -166,6 +198,7 @@ __all__ = [
     "autorizar_override_recursos",
     "continuar_por_override",
     "tiene_override_factibilidad",
+    "validar_override_recursos",
     "registrar_espera_recursos",
     # Revision tecnica (PROC-REP-065)
     "registrar_revision_tecnica",
@@ -175,6 +208,9 @@ __all__ = [
     # Detalles de Reparacion
     "aprobar_control_tecnico",
     "calcular_puntaje",
+    "control_tecnico_completo",
+    "pendiente_de_retrabajo",
+    "rechazar_control_tecnico",
     "definir_reparacion_detail",
     "definicion_finalizada",
     "exigir_definicion_finalizable",
@@ -188,6 +224,7 @@ __all__ = [
     "tomar_orden",
     "validar_compatibilidad_detalle",
     "validar_estacion_trabajo",
+    "validar_titular_de_la_toma",
     # Ejecucion
     "ejecucion_activa",
     "ejecutar_detalle",
@@ -204,10 +241,12 @@ __all__ = [
     "intentar_reserva_e_inicio",
     "reservar_insumos_e_iniciar_ejecucion",
     # Inventario
+    "ImpactoStockInsumo",
     "cantidad_pendiente",
     "faltantes_del_detalle",
     "generar_movimientos_inventario",
     "hay_reservas_activas",
+    "impacto_en_stock_del_detalle",
     "insumos_previstos_de",
     "inventario_aplicado",
     "reservas_activas",

@@ -153,7 +153,9 @@ def test_cantidad_de_insumo_positiva_es_aceptada():
 def test_estado_detalle_solo_tiene_el_ciclo_tecnico():
     valores = {estado.value for estado in EstadoReparacionDetail}
 
-    assert valores == {"DEFINIDO", "EN_PROGRESO", "COMPLETO"}
+    # CANCELADO (PROC-REP-300/305, BR-REP-014) es el segundo estado
+    # terminal del ciclo tecnico; reserva y aprobacion siguen afuera.
+    assert valores == {"DEFINIDO", "EN_PROGRESO", "COMPLETO", "CANCELADO"}
 
 
 def test_estado_detalle_no_incluye_reservado():

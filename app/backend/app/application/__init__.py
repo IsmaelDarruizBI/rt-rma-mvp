@@ -20,17 +20,27 @@ generico de workflow: la secuencia de cada comando esta escrita a mano
 porque es una decision funcional, no una configuracion.
 """
 
-from .acciones import AccionDisponible, acciones_disponibles
+from .acciones import (
+    AccionDisponible,
+    acciones_de_cancelacion,
+    acciones_disponibles,
+)
+from .cancelacion import cancelar_detalle, cancelar_orden, registrar_devolucion
 from .cierre import (
     aprobar_control,
     devolver_rt,
     entregar,
     informar_rt,
     notificar,
+    rechazar_control,
     registrar_pago_de_orden,
 )
 from .cola import encolar_orden
-from .concurrencia import LOCK_INVENTARIO, seccion_critica_inventario
+from .concurrencia import (
+    LOCK_INVENTARIO,
+    seccion_critica_inventario,
+    seccion_critica_ordenes,
+)
 from .consultas import (
     DetalleOrigen,
     InsumoPrevisto,
@@ -57,8 +67,10 @@ from .ingreso import (
 )
 from .progreso import PasoProgreso, progreso
 from .recursos import (
+    ImpactoOverride,
     esperar_recursos,
     forzar_detalle_por_recursos,
+    impacto_override,
     revalidar_recursos,
 )
 from .redefinicion import redefinir_detalle, revisar_detalle
@@ -78,11 +90,14 @@ __all__ = [
     "construir_contexto",
     "LOCK_INVENTARIO",
     "seccion_critica_inventario",
+    "seccion_critica_ordenes",
     "siguiente_detalle_id",
     "siguiente_orden_id",
     # Lecturas
     "DetalleOrigen",
     "detalles_origen_de",
+    "ImpactoOverride",
+    "impacto_override",
     "listar_estaciones",
     "InsumoPrevisto",
     "insumos_previstos_por_detalle",
@@ -95,6 +110,7 @@ __all__ = [
     # (visualizacion, por Origen)
     "AccionDisponible",
     "PasoProgreso",
+    "acciones_de_cancelacion",
     "acciones_disponibles",
     "progreso",
     # Comandos
@@ -120,9 +136,13 @@ __all__ = [
     "revisar_detalle",
     "redefinir_detalle",
     "aprobar_control",
+    "rechazar_control",
     "notificar",
     "registrar_pago_de_orden",
     "entregar",
     "informar_rt",
     "devolver_rt",
+    "cancelar_detalle",
+    "cancelar_orden",
+    "registrar_devolucion",
 ]

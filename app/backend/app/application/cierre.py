@@ -1,6 +1,7 @@
 """Tramo de cierre: control, notificacion, cobro y entrega.
 
     aprobar_control    PROC-REP-220 -> 230 -> 245 -> 240
+    rechazar_control   PROC-REP-220 -> 230 (No) -> 235 -> 211 [-> 170]
     notificar          PROC-REP-250 -> 260 -> 265 [-> 266]
     registrar_pago_de_orden   (capacidad transversal) [-> 265]
     entregar           PROC-REP-280 -> 270 -> EVT-REP-999
@@ -13,19 +14,22 @@ precondicion del comando y va derecho a PROC-REP-280.
 
 from decimal import Decimal
 
-from app.domain.models import EstadoControl, OrdenReparacion
+from app.domain.models import OrdenReparacion
 from app.services import (
     PrecondicionInvalidaError,
     aprobar_control_tecnico,
     calcular_puntaje,
     condicion_entrega_cumplida,
+    control_tecnico_completo,
     devolver_equipo_rt,
     entregar_equipo,
+    evaluar_situacion_orden,
     generar_comprobante_final,
     informar_resultado_rt,
     lista_para_cierre,
     marcar_reparacion_lista,
     notificar_cliente,
+    rechazar_control_tecnico,
     registrar_pago,
     registrar_saldo_pendiente,
     validar_alguno_de,
@@ -34,6 +38,7 @@ from app.services import (
 from app.services.ordenes import ROLES_ENTREGA
 
 from .contexto import ApplicationContext
+from .modificacion import orden_para_modificar
 
 CERO = Decimal("0")
 
@@ -69,23 +74,53 @@ def aprobar_control(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
-    orden = aprobar_control_tecnico(
-        orden,
-        usuario=usuario,
-        fecha=fecha,
-        detalle_id=detalle_id,
-        observaciones=observaciones,
-    )
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = aprobar_control_tecnico(
+            orden,
+            usuario=usuario,
+            fecha=fecha,
+            detalle_id=detalle_id,
+            observaciones=observaciones,
+        )
 
-    if all(
-        detalle.control_estado is EstadoControl.APROBADO
-        for detalle in orden.reparaciones_detail
-    ):
-        orden = calcular_puntaje(orden, fecha=fecha)
-        orden = marcar_reparacion_lista(orden, fecha=fecha)
+        # Los Detalles CANCELADO no se controlan: alcanza con que todos
+        # los vigentes esten APROBADO.
+        if control_tecnico_completo(orden):
+            orden = calcular_puntaje(orden, fecha=fecha)
+            orden = marcar_reparacion_lista(orden, fecha=fecha)
 
-    contexto.ordenes.guardar(orden)
+        contexto.ordenes.guardar(orden)
+    return orden
+
+
+def rechazar_control(
+    contexto: ApplicationContext,
+    *,
+    orden_id: str,
+    usuario_id: str,
+    detalle_id: str,
+    motivo: str,
+) -> OrdenReparacion:
+    """Recepcion rechaza el control de UN Detalle (220 -> 230 No -> 235).
+
+    El Detalle se reabre para retrabajo y el resolver (PROC-REP-211)
+    decide que sigue: con la toma ya cerrada, la Orden vuelve a la cola
+    (PROC-REP-170) para una Ejecucion nueva. No llega a REPARACION_LISTA
+    hasta que el retrabajo se apruebe.
+    """
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = rechazar_control_tecnico(
+            orden,
+            detalle_id=detalle_id,
+            usuario=usuario,
+            motivo=motivo,
+            fecha=fecha,
+        )
+        orden, _ = evaluar_situacion_orden(orden, fecha=fecha)
+        contexto.ordenes.guardar(orden)
     return orden
 
 
@@ -106,13 +141,13 @@ def notificar(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
-    orden = notificar_cliente(orden, usuario=usuario, fecha=fecha)
-    orden, puede_entregar = validar_condicion_entrega(orden, fecha=fecha)
-    if not puede_entregar:
-        orden = registrar_saldo_pendiente(orden, fecha=fecha)
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = notificar_cliente(orden, usuario=usuario, fecha=fecha)
+        orden, puede_entregar = validar_condicion_entrega(orden, fecha=fecha)
+        if not puede_entregar:
+            orden = registrar_saldo_pendiente(orden, fecha=fecha)
 
-    contexto.ordenes.guardar(orden)
+        contexto.ordenes.guardar(orden)
     return orden, puede_entregar
 
 
@@ -145,22 +180,24 @@ def registrar_pago_de_orden(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
-    orden = registrar_pago(
-        orden, monto=monto, metodo=metodo, usuario=usuario, fecha=fecha
-    )
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = registrar_pago(
+            orden, monto=monto, metodo=metodo, usuario=usuario, fecha=fecha
+        )
 
-    # PROC-REP-265 es de la fase SECUENCIAL de cierre: solo se revalida
-    # si la Orden ya llego a ella (tras 250 -> 260 -> 265). Un Pago
-    # anterior solo baja el saldo; el Pago es transversal y no mueve el
-    # proceso.
-    puede_entregar = False
-    if orden.current_process in _NODOS_DE_CONDICION_DE_ENTREGA:
-        orden, puede_entregar = validar_condicion_entrega(orden, fecha=fecha)
-        if not puede_entregar:
-            orden = registrar_saldo_pendiente(orden, fecha=fecha)
+        # PROC-REP-265 es de la fase SECUENCIAL de cierre: solo se
+        # revalida si la Orden ya llego a ella (tras 250 -> 260 -> 265).
+        # Un Pago anterior solo baja el saldo; el Pago es transversal y no
+        # mueve el proceso.
+        puede_entregar = False
+        if orden.current_process in _NODOS_DE_CONDICION_DE_ENTREGA:
+            orden, puede_entregar = validar_condicion_entrega(
+                orden, fecha=fecha
+            )
+            if not puede_entregar:
+                orden = registrar_saldo_pendiente(orden, fecha=fecha)
 
-    contexto.ordenes.guardar(orden)
+        contexto.ordenes.guardar(orden)
     return orden, puede_entregar
 
 
@@ -185,29 +222,29 @@ def entregar(
     validar_alguno_de(usuario, ROLES_ENTREGA)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
+    with orden_para_modificar(contexto, orden_id) as orden:
+        if not lista_para_cierre(orden):
+            raise PrecondicionInvalidaError(
+                f"Solo se entrega una Orden con resultado "
+                f"(REPARACION_LISTA o SIN_REPARACION); esta en "
+                f"{orden.estado_workflow.value}."
+            )
+        if orden.current_process != "PROC-REP-265":
+            raise PrecondicionInvalidaError(
+                "Falta validar la condicion de entrega (PROC-REP-265) "
+                "antes de entregar; la Orden esta en "
+                f"{orden.current_process}."
+            )
+        if not condicion_entrega_cumplida(orden):
+            raise PrecondicionInvalidaError(
+                f"No se puede entregar con saldo pendiente: {orden.saldo}. "
+                "Registra el Pago y volve a intentarlo."
+            )
 
-    if not lista_para_cierre(orden):
-        raise PrecondicionInvalidaError(
-            f"Solo se entrega una Orden con resultado (REPARACION_LISTA o "
-            f"SIN_REPARACION); esta en {orden.estado_workflow.value}."
-        )
-    if orden.current_process != "PROC-REP-265":
-        raise PrecondicionInvalidaError(
-            "Falta validar la condicion de entrega (PROC-REP-265) "
-            "antes de entregar; la Orden esta en "
-            f"{orden.current_process}."
-        )
-    if not condicion_entrega_cumplida(orden):
-        raise PrecondicionInvalidaError(
-            f"No se puede entregar con saldo pendiente: {orden.saldo}. "
-            "Registra el Pago y volve a intentarlo."
-        )
+        orden = generar_comprobante_final(orden, fecha=fecha)
+        orden = entregar_equipo(orden, usuario=usuario, fecha=fecha)
 
-    orden = generar_comprobante_final(orden, fecha=fecha)
-    orden = entregar_equipo(orden, usuario=usuario, fecha=fecha)
-
-    contexto.ordenes.guardar(orden)
+        contexto.ordenes.guardar(orden)
     return orden
 
 
@@ -226,10 +263,9 @@ def informar_rt(
     """
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
-    orden = informar_resultado_rt(orden, fecha=fecha)
-
-    contexto.ordenes.guardar(orden)
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = informar_resultado_rt(orden, fecha=fecha)
+        contexto.ordenes.guardar(orden)
     return orden
 
 
@@ -249,8 +285,7 @@ def devolver_rt(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
-    orden = devolver_equipo_rt(orden, usuario=usuario, fecha=fecha)
-
-    contexto.ordenes.guardar(orden)
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = devolver_equipo_rt(orden, usuario=usuario, fecha=fecha)
+        contexto.ordenes.guardar(orden)
     return orden

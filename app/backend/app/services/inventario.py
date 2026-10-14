@@ -9,6 +9,7 @@ los movimientos que la referencian.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
@@ -150,6 +151,99 @@ def stock_disponible(
         CERO,
     )
     return insumo.stock_fisico - propias - reservas_externas
+
+
+@dataclass(frozen=True)
+class ImpactoStockInsumo:
+    """Situacion de UN insumo previsto ante un override (E3, BR-REP-003).
+
+    Es lo que el Coordinador ve -y confirma- antes de autorizar:
+
+        reservado  = reservado por otras Ordenes + por esta Orden
+        disponible = stock fisico - reservado
+        resultante = disponible - requerido por el Detalle
+
+    No se persiste: se calcula contra el catalogo y las reservas vigentes.
+    """
+
+    insumo_id: str
+    codigo: str
+    nombre: str
+    stock_fisico: Decimal
+    reservado_otras_ordenes: Decimal
+    reservado_esta_orden: Decimal
+    requerido: Decimal
+
+    @property
+    def reservado(self) -> Decimal:
+        return self.reservado_otras_ordenes + self.reservado_esta_orden
+
+    @property
+    def disponible(self) -> Decimal:
+        return self.stock_fisico - self.reservado
+
+    @property
+    def disponible_resultante(self) -> Decimal:
+        return self.disponible - self.requerido
+
+    def describir(self) -> str:
+        """Una linea legible, para el historial y los mensajes."""
+        return (
+            f"{self.insumo_id}: fisico {self.stock_fisico}, reservado "
+            f"{self.reservado} (otras Ordenes {self.reservado_otras_ordenes}"
+            f"), disponible {self.disponible}, requerido {self.requerido}, "
+            f"disponible resultante {self.disponible_resultante}"
+        )
+
+
+def impacto_en_stock_del_detalle(
+    orden: OrdenReparacion,
+    detalle_id: str,
+    insumos: Sequence[Insumo],
+    insumos_previstos: Sequence[TipoReparacionInsumos],
+    reservas_externas: Mapping[str, Decimal] | None = None,
+) -> list[ImpactoStockInsumo]:
+    """Impacto de forzar ese Detalle sobre cada insumo que preve (E3).
+
+    Usa la misma aritmetica que ``stock_disponible``: el stock fisico, las
+    reservas pendientes de esta Orden (``orden.movimientos_insumo``) y las
+    de las demas (``reservas_externas``). Solo consulta: no reserva ni
+    toca ninguna reserva, propia o ajena.
+    """
+    detalle = next(
+        (d for d in orden.reparaciones_detail if d.id == detalle_id), None
+    )
+    if detalle is None:
+        raise EntidadNoEncontradaError(
+            f"La Orden {orden.id} no tiene el Detalle {detalle_id}."
+        )
+
+    ajenas = reservas_externas or {}
+    impactos: list[ImpactoStockInsumo] = []
+    for previsto in insumos_previstos_de(
+        detalle.tipo_reparacion_id, insumos_previstos
+    ):
+        insumo = buscar_insumo(previsto.insumo_id, insumos)
+        propias = sum(
+            (
+                cantidad_pendiente(reserva, orden.movimientos_insumo)
+                for reserva in reservas_activas(orden.movimientos_insumo)
+                if reserva.insumo_id == insumo.id
+            ),
+            CERO,
+        )
+        impactos.append(
+            ImpactoStockInsumo(
+                insumo_id=insumo.id,
+                codigo=insumo.codigo,
+                nombre=insumo.nombre,
+                stock_fisico=insumo.stock_fisico,
+                reservado_otras_ordenes=ajenas.get(insumo.id, CERO),
+                reservado_esta_orden=propias,
+                requerido=previsto.cantidad,
+            )
+        )
+    return impactos
 
 
 def inventario_aplicado(

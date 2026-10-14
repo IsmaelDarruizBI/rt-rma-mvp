@@ -43,7 +43,11 @@ from .inventario import (
     insumos_previstos_de,
 )
 from .recursos import tiene_override_factibilidad
-from .tomas import buscar_detalle, hay_ejecucion_activa, toma_activa
+from .tomas import (
+    buscar_detalle,
+    hay_ejecucion_activa,
+    validar_titular_de_la_toma,
+)
 from .workflow import registrar_paso
 
 RESULTADO_RESERVA_FALLIDA = "Reserva fallida"
@@ -89,14 +93,16 @@ def reservar_insumos_e_iniciar_ejecucion(
     (ACC-REP-049, ``tiene_override_factibilidad``) reserva igual, dejando
     el disponible negativo (el stock fisico solo baja en PROC-REP-210).
 
-    Nodo ACT-SYSTEM. El ``usuario`` recibido es el tecnico de la toma
-    activa, al que se atribuye la Ejecucion que se abre aqui.
+    Nodo ACT-SYSTEM. El ``usuario`` recibido tiene que ser el tecnico de
+    la toma activa (E2): a el se atribuye la Ejecucion que se abre aqui.
 
     ``reservas_externas`` (insumo_id -> cantidad) revalida contra lo
     que otras Ordenes ya reservaron: entre la factibilidad y este
     momento el insumo pudo haber sido tomado por otra Orden.
     """
-    detalle, toma = _validar_precondiciones_de_la_reserva(orden, detalle_id)
+    detalle, toma = _validar_precondiciones_de_la_reserva(
+        orden, detalle_id, usuario
+    )
 
     previstos = insumos_previstos_de(
         detalle.tipo_reparacion_id, insumos_previstos
@@ -163,11 +169,13 @@ def reservar_insumos_e_iniciar_ejecucion(
 def _validar_precondiciones_de_la_reserva(
     orden: OrdenReparacion,
     detalle_id: str,
+    usuario: Usuario,
 ) -> tuple[ReparacionDetail, TomaOrden]:
     """Precondiciones reales de PROC-REP-185: no son una reserva fallida.
 
-    Un Detalle no trabajable, sin toma o con otra Ejecucion en curso es un
-    error de precondicion, no el resultado "Reserva fallida".
+    Un Detalle no trabajable, sin toma, con la toma de otro tecnico (E2)
+    o con otra Ejecucion en curso es un error de precondicion, no el
+    resultado "Reserva fallida".
     """
     detalle = buscar_detalle(orden, detalle_id)
     if detalle.estado is not EstadoReparacionDetail.DEFINIDO:
@@ -181,11 +189,11 @@ def _validar_precondiciones_de_la_reserva(
             f"(condicion {detalle.condicion.value})."
         )
 
-    toma = toma_activa(orden)
-    if toma is None:
-        raise PrecondicionInvalidaError(
-            "Hay que tomar la Orden antes de iniciar una Ejecucion."
-        )
+    toma = validar_titular_de_la_toma(
+        orden,
+        usuario,
+        sin_toma="Hay que tomar la Orden antes de iniciar una Ejecucion.",
+    )
     if hay_ejecucion_activa(orden):
         raise PrecondicionInvalidaError(
             "La Orden ya tiene una Ejecucion activa (BR-REP-007)."
@@ -216,10 +224,13 @@ def intentar_reserva_e_inicio(
       BLOQUEADO_POR_RECURSOS. Recalcular la Orden (PROC-REP-211) es del
       caller (``evaluar_situacion_orden``).
 
-    Las precondiciones reales (Detalle, toma, BR-REP-007) siguen lanzando
-    PrecondicionInvalidaError: no se registran como reserva fallida.
+    Las precondiciones reales (Detalle, titular de la toma, BR-REP-007)
+    siguen lanzando PrecondicionInvalidaError: no se registran como
+    reserva fallida.
     """
-    detalle, _ = _validar_precondiciones_de_la_reserva(orden, detalle_id)
+    detalle, _ = _validar_precondiciones_de_la_reserva(
+        orden, detalle_id, usuario
+    )
 
     faltantes: list[str] = []
     if not tiene_override_factibilidad(orden, detalle_id):
@@ -318,23 +329,17 @@ def _validar_propiedad_de_la_ejecucion(
 ) -> None:
     """La Ejecucion activa solo la trabaja el tecnico que la inicio.
 
-    Comprueba las tres identidades que V1.3 mantiene unidas: la
-    Ejecucion es del tecnico, la toma activa tambien, y la Ejecucion
-    pertenece a esa toma.
+    Comprueba las tres identidades que V1.3 mantiene unidas: la toma
+    activa es del tecnico (E2, primero: es lo que un tecnico ajeno
+    necesita saber), la Ejecucion tambien, y la Ejecucion pertenece a esa
+    toma.
     """
+    toma = validar_titular_de_la_toma(orden, usuario)
     if ejecucion.usuario_id != usuario.id:
         raise PrecondicionInvalidaError(
             f"La Ejecucion {ejecucion.id} la inicio "
             f"{ejecucion.usuario_id}: {usuario.id} no puede "
             "trabajarla. Continuarla requiere una Ejecucion nueva."
-        )
-
-    toma = toma_activa(orden)
-    if toma is None:
-        raise PrecondicionInvalidaError("La Orden no tiene una toma activa.")
-    if toma.usuario_id != usuario.id:
-        raise PrecondicionInvalidaError(
-            f"La Orden esta tomada por {toma.usuario_id}, no por {usuario.id}."
         )
     if ejecucion.toma_orden_id != toma.id:
         raise PrecondicionInvalidaError(

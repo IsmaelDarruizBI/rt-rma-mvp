@@ -142,6 +142,13 @@ def registrar_pago(
             f"COBRABLE."
         )
 
+    if orden.estado_workflow is EstadoWorkflow.CANCELADA:
+        # BR-REP-014: cancelar no genera un cobro. La devolucion de un
+        # anticipo ya pagado (V1.4 PROC-REP-267/268) queda fuera del MVP.
+        raise PrecondicionInvalidaError(
+            f"La Orden {orden.id} esta CANCELADA: no se registran pagos."
+        )
+
     if monto <= 0:
         raise PrecondicionInvalidaError(
             f"El monto del pago debe ser positivo: {monto}."

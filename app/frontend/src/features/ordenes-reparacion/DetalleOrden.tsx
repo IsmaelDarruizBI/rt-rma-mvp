@@ -10,7 +10,7 @@ import {
   fechaCorta,
   importe,
 } from "../../components/ui";
-import type { Orden } from "../../types/api";
+import type { Estacion, Orden, Usuario } from "../../types/api";
 
 const COLOR_ESTADO: Record<string, string> = {
   REQUERIMIENTO: colores.suave,
@@ -20,9 +20,62 @@ const COLOR_ESTADO: Record<string, string> = {
   EN_REPARACION: colores.alerta,
   REPARACION_LISTA: colores.ok,
   ENTREGADA: colores.ok,
+  CANCELADA: colores.error,
 };
 
-export function CabeceraOrden({ orden }: { orden: Orden }) {
+/** "Nombre (ID)" si el usuario está en el catálogo; si no, el ID. */
+export function nombreDeUsuario(
+  usuarios: Usuario[],
+  usuarioId: string | null,
+): string {
+  if (usuarioId === null) return "—";
+  const usuario = usuarios.find((candidato) => candidato.id === usuarioId);
+  return usuario ? `${usuario.nombre} (${usuario.id})` : usuarioId;
+}
+
+function nombreDeEstacion(estaciones: Estacion[], estacionId: string): string {
+  const estacion = estaciones.find((candidata) => candidata.id === estacionId);
+  return estacion ? `${estacion.nombre} (${estacion.id})` : estacionId;
+}
+
+/**
+ * E2: quién tiene la Orden. Cualquier usuario la ve; solo el titular puede
+ * operar las acciones técnicas.
+ */
+function TomaActiva({
+  orden,
+  usuarios,
+  estaciones,
+}: {
+  orden: Orden;
+  usuarios: Usuario[];
+  estaciones: Estacion[];
+}) {
+  const toma = orden.toma_activa;
+  return (
+    <p style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
+      {toma ? (
+        <>
+          <strong>Tomada por</strong> {nombreDeUsuario(usuarios, toma.usuario_id)}{" "}
+          · estación {nombreDeEstacion(estaciones, toma.estacion_id)} · desde{" "}
+          {fechaCorta(toma.inicio)}
+        </>
+      ) : (
+        <span style={{ color: colores.suave }}>Sin toma activa</span>
+      )}
+    </p>
+  );
+}
+
+export function CabeceraOrden({
+  orden,
+  usuarios = [],
+  estaciones = [],
+}: {
+  orden: Orden;
+  usuarios?: Usuario[];
+  estaciones?: Estacion[];
+}) {
   return (
     <Panel>
       <div
@@ -56,6 +109,32 @@ export function CabeceraOrden({ orden }: { orden: Orden }) {
                   .join(", ")}`}
             </p>
           )}
+          {!orden.cerrada && !orden.devolucion_pendiente && (
+            <TomaActiva
+              orden={orden}
+              usuarios={usuarios}
+              estaciones={estaciones}
+            />
+          )}
+          {orden.devolucion && (
+            <p style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
+              <strong>Equipo devuelto</strong> a {orden.devolucion.recibido_por}{" "}
+              por {nombreDeUsuario(usuarios, orden.devolucion.entregado_por)} ·{" "}
+              {fechaCorta(orden.devolucion.fecha)}
+            </p>
+          )}
+          {orden.devolucion_pendiente && (
+            <p
+              style={{
+                margin: "0.35rem 0 0",
+                fontSize: "0.85rem",
+                color: colores.alerta,
+              }}
+            >
+              Cancelada: el equipo sigue en custodia, falta registrar su
+              devolución.
+            </p>
+          )}
         </div>
         <div style={{ textAlign: "right" }}>
           <p
@@ -76,6 +155,12 @@ export function CabeceraOrden({ orden }: { orden: Orden }) {
             <>
               {" "}
               <Etiqueta color={colores.alerta}>SIN_REPARACION</Etiqueta>
+            </>
+          )}
+          {orden.cerrada && (
+            <>
+              {" "}
+              <Etiqueta color={colores.texto}>CERRADA</Etiqueta>
             </>
           )}
           <p
@@ -264,14 +349,57 @@ export function DetallesOrden({ orden }: { orden: Orden }) {
               <strong style={{ fontSize: "1rem" }}>
                 {detalle.tipo_reparacion_nombre}
               </strong>
-              {detalle.condicion !== "SIN_BLOQUEO" && (
-                <div style={{ marginTop: "0.15rem" }}>
-                  <Etiqueta color={colores.alerta}>
-                    {detalle.condicion === "BLOQUEADO_POR_RECURSOS"
-                      ? "Bloqueado por recursos"
-                      : "Requiere definición"}
-                  </Etiqueta>
+              {detalle.condicion !== "SIN_BLOQUEO" &&
+                detalle.estado !== "CANCELADO" && (
+                  <div style={{ marginTop: "0.15rem" }}>
+                    <Etiqueta color={colores.alerta}>
+                      {detalle.condicion === "BLOQUEADO_POR_RECURSOS"
+                        ? "Bloqueado por recursos"
+                        : "Requiere definición"}
+                    </Etiqueta>
+                  </div>
+                )}
+              {detalle.cancelacion && (
+                <div style={{ fontSize: "0.8rem", color: colores.error }}>
+                  Cancelado por {detalle.cancelacion.usuario_id} ·{" "}
+                  {fechaCorta(detalle.cancelacion.fecha)} ·{" "}
+                  {detalle.cancelacion.motivo} (no se cobra)
                 </div>
+              )}
+              {detalle.pendiente_de_retrabajo && (
+                <div style={{ marginTop: "0.15rem" }}>
+                  <Etiqueta color={colores.alerta}>Retrabajo pendiente</Etiqueta>
+                </div>
+              )}
+              {detalle.controles.length > 0 && (
+                <ul
+                  style={{
+                    margin: "0.25rem 0 0",
+                    padding: 0,
+                    listStyle: "none",
+                    fontSize: "0.75rem",
+                    color: colores.suave,
+                  }}
+                >
+                  {detalle.controles.map((control, indice) => (
+                    <li key={`${control.fecha}-${indice}`}>
+                      Control{" "}
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          color:
+                            control.resultado === "APROBADO"
+                              ? colores.ok
+                              : colores.error,
+                        }}
+                      >
+                        {control.resultado}
+                      </span>{" "}
+                      · {control.usuario_id} · {fechaCorta(control.fecha)}
+                      {control.observaciones && ` · ${control.observaciones}`}
+                    </li>
+                  ))}
+                </ul>
               )}
               {detalle.definiciones_anteriores.length > 0 && (
                 <div style={{ fontSize: "0.75rem", color: colores.suave }}>
@@ -324,18 +452,34 @@ export function DetallesOrden({ orden }: { orden: Orden }) {
               )}
             </div>
             <div style={{ textAlign: "right" }}>
-              <div>{importe(detalle.precio)}</div>
+              <div
+                style={
+                  detalle.estado === "CANCELADO"
+                    ? { textDecoration: "line-through", color: colores.suave }
+                    : undefined
+                }
+              >
+                {importe(detalle.precio)}
+              </div>
               <div style={{ fontSize: "0.8rem" }}>
-                <Etiqueta>{detalle.estado}</Etiqueta>{" "}
                 <Etiqueta
                   color={
-                    detalle.control_estado === "APROBADO"
-                      ? colores.ok
-                      : colores.suave
+                    detalle.estado === "CANCELADO" ? colores.error : undefined
                   }
                 >
-                  control {detalle.control_estado}
-                </Etiqueta>
+                  {detalle.estado}
+                </Etiqueta>{" "}
+                {detalle.estado !== "CANCELADO" && (
+                  <Etiqueta
+                    color={
+                      detalle.control_estado === "APROBADO"
+                        ? colores.ok
+                        : colores.suave
+                    }
+                  >
+                    control {detalle.control_estado}
+                  </Etiqueta>
+                )}
               </div>
             </div>
           </li>

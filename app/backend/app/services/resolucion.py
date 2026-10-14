@@ -24,11 +24,13 @@ siempre puede CLASIFICARSE, lo que se haga con esa clasificacion es
 responsabilidad de quien la use
 (``app.services.ordenes.evaluar_situacion_orden`` para PROC-REP-211).
 
-``TODO_CANCELADO`` (prioridad 1) depende de que un Detalle pueda estar
-CANCELADO. La Cancelacion (BR-REP-014, FEAT-REP-009) esta fuera del
-scope de MVP v2: ``EstadoReparacionDetail`` no tiene ese valor todavia,
-asi que esta rama queda formalmente completa -fiel a la matriz del
-contrato- pero inalcanzable con el catalogo actual.
+``TODO_CANCELADO`` (prioridad 1) se alcanza al cancelar Detalles
+(PROC-REP-300/305, BR-REP-014): un Detalle CANCELADO es terminal, igual
+que uno COMPLETO, y no cuenta como trabajable, bloqueado ni en ejecucion.
+Una mezcla de COMPLETO y CANCELADO es ``COMPLETA``: lo realizado sigue al
+control tecnico. Un Detalle reabierto por un control rechazado
+(PROC-REP-235) vuelve a DEFINIDO y se clasifica como cualquier otro
+pendiente: no necesita un resultado propio.
 """
 
 from collections.abc import Sequence
@@ -44,12 +46,8 @@ from app.domain.models import (
 class ResultadoEvaluacionOrden(str, Enum):
     """Los ocho resultados que BR-REP-012 contempla para PROC-REP-211.
 
-    Que este resolver sepa clasificar un resultado no significa que
-    exista un comando de la API que lo alcance: en Slice 0 solo
-    ``COMPLETA`` es alcanzable end-to-end. Los demas ya estan
-    clasificados y testeados para que los slices que conectan
-    EXC-REP-001..004, VAR-REP-003 y la Cancelacion no tengan que tocar
-    el resolver.
+    Todos son alcanzables por la API salvo ``CONTEXTO_INCONSISTENTE``,
+    el fail-safe tecnico.
     """
 
     SIN_DETALLES = "SIN_DETALLES"
@@ -67,10 +65,7 @@ def _es_completo(detalle: ReparacionDetail) -> bool:
 
 
 def _es_cancelado(detalle: ReparacionDetail) -> bool:
-    # Reservado para BR-REP-014 (Cancelacion, fuera de MVP v2):
-    # EstadoReparacionDetail todavia no tiene un valor CANCELADO, asi
-    # que ningun Detalle real puede cumplir esto hoy.
-    return False
+    return detalle.estado is EstadoReparacionDetail.CANCELADO
 
 
 def _es_terminal(detalle: ReparacionDetail) -> bool:
@@ -123,10 +118,10 @@ def resolver_situacion_orden(
             return ResultadoEvaluacionOrden.TODO_CANCELADO
         if any(_es_completo(detalle) for detalle in detalles):
             return ResultadoEvaluacionOrden.COMPLETA
-        # Todos terminales, ninguno completo ni cancelado: con el
-        # catalogo actual (sin CANCELADO) esto es inalcanzable, pero se
-        # deja clasificado en vez de asumido para no ocultar una futura
-        # invariante rota.
+        # Todos terminales pero ni todos cancelados ni alguno completo:
+        # inalcanzable (terminal = COMPLETO o CANCELADO), se deja
+        # clasificado en vez de asumido para no ocultar una invariante
+        # rota.
         return ResultadoEvaluacionOrden.CONTEXTO_INCONSISTENTE
 
     if any(_esta_en_ejecucion(detalle) for detalle in detalles):

@@ -6,8 +6,10 @@ factibilidad parcial. Solo en el circuito de 100 el proceso continua
 090 "Ninguno trabajable" -> 100 -> 110 "Si" -> 130 -> 140. El override solo
 REGISTRA la autorizacion en el historial: no reserva ni descuenta stock. Con
 override vigente de ESE Detalle, PROC-REP-185 reserva aunque no alcance y
-PROC-REP-210 puede dejar el stock fisico negativo; sin override se conserva
-el comportamiento anterior.
+PROC-REP-210 puede dejar el stock fisico negativo. Sin override, 185 sigue
+sin reservar lo que no hay; pero desde la decision E3 (MVP v2) un consumo
+de 210 respaldado por la reserva propia tampoco se bloquea si el stock
+fisico ya no alcanza: se registra y deja trazado el faltante.
 """
 
 from decimal import Decimal
@@ -550,8 +552,14 @@ def test_la_liberacion_de_reserva_no_descuenta_stock(tmp_path):
     assert repos[1].obtener_insumo("INS-001").stock_fisico == Decimal("-1")
 
 
-def test_sin_override_el_consumo_no_puede_dejar_stock_negativo(tmp_path):
-    """El stock se agota por otra via antes de 210: sin override se rechaza."""
+def test_sin_override_el_consumo_reservado_se_registra_con_faltante(tmp_path):
+    """El stock se agota por otra via antes de 210 (decision E3).
+
+    Antes se rechazaba y la Orden quedaba con la Ejecucion y la reserva
+    abiertas, sin poder cerrarse. Ahora el CONSUMO -que cierra una reserva
+    propia, obtenida en 185- se registra igual: el stock fisico queda
+    negativo y el faltante queda trazado en el paso 210.
+    """
     insumos = _insumos(a="1")
     repos = _con_repos(tmp_path, insumos)
     orden = _seleccionar(
@@ -575,15 +583,26 @@ def test_sin_override_el_consumo_no_puede_dejar_stock_negativo(tmp_path):
     )
     repos[1].actualizar_stock_insumo("INS-001", Decimal("0"))  # se agoto
 
-    with pytest.raises(PrecondicionInvalidaError, match="stock"):
-        aplicar_movimientos_inventario(
-            orden,
-            ejecucion_id=orden.ejecuciones[0].id,
-            fecha=t(146),
-            ordenes_repo=repos[0],
-            catalogos_repo=repos[1],
-        )
-    assert repos[1].obtener_insumo("INS-001").stock_fisico == Decimal("0")
+    orden = aplicar_movimientos_inventario(
+        orden,
+        ejecucion_id=orden.ejecuciones[0].id,
+        fecha=t(146),
+        ordenes_repo=repos[0],
+        catalogos_repo=repos[1],
+    )
+
+    assert repos[1].obtener_insumo("INS-001").stock_fisico == Decimal("-1")
+    consumos = [
+        m
+        for m in orden.movimientos_insumo
+        if m.tipo is TipoMovimientoInsumo.CONSUMO
+    ]
+    assert [m.cantidad for m in consumos] == [Decimal("1")]
+    paso_210 = orden.historial[-1]
+    assert paso_210.process_id == "PROC-REP-210"
+    assert "Faltante fisico: INS-001 queda en -1" in paso_210.observacion
+    assert "reserva de esta Orden" in paso_210.observacion
+    assert repos[0].obtener(orden.id) == orden
 
 
 def test_el_override_de_un_detalle_no_habilita_negativo_para_otro(tmp_path):

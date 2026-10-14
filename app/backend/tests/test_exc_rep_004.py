@@ -814,11 +814,12 @@ def test_escrituras_de_la_orden_por_comando(tmp_path):
 
     El cierre por "Requiere redefinicion" reutiliza el cierre comun de
     PROC-REP-200 y, con el, el contrato de PROC-REP-210
-    (``aplicar_movimientos_inventario``): la Orden se guarda ANTES de
-    tocar el stock del catalogo -para que un reintento sea idempotente- y
-    otra vez al final con 211 [-> 125]. Son las mismas dos escrituras que
-    "Interrumpido" y "Completado" (TASK-REP-092 sigue abierta). Se fija
-    esa paridad en vez de una tercera mecanica.
+    (``aplicar_movimientos_inventario``): la Orden se guarda junto con el
+    stock del catalogo -desde E4, primero el stock y despues la Orden,
+    con compensacion si falla la segunda- y otra vez al final con 211
+    [-> 125]. Son las mismas dos escrituras que "Interrumpido" y
+    "Completado" (TASK-REP-092 sigue abierta). Se fija esa paridad en vez
+    de una tercera mecanica.
     """
     from tests.test_api_exc_rep_004 import _hasta_en_ejecucion
 

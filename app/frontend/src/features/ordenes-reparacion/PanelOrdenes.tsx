@@ -7,7 +7,7 @@
  * devuelve, incluidas las acciones disponibles.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import * as api from "../../api/ordenes";
 import { ApiError } from "../../api/client";
@@ -19,7 +19,11 @@ import type {
   TipoReparacion,
   Usuario,
 } from "../../types/api";
-import { AccionesOrden, type EjecutorAcciones } from "./AccionesOrden";
+import {
+  AccionesOrden,
+  CancelacionesOrden,
+  type EjecutorAcciones,
+} from "./AccionesOrden";
 import {
   CabeceraOrden,
   DetallesOrden,
@@ -48,6 +52,12 @@ export function PanelOrdenes() {
 
   const actor = usuarios.find((usuario) => usuario.id === actorId) ?? null;
 
+  // La Orden en pantalla, para recargarla si un comando choca (409).
+  const ordenEnPantalla = useRef<string | null>(null);
+  useEffect(() => {
+    ordenEnPantalla.current = orden?.id ?? null;
+  }, [orden]);
+
   const refrescarListado = useCallback(async () => {
     setOrdenes(await api.listarOrdenes());
   }, []);
@@ -73,7 +83,15 @@ export function PanelOrdenes() {
     void cargar();
   }, [refrescarListado]);
 
-  /** Ejecuta un comando y deja la Orden devuelta como estado actual. */
+  /**
+   * Ejecuta un comando y deja la Orden devuelta como estado actual.
+   *
+   * Un 409 significa que la Orden no admitía el comando en su estado
+   * REAL: otro usuario la cambió (CONFLICTO_CONCURRENTE), ya está cerrada
+   * (ORDEN_CERRADA), la tiene otro técnico (TOMA_DE_OTRO_TECNICO), etc.
+   * En todos los casos se recarga desde el backend para no seguir
+   * operando sobre datos viejos.
+   */
   const ejecutarComando = useCallback(
     async (comando: () => Promise<Orden>) => {
       setOcupado(true);
@@ -83,7 +101,19 @@ export function PanelOrdenes() {
         setOrden(actualizada);
         await refrescarListado();
       } catch (fallo) {
-        setError(mensajeDe(fallo));
+        const ordenId = ordenEnPantalla.current;
+        const conflicto = fallo instanceof ApiError && fallo.status === 409;
+        let recargada = false;
+        if (conflicto && ordenId) {
+          try {
+            setOrden(await api.obtenerOrden(ordenId));
+            await refrescarListado();
+            recargada = true;
+          } catch {
+            // Si la recarga tambien falla, queda el mensaje original.
+          }
+        }
+        setError(mensajeDe(fallo, recargada));
       } finally {
         setOcupado(false);
       }
@@ -134,9 +164,12 @@ export function PanelOrdenes() {
       ),
     esperarRecursos: () =>
       void ejecutarComando(() => api.esperarRecursos(idOrden)),
+    consultarImpactoOverride: (detalleId) =>
+      api.obtenerImpactoOverride(idOrden, detalleId),
+    // Solo se invoca tras la confirmación explícita del impacto (E3).
     overrideRecursos: (detalleId, motivo) =>
       void ejecutarComando(() =>
-        api.overrideRecursos(idOrden, detalleId, idActor, motivo),
+        api.overrideRecursos(idOrden, detalleId, idActor, motivo, true),
       ),
     revalidarRecursos: () =>
       void ejecutarComando(() => api.revalidarRecursos(idOrden)),
@@ -220,6 +253,25 @@ export function PanelOrdenes() {
       void ejecutarComando(() =>
         api.iniciarGarantiaRma(idOrden, idActor, detalleOrigenIds),
       ),
+    rechazarControl: (detalleId, motivo) =>
+      void ejecutarComando(() =>
+        api.rechazarControl(idOrden, idActor, detalleId, motivo),
+      ),
+    registrarDevolucion: (recibidoPor, observaciones) =>
+      void ejecutarComando(() =>
+        api.registrarDevolucion(
+          idOrden,
+          idActor,
+          recibidoPor,
+          observaciones || null,
+        ),
+      ),
+    cancelarDetalle: (detalleId, motivo) =>
+      void ejecutarComando(() =>
+        api.cancelarDetalle(idOrden, detalleId, idActor, motivo),
+      ),
+    cancelarOrden: (motivo) =>
+      void ejecutarComando(() => api.cancelarOrden(idOrden, idActor, motivo)),
   };
 
   return (
@@ -270,12 +322,26 @@ export function PanelOrdenes() {
               gridTemplateColumns: "minmax(0, 1fr)",
             }}
           >
-            <CabeceraOrden orden={orden} />
+            <CabeceraOrden
+              orden={orden}
+              usuarios={usuarios}
+              estaciones={estaciones}
+            />
             <DetallesOrden orden={orden} />
             <EjecucionesOrden orden={orden} />
             <AccionesOrden
               orden={orden}
               actor={actor}
+              usuarios={usuarios}
+              tipos={tipos}
+              estaciones={estaciones}
+              ocupado={ocupado}
+              ejecutar={ejecutor}
+            />
+            <CancelacionesOrden
+              orden={orden}
+              actor={actor}
+              usuarios={usuarios}
               tipos={tipos}
               estaciones={estaciones}
               ocupado={ocupado}
@@ -317,7 +383,14 @@ export function PanelOrdenes() {
   );
 }
 
-function mensajeDe(fallo: unknown): string {
-  if (fallo instanceof ApiError) return fallo.message;
-  return "Ocurrió un error inesperado.";
+function mensajeDe(fallo: unknown, recargada = false): string {
+  if (!(fallo instanceof ApiError)) return "Ocurrió un error inesperado.";
+  const prefijo =
+    fallo.codigo === "CONFLICTO_CONCURRENTE"
+      ? "Otra operación modificó la Orden al mismo tiempo. "
+      : "";
+  const sufijo = recargada
+    ? " Se recargó la Orden con su estado actual."
+    : "";
+  return `${prefijo}${fallo.message}${sufijo}`;
 }

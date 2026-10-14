@@ -23,6 +23,7 @@ el stock sigue disponible para cualquier otra Orden. La factibilidad
 (PROC-REP-080) solo consulta.
 """
 
+import logging
 from collections.abc import Iterable, Sequence
 from datetime import datetime
 from decimal import Decimal
@@ -41,6 +42,8 @@ from .inventario import (
     inventario_aplicado,
 )
 from .recursos import tiene_override_factibilidad
+
+logger = logging.getLogger(__name__)
 
 CERO = Decimal("0")
 
@@ -126,18 +129,31 @@ def aplicar_movimientos_inventario(
     test, manana la API- no tenga que coordinarla a mano:
 
         1. generar los movimientos dentro de la Orden (service 210);
-        2. validar que ningun stock quede negativo (salvo override);
-        3. guardar la Orden;
-        4. descontar del stock fisico lo efectivamente consumido.
+        2. calcular el stock fisico resultante y, si queda negativo,
+           dejar constancia del faltante fisico en el paso 210;
+        3. descontar del stock fisico lo efectivamente consumido;
+        4. guardar la Orden.
 
     Solo el CONSUMO baja ``stock_fisico``. La LIBERACION_RESERVA cierra
     la reserva sin tocarlo, porque esa unidad nunca salio del deposito.
 
-    El MVP no implementa transacciones distribuidas: si el paso 4 fallara
-    despues del 3, la Orden quedaria con el consumo registrado y el
-    catalogo sin actualizar. El paso 2 hace improbable ese caso, y el
-    orden elegido preserva primero la historia de la Orden, que es la
-    fuente de verdad de lo que ocurrio.
+    Decision de negocio E3 (MVP v2): todo CONSUMO de este paso cierra una
+    RESERVA de la propia Orden -``generar_movimientos_inventario``
+    rechaza usar mas de lo reservado-, y esa reserva es un derecho que la
+    Orden obtuvo en PROC-REP-185. Por eso el consumo nunca se bloquea
+    porque el stock fisico ya no alcance: si otra Orden consumio con
+    override (o el stock se ajusto a mano), el fisico puede quedar
+    negativo y el faltante queda trazado; no se inventan existencias ni
+    se borran movimientos.
+
+    El MVP no tiene transacciones entre archivos (E4): el stock se escribe
+    primero -no tiene control de version- y la Orden despues -el
+    repository puede rechazar una version obsoleta-. Si guardar la Orden
+    falla, el stock vuelve a su valor anterior; si falla el stock, la Orden
+    no se guarda. Asi ninguno de los dos queda con un consumo que el otro
+    no tiene y el tecnico puede reintentar. Lo unico que queda fuera es
+    que falle tambien esa restauracion: se registra en el log como
+    inconsistencia a revisar a mano.
 
     Es IDEMPOTENTE: si esa Ejecucion ya aplico su inventario, devuelve la
     Orden sin generar movimientos, sin volver a descontar stock y sin
@@ -152,35 +168,88 @@ def aplicar_movimientos_inventario(
 
     consumos = _consumos_de_la_ejecucion(nueva_orden, ejecucion_id)
 
-    # Un stock fisico negativo solo es admisible si el consumo viene de un
-    # Detalle con override de factibilidad valido (BR-REP-003). Es la
-    # unica politica de stock negativo; el override de otro Detalle no la
-    # habilita.
-    ejecucion = next(
-        e for e in nueva_orden.ejecuciones if e.id == ejecucion_id
-    )
-    permite_negativo = tiene_override_factibilidad(
-        nueva_orden, ejecucion.reparacion_detail_id
-    )
-
-    # Validar todo antes de escribir nada.
-    stocks_resultantes: list[tuple[str, Decimal]] = []
+    # Calcular todo antes de escribir nada.
+    stocks: list[tuple[str, Decimal, Decimal]] = []  # (id, antes, despues)
+    faltantes: list[str] = []
     for insumo_id, consumido in sorted(consumos.items()):
         insumo = catalogos_repo.obtener_insumo(insumo_id)
         resultante = insumo.stock_fisico - consumido
-        if resultante < CERO and not permite_negativo:
-            raise PrecondicionInvalidaError(
-                f"El consumo de {consumido} de {insumo_id} dejaria el stock "
-                f"fisico en {resultante}: hay {insumo.stock_fisico}."
+        stocks.append((insumo_id, insumo.stock_fisico, resultante))
+        if resultante < CERO:
+            faltantes.append(
+                f"{insumo_id} queda en {resultante} tras consumir "
+                f"{consumido} (habia {insumo.stock_fisico})"
             )
-        stocks_resultantes.append((insumo_id, resultante))
 
-    ordenes_repo.guardar(nueva_orden)
+    if faltantes:
+        ejecucion = next(
+            e for e in nueva_orden.ejecuciones if e.id == ejecucion_id
+        )
+        respaldo = (
+            "consumo con override de factibilidad"
+            if tiene_override_factibilidad(
+                nueva_orden, ejecucion.reparacion_detail_id
+            )
+            else "consumo respaldado por la reserva de esta Orden"
+        )
+        nueva_orden = _anotar_faltante_fisico(
+            nueva_orden,
+            f"Faltante fisico: {'; '.join(faltantes)}. {respaldo}.",
+        )
 
-    for insumo_id, resultante in stocks_resultantes:
-        catalogos_repo.actualizar_stock_insumo(insumo_id, resultante)
+    escritos: list[tuple[str, Decimal]] = []
+    try:
+        for insumo_id, anterior, resultante in stocks:
+            catalogos_repo.actualizar_stock_insumo(insumo_id, resultante)
+            escritos.append((insumo_id, anterior))
+        ordenes_repo.guardar(nueva_orden)
+    except Exception:
+        _restaurar_stock(catalogos_repo, escritos)
+        raise
 
     return nueva_orden
+
+
+def _restaurar_stock(
+    catalogos_repo: CatalogosRepository,
+    escritos: Sequence[tuple[str, Decimal]],
+) -> None:
+    """Deshace los descuentos de stock ya escritos (compensacion, E4).
+
+    Si la restauracion misma falla, no tapa el error original: queda en
+    el log para revisarlo a mano.
+    """
+    for insumo_id, anterior in reversed(escritos):
+        try:
+            catalogos_repo.actualizar_stock_insumo(insumo_id, anterior)
+        except Exception:
+            logger.exception(
+                "No se pudo restaurar el stock de %s a %s tras un fallo de "
+                "escritura de PROC-REP-210: revisar el inventario.",
+                insumo_id,
+                anterior,
+            )
+
+
+def _anotar_faltante_fisico(
+    orden: OrdenReparacion,
+    observacion: str,
+) -> OrdenReparacion:
+    """Deja el faltante fisico en el paso PROC-REP-210 recien registrado.
+
+    ``generar_movimientos_inventario`` acaba de agregar ese paso al final
+    del historial de esta copia de la Orden, todavia sin persistir: se
+    completa su observacion en lugar de inventar un nodo nuevo.
+    """
+    ultimo = orden.historial[-1]
+    if ultimo.process_id != "PROC-REP-210":
+        raise PrecondicionInvalidaError(
+            "El faltante fisico se anota sobre el paso PROC-REP-210."
+        )
+    orden.historial[-1] = ultimo.model_copy(
+        update={"observacion": observacion}
+    )
+    return orden
 
 
 def _consumos_de_la_ejecucion(

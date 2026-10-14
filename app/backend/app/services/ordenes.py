@@ -19,7 +19,6 @@ from app.domain.models import (
     Cliente,
     DocumentosOrden,
     Equipo,
-    EstadoControl,
     EstadoEjecucion,
     EstadoTomaOrden,
     EstadoWorkflow,
@@ -29,15 +28,22 @@ from app.domain.models import (
     RolUsuario,
     Usuario,
 )
+from app.domain.politicas import politica_de
 
 from .autorizacion import validar_actor, validar_alguno_de
-from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
+from .exceptions import (
+    EntidadNoEncontradaError,
+    OrdenCerradaError,
+    PrecondicionInvalidaError,
+)
 from .inventario import hay_reservas_activas
 from .pagos import condicion_entrega_cumplida
 from .recursos import marcar_pendiente_recursos, override_listo_para_habilitar
 from .redefinicion import marcar_pendiente_revision
+from .reparaciones import control_tecnico_completo
 from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
 from .revisiones import finalizada_sin_reparacion, lista_para_cierre
+from .tomas import toma_activa
 from .workflow import registrar_paso
 
 # Nodos que PROC-REP V1.3 declara con ``actores_alternativos``:
@@ -64,6 +70,76 @@ _RESULTADOS_QUE_CIERRAN_LA_TOMA = (
     ResultadoEvaluacionOrden.PENDIENTE_RECURSOS,
     ResultadoEvaluacionOrden.REQUIERE_REVISION,
 )
+
+
+def exigir_orden_abierta(orden: OrdenReparacion) -> None:
+    """E1: ninguna operacion modifica una Orden cerrada.
+
+    Unica validacion de "Orden cerrada" de los comandos: la aplica la capa
+    de aplicacion al cargar la Orden que va a modificar, antes de
+    cualquier otra precondicion. Asi el rechazo es siempre el mismo (409
+    ORDEN_CERRADA) y no depende de que cada service recuerde mirar el
+    estado. Consultar la Orden o iniciar una garantia RMA desde ella no
+    pasa por aqui: ninguna de las dos la modifica.
+    """
+    if not orden.esta_cerrada:
+        return
+    if orden.estado_workflow is EstadoWorkflow.ENTREGADA:
+        situacion = "ya fue entregada"
+    elif orden.estado_workflow is EstadoWorkflow.CANCELADA:
+        situacion = "fue cancelada y su proceso termino"
+    else:
+        situacion = "ya fue devuelta a Gestion RT"
+    raise OrdenCerradaError(
+        f"La Orden {orden.id} {situacion}: esta cerrada y solo puede "
+        "consultarse."
+    )
+
+
+def equipo_bajo_custodia(orden: OrdenReparacion) -> bool:
+    """El equipo quedo en poder de RMA y hay que devolverlo si se cancela.
+
+    Aproximacion del MVP a la custodia de V1.4 (BR-REP-033), que no
+    modela la confirmacion fisica de la recepcion: para los Origenes con
+    comprobante de recepcion, el equipo esta en custodia desde que el
+    comprobante se emitio (PROC-REP-060). Antes -por ejemplo, el cliente
+    desiste mientras se carga la Orden- no hay nada que devolver. Un equipo
+    RT_INTERNO llega desde Gestion RT al crear la Orden (PROC-REP-020):
+    siempre hay que devolverlo.
+    """
+    if politica_de(orden.origen).requiere_comprobante_recepcion:
+        return orden.documentos.comprobante_recepcion.generado
+    return True
+
+
+def devolucion_pendiente(orden: OrdenReparacion) -> bool:
+    """Orden CANCELADA cuyo equipo todavia no se devolvio (PROC-REP-270)."""
+    return (
+        orden.estado_workflow is EstadoWorkflow.CANCELADA
+        and not orden.esta_cerrada
+    )
+
+
+def marcar_orden_cancelada(
+    orden: OrdenReparacion,
+    *,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """La Orden pasa a CANCELADA (PROC-REP-211 TODO_CANCELADO / 306).
+
+    Fija el hito y decide como sigue, sin inventar un nodo: si el equipo
+    esta en custodia, la Orden espera su devolucion fisica (PROC-REP-270,
+    ``services.cancelaciones.registrar_devolucion_equipo``); si no, el
+    proceso termina aca (EVT-REP-999, sin entrada de historial, como la
+    entrega). CANCELADA nunca se convierte en ENTREGADA. Nodo ACT-SYSTEM:
+    no recibe Usuario.
+    """
+    nueva_orden = orden.model_copy(deep=True)
+    nueva_orden.estado_workflow = EstadoWorkflow.CANCELADA
+    nueva_orden.updated_at = fecha
+    if not equipo_bajo_custodia(nueva_orden):
+        nueva_orden.current_process = "EVT-REP-999"
+    return nueva_orden
 
 
 def crear_orden_cliente_externo(
@@ -489,11 +565,23 @@ def evaluar_situacion_orden(
     ``tests/test_resolucion_orden.py``). Con PENDIENTE_RECURSOS (EXC-REP-001)
     cierra la toma y continua directo a PROC-REP-120 (sin 100 ni 110); con
     REQUIERE_REVISION (EXC-REP-004) cierra la toma y continua a
-    PROC-REP-125. La cancelacion todavia no esta conectada.
+    PROC-REP-125.
 
-    No cambia ``estado_workflow``: REPARACION_LISTA se fija recien en
-    PROC-REP-240, tras el control tecnico, y la espera de recursos conserva
-    el ultimo hito (por ejemplo EN_REPARACION).
+    Se invoca tambien despues de cancelar Detalles (PROC-REP-300/305) y de
+    rechazar un control (PROC-REP-235):
+
+    - TODO_CANCELADO (caso d): la Orden pasa a CANCELADA
+      (``marcar_orden_cancelada``), y espera la devolucion del equipo si
+      esta en custodia.
+    - ABIERTA_TRABAJABLE sin toma activa (caso b) con la Orden ya en el
+      taller (EN_REPARACION): vuelve a la cola (PROC-REP-170), por
+      ejemplo con un Detalle reabierto para retrabajo. En las etapas
+      anteriores (definicion, habilitada, en cola) la Orden ya esta donde
+      corresponde y no se mueve.
+
+    Fuera de esos dos casos no cambia ``estado_workflow``: REPARACION_LISTA
+    se fija recien en PROC-REP-240, tras el control tecnico, y la espera de
+    recursos conserva el ultimo hito (por ejemplo EN_REPARACION).
     """
     resultado = resolver_situacion_orden(orden.reparaciones_detail)
 
@@ -517,6 +605,23 @@ def evaluar_situacion_orden(
     elif resultado is ResultadoEvaluacionOrden.REQUIERE_REVISION:
         # PROC-REP-211 -> PROC-REP-125 (EXC-REP-004).
         nueva_orden = marcar_pendiente_revision(nueva_orden, fecha=fecha)
+    elif resultado is ResultadoEvaluacionOrden.TODO_CANCELADO:
+        # PROC-REP-211 (d): CANCELADA [-> 270 devolucion] -> EVT-REP-999.
+        nueva_orden = marcar_orden_cancelada(nueva_orden, fecha=fecha)
+    elif (
+        resultado is ResultadoEvaluacionOrden.ABIERTA_TRABAJABLE
+        and toma_activa(nueva_orden) is None
+        and nueva_orden.estado_workflow is EstadoWorkflow.EN_REPARACION
+    ):
+        # PROC-REP-211 (b) -> PROC-REP-170: disponible para cualquier
+        # tecnico, con su prioridad.
+        nueva_orden = registrar_paso(
+            nueva_orden,
+            process_id="PROC-REP-170",
+            accion="INGRESAR_A_COLA",
+            fecha=fecha,
+        )
+        nueva_orden.estado_workflow = EstadoWorkflow.EN_COLA
 
     return nueva_orden, resultado
 
@@ -529,7 +634,8 @@ def marcar_reparacion_lista(
     """PROC-REP-240: la Orden pasa a REPARACION_LISTA.
 
     Depende del evento de aprobacion de Recepcion, no solo del estado de
-    los Detalles: por eso exige que todos tengan control APROBADO.
+    los Detalles: por eso exige que todos los Detalles vigentes tengan
+    control APROBADO (los CANCELADO no se controlan).
 
     Nodo ACT-SYSTEM: no lo ejecuta una persona, asi que no recibe
     Usuario y el historial queda sin actor humano. El evento humano
@@ -540,10 +646,7 @@ def marcar_reparacion_lista(
         raise PrecondicionInvalidaError(
             "No se puede marcar lista una Orden sin Detalles."
         )
-    if any(
-        detalle.control_estado is not EstadoControl.APROBADO
-        for detalle in orden.reparaciones_detail
-    ):
+    if not control_tecnico_completo(orden):
         raise PrecondicionInvalidaError(
             "Todos los Detalles deben tener control APROBADO antes de "
             "REPARACION_LISTA."

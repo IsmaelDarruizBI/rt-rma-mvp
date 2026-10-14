@@ -236,9 +236,16 @@ def test_espera_control():
     # Detalle (PROC-REP-230), asi que APROBAR_CONTROL declara el
     # detalle_id que aprobaria -antes, con la aprobacion en bloque, este
     # campo siempre viajaba en None-.
+    # Segunda excepcion deliberada (rechazo de control, PROC-REP-235): el
+    # mismo control ofrece tambien RECHAZAR_CONTROL para ese Detalle.
     assert _codigos_y_roles(orden) == [
         (
             "APROBAR_CONTROL",
+            (RolUsuario.RECEPCION,),
+            flujo_mvp.DETALLE_ID,
+        ),
+        (
+            "RECHAZAR_CONTROL",
             (RolUsuario.RECEPCION,),
             flujo_mvp.DETALLE_ID,
         ),

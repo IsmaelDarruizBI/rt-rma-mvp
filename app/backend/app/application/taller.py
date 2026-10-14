@@ -47,6 +47,7 @@ from app.services import (
 
 from .concurrencia import seccion_critica_inventario
 from .contexto import ApplicationContext
+from .modificacion import orden_para_modificar
 
 
 def _motivo_del_ultimo_paso(orden: OrdenReparacion) -> str:
@@ -81,29 +82,28 @@ def tomar_orden_en_estacion(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden, valida = validar_estacion_trabajo(
+            orden,
+            usuario=usuario,
+            estacion_id=estacion_id,
+            estaciones=contexto.catalogos.listar_estaciones(),
+            compatibilidades=(
+                contexto.catalogos.listar_tipo_reparacion_estaciones()
+            ),
+            fecha=fecha,
+        )
+        if not valida:
+            raise PrecondicionInvalidaError(
+                f"No se puede tomar la Orden (PROC-REP-172): "
+                f"{_motivo_del_ultimo_paso(orden)}."
+            )
 
-    orden, valida = validar_estacion_trabajo(
-        orden,
-        usuario=usuario,
-        estacion_id=estacion_id,
-        estaciones=contexto.catalogos.listar_estaciones(),
-        compatibilidades=(
-            contexto.catalogos.listar_tipo_reparacion_estaciones()
-        ),
-        fecha=fecha,
-    )
-    if not valida:
-        raise PrecondicionInvalidaError(
-            f"No se puede tomar la Orden (PROC-REP-172): "
-            f"{_motivo_del_ultimo_paso(orden)}."
+        orden = tomar_orden(
+            orden, usuario=usuario, estacion_id=estacion_id, fecha=fecha
         )
 
-    orden = tomar_orden(
-        orden, usuario=usuario, estacion_id=estacion_id, fecha=fecha
-    )
-
-    contexto.ordenes.guardar(orden)
+        contexto.ordenes.guardar(orden)
     return orden
 
 
@@ -139,9 +139,10 @@ def iniciar_detalle(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    with seccion_critica_inventario():
-        orden = contexto.ordenes.obtener(orden_id)
-
+    with (
+        seccion_critica_inventario(),
+        orden_para_modificar(contexto, orden_id) as orden,
+    ):
         orden = seleccionar_detalle(
             orden, detalle_id=detalle_id, usuario=usuario, fecha=fecha
         )
@@ -198,10 +199,9 @@ def liberar_orden(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
-    orden = liberar_orden_servicio(orden, usuario=usuario, fecha=fecha)
-
-    contexto.ordenes.guardar(orden)
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = liberar_orden_servicio(orden, usuario=usuario, fecha=fecha)
+        contexto.ordenes.guardar(orden)
     return orden
 
 
@@ -336,8 +336,10 @@ def _cerrar_ejecucion(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha: datetime = contexto.ahora()
 
-    with seccion_critica_inventario():
-        orden = contexto.ordenes.obtener(orden_id)
+    with (
+        seccion_critica_inventario(),
+        orden_para_modificar(contexto, orden_id) as orden,
+    ):
         ejecucion = _buscar_ejecucion(orden, ejecucion_id)
 
         orden = ejecutar_detalle(

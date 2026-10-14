@@ -325,9 +325,16 @@ def test_aplicar_movimientos_no_muta_la_orden_recibida(repos):
     assert len(original.movimientos_insumo) == 1
 
 
-def test_aplicar_movimientos_falla_si_el_stock_quedaria_negativo(tmp_path):
-    from app.services import PrecondicionInvalidaError
+def test_aplicar_movimientos_registra_el_faltante_si_el_stock_no_alcanza(
+    tmp_path,
+):
+    """Decision E3: el consumo de una reserva propia no se bloquea.
 
+    Antes, con el stock fisico en 0, PROC-REP-210 se rechazaba y no
+    escribia nada: la Orden quedaba con la Ejecucion y la reserva
+    abiertas. Ahora el CONSUMO se registra, el stock queda negativo y el
+    faltante fisico queda trazado en el paso 210.
+    """
     ordenes_repo = JsonOrdenReparacionRepository(tmp_path / "ordenes")
     catalogos_repo = JsonCatalogosRepository(tmp_path / "catalogs")
     sin_stock = INSUMO_BATERIA.model_copy(
@@ -340,20 +347,19 @@ def test_aplicar_movimientos_falla_si_el_stock_quedaria_negativo(tmp_path):
 
     orden = flujo_mvp.orden_con_ejecucion_completada()
 
-    with pytest.raises(PrecondicionInvalidaError):
-        aplicar_movimientos_inventario(
-            orden,
-            ejecucion_id=orden.ejecuciones[0].id,
-            fecha=t(146),
-            ordenes_repo=ordenes_repo,
-            catalogos_repo=catalogos_repo,
-        )
-
-    # Nada se escribio: ni la Orden ni el stock.
-    assert ordenes_repo.listar() == []
-    assert catalogos_repo.obtener_insumo("INS-001").stock_fisico == Decimal(
-        "0"
+    aplicada = aplicar_movimientos_inventario(
+        orden,
+        ejecucion_id=orden.ejecuciones[0].id,
+        fecha=t(146),
+        ordenes_repo=ordenes_repo,
+        catalogos_repo=catalogos_repo,
     )
+
+    assert ordenes_repo.obtener(orden.id) == aplicada
+    assert catalogos_repo.obtener_insumo("INS-001").stock_fisico == Decimal(
+        "-1"
+    )
+    assert "Faltante fisico" in aplicada.historial[-1].observacion
 
 
 # --- Consultas auxiliares -------------------------------------------

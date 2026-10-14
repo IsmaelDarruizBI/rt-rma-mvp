@@ -50,9 +50,15 @@ def _override(
     usuario=COORDINADOR,
     motivo=MOTIVO,
 ):
+    """El override ya confirmado, como lo envia la UI (E3).
+
+    Desde la correccion E3 el backend exige ``confirmado: true`` -la
+    confirmacion explicita del impacto en el stock-; sin ella responde
+    409 CONFIRMACION_REQUERIDA (ver ``test_override_reservas_ajenas``).
+    """
     return cliente.post(
         f"/api/orders/{orden_id}/details/{detalle_id}/resources/override",
-        json={"usuario_id": usuario, "motivo": motivo},
+        json={"usuario_id": usuario, "motivo": motivo, "confirmado": True},
     )
 
 

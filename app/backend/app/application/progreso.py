@@ -17,7 +17,8 @@ Scenario guardado en la Orden.
 
 from dataclasses import dataclass
 
-from app.domain.models import OrdenReparacion, OrigenOrden
+from app.domain.models import EstadoWorkflow, OrdenReparacion, OrigenOrden
+from app.services import equipo_bajo_custodia
 
 # Nodos de HP-REP-001, en el orden en que el escenario los recorre.
 # ``EVT-REP-999`` no genera historial: se alcanza cuando la Orden queda
@@ -300,6 +301,62 @@ def _sin_reparacion(
     return tuple(resultado)
 
 
+_NODO_RETRABAJO = ("PROC-REP-235", "Identificar Detalle(s) a retrabajar")
+
+
+def _con_retrabajo(
+    ruta: tuple[tuple[str, str], ...],
+) -> tuple[tuple[str, str], ...]:
+    """Intercala 235 tras 230 (control rechazado, PROC-REP-230 "No").
+
+    Se muestra UNA vez aunque haya varios ciclos de rechazo y retrabajo:
+    el historial conserva cada uno.
+    """
+    resultado: list[tuple[str, str]] = []
+    for nodo in ruta:
+        resultado.append(nodo)
+        if nodo[0] == "PROC-REP-230":
+            resultado.append(_NODO_RETRABAJO)
+    return tuple(resultado)
+
+
+_NODOS_DE_CANCELACION: tuple[tuple[str, str], ...] = (
+    ("PROC-REP-300", "Cancelar Detalle"),
+    ("PROC-REP-305", "Cancelar Orden / trabajos pendientes"),
+    ("PROC-REP-306", "Cancelar Orden sin Detalles"),
+)
+_CIERRE_DE_LA_CANCELACION = {"PROC-REP-211", "PROC-REP-270", "EVT-REP-999"}
+
+
+def _cancelada(
+    ruta: tuple[tuple[str, str], ...],
+    alcanzados: set[str],
+    *,
+    con_devolucion: bool,
+) -> tuple[tuple[str, str], ...]:
+    """Lo recorrido hasta cancelar, la cancelacion y su cierre.
+
+    Una Orden CANCELADA no sigue el resto de su ruta: se muestra lo que
+    efectivamente recorrio, el nodo de cancelacion, el resolver (si paso
+    por el), la devolucion fisica si el equipo estaba en custodia
+    (PROC-REP-270) y el fin.
+    """
+    recorrido = [
+        nodo
+        for nodo in ruta
+        if nodo[0] in alcanzados and nodo[0] not in _CIERRE_DE_LA_CANCELACION
+    ]
+    recorrido.extend(
+        nodo for nodo in _NODOS_DE_CANCELACION if nodo[0] in alcanzados
+    )
+    if "PROC-REP-211" in alcanzados:
+        recorrido.append(("PROC-REP-211", "Evaluar situacion de la Orden"))
+    if con_devolucion:
+        recorrido.append(("PROC-REP-270", "Devolver el equipo sin reparar"))
+    recorrido.append(("EVT-REP-999", "Proceso finalizado"))
+    return tuple(recorrido)
+
+
 def _ruta_esperada(orden: OrdenReparacion) -> tuple[tuple[str, str], ...]:
     """Ruta de referencia para mostrar el progreso de esta Orden.
 
@@ -333,6 +390,12 @@ def _ruta_esperada(orden: OrdenReparacion) -> tuple[tuple[str, str], ...]:
         )
     if "PROC-REP-125" in alcanzados:
         ruta = _con_revision_posterior(ruta)
+    if "PROC-REP-235" in alcanzados:
+        ruta = _con_retrabajo(ruta)
+    if orden.estado_workflow is EstadoWorkflow.CANCELADA:
+        return _cancelada(
+            ruta, alcanzados, con_devolucion=equipo_bajo_custodia(orden)
+        )
     return ruta
 
 

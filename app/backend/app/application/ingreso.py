@@ -46,6 +46,7 @@ from app.services import (
 from .concurrencia import seccion_critica_inventario
 from .contexto import ApplicationContext
 from .identificadores import siguiente_detalle_id, siguiente_orden_id
+from .modificacion import orden_para_modificar
 
 
 def crear_orden(
@@ -131,17 +132,16 @@ def definir_reparacion(
     tipo = contexto.catalogos.obtener_tipo_reparacion(tipo_reparacion_id)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
-    orden = definir_reparacion_detail(
-        orden,
-        detalle_id=siguiente_detalle_id(orden),
-        tipo_reparacion=tipo,
-        usuario=usuario,
-        fecha=fecha,
-        observaciones=observaciones,
-    )
-
-    contexto.ordenes.guardar(orden)
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = definir_reparacion_detail(
+            orden,
+            detalle_id=siguiente_detalle_id(orden),
+            tipo_reparacion=tipo,
+            usuario=usuario,
+            fecha=fecha,
+            observaciones=observaciones,
+        )
+        contexto.ordenes.guardar(orden)
     return orden
 
 
@@ -169,14 +169,16 @@ def finalizar_definicion(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
-    exigir_definicion_finalizable(orden, usuario=usuario)
+    with orden_para_modificar(contexto, orden_id) as orden:
+        exigir_definicion_finalizable(orden, usuario=usuario)
 
-    if not any(paso.process_id == "PROC-REP-050" for paso in orden.historial):
-        orden = generar_comprobante_recepcion(orden, fecha=fecha)
-    orden = _validar_y_habilitar(contexto, orden, fecha=fecha)
+        if not any(
+            paso.process_id == "PROC-REP-050" for paso in orden.historial
+        ):
+            orden = generar_comprobante_recepcion(orden, fecha=fecha)
+        orden = _validar_y_habilitar(contexto, orden, fecha=fecha)
 
-    contexto.ordenes.guardar(orden)
+        contexto.ordenes.guardar(orden)
     return orden
 
 
@@ -226,11 +228,10 @@ def enviar_a_revision(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
-    orden = marcar_orden_en_revision(orden, usuario=usuario, fecha=fecha)
-    orden = generar_comprobante_recepcion(orden, fecha=fecha)
-
-    contexto.ordenes.guardar(orden)
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = marcar_orden_en_revision(orden, usuario=usuario, fecha=fecha)
+        orden = generar_comprobante_recepcion(orden, fecha=fecha)
+        contexto.ordenes.guardar(orden)
     return orden
 
 
@@ -296,18 +297,17 @@ def definir_reparacion_desde_revision(
     tipo = contexto.catalogos.obtener_tipo_reparacion(tipo_reparacion_id)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
-    orden = definir_reparacion_detail_luego_revision(
-        orden,
-        detalle_id=siguiente_detalle_id(orden),
-        tipo_reparacion=tipo,
-        usuario=usuario,
-        fecha=fecha,
-        observaciones=observaciones,
-        detalle_origen_id=detalle_origen_id,
-    )
-
-    contexto.ordenes.guardar(orden)
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = definir_reparacion_detail_luego_revision(
+            orden,
+            detalle_id=siguiente_detalle_id(orden),
+            tipo_reparacion=tipo,
+            usuario=usuario,
+            fecha=fecha,
+            observaciones=observaciones,
+            detalle_origen_id=detalle_origen_id,
+        )
+        contexto.ordenes.guardar(orden)
     return orden
 
 
@@ -329,14 +329,13 @@ def finalizar_sin_reparacion(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
-    orden = registrar_finalizacion_sin_reparacion(
-        orden,
-        usuario=usuario,
-        motivo=motivo,
-        observaciones=observaciones,
-        fecha=fecha,
-    )
-
-    contexto.ordenes.guardar(orden)
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = registrar_finalizacion_sin_reparacion(
+            orden,
+            usuario=usuario,
+            motivo=motivo,
+            observaciones=observaciones,
+            fecha=fecha,
+        )
+        contexto.ordenes.guardar(orden)
     return orden

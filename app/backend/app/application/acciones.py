@@ -33,6 +33,8 @@ from app.domain.models import (
 )
 from app.domain.politicas import CondicionComercial, politica_de
 from app.services import (
+    ROLES_CANCELACION,
+    devolucion_pendiente,
     ejecucion_activa,
     requiere_definicion,
     revision_vigente,
@@ -76,6 +78,16 @@ ACCION_OVERRIDE_RECURSOS = "OVERRIDE_RECURSOS"
 ACCION_REQUIERE_REDEFINICION = "REQUIERE_REDEFINICION"
 ACCION_REVISAR_DETALLE = "REVISAR_DETALLE"
 ACCION_REDEFINIR_DETALLE = "REDEFINIR_DETALLE"
+ACCION_RECHAZAR_CONTROL = "RECHAZAR_CONTROL"
+ACCION_REGISTRAR_DEVOLUCION = "REGISTRAR_DEVOLUCION"
+ACCION_CANCELAR_DETALLE = "CANCELAR_DETALLE"
+ACCION_CANCELAR_ORDEN = "CANCELAR_ORDEN"
+
+# Terminales de un Detalle: lo realizado y lo cancelado (BR-REP-012).
+_TERMINALES = (
+    EstadoReparacionDetail.COMPLETO,
+    EstadoReparacionDetail.CANCELADO,
+)
 
 # EXC-REP-004: circuito de revision posterior (125 espera, 126 revision).
 _NODOS_REVISION_POSTERIOR = ("PROC-REP-125", "PROC-REP-126")
@@ -101,6 +113,10 @@ class AccionDisponible:
     autorizar -ni "cualquiera", ni "todavia sin definir"-: no
     corresponde exigir ``usuario_id`` en el comando. El MVP igual lo
     expone como paso demostrable en la UI para poder disparar el nodo.
+
+    ``usuario_id`` restringe la accion a UNA persona dentro del rol: el
+    titular de la toma activa para las acciones tecnicas sobre ella
+    (E2). ``None`` significa que cualquier usuario con el rol puede.
     """
 
     codigo: str
@@ -109,6 +125,7 @@ class AccionDisponible:
     detalle_id: str | None = None
     ejecucion_id: str | None = None
     requiere_actor: bool = True
+    usuario_id: str | None = None
 
 
 def detalle_trabajable(orden: OrdenReparacion) -> str | None:
@@ -149,28 +166,29 @@ def detalles_trabajables(orden: OrdenReparacion) -> list[str]:
 
 
 def _detalles_en_espera_de_control(orden: OrdenReparacion) -> list[str]:
-    """Detalles con control PENDIENTE, aprobables ahora mismo.
+    """Detalles realizados con control PENDIENTE, controlables ahora.
 
     PROC-REP-220 solo se alcanza cuando la Orden ENTERA es terminal
-    (todos sus Detalles COMPLETO, igual que exige
-    ``services.reparaciones.aprobar_control_tecnico``): mientras quede
-    algun Detalle DEFINIDO o EN_PROGRESO no se ofrece ninguna accion de
-    control, ni siquiera para un Detalle que ya este COMPLETO. Una vez
+    (todos sus Detalles COMPLETO o CANCELADO, al menos uno COMPLETO, igual
+    que exige ``services.reparaciones.aprobar_control_tecnico``): mientras
+    quede algun Detalle DEFINIDO o EN_PROGRESO no se ofrece ninguna accion
+    de control, ni siquiera para un Detalle que ya este COMPLETO. Una vez
     ahi, el control SI es granular por Detalle (PROC-REP-220): cada uno
-    se aprueba de forma independiente. PROC-REP-230 es, en cambio, la
-    decision global "todos los Detalles aprobados".
+    se aprueba o se rechaza de forma independiente. Los CANCELADO no se
+    controlan, y un Detalle ya aprobado no se vuelve a ofrecer (E14).
     """
     if ejecucion_activa(orden) is not None:
         return []
     if any(
-        detalle.estado is not EstadoReparacionDetail.COMPLETO
+        detalle.estado not in _TERMINALES
         for detalle in orden.reparaciones_detail
     ):
         return []
     return [
         detalle.id
         for detalle in orden.reparaciones_detail
-        if detalle.control_estado is EstadoControl.PENDIENTE
+        if detalle.estado is EstadoReparacionDetail.COMPLETO
+        and detalle.control_estado is EstadoControl.PENDIENTE
     ]
 
 
@@ -231,6 +249,17 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
         or orden.current_process == "EVT-REP-999"
     ):
         return []
+
+    # Orden CANCELADA con el equipo en custodia: lo unico que queda es
+    # devolverlo (PROC-REP-270). Sin cobro, control ni entrega comercial.
+    if devolucion_pendiente(orden):
+        return [
+            AccionDisponible(
+                codigo=ACCION_REGISTRAR_DEVOLUCION,
+                etiqueta="Registrar la devolucion del equipo",
+                roles=ROLES_ENTREGA,
+            )
+        ]
 
     politica = politica_de(orden.origen)
 
@@ -388,6 +417,8 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
 
     en_curso = ejecucion_activa(orden)
     toma = toma_activa(orden)
+    # E2: las acciones tecnicas sobre la toma son solo de su titular.
+    titular = toma.usuario_id if toma is not None else None
 
     if toma is not None and en_curso is None:
         for trabajable in detalles_trabajables(orden):
@@ -397,6 +428,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                     etiqueta="Iniciar el Detalle",
                     roles=(RolUsuario.TECNICO,),
                     detalle_id=trabajable,
+                    usuario_id=titular,
                 )
             )
         acciones.append(
@@ -404,6 +436,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 codigo=ACCION_LIBERAR_ORDEN,
                 etiqueta="Liberar la Orden (PROC-REP-212/213)",
                 roles=(RolUsuario.TECNICO,),
+                usuario_id=titular,
             )
         )
 
@@ -415,6 +448,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 roles=(RolUsuario.TECNICO,),
                 detalle_id=en_curso.reparacion_detail_id,
                 ejecucion_id=en_curso.id,
+                usuario_id=titular,
             )
         )
         # VAR-REP-003: la otra salida de PROC-REP-200. Continuar luego es
@@ -426,6 +460,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 roles=(RolUsuario.TECNICO,),
                 detalle_id=en_curso.reparacion_detail_id,
                 ejecucion_id=en_curso.id,
+                usuario_id=titular,
             )
         )
         # EXC-REP-004: tercer resultado de PROC-REP-200. Igual que los
@@ -437,6 +472,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 roles=(RolUsuario.TECNICO,),
                 detalle_id=en_curso.reparacion_detail_id,
                 ejecucion_id=en_curso.id,
+                usuario_id=titular,
             )
         )
 
@@ -455,6 +491,15 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 AccionDisponible(
                     codigo=ACCION_APROBAR_CONTROL,
                     etiqueta="Aprobar el control tecnico",
+                    roles=(RolUsuario.RECEPCION,),
+                    detalle_id=pendiente,
+                )
+            )
+            # PROC-REP-230 "No" -> 235: la otra salida del mismo control.
+            acciones.append(
+                AccionDisponible(
+                    codigo=ACCION_RECHAZAR_CONTROL,
+                    etiqueta="Rechazar el control (retrabajo)",
                     roles=(RolUsuario.RECEPCION,),
                     detalle_id=pendiente,
                 )
@@ -516,4 +561,55 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             )
         )
 
+    return acciones
+
+
+def acciones_de_cancelacion(orden: OrdenReparacion) -> list[AccionDisponible]:
+    """Cancelaciones que la Orden admite ahora (PROC-REP-300/305/306).
+
+    Van aparte de ``acciones_disponibles``: son capacidades excepcionales,
+    posibles en casi cualquier momento del proceso, y la UI las presenta
+    separadas -con confirmacion- de la accion que corresponde al flujo.
+    Igual que el resto, no autorizan nada: los services validan rol y
+    estado cuando el comando llega.
+
+    - Cancelar un Detalle: cada Detalle PENDIENTE (DEFINIDO); nunca uno
+      COMPLETO, CANCELADO o en ejecucion.
+    - Cancelar la Orden: sin Ejecucion activa, y con al menos un Detalle
+      pendiente o sin Detalles todavia.
+
+    Ninguna sobre una Orden cerrada, CANCELADA, SIN_REPARACION o con la
+    reparacion lista: ahi ya no queda nada pendiente que cancelar.
+    """
+    if (
+        orden.esta_cerrada
+        or orden.estado_workflow is EstadoWorkflow.CANCELADA
+        or lista_para_cierre(orden)
+    ):
+        return []
+
+    pendientes = [
+        detalle.id
+        for detalle in orden.reparaciones_detail
+        if detalle.estado is EstadoReparacionDetail.DEFINIDO
+    ]
+    acciones = [
+        AccionDisponible(
+            codigo=ACCION_CANCELAR_DETALLE,
+            etiqueta="Cancelar el Detalle",
+            roles=ROLES_CANCELACION,
+            detalle_id=detalle_id,
+        )
+        for detalle_id in pendientes
+    ]
+    if ejecucion_activa(orden) is None and (
+        pendientes or not orden.reparaciones_detail
+    ):
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_CANCELAR_ORDEN,
+                etiqueta="Cancelar la Orden (trabajos pendientes)",
+                roles=ROLES_CANCELACION,
+            )
+        )
     return acciones

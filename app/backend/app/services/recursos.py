@@ -140,29 +140,20 @@ def tiene_override_factibilidad(
     return vigente
 
 
-def autorizar_override_recursos(
+def validar_override_recursos(
     orden: OrdenReparacion,
     *,
     detalle_id: str,
     usuario: Usuario,
     motivo: str,
-    fecha: datetime,
-) -> OrdenReparacion:
-    """Capacidad transversal: autorizar UN Detalle bloqueado por recursos.
+) -> None:
+    """Precondiciones del override (BR-REP-003), sin registrar nada.
 
-    BR-REP-003: un Coordinador RMA autoriza un Detalle PENDIENTE (DEFINIDO)
-    con condicion BLOQUEADO_POR_RECURSOS y deja usuario, fecha, Detalle,
-    validacion ignorada y motivo. Es la UNICA forma de registrar un
-    override, cualquiera sea el momento: con la Orden detenida en
-    PROC-REP-100 o con factibilidad parcial (otros Detalles trabajables,
-    Orden habilitada, en cola, tomada o en reparacion).
-
-    Igual que Registrar Pago, es una accion funcional: queda en el
-    historial sin mover ``current_process`` ni el estado de workflow, sin
-    tocar tomas ni Ejecuciones. El Detalle pasa a SIN_BLOQUEO; los demas
-    siguen como estaban. No reserva ni toca el stock (eso es
-    PROC-REP-185 / 210). Continuar el circuito de PROC-REP-100 es
-    ``continuar_por_override``.
+    Coordinador RMA activo, Detalle DEFINIDO + BLOQUEADO_POR_RECURSOS y
+    motivo no vacio. La comparte ``autorizar_override_recursos`` y la capa
+    de aplicacion, que la evalua antes de pedir la confirmacion del
+    impacto en el stock (E3): un usuario sin permiso no llega a ver una
+    advertencia que igual no podria confirmar.
     """
     validar_actor(usuario, RolUsuario.COORDINADOR_RMA)
 
@@ -187,6 +178,46 @@ def autorizar_override_recursos(
             "El override exige un motivo (BR-REP-003)."
         )
 
+
+def autorizar_override_recursos(
+    orden: OrdenReparacion,
+    *,
+    detalle_id: str,
+    usuario: Usuario,
+    motivo: str,
+    fecha: datetime,
+    impacto: str | None = None,
+) -> OrdenReparacion:
+    """Capacidad transversal: autorizar UN Detalle bloqueado por recursos.
+
+    BR-REP-003: un Coordinador RMA autoriza un Detalle PENDIENTE (DEFINIDO)
+    con condicion BLOQUEADO_POR_RECURSOS y deja usuario, fecha, Detalle,
+    validacion ignorada y motivo. Es la UNICA forma de registrar un
+    override, cualquiera sea el momento: con la Orden detenida en
+    PROC-REP-100 o con factibilidad parcial (otros Detalles trabajables,
+    Orden habilitada, en cola, tomada o en reparacion).
+
+    Igual que Registrar Pago, es una accion funcional: queda en el
+    historial sin mover ``current_process`` ni el estado de workflow, sin
+    tocar tomas ni Ejecuciones. El Detalle pasa a SIN_BLOQUEO; los demas
+    siguen como estaban. No reserva ni toca el stock (eso es
+    PROC-REP-185 / 210), y jamas toca reservas de otras Ordenes (E3).
+    Continuar el circuito de PROC-REP-100 es ``continuar_por_override``.
+
+    ``impacto`` es la situacion de stock que el Coordinador confirmo
+    (E3): queda en la misma entrada del historial, junto al motivo.
+    """
+    validar_override_recursos(
+        orden, detalle_id=detalle_id, usuario=usuario, motivo=motivo
+    )
+
+    observacion = (
+        "Validacion ignorada: factibilidad por recursos "
+        f"(PROC-REP-080/090). Motivo: {motivo.strip()}"
+    )
+    if impacto:
+        observacion += f". Impacto confirmado: {impacto}"
+
     nueva_orden = registrar_accion_funcional(
         orden,
         accion_id=ACCION_AUTORIZAR_OVERRIDE,
@@ -194,10 +225,7 @@ def autorizar_override_recursos(
         fecha=fecha,
         usuario_id=usuario.id,
         reparacion_detail_id=detalle_id,
-        observacion=(
-            "Validacion ignorada: factibilidad por recursos "
-            f"(PROC-REP-080/090). Motivo: {motivo.strip()}"
-        ),
+        observacion=observacion,
     )
     for d in nueva_orden.reparaciones_detail:
         if d.id == detalle_id:

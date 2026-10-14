@@ -10,6 +10,7 @@ por Cloud Storage, PostgreSQL u otro backend sin tocar el dominio.
 
 from .catalogos import CatalogosRepository
 from .exceptions import (
+    ConflictoDeEscrituraError,
     EntidadPersistidaNoEncontradaError,
     PersistenciaError,
     RepositoryError,
@@ -18,6 +19,7 @@ from .ordenes import OrdenReparacionRepository
 
 __all__ = [
     "CatalogosRepository",
+    "ConflictoDeEscrituraError",
     "EntidadPersistidaNoEncontradaError",
     "OrdenReparacionRepository",
     "PersistenciaError",

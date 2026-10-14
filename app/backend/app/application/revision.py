@@ -14,6 +14,7 @@ from app.domain.models import OrdenReparacion
 from app.services import registrar_revision_tecnica
 
 from .contexto import ApplicationContext
+from .modificacion import orden_para_modificar
 
 
 def realizar_revision(
@@ -27,10 +28,9 @@ def realizar_revision(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
-    orden = registrar_revision_tecnica(
-        orden, usuario=usuario, resultado=resultado, fecha=fecha
-    )
-
-    contexto.ordenes.guardar(orden)
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = registrar_revision_tecnica(
+            orden, usuario=usuario, resultado=resultado, fecha=fecha
+        )
+        contexto.ordenes.guardar(orden)
     return orden

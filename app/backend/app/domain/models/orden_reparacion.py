@@ -6,8 +6,14 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, computed_field
 
 from .documentos import DocumentosOrden
-from .enums import EstadoControl, EstadoPago, EstadoWorkflow, OrigenOrden
-from .equipos import Equipo
+from .enums import (
+    EstadoControl,
+    EstadoPago,
+    EstadoReparacionDetail,
+    EstadoWorkflow,
+    OrigenOrden,
+)
+from .equipos import DevolucionEquipo, Equipo
 from .inventario import MovimientoInsumo
 from .pagos import ResumenPago
 from .personas import Cliente
@@ -75,15 +81,46 @@ class OrdenReparacion(BaseModel):
 
     historial: list[HistorialWorkflow] = Field(default_factory=list)
 
+    # PROC-REP-270 tras una cancelacion: devolucion fisica del equipo sin
+    # reparar. Default None: un JSON anterior sigue cargando.
+    devolucion: DevolucionEquipo | None = None
+
     created_at: datetime
     updated_at: datetime
+
+    @property
+    def esta_cerrada(self) -> bool:
+        """True si la Orden ya termino su proceso y solo puede consultarse.
+
+        Decision de negocio E1 (MVP v2): una Orden ENTREGADA queda cerrada
+        para cualquier modificacion operativa. RT_INTERNO no pasa por
+        ENTREGADA -su estado terminal sigue pendiente de definicion-: al
+        devolverse a Gestion RT su proceso termina en EVT-REP-999, y
+        recibe el mismo trato. Una garantia RMA nace de una Orden cerrada
+        sin modificarla: es otra Orden.
+
+        No es un campo: se deriva del estado, asi que no cambia el JSON
+        persistido.
+        """
+        return (
+            self.estado_workflow is EstadoWorkflow.ENTREGADA
+            or self.current_process == "EVT-REP-999"
+        )
 
     @computed_field
     @property
     def total(self) -> Decimal:
-        """Total cobrable: suma de los precios snapshot de los Detalles."""
+        """Total cobrable: suma de los precios snapshot de los Detalles.
+
+        Un Detalle CANCELADO conserva su precio snapshot (historia), pero
+        no se cobra (BR-REP-014).
+        """
         return sum(
-            (detalle.precio for detalle in self.reparaciones_detail),
+            (
+                detalle.precio
+                for detalle in self.reparaciones_detail
+                if detalle.estado is not EstadoReparacionDetail.CANCELADO
+            ),
             Decimal("0"),
         )
 
@@ -114,9 +151,13 @@ class OrdenReparacion(BaseModel):
 
         Una Orden sin Detalles todavia no tiene nada que cobrar, y no es
         lo mismo que una Orden con Detalles cuyo total da 0: la primera
-        queda PENDIENTE, la segunda PAGADA.
+        queda PENDIENTE, la segunda PAGADA. Los Detalles CANCELADO no
+        cuentan: una Orden con todos cancelados no figura PAGADA.
         """
-        if not self.reparaciones_detail:
+        if all(
+            detalle.estado is EstadoReparacionDetail.CANCELADO
+            for detalle in self.reparaciones_detail
+        ):
             return EstadoPago.PENDIENTE
         if self.saldo <= 0:
             return EstadoPago.PAGADO

@@ -13,7 +13,9 @@ export type EstadoWorkflow =
   | "EN_COLA"
   | "EN_REPARACION"
   | "REPARACION_LISTA"
-  | "ENTREGADA";
+  | "ENTREGADA"
+  /** Todos los Detalles cancelados, o cancelada sin Detalles. No es ENTREGADA. */
+  | "CANCELADA";
 
 export type OrigenOrden =
   | "CLIENTE_EXTERNO"
@@ -31,7 +33,8 @@ export type EstadoPago = "PENDIENTE" | "PARCIAL" | "PAGADO";
 /** Momento comercial del cobro. Distinto del medio (`metodo`). */
 export type TipoPago = "ANTICIPO" | "PAGO";
 
-export type EstadoDetalle = "DEFINIDO" | "EN_PROGRESO" | "COMPLETO";
+/** COMPLETO y CANCELADO son terminales. Un CANCELADO no se cobra ni se borra. */
+export type EstadoDetalle = "DEFINIDO" | "EN_PROGRESO" | "COMPLETO" | "CANCELADO";
 
 /**
  * Condición de bloqueo del Detalle, enviada por el backend. Es una
@@ -43,7 +46,35 @@ export type CondicionDetalle =
   | "REQUIERE_DEFINICION"
   | "BLOQUEADO_POR_RECURSOS";
 
+/** Control VIGENTE: tras un rechazo vuelve a PENDIENTE hasta el retrabajo. */
 export type EstadoControl = "PENDIENTE" | "APROBADO";
+
+/** Resultado de UN control registrado (aprobación o rechazo). */
+export type ResultadoControl = "APROBADO" | "RECHAZADO";
+
+/** Un control técnico tal como ocurrió (E14: nunca se reemplaza). */
+export interface ControlTecnico {
+  resultado: ResultadoControl;
+  usuario_id: string;
+  fecha: string;
+  observaciones: string | null;
+  ejecucion_id: string | null;
+}
+
+/** Quién canceló el Detalle, cuándo y por qué (PROC-REP-300/305). */
+export interface Cancelacion {
+  usuario_id: string;
+  fecha: string;
+  motivo: string;
+}
+
+/** Devolución física del equipo de una Orden CANCELADA (PROC-REP-270). */
+export interface Devolucion {
+  entregado_por: string;
+  recibido_por: string;
+  fecha: string;
+  observaciones: string | null;
+}
 
 /** INTERRUMPIDO y COMPLETADO son los resultados terminales de PROC-REP-200. */
 export type EstadoEjecucion = "EN_PROGRESO" | "COMPLETADO" | "INTERRUMPIDO";
@@ -121,6 +152,12 @@ export interface Detalle {
   detalle_origen_id: string | null;
   /** Definiciones reemplazadas por PROC-REP-127 (EXC-REP-004). */
   definiciones_anteriores: DefinicionAnterior[];
+  /** Todos los controles registrados, del más antiguo al más reciente. */
+  controles: ControlTecnico[];
+  /** Reabierto por un control rechazado y todavía sin rehacer. */
+  pendiente_de_retrabajo: boolean;
+  /** Solo en un Detalle CANCELADO. */
+  cancelacion: Cancelacion | null;
   /** Resuelto por la API contra el catálogo; no vive en el dominio. */
   insumos_previstos: InsumoPrevisto[];
 }
@@ -236,6 +273,34 @@ export interface Accion {
    * `usuario_id`. `true` (default) es el caso humano normal.
    */
   requiere_actor: boolean;
+  /**
+   * E2: si viene, es la ÚNICA persona que puede ejecutarla (el titular de
+   * la toma activa en las acciones técnicas). `null` = cualquiera con el rol.
+   */
+  usuario_id: string | null;
+}
+
+/** Un insumo previsto ante el override (E3): lo que se confirma. */
+export interface ImpactoStockInsumo {
+  insumo_id: string;
+  codigo: string;
+  nombre: string;
+  stock_fisico: string;
+  reservado_otras_ordenes: string;
+  reservado_esta_orden: string;
+  disponible: string;
+  requerido: string;
+  disponible_resultante: string;
+}
+
+/** `GET .../resources/override-preview`: impacto de forzar un Detalle. */
+export interface ImpactoOverride {
+  orden_id: string;
+  detalle_id: string;
+  insumos: ImpactoStockInsumo[];
+  deja_disponible_negativo: boolean;
+  hay_reservas_de_otras_ordenes: boolean;
+  advertencia: string;
 }
 
 /**
@@ -287,8 +352,15 @@ export interface Orden {
    * del historial; no es un estado de workflow.
    */
   finalizada_sin_reparacion: boolean;
+  /**
+   * E1: la Orden terminó su proceso (entregada o devuelta a Gestión RT) y
+   * solo puede consultarse. Lo deriva el backend.
+   */
+  cerrada: boolean;
   reparaciones_detail: Detalle[];
   tomas: Toma[];
+  /** E2: toma vigente (técnico, estación, inicio), o `null`. */
+  toma_activa: Toma | null;
   ejecuciones: Ejecucion[];
   pagos: Pago[];
   documentos: Documentos;
@@ -296,6 +368,12 @@ export interface Orden {
   historial: PasoHistorial[];
   progreso: PasoProgreso[];
   acciones_disponibles: Accion[];
+  /** Cancelaciones posibles ahora (Detalle u Orden), aparte del flujo. */
+  acciones_cancelacion: Accion[];
+  /** Orden CANCELADA: devolución física registrada, o `null`. */
+  devolucion: Devolucion | null;
+  /** Orden CANCELADA con el equipo todavía en custodia. */
+  devolucion_pendiente: boolean;
   created_at: string;
   updated_at: string;
   /** Solo lo devuelven notificar y registrar pago (PROC-REP-265). */

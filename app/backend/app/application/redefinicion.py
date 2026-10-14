@@ -18,6 +18,7 @@ from app.services import revisar_detalle_pendiente
 from .concurrencia import seccion_critica_inventario
 from .contexto import ApplicationContext
 from .ingreso import _validar_y_habilitar
+from .modificacion import orden_para_modificar
 
 
 def revisar_detalle(
@@ -32,16 +33,15 @@ def revisar_detalle(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    orden = contexto.ordenes.obtener(orden_id)
-    orden = revisar_detalle_pendiente(
-        orden,
-        detalle_id=detalle_id,
-        usuario=usuario,
-        resultado=resultado,
-        fecha=fecha,
-    )
-
-    contexto.ordenes.guardar(orden)
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = revisar_detalle_pendiente(
+            orden,
+            detalle_id=detalle_id,
+            usuario=usuario,
+            resultado=resultado,
+            fecha=fecha,
+        )
+        contexto.ordenes.guardar(orden)
     return orden
 
 
@@ -64,8 +64,10 @@ def redefinir_detalle(
     tipo = contexto.catalogos.obtener_tipo_reparacion(tipo_reparacion_id)
     fecha = contexto.ahora()
 
-    with seccion_critica_inventario():
-        orden = contexto.ordenes.obtener(orden_id)
+    with (
+        seccion_critica_inventario(),
+        orden_para_modificar(contexto, orden_id) as orden,
+    ):
         orden = redefinir_detalle_servicio(
             orden,
             detalle_id=detalle_id,

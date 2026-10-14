@@ -65,13 +65,24 @@ uvicorn app.main:app --reload --port 8000 --workers 1
 - Health: http://localhost:8000/health
 - Docs: http://localhost:8000/docs
 
-**Un solo worker, a proposito.** `PROC-REP-185` (reservar insumos) se
-protege con un lock de proceso (`threading.RLock`) que cubre la seccion
-critica completa: leer disponibilidad global, validar y escribir la
-reserva. Ese lock **no** es distribuido: con varios workers o instancias
-sobre el mismo directorio de datos, dos pedidos podrian reservar la
-misma unidad. Cuando el almacenamiento deje de ser JSON, la exclusion
-mutua debera resolverla el motor de persistencia.
+**Un solo worker, a proposito.** Toda operacion que modifica una Orden o
+el stock se protege con un unico lock de proceso (`threading.RLock`,
+`app/application/concurrencia.py`) que cubre la seccion critica completa
+de cada comando: leer la Orden, validar, aplicar y guardar (incluida la
+reserva de `PROC-REP-185`, que lee la disponibilidad global). Por debajo,
+el repositorio JSON rechaza con 409 `CONFLICTO_CONCURRENTE` cualquier
+version obsoleta de una Orden (su historial persistido tiene que ser un
+prefijo del que se guarda) y no sobrescribe una Orden cerrada; las
+colisiones transitorias de archivos en Windows se reintentan.
+
+Esa proteccion vale **solo dentro de un proceso**: el lock no es
+distribuido, y con varios workers o instancias sobre el mismo directorio
+de datos dos pedidos podrian volver a pisarse (el control de version
+achica la ventana, pero no es atomico entre procesos). JSON es el
+almacenamiento de las pruebas funcionales, no la solucion definitiva para
+operar con varias instancias: con una base de datos, la exclusion mutua
+debera resolverla el motor de persistencia (transacciones, bloqueo de
+fila o control de version en la base).
 
 ## Endpoints
 
@@ -100,6 +111,22 @@ frontera de actor humano:
 | `POST /api/orders/{id}/notify` | RECEPCION | 250 → 260 → 265 [→ 266] |
 | `POST /api/orders/{id}/payments` | sin rol definido | capacidad transversal |
 | `POST /api/orders/{id}/deliver` | ADMINISTRADOR o RECEPCION | 280 → 270 → EVT-REP-999 |
+
+Salidas del proceso (cancelacion y rechazo de control). El motivo es
+obligatorio en todas; la Orden se reevalua con el resolver de siempre
+(PROC-REP-211):
+
+| Endpoint | Actor | Nodos |
+|---|---|---|
+| `POST /api/orders/{id}/control/reject` | RECEPCION | 220 → 230 (No) → 235 → 211 [→ 170] |
+| `POST /api/orders/{id}/details/{detalle_id}/cancel` | RECEPCION o COORDINADOR_RMA | 300 → 211 |
+| `POST /api/orders/{id}/cancel` | RECEPCION o COORDINADOR_RMA | 305 → 211, o 306 sin Detalles |
+| `POST /api/orders/{id}/return-equipment` | ADMINISTRADOR o RECEPCION | 270 (devolucion sin reparar) → EVT-REP-999 |
+
+`GET /api/orders/{id}` publica las cancelaciones posibles en
+`acciones_cancelacion`, aparte de `acciones_disponibles`. Una Orden
+CANCELADA no es ENTREGADA: si el equipo esta en custodia, queda abierta
+(`devolucion_pendiente`) hasta registrar su devolucion.
 
 Registrar Pago no corresponde a ningun `PROC-REP-*`: no mueve
 `current_process`, pero deja traza en el historial como accion funcional

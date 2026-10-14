@@ -16,8 +16,33 @@ from .enums import (
     EstadoEjecucion,
     EstadoReparacionDetail,
     EstadoTomaOrden,
+    ResultadoControl,
 )
 from .inventario import InsumoUtilizado
+
+
+class RegistroControlTecnico(BaseModel):
+    """Un control tecnico de un Detalle, tal como ocurrio (E14).
+
+    Append-only: aprobar o rechazar agrega un registro y nunca reemplaza
+    uno anterior. ``ejecucion_id`` es la Ejecucion cuyo resultado se
+    controlo, asi una aprobacion tras un retrabajo queda distinguida del
+    rechazo de la Ejecucion previa.
+    """
+
+    resultado: ResultadoControl
+    usuario_id: str
+    fecha: datetime
+    observaciones: str | None = None
+    ejecucion_id: str | None = None
+
+
+class RegistroCancelacion(BaseModel):
+    """Quien cancelo un Detalle, cuando y por que (PROC-REP-300/305)."""
+
+    usuario_id: str
+    fecha: datetime
+    motivo: str
 
 
 class DefinicionAnteriorDetalle(BaseModel):
@@ -63,10 +88,19 @@ class ReparacionDetail(BaseModel):
         CondicionReparacionDetail.SIN_BLOQUEO
     )
 
+    # Control vigente (el ciclo actual). Un rechazo lo vuelve a PENDIENTE
+    # y lo deja sin usuario/fecha hasta el control del retrabajo.
     control_estado: EstadoControl = EstadoControl.PENDIENTE
     control_usuario_id: str | None = None
     control_fecha: datetime | None = None
     control_observaciones: str | None = None
+
+    # E14: todos los controles registrados, del mas antiguo al mas
+    # reciente. Default vacio: un JSON anterior sigue cargando.
+    controles: list[RegistroControlTecnico] = Field(default_factory=list)
+
+    # PROC-REP-300/305: solo en un Detalle CANCELADO.
+    cancelacion: RegistroCancelacion | None = None
 
     observaciones: str | None = None
 
