@@ -519,6 +519,17 @@ def marcar_orden_en_revision(
     return nueva_orden
 
 
+def fue_habilitada(orden: OrdenReparacion) -> bool:
+    """El hito PROC-REP-140 ya ocurrio (BR-REP-037).
+
+    Criterio unico para todos los caminos (factibilidad, revalidacion,
+    override, redefinicion, autorizacion del cliente): la habilitacion
+    inicial es un hito historico unico. Se deriva del historial, sin flag
+    persistido.
+    """
+    return any(paso.process_id == "PROC-REP-140" for paso in orden.historial)
+
+
 def habilitar_orden(
     orden: OrdenReparacion,
     *,
@@ -542,6 +553,11 @@ def habilitar_orden(
     "No" de PROC-REP-110 / PROC-REP-120 (EXC-REP-001) estan implementados
     fuera de esta funcion, y tambien el override (PROC-REP-110 "Si" ->
     PROC-REP-130, EXC-REP-002).
+
+    La habilitacion inicial es un hito unico (BR-REP-037): una Orden que ya
+    paso por 140 se rechaza aunque cumpla el gate -una EN_REPARACION o
+    EN_COLA siempre lo cumple-. Lo que sigue a su 090 "Si" o a su 130 es
+    ``habilitar_o_reevaluar``.
 
     Nodo ACT-SYSTEM: no lo ejecuta una persona, asi que no recibe
     Usuario y el historial queda sin actor humano.
@@ -587,6 +603,11 @@ def habilitar_orden(
                 "factibilidad (PROC-REP-090) no fue aprobada: "
                 f"{evaluacion_090.observacion}."
             )
+    if fue_habilitada(orden):
+        raise PrecondicionInvalidaError(
+            "La Orden ya se habilito (PROC-REP-140): la habilitacion "
+            "inicial no se repite (BR-REP-037)."
+        )
 
     nueva_orden = registrar_paso(
         orden,
@@ -753,6 +774,27 @@ def evaluar_situacion_orden(
         nueva_orden.estado_workflow = EstadoWorkflow.EN_COLA
 
     return nueva_orden, resultado
+
+
+def habilitar_o_reevaluar(
+    orden: OrdenReparacion,
+    *,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """Lo que sigue a una factibilidad aprobada (090 "Si") o a un 130.
+
+    Nunca habilitada: PROC-REP-140 (``habilitar_orden``), y despues la
+    priorizacion de siempre. Ya habilitada: ni 140 ni la priorizacion se
+    repiten (BR-REP-037); PROC-REP-211 recalcula la situacion y la devuelve
+    a la cola (170) si venia del taller sin toma, o la deja donde estaba
+    -en cola, habilitada o con su toma-, con su prioridad y sin tocar
+    tomas ni Ejecuciones. Es la continuacion que ya usa la autorizacion
+    del cliente en una Orden habilitada.
+    """
+    if not fue_habilitada(orden):
+        return habilitar_orden(orden, fecha=fecha)
+    nueva_orden, _ = evaluar_situacion_orden(orden, fecha=fecha)
+    return nueva_orden
 
 
 def marcar_reparacion_lista(

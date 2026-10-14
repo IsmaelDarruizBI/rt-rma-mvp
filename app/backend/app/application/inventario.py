@@ -42,6 +42,7 @@ from app.services import (
     evidencias_de_faltante,
     faltantes_de_detalles_bloqueados,
     filtrar_situaciones,
+    fue_habilitada,
     historial_movimientos,
     registrar_accion_funcional,
     registrar_espera_recursos,
@@ -313,7 +314,7 @@ def _con_factibilidad_parcial(orden: OrdenReparacion) -> bool:
     Detalle espera recursos."""
     return (
         orden.current_process not in NODOS_ESPERANDO_RECURSOS
-        and any(paso.process_id == "PROC-REP-140" for paso in orden.historial)
+        and fue_habilitada(orden)
         and situacion_de_la_orden(orden) in _OPERANDO
     )
 
@@ -354,6 +355,16 @@ def _clasificar(
         detalle = "Habilitada: tiene Detalles trabajables (PROC-REP-140)."
         if detalles_bloqueados_por_recursos(orden):
             detalle += " Algun Detalle sigue bloqueado por recursos."
+    elif proceso in ("PROC-REP-170", "PROC-REP-211") and (
+        situacion_de_la_orden(orden) in _OPERANDO
+    ):
+        resultado = ResultadoRevalidacion.TRABAJABLE
+        detalle = (
+            "Ya habilitada: sigue sin repetir PROC-REP-140, "
+            f"{orden.estado_workflow.value} y con su prioridad ({proceso})."
+        )
+        if detalles_bloqueados_por_recursos(orden):
+            detalle += " Algun Detalle sigue bloqueado por recursos."
     elif proceso == "PROC-REP-100":
         resultado = ResultadoRevalidacion.SIGUE_ESPERANDO
         detalle = f"Sigue sin recursos suficientes. {ultimo or ''}".strip()
@@ -381,7 +392,9 @@ def revalidar_ordenes_pendientes(
     - Si ningun Detalle bloqueado tiene recursos todavia, la Orden no se
       toca (SIGUE_ESPERANDO): revalidar otra vez no duplica transiciones.
     - Esperando recursos (100/120): las transiciones existentes -110 No ->
-      120 desde 100, y 120 -> 080 -> 090 -> 140 | 100-.
+      120 desde 100, y 120 -> 080 -> 090 -> 140 | 100-; una Orden ya
+      habilitada no repite 140: 090 -> 211 y vuelve a la cola con su
+      prioridad (``habilitar_o_reevaluar``).
     - Factibilidad parcial (habilitada y operando): los Detalles con
       recursos pasan a SIN_BLOQUEO como accion funcional, sin recorrer
       nodos ni repetir 140, sin tocar la toma, la Ejecucion en curso ni la
@@ -478,7 +491,12 @@ def _revalidar_una(
             if not insumos
         )
         sin_recursos = _describir_faltantes(faltantes)
-        if not con_recursos:
+        ya_trabajable = (
+            esperando
+            and situacion_de_la_orden(orden)
+            is ResultadoEvaluacionOrden.ABIERTA_TRABAJABLE
+        )
+        if not con_recursos and not ya_trabajable:
             detalle = (
                 f"Sin recursos todavia: {sin_recursos}. No se modifico."
                 if sin_recursos

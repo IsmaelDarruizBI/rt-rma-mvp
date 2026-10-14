@@ -44,6 +44,7 @@ from app.services import (
     ejecutar_detalle,
     evaluar_situacion_orden,
     generar_movimientos_inventario,
+    habilitar_o_reevaluar,
     habilitar_orden,
     marcar_pendiente_revision,
     registrar_accion_funcional,
@@ -86,6 +87,7 @@ from tests.test_exc_rep_003 import (
     _encolar_y_tomar,
     _intentar,
     _seleccionar,
+    _volver_a_tomar,
 )
 
 MOTIVO = "La placa esta danada: no alcanza con cambiar la bateria."
@@ -556,14 +558,16 @@ def test_la_primera_definicion_no_genera_historico():
 
 
 def _ciclo_completo(orden, tipo, minuto):
-    """Una redefinicion completa: 125 -> 126 -> 127 -> 046/047 -> 080/140.
+    """Una redefinicion completa: 125 -> 126 -> 127 -> 046/047 -> 080/090
+    -> 211 -> 170. La Orden ya se habilito: 140 no se repite y vuelve a la
+    cola con su prioridad, lista para tomarse.
 
     La definicion nueva necesita la autorizacion del cliente (BR-REP-029).
     """
     redefinida = _redefinir(
         _revisar(orden, minuto=minuto), tipo=tipo, minuto=minuto + 1
     )
-    orden = habilitar_orden(
+    orden = habilitar_o_reevaluar(
         _validar(
             _reautorizar(redefinida, minuto=minuto + 1),
             _insumos(a="5", b="5", c="5"),
@@ -576,7 +580,9 @@ def _ciclo_completo(orden, tipo, minuto):
 
 def test_historico_a_b_c_es_append_only():
     orden = _ciclo_completo(_en_125(), TIPO_PLACA, 80)  # A -> B
-    orden = _seleccionar(_encolar_y_tomar(orden))
+    assert orden.estado_workflow is EstadoWorkflow.EN_COLA
+    assert _ids(orden).count("PROC-REP-140") == 1
+    orden = _seleccionar(_volver_a_tomar(orden))
     orden, _ = _intentar(orden, _insumos(a="5", b="5", c="5"))
     orden, resultado = _requiere_redefinicion(orden, minuto=100)
     assert resultado is ResultadoEvaluacionOrden.REQUIERE_REVISION
@@ -631,7 +637,7 @@ def test_127_exige_revision_del_mismo_detalle_en_el_ciclo_actual():
 
 def test_una_revision_de_un_ciclo_anterior_no_habilita_127():
     orden = _ciclo_completo(_en_125(), TIPO_PLACA, 80)
-    orden = _seleccionar(_encolar_y_tomar(orden))
+    orden = _seleccionar(_volver_a_tomar(orden))
     orden, _ = _intentar(orden, _insumos(a="5", b="5", c="5"))
     orden, _ = _requiere_redefinicion(orden, minuto=100)
 
@@ -705,9 +711,18 @@ def test_un_override_posterior_al_127_es_valido():
     )
 
     assert tiene_override_factibilidad(forzada, "DET-001")
-    assert habilitar_orden(forzada, fecha=t(97)).estado_workflow is (
-        EstadoWorkflow.HABILITADA
-    )
+    # Ya se habilito: 130 -> 211 -> cola, sin repetir 140.
+    with pytest.raises(PrecondicionInvalidaError, match="no se repite"):
+        habilitar_orden(forzada, fecha=t(97))
+    continuada = habilitar_o_reevaluar(forzada, fecha=t(97))
+    assert continuada.estado_workflow is EstadoWorkflow.EN_COLA
+    assert _ids(continuada)[-4:] == [
+        "PROC-REP-110",
+        "PROC-REP-130",
+        "PROC-REP-211",
+        "PROC-REP-170",
+    ]
+    assert _ids(continuada).count("PROC-REP-140") == 1
 
 
 def test_el_127_de_otro_detalle_no_invalida_el_override():
@@ -733,22 +748,27 @@ def test_el_127_de_otro_detalle_no_invalida_el_override():
 # --- 15/16. 127 -> 080 ---
 
 
-def test_127_y_080_con_stock_habilita():
+def test_127_y_080_con_stock_vuelve_a_la_cola_sin_repetir_140():
     orden = _redefinir(_revisar(_en_125()))
     orden, factible = _validar(_reautorizar(orden), _insumos(a="5"), minuto=95)
 
     assert factible is True
-    habilitada = habilitar_orden(orden, fecha=t(96))
-    assert _ids(habilitada)[-7:] == [
+    with pytest.raises(PrecondicionInvalidaError, match="no se repite"):
+        habilitar_orden(orden, fecha=t(96))
+    continuada = habilitar_o_reevaluar(orden, fecha=t(96))
+    assert _ids(continuada)[-8:] == [
         "PROC-REP-126",
         "PROC-REP-127",
         "PROC-REP-046",
         "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
-        "PROC-REP-140",
+        "PROC-REP-211",
+        "PROC-REP-170",
     ]
-    assert habilitada.estado_workflow is EstadoWorkflow.HABILITADA
+    assert continuada.estado_workflow is EstadoWorkflow.EN_COLA
+    assert _ids(continuada).count("PROC-REP-140") == 1
+    assert continuada.prioridad == orden.prioridad
 
 
 # --- 17. Precio y pagos ---
@@ -781,7 +801,7 @@ def test_el_nuevo_snapshot_cambia_total_y_saldo_incluso_negativo():
 
 def test_json_conserva_varias_definiciones_anteriores(tmp_path):
     orden = _ciclo_completo(_en_125(), TIPO_PLACA, 80)
-    orden = _seleccionar(_encolar_y_tomar(orden))
+    orden = _seleccionar(_volver_a_tomar(orden))
     orden, _ = _intentar(orden, _insumos(a="5", b="5", c="5"))
     orden, _ = _requiere_redefinicion(orden, minuto=100)
     orden = _ciclo_completo(orden, TIPO_PANTALLA, 110)

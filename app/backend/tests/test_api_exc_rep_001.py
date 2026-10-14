@@ -543,29 +543,29 @@ def test_e2e_parcial_espera_stock_revalida_reencola_y_llega_al_control(
             "id"
         ]
 
-        # Vuelve el stock: 120 -> 080 -> 090 Si -> 140.
+        # Vuelve el stock: 120 -> 080 -> 090 Si -> 211 -> 170. Ya estaba
+        # habilitada: no repite 140 ni se vuelve a priorizar.
         _fijar_stock(tmp_path, **{"INS-001": 5})
         orden = _revalidar(cliente, orden_id).json()
-        assert _ids(orden)[-3:] == [
+        assert _ids(orden)[-4:] == [
             "PROC-REP-080",
             "PROC-REP-090",
-            "PROC-REP-140",
+            "PROC-REP-211",
+            "PROC-REP-170",
         ]
-        assert orden["historial"][-2]["observacion"] == "Si"
-        assert orden["estado_workflow"] == "HABILITADA"
+        assert orden["historial"][-3]["observacion"] == "Si"
+        assert orden["historial"][-2]["observacion"] == "ABIERTA_TRABAJABLE"
+        assert orden["estado_workflow"] == "EN_COLA"
+        assert orden["prioridad"] == 1
+        assert _ids(orden).count("PROC-REP-140") == 1
         assert [d["condicion"] for d in orden["reparaciones_detail"]] == [
             "SIN_BLOQUEO",
             "SIN_BLOQUEO",
         ]
         assert orden["reparaciones_detail"][1]["estado"] == "COMPLETO"
-        assert "ENCOLAR" in _codigos(orden)
+        assert "ENCOLAR" not in _codigos(orden)
 
-        # El proceso vuelve naturalmente: 150 -> 170 -> toma -> iniciar.
-        orden = cliente.post(
-            f"/api/orders/{orden_id}/queue",
-            json={"usuario_id": multi.COORDINADOR, "prioridad": 1},
-        ).json()
-        assert _ids(orden)[-2:] == ["PROC-REP-150", "PROC-REP-170"]
+        # El proceso vuelve naturalmente: toma -> iniciar.
         cliente.post(
             f"/api/orders/{orden_id}/take",
             json={"usuario_id": multi.TECNICO, "estacion_id": multi.ESTACION},

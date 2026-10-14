@@ -3,7 +3,8 @@
 El override es una capacidad transversal (ACC-REP-049,
 ``autorizar_override_recursos``). Solo con la Orden detenida en
 PROC-REP-100 el proceso continua 110 "Si" -> 130
-(``continuar_por_override``); la habilitacion (140) la agrega cada test.
+(``continuar_por_override``); lo que sigue -140 si la Orden nunca se
+habilito, 211 si ya- lo agrega cada test (``habilitar_o_reevaluar``).
 """
 
 from datetime import datetime

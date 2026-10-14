@@ -528,12 +528,14 @@ def test_16_revalidar_no_cambia_la_prioridad(tmp_path):
         assert orden["current_process"] == "PROC-REP-120"
         ok(_ingreso(cliente, "2"))
 
-        ok(_revalidar(cliente))
+        (fila,) = ok(_revalidar(cliente))["ordenes"]
 
+        assert fila["resultado"] == "TRABAJABLE"
         orden = ok(cliente.get(f"/api/orders/{orden_id}"))
-        assert orden["estado_workflow"] == "HABILITADA"
+        # Ya habilitada: vuelve a la cola sin repetir 140 ni repriorizar.
+        assert orden["estado_workflow"] == "EN_COLA"
         assert orden["prioridad"] == 3
-        assert _ids(orden).count("PROC-REP-140") == 2
+        assert _ids(orden).count("PROC-REP-140") == 1
 
 
 # --- 13. Revalidacion con factibilidad parcial ------------------------------

@@ -285,7 +285,9 @@ def test_caso_b_sin_stock_tras_127_espera_recursos_y_admite_override(
             f"/api/orders/{orden_id}/resources/revalidate"
         )
         assert revalidada.status_code == 200, revalidada.text
-        assert revalidada.json()["estado_workflow"] == "HABILITADA"
+        # Ya estaba habilitada: 090 Si -> 211 -> cola, sin repetir 140.
+        assert revalidada.json()["estado_workflow"] == "EN_COLA"
+        assert _ids(revalidada.json()).count("PROC-REP-140") == 1
 
 
 # --- Caso A: Multi-Detalle ---
@@ -467,7 +469,9 @@ def test_garantia_rma_conserva_vinculo_al_detalle_origen(tmp_path):
         detalle = _detalle(orden)
         assert detalle["detalle_origen_id"] == "DET-001"
         assert len(detalle["definiciones_anteriores"]) == 1  # mismo Tipo
-        assert orden["estado_workflow"] == "HABILITADA"
+        # Ya se habilito: 211 -> cola, sin repetir 140.
+        assert orden["estado_workflow"] == "EN_COLA"
+        assert _ids(orden).count("PROC-REP-140") == 1
 
 
 # --- RT_INTERNO ---
@@ -492,8 +496,11 @@ def test_rt_interno_redefinicion_sin_pagos(tmp_path, stock_pantalla):
         assert _codigos(orden) == ["REVISAR_DETALLE"]  # RT: sin pagos
         _revisar(cliente, orden_id)
         orden = _redefinir(cliente, orden_id).json()
-        esperado = "PROC-REP-140" if stock_pantalla != "0" else "PROC-REP-100"
+        # Ya se habilito: con stock 211 -> 170 (sin repetir 140); sin stock
+        # 090 Ninguno -> 100, como siempre.
+        esperado = "PROC-REP-170" if stock_pantalla != "0" else "PROC-REP-100"
         assert orden["historial"][-1]["referencia_id"] == esperado
+        assert _ids(orden).count("PROC-REP-140") == 1
 
 
 # --- Stock y atomicidad del cierre ---

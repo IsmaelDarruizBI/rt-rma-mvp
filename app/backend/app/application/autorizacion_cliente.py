@@ -47,6 +47,7 @@ from app.services import (
     estado_autorizacion,
     evaluar_situacion_orden,
     finalizada_sin_reparacion,
+    fue_habilitada,
     habilitar_orden,
     lista_para_cierre,
     pendiente_de_autorizacion,
@@ -291,11 +292,6 @@ def pendientes_de_autorizacion(
     return pendientes
 
 
-def _fue_habilitada(orden: OrdenReparacion) -> bool:
-    """El hito PROC-REP-140 ya ocurrio: no se repite (BR-REP-037)."""
-    return any(paso.process_id == "PROC-REP-140" for paso in orden.historial)
-
-
 def registrar_decision_cliente(
     contexto: ApplicationContext,
     *,
@@ -324,7 +320,7 @@ def registrar_decision_cliente(
         seccion_critica_inventario(),
         orden_para_modificar(contexto, orden_id) as orden,
     ):
-        ya_habilitada = _fue_habilitada(orden)
+        ya_habilitada = fue_habilitada(orden)
         orden, autorizados = registrar_decision_cliente_servicio(
             orden,
             decisiones=decisiones,

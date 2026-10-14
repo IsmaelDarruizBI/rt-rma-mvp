@@ -45,7 +45,7 @@ from app.services import (
     evaluar_situacion_orden,
     exigir_definicion_finalizable,
     generar_comprobante_recepcion,
-    habilitar_orden,
+    habilitar_o_reevaluar,
     hay_detalles_para_factibilidad,
     marcar_orden_en_revision,
     marcar_pendiente_autorizacion,
@@ -215,8 +215,11 @@ def _validar_y_habilitar(
 ) -> OrdenReparacion:
     """PROC-REP-080 -> 090 -> 140: factibilidad y habilitacion.
 
-    Tambien lo usa el camino de revision (075 -> 080) y la revalidacion de
-    recursos (120 -> 080); el comprobante ya se genero antes.
+    Tambien lo usa el camino de revision (075 -> 080), la redefinicion de
+    un Detalle (127 -> 080) y la revalidacion de recursos (120 -> 080); el
+    comprobante ya se genero antes. La habilitacion inicial es un hito
+    unico: una Orden ya habilitada sigue 090 Si -> 211 -> cola, sin
+    repetir 140 ni la priorizacion (``habilitar_o_reevaluar``).
 
     La factibilidad es por Detalle: basta uno trabajable para habilitar.
     Si ninguno lo es (EXC-REP-001) NO es un error: la Orden queda detenida
@@ -251,7 +254,7 @@ def _validar_y_habilitar(
     if not factible:
         return orden
 
-    return habilitar_orden(orden, fecha=fecha)
+    return habilitar_o_reevaluar(orden, fecha=fecha)
 
 
 def enviar_a_revision(

@@ -1,11 +1,11 @@
 """Tramo de recursos (EXC-REP-001): esperar y revalidar.
 
     esperar_recursos     PROC-REP-110 (No) -> 120
-    revalidar_recursos   PROC-REP-120 -> 080 -> 090 [-> 140 | -> 100]
+    revalidar_recursos   PROC-REP-120 -> 080 -> 090 [-> 140 | -> 211 | -> 100]
     impacto_override     lectura: impacto en el stock de forzar un Detalle
     forzar_detalle_por_recursos
                          autorizacion transversal del Detalle (EXC-REP-002)
-                         [en PROC-REP-100: 110 (Si) -> 130 -> 140]
+                         [en PROC-REP-100: 110 (Si) -> 130 -> 140 | -> 211]
 
 Esperar y revalidar son eventos de sistema, sin actor humano: PROC-REP-120
 es ACT-SYSTEM y la rama No de PROC-REP-110 no declara actor. El override es
@@ -14,7 +14,11 @@ manualmente el evento de revalidacion ("cambio de disponibilidad de
 insumos") que V1.3 describe.
 
 El circuito no pertenece solo al ingreso: PROC-REP-120 tambien se alcanza
-desde PROC-REP-211 en otros slices.
+desde PROC-REP-211 en otros slices, con la Orden ya habilitada (por
+ejemplo, tras una reserva fallida, EXC-REP-003). La habilitacion inicial
+(PROC-REP-140) es un hito historico unico: una Orden ya habilitada sigue
+por PROC-REP-211, sin repetir 140 ni la priorizacion
+(``habilitar_o_reevaluar``).
 """
 
 from dataclasses import dataclass
@@ -27,7 +31,7 @@ from app.services import (
     cargar_reservas_externas,
     continuar_por_override,
     exigir_espera_por_recursos,
-    habilitar_orden,
+    habilitar_o_reevaluar,
     impacto_en_stock_del_detalle,
     registrar_espera_recursos,
     validar_override_recursos,
@@ -120,12 +124,13 @@ def revalidar_recursos(
 ) -> OrdenReparacion:
     """Revalida la factibilidad contra el stock global actual (120 -> 080).
 
-    Con al menos un Detalle trabajable: 090 Si -> 140 (HABILITADA), y los
-    Detalles que ahora tienen recursos vuelven a SIN_BLOQUEO. Si todavia
-    no hay ninguno: 090 Ninguno trabajable -> 100, y la Orden queda de
-    nuevo lista para esperar (cada ciclo conserva su historial). No crea
-    Detalles ni repite 045/050/060/065/068/070/075; no reserva ni modifica
-    el stock.
+    Con al menos un Detalle trabajable, los Detalles que ahora tienen
+    recursos vuelven a SIN_BLOQUEO y 090 Si -> 140 (HABILITADA) si la Orden
+    nunca se habilito, o 090 Si -> 211 -> cola si ya se habilito
+    (``habilitar_o_reevaluar``). Si todavia no hay ninguno: 090 Ninguno
+    trabajable -> 100, y la Orden queda de nuevo lista para esperar (cada
+    ciclo conserva su historial). No crea Detalles ni repite
+    045/050/060/065/068/070/075; no reserva ni modifica el stock.
     """
     fecha = contexto.ahora()
 
@@ -171,10 +176,12 @@ def forzar_detalle_por_recursos(
     estado del Detalle se validan primero.
 
     Solo si la Orden esta detenida en PROC-REP-100 ("ningun Detalle
-    trabajable") el proceso continua 110 "Si" -> 130 -> 140, sin fabricar
-    un 090 "Si". Con factibilidad parcial (Orden habilitada, en cola,
-    tomada o en reparacion) no se recorre ningun nodo: no vuelve a 140, no
-    cierra la toma ni toca la Ejecucion en curso. Persiste una sola vez.
+    trabajable") el proceso continua 110 "Si" -> 130 y, sin fabricar un
+    090 "Si", -> 140 si nunca se habilito o -> 211 (cola) si ya se habilito:
+    140 no se repite (``habilitar_o_reevaluar``). Con factibilidad parcial
+    (Orden habilitada, en cola, tomada o en reparacion) no se recorre
+    ningun nodo: no vuelve a 140, no cierra la toma ni toca la Ejecucion en
+    curso. Persiste una sola vez.
 
     Corre en la seccion critica de inventario: el impacto lee las
     reservas de todas las Ordenes.
@@ -209,7 +216,7 @@ def forzar_detalle_por_recursos(
             orden = continuar_por_override(
                 orden, detalle_id=detalle_id, usuario=usuario, fecha=fecha
             )
-            orden = habilitar_orden(orden, fecha=fecha)
+            orden = habilitar_o_reevaluar(orden, fecha=fecha)
 
         contexto.ordenes.guardar(orden)
     return orden

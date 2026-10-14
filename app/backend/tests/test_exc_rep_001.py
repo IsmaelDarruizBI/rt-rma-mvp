@@ -34,6 +34,7 @@ from app.services import (
     exigir_espera_por_recursos,
     generar_comprobante_recepcion,
     generar_movimientos_inventario,
+    habilitar_o_reevaluar,
     habilitar_orden,
     ingresar_a_cola,
     marcar_orden_en_revision,
@@ -544,16 +545,21 @@ def _en_reparacion_en_120_y_revalidada(stock_b):
     return _validar(orden, _insumos(a="1", b=stock_b), minuto=200)
 
 
-def test_en_reparacion_alcanza_140_solo_tras_090_si():
+def test_en_reparacion_tras_090_si_vuelve_a_la_cola_sin_repetir_140():
     orden, factible = _en_reparacion_en_120_y_revalidada("1")
     assert factible is True
     assert orden.estado_workflow is EstadoWorkflow.EN_REPARACION
     assert orden.current_process == "PROC-REP-090"
 
-    habilitada = habilitar_orden(orden, fecha=t(201))
+    # Ya se habilito: el hito 140 no se repite (BR-REP-037).
+    with pytest.raises(PrecondicionInvalidaError, match="no se repite"):
+        habilitar_orden(orden, fecha=t(201))
+    continuada = habilitar_o_reevaluar(orden, fecha=t(201))
 
-    assert habilitada.estado_workflow is EstadoWorkflow.HABILITADA
-    assert habilitada.historial[-1].referencia_id == "PROC-REP-140"
+    assert _ids(continuada)[-2:] == ["PROC-REP-211", "PROC-REP-170"]
+    assert continuada.estado_workflow is EstadoWorkflow.EN_COLA
+    assert _ids(continuada).count("PROC-REP-140") == 1
+    assert continuada.prioridad == orden.prioridad
 
 
 def test_en_reparacion_con_090_ninguno_o_fuera_de_090_no_habilita():

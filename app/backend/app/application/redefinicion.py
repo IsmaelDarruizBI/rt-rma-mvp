@@ -1,7 +1,7 @@
 """Tramo de revision posterior de un Detalle (EXC-REP-004).
 
     revisar_detalle     PROC-REP-126                     (ACT-TECH)
-    redefinir_detalle   PROC-REP-127 -> 080 -> 090 [-> 140 | -> 100]
+    redefinir_detalle   PROC-REP-127 -> 080 -> 090 [-> 211 | -> 100]
                                                          (ACT-RECEP)
 
 PROC-REP-125 no es un comando: lo compone ``evaluar_situacion_orden``
@@ -55,8 +55,9 @@ def redefinir_detalle(
 ) -> OrdenReparacion:
     """Recepcion redefine el Detalle y se revalida la factibilidad.
 
-    127 -> 080 -> 090: con algun Detalle trabajable 090 "Si" -> 140
-    (HABILITADA); si no, 090 "Ninguno" -> 100, desde donde siguen
+    127 -> 080 -> 090: con algun Detalle trabajable 090 "Si" -> 211, que
+    la devuelve a la cola con su prioridad (la Orden ya se habilito: 140 no
+    se repite); si no, 090 "Ninguno" -> 100, desde donde siguen
     EXC-REP-001/002. Corre en la seccion critica de inventario porque la
     factibilidad lee el stock y las reservas de las demas Ordenes.
     """

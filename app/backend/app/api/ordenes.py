@@ -562,7 +562,8 @@ def post_revalidar_recursos(
     """Revalida la factibilidad (EXC-REP-001): PROC-REP-120 -> 080 -> 090.
 
     Evento de sistema: sin actor humano ni body. Solo valido desde
-    PROC-REP-120; con un Detalle trabajable continua a PROC-REP-140.
+    PROC-REP-120; con un Detalle trabajable continua a PROC-REP-140, o a
+    PROC-REP-211 (cola) si la Orden ya se habilito: 140 no se repite.
     """
     orden = revalidar_recursos(contexto, orden_id=orden_id)
     return _salida(orden, contexto)

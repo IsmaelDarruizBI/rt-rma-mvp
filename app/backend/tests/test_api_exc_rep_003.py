@@ -29,7 +29,6 @@ from tests.test_api_exc_rep_001 import (
 )
 from tests.test_api_exc_rep_002 import _override, _tomar
 from tests.test_api_hp_rep_002 import (
-    COORDINADOR,
     ESTACION,
     INSUMO,
     RECEPCION,
@@ -285,7 +284,7 @@ def test_el_progreso_no_cambia_si_la_reserva_sale_bien(tmp_path):
 # --- I-1: revalidar una Orden que llego a 120 estando EN_COLA ---
 
 
-def test_i1_en_cola_a_120_revalida_habilita_y_el_proceso_continua(tmp_path):
+def test_i1_en_cola_a_120_revalida_sin_rehabilitar_y_continua(tmp_path):
     with _cliente(tmp_path, stock="1") as cliente:
         orden_id = _uno_tomado(cliente, tmp_path)
         orden = _iniciar(cliente, orden_id).json()
@@ -296,20 +295,21 @@ def test_i1_en_cola_a_120_revalida_habilita_y_el_proceso_continua(tmp_path):
         respuesta = _revalidar(cliente, orden_id)
         assert respuesta.status_code == 200, respuesta.text  # sin 409
         orden = respuesta.json()
+        # Ya se habilito antes de tomarla: 140 no se repite. 090 Si -> 211
+        # y sigue EN_COLA con su prioridad, lista para volver a tomarse.
         assert _ids(orden)[-3:] == [
             "PROC-REP-080",
             "PROC-REP-090",
-            "PROC-REP-140",
+            "PROC-REP-211",
         ]
         assert orden["historial"][-2]["observacion"] == "Si"
-        assert orden["estado_workflow"] == "HABILITADA"
+        assert orden["historial"][-1]["observacion"] == "ABIERTA_TRABAJABLE"
+        assert orden["estado_workflow"] == "EN_COLA"
+        assert orden["prioridad"] == 1
+        assert _ids(orden).count("PROC-REP-140") == 1
         assert orden["reparaciones_detail"][0]["condicion"] == "SIN_BLOQUEO"
+        assert "ENCOLAR" not in _codigos(orden)
 
-        orden = cliente.post(
-            f"/api/orders/{orden_id}/queue",
-            json={"usuario_id": COORDINADOR, "prioridad": 1},
-        ).json()
-        assert _ids(orden)[-2:] == ["PROC-REP-150", "PROC-REP-170"]
         cliente.post(
             f"/api/orders/{orden_id}/take",
             json={"usuario_id": TECNICO, "estacion_id": ESTACION},
@@ -338,7 +338,7 @@ def test_i1_revalidar_sin_stock_vuelve_a_100_y_luego_espera(tmp_path):
         assert "PROC-REP-140" not in _ids(orden)[-3:]
 
 
-def test_i1_003_120_revalidar_100_override_130_140_con_en_cola(tmp_path):
+def test_i1_003_120_revalidar_100_override_130_211_con_en_cola(tmp_path):
     """EXC-REP-003 -> EXC-REP-001 (120) -> EXC-REP-002 (override)."""
     with _cliente(tmp_path, stock="1") as cliente:
         orden_id = _uno_tomado(cliente, tmp_path)
@@ -349,19 +349,19 @@ def test_i1_003_120_revalidar_100_override_130_140_con_en_cola(tmp_path):
         respuesta = _override(cliente, orden_id)
         assert respuesta.status_code == 200, respuesta.text
         orden = respuesta.json()
+        # Ya se habilito: 130 -> 211, sin repetir 140 ni repriorizar.
         assert _ids(orden)[-3:] == [
             "PROC-REP-110",
             "PROC-REP-130",
-            "PROC-REP-140",
+            "PROC-REP-211",
         ]
-        assert orden["estado_workflow"] == "HABILITADA"
+        assert orden["estado_workflow"] == "EN_COLA"
+        assert orden["prioridad"] == 1
+        assert _ids(orden).count("PROC-REP-140") == 1
+        assert "ENCOLAR" not in _codigos(orden)
 
         # Con override, el mismo Detalle reserva aunque falte stock: no hay
         # 186 y la Ejecucion inicia.
-        cliente.post(
-            f"/api/orders/{orden_id}/queue",
-            json={"usuario_id": COORDINADOR, "prioridad": 1},
-        )
         cliente.post(
             f"/api/orders/{orden_id}/take",
             json={"usuario_id": TECNICO, "estacion_id": ESTACION},
@@ -581,4 +581,7 @@ def test_ciclo_completo_003_espera_revalida_y_termina(
         _fijar_stock(tmp_path, **{INSUMO: 2})
         assert _revalidar(cliente, orden_id).status_code == 200
         orden = _orden(cliente, orden_id)
-        assert orden["estado_workflow"] == "HABILITADA"
+        # Ya habilitada: vuelve a la cola sin repetir 140 ni repriorizar.
+        assert orden["estado_workflow"] == "EN_COLA"
+        assert orden["prioridad"] == 1
+        assert _ids(orden).count("PROC-REP-140") == 1

@@ -32,6 +32,7 @@ from app.services import (
     definir_prioridad,
     evaluar_situacion_orden,
     faltantes_del_detalle,
+    habilitar_o_reevaluar,
     habilitar_orden,
     ingresar_a_cola,
     intentar_reserva_e_inicio,
@@ -340,6 +341,11 @@ def _encolar_y_tomar(orden):
         ),
         fecha=t(30),
     )
+    return _volver_a_tomar(orden)
+
+
+def _volver_a_tomar(orden):
+    """172 -> 180 sobre una Orden que ya esta EN_COLA."""
     orden, _ = validar_estacion_trabajo(
         orden,
         usuario=TECNICO,
@@ -459,18 +465,23 @@ def _a_120_en_cola() -> OrdenReparacion:
     return orden
 
 
-def test_revalidar_desde_120_en_cola_permite_habilitar():
+def test_revalidar_desde_120_en_cola_no_repite_140():
     orden, factible = _validar(_a_120_en_cola(), _insumos(), minuto=70)
     assert factible is True
 
-    habilitada = habilitar_orden(orden, fecha=t(71))
+    # Ya se habilito antes de tomarla: 140 no se repite (BR-REP-037).
+    with pytest.raises(PrecondicionInvalidaError, match="no se repite"):
+        habilitar_orden(orden, fecha=t(71))
+    continuada = habilitar_o_reevaluar(orden, fecha=t(71))
 
-    assert habilitada.estado_workflow is EstadoWorkflow.HABILITADA
-    assert _ids(habilitada)[-3:] == [
+    assert continuada.estado_workflow is EstadoWorkflow.EN_COLA
+    assert _ids(continuada)[-3:] == [
         "PROC-REP-080",
         "PROC-REP-090",
-        "PROC-REP-140",
+        "PROC-REP-211",
     ]
+    assert _ids(continuada).count("PROC-REP-140") == 1
+    assert continuada.prioridad == 1
 
 
 def test_en_cola_sin_090_si_ni_130_valido_sigue_rechazada():
@@ -492,7 +503,7 @@ def test_090_ninguno_en_cola_no_habilita():
         habilitar_orden(orden, fecha=t(71))
 
 
-def test_003_120_revalida_100_override_130_140_en_cola():
+def test_003_120_revalida_100_override_130_211_en_cola():
     orden, factible = _validar(_a_120_en_cola(), _insumos(a="0"), minuto=70)
     assert factible is False and orden.current_process == "PROC-REP-100"
 
@@ -503,14 +514,17 @@ def test_003_120_revalida_100_override_130_140_en_cola():
         motivo="urgente",
         fecha=t(72),
     )
-    habilitada = habilitar_orden(orden, fecha=t(73))
+    with pytest.raises(PrecondicionInvalidaError, match="no se repite"):
+        habilitar_orden(orden, fecha=t(73))
+    continuada = habilitar_o_reevaluar(orden, fecha=t(73))
 
-    assert habilitada.estado_workflow is EstadoWorkflow.HABILITADA
-    assert _ids(habilitada)[-3:] == [
+    assert continuada.estado_workflow is EstadoWorkflow.EN_COLA
+    assert _ids(continuada)[-3:] == [
         "PROC-REP-110",
         "PROC-REP-130",
-        "PROC-REP-140",
+        "PROC-REP-211",
     ]
+    assert _ids(continuada).count("PROC-REP-140") == 1
 
 
 # --- Progreso ---
