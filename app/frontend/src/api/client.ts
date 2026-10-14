@@ -68,3 +68,10 @@ export function post<T>(ruta: string, cuerpo: unknown): Promise<T> {
     body: JSON.stringify(cuerpo),
   });
 }
+
+export function put<T>(ruta: string, cuerpo: unknown): Promise<T> {
+  return pedir<T>(ruta, {
+    method: "PUT",
+    body: JSON.stringify(cuerpo),
+  });
+}

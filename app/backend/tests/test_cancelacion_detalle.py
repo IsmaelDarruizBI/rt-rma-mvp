@@ -207,8 +207,8 @@ def test_todos_los_detalles_cancelados_llevan_a_la_cancelacion_de_la_orden(
 
     assert orden["historial"][-1]["observacion"] == "TODO_CANCELADO"
     assert orden["estado_workflow"] == "CANCELADA"
-    # El comprobante de recepcion se emitio: el equipo esta en custodia y
-    # hay que devolverlo antes del cierre operativo.
+    # La recepcion fisica se confirmo: el equipo esta en custodia y hay que
+    # devolverlo antes del cierre operativo.
     assert orden["cerrada"] is False
     assert orden["devolucion_pendiente"] is True
     assert codigos(orden) == ["REGISTRAR_DEVOLUCION"]

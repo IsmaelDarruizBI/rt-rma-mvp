@@ -9,6 +9,8 @@ Un archivo por catalogo, cada uno con un array JSON:
     tipo_reparacion_estaciones.json
     usuarios.json
     medios_pago.json        (opcional: sin el archivo, los predeterminados)
+    empresa.json            (opcional, un objeto: identificacion en los
+                             documentos; sin el archivo, la predeterminada)
 
 Los catalogos se releen en cada consulta: son chicos y asi dos procesos
 no trabajan sobre una copia en memoria desactualizada. Cuando el volumen
@@ -22,7 +24,9 @@ from typing import TypeVar
 from pydantic import BaseModel, ValidationError
 
 from app.domain.models import (
+    DATOS_EMPRESA_PREDETERMINADOS,
     MEDIOS_PAGO_PREDETERMINADOS,
+    DatosEmpresa,
     EstacionTrabajo,
     Insumo,
     MedioPago,
@@ -45,6 +49,7 @@ ARCHIVO_ESTACIONES = "estaciones.json"
 ARCHIVO_TIPO_REPARACION_ESTACIONES = "tipo_reparacion_estaciones.json"
 ARCHIVO_USUARIOS = "usuarios.json"
 ARCHIVO_MEDIOS_PAGO = "medios_pago.json"
+ARCHIVO_EMPRESA = "empresa.json"
 
 ModeloT = TypeVar("ModeloT", bound=BaseModel)
 
@@ -146,6 +151,19 @@ class JsonCatalogosRepository:
         return self._buscar_por_id(
             self.listar_medios_pago(), medio_id, "Medio de pago"
         )
+
+    # --- Identificacion de la empresa en los documentos ---
+
+    def obtener_datos_empresa(self) -> DatosEmpresa:
+        ruta = self._directorio / ARCHIVO_EMPRESA
+        if not ruta.is_file():
+            return DATOS_EMPRESA_PREDETERMINADOS.model_copy()
+        try:
+            return DatosEmpresa.model_validate(leer_json(ruta))
+        except ValidationError as error:
+            raise PersistenciaError(
+                f"El archivo {ruta} no es valido: {error}"
+            ) from error
 
     # --- Interno ---
 

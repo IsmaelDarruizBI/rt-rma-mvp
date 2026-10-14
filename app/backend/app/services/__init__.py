@@ -40,6 +40,23 @@ from .cancelaciones import (
     registrar_devolucion_equipo,
     validar_cancelacion_detalle,
 )
+from .custodia import (
+    ROLES_RECEPCION_EQUIPO,
+    agregar_nota_recepcion,
+    armar_entrega,
+    confirmar_recepcion_fisica,
+    custodia_por_definir,
+    custodia_resuelta,
+    equipo_bajo_custodia,
+    estado_custodia,
+    evidencias_de_equipo,
+    exigir_equipo_en_custodia,
+    normalizar_datos_recepcion,
+    recepcion_inicial,
+    registrar_datos_recepcion,
+    registrar_equipo_no_recibido,
+    tipo_de_entrega,
+)
 from .decision_cliente import (
     AnalisisDesistimiento,
     DecisionDetalle,
@@ -49,8 +66,20 @@ from .decision_cliente import (
     registrar_desistimiento_cliente,
 )
 from .documentos import (
+    ContextoDocumentos,
+    contenido_comprobante_entrega,
+    contenido_comprobante_recepcion,
+    contenido_de,
+    contenido_garantia,
+    documento_emitido,
+    documentos_de_tipo,
+    documentos_previsualizables,
+    emitir_comprobante_recepcion,
     generar_comprobante_final,
     generar_comprobante_recepcion,
+    registrar_documento,
+    ultimo_documento,
+    vencimiento_garantia,
 )
 from .ejecuciones import (
     ejecucion_activa,
@@ -94,6 +123,7 @@ from .inventario_global import (
     stock_disponible_por_insumo,
 )
 from .ordenes import (
+    cerrar_cancelada_si_corresponde,
     crear_orden_cliente_externo,
     crear_orden_garantia_rma,
     crear_orden_rt_interno,
@@ -101,7 +131,6 @@ from .ordenes import (
     devolucion_pendiente,
     devolver_equipo_rt,
     entregar_equipo,
-    equipo_bajo_custodia,
     evaluar_situacion_orden,
     exigir_orden_abierta,
     habilitar_orden,
@@ -111,6 +140,7 @@ from .ordenes import (
     marcar_orden_en_revision,
     marcar_reparacion_lista,
     notificar_cliente,
+    pendientes_para_cerrar,
     verificar_fin_financiero,
 )
 from .pagos import (
@@ -208,7 +238,6 @@ __all__ = [
     "devolucion_pendiente",
     "devolver_equipo_rt",
     "entregar_equipo",
-    "equipo_bajo_custodia",
     "evaluar_situacion_orden",
     "exigir_orden_abierta",
     "habilitar_orden",
@@ -218,12 +247,30 @@ __all__ = [
     "marcar_orden_en_revision",
     "marcar_reparacion_lista",
     "notificar_cliente",
+    # Recepcion fisica y custodia
+    "ROLES_RECEPCION_EQUIPO",
+    "agregar_nota_recepcion",
+    "armar_entrega",
+    "confirmar_recepcion_fisica",
+    "custodia_por_definir",
+    "custodia_resuelta",
+    "equipo_bajo_custodia",
+    "estado_custodia",
+    "evidencias_de_equipo",
+    "exigir_equipo_en_custodia",
+    "normalizar_datos_recepcion",
+    "recepcion_inicial",
+    "registrar_datos_recepcion",
+    "registrar_equipo_no_recibido",
+    "tipo_de_entrega",
     # Cancelacion y devolucion (PROC-REP-300/305/306/270)
     "ROLES_CANCELACION",
     "cancelar_detalle",
     "cancelar_orden",
     "registrar_devolucion_equipo",
     "validar_cancelacion_detalle",
+    "cerrar_cancelada_si_corresponde",
+    "pendientes_para_cerrar",
     # Autorizacion del cliente por Detalle (BR-REP-028, PROC-REP-046/047)
     "AnalisisDesistimiento",
     "analizar_desistimiento",
@@ -334,6 +381,18 @@ __all__ = [
     "registrar_saldo_pendiente",
     "validar_condicion_entrega",
     # Documentos
+    "ContextoDocumentos",
+    "contenido_comprobante_entrega",
+    "contenido_comprobante_recepcion",
+    "contenido_de",
+    "contenido_garantia",
+    "documento_emitido",
+    "documentos_de_tipo",
+    "documentos_previsualizables",
+    "emitir_comprobante_recepcion",
     "generar_comprobante_final",
     "generar_comprobante_recepcion",
+    "registrar_documento",
+    "ultimo_documento",
+    "vencimiento_garantia",
 ]

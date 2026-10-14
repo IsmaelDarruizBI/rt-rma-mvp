@@ -4,7 +4,8 @@
     rechazar_control   PROC-REP-220 -> 230 (No) -> 235 -> 211 [-> 170]
     notificar          PROC-REP-250 -> 260 -> 265 [-> 266]
     registrar_pago_de_orden   (capacidad transversal) [-> 265 [-> 266]]
-    entregar           PROC-REP-280 -> 270 -> EVT-REP-999
+    entregar           PROC-REP-280 -> 270 -> EVT-REP-999 (+ comprobante
+                       final y garantia emitidos)
 
 La condicion de entrega exige saldo exactamente cero (V1.4, BR-REP-038):
 una deuda se cobra y un saldo a favor se devuelve
@@ -22,12 +23,14 @@ from app.domain.models import OrdenReparacion
 from app.services import (
     PrecondicionInvalidaError,
     aprobar_control_tecnico,
+    armar_entrega,
     calcular_puntaje,
     condicion_entrega_cumplida,
     control_tecnico_completo,
     devolver_equipo_rt,
     entregar_equipo,
     evaluar_situacion_orden,
+    exigir_equipo_en_custodia,
     generar_comprobante_final,
     informar_resultado_rt,
     lista_para_cierre,
@@ -43,6 +46,7 @@ from app.services.ordenes import ROLES_ENTREGA
 from app.services.pagos import motivo_de_entrega_bloqueada
 
 from .contexto import ApplicationContext
+from .documentos import emitir_documentos_de_salida
 from .finanzas import reevaluar_tras_movimiento
 from .modificacion import orden_para_modificar
 
@@ -216,6 +220,9 @@ def entregar(
     *,
     orden_id: str,
     usuario_id: str,
+    recibido_por: str | None = None,
+    identificacion_receptor: str | None = None,
+    observaciones: str | None = None,
 ) -> OrdenReparacion:
     """El Administrador entrega el equipo (280 -> 270 -> EVT-REP-999).
 
@@ -227,6 +234,12 @@ def entregar(
     El rol se valida antes de generar nada: ``entregar_equipo`` tambien
     lo valida, pero para entonces PROC-REP-280 ya habria emitido el
     comprobante final.
+
+    Despues de la condicion comercial exige el equipo en custodia
+    confirmada (el comprobante de recepcion no alcanza) y quien lo retira.
+    La entrega queda registrada (``orden.entrega``) y, en la misma
+    operacion, se emiten el comprobante final y la garantia, que empieza
+    con esta entrega.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     validar_alguno_de(usuario, ROLES_ENTREGA)
@@ -250,9 +263,23 @@ def entregar(
                 f"No se puede entregar: {motivo_de_entrega_bloqueada(orden)}. "
                 "Resolve la cuenta (cobro o devolucion) y volve a intentarlo."
             )
+        exigir_equipo_en_custodia(orden, operacion="entregar el equipo")
+        entrega = armar_entrega(
+            orden,
+            usuario=usuario,
+            fecha=fecha,
+            recibido_por=recibido_por,
+            identificacion_receptor=identificacion_receptor,
+            observaciones=observaciones,
+        )
 
         orden = generar_comprobante_final(orden, fecha=fecha)
-        orden = entregar_equipo(orden, usuario=usuario, fecha=fecha)
+        orden = entregar_equipo(
+            orden, usuario=usuario, fecha=fecha, entrega=entrega
+        )
+        orden = emitir_documentos_de_salida(
+            contexto, orden, usuario_id=usuario.id, fecha=fecha
+        )
 
         contexto.ordenes.guardar(orden)
     return orden

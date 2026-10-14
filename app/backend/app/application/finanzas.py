@@ -21,18 +21,16 @@ from decimal import Decimal
 from enum import Enum
 
 from app.domain.models import (
-    EstadoWorkflow,
     MedioPago,
     OrdenReparacion,
 )
 from app.services import (
     anular_pago,
-    devolucion_pendiente,
+    cerrar_cancelada_si_corresponde,
     es_cobrable,
     registrar_devolucion_dinero,
     registrar_saldo_pendiente,
     validar_condicion_entrega,
-    verificar_fin_financiero,
 )
 
 from .contexto import ApplicationContext
@@ -52,8 +50,10 @@ def reevaluar_tras_movimiento(
     - En la condicion de entrega (265/266): se revalida PROC-REP-265 y, si
       todavia hay saldo pendiente, PROC-REP-266. Devuelve si ya puede
       entregarse.
-    - Orden CANCELADA sin devolucion fisica pendiente: PROC-REP-268 (sin
-      saldo a favor, termina).
+    - Orden CANCELADA cuyo equipo ya no condiciona el cierre (devuelto o
+      registrado como no recibido): PROC-REP-268 (sin saldo a favor,
+      termina). Con la custodia sin definir o el equipo en el local, sigue
+      abierta.
     - En cualquier otro punto el movimiento no mueve el proceso.
 
     Solo se invoca tras un movimiento real (Pago, anulacion o devolucion):
@@ -64,13 +64,7 @@ def reevaluar_tras_movimiento(
         if not puede_entregar and orden.saldo > 0:
             orden = registrar_saldo_pendiente(orden, fecha=fecha)
         return orden, puede_entregar
-    if (
-        orden.estado_workflow is EstadoWorkflow.CANCELADA
-        and not orden.esta_cerrada
-        and not devolucion_pendiente(orden)
-    ):
-        orden = verificar_fin_financiero(orden, fecha=fecha)
-    return orden, False
+    return cerrar_cancelada_si_corresponde(orden, fecha=fecha), False
 
 
 def anular_pago_de_orden(

@@ -53,6 +53,7 @@ from tests.fixtures.api_salidas import (
     repo_ordenes,
     tomada,
 )
+from tests.fixtures.custodia import entregar, no_recibido
 from tests.test_api_hp_rep_002 import TIPO, _crear_orden_rt, _sembrar_catalogos
 
 T100 = "TR-100"
@@ -267,12 +268,7 @@ def test_3_pago_final_salda_y_permite_entregar(cliente):
     assert _ultimo_pago(orden)["tipo_pago"] == "FINAL"
     assert orden["puede_entregar"] is True
     assert orden["resumen"]["situacion_financiera"] == "SALDADA"
-    entregada = ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/deliver",
-            json={"usuario_id": ADMINISTRADOR},
-        )
-    )
+    entregada = ok(entregar(cliente, orden_id, ADMINISTRADOR))
     assert entregada["estado_workflow"] == "ENTREGADA"
 
 
@@ -656,8 +652,8 @@ def test_19_devolucion_financiera_antes_que_la_fisica(cliente):
 
 
 def test_cancelada_sin_custodia_con_seña_espera_la_devolucion(cliente):
-    """Seña antes de definir nada; se cancela sin que el equipo quede en
-    custodia (sin comprobante): solo falta devolver el dinero."""
+    """Seña antes de definir nada; se cancela sin que el equipo ingrese:
+    registrado "Equipo no recibido", solo falta devolver el dinero."""
     orden_id = crear(cliente)
     orden = ok(pagar(cliente, orden_id, "15000", referencia="Seña revision"))
     assert _ultimo_pago(orden)["tipo_pago"] == "ANTICIPO"
@@ -665,6 +661,9 @@ def test_cancelada_sin_custodia_con_seña_espera_la_devolucion(cliente):
     pago_id = _ultimo_pago(orden)["id"]
 
     orden = ok(cancelar_orden(cliente, orden_id, "No deja el equipo."))
+    # Sin decision de custodia no se asume que no hay equipo.
+    assert orden["current_process"] == "PROC-REP-306"
+    orden = ok(no_recibido(cliente, orden_id, "No dejo el equipo."))
 
     assert orden["estado_workflow"] == "CANCELADA"
     assert orden["devolucion_pendiente"] is False
@@ -707,12 +706,7 @@ def test_20_no_se_entrega_con_saldo_a_favor(cliente):
     orden = ok(reintegrar(cliente, orden_id, pago_id, "30000"))
     assert orden["puede_entregar"] is True
     assert ids(orden)[-2:] == ["ACC-REP-022", "PROC-REP-265"]
-    entregada = ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/deliver",
-            json={"usuario_id": ADMINISTRADOR},
-        )
-    )
+    entregada = ok(entregar(cliente, orden_id, ADMINISTRADOR))
     assert entregada["estado_workflow"] == "ENTREGADA"
 
 
@@ -756,12 +750,7 @@ def test_22_no_hay_movimientos_sobre_una_orden_cerrada(cliente, tmp_path):
         )
     )
     pago_id = _ultimo_pago(ok(pagar(cliente, orden_id, "100000")))["id"]
-    ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/deliver",
-            json={"usuario_id": ADMINISTRADOR},
-        )
-    )
+    ok(entregar(cliente, orden_id, ADMINISTRADOR))
     antes = archivo(tmp_path, orden_id)
 
     conflicto(pagar(cliente, orden_id, "1"), codigo="ORDEN_CERRADA")
@@ -867,12 +856,7 @@ def test_circuito_a_anticipo_ejecucion_pago_final_entrega(cliente):
 
     orden = ok(pagar(cliente, orden_id, "60000", metodo="TARJETA_CREDITO"))
     assert [p["tipo_pago"] for p in orden["pagos"]] == ["ANTICIPO", "FINAL"]
-    entregada = ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/deliver",
-            json={"usuario_id": ADMINISTRADOR},
-        )
-    )
+    entregada = ok(entregar(cliente, orden_id, ADMINISTRADOR))
 
     assert entregada["estado_workflow"] == "ENTREGADA"
     assert entregada["cerrada"] is True
@@ -938,10 +922,5 @@ def test_circuito_c_autorizacion_parcial_credito_y_entrega(cliente):
         )
     )
     assert orden["puede_entregar"] is True
-    entregada = ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/deliver",
-            json={"usuario_id": ADMINISTRADOR},
-        )
-    )
+    entregada = ok(entregar(cliente, orden_id, ADMINISTRADOR))
     assert entregada["estado_workflow"] == "ENTREGADA"

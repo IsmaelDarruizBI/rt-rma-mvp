@@ -266,7 +266,7 @@ def test_3_rechazar_todo_cancela_y_espera_la_devolucion(cliente):
         d["cancelacion"]["origen"] for d in orden["reparaciones_detail"]
     } == {"RECHAZO_CLIENTE"}
     assert Decimal(orden["resumen"]["total"]) == Decimal("0")
-    # El comprobante se emitio: el equipo esta en custodia y se devuelve.
+    # La recepcion se confirmo: el equipo esta en custodia y se devuelve.
     assert orden["devolucion_pendiente"] is True
     assert codigos(orden) == ["REGISTRAR_DEVOLUCION"]
     assert orden["acciones_autorizacion"] == []

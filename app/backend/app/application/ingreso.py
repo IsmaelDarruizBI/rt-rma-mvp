@@ -27,7 +27,12 @@ encadenan sin volver a preguntar.
 from collections.abc import Sequence
 from datetime import datetime
 
-from app.domain.models import Cliente, Equipo, OrdenReparacion
+from app.domain.models import (
+    Cliente,
+    DatosRecepcion,
+    Equipo,
+    OrdenReparacion,
+)
 from app.services import (
     ResultadoEvaluacionOrden,
     cargar_reservas_externas,
@@ -50,6 +55,7 @@ from app.services import (
 
 from .concurrencia import seccion_critica_inventario
 from .contexto import ApplicationContext
+from .documentos import emitir_comprobante_recepcion_inicial
 from .identificadores import siguiente_detalle_id, siguiente_orden_id
 from .modificacion import orden_para_modificar
 
@@ -60,11 +66,14 @@ def crear_orden(
     usuario_id: str,
     cliente: Cliente,
     equipo: Equipo,
+    datos_recepcion: DatosRecepcion | None = None,
 ) -> OrdenReparacion:
     """Ingreso de un equipo de CLIENTE_EXTERNO (PROC-REP-010/030/040).
 
     La Orden nace en REQUERIMIENTO y sin Detalles: el proceso continua
-    cuando Recepcion define la reparacion.
+    cuando Recepcion define la reparacion. Los datos del ingreso (estado
+    fisico, accesorios, observaciones) quedan registrados, con la
+    recepcion fisica pendiente de confirmar.
 
     La numeracion se calcula sobre lo persistido, asi que se asigna
     dentro de la seccion critica: dos altas simultaneas no pueden
@@ -80,6 +89,7 @@ def crear_orden(
             equipo=equipo,
             usuario=usuario,
             fecha=fecha,
+            datos_recepcion=datos_recepcion,
         )
         contexto.ordenes.guardar(orden)
 
@@ -92,6 +102,7 @@ def crear_orden_rt(
     usuario_id: str,
     equipo: Equipo,
     referencia_rt: str,
+    datos_recepcion: DatosRecepcion | None = None,
 ) -> OrdenReparacion:
     """Ingreso de un equipo RT_INTERNO (PROC-REP-010/020/040, HP-REP-002).
 
@@ -111,6 +122,7 @@ def crear_orden_rt(
             referencia_rt=referencia_rt,
             usuario=usuario,
             fecha=fecha,
+            datos_recepcion=datos_recepcion,
         )
         contexto.ordenes.guardar(orden)
 
@@ -186,6 +198,9 @@ def finalizar_definicion(
             paso.process_id == "PROC-REP-050" for paso in orden.historial
         ):
             orden = generar_comprobante_recepcion(orden, fecha=fecha)
+            orden = emitir_comprobante_recepcion_inicial(
+                contexto, orden, usuario_id=usuario.id, fecha=fecha
+            )
         orden = _validar_y_habilitar(contexto, orden, fecha=fecha)
 
         contexto.ordenes.guardar(orden)
@@ -259,6 +274,9 @@ def enviar_a_revision(
     with orden_para_modificar(contexto, orden_id) as orden:
         orden = marcar_orden_en_revision(orden, usuario=usuario, fecha=fecha)
         orden = generar_comprobante_recepcion(orden, fecha=fecha)
+        orden = emitir_comprobante_recepcion_inicial(
+            contexto, orden, usuario_id=usuario.id, fecha=fecha
+        )
         contexto.ordenes.guardar(orden)
     return orden
 
@@ -269,6 +287,7 @@ def iniciar_garantia_rma(
     orden_origen_id: str,
     detalle_origen_ids: Sequence[str],
     usuario_id: str,
+    datos_recepcion: DatosRecepcion | None = None,
 ) -> OrdenReparacion:
     """Recepcion inicia la garantia RMA de una Orden ENTREGADA (HP-REP-003).
 
@@ -279,7 +298,9 @@ def iniciar_garantia_rma(
     origen y deje la garantia habilitada.
 
     Devuelve la UNICA Orden NUEVA, sin Detalles propios todavia. La Orden
-    origen solo se lee: no se guarda ni se modifica.
+    origen solo se lee: no se guarda ni se modifica. El cliente vuelve a
+    traer el equipo: sus datos de ingreso se registran en la Orden nueva,
+    con la recepcion fisica pendiente de confirmar.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
@@ -293,9 +314,13 @@ def iniciar_garantia_rma(
             detalle_origen_ids=list(detalle_origen_ids),
             usuario=usuario,
             fecha=fecha,
+            datos_recepcion=datos_recepcion,
         )
         orden = marcar_orden_en_revision(orden, usuario=usuario, fecha=fecha)
         orden = generar_comprobante_recepcion(orden, fecha=fecha)
+        orden = emitir_comprobante_recepcion_inicial(
+            contexto, orden, usuario_id=usuario.id, fecha=fecha
+        )
         contexto.ordenes.guardar(orden)
 
     return orden

@@ -16,20 +16,26 @@ from app.application import (
     ApplicationContext,
     acciones_de_autorizacion,
     acciones_de_cancelacion,
+    acciones_de_custodia,
     acciones_disponibles,
     acciones_financieras,
+    agregar_observacion_recepcion,
     anular_pago_de_orden,
     aprobar_control,
     autorizaciones_de_orden,
     cancelar_detalle,
     cancelar_orden,
     completar_ejecucion,
+    confirmar_recepcion,
     crear_orden,
     crear_orden_rt,
     definir_reparacion,
     definir_reparacion_desde_revision,
     detalles_origen_de,
     devolver_rt,
+    documento_de_orden,
+    documentos_de_orden,
+    emitir_comprobante_recepcion,
     encolar_orden,
     entregar,
     enviar_a_revision,
@@ -57,13 +63,16 @@ from app.application import (
     registrar_desistimiento,
     registrar_devolucion,
     registrar_devolucion_de_dinero,
+    registrar_no_recepcion,
     registrar_pago_de_orden,
+    registrar_recepcion,
     requerir_redefinicion_ejecucion,
     revalidar_recursos,
     revisar_detalle,
     tomar_orden_en_estacion,
+    vista_previa_documento,
 )
-from app.domain.models import OrdenReparacion
+from app.domain.models import OrdenReparacion, TipoDocumento
 from app.services import DecisionDetalle
 
 from .dependencias import ContextoDep
@@ -74,16 +83,23 @@ from .schemas import (
     CancelarDetalleIn,
     CancelarOrdenIn,
     CompletarEjecucionIn,
+    ConfirmarRecepcionIn,
     CrearOrdenIn,
     CrearOrdenRtIn,
+    CustodiaOut,
     DefinirReparacionDesdeRevisionIn,
     DefinirReparacionIn,
     DesistimientoIn,
     DevolucionDineroIn,
     DevolverRtIn,
+    DocumentoEmitidoOut,
+    DocumentosOrdenOut,
+    DocumentosOut,
+    EmitirDocumentoIn,
     EncolarIn,
     EntregarIn,
     EnviarARevisionIn,
+    EquipoNoRecibidoIn,
     FinalizarDefinicionIn,
     FinalizarSinReparacionIn,
     FinanzasOrdenOut,
@@ -93,20 +109,24 @@ from .schemas import (
     InterrumpirEjecucionIn,
     LiberarOrdenIn,
     NotificarIn,
+    ObservacionRecepcionIn,
     OrdenConEntregaOut,
     OrdenOut,
     OrdenResumenOut,
     OverrideRecursosIn,
     PagoIn,
     PendienteAutorizacionOut,
+    RecepcionOut,
     RechazarControlIn,
     RedefinirDetalleIn,
     RegistrarDecisionClienteIn,
     RegistrarDevolucionIn,
+    RegistrarRecepcionIn,
     RequiereRedefinicionIn,
     RevisionDetalleIn,
     RevisionTecnicaIn,
     TomarIn,
+    VistaPreviaDocumentoOut,
 )
 
 router = APIRouter(prefix="/api/orders", tags=["ordenes"])
@@ -130,6 +150,7 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
         acciones_cancelacion=acciones_de_cancelacion(orden),
         acciones_autorizacion=acciones_de_autorizacion(orden),
         acciones_financieras=acciones_financieras(orden),
+        acciones_custodia=acciones_de_custodia(orden),
     )
 
 
@@ -145,7 +166,7 @@ def _salida_con_entrega(
     )
 
 
-# --- Lectura -----------------------------------------------------------
+# --- Lectura -----------------------------------------------------------------
 
 
 @router.get("")
@@ -187,6 +208,84 @@ def get_finanzas(orden_id: str, contexto: ContextoDep) -> FinanzasOrdenOut:
     return FinanzasOrdenOut.desde_dominio(obtener_orden(contexto, orden_id))
 
 
+@router.get("/{orden_id}/custody")
+def get_custodia(orden_id: str, contexto: ContextoDep) -> dict:
+    """Custodia del equipo y datos del ingreso. Solo lectura.
+
+    La custodia es independiente del comprobante de recepcion: se informa
+    aparte si el comprobante se emitio.
+    """
+    orden = obtener_orden(contexto, orden_id)
+    return {
+        "orden_id": orden.id,
+        "custodia": CustodiaOut.desde_dominio(orden),
+        "recepcion": (
+            RecepcionOut.desde_dominio(orden.recepcion)
+            if orden.recepcion is not None
+            else None
+        ),
+    }
+
+
+@router.get("/{orden_id}/documents")
+def get_documentos(orden_id: str, contexto: ContextoDep) -> DocumentosOrdenOut:
+    """Documentos emitidos de la Orden, con su contenido. Solo lectura.
+
+    Tambien de una Orden cerrada: un documento emitido se puede volver a
+    ver e imprimir, sin modificar la Orden.
+    """
+    documentos = documentos_de_orden(contexto, orden_id)
+    orden = documentos.orden
+    vigentes = {
+        documento.tipo: documento.id for documento in documentos.emitidos
+    }
+    return DocumentosOrdenOut(
+        orden_id=orden.id,
+        cerrada=orden.esta_cerrada,
+        emitidos=[
+            DocumentoEmitidoOut.desde_dominio(
+                documento, vigente=vigentes[documento.tipo] == documento.id
+            )
+            for documento in documentos.emitidos
+        ],
+        marcas=DocumentosOut(**orden.documentos.model_dump()),
+        previsualizables=documentos.previsualizables,
+    )
+
+
+@router.get("/{orden_id}/documents/preview/{tipo}")
+def get_vista_previa_documento(
+    orden_id: str,
+    tipo: TipoDocumento,
+    contexto: ContextoDep,
+) -> VistaPreviaDocumentoOut:
+    """Vista previa con los datos vigentes. NO emite ni guarda nada."""
+    return VistaPreviaDocumentoOut(
+        orden_id=orden_id,
+        tipo=tipo,
+        contenido=vista_previa_documento(contexto, orden_id, tipo),
+    )
+
+
+@router.get("/{orden_id}/documents/{documento_id}")
+def get_documento(
+    orden_id: str,
+    documento_id: str,
+    contexto: ContextoDep,
+) -> DocumentoEmitidoOut:
+    """Un documento emitido, tal como se entrego al cliente."""
+    documento = documento_de_orden(contexto, orden_id, documento_id)
+    orden = obtener_orden(contexto, orden_id)
+    ultimo = [
+        emitido.id
+        for emitido in orden.documentos.emitidos
+        if emitido.tipo is documento.tipo
+    ][-1]
+    return DocumentoEmitidoOut.desde_dominio(
+        documento, vigente=ultimo == documento.id
+    )
+
+
 @router.get("/{orden_id}/authorizations")
 def get_autorizaciones(
     orden_id: str,
@@ -219,7 +318,7 @@ def get_impacto_override(
     )
 
 
-# --- Comandos del Happy Path -------------------------------------------
+# --- Comandos del Happy Path -------------------------------------------------
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -237,6 +336,9 @@ def post_crear_orden(
         usuario_id=cuerpo.usuario_id,
         cliente=cuerpo.cliente.a_dominio(),
         equipo=cuerpo.equipo.a_dominio(),
+        datos_recepcion=(
+            cuerpo.recepcion.a_dominio() if cuerpo.recepcion else None
+        ),
     )
     return _salida(orden, contexto)
 
@@ -256,6 +358,9 @@ def post_crear_orden_rt(
         usuario_id=cuerpo.usuario_id,
         equipo=cuerpo.equipo.a_dominio(),
         referencia_rt=cuerpo.referencia_rt,
+        datos_recepcion=(
+            cuerpo.recepcion.a_dominio() if cuerpo.recepcion else None
+        ),
     )
     return _salida(orden, contexto)
 
@@ -322,6 +427,9 @@ def post_iniciar_garantia_rma(
         orden_origen_id=orden_origen_id,
         detalle_origen_ids=cuerpo.detalle_origen_ids,
         usuario_id=cuerpo.usuario_id,
+        datos_recepcion=(
+            cuerpo.recepcion.a_dominio() if cuerpo.recepcion else None
+        ),
     )
     return _salida(orden, contexto)
 
@@ -811,8 +919,9 @@ def post_registrar_devolucion(
 ) -> OrdenOut:
     """Devolver el equipo de una Orden CANCELADA (PROC-REP-270 -> fin).
 
-    Sin cobro, comprobante final ni garantia; la Orden sigue CANCELADA y
-    queda cerrada.
+    Exige la custodia confirmada. Sin cobro ni garantia: emite el
+    comprobante de devolucion sin reparacion. La Orden sigue CANCELADA y
+    queda cerrada (o espera la devolucion de dinero pendiente).
     """
     orden = registrar_devolucion(
         contexto,
@@ -820,6 +929,105 @@ def post_registrar_devolucion(
         usuario_id=cuerpo.usuario_id,
         recibido_por=cuerpo.recibido_por,
         observaciones=cuerpo.observaciones,
+        identificacion_receptor=cuerpo.identificacion_receptor,
+    )
+    return _salida(orden, contexto)
+
+
+# --- Recepcion fisica y custodia ---------------------------------------------
+
+
+@router.put("/{orden_id}/reception")
+def put_recepcion(
+    orden_id: str,
+    cuerpo: RegistrarRecepcionIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Registrar o corregir los datos del ingreso (ACT-RECEP).
+
+    Solo antes de confirmar la recepcion; conserva la version anterior. En
+    una Orden anterior al registro de recepcion, es la regularizacion.
+    """
+    orden = registrar_recepcion(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        datos=cuerpo.datos(),
+        equipo=cuerpo.equipo.a_dominio() if cuerpo.equipo else None,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/reception/confirm")
+def post_confirmar_recepcion(
+    orden_id: str,
+    cuerpo: ConfirmarRecepcionIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Confirmar que el equipo quedo fisicamente en el local (custodia)."""
+    orden = confirmar_recepcion(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        observaciones=cuerpo.observaciones,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/reception/not-received")
+def post_equipo_no_recibido(
+    orden_id: str,
+    cuerpo: EquipoNoRecibidoIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Confirmar que el equipo nunca ingreso (Orden cancelada, con motivo).
+
+    Alternativa explicita a confirmar la recepcion: sin equipo que
+    devolver, la Orden pasa por la verificacion financiera y cierra, o
+    espera la devolucion del saldo a favor. Se rechaza si algo en la Orden
+    prueba que el equipo estuvo en el local.
+    """
+    orden = registrar_no_recepcion(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        motivo=cuerpo.motivo,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/reception/notes")
+def post_observacion_recepcion(
+    orden_id: str,
+    cuerpo: ObservacionRecepcionIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Agregar una observacion complementaria del ingreso."""
+    orden = agregar_observacion_recepcion(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        texto=cuerpo.texto,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/documents/reception-receipt")
+def post_emitir_comprobante_recepcion(
+    orden_id: str,
+    cuerpo: EmitirDocumentoIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Emitir una version nueva del comprobante de recepcion (ACT-RECEP).
+
+    La primera la emite el proceso (PROC-REP-060). Una version nueva exige
+    motivo y conserva la anterior; un reintento no la duplica.
+    """
+    orden = emitir_comprobante_recepcion(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        motivo=cuerpo.motivo,
     )
     return _salida(orden, contexto)
 
@@ -946,11 +1154,16 @@ def post_entregar(
     """Entregar el equipo (ACT-ADMIN).
 
     Compone PROC-REP-280 -> 270 -> EVT-REP-999. La Orden queda ENTREGADA.
+    Exige la custodia confirmada y quien retira; emite el comprobante final
+    y la garantia, que empieza con esta entrega.
     """
     orden = entregar(
         contexto,
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
+        recibido_por=cuerpo.recibido_por,
+        identificacion_receptor=cuerpo.identificacion_receptor,
+        observaciones=cuerpo.observaciones,
     )
     return _salida(orden, contexto)
 

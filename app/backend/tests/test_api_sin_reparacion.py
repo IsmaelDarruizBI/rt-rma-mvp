@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
+from tests.fixtures.custodia import entregar
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     RECEPCION,
@@ -119,9 +120,7 @@ def test_cliente_externo_sin_reparacion_de_punta_a_punta(cliente):
     assert _codigos(orden) == ["ENTREGAR"]
 
     # 280 (sin garantia de reparacion) -> 270 -> EVT-REP-999.
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/deliver", json={"usuario_id": ADMINISTRADOR}
-    )
+    respuesta = entregar(cliente, orden_id, ADMINISTRADOR)
     assert respuesta.status_code == 200, respuesta.text
     orden = respuesta.json()
     assert _ids(orden)[-2:] == ["PROC-REP-280", "PROC-REP-270"]
@@ -163,9 +162,7 @@ def test_garantia_rma_sin_reparacion_cierra_no_cobrable(cliente):
     assert orden["historial"][-1]["observacion"] == "NO_COBRABLE_POR_ORIGEN"
     assert orden["puede_entregar"] is True
 
-    orden = cliente.post(
-        f"/api/orders/{orden_id}/deliver", json={"usuario_id": ADMINISTRADOR}
-    ).json()
+    orden = entregar(cliente, orden_id, ADMINISTRADOR).json()
     assert orden["estado_workflow"] == "ENTREGADA"
     assert orden["current_process"] == "EVT-REP-999"
     assert orden["pagos"] == []

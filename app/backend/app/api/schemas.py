@@ -41,10 +41,14 @@ from app.domain.models import (
     CanalComunicacion,
     Cliente,
     CondicionReparacionDetail,
+    ContenidoDocumento,
+    DatosRecepcion,
+    DocumentoEmitido,
     EjecucionReparacion,
     Equipo,
     EstacionTrabajo,
     EstadoControl,
+    EstadoCustodia,
     EstadoEjecucion,
     EstadoPago,
     EstadoReparacionDetail,
@@ -56,11 +60,15 @@ from app.domain.models import (
     OrdenReparacion,
     OrigenCancelacion,
     OrigenOrden,
+    RecepcionEquipo,
     RegistroAutorizacionCliente,
+    RegistroRecepcion,
     ReparacionDetail,
     ResultadoAutorizacion,
     ResultadoControl,
     RolUsuario,
+    TipoDocumento,
+    TipoEntrega,
     TipoPago,
     TipoReferenciaHistorial,
     TipoReparacion,
@@ -75,14 +83,16 @@ from app.services import (
     devolucion_pendiente,
     devolvible_de,
     estado_autorizacion,
+    estado_custodia,
     finalizada_sin_reparacion,
     nuevo_id,
     pendiente_de_retrabajo,
+    pendientes_para_cerrar,
     requiere_autorizacion_cliente,
     toma_activa,
 )
 
-# --- Catalogos ---------------------------------------------------------
+# --- Catalogos ---------------------------------------------------------------
 
 
 class TipoReparacionOut(BaseModel):
@@ -138,7 +148,7 @@ class UsuarioOut(BaseModel):
         return cls(**usuario.model_dump())
 
 
-# --- Entrada de comandos ------------------------------------------------
+# --- Entrada de comandos -----------------------------------------------------
 
 
 class ClienteIn(BaseModel):
@@ -180,12 +190,36 @@ class EquipoIn(BaseModel):
         )
 
 
+class DatosRecepcionIn(BaseModel):
+    """Condiciones en que se recibe el equipo (todas opcionales al alta).
+
+    ``accesorios``: lo que se recibe junto con el equipo (vacio: ninguno).
+    ``observaciones``: observaciones iniciales del ingreso.
+    """
+
+    estado_fisico: str | None = None
+    accesorios: list[str] = Field(default_factory=list)
+    observaciones: str | None = None
+
+    def a_dominio(self) -> DatosRecepcion:
+        return DatosRecepcion(
+            estado_fisico=self.estado_fisico,
+            accesorios=list(self.accesorios),
+            observaciones=self.observaciones,
+        )
+
+
 class CrearOrdenIn(BaseModel):
-    """``POST /api/orders`` (ACT-RECEP)."""
+    """``POST /api/orders`` (ACT-RECEP).
+
+    ``recepcion`` registra las condiciones del ingreso; la recepcion
+    fisica queda pendiente de confirmar (``POST .../reception/confirm``).
+    """
 
     usuario_id: str = Field(min_length=1)
     cliente: ClienteIn
     equipo: EquipoIn
+    recepcion: DatosRecepcionIn | None = None
 
 
 class CrearOrdenRtIn(BaseModel):
@@ -198,6 +232,7 @@ class CrearOrdenRtIn(BaseModel):
     usuario_id: str = Field(min_length=1)
     equipo: EquipoIn
     referencia_rt: str = Field(min_length=1)
+    recepcion: DatosRecepcionIn | None = None
 
 
 class DefinirReparacionIn(BaseModel):
@@ -377,9 +412,18 @@ class DevolucionDineroIn(BaseModel):
 
 
 class EntregarIn(BaseModel):
-    """``POST /api/orders/{id}/deliver`` (ACT-ADMIN)."""
+    """``POST /api/orders/{id}/deliver`` (ACT-ADMIN).
+
+    ``recibido_por`` (quien retira) es obligatorio para entregar: el
+    backend lo exige despues de la condicion comercial y de la custodia,
+    asi que una Orden que todavia no puede entregarse responde por ese
+    motivo. ``identificacion_receptor``: DNI u otro, si corresponde.
+    """
 
     usuario_id: str = Field(min_length=1)
+    recibido_por: str | None = None
+    identificacion_receptor: str | None = None
+    observaciones: str | None = None
 
 
 class IniciarGarantiaRmaIn(BaseModel):
@@ -392,6 +436,7 @@ class IniciarGarantiaRmaIn(BaseModel):
 
     usuario_id: str = Field(min_length=1)
     detalle_origen_ids: list[str] = Field(min_length=1)
+    recepcion: DatosRecepcionIn | None = None
 
 
 class OverrideRecursosIn(BaseModel):
@@ -489,6 +534,66 @@ class RegistrarDevolucionIn(BaseModel):
     usuario_id: str = Field(min_length=1)
     recibido_por: str = Field(min_length=1)
     observaciones: str | None = None
+    identificacion_receptor: str | None = None
+
+
+class RegistrarRecepcionIn(BaseModel):
+    """``PUT /api/orders/{id}/reception``: datos del ingreso.
+
+    Registra o corrige (antes de confirmar la recepcion) el estado fisico,
+    los accesorios y las observaciones; ``equipo`` corrige tambien marca,
+    modelo, identificadores o falla declarada. La version anterior se
+    conserva.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    estado_fisico: str | None = None
+    accesorios: list[str] = Field(default_factory=list)
+    observaciones: str | None = None
+    equipo: EquipoIn | None = None
+
+    def datos(self) -> DatosRecepcion:
+        return DatosRecepcion(
+            estado_fisico=self.estado_fisico,
+            accesorios=list(self.accesorios),
+            observaciones=self.observaciones,
+        )
+
+
+class ConfirmarRecepcionIn(BaseModel):
+    """``POST .../reception/confirm``: el equipo quedo en el local.
+
+    ``observaciones`` es obligatoria si la confirmacion regulariza una
+    Orden anterior al registro de recepcion (lo valida el dominio).
+    """
+
+    usuario_id: str = Field(min_length=1)
+    observaciones: str | None = None
+
+
+class EquipoNoRecibidoIn(BaseModel):
+    """``POST .../reception/not-received``: el equipo nunca ingreso.
+
+    Motivo obligatorio. Solo en una Orden cancelada y sin evidencias de que
+    el equipo estuvo en el local (lo valida el dominio).
+    """
+
+    usuario_id: str = Field(min_length=1)
+    motivo: str = Field(min_length=1)
+
+
+class ObservacionRecepcionIn(BaseModel):
+    """``POST .../reception/notes``: observacion complementaria."""
+
+    usuario_id: str = Field(min_length=1)
+    texto: str = Field(min_length=1)
+
+
+class EmitirDocumentoIn(BaseModel):
+    """``POST .../documents/reception-receipt``: version nueva, con motivo."""
+
+    usuario_id: str = Field(min_length=1)
+    motivo: str | None = None
 
 
 class DecisionDetalleIn(BaseModel):
@@ -529,7 +634,7 @@ class DesistimientoIn(BaseModel):
     motivo: str = Field(min_length=1)
 
 
-# --- Salida ------------------------------------------------------------
+# --- Salida ------------------------------------------------------------------
 
 
 class ClienteOut(BaseModel):
@@ -787,12 +892,155 @@ class DocumentosOut(BaseModel):
 
 
 class DevolucionOut(BaseModel):
-    """Devolucion fisica del equipo de una Orden CANCELADA (PROC-REP-270)."""
+    """Salida fisica del equipo (PROC-REP-270): entrega o devolucion."""
 
+    tipo: TipoEntrega = TipoEntrega.DEVOLUCION_SIN_REPARACION
     entregado_por: str
     recibido_por: str
+    identificacion_receptor: str | None = None
     fecha: datetime
     observaciones: str | None = None
+
+
+class DatosRecepcionOut(BaseModel):
+    estado_fisico: str | None = None
+    accesorios: list[str] = Field(default_factory=list)
+    observaciones: str | None = None
+
+
+class VersionRecepcionOut(BaseModel):
+    """Datos del ingreso reemplazados por una correccion."""
+
+    equipo: EquipoOut
+    datos: DatosRecepcionOut
+    registrado_por: str
+    registrado_en: datetime
+    reemplazado_por: str
+    reemplazado_en: datetime
+
+
+class ConfirmacionRecepcionOut(BaseModel):
+    usuario_id: str
+    fecha: datetime
+    observaciones: str | None = None
+
+
+class NoRecepcionOut(BaseModel):
+    usuario_id: str
+    fecha: datetime
+    motivo: str
+
+
+class NotaRecepcionOut(BaseModel):
+    usuario_id: str
+    fecha: datetime
+    texto: str
+
+
+class RecepcionOut(BaseModel):
+    """Datos del ingreso fisico del equipo, versiones y confirmacion."""
+
+    registro: RegistroRecepcion
+    datos: DatosRecepcionOut
+    registrado_por: str
+    registrado_en: datetime
+    versiones_anteriores: list[VersionRecepcionOut] = Field(
+        default_factory=list
+    )
+    confirmacion: ConfirmacionRecepcionOut | None = None
+    no_recibido: NoRecepcionOut | None = None
+    notas: list[NotaRecepcionOut] = Field(default_factory=list)
+
+    @classmethod
+    def desde_dominio(cls, recepcion: RecepcionEquipo) -> "RecepcionOut":
+        return cls.model_validate(recepcion.model_dump())
+
+
+class CustodiaOut(BaseModel):
+    """Donde esta el equipo, independiente del comprobante de recepcion.
+
+    ``confirmacion_requerida``: el Origen exige confirmar la recepcion
+    (RT_INTERNO no). ``comprobante_recepcion_emitido`` es otro hecho y se
+    informa aparte: no prueba la custodia.
+    """
+
+    estado: EstadoCustodia
+    confirmacion_requerida: bool
+    confirmada_por: str | None = None
+    confirmada_en: datetime | None = None
+    comprobante_recepcion_emitido: bool = False
+    salida: DevolucionOut | None = None
+
+    @classmethod
+    def desde_dominio(cls, orden: OrdenReparacion) -> "CustodiaOut":
+        confirmacion = (
+            orden.recepcion.confirmacion if orden.recepcion else None
+        )
+        salida = orden.entrega or orden.devolucion
+        return cls(
+            estado=estado_custodia(orden),
+            confirmacion_requerida=politica_de(
+                orden.origen
+            ).requiere_confirmacion_recepcion,
+            confirmada_por=confirmacion.usuario_id if confirmacion else None,
+            confirmada_en=confirmacion.fecha if confirmacion else None,
+            comprobante_recepcion_emitido=(
+                orden.documentos.comprobante_recepcion.generado
+                or any(
+                    documento.tipo is TipoDocumento.COMPROBANTE_RECEPCION
+                    for documento in orden.documentos.emitidos
+                )
+            ),
+            salida=(
+                DevolucionOut(**salida.model_dump())
+                if salida is not None
+                else None
+            ),
+        )
+
+
+class DocumentoResumenOut(BaseModel):
+    """Un documento emitido, sin su contenido (para listar).
+
+    ``vigente``: es la ultima version emitida de su tipo.
+    """
+
+    id: str
+    tipo: TipoDocumento
+    version: int
+    fecha_emision: datetime
+    usuario_id: str | None = None
+    motivo: str | None = None
+    reemplaza_a: str | None = None
+    vigente: bool = True
+
+
+class DocumentoEmitidoOut(DocumentoResumenOut):
+    """Un documento emitido con su contenido, tal como se entrego."""
+
+    orden_id: str
+    contenido: ContenidoDocumento
+
+    @classmethod
+    def desde_dominio(
+        cls,
+        documento: DocumentoEmitido,
+        *,
+        vigente: bool,
+    ) -> "DocumentoEmitidoOut":
+        return cls(
+            **documento.model_dump(exclude={"contenido"}),
+            contenido=documento.contenido,
+            vigente=vigente,
+        )
+
+
+def _vigentes(orden: OrdenReparacion) -> set[str]:
+    """IDs de la ultima version emitida de cada tipo de documento."""
+    ultimos: dict[TipoDocumento, str] = {}
+    for documento in orden.documentos.emitidos:
+        ultimos[documento.tipo] = documento.id
+    return set(ultimos.values())
 
 
 class ResumenComercialOut(BaseModel):
@@ -1124,6 +1372,22 @@ class OrdenOut(BaseModel):
     # Orden CANCELADA: devolucion fisica del equipo (registrada o pendiente).
     devolucion: DevolucionOut | None = None
     devolucion_pendiente: bool = False
+    # Ingreso fisico y custodia (independiente del comprobante).
+    recepcion: RecepcionOut | None = None
+    custodia: CustodiaOut | None = None
+    # Entrega de la Orden ENTREGADA: quien retiro el equipo.
+    entrega: DevolucionOut | None = None
+    # Documentos emitidos (sin contenido: ``GET .../documents``).
+    documentos_emitidos: list[DocumentoResumenOut] = Field(
+        default_factory=list
+    )
+    # Registrar o corregir el ingreso, confirmar la recepcion o registrar
+    # "Equipo no recibido", observacion complementaria, nueva version del
+    # comprobante de recepcion.
+    acciones_custodia: list[AccionOut] = Field(default_factory=list)
+    # Orden CANCELADA abierta: que falta para cerrarla (custodia, devolucion
+    # fisica, saldo a favor). Vacio en los demas casos.
+    pendientes_de_cierre: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -1141,7 +1405,9 @@ class OrdenOut(BaseModel):
         acciones_cancelacion: Sequence[AccionDisponible] = (),
         acciones_autorizacion: Sequence[AccionDisponible] = (),
         acciones_financieras: Sequence[AccionDisponible] = (),
+        acciones_custodia: Sequence[AccionDisponible] = (),
     ) -> "OrdenOut":
+        vigentes = _vigentes(orden)
         return cls(
             id=orden.id,
             origen=orden.origen,
@@ -1235,6 +1501,28 @@ class OrdenOut(BaseModel):
                 else None
             ),
             devolucion_pendiente=devolucion_pendiente(orden),
+            recepcion=(
+                RecepcionOut.desde_dominio(orden.recepcion)
+                if orden.recepcion is not None
+                else None
+            ),
+            custodia=CustodiaOut.desde_dominio(orden),
+            entrega=(
+                DevolucionOut(**orden.entrega.model_dump())
+                if orden.entrega is not None
+                else None
+            ),
+            documentos_emitidos=[
+                DocumentoResumenOut(
+                    **documento.model_dump(exclude={"contenido", "orden_id"}),
+                    vigente=documento.id in vigentes,
+                )
+                for documento in orden.documentos.emitidos
+            ],
+            acciones_custodia=[
+                AccionOut.desde_dominio(accion) for accion in acciones_custodia
+            ],
+            pendientes_de_cierre=pendientes_para_cerrar(orden),
             created_at=orden.created_at,
             updated_at=orden.updated_at,
         )
@@ -1389,6 +1677,30 @@ class MovimientoFinancieroOut(BaseModel):
             usuario_id=movimiento.usuario_id,
             detalle=movimiento.detalle,
         )
+
+
+class DocumentosOrdenOut(BaseModel):
+    """``GET /api/orders/{id}/documents``.
+
+    ``emitidos``: todas las versiones, con su contenido. ``marcas``: lo que
+    registro el proceso (una Orden anterior puede tener la marca sin copia
+    del documento). ``previsualizables``: tipos con vista previa ahora.
+    """
+
+    orden_id: str
+    cerrada: bool
+    emitidos: list[DocumentoEmitidoOut]
+    marcas: DocumentosOut
+    previsualizables: list[TipoDocumento]
+
+
+class VistaPreviaDocumentoOut(BaseModel):
+    """Contenido de un documento con los datos vigentes. NO esta emitido."""
+
+    orden_id: str
+    tipo: TipoDocumento
+    vista_previa: bool = True
+    contenido: ContenidoDocumento
 
 
 class FinanzasOrdenOut(BaseModel):

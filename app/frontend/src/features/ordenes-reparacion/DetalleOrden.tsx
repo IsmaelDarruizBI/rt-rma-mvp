@@ -116,6 +116,21 @@ export function CabeceraOrden({
               estaciones={estaciones}
             />
           )}
+          {orden.entrega && (
+            <p style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
+              <strong>
+                {orden.entrega.tipo === "DEVOLUCION_SIN_REPARACION"
+                  ? "Devuelto sin reparación"
+                  : "Entregado"}
+              </strong>{" "}
+              a {orden.entrega.recibido_por}
+              {orden.entrega.identificacion_receptor
+                ? ` (${orden.entrega.identificacion_receptor})`
+                : ""}{" "}
+              por {nombreDeUsuario(usuarios, orden.entrega.entregado_por)} ·{" "}
+              {fechaCorta(orden.entrega.fecha)}
+            </p>
+          )}
           {orden.devolucion && (
             <p style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
               <strong>Equipo devuelto</strong> a {orden.devolucion.recibido_por}{" "}

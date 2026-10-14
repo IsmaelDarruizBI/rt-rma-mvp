@@ -161,6 +161,128 @@ export function FormularioAltaOrden({
   );
 }
 
+/**
+ * Datos del ingreso físico, comunes a los dos orígenes: identificadores
+ * del equipo (opcionales: no todo equipo tiene IMEI) y condiciones en que
+ * se recibe. La recepción física se confirma después, en la Orden.
+ */
+interface Ingreso {
+  imei: string;
+  numeroSerie: string;
+  estadoFisico: string;
+  accesorios: string;
+  observaciones: string;
+}
+
+function ingresoInicial(): Ingreso {
+  return {
+    imei: "",
+    numeroSerie: "",
+    estadoFisico: "Sin golpes ni marcas visibles.",
+    accesorios: "Cargador",
+    observaciones: "",
+  };
+}
+
+function textoONulo(valor: string): string | null {
+  return valor.trim() || null;
+}
+
+/** "Cargador, funda" -> ["Cargador", "funda"]. */
+export function listaDeAccesorios(texto: string): string[] {
+  return texto
+    .split(",")
+    .map((accesorio) => accesorio.trim())
+    .filter(Boolean);
+}
+
+function datosDeIngreso(ingreso: Ingreso) {
+  return {
+    identificadores: {
+      imei: textoONulo(ingreso.imei),
+      numero_serie: textoONulo(ingreso.numeroSerie),
+    },
+    recepcion: {
+      estado_fisico: textoONulo(ingreso.estadoFisico),
+      accesorios: listaDeAccesorios(ingreso.accesorios),
+      observaciones: textoONulo(ingreso.observaciones),
+    },
+  };
+}
+
+function CamposIngreso({
+  ingreso,
+  onCambiar,
+}: {
+  ingreso: Ingreso;
+  onCambiar: (ingreso: Ingreso) => void;
+}) {
+  const cambiar =
+    (clave: keyof Ingreso) =>
+    (evento: { target: { value: string } }) =>
+      onCambiar({ ...ingreso, [clave]: evento.target.value });
+  return (
+    <>
+      <div
+        style={{
+          display: "grid",
+          columnGap: "0.6rem",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+        }}
+      >
+        <Campo etiqueta="IMEI (si tiene)">
+          <input
+            value={ingreso.imei}
+            onChange={cambiar("imei")}
+            style={estiloInput}
+            inputMode="numeric"
+          />
+        </Campo>
+        <Campo etiqueta="N.º de serie (si tiene)">
+          <input
+            value={ingreso.numeroSerie}
+            onChange={cambiar("numeroSerie")}
+            style={estiloInput}
+          />
+        </Campo>
+      </div>
+      <Campo etiqueta="Estado físico al recibirlo">
+        <textarea
+          value={ingreso.estadoFisico}
+          onChange={cambiar("estadoFisico")}
+          rows={2}
+          style={{ ...estiloInput, resize: "vertical" }}
+        />
+      </Campo>
+      <Campo etiqueta="Accesorios recibidos (separados por coma)">
+        <input
+          value={ingreso.accesorios}
+          onChange={cambiar("accesorios")}
+          placeholder="Cargador, funda, chip"
+          style={estiloInput}
+        />
+      </Campo>
+      <Campo etiqueta="Observaciones iniciales">
+        <input
+          value={ingreso.observaciones}
+          onChange={cambiar("observaciones")}
+          style={estiloInput}
+        />
+      </Campo>
+      <p
+        style={{
+          margin: "0 0 0.6rem",
+          fontSize: "0.75rem",
+          color: colores.suave,
+        }}
+      >
+        La recepción física del equipo se confirma después, en la Orden: el
+        comprobante no la prueba.
+      </p>
+    </>
+  );
+}
+
 /** Campos del alta de cliente externo (dentro de "Nueva Orden"). */
 export function FormularioNuevaOrden({
   actor,
@@ -176,6 +298,7 @@ export function FormularioNuevaOrden({
   const [marca, setMarca] = useState("Apple");
   const [modelo, setModelo] = useState("iPhone 14");
   const [falla, setFalla] = useState("La batería dura poco.");
+  const [ingreso, setIngreso] = useState<Ingreso>(ingresoInicial);
 
   const esRecepcion = actor?.rol === "RECEPCION";
   const completo = nombre && telefono && marca && modelo && falla;
@@ -221,17 +344,19 @@ export function FormularioNuevaOrden({
           style={estiloInput}
         />
       </Campo>
-      <Campo etiqueta="Falla reportada">
+      <Campo etiqueta="Falla declarada por el cliente">
         <input
           value={falla}
           onChange={(evento) => setFalla(evento.target.value)}
           style={estiloInput}
         />
       </Campo>
+      <CamposIngreso ingreso={ingreso} onCambiar={setIngreso} />
       <Boton
         disabled={!esRecepcion || ocupado || !completo || !actor}
-        onClick={() =>
-          actor &&
+        onClick={() => {
+          if (!actor) return;
+          const { identificadores, recepcion } = datosDeIngreso(ingreso);
           onCrear({
             usuario_id: actor.id,
             cliente: { nombre, telefono },
@@ -239,9 +364,11 @@ export function FormularioNuevaOrden({
               marca,
               modelo,
               falla_reportada: falla,
+              ...identificadores,
             },
-          })
-        }
+            recepcion,
+          });
+        }}
       >
         Crear Orden
       </Boton>
@@ -263,6 +390,7 @@ export function FormularioNuevaOrdenRt({
   const [modelo, setModelo] = useState("Moto G84");
   const [falla, setFalla] = useState("No enciende.");
   const [referenciaRt, setReferenciaRt] = useState("RT-INGRESO-0001");
+  const [ingreso, setIngreso] = useState<Ingreso>(ingresoInicial);
 
   const esRecepcion = actor?.rol === "RECEPCION";
   const completo = marca && modelo && falla && referenciaRt;
@@ -308,20 +436,24 @@ export function FormularioNuevaOrdenRt({
           style={estiloInput}
         />
       </Campo>
+      <CamposIngreso ingreso={ingreso} onCambiar={setIngreso} />
       <Boton
         disabled={!esRecepcion || ocupado || !completo || !actor}
-        onClick={() =>
-          actor &&
+        onClick={() => {
+          if (!actor) return;
+          const { identificadores, recepcion } = datosDeIngreso(ingreso);
           onCrear({
             usuario_id: actor.id,
             equipo: {
               marca,
               modelo,
               falla_reportada: falla,
+              ...identificadores,
             },
             referencia_rt: referenciaRt,
-          })
-        }
+            recepcion,
+          });
+        }}
       >
         Crear Orden RT
       </Boton>

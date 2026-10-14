@@ -26,6 +26,7 @@ import {
   type EjecutorAcciones,
 } from "./AccionesOrden";
 import { AutorizacionClienteOrden } from "./AutorizacionCliente";
+import { CustodiaOrden } from "./CustodiaOrden";
 import {
   CabeceraOrden,
   DetallesOrden,
@@ -33,6 +34,7 @@ import {
   HistorialOrden,
   ProgresoHappyPath,
 } from "./DetalleOrden";
+import { DocumentosOrden } from "./DocumentosOrden";
 import { PagosYMovimientos } from "./PagosOrden";
 import {
   FormularioAltaOrden,
@@ -220,8 +222,8 @@ export function PanelOrdenes() {
       void ejecutarComando(() => api.liberarOrden(idOrden, idActor)),
     notificar: () =>
       void ejecutarComando(() => api.notificar(idOrden, idActor)),
-    entregar: () =>
-      void ejecutarComando(() => api.entregar(idOrden, idActor)),
+    entregar: (retiro) =>
+      void ejecutarComando(() => api.entregar(idOrden, idActor, retiro)),
     informarRt: () => void ejecutarComando(() => api.informarRt(idOrden)),
     devolverRt: () =>
       void ejecutarComando(() => api.devolverRt(idOrden, idActor)),
@@ -258,14 +260,9 @@ export function PanelOrdenes() {
       void ejecutarComando(() =>
         api.rechazarControl(idOrden, idActor, detalleId, motivo),
       ),
-    registrarDevolucion: (recibidoPor, observaciones) =>
+    registrarDevolucion: (retiro) =>
       void ejecutarComando(() =>
-        api.registrarDevolucion(
-          idOrden,
-          idActor,
-          recibidoPor,
-          observaciones || null,
-        ),
+        api.registrarDevolucion(idOrden, idActor, retiro),
       ),
     cancelarDetalle: (detalleId, motivo) =>
       void ejecutarComando(() =>
@@ -327,6 +324,32 @@ export function PanelOrdenes() {
               orden={orden}
               usuarios={usuarios}
               estaciones={estaciones}
+            />
+            <CustodiaOrden
+              orden={orden}
+              actor={actor}
+              usuarios={usuarios}
+              ocupado={ocupado}
+              onRegistrar={(datos, equipo) =>
+                void ejecutarComando(() =>
+                  api.registrarRecepcion(idOrden, idActor, datos, equipo),
+                )
+              }
+              onConfirmar={(observaciones) =>
+                void ejecutarComando(() =>
+                  api.confirmarRecepcion(idOrden, idActor, observaciones),
+                )
+              }
+              onNoRecibido={(motivo) =>
+                void ejecutarComando(() =>
+                  api.registrarEquipoNoRecibido(idOrden, idActor, motivo),
+                )
+              }
+              onObservar={(texto) =>
+                void ejecutarComando(() =>
+                  api.agregarObservacionRecepcion(idOrden, idActor, texto),
+                )
+              }
             />
             <DetallesOrden orden={orden} />
             <AutorizacionClienteOrden
@@ -396,6 +419,17 @@ export function PanelOrdenes() {
               onDevolver={(datos) =>
                 void ejecutarComando(() =>
                   api.devolverDinero(idOrden, idActor, datos),
+                )
+              }
+            />
+            <DocumentosOrden
+              orden={orden}
+              actor={actor}
+              usuarios={usuarios}
+              ocupado={ocupado}
+              onEmitirRecepcion={(motivo) =>
+                void ejecutarComando(() =>
+                  api.emitirComprobanteRecepcion(idOrden, idActor, motivo),
                 )
               }
             />

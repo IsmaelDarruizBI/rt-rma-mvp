@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     # a este default, para no tocar los JSON DEMO versionados.
     data_dir: Path = DATA_DIR_POR_DEFECTO
 
+    # Desfasaje horario del negocio respecto de UTC, en horas. Las fechas
+    # se guardan en UTC; este valor solo fija el dia calendario local (por
+    # ejemplo, el vencimiento de una garantia). Argentina: -3, sin horario
+    # de verano. Fijo a proposito: no depende de la base de zonas horarias
+    # del sistema operativo.
+    utc_offset_horas: int = -3
+
     @property
     def ordenes_dir(self) -> Path:
         """Directorio de las Ordenes persistidas."""

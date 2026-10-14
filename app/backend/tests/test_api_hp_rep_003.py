@@ -25,6 +25,7 @@ from tests.fixtures.api_definicion import (
     finalizar_definicion,
     registrar_decision,
 )
+from tests.fixtures.custodia import entregar
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     COORDINADOR,
@@ -113,9 +114,7 @@ def _orden_entregada(cliente: TestClient) -> dict:
             "metodo": "EFECTIVO",
         },
     )
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/deliver", json={"usuario_id": ADMINISTRADOR}
-    )
+    respuesta = entregar(cliente, orden_id, ADMINISTRADOR)
     assert respuesta.status_code == 200, respuesta.text
     orden = respuesta.json()
     assert orden["estado_workflow"] == "ENTREGADA"
@@ -263,9 +262,7 @@ def test_hp_rep_003_end_to_end_por_http(cliente):
     assert "PROC-REP-266" not in _ids(orden)
 
     # PROC-REP-280 -> 270 -> EVT-REP-999.
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/deliver", json={"usuario_id": ADMINISTRADOR}
-    )
+    respuesta = entregar(cliente, orden_id, ADMINISTRADOR)
     assert respuesta.status_code == 200, respuesta.text
     orden = respuesta.json()
 
@@ -441,9 +438,7 @@ def test_garantia_no_puede_entregarse_sin_notificar_ni_pasar_por_265(cliente):
     referencias = _referencias(cliente, orden_id)
     assert referencias[-2:] == ["PROC-REP-260", "PROC-REP-265"]
 
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/deliver", json={"usuario_id": ADMINISTRADOR}
-    )
+    respuesta = entregar(cliente, orden_id, ADMINISTRADOR)
     assert respuesta.status_code == 200, respuesta.text
     assert respuesta.json()["estado_workflow"] == "ENTREGADA"
 
@@ -489,9 +484,7 @@ def test_cliente_externo_pagado_por_adelantado_tampoco_saltea_265(cliente):
     cliente.post(
         f"/api/orders/{orden_id}/notify", json={"usuario_id": RECEPCION}
     )
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/deliver", json={"usuario_id": ADMINISTRADOR}
-    )
+    respuesta = entregar(cliente, orden_id, ADMINISTRADOR)
     assert respuesta.status_code == 200, respuesta.text
 
 
@@ -550,9 +543,7 @@ def test_pago_total_en_reparacion_lista_no_ejecuta_265(cliente):
     assert referencias[-3:] == ["PROC-REP-250", "PROC-REP-260", "PROC-REP-265"]
     assert orden["puede_entregar"] is True
 
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/deliver", json={"usuario_id": ADMINISTRADOR}
-    )
+    respuesta = entregar(cliente, orden_id, ADMINISTRADOR)
     assert respuesta.status_code == 200, respuesta.text
 
 
@@ -598,9 +589,7 @@ def test_pago_final_en_completar_cobro_aprueba_265_y_permite_entregar(
     assert orden["puede_entregar"] is True
     assert Decimal(orden["resumen"]["saldo"]) <= 0
 
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/deliver", json={"usuario_id": ADMINISTRADOR}
-    )
+    respuesta = entregar(cliente, orden_id, ADMINISTRADOR)
     assert respuesta.status_code == 200, respuesta.text
 
 
@@ -674,10 +663,7 @@ def _entregada_con_dos_detalles(cliente: TestClient) -> dict:
             "metodo": "EFECTIVO",
         },
     )
-    orden = cliente.post(
-        f"/api/orders/{orden_id}/deliver",
-        json={"usuario_id": multi.ADMINISTRADOR},
-    ).json()
+    orden = entregar(cliente, orden_id, multi.ADMINISTRADOR).json()
     assert orden["estado_workflow"] == "ENTREGADA", orden
     return orden
 

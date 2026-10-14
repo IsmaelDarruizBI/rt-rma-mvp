@@ -83,7 +83,7 @@ function nombreDeMedio(medios: MedioPago[], medioId: string | null): string {
   return medios.find((medio) => medio.id === medioId)?.nombre ?? medioId;
 }
 
-function habilitada(accion: Accion, actor: Usuario | null): boolean {
+export function habilitada(accion: Accion, actor: Usuario | null): boolean {
   return (
     actor !== null &&
     (accion.roles.length === 0 || accion.roles.includes(actor.rol))
@@ -323,7 +323,7 @@ function ListaMovimientos({
   );
 }
 
-function Seccion({
+export function Seccion({
   titulo,
   accion,
   actor,
@@ -644,7 +644,7 @@ function FormularioAnulacion({
   );
 }
 
-function Confirmacion({
+export function Confirmacion({
   texto,
   ocupado,
   onConfirmar,

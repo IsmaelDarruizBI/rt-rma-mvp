@@ -26,6 +26,7 @@ from decimal import Decimal
 from app.domain.models import (
     CondicionReparacionDetail,
     EstadoControl,
+    EstadoCustodia,
     EstadoReparacionDetail,
     EstadoWorkflow,
     OrdenReparacion,
@@ -34,9 +35,13 @@ from app.domain.models import (
 from app.domain.politicas import CondicionComercial, politica_de
 from app.services import (
     ROLES_CANCELACION,
+    ROLES_RECEPCION_EQUIPO,
+    custodia_por_definir,
     devolucion_pendiente,
     ejecucion_activa,
     es_trabajable,
+    estado_custodia,
+    evidencias_de_equipo,
     pendiente_de_autorizacion,
     requiere_definicion,
     revision_vigente,
@@ -102,6 +107,11 @@ ACCION_DESISTIR_DETALLE = "DESISTIR_DETALLE"
 ACCION_DESISTIR_TODO = "DESISTIR_TODO"
 ACCION_ANULAR_PAGO = "ANULAR_PAGO"
 ACCION_DEVOLVER_DINERO = "REGISTRAR_DEVOLUCION_DINERO"
+ACCION_REGISTRAR_DATOS_RECEPCION = "REGISTRAR_DATOS_RECEPCION"
+ACCION_CONFIRMAR_RECEPCION = "CONFIRMAR_RECEPCION"
+ACCION_EQUIPO_NO_RECIBIDO = "REGISTRAR_EQUIPO_NO_RECIBIDO"
+ACCION_AGREGAR_OBSERVACION_RECEPCION = "AGREGAR_OBSERVACION_RECEPCION"
+ACCION_EMITIR_COMPROBANTE_RECEPCION = "EMITIR_COMPROBANTE_RECEPCION"
 
 # Terminales de un Detalle: lo realizado y lo cancelado (BR-REP-012).
 _TERMINALES = (
@@ -742,4 +752,92 @@ def acciones_financieras(orden: OrdenReparacion) -> list[AccionDisponible]:
         for pago in orden.resumen_pago.pagos
         if anulable(orden, pago)
     )
+    return acciones
+
+
+def acciones_de_custodia(orden: OrdenReparacion) -> list[AccionDisponible]:
+    """Recepcion fisica y comprobante de recepcion, si corresponden ahora.
+
+    Aparte de ``acciones_disponibles``: son capacidades transversales que
+    la UI presenta en "Recepcion y custodia" y en "Documentos".
+
+    - Registrar o corregir los datos del ingreso: mientras la recepcion no
+      este confirmada y el equipo no haya salido. En una Orden anterior al
+      registro de recepcion, es la regularizacion.
+    - Confirmar la recepcion fisica: hay datos de ingreso sin decidir.
+    - Registrar "Equipo no recibido": Orden cancelada con la custodia sin
+      definir y sin evidencias de que el equipo estuvo en el local.
+    - Agregar una observacion complementaria: hay datos de ingreso.
+    - Emitir una version nueva del comprobante: el proceso ya emitio el
+      primero (PROC-REP-060).
+
+    Nada en una Orden cerrada.
+    """
+    if orden.esta_cerrada:
+        return []
+    politica = politica_de(orden.origen)
+    estado = estado_custodia(orden)
+    recepcion = orden.recepcion
+    sin_salida = estado not in (
+        EstadoCustodia.ENTREGADO,
+        EstadoCustodia.DEVUELTO,
+    )
+    acciones: list[AccionDisponible] = []
+    if sin_salida and (recepcion is None or not recepcion.decidida):
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_REGISTRAR_DATOS_RECEPCION,
+                etiqueta=(
+                    "Regularizar: registrar los datos del ingreso"
+                    if recepcion is None
+                    else "Corregir los datos del ingreso"
+                ),
+                roles=ROLES_RECEPCION_EQUIPO,
+            )
+        )
+    if (
+        politica.requiere_confirmacion_recepcion
+        and recepcion is not None
+        and not recepcion.decidida
+        and sin_salida
+    ):
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_CONFIRMAR_RECEPCION,
+                etiqueta="Confirmar la recepcion fisica del equipo",
+                roles=ROLES_RECEPCION_EQUIPO,
+            )
+        )
+    if (
+        politica.requiere_confirmacion_recepcion
+        and orden.estado_workflow is EstadoWorkflow.CANCELADA
+        and custodia_por_definir(orden)
+        and not evidencias_de_equipo(orden)
+    ):
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_EQUIPO_NO_RECIBIDO,
+                etiqueta="Confirmar equipo no recibido",
+                roles=ROLES_RECEPCION_EQUIPO,
+            )
+        )
+    if recepcion is not None:
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_AGREGAR_OBSERVACION_RECEPCION,
+                etiqueta="Agregar una observacion complementaria",
+                roles=ROLES_RECEPCION_EQUIPO,
+            )
+        )
+    if (
+        politica.requiere_comprobante_recepcion
+        and orden.documentos.comprobante_recepcion.generado
+    ):
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_EMITIR_COMPROBANTE_RECEPCION,
+                etiqueta="Emitir otra version del comprobante de recepcion",
+                roles=ROLES_RECEPCION_EQUIPO,
+            )
+        )
     return acciones

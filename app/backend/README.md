@@ -93,6 +93,10 @@ GET  /health
 GET  /api/orders
 GET  /api/orders/{orden_id}
 GET  /api/orders/{orden_id}/finances
+GET  /api/orders/{orden_id}/custody
+GET  /api/orders/{orden_id}/documents
+GET  /api/orders/{orden_id}/documents/{documento_id}
+GET  /api/orders/{orden_id}/documents/preview/{tipo}
 GET  /api/catalogs/repair-types | stations | users | payment-methods
 ```
 
@@ -111,7 +115,7 @@ frontera de actor humano:
 | `POST /api/orders/{id}/control/approve` | RECEPCION | 220 → 230 → 245 → 240 |
 | `POST /api/orders/{id}/notify` | RECEPCION | 250 → 260 → 265 [→ 266] |
 | `POST /api/orders/{id}/payments` | ADMINISTRADOR, RECEPCION o COORDINADOR_RMA | `ACC-REP-020` [→ 265 \| 266] |
-| `POST /api/orders/{id}/deliver` | ADMINISTRADOR o RECEPCION | 280 → 270 → EVT-REP-999 |
+| `POST /api/orders/{id}/deliver` | ADMINISTRADOR o RECEPCION | 280 → 270 → EVT-REP-999 (+ comprobante final y garantia) |
 
 Salidas del proceso (cancelacion y rechazo de control). El motivo es
 obligatorio en todas; la Orden se reevalua con el resolver de siempre
@@ -122,7 +126,7 @@ obligatorio en todas; la Orden se reevalua con el resolver de siempre
 | `POST /api/orders/{id}/control/reject` | RECEPCION | 220 → 230 (No) → 235 → 211 [→ 170] |
 | `POST /api/orders/{id}/details/{detalle_id}/cancel` | RECEPCION o COORDINADOR_RMA | 300 → 211 |
 | `POST /api/orders/{id}/cancel` | RECEPCION o COORDINADOR_RMA | 305 → 211, o 306 sin Detalles |
-| `POST /api/orders/{id}/return-equipment` | ADMINISTRADOR o RECEPCION | 270 (devolucion sin reparar) [→ 268] → EVT-REP-999 |
+| `POST /api/orders/{id}/return-equipment` | ADMINISTRADOR o RECEPCION | 270 (devolucion sin reparar, + comprobante) [→ 268] → EVT-REP-999 |
 
 `GET /api/orders/{id}` publica las cancelaciones posibles en
 `acciones_cancelacion`, aparte de `acciones_disponibles`. Una Orden
@@ -218,6 +222,67 @@ usan EFECTIVO, TRANSFERENCIA, TARJETA_DEBITO, TARJETA_CREDITO y OTRO.
 Los roles de anulacion y devolucion son una propuesta del MVP: **negocio
 debe validar la politica final**.
 
+Recepcion fisica, custodia, entrega y documentos:
+
+| Endpoint | Actor | Efecto |
+|---|---|---|
+| `PUT /api/orders/{id}/reception` | RECEPCION o ADMINISTRADOR | `ACC-REP-023`: registra o corrige los datos del ingreso (antes de confirmar) |
+| `POST /api/orders/{id}/reception/confirm` | RECEPCION o ADMINISTRADOR | `ACC-REP-024`: el equipo quedo en el local (custodia) |
+| `POST /api/orders/{id}/reception/not-received` | RECEPCION o ADMINISTRADOR | `ACC-REP-027`: el equipo nunca ingreso (Orden cancelada, motivo obligatorio) [→ 268 → EVT-REP-999] |
+| `POST /api/orders/{id}/reception/notes` | RECEPCION o ADMINISTRADOR | `ACC-REP-025`: observacion complementaria |
+| `POST /api/orders/{id}/documents/reception-receipt` | RECEPCION o ADMINISTRADOR | `ACC-REP-026`: version nueva del comprobante de recepcion (con motivo) |
+
+- **Comprobante != custodia.** El comprobante de recepcion es un
+  documento; la custodia es una decision explicita, con usuario y fecha:
+  se confirma que el equipo esta en el local, o se registra "Equipo no
+  recibido" con motivo. Se consultan por separado (`OrdenOut.custodia`):
+  ninguno implica al otro y nada se deduce. El estado de custodia es
+  derivado (`PENDIENTE_CONFIRMACION`, `SIN_REGISTRO`, `EN_CUSTODIA`,
+  `ENTREGADO`, `DEVUELTO`, `NO_RECIBIDO`).
+- **Cancelacion y custodia.** Una Orden CANCELADA solo cierra cuando el
+  equipo ya no condiciona el cierre (devuelto o "no recibido") y la cuenta
+  esta saldada (PROC-REP-268). Con la custodia sin definir queda abierta:
+  `OrdenOut.pendientes_de_cierre` dice que falta. "Equipo no recibido" se
+  registra una sola vez, solo en una Orden cancelada, y se rechaza si la
+  Orden prueba que el equipo estuvo en el local (recepcion confirmada,
+  salida registrada, tomas, ejecuciones, revision tecnica o control): ese
+  caso se regulariza confirmando la recepcion y devolviendo el equipo.
+  Nunca se emite comprobante de devolucion para un equipo no recibido.
+- **Datos del ingreso.** El alta (`POST /api/orders`, `.../rt-interno`,
+  `.../warranty-rma`) acepta `recepcion` (estado fisico, accesorios,
+  observaciones). IMEI y numero de serie son opcionales. Antes de
+  confirmar se corrigen (equipo incluido) y cada version anterior queda
+  en `recepcion.versiones_anteriores`; confirmada, solo se agregan
+  observaciones. Confirmar exige el estado fisico registrado.
+- **Entrega.** Exige, despues de la condicion comercial de siempre, la
+  custodia confirmada y quien retira (`recibido_por`; DNI u otra
+  identificacion opcional). Queda en `orden.entrega` y en la misma
+  operacion se emiten el comprobante final y la garantia. La devolucion
+  de una Orden CANCELADA exige la custodia confirmada, emite el
+  comprobante de devolucion sin reparacion y la Orden sigue CANCELADA.
+  RT_INTERNO conserva su circuito: llega y vuelve a Gestion RT sin
+  confirmacion de recepcion ni documentos al cliente.
+- **Documentos.** Cada emision guarda un snapshot inmutable
+  (`documentos.emitidos`): el comprobante de recepcion al pasar por
+  PROC-REP-060, y el comprobante final y la garantia al entregar. Una
+  version nueva exige motivo y conserva la anterior; volver a emitir el
+  mismo contenido devuelve la vigente (un reintento no duplica). La vista
+  previa (`.../preview/{tipo}`) no emite ni guarda nada. Los documentos
+  de una Orden cerrada se siguen consultando.
+- **Garantia.** Un trabajo realizado y aprobado por Detalle, con su
+  propio `garantia_dias` (snapshot). Empieza con la entrega efectiva;
+  vence el dia local de la entrega + el plazo (`RMA_UTC_OFFSET_HORAS`).
+  En una garantia RMA conserva la Orden original y los Detalles
+  reclamados. Sin cobros: una Orden no cobrable no muestra importes.
+- **Ordenes anteriores.** Sin registro de recepcion no se presume la
+  custodia: para entregarlas o devolverlas se regulariza (datos del
+  ingreso + confirmacion con una observacion obligatoria, marcada como
+  `REGULARIZACION`). Sus marcas de documentos se conservan, sin inventar
+  una copia del contenido.
+
+Los roles de recepcion y custodia son una propuesta del MVP: **negocio
+debe validar la politica final**.
+
 Errores: `404` no encontrado · `409` precondicion invalida o recurso no
 disponible · `422` request mal formado · `500` fallo de infraestructura
 (sin filtrar detalle interno).
@@ -232,6 +297,7 @@ Variables de entorno con prefijo `RMA_` (ver `app/core/config.py`):
 | `RMA_APP_VERSION` | `0.1.0` |
 | `RMA_DATA_DIR` | `app/backend/data` |
 | `RMA_CORS_ALLOW_ORIGINS` | `["http://localhost:5173","http://127.0.0.1:5173"]` |
+| `RMA_UTC_OFFSET_HORAS` | `-3` (dia local de los vencimientos de garantia) |
 
 `RMA_DATA_DIR` decide donde viven `ordenes/` y `catalogs/`. Los tests
 siempre usan `tmp_path`: nunca escriben sobre los catalogos DEMO
@@ -249,6 +315,11 @@ RECEP-001 · COORD-001 · TECH-001 · ADMIN-001
 ```
 
 No contienen datos reales ni informacion personal.
+
+Opcional: `empresa.json` (un objeto: `nombre`, `razon_social`, `cuit`,
+`direccion`, `telefono`, `email`, `condiciones_garantia`) identifica a la
+empresa en los documentos. Sin el archivo figura "Rosario Tecno" sin
+condiciones de garantia: el sistema no las inventa.
 
 ## Compatibilidad de persistencia del MVP
 
@@ -271,6 +342,12 @@ Concretamente:
   `referencia`, `operacion_id`, `anulacion` y `resumen_pago.devoluciones`
   tienen default, y el tipo historico `PAGO` sigue aceptandose (los pagos
   nuevos son ANTICIPO, PARCIAL o FINAL).
+- Recepcion, custodia y documentos **si** cargan Ordenes anteriores:
+  `recepcion`, `entrega` y `documentos.emitidos` tienen default, y una
+  `devolucion` sin `tipo` se lee como DEVOLUCION_SIN_REPARACION (era la
+  unica posible). La custodia de esas Ordenes queda `SIN_REGISTRO`, y
+  un registro sin `no_recibido` sigue pendiente: "no recibido" nunca se
+  infiere.
 - Para el MVP se espera **recrear o resetear** los datos locales
   generados con versiones anteriores: borrar `data/ordenes/*.json`.
 - Esto debera resolverse con migraciones reales cuando exista una

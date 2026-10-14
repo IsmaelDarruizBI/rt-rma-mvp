@@ -158,12 +158,228 @@ export interface DecisionDetalle {
   resultado: ResultadoAutorizacion;
 }
 
-/** Devolución física del equipo de una Orden CANCELADA (PROC-REP-270). */
+/** Qué se le entrega a quien retira (lo decide el backend). */
+export type TipoEntrega = "REPARACION_TERMINADA" | "DEVOLUCION_SIN_REPARACION";
+
+/**
+ * Salida física del equipo (PROC-REP-270): la entrega de la Orden o la
+ * devolución sin reparar de una Orden CANCELADA.
+ */
 export interface Devolucion {
+  tipo: TipoEntrega;
   entregado_por: string;
   recibido_por: string;
+  identificacion_receptor: string | null;
   fecha: string;
   observaciones: string | null;
+}
+
+/**
+ * Dónde está el equipo. Independiente del comprobante de recepción: emitir
+ * un documento no prueba que el equipo esté en el local.
+ */
+export type EstadoCustodia =
+  | "PENDIENTE_CONFIRMACION"
+  | "SIN_REGISTRO"
+  | "EN_CUSTODIA"
+  | "ENTREGADO"
+  | "DEVUELTO"
+  | "NO_RECIBIDO";
+
+export interface DatosRecepcion {
+  estado_fisico: string | null;
+  accesorios: string[];
+  observaciones: string | null;
+}
+
+/** Datos del ingreso reemplazados por una corrección (antes de confirmar). */
+export interface VersionRecepcion {
+  equipo: Equipo;
+  datos: DatosRecepcion;
+  registrado_por: string;
+  registrado_en: string;
+  reemplazado_por: string;
+  reemplazado_en: string;
+}
+
+export interface Recepcion {
+  /** INGRESO al crear la Orden; REGULARIZACION en una Orden anterior. */
+  registro: "INGRESO" | "REGULARIZACION";
+  datos: DatosRecepcion;
+  registrado_por: string;
+  registrado_en: string;
+  versiones_anteriores: VersionRecepcion[];
+  confirmacion: {
+    usuario_id: string;
+    fecha: string;
+    observaciones: string | null;
+  } | null;
+  /** Decisión explícita: el equipo nunca ingresó (nunca se deduce). */
+  no_recibido: { usuario_id: string; fecha: string; motivo: string } | null;
+  notas: { usuario_id: string; fecha: string; texto: string }[];
+}
+
+export interface Custodia {
+  estado: EstadoCustodia;
+  /** El Origen exige confirmar la recepción (RT_INTERNO no). */
+  confirmacion_requerida: boolean;
+  confirmada_por: string | null;
+  confirmada_en: string | null;
+  /** Otro hecho: no prueba la custodia. */
+  comprobante_recepcion_emitido: boolean;
+  salida: Devolucion | null;
+}
+
+export type TipoDocumento =
+  | "COMPROBANTE_RECEPCION"
+  | "COMPROBANTE_ENTREGA"
+  | "GARANTIA";
+
+/** Documento emitido, sin contenido (listado en la Orden). */
+export interface DocumentoResumen {
+  id: string;
+  tipo: TipoDocumento;
+  version: number;
+  fecha_emision: string;
+  usuario_id: string | null;
+  motivo: string | null;
+  reemplaza_a: string | null;
+  /** Es la última versión emitida de su tipo. */
+  vigente: boolean;
+}
+
+export interface UsuarioEnDocumento {
+  id: string;
+  nombre: string;
+}
+
+export interface EmpresaEnDocumento {
+  nombre: string;
+  razon_social: string | null;
+  cuit: string | null;
+  direccion: string | null;
+  telefono: string | null;
+  email: string | null;
+  condiciones_garantia: string | null;
+}
+
+export interface TrabajoEnDocumento {
+  detalle_id: string;
+  tipo_reparacion_id: string;
+  nombre: string;
+  /** `null` si la Orden no se cobra: no se muestran cobros inexistentes. */
+  precio: string | null;
+  detalle_origen_id: string | null;
+}
+
+interface ContenidoBase {
+  empresa: EmpresaEnDocumento;
+  orden_id: string;
+  origen: OrigenOrden;
+  fecha_ingreso: string;
+  cliente: Cliente | null;
+  referencia_rt: string | null;
+  equipo: Equipo;
+  orden_origen_id: string | null;
+  detalles_reclamados: TrabajoEnDocumento[];
+}
+
+export interface ContenidoRecepcion extends ContenidoBase {
+  tipo: "COMPROBANTE_RECEPCION";
+  estado_fisico: string | null;
+  accesorios: string[];
+  observaciones: string | null;
+  notas: string[];
+  registrado_por: UsuarioEnDocumento | null;
+  registrado_en: string | null;
+  recepcion_fisica: EstadoCustodia;
+  confirmada_por: UsuarioEnDocumento | null;
+  confirmada_en: string | null;
+  leyenda: string;
+}
+
+export interface ContenidoEntrega extends ContenidoBase {
+  tipo: "COMPROBANTE_ENTREGA";
+  estado_final: EstadoWorkflow;
+  tipo_entrega: TipoEntrega;
+  resultado: string;
+  fecha_entrega: string | null;
+  entregado_por: UsuarioEnDocumento | null;
+  recibido_por: string | null;
+  identificacion_receptor: string | null;
+  observaciones_entrega: string | null;
+  trabajos_realizados: TrabajoEnDocumento[];
+  trabajos_cancelados: (TrabajoEnDocumento & {
+    motivo: string | null;
+    origen_cancelacion: string | null;
+  })[];
+  cobrable: boolean;
+  total: string | null;
+  pagado: string | null;
+  devuelto: string | null;
+  saldo: string | null;
+  pagos: {
+    id: string;
+    fecha: string;
+    tipo_pago: TipoPago;
+    medio: string;
+    monto: string;
+    referencia: string | null;
+  }[];
+  devoluciones_dinero: {
+    id: string;
+    pago_id: string;
+    fecha: string;
+    medio: string;
+    monto: string;
+    motivo: string;
+  }[];
+}
+
+export interface ContenidoGarantia extends ContenidoBase {
+  tipo: "GARANTIA";
+  /** Entrega efectiva; `null` en una vista previa anterior a la entrega. */
+  fecha_inicio: string | null;
+  coberturas: {
+    detalle_id: string;
+    tipo_reparacion_id: string;
+    nombre: string;
+    garantia_dias: number;
+    /** Último día de garantía; `null` sin plazo o sin entrega todavía. */
+    vence: string | null;
+    detalle_origen_id: string | null;
+    observaciones: string | null;
+  }[];
+  condiciones: string | null;
+  observaciones_entrega: string | null;
+}
+
+export type ContenidoDocumento =
+  | ContenidoRecepcion
+  | ContenidoEntrega
+  | ContenidoGarantia;
+
+/** Documento emitido con su contenido, tal como se entregó. */
+export interface DocumentoEmitido extends DocumentoResumen {
+  orden_id: string;
+  contenido: ContenidoDocumento;
+}
+
+/** `GET .../documents`. */
+export interface DocumentosDeOrden {
+  orden_id: string;
+  cerrada: boolean;
+  emitidos: DocumentoEmitido[];
+  marcas: Documentos;
+  previsualizables: TipoDocumento[];
+}
+
+/** `GET .../documents/preview/{tipo}`: NO está emitido. */
+export interface VistaPreviaDocumento {
+  orden_id: string;
+  tipo: TipoDocumento;
+  vista_previa: true;
+  contenido: ContenidoDocumento;
 }
 
 /** INTERRUMPIDO y COMPLETADO son los resultados terminales de PROC-REP-200. */
@@ -508,6 +724,16 @@ export interface Orden {
   devolucion: Devolucion | null;
   /** Orden CANCELADA con el equipo todavía en custodia. */
   devolucion_pendiente: boolean;
+  /** Datos del ingreso físico; `null` en una Orden anterior a este registro. */
+  recepcion: Recepcion | null;
+  custodia: Custodia;
+  /** Orden ENTREGADA: quién retiró el equipo. */
+  entrega: Devolucion | null;
+  documentos_emitidos: DocumentoResumen[];
+  /** Registrar/corregir el ingreso, confirmar (o "no recibido"), observar, re-emitir. */
+  acciones_custodia: Accion[];
+  /** Orden CANCELADA abierta: qué falta para cerrarla. */
+  pendientes_de_cierre: string[];
   created_at: string;
   updated_at: string;
   /** Solo lo devuelven notificar y registrar pago (PROC-REP-265). */

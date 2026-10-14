@@ -3,6 +3,7 @@
     cancelar_detalle      PROC-REP-300 -> 211 [-> CANCELADA | 120 | 125 ...]
     cancelar_orden        PROC-REP-305 -> 211, o PROC-REP-306 sin Detalles
     registrar_devolucion  PROC-REP-270 (Orden CANCELADA) -> EVT-REP-999
+                          (+ comprobante de devolucion sin reparacion)
 
 Como el resto de los comandos, cargan la Orden por
 ``orden_para_modificar`` (seccion critica y Orden cerrada) y la guardan una
@@ -20,6 +21,7 @@ from app.services import (
 )
 
 from .contexto import ApplicationContext
+from .documentos import emitir_documentos_de_salida
 from .modificacion import orden_para_modificar
 
 
@@ -81,8 +83,13 @@ def registrar_devolucion(
     usuario_id: str,
     recibido_por: str,
     observaciones: str | None = None,
+    identificacion_receptor: str | None = None,
 ) -> OrdenReparacion:
-    """Devolucion fisica del equipo de una Orden CANCELADA (270 -> fin)."""
+    """Devolucion fisica del equipo de una Orden CANCELADA (270 -> fin).
+
+    Emite el comprobante de devolucion sin reparacion (no una entrega de
+    reparacion terminada, ni garantia). La Orden sigue CANCELADA.
+    """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
@@ -92,7 +99,11 @@ def registrar_devolucion(
             usuario=usuario,
             recibido_por=recibido_por,
             observaciones=observaciones,
+            identificacion_receptor=identificacion_receptor,
             fecha=fecha,
+        )
+        orden = emitir_documentos_de_salida(
+            contexto, orden, usuario_id=usuario.id, fecha=fecha
         )
         contexto.ordenes.guardar(orden)
     return orden

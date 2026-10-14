@@ -13,10 +13,11 @@ from .enums import (
     EstadoWorkflow,
     OrigenOrden,
 )
-from .equipos import DevolucionEquipo, Equipo
+from .equipos import EntregaEquipo, Equipo
 from .inventario import MovimientoInsumo
 from .pagos import ResumenPago
 from .personas import Cliente
+from .recepcion import RecepcionEquipo
 from .reparacion import EjecucionReparacion, ReparacionDetail, TomaOrden
 from .workflow import HistorialWorkflow
 
@@ -81,9 +82,17 @@ class OrdenReparacion(BaseModel):
 
     historial: list[HistorialWorkflow] = Field(default_factory=list)
 
+    # Datos del ingreso fisico y confirmacion de custodia. ``None`` solo en
+    # una Orden anterior a este registro: no se presume su custodia.
+    recepcion: RecepcionEquipo | None = None
+
     # PROC-REP-270 tras una cancelacion: devolucion fisica del equipo sin
     # reparar. Default None: un JSON anterior sigue cargando.
-    devolucion: DevolucionEquipo | None = None
+    devolucion: EntregaEquipo | None = None
+
+    # PROC-REP-270 de la entrega (Orden ENTREGADA): quien retiro el equipo.
+    # ``None`` en una Orden entregada antes de este registro.
+    entrega: EntregaEquipo | None = None
 
     created_at: datetime
     updated_at: datetime

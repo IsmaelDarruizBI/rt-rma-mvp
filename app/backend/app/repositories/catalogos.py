@@ -14,6 +14,7 @@ from decimal import Decimal
 from typing import Protocol, runtime_checkable
 
 from app.domain.models import (
+    DatosEmpresa,
     EstacionTrabajo,
     Insumo,
     MedioPago,
@@ -94,4 +95,10 @@ class CatalogosRepository(Protocol):
 
     def obtener_medio_pago(self, medio_id: str) -> MedioPago:
         """Lanza ``EntidadPersistidaNoEncontradaError`` si no existe."""
+        ...
+
+    # --- Identificacion de la empresa en los documentos ---
+
+    def obtener_datos_empresa(self) -> DatosEmpresa:
+        """Datos configurados (o los predeterminados si no hay)."""
         ...

@@ -82,6 +82,24 @@ class TipoReparacionEstacion(BaseModel):
     estacion_id: str
 
 
+class DatosEmpresa(BaseModel):
+    """Identificacion de Rosario Tecno en los documentos (configuracion).
+
+    ``condiciones_garantia`` es el texto comercial de la garantia, si el
+    negocio lo define: el sistema no inventa condiciones. Cada documento
+    emitido guarda una copia, asi que cambiar estos datos no altera lo ya
+    entregado al cliente.
+    """
+
+    nombre: str
+    razon_social: str | None = None
+    cuit: str | None = None
+    direccion: str | None = None
+    telefono: str | None = None
+    email: str | None = None
+    condiciones_garantia: str | None = None
+
+
 # Unica definicion de los medios iniciales. Se usan mientras el directorio
 # de catalogos no traiga su propio ``medios_pago.json``: para ampliar o
 # cambiar los medios alcanza con crear ese archivo, la logica financiera
@@ -93,3 +111,6 @@ MEDIOS_PAGO_PREDETERMINADOS = (
     MedioPago(id="TARJETA_CREDITO", nombre="Tarjeta de credito"),
     MedioPago(id="OTRO", nombre="Otro"),
 )
+
+# Se usa mientras el directorio de catalogos no traiga ``empresa.json``.
+DATOS_EMPRESA_PREDETERMINADOS = DatosEmpresa(nombre="Rosario Tecno")

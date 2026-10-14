@@ -28,6 +28,7 @@ from app.domain.models import (
 from app.main import create_app
 from app.storage.json.base import escribir_json_atomico
 from tests.fixtures.api_definicion import definir_y_finalizar
+from tests.fixtures.custodia import entregar
 
 RECEPCION = "RECEP-001"
 COORDINADOR = "COORD-001"
@@ -287,10 +288,7 @@ def test_hp_rep_001_end_to_end_por_http(cliente):
     assert respuesta["resumen"]["estado_pago"] == "PAGADO"
 
     # PROC-REP-280 -> 270 -> EVT-REP-999
-    orden = cliente.post(
-        f"/api/orders/{orden_id}/deliver",
-        json={"usuario_id": ADMINISTRADOR},
-    ).json()
+    orden = entregar(cliente, orden_id, ADMINISTRADOR).json()
 
     # --- expected de HP-REP-001 ---
     assert orden["estado_workflow"] == "ENTREGADA"

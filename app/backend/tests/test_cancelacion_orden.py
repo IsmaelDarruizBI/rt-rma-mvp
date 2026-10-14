@@ -43,6 +43,7 @@ from tests.fixtures.api_salidas import (
     repo_ordenes,
     tomada,
 )
+from tests.fixtures.custodia import confirmar_recepcion, no_recibido
 
 
 @pytest.fixture
@@ -55,7 +56,11 @@ def cliente(tmp_path):
 
 
 def test_una_orden_sin_detalles_se_cancela_explicitamente(cliente):
-    """Recien creada: sin comprobante, el equipo no quedo en custodia."""
+    """Recien creada, sin decision de custodia: no cierra sola.
+
+    Cierra cuando Recepcion registra que el equipo nunca ingreso (o, si lo
+    tiene, confirma la recepcion y lo devuelve).
+    """
     orden_id = crear(cliente)
     assert ("CANCELAR_ORDEN", None) in codigos_cancelacion(
         cliente.get(f"/api/orders/{orden_id}").json()
@@ -67,15 +72,26 @@ def test_una_orden_sin_detalles_se_cancela_explicitamente(cliente):
     assert ids(orden)[-1] == "PROC-REP-306"
     paso = orden["historial"][-1]
     assert paso["usuario_id"] == RECEPCION and MOTIVO in paso["observacion"]
-    assert orden["current_process"] == "EVT-REP-999"
+    assert orden["current_process"] == "PROC-REP-306"
     assert orden["devolucion_pendiente"] is False
-    assert orden["cerrada"] is True
+    assert orden["cerrada"] is False
     assert orden["acciones_disponibles"] == []
+    assert "Falta definir la custodia" in orden["pendientes_de_cierre"][0]
+
+    orden = ok(no_recibido(cliente, orden_id))
+
+    assert orden["current_process"] == "EVT-REP-999"
+    assert orden["cerrada"] is True
+    assert orden["custodia"]["estado"] == "NO_RECIBIDO"
     conflicto(cancelar_orden(cliente, orden_id), "ORDEN_CERRADA")
 
 
 def test_sin_detalles_en_revision_requiere_devolver_el_equipo(cliente):
-    """EN_REVISION: el comprobante ya se emitio, el equipo esta en custodia."""
+    """EN_REVISION con la recepcion confirmada: el equipo esta en custodia.
+
+    La custodia sale de la confirmacion, no del comprobante emitido al
+    enviar a revision.
+    """
     orden_id = crear(cliente)
     ok(
         cliente.post(
@@ -83,6 +99,7 @@ def test_sin_detalles_en_revision_requiere_devolver_el_equipo(cliente):
             json={"usuario_id": RECEPCION},
         )
     )
+    confirmar_recepcion(cliente, orden_id)
 
     orden = ok(cancelar_orden(cliente, orden_id))
 
@@ -259,6 +276,8 @@ def test_sin_custodia_no_hay_devolucion_que_registrar(cliente):
     orden_id = crear(cliente)
     ok(cancelar_orden(cliente, orden_id))
 
+    assert "custodia confirmada" in conflicto(devolver(cliente, orden_id))
+    ok(no_recibido(cliente, orden_id))
     conflicto(devolver(cliente, orden_id), "ORDEN_CERRADA")
 
 
@@ -314,6 +333,7 @@ def test_circuito_ingreso_definicion_cancelacion_devolucion_cierre(
     cliente, tmp_path
 ):
     orden_id = crear(cliente)
+    confirmar_recepcion(cliente, orden_id)
     for tipo in (BATERIA, PANTALLA):
         ok(
             cliente.post(

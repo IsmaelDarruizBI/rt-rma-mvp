@@ -24,6 +24,9 @@ from app.domain.models import (
 from app.main import create_app
 from app.storage.json.base import escribir_json_atomico
 
+from . import custodia
+from .custodia import entregar
+
 RECEPCION = "RECEP-001"
 COORDINADOR = "COORD-001"
 TECNICO = "TECH-001"
@@ -193,13 +196,23 @@ def agregar(cliente, orden_id, tipo=BATERIA) -> dict:
     )
 
 
-def finalizar(cliente, orden_id) -> dict:
-    return ok(
+def finalizar(cliente, orden_id, confirmar_recepcion=True) -> dict:
+    """Finaliza la definicion y devuelve esa respuesta.
+
+    Con ``confirmar_recepcion`` (default) Recepcion confirma ademas la
+    recepcion fisica del equipo: estos tests asumen el equipo en custodia
+    desde aqui, como antes lo aproximaba el comprobante emitido al
+    finalizar. Ahora es una confirmacion explicita.
+    """
+    respuesta = ok(
         cliente.post(
             f"/api/orders/{orden_id}/definition/finalize",
             json={"usuario_id": RECEPCION},
         )
     )
+    if confirmar_recepcion:
+        custodia.confirmar_recepcion(cliente, orden_id)
+    return respuesta
 
 
 def decidir(
@@ -397,9 +410,4 @@ def notificar_pagar_entregar(cliente, orden_id) -> dict:
                 },
             )
         )
-    return ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/deliver",
-            json={"usuario_id": ADMINISTRADOR},
-        )
-    )
+    return ok(entregar(cliente, orden_id, ADMINISTRADOR))

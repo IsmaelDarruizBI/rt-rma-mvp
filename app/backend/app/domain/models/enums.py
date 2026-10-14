@@ -267,3 +267,69 @@ class EstadoPago(str, Enum):
     PARCIAL = "PARCIAL"
     PAGADO = "PAGADO"
     SALDO_A_FAVOR = "SALDO_A_FAVOR"
+
+
+class RegistroRecepcion(str, Enum):
+    """Como nacio el registro de recepcion fisica del equipo.
+
+    INGRESO         se registro al crear la Orden (PROC-REP-030/020/035)
+    REGULARIZACION  se registro despues, sobre una Orden anterior a
+                    este registro: nadie documento el ingreso en su
+                    momento y no se presume que haya ocurrido
+    """
+
+    INGRESO = "INGRESO"
+    REGULARIZACION = "REGULARIZACION"
+
+
+class EstadoCustodia(str, Enum):
+    """Donde esta el equipo fisicamente. Siempre derivado, nunca persistido.
+
+    Es independiente del comprobante de recepcion: emitir un documento no
+    prueba que el equipo este en el local.
+
+        PENDIENTE_CONFIRMACION  hay datos de ingreso, falta confirmar que el
+                                equipo se recibio
+        SIN_REGISTRO            Orden anterior al registro de recepcion:
+                                requiere regularizacion
+        EN_CUSTODIA             recepcion confirmada (o equipo RT_INTERNO
+                                recibido por el circuito de Gestion RT)
+        ENTREGADO               salio por la entrega de la Orden
+        DEVUELTO                salio sin reparar (cancelacion) o volvio a
+                                Gestion RT
+        NO_RECIBIDO             se registro explicitamente que el equipo
+                                nunca ingreso (nunca se deduce)
+    """
+
+    PENDIENTE_CONFIRMACION = "PENDIENTE_CONFIRMACION"
+    SIN_REGISTRO = "SIN_REGISTRO"
+    EN_CUSTODIA = "EN_CUSTODIA"
+    ENTREGADO = "ENTREGADO"
+    DEVUELTO = "DEVUELTO"
+    NO_RECIBIDO = "NO_RECIBIDO"
+
+
+class TipoEntrega(str, Enum):
+    """Que se le entrega a quien retira el equipo (PROC-REP-270).
+
+    No lo elige el usuario: sale del resultado de la Orden. Una devolucion
+    sin reparacion (Orden SIN_REPARACION o CANCELADA) nunca es una entrega
+    de reparacion terminada.
+    """
+
+    REPARACION_TERMINADA = "REPARACION_TERMINADA"
+    DEVOLUCION_SIN_REPARACION = "DEVOLUCION_SIN_REPARACION"
+
+
+class TipoDocumento(str, Enum):
+    """Documentos que la Orden emite al cliente.
+
+    COMPROBANTE_RECEPCION  PROC-REP-060 (FEAT-REP-001)
+    COMPROBANTE_ENTREGA    PROC-REP-280, o la devolucion sin reparar
+                           de una Orden CANCELADA (PROC-REP-270)
+    GARANTIA               PROC-REP-280, solo con trabajos realizados
+    """
+
+    COMPROBANTE_RECEPCION = "COMPROBANTE_RECEPCION"
+    COMPROBANTE_ENTREGA = "COMPROBANTE_ENTREGA"
+    GARANTIA = "GARANTIA"

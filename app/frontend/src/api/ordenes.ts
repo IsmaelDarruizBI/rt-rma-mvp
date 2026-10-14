@@ -8,17 +8,22 @@
 
 import type {
   CanalComunicacion,
+  DatosRecepcion,
   DecisionDetalle,
+  DocumentoEmitido,
+  DocumentosDeOrden,
   Estacion,
   ImpactoOverride,
   InsumoUtilizado,
   MedioPago,
   Orden,
   OrdenResumen,
+  TipoDocumento,
   TipoReparacion,
   Usuario,
+  VistaPreviaDocumento,
 } from "../types/api";
-import { get, post } from "./client";
+import { get, post, put } from "./client";
 
 // --- Catalogos ---------------------------------------------------------
 
@@ -50,10 +55,21 @@ export function obtenerOrden(ordenId: string): Promise<Orden> {
 
 // --- Comandos del Happy Path -------------------------------------------
 
+/** Equipo que se recibe. IMEI y número de serie son opcionales. */
+export interface DatosEquipo {
+  marca: string;
+  modelo: string;
+  falla_reportada: string;
+  imei?: string | null;
+  numero_serie?: string | null;
+}
+
 export interface DatosNuevaOrden {
   usuario_id: string;
   cliente: { nombre: string; telefono: string; email?: string | null };
-  equipo: { marca: string; modelo: string; falla_reportada: string };
+  equipo: DatosEquipo;
+  /** Condiciones del ingreso; la recepción física se confirma aparte. */
+  recepcion?: DatosRecepcion;
 }
 
 /** PROC-REP-010 -> 030 -> 040 (Recepción). */
@@ -63,8 +79,9 @@ export function crearOrden(datos: DatosNuevaOrden): Promise<Orden> {
 
 export interface DatosNuevaOrdenRt {
   usuario_id: string;
-  equipo: { marca: string; modelo: string; falla_reportada: string };
+  equipo: DatosEquipo;
   referencia_rt: string;
+  recepcion?: DatosRecepcion;
 }
 
 /** PROC-REP-010 -> 020 -> 040 (Recepción, HP-REP-002). Sin Cliente. */
@@ -322,13 +339,26 @@ export function devolverDinero(
   });
 }
 
-/** PROC-REP-280 -> 270 -> EVT-REP-999 (Administrador). */
+/** Quién retira el equipo y cómo se identifica (sin firma digital). */
+export interface DatosRetiro {
+  recibido_por: string;
+  identificacion_receptor: string | null;
+  observaciones: string | null;
+}
+
+/**
+ * PROC-REP-280 -> 270 -> EVT-REP-999 (Administración o Recepción). Exige
+ * la custodia confirmada y quién retira; emite el comprobante final y la
+ * garantía.
+ */
 export function entregar(
   ordenId: string,
   usuarioId: string,
+  retiro: DatosRetiro,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/deliver`, {
     usuario_id: usuarioId,
+    ...retiro,
   });
 }
 
@@ -557,13 +587,107 @@ export function desistir(
 export function registrarDevolucion(
   ordenId: string,
   usuarioId: string,
-  recibidoPor: string,
-  observaciones: string | null,
+  retiro: DatosRetiro,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/return-equipment`, {
     usuario_id: usuarioId,
-    recibido_por: recibidoPor,
+    ...retiro,
+  });
+}
+
+// --- Recepción física y custodia ---------------------------------------
+
+/**
+ * Registra o corrige los datos del ingreso (antes de confirmar la
+ * recepción). La versión anterior se conserva.
+ */
+export function registrarRecepcion(
+  ordenId: string,
+  usuarioId: string,
+  datos: DatosRecepcion,
+  equipo: DatosEquipo | null,
+): Promise<Orden> {
+  return put<Orden>(`/api/orders/${ordenId}/reception`, {
+    usuario_id: usuarioId,
+    ...datos,
+    equipo,
+  });
+}
+
+/** El equipo quedó físicamente en el local (custodia). */
+export function confirmarRecepcion(
+  ordenId: string,
+  usuarioId: string,
+  observaciones: string | null,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/reception/confirm`, {
+    usuario_id: usuarioId,
     observaciones,
+  });
+}
+
+/**
+ * El equipo nunca ingresó (Orden cancelada, motivo obligatorio). Sin equipo
+ * que devolver, la Orden cierra o espera la devolución del saldo a favor.
+ */
+export function registrarEquipoNoRecibido(
+  ordenId: string,
+  usuarioId: string,
+  motivo: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/reception/not-received`, {
+    usuario_id: usuarioId,
+    motivo,
+  });
+}
+
+/** Observación complementaria del ingreso (no reemplaza nada). */
+export function agregarObservacionRecepcion(
+  ordenId: string,
+  usuarioId: string,
+  texto: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/reception/notes`, {
+    usuario_id: usuarioId,
+    texto,
+  });
+}
+
+// --- Documentos ----------------------------------------------------------
+
+/** Documentos emitidos (con contenido) y qué se puede previsualizar. */
+export function obtenerDocumentos(ordenId: string): Promise<DocumentosDeOrden> {
+  return get<DocumentosDeOrden>(`/api/orders/${ordenId}/documents`);
+}
+
+export function obtenerDocumento(
+  ordenId: string,
+  documentoId: string,
+): Promise<DocumentoEmitido> {
+  return get<DocumentoEmitido>(
+    `/api/orders/${ordenId}/documents/${documentoId}`,
+  );
+}
+
+/** Contenido con los datos vigentes. No emite ni guarda nada. */
+export function vistaPreviaDocumento(
+  ordenId: string,
+  tipo: TipoDocumento,
+): Promise<VistaPreviaDocumento> {
+  return get<VistaPreviaDocumento>(
+    `/api/orders/${ordenId}/documents/preview/${tipo}`,
+  );
+}
+
+/** Versión nueva del comprobante de recepción (con motivo si ya hay una). */
+export function emitirComprobanteRecepcion(
+  ordenId: string,
+  usuarioId: string,
+  motivo: string | null,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/documents/reception-receipt`, {
+    usuario_id: usuarioId,
+    motivo,
   });
 }
 

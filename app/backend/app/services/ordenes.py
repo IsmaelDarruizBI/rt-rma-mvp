@@ -17,7 +17,9 @@ from datetime import datetime
 
 from app.domain.models import (
     Cliente,
+    DatosRecepcion,
     DocumentosOrden,
+    EntregaEquipo,
     Equipo,
     EstadoEjecucion,
     EstadoTomaOrden,
@@ -28,12 +30,18 @@ from app.domain.models import (
     RolUsuario,
     Usuario,
 )
-from app.domain.politicas import politica_de
 
 from .autorizacion import validar_actor, validar_alguno_de
 from .autorizacion_cliente import (
     marcar_pendiente_autorizacion,
     situacion_de_la_orden,
+)
+from .custodia import (
+    custodia_por_definir,
+    custodia_resuelta,
+    equipo_bajo_custodia,
+    evidencias_de_equipo,
+    recepcion_inicial,
 )
 from .exceptions import (
     EntidadNoEncontradaError,
@@ -106,27 +114,13 @@ def exigir_orden_abierta(orden: OrdenReparacion) -> None:
     )
 
 
-def equipo_bajo_custodia(orden: OrdenReparacion) -> bool:
-    """El equipo quedo en poder de RMA y hay que devolverlo si se cancela.
-
-    Aproximacion del MVP a la custodia de V1.4 (BR-REP-033), que no
-    modela la confirmacion fisica de la recepcion: para los Origenes con
-    comprobante de recepcion, el equipo esta en custodia desde que el
-    comprobante se emitio (PROC-REP-060). Antes -por ejemplo, el cliente
-    desiste mientras se carga la Orden- no hay nada que devolver. Un equipo
-    RT_INTERNO llega desde Gestion RT al crear la Orden (PROC-REP-020):
-    siempre hay que devolverlo.
-    """
-    if politica_de(orden.origen).requiere_comprobante_recepcion:
-        return orden.documentos.comprobante_recepcion.generado
-    return True
-
-
 def devolucion_pendiente(orden: OrdenReparacion) -> bool:
     """Orden CANCELADA cuyo equipo todavia no se devolvio (PROC-REP-270).
 
     Es la devolucion FISICA del equipo: la de dinero (saldo a favor, V1.4
     PROC-REP-267) es otra dimension y puede resolverse antes o despues.
+    La custodia es la confirmada (``services.custodia``): el comprobante de
+    recepcion no la prueba.
     """
     return (
         orden.estado_workflow is EstadoWorkflow.CANCELADA
@@ -134,6 +128,60 @@ def devolucion_pendiente(orden: OrdenReparacion) -> bool:
         and equipo_bajo_custodia(orden)
         and orden.devolucion is None
     )
+
+
+def pendientes_para_cerrar(orden: OrdenReparacion) -> list[str]:
+    """Que le falta a una Orden CANCELADA abierta para cerrarse.
+
+    Dos dimensiones independientes: el equipo (definir la custodia y, si
+    esta en el local, devolverlo) y el dinero (devolver el saldo a favor).
+    Vacio si la Orden no esta cancelada o ya cerro.
+    """
+    if (
+        orden.estado_workflow is not EstadoWorkflow.CANCELADA
+        or orden.esta_cerrada
+    ):
+        return []
+    pendientes = []
+    if custodia_por_definir(orden):
+        if evidencias_de_equipo(orden):
+            pendientes.append(
+                "Falta confirmar la recepcion fisica del equipo (el historial "
+                "registra trabajo sobre el) y registrar su devolucion."
+            )
+        else:
+            pendientes.append(
+                "Falta definir la custodia del equipo: confirmar la "
+                "recepcion fisica (y despues registrar su devolucion) o "
+                'registrar "Equipo no recibido".'
+            )
+    elif equipo_bajo_custodia(orden):
+        pendientes.append("Falta registrar la devolucion fisica del equipo.")
+    credito = credito_pendiente(orden)
+    if credito > 0:
+        pendientes.append(
+            f"Falta devolver al cliente el saldo a favor: {credito}."
+        )
+    return pendientes
+
+
+def cerrar_cancelada_si_corresponde(
+    orden: OrdenReparacion,
+    *,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """Una Orden CANCELADA abierta pasa por PROC-REP-268 si el equipo ya no
+    condiciona el cierre (devuelto o no recibido); si no, sigue esperando.
+
+    Nunca cierra con la custodia sin definir ni con el equipo en el local.
+    """
+    if (
+        orden.estado_workflow is EstadoWorkflow.CANCELADA
+        and not orden.esta_cerrada
+        and custodia_resuelta(orden)
+    ):
+        return verificar_fin_financiero(orden, fecha=fecha)
+    return orden
 
 
 def verificar_fin_financiero(
@@ -186,7 +234,9 @@ def marcar_orden_cancelada(
 
     Fija el hito y decide como sigue, sin inventar un nodo: si el equipo
     esta en custodia, la Orden espera su devolucion fisica (PROC-REP-270,
-    ``services.cancelaciones.registrar_devolucion_equipo``); si no, pasa
+    ``services.cancelaciones.registrar_devolucion_equipo``); si todavia no
+    se decidio si el equipo se recibio, espera esa decision (nunca se
+    asume que no hay equipo); solo si se registro "Equipo no recibido" pasa
     por la verificacion financiera (``verificar_fin_financiero``): termina
     aca (EVT-REP-999), o espera la devolucion de un anticipo. CANCELADA
     nunca se convierte en ENTREGADA. Nodo ACT-SYSTEM: no recibe Usuario.
@@ -194,9 +244,7 @@ def marcar_orden_cancelada(
     nueva_orden = orden.model_copy(deep=True)
     nueva_orden.estado_workflow = EstadoWorkflow.CANCELADA
     nueva_orden.updated_at = fecha
-    if not equipo_bajo_custodia(nueva_orden):
-        nueva_orden = verificar_fin_financiero(nueva_orden, fecha=fecha)
-    return nueva_orden
+    return cerrar_cancelada_si_corresponde(nueva_orden, fecha=fecha)
 
 
 def crear_orden_cliente_externo(
@@ -206,6 +254,7 @@ def crear_orden_cliente_externo(
     equipo: Equipo,
     usuario: Usuario,
     fecha: datetime,
+    datos_recepcion: DatosRecepcion | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-010 -> PROC-REP-030 -> PROC-REP-040 (FEAT-REP-001).
 
@@ -227,6 +276,9 @@ def crear_orden_cliente_externo(
         equipo=equipo,
         resumen_pago=ResumenPago(),
         documentos=DocumentosOrden(),
+        recepcion=recepcion_inicial(
+            usuario_id=usuario.id, fecha=fecha, datos=datos_recepcion
+        ),
         created_at=fecha,
         updated_at=fecha,
     )
@@ -262,6 +314,7 @@ def crear_orden_rt_interno(
     referencia_rt: str,
     usuario: Usuario,
     fecha: datetime,
+    datos_recepcion: DatosRecepcion | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-010 -> PROC-REP-020 -> PROC-REP-040 (HP-REP-002).
 
@@ -285,6 +338,9 @@ def crear_orden_rt_interno(
         referencia_rt=referencia_rt,
         resumen_pago=ResumenPago(),
         documentos=DocumentosOrden(),
+        recepcion=recepcion_inicial(
+            usuario_id=usuario.id, fecha=fecha, datos=datos_recepcion
+        ),
         created_at=fecha,
         updated_at=fecha,
     )
@@ -320,6 +376,7 @@ def crear_orden_garantia_rma(
     detalle_origen_ids: Sequence[str],
     usuario: Usuario,
     fecha: datetime,
+    datos_recepcion: DatosRecepcion | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-035 -> PROC-REP-040 (HP-REP-003, BR-REP-019).
 
@@ -378,6 +435,9 @@ def crear_orden_garantia_rma(
         detalles_origen_ids=list(detalle_origen_ids),
         resumen_pago=ResumenPago(),
         documentos=DocumentosOrden(),
+        recepcion=recepcion_inicial(
+            usuario_id=usuario.id, fecha=fecha, datos=datos_recepcion
+        ),
         created_at=fecha,
         updated_at=fecha,
     )
@@ -775,6 +835,7 @@ def entregar_equipo(
     *,
     usuario: Usuario,
     fecha: datetime,
+    entrega: EntregaEquipo | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-270: se entrega el equipo y la Orden pasa a ENTREGADA.
 
@@ -791,6 +852,11 @@ def entregar_equipo(
     El nodo declara ``actores_alternativos: [ACT-RECEP]``: entrega
     Administracion o Recepcion. El actor NO relaja la condicion
     comercial: las precondiciones de abajo se exigen igual.
+
+    ``entrega`` (quien retira, su identificacion, observaciones) queda en
+    ``orden.entrega``. La custodia confirmada y el receptor obligatorio los
+    exige el comando de entrega (``application.cierre.entregar``) antes de
+    emitir nada.
     """
     validar_alguno_de(usuario, ROLES_ENTREGA)
 
@@ -831,13 +897,20 @@ def entregar_equipo(
             "No se puede entregar con reservas de insumos activas."
         )
 
+    observacion = None
+    if entrega is not None:
+        observacion = f"Retira: {entrega.recibido_por}"
+        if entrega.identificacion_receptor:
+            observacion += f" ({entrega.identificacion_receptor})"
     nueva_orden = registrar_paso(
         orden,
         process_id="PROC-REP-270",
         accion="ENTREGAR_EQUIPO",
         fecha=fecha,
         usuario_id=usuario.id,
+        observacion=observacion,
     )
+    nueva_orden.entrega = entrega
     nueva_orden.estado_workflow = EstadoWorkflow.ENTREGADA
     nueva_orden.current_process = "EVT-REP-999"
     return nueva_orden

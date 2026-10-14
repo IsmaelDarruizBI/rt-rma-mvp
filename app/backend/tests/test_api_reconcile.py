@@ -18,6 +18,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tests.fixtures.api_definicion import definir_y_finalizar
+from tests.fixtures.custodia import entregar
 
 from .test_api_hp_rep_001 import (
     ADMINISTRADOR,
@@ -313,9 +314,7 @@ def test_recepcion_puede_entregar_el_equipo(cliente):  # noqa: F811
     """PROC-REP-270 declara actores_alternativos: [ACT-RECEP]."""
     orden_id = _hasta_lista_para_entregar(cliente, RECEPCION)
 
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/deliver", json={"usuario_id": RECEPCION}
-    )
+    respuesta = entregar(cliente, orden_id, RECEPCION)
 
     assert respuesta.status_code == 200, respuesta.text
     orden = respuesta.json()
@@ -326,10 +325,7 @@ def test_recepcion_puede_entregar_el_equipo(cliente):  # noqa: F811
 def test_el_administrador_sigue_pudiendo_entregar(cliente):  # noqa: F811
     orden_id = _hasta_lista_para_entregar(cliente, ADMINISTRADOR)
 
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/deliver",
-        json={"usuario_id": ADMINISTRADOR},
-    )
+    respuesta = entregar(cliente, orden_id, ADMINISTRADOR)
 
     assert respuesta.status_code == 200
     assert respuesta.json()["estado_workflow"] == "ENTREGADA"

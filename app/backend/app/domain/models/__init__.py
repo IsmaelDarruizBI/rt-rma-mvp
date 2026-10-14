@@ -8,7 +8,9 @@ fuente de verdad funcional, y aqui solo se conservan sus IDs
 """
 
 from .catalogos import (
+    DATOS_EMPRESA_PREDETERMINADOS,
     MEDIOS_PAGO_PREDETERMINADOS,
+    DatosEmpresa,
     EstacionTrabajo,
     Insumo,
     MedioPago,
@@ -16,11 +18,26 @@ from .catalogos import (
     TipoReparacionEstacion,
     TipoReparacionInsumos,
 )
-from .documentos import Documento, DocumentosOrden
+from .documentos import (
+    CoberturaGarantia,
+    ContenidoComprobanteEntrega,
+    ContenidoComprobanteRecepcion,
+    ContenidoDocumento,
+    ContenidoGarantia,
+    DevolucionDineroEnDocumento,
+    Documento,
+    DocumentoEmitido,
+    DocumentosOrden,
+    PagoEnDocumento,
+    TrabajoCanceladoEnDocumento,
+    TrabajoEnDocumento,
+    UsuarioEnDocumento,
+)
 from .enums import (
     CanalComunicacion,
     CondicionReparacionDetail,
     EstadoControl,
+    EstadoCustodia,
     EstadoEjecucion,
     EstadoPago,
     EstadoReparacionDetail,
@@ -28,18 +45,29 @@ from .enums import (
     EstadoWorkflow,
     OrigenCancelacion,
     OrigenOrden,
+    RegistroRecepcion,
     ResultadoAutorizacion,
     ResultadoControl,
     RolUsuario,
+    TipoDocumento,
+    TipoEntrega,
     TipoMovimientoInsumo,
     TipoPago,
     TipoReferenciaHistorial,
 )
-from .equipos import DevolucionEquipo, Equipo
+from .equipos import DevolucionEquipo, EntregaEquipo, Equipo
 from .inventario import InsumoUtilizado, MovimientoInsumo
 from .orden_reparacion import OrdenReparacion
 from .pagos import AnulacionPago, DevolucionDinero, Pago, ResumenPago
 from .personas import Cliente, Usuario
+from .recepcion import (
+    ConfirmacionRecepcion,
+    DatosRecepcion,
+    NoRecepcion,
+    NotaRecepcion,
+    RecepcionEquipo,
+    VersionRecepcion,
+)
 from .reparacion import (
     DefinicionAnteriorDetalle,
     EjecucionReparacion,
@@ -57,6 +85,7 @@ __all__ = [
     "CondicionReparacionDetail",
     "DefinicionAnteriorDetalle",
     "EstadoControl",
+    "EstadoCustodia",
     "EstadoEjecucion",
     "EstadoPago",
     "EstadoReparacionDetail",
@@ -64,19 +93,32 @@ __all__ = [
     "EstadoWorkflow",
     "OrigenCancelacion",
     "OrigenOrden",
+    "RegistroRecepcion",
     "ResultadoAutorizacion",
     "ResultadoControl",
     "RolUsuario",
+    "TipoDocumento",
+    "TipoEntrega",
     "TipoMovimientoInsumo",
     "TipoPago",
     "TipoReferenciaHistorial",
     # Personas y equipo
     "Cliente",
     "DevolucionEquipo",
+    "EntregaEquipo",
     "Equipo",
     "Usuario",
+    # Recepcion y custodia
+    "ConfirmacionRecepcion",
+    "DatosRecepcion",
+    "NoRecepcion",
+    "NotaRecepcion",
+    "RecepcionEquipo",
+    "VersionRecepcion",
     # Catalogos
+    "DATOS_EMPRESA_PREDETERMINADOS",
     "MEDIOS_PAGO_PREDETERMINADOS",
+    "DatosEmpresa",
     "EstacionTrabajo",
     "Insumo",
     "MedioPago",
@@ -99,8 +141,19 @@ __all__ = [
     "Pago",
     "ResumenPago",
     # Documentos
+    "CoberturaGarantia",
+    "ContenidoComprobanteEntrega",
+    "ContenidoComprobanteRecepcion",
+    "ContenidoDocumento",
+    "ContenidoGarantia",
+    "DevolucionDineroEnDocumento",
     "Documento",
+    "DocumentoEmitido",
     "DocumentosOrden",
+    "PagoEnDocumento",
+    "TrabajoCanceladoEnDocumento",
+    "TrabajoEnDocumento",
+    "UsuarioEnDocumento",
     # Workflow
     "HistorialWorkflow",
     # Aggregate raiz

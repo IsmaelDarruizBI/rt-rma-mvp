@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings
 from app.main import create_app
 from tests.fixtures.api_definicion import definir_y_finalizar
+from tests.fixtures.custodia import RECEPTOR, confirmar_recepcion
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     COORDINADOR,
@@ -283,8 +284,12 @@ def test_una_orden_sin_reparacion_entregada_queda_cerrada(cliente, tmp_path):
             {"usuario_id": RECEPCION, "motivo": "Placa irreparable."},
         ),
         (f"/api/orders/{orden_id}/notify", {"usuario_id": RECEPCION}),
-        (f"/api/orders/{orden_id}/deliver", {"usuario_id": ADMINISTRADOR}),
+        (
+            f"/api/orders/{orden_id}/deliver",
+            {"usuario_id": ADMINISTRADOR, **RECEPTOR},
+        ),
     ]
+    confirmar_recepcion(cliente, orden_id)
     for ruta, cuerpo in pasos:
         respuesta = cliente.post(ruta, json=cuerpo)
         assert respuesta.status_code == 200, (ruta, respuesta.text)

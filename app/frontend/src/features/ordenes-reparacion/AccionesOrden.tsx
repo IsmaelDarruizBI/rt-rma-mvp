@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from "react";
 
+import type { DatosRetiro } from "../../api/ordenes";
 import {
   Boton,
   Campo,
@@ -30,7 +31,9 @@ import type {
   TipoReparacion,
   Usuario,
 } from "../../types/api";
+import { PendientesDeCierre } from "./CustodiaOrden";
 import { nombreDeUsuario } from "./DetalleOrden";
+import { Confirmacion } from "./PagosOrden";
 
 export interface EjecutorAcciones {
   agregarDetalle: (tipoReparacionId: string) => void;
@@ -65,7 +68,8 @@ export interface EjecutorAcciones {
   aprobarControl: (detalleId: string | null, observaciones: string) => void;
   liberarOrden: () => void;
   notificar: () => void;
-  entregar: () => void;
+  /** PROC-REP-280 -> 270: con quién retira (exige custodia confirmada). */
+  entregar: (retiro: DatosRetiro) => void;
   informarRt: () => void;
   devolverRt: () => void;
   iniciarGarantiaRma: (detalleOrigenIds: string[]) => void;
@@ -79,7 +83,7 @@ export interface EjecutorAcciones {
   /** PROC-REP-235: reabre el Detalle para retrabajo. */
   rechazarControl: (detalleId: string, motivo: string) => void;
   /** PROC-REP-270 sobre una Orden CANCELADA. */
-  registrarDevolucion: (recibidoPor: string, observaciones: string) => void;
+  registrarDevolucion: (retiro: DatosRetiro) => void;
   /** PROC-REP-300. */
   cancelarDetalle: (detalleId: string, motivo: string) => void;
   /** PROC-REP-305 / 306 (pide confirmación antes). */
@@ -108,7 +112,9 @@ function AvisoOrdenCerrada({ orden }: { orden: Orden }) {
       : orden.estado_workflow === "CANCELADA"
         ? orden.devolucion
           ? `fue cancelada y el equipo se devolvió a ${orden.devolucion.recibido_por}`
-          : "fue cancelada (el equipo no había quedado en custodia)"
+          : orden.custodia.estado === "NO_RECIBIDO"
+            ? "fue cancelada (se registró que el equipo nunca ingresó)"
+            : "fue cancelada sin devolución física registrada"
         : "fue devuelta a Gestión RT";
   return (
     <p
@@ -145,6 +151,8 @@ export function AccionesOrden({
       <Panel titulo="Acción disponible">
         {orden.cerrada ? (
           <AvisoOrdenCerrada orden={orden} />
+        ) : orden.pendientes_de_cierre.length > 0 ? (
+          <PendientesDeCierre orden={orden} />
         ) : (
           <p style={{ margin: 0, color: colores.suave, fontSize: "0.9rem" }}>
             No hay acciones disponibles para el estado actual.
@@ -624,9 +632,11 @@ function FormularioAccion({
 
     case "ENTREGAR":
       return (
-        <Boton disabled={deshabilitado} onClick={ejecutar.entregar}>
-          Entregar equipo
-        </Boton>
+        <FormularioEntrega
+          orden={orden}
+          deshabilitado={deshabilitado}
+          onConfirmar={ejecutar.entregar}
+        />
       );
 
     case "INFORMAR_RT":
@@ -780,11 +790,12 @@ function FormularioDevolucion({
 }: {
   orden: Orden;
   deshabilitado: boolean;
-  onConfirmar: (recibidoPor: string, observaciones: string) => void;
+  onConfirmar: (retiro: DatosRetiro) => void;
 }) {
   const [recibidoPor, setRecibidoPor] = useState(
     orden.cliente?.nombre ?? "Gestión RT",
   );
+  const [identificacion, setIdentificacion] = useState("");
   const [observaciones, setObservaciones] = useState("");
 
   return (
@@ -793,6 +804,14 @@ function FormularioDevolucion({
         <input
           value={recibidoPor}
           onChange={(evento) => setRecibidoPor(evento.target.value)}
+          disabled={deshabilitado}
+          style={estiloInput}
+        />
+      </Campo>
+      <Campo etiqueta="DNI u otra identificación (si corresponde)">
+        <input
+          value={identificacion}
+          onChange={(evento) => setIdentificacion(evento.target.value)}
           disabled={deshabilitado}
           style={estiloInput}
         />
@@ -807,10 +826,137 @@ function FormularioDevolucion({
       </Campo>
       <Boton
         disabled={deshabilitado || recibidoPor.trim() === ""}
-        onClick={() => onConfirmar(recibidoPor.trim(), observaciones.trim())}
+        onClick={() =>
+          onConfirmar({
+            recibido_por: recibidoPor.trim(),
+            identificacion_receptor: identificacion.trim() || null,
+            observaciones: observaciones.trim() || null,
+          })
+        }
       >
         Registrar la devolución (sin cobro)
       </Boton>
+      <p style={{ margin: "0.4rem 0 0", fontSize: "0.75rem", color: colores.suave }}>
+        Se emite el comprobante de devolución sin reparación. La Orden sigue
+        CANCELADA.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Entrega del equipo (PROC-REP-280 -> 270): quién retira, su
+ * identificación y observaciones, con confirmación. El backend exige la
+ * custodia confirmada, el control aprobado y la cuenta saldada; acá solo
+ * se avisa si la custodia falta. Al confirmar se emiten el comprobante
+ * final y la garantía.
+ */
+function FormularioEntrega({
+  orden,
+  deshabilitado,
+  onConfirmar,
+}: {
+  orden: Orden;
+  deshabilitado: boolean;
+  onConfirmar: (retiro: DatosRetiro) => void;
+}) {
+  const [recibidoPor, setRecibidoPor] = useState("");
+  const [identificacion, setIdentificacion] = useState("");
+  const [observaciones, setObservaciones] = useState("");
+  const [confirmando, setConfirmando] = useState(false);
+  const enCustodia = orden.custodia.estado === "EN_CUSTODIA";
+  const bloqueado = deshabilitado || !enCustodia;
+  const titular = orden.cliente?.nombre ?? null;
+  const devolucion = orden.finalizada_sin_reparacion;
+
+  useEffect(
+    () => setConfirmando(false),
+    [recibidoPor, identificacion, observaciones],
+  );
+
+  const retira = `${recibidoPor.trim()}${
+    identificacion.trim() ? ` (${identificacion.trim()})` : ""
+  }`;
+
+  return (
+    <div>
+      {!enCustodia && (
+        <p
+          role="status"
+          style={{
+            margin: "0 0 0.6rem",
+            padding: "0.5rem 0.7rem",
+            borderRadius: 6,
+            border: `1px solid ${colores.alerta}`,
+            background: "#fff8e6",
+            fontSize: "0.85rem",
+          }}
+        >
+          La recepción física del equipo no está confirmada. Confirmala (o
+          regularizala) en <strong>Recepción y custodia</strong> antes de
+          entregar.
+        </p>
+      )}
+      <Campo etiqueta="Retira el equipo (obligatorio)">
+        <input
+          value={recibidoPor}
+          onChange={(evento) => setRecibidoPor(evento.target.value)}
+          disabled={bloqueado}
+          style={estiloInput}
+        />
+      </Campo>
+      {titular && (
+        <div style={{ margin: "-0.3rem 0 0.6rem" }}>
+          <Boton
+            variante="secundario"
+            disabled={bloqueado}
+            onClick={() => setRecibidoPor(titular)}
+          >
+            Retira el titular ({titular})
+          </Boton>
+        </div>
+      )}
+      <Campo etiqueta="DNI u otra identificación (si corresponde)">
+        <input
+          value={identificacion}
+          onChange={(evento) => setIdentificacion(evento.target.value)}
+          disabled={bloqueado}
+          style={estiloInput}
+        />
+      </Campo>
+      <Campo etiqueta="Observaciones de la entrega">
+        <input
+          value={observaciones}
+          onChange={(evento) => setObservaciones(evento.target.value)}
+          disabled={bloqueado}
+          style={estiloInput}
+        />
+      </Campo>
+      {!confirmando ? (
+        <Boton
+          disabled={bloqueado || recibidoPor.trim() === ""}
+          onClick={() => setConfirmando(true)}
+        >
+          {devolucion ? "Devolver el equipo (sin reparación)" : "Entregar equipo"}
+        </Boton>
+      ) : (
+        <Confirmacion
+          texto={`¿Confirmás la ${
+            devolucion ? "devolución" : "entrega"
+          } del equipo a ${retira}? Se emiten el comprobante final${
+            devolucion ? "" : " y la garantía"
+          }, y la Orden queda cerrada.`}
+          ocupado={deshabilitado}
+          onVolver={() => setConfirmando(false)}
+          onConfirmar={() =>
+            onConfirmar({
+              recibido_por: recibidoPor.trim(),
+              identificacion_receptor: identificacion.trim() || null,
+              observaciones: observaciones.trim() || null,
+            })
+          }
+        />
+      )}
     </div>
   );
 }

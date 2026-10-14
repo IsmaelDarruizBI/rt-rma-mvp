@@ -45,6 +45,7 @@ from app.domain.models import (
     OrigenCancelacion,
     RegistroCancelacion,
     RolUsuario,
+    TipoEntrega,
     Usuario,
 )
 
@@ -323,6 +324,7 @@ def registrar_devolucion_equipo(
     recibido_por: str,
     fecha: datetime,
     observaciones: str | None = None,
+    identificacion_receptor: str | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-270 (V1.4): devolucion fisica del equipo, Orden CANCELADA.
 
@@ -333,7 +335,8 @@ def registrar_devolucion_equipo(
     financiera (PROC-REP-268): sin saldo a favor del cliente el proceso
     termina (EVT-REP-999) y la Orden queda cerrada; con saldo a favor sigue
     abierta hasta devolver el dinero. No se registra una segunda
-    devolucion.
+    devolucion. Exige la custodia confirmada: sin recepcion confirmada no
+    hay equipo que devolver.
     """
     validar_alguno_de(usuario, ROLES_ENTREGA)
 
@@ -344,8 +347,8 @@ def registrar_devolucion_equipo(
         )
     if not equipo_bajo_custodia(orden):
         raise PrecondicionInvalidaError(
-            f"El equipo de la Orden {orden.id} no quedo en custodia: no hay "
-            "nada que devolver."
+            f"El equipo de la Orden {orden.id} no esta en custodia "
+            "confirmada: no hay nada que devolver."
         )
     if orden.devolucion is not None:
         raise PrecondicionInvalidaError(
@@ -367,6 +370,8 @@ def registrar_devolucion_equipo(
         )
 
     observacion = f"Recibido por: {recibido_por.strip()}"
+    if identificacion_receptor and identificacion_receptor.strip():
+        observacion += f" ({identificacion_receptor.strip()})"
     if observaciones and observaciones.strip():
         observacion += f". Observaciones: {observaciones.strip()}"
 
@@ -379,8 +384,11 @@ def registrar_devolucion_equipo(
         observacion=observacion,
     )
     nueva_orden.devolucion = DevolucionEquipo(
+        tipo=TipoEntrega.DEVOLUCION_SIN_REPARACION,
         entregado_por=usuario.id,
         recibido_por=recibido_por.strip(),
+        identificacion_receptor=(identificacion_receptor or "").strip()
+        or None,
         fecha=fecha,
         observaciones=(observaciones or "").strip() or None,
     )
