@@ -445,7 +445,8 @@ def test_5_la_custodia_se_confirma_aparte_del_comprobante(cliente):
 
 
 def test_6_orden_anterior_se_regulariza_antes_de_entregar(cliente, tmp_path):
-    orden_id = _definida(cliente, confirmar=False)
+    # Una Orden reparada y guardada antes del registro de recepcion.
+    orden_id = _definida(cliente)
     _reparada(cliente, orden_id)
     _pagar(
         cliente, orden_id, _notificar(cliente, orden_id)["resumen"]["saldo"]
@@ -1098,13 +1099,19 @@ def test_circuito_c_garantia_rma(cliente, tmp_path):
     ok(_entregar(cliente, origen_id, **RETIRA))
 
     rma_id = _garantia_rma(cliente, origen_id)
-    # Sin custodia confirmada no se entrega, aunque no haya cobro.
-    _reparada(cliente, rma_id)
-    _notificar(cliente, rma_id)
-    assert "recepcion fisica" in conflicto(
-        _entregar(cliente, rma_id, **RETIRA)
+    # Sin custodia confirmada no se trabaja el equipo, aunque no haya cobro.
+    tomada(cliente, rma_id)
+    mensaje = conflicto(
+        cliente.post(
+            f"/api/orders/{rma_id}/details/DET-001/start",
+            json={"usuario_id": TECNICO},
+        )
     )
+    assert "Debe confirmarse la recepcion fisica" in mensaje
     ok(_confirmar(cliente, rma_id, "Se recibio en el mostrador."))
+    ejecutar(cliente, rma_id, "DET-001", BATERIA)
+    ok(aprobar(cliente, rma_id, "DET-001"))
+    _notificar(cliente, rma_id)
     orden = ok(_entregar(cliente, rma_id, **RETIRA))
 
     assert orden["estado_workflow"] == "ENTREGADA"

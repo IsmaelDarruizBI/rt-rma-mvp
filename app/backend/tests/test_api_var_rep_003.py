@@ -24,6 +24,7 @@ from tests.fixtures.api_definicion import (
     finalizar_definicion,
     registrar_decision,
 )
+from tests.fixtures.custodia import confirmar_recepcion
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     COORDINADOR,
@@ -385,6 +386,7 @@ def test_multidetalle_interrumpir_uno_ofrece_los_trabajables(tmp_path):
 
     with TestClient(create_app(Settings(data_dir=tmp_path))) as cliente:
         orden_id = multi._crear_orden(cliente)
+        confirmar_recepcion(cliente, orden_id)
         for tipo in (multi.TIPO_BATERIA, multi.TIPO_PANTALLA):
             cliente.post(
                 f"/api/orders/{orden_id}/details",

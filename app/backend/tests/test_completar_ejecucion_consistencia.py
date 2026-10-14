@@ -107,6 +107,7 @@ def _orden_en_cola_con_dos_detalles():
         usuario=RECEPCION,
         fecha=t(0),
     )
+    orden = flujo_mvp.con_custodia_confirmada(orden, fecha=t(0))
     orden = definir_reparacion_detail(
         orden,
         detalle_id=DETALLE_1,

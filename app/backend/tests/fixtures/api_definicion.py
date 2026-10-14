@@ -12,12 +12,19 @@ defecto, registran ademas la autorizacion del cliente con el endpoint real
 (``POST .../authorizations``), como lo haria Recepcion. No es una
 autorizacion implicita: es una llamada explicita, visible en el historial
 (PROC-REP-046/047). ``autorizar=False`` deja los Detalles pendientes.
+
+Tambien confirman la recepcion fisica del equipo antes de definir:
+sin custodia confirmada no se inicia ninguna Ejecucion, y estos atajos
+preparan Ordenes que van a ejecutarse. Es la confirmacion explicita de
+Recepcion (``POST .../reception/confirm``), no una custodia presumida.
 """
 
 from typing import Any
 
 from fastapi.testclient import TestClient
 from httpx import Response
+
+from .custodia import confirmar_recepcion
 
 RECEPCION_ID = "RECEP-001"
 
@@ -107,6 +114,7 @@ def definir_y_finalizar(
 
     Si agregar el Detalle falla, devuelve esa respuesta sin finalizar.
     """
+    confirmar_recepcion(cliente, orden_id)
     agregado = cliente.post(f"/api/orders/{orden_id}/details", json=json)
     if agregado.status_code != 200:
         return agregado
@@ -127,6 +135,7 @@ def definir_desde_revision_y_finalizar(
 
     Si agregar el Detalle falla, devuelve esa respuesta sin finalizar.
     """
+    confirmar_recepcion(cliente, orden_id)
     agregado = cliente.post(
         f"/api/orders/{orden_id}/review/details", json=json
     )

@@ -17,6 +17,7 @@ from tests.fixtures.api_definicion import (
     finalizar_definicion,
     registrar_decision,
 )
+from tests.fixtures.custodia import confirmar_recepcion
 from tests.test_api_exc_rep_001 import (
     _cliente,
     _cliente_multi,
@@ -293,6 +294,7 @@ def test_caso_b_sin_stock_tras_127_espera_recursos_y_admite_override(
 def test_caso_a_multidetalle_continua_b_y_despues_entra_a_125(tmp_path):
     with _cliente_multi(tmp_path, a="2", b="2") as cliente:
         orden_id = multi._crear_orden(cliente)
+        confirmar_recepcion(cliente, orden_id)
         for tipo in (multi.TIPO_BATERIA, multi.TIPO_PANTALLA):
             cliente.post(
                 f"/api/orders/{orden_id}/details",

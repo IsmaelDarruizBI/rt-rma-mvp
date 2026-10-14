@@ -18,6 +18,7 @@ from app.domain.models import (
     EstacionTrabajo,
     Insumo,
     MedioPago,
+    MovimientoStock,
     TipoReparacion,
     TipoReparacionEstacion,
     TipoReparacionInsumos,
@@ -56,6 +57,24 @@ class CatalogosRepository(Protocol):
 
         Unica escritura del contrato. Quien la invoca ya valido que el
         nuevo stock sea coherente; aqui no hay regla de negocio.
+        """
+        ...
+
+    # --- Movimientos operativos de stock (ingresos y ajustes) ---
+
+    def listar_movimientos_stock(self) -> list[MovimientoStock]:
+        """Ingresos y ajustes manuales, del mas antiguo al mas reciente."""
+        ...
+
+    def registrar_movimiento_stock(
+        self,
+        movimiento: MovimientoStock,
+    ) -> Insumo:
+        """Agrega el movimiento y fija el stock fisico resultante.
+
+        Lanza ``ConflictoDeEscrituraError`` si el stock fisico ya no es el
+        ``stock_anterior`` del movimiento (alguien lo cambio en el medio).
+        Nunca toca reservas.
         """
         ...
 

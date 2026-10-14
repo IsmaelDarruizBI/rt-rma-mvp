@@ -255,8 +255,12 @@ def test_custodia_pendiente_con_credito_no_cierra_al_devolver_el_dinero(
 # --- 8/9. Historial contradictorio -------------------------------------------
 
 
-def test_8_no_recibido_con_ejecucion_previa_se_rechaza(cliente):
+def test_8_no_recibido_con_ejecucion_previa_se_rechaza(cliente, tmp_path):
+    """Historial contradictorio: una Orden ejecutada con las reglas de antes
+    (sin custodia registrada). Hoy ninguna Ejecucion empieza sin custodia,
+    asi que la contradiccion se simula como un JSON anterior."""
     orden_id = _sin_custodia(cliente)
+    confirmar_recepcion(cliente, orden_id)
     tomada(cliente, orden_id)
     ejecucion_id = iniciar(cliente, orden_id)
     ok(
@@ -264,7 +268,13 @@ def test_8_no_recibido_con_ejecucion_previa_se_rechaza(cliente):
             cliente, orden_id, ejecucion_id, accion="interrupt", cantidad=""
         )
     )
-    orden = ok(cancelar_orden(cliente, orden_id))
+    ok(cancelar_orden(cliente, orden_id))
+    ruta = tmp_path / "ordenes" / f"{orden_id}.json"
+    datos = json.loads(ruta.read_text(encoding="utf-8"))
+    datos["recepcion"]["confirmacion"] = None
+    datos["devolucion"] = None
+    ruta.write_text(json.dumps(datos), encoding="utf-8")
+    orden = _orden(cliente, orden_id)
     assert orden["cerrada"] is False
     assert "REGISTRAR_EQUIPO_NO_RECIBIDO" not in _custodia(orden)
     assert "registra trabajo" in orden["pendientes_de_cierre"][0]
@@ -272,10 +282,28 @@ def test_8_no_recibido_con_ejecucion_previa_se_rechaza(cliente):
     mensaje = conflicto(no_recibido(cliente, orden_id, MOTIVO))
 
     assert f"hubo ejecucion tecnica ({ejecucion_id})" in mensaje
+    assert "un tecnico tomo la Orden" in mensaje
     assert "Regulariza la custodia" in mensaje
     # La regularizacion: confirmar la recepcion y devolver el equipo.
     confirmar_recepcion(cliente, orden_id)
     assert ok(devolver(cliente, orden_id))["cerrada"] is True
+
+
+def test_no_recibido_con_una_toma_previa_se_rechaza(cliente):
+    """Tomar la Orden no exige custodia, pero prueba que hubo equipo."""
+    orden_id = _sin_custodia(cliente)
+    tomada(cliente, orden_id)
+    ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/release",
+            json={"usuario_id": TECNICO},
+        )
+    )
+    ok(cancelar_orden(cliente, orden_id))
+
+    mensaje = conflicto(no_recibido(cliente, orden_id, MOTIVO))
+
+    assert "un tecnico tomo la Orden" in mensaje
 
 
 def test_9_no_recibido_con_devolucion_o_entrega_anterior_se_rechaza(cliente):

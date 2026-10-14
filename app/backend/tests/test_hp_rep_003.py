@@ -124,9 +124,16 @@ def _garantia_habilitada(
 def _garantia_lista_y_notificada(
     origen: OrdenReparacion | None = None,
 ) -> OrdenReparacion:
-    """Circuito tecnico normal, hasta PROC-REP-260."""
+    """Circuito tecnico normal, hasta PROC-REP-260.
+
+    El equipo de la garantia esta en el local: Recepcion confirmo su
+    custodia antes de que el tecnico lo trabaje.
+    """
+    orden = flujo_mvp.con_custodia_confirmada(
+        _garantia_habilitada(origen), fecha=t(306)
+    )
     orden = definir_prioridad(
-        _garantia_habilitada(origen),
+        orden,
         prioridad=1,
         usuario=COORDINADOR,
         fecha=t(307),

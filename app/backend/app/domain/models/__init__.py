@@ -56,7 +56,7 @@ from .enums import (
     TipoReferenciaHistorial,
 )
 from .equipos import DevolucionEquipo, EntregaEquipo, Equipo
-from .inventario import InsumoUtilizado, MovimientoInsumo
+from .inventario import InsumoUtilizado, MovimientoInsumo, MovimientoStock
 from .orden_reparacion import OrdenReparacion
 from .pagos import AnulacionPago, DevolucionDinero, Pago, ResumenPago
 from .personas import Cliente, Usuario
@@ -135,6 +135,7 @@ __all__ = [
     # Inventario
     "InsumoUtilizado",
     "MovimientoInsumo",
+    "MovimientoStock",
     # Pagos y devoluciones de dinero
     "AnulacionPago",
     "DevolucionDinero",

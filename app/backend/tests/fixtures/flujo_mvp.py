@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from app.domain.models import (
     CanalComunicacion,
+    DatosRecepcion,
     InsumoUtilizado,
     OrdenReparacion,
     ResultadoAutorizacion,
@@ -20,6 +21,7 @@ from app.services import (
     DecisionDetalle,
     aprobar_control_tecnico,
     calcular_puntaje,
+    confirmar_recepcion_fisica,
     crear_orden_cliente_externo,
     definir_prioridad,
     definir_reparacion_detail,
@@ -34,6 +36,7 @@ from app.services import (
     marcar_pendiente_autorizacion,
     marcar_reparacion_lista,
     notificar_cliente,
+    registrar_datos_recepcion,
     registrar_decision_cliente,
     registrar_ejecucion_completada,
     registrar_pago,
@@ -65,17 +68,42 @@ from .catalogos_mvp import (
 )
 
 DETALLE_ID = "DET-001"
+ESTADO_AL_INGRESO = DatosRecepcion(estado_fisico="Sin golpes ni marcas.")
+
+
+def con_custodia_confirmada(
+    orden: OrdenReparacion,
+    *,
+    fecha,
+) -> OrdenReparacion:
+    """Recepcion confirma que el equipo quedo en el local.
+
+    Registra antes el estado fisico si falta (la confirmacion lo exige).
+    Es el paso explicito que habilita a ejecutar: sin custodia confirmada
+    ninguna Ejecucion puede empezar.
+    """
+    if orden.recepcion is None or not orden.recepcion.datos.estado_fisico:
+        orden = registrar_datos_recepcion(
+            orden, usuario=RECEPCION, fecha=fecha, datos=ESTADO_AL_INGRESO
+        )
+    return confirmar_recepcion_fisica(orden, usuario=RECEPCION, fecha=fecha)
 
 
 def orden_creada() -> OrdenReparacion:
-    """Hasta PROC-REP-040: Orden en REQUERIMIENTO, sin Detalles."""
-    return crear_orden_cliente_externo(
+    """Hasta PROC-REP-040: Orden en REQUERIMIENTO, sin Detalles.
+
+    Recepcion registra el estado fisico y confirma que el equipo quedo en
+    el local (custodia): sin eso ninguna Ejecucion puede empezar.
+    """
+    orden = crear_orden_cliente_externo(
         orden_id="OR-001",
         cliente=CLIENTE,
         equipo=EQUIPO,
         usuario=RECEPCION,
         fecha=t(0),
+        datos_recepcion=ESTADO_AL_INGRESO,
     )
+    return confirmar_recepcion_fisica(orden, usuario=RECEPCION, fecha=t(0))
 
 
 def orden_con_detalle() -> OrdenReparacion:

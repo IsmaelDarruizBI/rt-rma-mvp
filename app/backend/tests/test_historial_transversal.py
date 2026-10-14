@@ -164,10 +164,15 @@ def test_un_historial_mixto_sobrevive_el_round_trip(tmp_path):
     assert "FUNCTIONAL_ACTION" in tipos
     assert tipos[-1] == "PROCESS_NODE"
 
-    transversal = next(
+    # La confirmacion de custodia del ingreso (ACC-REP-024) y el pago.
+    transversales = [
         paso for paso in recuperada.historial if paso.es_accion_funcional
-    )
-    assert transversal.referencia_id == "ACC-REP-020"
+    ]
+    assert [paso.referencia_id for paso in transversales] == [
+        "ACC-REP-024",
+        "ACC-REP-020",
+    ]
+    transversal = transversales[-1]
     assert transversal.pago_id == "PAG-DEMO"
     assert transversal.process_id is None
     assert recuperada.current_process == "PROC-REP-140"
@@ -182,11 +187,14 @@ def test_la_orden_final_del_happy_path_sigue_siendo_valida(tmp_path):
 
     assert repo.obtener(orden.id) == orden
 
+    # Confirmacion de custodia del ingreso (ACC-REP-024) y el pago.
     transversales = [
         paso for paso in orden.historial if paso.es_accion_funcional
     ]
-    assert len(transversales) == 1
-    assert transversales[0].referencia_id == "ACC-REP-020"
+    assert [paso.referencia_id for paso in transversales] == [
+        "ACC-REP-024",
+        "ACC-REP-020",
+    ]
 
     # El resto sigue siendo el recorrido de nodos.
     nodos = [

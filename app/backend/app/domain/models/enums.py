@@ -177,12 +177,30 @@ class OrigenCancelacion(str, Enum):
 
 
 class TipoMovimientoInsumo(str, Enum):
-    """Tipos de movimiento de inventario trazados a un Detalle."""
+    """Tipos de movimiento de inventario.
+
+    Trazados a un Detalle de una Orden (``MovimientoInsumo``):
+
+        RESERVA             compromete stock, no toca el fisico (185)
+        CONSUMO             baja el fisico y cierra la reserva (210)
+        LIBERACION_RESERVA  cierra la reserva sin tocar el fisico (210)
+        DEVOLUCION          valor del modelo, sin flujo operativo todavia
+
+    Operativos, fuera de una Orden (``MovimientoStock``): cambian el stock
+    fisico y nunca tocan reservas.
+
+        INGRESO             entrada de existencias
+        AJUSTE_POSITIVO     correccion que suma unidades
+        AJUSTE_NEGATIVO     correccion que resta unidades
+    """
 
     RESERVA = "RESERVA"
     CONSUMO = "CONSUMO"
     LIBERACION_RESERVA = "LIBERACION_RESERVA"
     DEVOLUCION = "DEVOLUCION"
+    INGRESO = "INGRESO"
+    AJUSTE_POSITIVO = "AJUSTE_POSITIVO"
+    AJUSTE_NEGATIVO = "AJUSTE_NEGATIVO"
 
 
 class EstadoTomaOrden(str, Enum):

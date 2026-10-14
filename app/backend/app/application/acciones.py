@@ -42,6 +42,7 @@ from app.services import (
     es_trabajable,
     estado_custodia,
     evidencias_de_equipo,
+    motivo_bloqueo_ejecucion,
     pendiente_de_autorizacion,
     requiere_definicion,
     revision_vigente,
@@ -151,6 +152,9 @@ class AccionDisponible:
     titular de la toma activa para las acciones tecnicas sobre ella
     (E2). ``None`` significa que cualquier usuario con el rol puede.
     ``pago_id``: el Pago sobre el que actua un movimiento financiero.
+    ``bloqueo``: la accion corresponde pero hoy no puede ejecutarse (por
+    ejemplo, iniciar un Detalle sin la custodia del equipo confirmada); el
+    backend la rechaza igual.
     """
 
     codigo: str
@@ -161,6 +165,7 @@ class AccionDisponible:
     requiere_actor: bool = True
     usuario_id: str | None = None
     pago_id: str | None = None
+    bloqueo: str | None = None
 
 
 def detalle_trabajable(orden: OrdenReparacion) -> str | None:
@@ -468,6 +473,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
     titular = toma.usuario_id if toma is not None else None
 
     if toma is not None and en_curso is None:
+        bloqueo = motivo_bloqueo_ejecucion(orden)
         for trabajable in detalles_trabajables(orden):
             acciones.append(
                 AccionDisponible(
@@ -476,6 +482,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                     roles=(RolUsuario.TECNICO,),
                     detalle_id=trabajable,
                     usuario_id=titular,
+                    bloqueo=bloqueo,
                 )
             )
         acciones.append(

@@ -44,7 +44,10 @@ from .autorizacion_cliente import (
 )
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .inventario import faltantes_del_detalle
-from .recursos import tiene_override_factibilidad
+from .recursos import (
+    detalles_bloqueados_por_recursos,
+    tiene_override_factibilidad,
+)
 from .revisiones import finalizada_sin_reparacion, revision_tecnica_realizada
 from .workflow import registrar_paso
 
@@ -345,6 +348,52 @@ def _evaluable(orden: OrdenReparacion, detalle: ReparacionDetail) -> bool:
     )
 
 
+def _faltantes_para_factibilidad(
+    orden: OrdenReparacion,
+    detalle: ReparacionDetail,
+    insumos: Sequence[Insumo],
+    insumos_previstos: Sequence[TipoReparacionInsumos],
+    reservas_externas: Mapping[str, Decimal],
+) -> list[str]:
+    """La pregunta de PROC-REP-080 para UN Detalle: que insumos faltan hoy.
+
+    Un override vigente (EXC-REP-002) la responde de antemano: nada, el
+    override persiste (BR-REP-003).
+    """
+    if tiene_override_factibilidad(orden, detalle.id):
+        return []
+    return faltantes_del_detalle(
+        detalle.tipo_reparacion_id,
+        orden.movimientos_insumo,
+        insumos,
+        insumos_previstos,
+        reservas_externas,
+    )
+
+
+def faltantes_de_detalles_bloqueados(
+    orden: OrdenReparacion,
+    *,
+    insumos: Sequence[Insumo],
+    insumos_previstos: Sequence[TipoReparacionInsumos],
+    reservas_externas: Mapping[str, Decimal] | None = None,
+) -> dict[str, list[str]]:
+    """PROC-REP-080 como consulta, solo de los Detalles bloqueados.
+
+    Por cada Detalle bloqueado por recursos, sus faltantes con el stock y
+    las reservas actuales (lista vacia: ya tiene recursos). No modifica la
+    Orden ni registra pasos: sirve para decidir si revalidar cambia algo.
+    """
+    ajenas = reservas_externas or {}
+    detalles = {detalle.id: detalle for detalle in orden.reparaciones_detail}
+    return {
+        detalle_id: _faltantes_para_factibilidad(
+            orden, detalles[detalle_id], insumos, insumos_previstos, ajenas
+        )
+        for detalle_id in detalles_bloqueados_por_recursos(orden)
+    }
+
+
 def hay_detalles_para_factibilidad(orden: OrdenReparacion) -> bool:
     """Algun Detalle puede evaluarse en PROC-REP-080.
 
@@ -408,16 +457,8 @@ def validar_factibilidad_detalles(
             continue
         if detalle_ids is not None and detalle.id not in detalle_ids:
             continue
-        if tiene_override_factibilidad(nueva_orden, detalle.id):
-            # EXC-REP-002: el override autorizado persiste (BR-REP-003).
-            detalle.condicion = CondicionReparacionDetail.SIN_BLOQUEO
-            continue
-        faltantes = faltantes_del_detalle(
-            detalle.tipo_reparacion_id,
-            nueva_orden.movimientos_insumo,
-            insumos,
-            insumos_previstos,
-            ajenas,
+        faltantes = _faltantes_para_factibilidad(
+            nueva_orden, detalle, insumos, insumos_previstos, ajenas
         )
         if faltantes:
             detalle.condicion = (

@@ -103,6 +103,19 @@ from .ingreso import (
     finalizar_sin_reparacion,
     iniciar_garantia_rma,
 )
+from .inventario import (
+    DetalleInsumo,
+    ResultadoMovimientoStock,
+    ResultadoRevalidacion,
+    ResultadoRevalidacionMasiva,
+    ResultadoRevalidacionOrden,
+    consultar_inventario,
+    detalle_de_insumo,
+    movimientos_de_inventario,
+    registrar_ajuste_stock,
+    registrar_ingreso_stock,
+    revalidar_ordenes_pendientes,
+)
 from .progreso import PasoProgreso, progreso
 from .recursos import (
     ImpactoOverride,
@@ -211,6 +224,18 @@ __all__ = [
     "registrar_recepcion",
     "confirmar_recepcion",
     "registrar_no_recepcion",
+    # Inventario operativo
+    "DetalleInsumo",
+    "ResultadoMovimientoStock",
+    "ResultadoRevalidacion",
+    "ResultadoRevalidacionMasiva",
+    "ResultadoRevalidacionOrden",
+    "consultar_inventario",
+    "detalle_de_insumo",
+    "movimientos_de_inventario",
+    "registrar_ajuste_stock",
+    "registrar_ingreso_stock",
+    "revalidar_ordenes_pendientes",
     "agregar_observacion_recepcion",
     "emitir_comprobante_recepcion",
 ]

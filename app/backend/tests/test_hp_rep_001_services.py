@@ -60,6 +60,7 @@ from app.services import (
     validar_estacion_trabajo,
     validar_factibilidad_detalles,
 )
+from tests.fixtures import flujo_mvp
 from tests.fixtures.catalogos_mvp import (
     ADMINISTRADOR,
     CLIENTE,
@@ -95,6 +96,9 @@ def test_hp_rep_001_end_to_end():
     assert orden.total == Decimal("0")
     assert orden.estado_pago is EstadoPago.PENDIENTE
     assert orden.current_process == "PROC-REP-040"
+
+    # Recepcion confirma la custodia: sin ella no se ejecuta (ACC-REP-024).
+    orden = flujo_mvp.con_custodia_confirmada(orden, fecha=t(0))
 
     # PROC-REP-045 ("Si") -> PROC-REP-070
     orden = definir_reparacion_detail(

@@ -32,6 +32,7 @@ from app.domain.models import (
 
 from .autorizacion import validar_actor
 from .autorizacion_cliente import exigir_autorizacion_vigente
+from .custodia import exigir_custodia_para_ejecutar
 from .exceptions import (
     EntidadNoEncontradaError,
     PrecondicionInvalidaError,
@@ -175,9 +176,10 @@ def _validar_precondiciones_de_la_reserva(
     """Precondiciones reales de PROC-REP-185: no son una reserva fallida.
 
     Un Detalle no trabajable, sin autorizacion vigente del cliente
-    (BR-REP-028), sin toma, con la toma de otro tecnico (E2) o con otra
-    Ejecucion en curso es un error de precondicion, no el resultado
-    "Reserva fallida": no se reserva nada.
+    (BR-REP-028), sin toma, con la toma de otro tecnico (E2), con otra
+    Ejecucion en curso o sin el equipo en custodia confirmada es un error
+    de precondicion, no el resultado "Reserva fallida": no se reserva nada
+    ni se registra ningun paso.
     """
     detalle = buscar_detalle(orden, detalle_id)
     if detalle.estado is not EstadoReparacionDetail.DEFINIDO:
@@ -201,6 +203,8 @@ def _validar_precondiciones_de_la_reserva(
         raise PrecondicionInvalidaError(
             "La Orden ya tiene una Ejecucion activa (BR-REP-007)."
         )
+    # Trabajar sobre el equipo exige tenerlo (custodia confirmada).
+    exigir_custodia_para_ejecutar(orden)
     return detalle, toma
 
 

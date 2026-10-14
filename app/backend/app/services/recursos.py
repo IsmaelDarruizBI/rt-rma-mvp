@@ -24,6 +24,7 @@ por ``resolver_situacion_orden`` a partir de la condicion de los Detalles.
 Aqui solo se verifica; nunca se persiste.
 """
 
+from collections.abc import Collection
 from datetime import datetime
 
 from app.domain.models import (
@@ -50,6 +51,8 @@ NODO_REDEFINICION = "PROC-REP-127"
 # Capacidad transversal de autorizacion de override (BR-REP-003): ID real
 # de la trazabilidad, como ACC-REP-020 para Registrar Pago.
 ACCION_AUTORIZAR_OVERRIDE = "ACC-REP-049"
+# Revalidacion de recursos disparada por una persona (ID del MVP).
+ACCION_REVALIDAR_RECURSOS = "ACC-REP-028"
 _NODOS_QUE_LLEVAN_A_120 = ("PROC-REP-110", "PROC-REP-211")
 
 
@@ -320,6 +323,72 @@ def override_listo_para_habilitar(orden: OrdenReparacion) -> bool:
         and d.condicion is CondicionReparacionDetail.SIN_BLOQUEO
         for d in orden.reparaciones_detail
     )
+
+
+def detalles_bloqueados_por_recursos(orden: OrdenReparacion) -> list[str]:
+    """IDs de los Detalles realmente bloqueados por recursos.
+
+    DEFINIDO + BLOQUEADO_POR_RECURSOS y sin decision pendiente del cliente
+    (BR-REP-028): la misma definicion que usa el resolver. Un Detalle que
+    espera revision tecnica (REQUIERE_DEFINICION) o al cliente no cuenta,
+    sea cual sea el nodo de la Orden.
+    """
+    return [
+        detalle.id
+        for detalle in orden.reparaciones_detail
+        if detalle.estado is EstadoReparacionDetail.DEFINIDO
+        and detalle.condicion
+        is CondicionReparacionDetail.BLOQUEADO_POR_RECURSOS
+        and not pendiente_de_autorizacion(orden, detalle)
+    ]
+
+
+def desbloquear_detalles_con_recursos(
+    orden: OrdenReparacion,
+    *,
+    detalle_ids: Collection[str],
+    usuario_id: str,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """Factibilidad parcial: Detalles bloqueados que ya tienen recursos.
+
+    Para una Orden habilitada que sigue operando (otros Detalles
+    trabajables o en ejecucion). Igual que el override con factibilidad
+    parcial (EXC-REP-002), no recorre ningun nodo: no vuelve a 080/090
+    ni repite 140, no mueve ``current_process`` ni el estado de workflow,
+    no cierra la toma, no toca la Ejecucion en curso ni la prioridad. Por
+    cada Detalle deja una accion funcional (``ACC-REP-028``: quien
+    revalido y cuando) y lo pasa a SIN_BLOQUEO.
+
+    Que el Detalle tenga recursos lo decide el caller con la pregunta de
+    PROC-REP-080 (``faltantes_de_detalles_bloqueados``). No reserva ni toca
+    el stock: la reserva sigue ocurriendo en PROC-REP-185.
+    """
+    bloqueados = set(detalles_bloqueados_por_recursos(orden))
+    ajenos = sorted(set(detalle_ids) - bloqueados)
+    if ajenos:
+        raise PrecondicionInvalidaError(
+            f"No estan bloqueados por recursos: {', '.join(ajenos)}."
+        )
+
+    nueva_orden = orden
+    for detalle_id in sorted(detalle_ids):
+        nueva_orden = registrar_accion_funcional(
+            nueva_orden,
+            accion_id=ACCION_REVALIDAR_RECURSOS,
+            accion="REVALIDAR_RECURSOS",
+            fecha=fecha,
+            usuario_id=usuario_id,
+            reparacion_detail_id=detalle_id,
+            observacion=(
+                "Revalidacion de recursos: el Detalle ya tiene los insumos "
+                "previstos (factibilidad parcial, sin reservar)"
+            ),
+        )
+        for detalle in nueva_orden.reparaciones_detail:
+            if detalle.id == detalle_id:
+                detalle.condicion = CondicionReparacionDetail.SIN_BLOQUEO
+    return nueva_orden
 
 
 def exigir_espera_por_recursos(orden: OrdenReparacion) -> None:

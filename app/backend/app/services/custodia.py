@@ -105,6 +105,49 @@ def equipo_bajo_custodia(orden: OrdenReparacion) -> bool:
     return estado_custodia(orden) is EstadoCustodia.EN_CUSTODIA
 
 
+MENSAJE_SIN_CUSTODIA_PARA_EJECUTAR = (
+    "Debe confirmarse la recepcion fisica del equipo antes de iniciar la "
+    "reparacion"
+)
+
+
+def motivo_bloqueo_ejecucion(orden: OrdenReparacion) -> str | None:
+    """Por que no puede empezar una Ejecucion fisica, o ``None``.
+
+    Trabajar sobre el equipo exige tenerlo: custodia EN_CUSTODIA cuando la
+    politica del Origen confirma la recepcion (CLIENTE_EXTERNO, garantia
+    RMA). RT_INTERNO conserva su circuito: el equipo llega por Gestion RT.
+    Nunca se presume la custodia de una Orden anterior.
+    """
+    estado = estado_custodia(orden)
+    if estado is EstadoCustodia.EN_CUSTODIA:
+        return None
+    if estado is EstadoCustodia.NO_RECIBIDO:
+        return (
+            "Se registro que el equipo no se recibio: no se puede iniciar "
+            "la reparacion"
+        )
+    if estado is EstadoCustodia.SIN_REGISTRO:
+        return (
+            f"{MENSAJE_SIN_CUSTODIA_PARA_EJECUTAR} (Orden anterior al "
+            "registro de recepcion: regularizala)"
+        )
+    if estado is EstadoCustodia.PENDIENTE_CONFIRMACION:
+        return MENSAJE_SIN_CUSTODIA_PARA_EJECUTAR
+    return f"El equipo no esta en el local ({estado.value})"
+
+
+def exigir_custodia_para_ejecutar(orden: OrdenReparacion) -> None:
+    """Rechaza el inicio de una Ejecucion sin custodia confirmada.
+
+    Se valida antes de generar reservas, la Ejecucion o cualquier paso:
+    un rechazo no deja rastro operativo.
+    """
+    motivo = motivo_bloqueo_ejecucion(orden)
+    if motivo is not None:
+        raise PrecondicionInvalidaError(f"{motivo}.")
+
+
 def custodia_por_definir(orden: OrdenReparacion) -> bool:
     """Todavia no se decidio si el equipo se recibio (o es una Orden
     anterior sin registro): no se puede asumir ni que esta ni que no."""

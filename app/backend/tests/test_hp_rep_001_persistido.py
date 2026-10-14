@@ -65,6 +65,7 @@ from app.services import (
 )
 from app.storage import JsonCatalogosRepository, JsonOrdenReparacionRepository
 from app.storage.json.base import escribir_json_atomico
+from tests.fixtures import flujo_mvp
 from tests.fixtures.catalogos_mvp import (
     ADMINISTRADOR as ADMIN_DEMO,
 )
@@ -134,6 +135,8 @@ def test_hp_rep_001_persistido_end_to_end(repos):
         usuario=recepcion,
         fecha=t(0),
     )
+    # Recepcion confirma la custodia: sin ella no se ejecuta (ACC-REP-024).
+    orden = flujo_mvp.con_custodia_confirmada(orden, fecha=t(0))
     ordenes_repo.guardar(orden)
 
     # --- Tramo 2: cargar -> Detalle y comprobante (045/070, 050/060)

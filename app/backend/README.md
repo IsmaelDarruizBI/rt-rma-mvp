@@ -98,6 +98,9 @@ GET  /api/orders/{orden_id}/documents
 GET  /api/orders/{orden_id}/documents/{documento_id}
 GET  /api/orders/{orden_id}/documents/preview/{tipo}
 GET  /api/catalogs/repair-types | stations | users | payment-methods
+GET  /api/inventory?buscar=&solo_faltantes=
+GET  /api/inventory/movements?insumo_id=&tipo=
+GET  /api/inventory/{insumo_id}
 ```
 
 Comandos del Happy Path. Cada uno representa UNA intencion de una
@@ -280,8 +283,86 @@ Recepcion fisica, custodia, entrega y documentos:
   `REGULARIZACION`). Sus marcas de documentos se conservan, sin inventar
   una copia del contenido.
 
+- **Custodia antes de ejecutar.** Un tecnico no inicia la ejecucion
+  fisica (`.../details/{detalle_id}/start`) sin la recepcion confirmada.
+  CLIENTE_EXTERNO y RMA_GARANTIA_REPARACION exigen `EN_CUSTODIA`;
+  `PENDIENTE_CONFIRMACION`, `SIN_REGISTRO` y `NO_RECIBIDO` responden 409
+  ("Debe confirmarse la recepcion fisica del equipo antes de iniciar la
+  reparacion") antes de reservar stock, abrir la Ejecucion o mover el
+  workflow. RT_INTERNO conserva su politica
+  (`requiere_confirmacion_recepcion = False`). La accion `INICIAR_DETALLE`
+  publica el motivo en `bloqueo` para que la interfaz lo muestre. Las
+  Ordenes anteriores (`SIN_REGISTRO`) se regularizan confirmando la
+  recepcion: no se presume la custodia.
+
 Los roles de recepcion y custodia son una propuesta del MVP: **negocio
 debe validar la politica final**.
+
+Inventario operativo (consulta, ingresos, ajustes y revalidacion):
+
+| Endpoint | Actor | Efecto |
+|---|---|---|
+| `GET /api/inventory` | todos | fisico, reservado, disponible y faltante por insumo (`buscar`, `solo_faltantes`) |
+| `GET /api/inventory/{insumo_id}` | todos | reservas vigentes, faltantes registrados y movimientos del insumo |
+| `GET /api/inventory/movements` | todos | historial unificado (`insumo_id`, `tipo`) |
+| `POST /api/inventory/{insumo_id}/receipts` | ADMINISTRADOR o COORDINADOR_RMA | `INGRESO`: suma al fisico (cantidad > 0, motivo, referencia opcional) |
+| `POST /api/inventory/{insumo_id}/adjustments` | ADMINISTRADOR o COORDINADOR_RMA | `AJUSTE_POSITIVO` / `AJUSTE_NEGATIVO`: diferencia en unidades con motivo |
+| `POST /api/inventory/revalidate-orders` | ADMINISTRADOR o COORDINADOR_RMA | `ACC-REP-028`: revalida los Detalles bloqueados por recursos |
+
+- **Una sola fuente de stock fisico.** `catalogs/insumos.json`
+  (`Insumo.stock_fisico`). `reservado` = reservas activas de las Ordenes
+  (RESERVA sin consumir ni liberar); `disponible = fisico - reservado`,
+  que puede ser negativo. Nada de esto se guarda: se calcula al leer.
+- **Dos tipos de movimiento, un historial.** Los de las Ordenes
+  (`RESERVA`, `CONSUMO`, `LIBERACION_RESERVA`, `DEVOLUCION`) siguen dentro
+  de cada Orden, atados a su Detalle. Los operativos (`INGRESO`,
+  `AJUSTE_POSITIVO`, `AJUSTE_NEGATIVO`) van al libro append-only
+  `catalogs/movimientos_stock.json`, con usuario, fecha, motivo,
+  referencia, fisico anterior y resultante, reservado y disponible
+  resultante. El historial une ambos al leer, ordenado por fecha; no se
+  reconstruye ni se inventa ningun movimiento anterior.
+- **Ingresos y ajustes.** Nunca tocan reservas. Motivo obligatorio;
+  diferencia cero, cantidades no finitas o un fisico resultante menor
+  que cero se rechazan (409). Todo ajuste negativo exige
+  `confirmado: true` (409 `CONFIRMACION_REQUERIDA` sin ella, con el
+  impacto en fisico y disponible); si deja el disponible negativo, el
+  aviso lo dice y queda como faltante registrado. Un ingreso o un ajuste
+  positivo solo suman y no piden confirmacion. Un reintento con el mismo
+  `operacion_id`, o la misma `referencia` para el mismo insumo y tipo, se
+  rechaza (409). El libro y el stock se escriben juntos: si el stock
+  cambio desde la lectura (`stock_anterior`), se rechaza; si falla la
+  escritura del stock, el libro se restaura.
+- **Faltantes.** Un consumo que deja el fisico negativo queda en el
+  historial de la Orden (PROC-REP-210, "Faltante fisico"); un ajuste
+  negativo confirmado, en el libro. Se corrigen con movimientos nuevos
+  (ingreso o ajuste positivo); la evidencia se conserva.
+- **Revalidacion masiva.** Candidatas: Ordenes abiertas en PROC-REP-100
+  o 120, o con algun Detalle realmente bloqueado por recursos (DEFINIDO,
+  `BLOQUEADO_POR_RECURSOS`, sin decision pendiente del cliente), este en
+  el nodo que este. Cada una se evalua por separado con la pregunta de
+  PROC-REP-080 sobre sus Detalles bloqueados:
+  - Si ninguno tiene recursos todavia, la Orden no se toca
+    (`SIGUE_ESPERANDO`): revalidar de nuevo no duplica transiciones.
+  - Esperando en 100/120: las transiciones existentes (110 No → 120 →
+    080 → 090 → 140 \| 100).
+  - Factibilidad parcial (ya habilitada y operando, con otros Detalles
+    trabajables o en ejecucion): cada Detalle con recursos pasa a
+    SIN_BLOQUEO con una accion funcional `ACC-REP-028` por Detalle. No
+    recorre nodos ni repite 140, no cambia `current_process`, el estado,
+    la prioridad, la toma ni la Ejecucion en curso.
+  - En otra espera (revision tecnica, decision del cliente):
+    `OTRA_INTERVENCION`, sin modificarla.
+
+  No reserva stock (la reserva sigue ocurriendo al iniciar cada Detalle)
+  y nunca evalua Detalles pendientes de autorizacion o de revision.
+  `detalles_revalidados` lista los que quedaron trabajables; `SIN_CAMBIOS`
+  es una Orden que cambio mientras se evaluaba y `ERROR` no detiene a las
+  demas.
+
+Las reglas viven en `services/inventario_operativo.py` y
+`application/inventario.py`; los endpoints solo traducen. Los roles de
+ingreso, ajuste y revalidacion son una propuesta del MVP: **negocio debe
+validar la politica final**.
 
 Errores: `404` no encontrado · `409` precondicion invalida o recurso no
 disponible · `422` request mal formado · `500` fallo de infraestructura
@@ -309,7 +390,7 @@ versionados.
 
 ```text
 TR-001    Cambio bateria iPhone 14   precio 80000 · puntaje 10 · garantia 90
-INS-001   BAT-IP14 Bateria iPhone 14 · stock_fisico 6
+INS-001   BAT-IP14 Bateria iPhone 14 · stock_fisico 2
 EST-001   Mesa tecnica 1
 RECEP-001 · COORD-001 · TECH-001 · ADMIN-001
 ```
@@ -347,7 +428,11 @@ Concretamente:
   `devolucion` sin `tipo` se lee como DEVOLUCION_SIN_REPARACION (era la
   unica posible). La custodia de esas Ordenes queda `SIN_REGISTRO`, y
   un registro sin `no_recibido` sigue pendiente: "no recibido" nunca se
-  infiere.
+  infiere. Por eso tampoco se pueden iniciar en el taller hasta
+  regularizar la recepcion.
+- Inventario operativo **si** carga datos anteriores: sin
+  `catalogs/movimientos_stock.json` el libro esta vacio (los movimientos
+  de las Ordenes siguen visibles) y `Insumo.unidad` es opcional.
 - Para el MVP se espera **recrear o resetear** los datos locales
   generados con versiones anteriores: borrar `data/ordenes/*.json`.
 - Esto debera resolverse con migraciones reales cuando exista una
@@ -363,5 +448,7 @@ ruff check .
 Cubren los modelos de dominio, los services en memoria, las invariantes
 (una sola toma activa, una sola ejecucion activa, idempotencia de
 `PROC-REP-210`), la autorizacion por actor, la persistencia JSON, el
-inventario global y `HP-REP-001` completo en tres niveles: services en
-memoria, services contra JSON, y HTTP real con `TestClient`.
+inventario global y operativo (ingresos, ajustes, faltantes,
+revalidacion, custodia antes de ejecutar) y `HP-REP-001` completo en tres
+niveles: services en memoria, services contra JSON, y HTTP real con
+`TestClient`.

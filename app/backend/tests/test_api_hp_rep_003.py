@@ -25,7 +25,7 @@ from tests.fixtures.api_definicion import (
     finalizar_definicion,
     registrar_decision,
 )
-from tests.fixtures.custodia import entregar
+from tests.fixtures.custodia import confirmar_recepcion, entregar
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     COORDINADOR,
@@ -46,7 +46,12 @@ def cliente(tmp_path):
 
 
 def _circuito_tecnico(cliente: TestClient, orden_id: str) -> dict:
-    """Priorizar -> tomar -> ejecutar -> aprobar control (mismo circuito)."""
+    """Priorizar -> tomar -> ejecutar -> aprobar control (mismo circuito).
+
+    Antes, Recepcion confirma que el equipo esta en el local: sin custodia
+    no se ejecuta.
+    """
+    confirmar_recepcion(cliente, orden_id)
     cliente.post(
         f"/api/orders/{orden_id}/queue",
         json={"usuario_id": COORDINADOR, "prioridad": 1},
@@ -611,6 +616,7 @@ def cliente_multi(tmp_path):
 def _entregada_con_dos_detalles(cliente: TestClient) -> dict:
     """HP-REP-001 con DET-001 (bateria) y DET-002 (pantalla), entregada."""
     orden_id = multi._crear_orden(cliente)
+    confirmar_recepcion(cliente, orden_id)
     for tipo in (multi.TIPO_BATERIA, multi.TIPO_PANTALLA):
         cliente.post(
             f"/api/orders/{orden_id}/details",

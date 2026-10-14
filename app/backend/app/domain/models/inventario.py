@@ -54,3 +54,34 @@ class MovimientoInsumo(BaseModel):
     usuario_id: str | None = None
     fecha: datetime
     observacion: str | None = None
+
+
+class MovimientoStock(BaseModel):
+    """Movimiento operativo del stock fisico, fuera de una Orden.
+
+    Ingreso de existencias o ajuste manual (positivo o negativo). Es el
+    registro historico de cada cambio manual del ``stock_fisico`` del
+    catalogo, que sigue siendo la unica fuente del fisico: guarda el valor
+    anterior y el resultante para poder reconstruir y auditar el cambio.
+
+    Nunca toca reservas: ``reservado`` y ``disponible_resultante`` son la
+    foto de las reservas de todas las Ordenes al registrarlo, para dejar
+    evidencia de un faltante que el ajuste haya provocado. Inmutable: una
+    correccion es otro movimiento.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    tipo: TipoMovimientoInsumo
+    insumo_id: str
+    cantidad: Decimal = Field(gt=0)
+    stock_anterior: Decimal
+    stock_resultante: Decimal
+    reservado: Decimal = Decimal("0")
+    disponible_resultante: Decimal
+    usuario_id: str
+    fecha: datetime
+    motivo: str
+    referencia: str | None = None
+    operacion_id: str | None = None

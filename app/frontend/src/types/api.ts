@@ -618,6 +618,8 @@ export interface Accion {
   usuario_id: string | null;
   /** Movimientos financieros: el Pago sobre el que actúa (anularlo). */
   pago_id: string | null;
+  /** La acción corresponde pero hoy no puede ejecutarse (y por qué). */
+  bloqueo: string | null;
 }
 
 /** Un insumo previsto ante el override (E3): lo que se confirma. */
@@ -744,4 +746,111 @@ export interface Catalogos {
   tipos: TipoReparacion[];
   estaciones: Estacion[];
   usuarios: Usuario[];
+}
+
+// --- Inventario operativo ---------------------------------------------------
+
+export type TipoMovimientoInsumo =
+  | "RESERVA"
+  | "CONSUMO"
+  | "LIBERACION_RESERVA"
+  | "DEVOLUCION"
+  | "INGRESO"
+  | "AJUSTE_POSITIVO"
+  | "AJUSTE_NEGATIVO";
+
+/** Un insumo con sus tres cantidades: disponible = físico − reservado. */
+export interface SituacionInsumo {
+  id: string;
+  codigo: string;
+  nombre: string;
+  unidad: string | null;
+  activo: boolean;
+  stock_fisico: string;
+  reservado: string;
+  disponible: string;
+  /** Disponible o físico negativos. */
+  faltante: boolean;
+  disponible_negativo: boolean;
+  fisico_negativo: boolean;
+  ordenes_con_reserva: number;
+  detalles_con_reserva: number;
+}
+
+export interface ReservaVigente {
+  orden_id: string;
+  detalle_id: string;
+  movimiento_id: string;
+  ejecucion_id: string | null;
+  cantidad: string;
+  fecha: string;
+}
+
+/**
+ * Un movimiento tal como se registró. ORDEN: trazado a un Detalle;
+ * INVENTARIO: ingreso o ajuste manual (con stock antes y después).
+ */
+export interface MovimientoInventario {
+  id: string;
+  origen: "ORDEN" | "INVENTARIO";
+  tipo: TipoMovimientoInsumo;
+  insumo_id: string;
+  cantidad: string;
+  fecha: string;
+  usuario_id: string | null;
+  orden_id: string | null;
+  detalle_id: string | null;
+  ejecucion_id: string | null;
+  movimiento_origen_id: string | null;
+  observacion: string | null;
+  referencia: string | null;
+  stock_anterior: string | null;
+  stock_resultante: string | null;
+  disponible_resultante: string | null;
+}
+
+export interface EvidenciaFaltante {
+  fecha: string;
+  origen: string;
+  descripcion: string;
+  orden_id: string | null;
+  movimiento_id: string | null;
+}
+
+export interface DetalleInsumo {
+  insumo: SituacionInsumo;
+  reservas: ReservaVigente[];
+  movimientos: MovimientoInventario[];
+  faltantes: EvidenciaFaltante[];
+}
+
+export interface ResultadoMovimientoStock {
+  movimiento: MovimientoInventario;
+  insumo: SituacionInsumo;
+}
+
+export interface RevalidacionOrden {
+  orden_id: string;
+  resultado:
+    | "TRABAJABLE"
+    | "SIGUE_ESPERANDO"
+    | "OTRA_INTERVENCION"
+    | "SIN_CAMBIOS"
+    | "ERROR";
+  detalle: string;
+  current_process: string | null;
+  estado_workflow: string | null;
+  detalles_revalidados: string[];
+}
+
+export interface ResultadoRevalidacion {
+  usuario_id: string;
+  fecha: string;
+  evaluadas: number;
+  trabajables: number;
+  siguen_esperando: number;
+  otra_intervencion: number;
+  sin_cambios: number;
+  errores: number;
+  ordenes: RevalidacionOrden[];
 }

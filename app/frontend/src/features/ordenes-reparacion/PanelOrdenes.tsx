@@ -25,6 +25,7 @@ import {
   CancelacionesOrden,
   type EjecutorAcciones,
 } from "./AccionesOrden";
+import { InventarioPanel } from "../inventario/Inventario";
 import { AutorizacionClienteOrden } from "./AutorizacionCliente";
 import { CustodiaOrden } from "./CustodiaOrden";
 import {
@@ -54,6 +55,7 @@ export function PanelOrdenes() {
 
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [vista, setVista] = useState<"ordenes" | "inventario">("ordenes");
 
   const actor = usuarios.find((usuario) => usuario.id === actorId) ?? null;
 
@@ -297,9 +299,38 @@ export function PanelOrdenes() {
         />
       </header>
 
+      <nav
+        aria-label="Secciones"
+        style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}
+      >
+        {(
+          [
+            ["ordenes", "Órdenes"],
+            ["inventario", "Inventario"],
+          ] as const
+        ).map(([clave, etiqueta]) => (
+          <Boton
+            key={clave}
+            variante={vista === clave ? "primario" : "secundario"}
+            onClick={() => {
+              setVista(clave);
+              setError(null);
+              if (clave === "ordenes") {
+                void refrescarListado();
+                if (orden) void abrirOrden(orden.id);
+              }
+            }}
+          >
+            {etiqueta}
+          </Boton>
+        ))}
+      </nav>
+
       {error && <MensajeError mensaje={error} />}
 
-      {orden ? (
+      {vista === "inventario" ? (
+        <InventarioPanel actor={actor} usuarios={usuarios} />
+      ) : orden ? (
         <>
           <div style={{ marginBottom: "0.75rem" }}>
             <Boton variante="secundario" onClick={() => setOrden(null)}>

@@ -1144,6 +1144,8 @@ class AccionOut(BaseModel):
     usuario_id: str | None = None
     # Movimientos financieros: el Pago sobre el que actua (anularlo).
     pago_id: str | None = None
+    # La accion corresponde pero hoy no puede ejecutarse (y por que).
+    bloqueo: str | None = None
 
     @classmethod
     def desde_dominio(cls, accion: AccionDisponible) -> "AccionOut":
@@ -1156,6 +1158,7 @@ class AccionOut(BaseModel):
             requiere_actor=accion.requiere_actor,
             usuario_id=accion.usuario_id,
             pago_id=accion.pago_id,
+            bloqueo=accion.bloqueo,
         )
 
 

@@ -501,14 +501,36 @@ function FormularioAccion({
 
     case "INICIAR_DETALLE":
       return (
-        <Boton
-          disabled={deshabilitado || !accion.detalle_id}
-          onClick={() =>
-            accion.detalle_id && ejecutar.iniciarDetalle(accion.detalle_id)
-          }
-        >
-          Iniciar y reservar insumos
-        </Boton>
+        <div>
+          {accion.bloqueo && (
+            <p
+              role="status"
+              style={{
+                margin: "0 0 0.5rem",
+                padding: "0.5rem 0.7rem",
+                borderRadius: 6,
+                border: `1px solid ${colores.alerta}`,
+                background: "#fff8e6",
+                fontSize: "0.85rem",
+              }}
+            >
+              <strong>{accion.bloqueo}.</strong>
+              {accion.bloqueo.startsWith("Debe confirmarse") && (
+                <> Confirmala desde <strong>Recepción y custodia</strong> en esta Orden.</>
+              )}
+            </p>
+          )}
+          <Boton
+            disabled={
+              deshabilitado || !accion.detalle_id || accion.bloqueo !== null
+            }
+            onClick={() =>
+              accion.detalle_id && ejecutar.iniciarDetalle(accion.detalle_id)
+            }
+          >
+            Iniciar y reservar insumos
+          </Boton>
+        </div>
       );
 
     case "COMPLETAR_EJECUCION":

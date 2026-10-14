@@ -36,6 +36,8 @@ class Insumo(BaseModel):
     id: str
     codigo: str
     nombre: str
+    # Opcional: el catalogo DEMO no la trae (unidades por defecto).
+    unidad: str | None = None
     # Puede ser negativo: un override de factibilidad autorizado (BR-REP-003,
     # ACC-REP-049) permite consumir sin stock suficiente. La proteccion
     # vive en los services (solo un Detalle con override vigente puede

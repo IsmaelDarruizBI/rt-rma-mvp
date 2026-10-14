@@ -4,6 +4,8 @@ Un archivo por catalogo, cada uno con un array JSON:
 
     tipos_reparacion.json
     insumos.json
+    movimientos_stock.json  (ingresos y ajustes manuales; historico del
+                             stock fisico, que sigue viviendo en insumos)
     tipo_reparacion_insumos.json
     estaciones.json
     tipo_reparacion_estaciones.json
@@ -30,12 +32,14 @@ from app.domain.models import (
     EstacionTrabajo,
     Insumo,
     MedioPago,
+    MovimientoStock,
     TipoReparacion,
     TipoReparacionEstacion,
     TipoReparacionInsumos,
     Usuario,
 )
 from app.repositories.exceptions import (
+    ConflictoDeEscrituraError,
     EntidadPersistidaNoEncontradaError,
     PersistenciaError,
 )
@@ -44,6 +48,7 @@ from .base import asegurar_directorio, escribir_json_atomico, leer_json
 
 ARCHIVO_TIPOS_REPARACION = "tipos_reparacion.json"
 ARCHIVO_INSUMOS = "insumos.json"
+ARCHIVO_MOVIMIENTOS_STOCK = "movimientos_stock.json"
 ARCHIVO_TIPO_REPARACION_INSUMOS = "tipo_reparacion_insumos.json"
 ARCHIVO_ESTACIONES = "estaciones.json"
 ARCHIVO_TIPO_REPARACION_ESTACIONES = "tipo_reparacion_estaciones.json"
@@ -104,6 +109,55 @@ class JsonCatalogosRepository:
         )
         insumos[posicion] = actualizado
         self._guardar(ARCHIVO_INSUMOS, insumos)
+        return actualizado
+
+    # --- Movimientos operativos de stock ---
+
+    def listar_movimientos_stock(self) -> list[MovimientoStock]:
+        return self._listar(ARCHIVO_MOVIMIENTOS_STOCK, MovimientoStock)
+
+    def registrar_movimiento_stock(
+        self,
+        movimiento: MovimientoStock,
+    ) -> Insumo:
+        """Agrega el movimiento al historico y fija el stock resultante.
+
+        Sin transacciones entre archivos: se escribe primero el historico y
+        despues el stock; si el stock falla, el historico vuelve a su
+        estado anterior. Asi nunca queda un movimiento sin su efecto ni un
+        stock cambiado sin su movimiento.
+        """
+        insumos = self.listar_insumos()
+        posicion = next(
+            (
+                i
+                for i, insumo in enumerate(insumos)
+                if insumo.id == movimiento.insumo_id
+            ),
+            None,
+        )
+        if posicion is None:
+            raise EntidadPersistidaNoEncontradaError(
+                f"No existe el Insumo {movimiento.insumo_id}"
+            )
+        if insumos[posicion].stock_fisico != movimiento.stock_anterior:
+            raise ConflictoDeEscrituraError(
+                f"El stock fisico de {movimiento.insumo_id} cambio "
+                f"({insumos[posicion].stock_fisico}, no "
+                f"{movimiento.stock_anterior}): volve a intentarlo."
+            )
+
+        anteriores = self.listar_movimientos_stock()
+        self._guardar(ARCHIVO_MOVIMIENTOS_STOCK, [*anteriores, movimiento])
+        actualizado = insumos[posicion].model_copy(
+            update={"stock_fisico": movimiento.stock_resultante}
+        )
+        insumos[posicion] = actualizado
+        try:
+            self._guardar(ARCHIVO_INSUMOS, insumos)
+        except Exception:
+            self._guardar(ARCHIVO_MOVIMIENTOS_STOCK, anteriores)
+            raise
         return actualizado
 
     # --- Insumos previstos por Tipo de Reparacion ---
