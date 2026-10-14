@@ -36,6 +36,8 @@ from app.services import (
     ROLES_CANCELACION,
     devolucion_pendiente,
     ejecucion_activa,
+    es_trabajable,
+    pendiente_de_autorizacion,
     requiere_definicion,
     revision_vigente,
     toma_activa,
@@ -49,6 +51,11 @@ from app.services.revisiones import (
     revision_tecnica_realizada,
 )
 
+from .autorizacion_cliente import (
+    decision_registrable,
+    desistimiento_total_ofrecible,
+    detalles_desistibles,
+)
 from .progreso import nodos_alcanzados
 
 # Codigos de accion que la API expone. Cada uno es exactamente un
@@ -82,6 +89,9 @@ ACCION_RECHAZAR_CONTROL = "RECHAZAR_CONTROL"
 ACCION_REGISTRAR_DEVOLUCION = "REGISTRAR_DEVOLUCION"
 ACCION_CANCELAR_DETALLE = "CANCELAR_DETALLE"
 ACCION_CANCELAR_ORDEN = "CANCELAR_ORDEN"
+ACCION_REGISTRAR_DECISION_CLIENTE = "REGISTRAR_DECISION_CLIENTE"
+ACCION_DESISTIR_DETALLE = "DESISTIR_DETALLE"
+ACCION_DESISTIR_TODO = "DESISTIR_TODO"
 
 # Terminales de un Detalle: lo realizado y lo cancelado (BR-REP-012).
 _TERMINALES = (
@@ -91,6 +101,9 @@ _TERMINALES = (
 
 # EXC-REP-004: circuito de revision posterior (125 espera, 126 revision).
 _NODOS_REVISION_POSTERIOR = ("PROC-REP-125", "PROC-REP-126")
+
+# V1.4: la Orden espera la decision del cliente (ningun Detalle trabajable).
+_NODO_ESPERA_AUTORIZACION = "PROC-REP-129"
 
 CERO = Decimal("0")
 
@@ -129,11 +142,12 @@ class AccionDisponible:
 
 
 def detalle_trabajable(orden: OrdenReparacion) -> str | None:
-    """Primer Detalle DEFINIDO y SIN_BLOQUEO, que es el que se puede iniciar.
+    """Primer Detalle trabajable, que es el que se puede iniciar.
 
     Consistente con ``services.resolucion._es_trabajable``: un Detalle
     DEFINIDO pero bloqueado (``REQUIERE_DEFINICION`` o
-    ``BLOQUEADO_POR_RECURSOS``) no es trabajable.
+    ``BLOQUEADO_POR_RECURSOS``) o pendiente de autorizacion del cliente
+    no es trabajable (``services.es_trabajable``).
 
     Se conserva para compatibilidad (``application.happy_path`` y los
     tests que ya la importan). ``acciones_disponibles`` usa la version
@@ -141,17 +155,12 @@ def detalle_trabajable(orden: OrdenReparacion) -> str | None:
     de uno, y no le corresponde a este modulo elegir cual por el
     tecnico (PROC-REP-181).
     """
-    for detalle in orden.reparaciones_detail:
-        if (
-            detalle.estado is EstadoReparacionDetail.DEFINIDO
-            and detalle.condicion is CondicionReparacionDetail.SIN_BLOQUEO
-        ):
-            return detalle.id
-    return None
+    trabajables = detalles_trabajables(orden)
+    return trabajables[0] if trabajables else None
 
 
 def detalles_trabajables(orden: OrdenReparacion) -> list[str]:
-    """Todos los Detalles DEFINIDO y SIN_BLOQUEO, en orden de aparicion.
+    """Todos los Detalles trabajables, en orden de aparicion.
 
     Con Multi-Detalle puede haber mas de un Detalle trabajable a la vez:
     la eleccion de cual iniciar ahora es del tecnico (PROC-REP-181), no
@@ -160,8 +169,7 @@ def detalles_trabajables(orden: OrdenReparacion) -> list[str]:
     return [
         detalle.id
         for detalle in orden.reparaciones_detail
-        if detalle.estado is EstadoReparacionDetail.DEFINIDO
-        and detalle.condicion is CondicionReparacionDetail.SIN_BLOQUEO
+        if es_trabajable(orden, detalle)
     ]
 
 
@@ -200,6 +208,7 @@ def _overrides_de_recursos(
     Una accion de Coordinador RMA por cada Detalle PENDIENTE (DEFINIDO)
     bloqueado por recursos, este la Orden detenida en PROC-REP-100/120 o
     con factibilidad parcial (habilitada, en cola, tomada o en reparacion).
+    Nunca para uno pendiente de autorizacion del cliente.
     """
     return [
         AccionDisponible(
@@ -212,6 +221,7 @@ def _overrides_de_recursos(
         if detalle.estado is EstadoReparacionDetail.DEFINIDO
         and detalle.condicion
         is CondicionReparacionDetail.BLOQUEADO_POR_RECURSOS
+        and not pendiente_de_autorizacion(orden, detalle)
     ]
 
 
@@ -327,6 +337,12 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                     )
                 )
 
+    # V1.4: en PROC-REP-129 la Orden espera la decision del cliente; la
+    # registra Recepcion por ``acciones_de_autorizacion``. El hito de
+    # workflow no ofrece nada propio, igual que en 125.
+    if orden.current_process == _NODO_ESPERA_AUTORIZACION:
+        estado = None
+
     # Definicion de Detalles: agregar y finalizar son acciones distintas.
     # La definicion se cierra al validar la factibilidad (PROC-REP-080).
     definicion_abierta = not definicion_finalizada(orden)
@@ -406,7 +422,13 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             )
         )
 
-    if estado is EstadoWorkflow.EN_COLA and toma_activa(orden) is None:
+    # Con solo Detalles pendientes de autorizacion (por ejemplo, un JSON
+    # anterior) no hay nada que tomar: PROC-REP-172 lo rechazaria.
+    if (
+        estado is EstadoWorkflow.EN_COLA
+        and toma_activa(orden) is None
+        and detalles_trabajables(orden)
+    ):
         acciones.append(
             AccionDisponible(
                 codigo=ACCION_TOMAR,
@@ -610,6 +632,50 @@ def acciones_de_cancelacion(orden: OrdenReparacion) -> list[AccionDisponible]:
                 codigo=ACCION_CANCELAR_ORDEN,
                 etiqueta="Cancelar la Orden (trabajos pendientes)",
                 roles=ROLES_CANCELACION,
+            )
+        )
+    return acciones
+
+
+def acciones_de_autorizacion(
+    orden: OrdenReparacion,
+) -> list[AccionDisponible]:
+    """Decisiones comerciales del cliente que la Orden admite ahora.
+
+    Aparte de ``acciones_disponibles``, como las cancelaciones: es un
+    carril independiente de Recepcion (EVT-REP-003, BR-REP-037) que no
+    detiene al tecnico ni depende del hito de workflow.
+
+    - Registrar la decision (PROC-REP-046/047): una sola accion; que
+      Detalles decidir lo elige el formulario.
+    - Desistir de un Detalle ya autorizado y todavia cancelable.
+    - Desistir de todos los trabajos cancelables, si queda trabajo ya
+      autorizado sin terminar (aunque algo lo impida: la UI lo informa).
+    """
+    acciones: list[AccionDisponible] = []
+    if decision_registrable(orden):
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_REGISTRAR_DECISION_CLIENTE,
+                etiqueta="Registrar la decision del cliente",
+                roles=(RolUsuario.RECEPCION,),
+            )
+        )
+    acciones.extend(
+        AccionDisponible(
+            codigo=ACCION_DESISTIR_DETALLE,
+            etiqueta="El cliente desiste de este trabajo autorizado",
+            roles=(RolUsuario.RECEPCION,),
+            detalle_id=detalle_id,
+        )
+        for detalle_id in detalles_desistibles(orden)
+    )
+    if desistimiento_total_ofrecible(orden):
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_DESISTIR_TODO,
+                etiqueta="Cliente desiste de todos los trabajos cancelables",
+                roles=(RolUsuario.RECEPCION,),
             )
         )
     return acciones

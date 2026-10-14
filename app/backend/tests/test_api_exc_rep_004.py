@@ -15,6 +15,7 @@ from tests import test_multidetalle as multi
 from tests.fixtures.api_definicion import (
     definir_y_finalizar,
     finalizar_definicion,
+    registrar_decision,
 )
 from tests.test_api_exc_rep_001 import (
     _cliente,
@@ -198,23 +199,48 @@ def test_caso_b_e2e_requiere_redefinicion_125_126_127_080_y_reingreso(
         respuesta = _redefinir(cliente, orden_id)
         assert respuesta.status_code == 200, respuesta.text
         orden = respuesta.json()
-        assert _ids(orden)[-4:] == [
+        # CLIENTE_EXTERNO: la definicion nueva (v2) espera la decision del
+        # cliente (BR-REP-029). Sin ella no hay factibilidad: 211 -> 129.
+        assert _ids(orden)[-3:] == [
             "PROC-REP-127",
-            "PROC-REP-080",
-            "PROC-REP-090",
-            "PROC-REP-140",
+            "PROC-REP-211",
+            "PROC-REP-129",
         ]
         detalle = _detalle(orden)
         assert detalle["id"] == "DET-001"
         assert detalle["tipo_reparacion_id"] == multi.TIPO_PANTALLA
         assert detalle["condicion"] == "SIN_BLOQUEO"
+        assert detalle["version_definicion"] == 2
+        assert detalle["estado_autorizacion"] == "PENDIENTE"
         (anterior,) = detalle["definiciones_anteriores"]
         assert anterior["tipo_reparacion_id"] == multi.TIPO_BATERIA
         assert anterior["usuario_id"] == multi.RECEPCION
-        assert orden["estado_workflow"] == "HABILITADA"
+        assert orden["estado_workflow"] == "EN_REPARACION"
 
-        # Reingreso al flujo normal: 150 -> 170 -> tomar -> iniciar.
-        _encolar_y_tomar(cliente, orden_id)
+        # El cliente autoriza v2: factibilidad de ese Detalle y, como la
+        # Orden ya se habilito, 090 -> 211 -> 170 (sin repetir 140/150).
+        respuesta = registrar_decision(
+            cliente, orden_id, {"DET-001": "AUTORIZADO"}
+        )
+        assert respuesta.status_code == 200, respuesta.text
+        orden = respuesta.json()
+        assert _ids(orden)[-6:] == [
+            "PROC-REP-046",
+            "PROC-REP-047",
+            "PROC-REP-080",
+            "PROC-REP-090",
+            "PROC-REP-211",
+            "PROC-REP-170",
+        ]
+        assert orden["estado_workflow"] == "EN_COLA"
+        assert orden["prioridad"] == 1
+
+        # Reingreso al flujo normal: tomar -> iniciar.
+        respuesta = cliente.post(
+            f"/api/orders/{orden_id}/take",
+            json={"usuario_id": multi.TECNICO, "estacion_id": multi.ESTACION},
+        )
+        assert respuesta.status_code == 200, respuesta.text
         nueva = _iniciar(cliente, orden_id)
         orden = _completar(cliente, orden_id, nueva, "INS-002")
         assert orden["historial"][-1]["observacion"] == "COMPLETA"
@@ -229,25 +255,36 @@ def test_caso_b_e2e_requiere_redefinicion_125_126_127_080_y_reingreso(
         ]
 
 
-def test_caso_b_sin_stock_tras_127_va_a_100_y_admite_override(tmp_path):
+def test_caso_b_sin_stock_tras_127_espera_recursos_y_admite_override(
+    tmp_path,
+):
     cliente, orden_id = _hasta_125(tmp_path, a="2", b="0")
     with cliente:
         _revisar(cliente, orden_id)
-        orden = _redefinir(cliente, orden_id).json()  # pantalla sin stock
+        _redefinir(cliente, orden_id)  # pantalla sin stock
+        orden = registrar_decision(
+            cliente, orden_id, {"DET-001": "AUTORIZADO"}
+        ).json()
 
+        # Orden ya habilitada: 090 "Ninguno" vuelve a 211, que la deja
+        # esperando recursos (120) en vez de repetir el ingreso (100).
         assert _ids(orden)[-4:] == [
-            "PROC-REP-127",
             "PROC-REP-080",
             "PROC-REP-090",
-            "PROC-REP-100",
+            "PROC-REP-211",
+            "PROC-REP-120",
         ]
-        assert orden["historial"][-2]["observacion"] == "Ninguno trabajable"
+        assert orden["historial"][-3]["observacion"] == "Ninguno trabajable"
         assert _detalle(orden)["condicion"] == "BLOQUEADO_POR_RECURSOS"
         assert "OVERRIDE_RECURSOS" in _codigos(orden)
 
         forzada = _override(cliente, orden_id)
         assert forzada.status_code == 200, forzada.text
-        assert forzada.json()["estado_workflow"] == "HABILITADA"
+        revalidada = cliente.post(
+            f"/api/orders/{orden_id}/resources/revalidate"
+        )
+        assert revalidada.status_code == 200, revalidada.text
+        assert revalidada.json()["estado_workflow"] == "HABILITADA"
 
 
 # --- Caso A: Multi-Detalle ---
@@ -265,6 +302,11 @@ def test_caso_a_multidetalle_continua_b_y_despues_entra_a_125(tmp_path):
                 },
             )
         finalizar_definicion(cliente, orden_id, multi.RECEPCION)
+        registrar_decision(
+            cliente,
+            orden_id,
+            {"DET-001": "AUTORIZADO", "DET-002": "AUTORIZADO"},
+        )
         _encolar_y_tomar(cliente, orden_id)
         ejecucion_a = _iniciar(cliente, orden_id, "DET-001")
 

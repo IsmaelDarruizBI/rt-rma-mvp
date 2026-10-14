@@ -11,11 +11,14 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 from .enums import (
+    CanalComunicacion,
     CondicionReparacionDetail,
     EstadoControl,
     EstadoEjecucion,
     EstadoReparacionDetail,
     EstadoTomaOrden,
+    OrigenCancelacion,
+    ResultadoAutorizacion,
     ResultadoControl,
 )
 from .inventario import InsumoUtilizado
@@ -38,11 +41,34 @@ class RegistroControlTecnico(BaseModel):
 
 
 class RegistroCancelacion(BaseModel):
-    """Quien cancelo un Detalle, cuando y por que (PROC-REP-300/305)."""
+    """Quien cancelo un Detalle, cuando y por que (PROC-REP-300/305).
+
+    ``origen`` distingue una cancelacion interna del rechazo del cliente;
+    default ``INTERNA``: un JSON anterior solo pudo cancelar asi.
+    """
 
     usuario_id: str
     fecha: datetime
     motivo: str
+    origen: OrigenCancelacion = OrigenCancelacion.INTERNA
+
+
+class RegistroAutorizacionCliente(BaseModel):
+    """Una decision del cliente sobre un Detalle (PROC-REP-046, BR-REP-028).
+
+    Append-only: una decision nunca se reemplaza. Vale para la definicion
+    del Detalle que regia al registrarse (``version_definicion``): una
+    redefinicion (PROC-REP-127) abre una version nueva y la decision
+    anterior deja de estar vigente, sin borrarse. "Sin respuesta" no se
+    registra.
+    """
+
+    version_definicion: int = Field(ge=1)
+    resultado: ResultadoAutorizacion
+    usuario_id: str
+    fecha: datetime
+    canal: CanalComunicacion
+    observaciones: str | None = None
 
 
 class DefinicionAnteriorDetalle(BaseModel):
@@ -114,6 +140,23 @@ class ReparacionDetail(BaseModel):
     definiciones_anteriores: list[DefinicionAnteriorDetalle] = Field(
         default_factory=list
     )
+
+    # BR-REP-028: decisiones del cliente, de la mas antigua a la mas
+    # reciente. Default vacio: un JSON anterior sigue cargando, y en
+    # CLIENTE_EXTERNO queda pendiente de autorizacion (no se presume).
+    autorizaciones: list[RegistroAutorizacionCliente] = Field(
+        default_factory=list
+    )
+
+    @property
+    def version_definicion(self) -> int:
+        """Version de la definicion vigente: 1 + las reemplazadas (127).
+
+        Derivada de ``definiciones_anteriores`` (BR-REP-015): no se
+        persiste, asi que un JSON anterior obtiene su version sin
+        migracion.
+        """
+        return len(self.definiciones_anteriores) + 1
 
 
 class TomaOrden(BaseModel):

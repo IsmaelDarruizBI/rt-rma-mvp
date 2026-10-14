@@ -96,7 +96,7 @@ def _insumos(a="1", b="1", c="1") -> list[Insumo]:
 
 
 def _con_detalles(*tipos, base=None) -> OrdenReparacion:
-    """Orden con los Detalles definidos y el comprobante emitido (060)."""
+    """Detalles definidos, comprobante emitido (060) y autorizados (047)."""
     orden = base or flujo_mvp.orden_creada()
     for indice, tipo in enumerate(tipos, start=1):
         orden = definir_reparacion_detail(
@@ -106,7 +106,8 @@ def _con_detalles(*tipos, base=None) -> OrdenReparacion:
             usuario=RECEPCION,
             fecha=t(5),
         )
-    return generar_comprobante_recepcion(orden, fecha=t(10))
+    orden = generar_comprobante_recepcion(orden, fecha=t(10))
+    return flujo_mvp.autorizar_todo(orden)
 
 
 def _validar(orden, insumos, externas=None, minuto=15):
@@ -430,7 +431,10 @@ def test_progreso_muestra_100_110_120_una_sola_vez_y_combina_con_la_revision():
         "PROC-REP-120",
     ]
     alcanzados = [p.process_id for p in progreso(orden) if p.alcanzado]
-    assert alcanzados[-1] == "PROC-REP-120"
+    # 211 se alcanzo antes, al finalizar la definicion (-> 129, BR-REP-028).
+    assert [n for n in alcanzados if n != "PROC-REP-211"][-1] == (
+        "PROC-REP-120"
+    )
 
     sin_exc = [p.process_id for p in progreso(flujo_mvp.orden_creada())]
     assert "PROC-REP-100" not in sin_exc  # la ruta normal no cambia

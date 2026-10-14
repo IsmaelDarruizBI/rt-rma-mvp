@@ -45,6 +45,7 @@ from app.services import (
 )
 from app.storage import JsonCatalogosRepository, JsonOrdenReparacionRepository
 from app.storage.json.base import escribir_json_atomico
+from tests.fixtures import flujo_mvp
 from tests.fixtures.catalogos_mvp import (
     ADMINISTRADOR,
     CLIENTE,
@@ -121,6 +122,8 @@ def _orden_en_cola_con_dos_detalles():
         fecha=t(2),
     )
     orden = generar_comprobante_recepcion(orden, fecha=t(3))
+    # CLIENTE_EXTERNO: el cliente autoriza los dos Detalles (BR-REP-028).
+    orden = flujo_mvp.autorizar_todo(orden, minuto=3)
     orden, factible = validar_factibilidad_detalles(
         orden,
         insumos=INSUMOS,

@@ -23,12 +23,18 @@ from pydantic import BaseModel, Field
 
 from app.application import (
     AccionDisponible,
+    AutorizacionDetalle,
+    AutorizacionesOrden,
     DetalleOrigen,
     ImpactoOverride,
     InsumoPrevisto,
     PasoProgreso,
+    PendienteAutorizacion,
+    SituacionAutorizacion,
+    situacion_autorizacion,
 )
 from app.domain.models import (
+    CanalComunicacion,
     Cliente,
     CondicionReparacionDetail,
     EjecucionReparacion,
@@ -43,8 +49,11 @@ from app.domain.models import (
     HistorialWorkflow,
     InsumoUtilizado,
     OrdenReparacion,
+    OrigenCancelacion,
     OrigenOrden,
+    RegistroAutorizacionCliente,
     ReparacionDetail,
+    ResultadoAutorizacion,
     ResultadoControl,
     RolUsuario,
     TipoPago,
@@ -55,10 +64,15 @@ from app.domain.models import (
 )
 from app.domain.politicas import politica_de
 from app.services import (
+    AnalisisDesistimiento,
+    EstadoAutorizacion,
+    analizar_desistimiento,
     devolucion_pendiente,
+    estado_autorizacion,
     finalizada_sin_reparacion,
     nuevo_id,
     pendiente_de_retrabajo,
+    requiere_autorizacion_cliente,
     toma_activa,
 )
 
@@ -428,6 +442,44 @@ class RegistrarDevolucionIn(BaseModel):
     observaciones: str | None = None
 
 
+class DecisionDetalleIn(BaseModel):
+    """La respuesta del cliente sobre UN Detalle.
+
+    ``version_definicion`` es la definicion que se le presento: si ya no
+    es la vigente, la respuesta se rechaza (409).
+    """
+
+    detalle_id: str = Field(min_length=1)
+    version_definicion: int = Field(ge=1)
+    resultado: ResultadoAutorizacion
+
+
+class RegistrarDecisionClienteIn(BaseModel):
+    """``POST /api/orders/{id}/authorizations`` (ACT-RECEP, PROC-REP-046).
+
+    Uno o varios Detalles en una sola operacion. Un Detalle sin respuesta
+    del cliente simplemente no se incluye: sigue pendiente.
+    ``observaciones`` es la referencia o evidencia de la respuesta.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    canal: CanalComunicacion
+    observaciones: str | None = None
+    decisiones: list[DecisionDetalleIn]
+
+
+class DesistimientoIn(BaseModel):
+    """``POST .../withdrawal`` y ``.../details/{detalle_id}/withdrawal``.
+
+    El cliente desiste de trabajos ya autorizados (o de todos los
+    cancelables). El motivo es obligatorio.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    canal: CanalComunicacion
+    motivo: str = Field(min_length=1)
+
+
 # --- Salida ------------------------------------------------------------
 
 
@@ -496,11 +548,32 @@ class ControlTecnicoOut(BaseModel):
 
 
 class CancelacionOut(BaseModel):
-    """Quien cancelo el Detalle, cuando y por que (PROC-REP-300/305)."""
+    """Quien cancelo el Detalle, cuando y por que (PROC-REP-300/305).
+
+    ``origen``: ``INTERNA`` o ``RECHAZO_CLIENTE``.
+    """
 
     usuario_id: str
     fecha: datetime
     motivo: str
+    origen: OrigenCancelacion = OrigenCancelacion.INTERNA
+
+
+class AutorizacionClienteOut(BaseModel):
+    """Una decision del cliente registrada sobre un Detalle (046)."""
+
+    version_definicion: int
+    resultado: ResultadoAutorizacion
+    usuario_id: str
+    fecha: datetime
+    canal: CanalComunicacion
+    observaciones: str | None = None
+
+    @classmethod
+    def desde_dominio(
+        cls, registro: RegistroAutorizacionCliente
+    ) -> "AutorizacionClienteOut":
+        return cls(**registro.model_dump())
 
 
 class DetalleOut(BaseModel):
@@ -511,6 +584,11 @@ class DetalleOut(BaseModel):
     ``controles`` son todos los controles tecnicos registrados, en orden;
     ``pendiente_de_retrabajo`` indica un Detalle reabierto por un rechazo
     que todavia no se rehizo. ``cancelacion`` solo viene en un CANCELADO.
+
+    Autorizacion del cliente (BR-REP-028): ``version_definicion`` es la
+    definicion vigente, ``autorizaciones`` todas las decisiones registradas
+    (de cualquier version) y ``estado_autorizacion`` /
+    ``situacion_autorizacion`` lo derivado para la definicion vigente.
     """
 
     id: str
@@ -534,6 +612,12 @@ class DetalleOut(BaseModel):
     pendiente_de_retrabajo: bool = False
     cancelacion: CancelacionOut | None = None
     insumos_previstos: list[InsumoPrevistoOut] = Field(default_factory=list)
+    version_definicion: int = 1
+    autorizaciones: list[AutorizacionClienteOut] = Field(default_factory=list)
+    estado_autorizacion: EstadoAutorizacion = EstadoAutorizacion.NO_REQUERIDA
+    situacion_autorizacion: SituacionAutorizacion = (
+        SituacionAutorizacion.NO_REQUERIDA
+    )
 
     @classmethod
     def desde_dominio(
@@ -541,9 +625,19 @@ class DetalleOut(BaseModel):
         detalle: ReparacionDetail,
         previstos: Sequence[InsumoPrevisto] = (),
         tipo_reparacion_nombre: str | None = None,
+        *,
+        estado_autorizacion: EstadoAutorizacion = (
+            EstadoAutorizacion.NO_REQUERIDA
+        ),
+        situacion_autorizacion: SituacionAutorizacion = (
+            SituacionAutorizacion.NO_REQUERIDA
+        ),
     ) -> "DetalleOut":
         return cls(
             **detalle.model_dump(),
+            version_definicion=detalle.version_definicion,
+            estado_autorizacion=estado_autorizacion,
+            situacion_autorizacion=situacion_autorizacion,
             pendiente_de_retrabajo=pendiente_de_retrabajo(detalle),
             tipo_reparacion_nombre=(
                 tipo_reparacion_nombre or detalle.tipo_reparacion_id
@@ -849,6 +943,39 @@ class DetalleOrigenOut(BaseModel):
     tipo_reparacion_nombre: str
 
 
+class BloqueoDesistimientoOut(BaseModel):
+    detalle_id: str
+    motivo: str
+
+
+class DesistimientoOut(BaseModel):
+    """Que haria hoy el desistimiento total del cliente (solo lectura).
+
+    ``rechazables``: pendientes que se rechazarian; ``desistibles``:
+    autorizados que se cancelarian; ``conservados``: COMPLETO, no se tocan;
+    ``bloqueantes``: lo que hoy lo impide (con ellos se rechaza entero).
+    """
+
+    rechazables: list[str]
+    desistibles: list[str]
+    conservados: list[str]
+    bloqueantes: list[BloqueoDesistimientoOut]
+
+    @classmethod
+    def desde_servicio(
+        cls, analisis: AnalisisDesistimiento
+    ) -> "DesistimientoOut":
+        return cls(
+            rechazables=list(analisis.rechazables),
+            desistibles=list(analisis.desistibles),
+            conservados=list(analisis.conservados),
+            bloqueantes=[
+                BloqueoDesistimientoOut(detalle_id=detalle_id, motivo=motivo)
+                for detalle_id, motivo in analisis.bloqueantes
+            ],
+        )
+
+
 class OrdenOut(BaseModel):
     """La Orden completa tal como la consume el frontend."""
 
@@ -886,6 +1013,12 @@ class OrdenOut(BaseModel):
     # Cancelaciones posibles ahora (PROC-REP-300/305/306): capacidades
     # excepcionales, separadas de la accion del flujo.
     acciones_cancelacion: list[AccionOut] = Field(default_factory=list)
+    # BR-REP-028: el Origen exige la decision del cliente por Detalle, y la
+    # accion de registrarla si corresponde ahora (carril de Recepcion).
+    autorizacion_requerida: bool = False
+    acciones_autorizacion: list[AccionOut] = Field(default_factory=list)
+    # Vista previa del desistimiento total (CLIENTE_EXTERNO con Detalles).
+    desistimiento: DesistimientoOut | None = None
     # Orden CANCELADA: devolucion fisica del equipo (registrada o pendiente).
     devolucion: DevolucionOut | None = None
     devolucion_pendiente: bool = False
@@ -904,6 +1037,7 @@ class OrdenOut(BaseModel):
         nombres_de_tipo: Mapping[str, str] | None = None,
         detalles_origen: Sequence[DetalleOrigen] = (),
         acciones_cancelacion: Sequence[AccionDisponible] = (),
+        acciones_autorizacion: Sequence[AccionDisponible] = (),
     ) -> "OrdenOut":
         return cls(
             id=orden.id,
@@ -934,6 +1068,10 @@ class OrdenOut(BaseModel):
                     detalle,
                     (insumos_previstos or {}).get(detalle.id, ()),
                     (nombres_de_tipo or {}).get(detalle.id),
+                    estado_autorizacion=estado_autorizacion(orden, detalle),
+                    situacion_autorizacion=situacion_autorizacion(
+                        orden, detalle
+                    ),
                 )
                 for detalle in orden.reparaciones_detail
             ],
@@ -971,6 +1109,17 @@ class OrdenOut(BaseModel):
                 AccionOut.desde_dominio(accion)
                 for accion in acciones_cancelacion
             ],
+            autorizacion_requerida=requiere_autorizacion_cliente(orden),
+            desistimiento=(
+                DesistimientoOut.desde_servicio(analizar_desistimiento(orden))
+                if requiere_autorizacion_cliente(orden)
+                and orden.reparaciones_detail
+                else None
+            ),
+            acciones_autorizacion=[
+                AccionOut.desde_dominio(accion)
+                for accion in acciones_autorizacion
+            ],
             devolucion=(
                 DevolucionOut(**orden.devolucion.model_dump())
                 if orden.devolucion is not None
@@ -979,6 +1128,100 @@ class OrdenOut(BaseModel):
             devolucion_pendiente=devolucion_pendiente(orden),
             created_at=orden.created_at,
             updated_at=orden.updated_at,
+        )
+
+
+class AutorizacionDetalleOut(BaseModel):
+    """La autorizacion de UN Detalle (``GET .../authorizations``).
+
+    ``decision_vigente`` es la decision sobre la definicion vigente (si la
+    hay); ``historial``, todas, de cualquier version. ``decidible``: se
+    puede registrar ahora su decision.
+    """
+
+    detalle_id: str
+    tipo_reparacion_id: str
+    tipo_reparacion_nombre: str
+    precio: Decimal
+    version_definicion: int
+    estado: EstadoAutorizacion
+    situacion: SituacionAutorizacion
+    decision_vigente: AutorizacionClienteOut | None = None
+    historial: list[AutorizacionClienteOut] = Field(default_factory=list)
+    decidible: bool
+
+    @classmethod
+    def desde_aplicacion(
+        cls, autorizacion: AutorizacionDetalle
+    ) -> "AutorizacionDetalleOut":
+        vigente = autorizacion.decision_vigente
+        return cls(
+            detalle_id=autorizacion.detalle_id,
+            tipo_reparacion_id=autorizacion.tipo_reparacion_id,
+            tipo_reparacion_nombre=autorizacion.tipo_reparacion_nombre,
+            precio=autorizacion.precio,
+            version_definicion=autorizacion.version_definicion,
+            estado=autorizacion.estado,
+            situacion=autorizacion.situacion,
+            decision_vigente=(
+                AutorizacionClienteOut.desde_dominio(vigente)
+                if vigente is not None
+                else None
+            ),
+            historial=[
+                AutorizacionClienteOut.desde_dominio(registro)
+                for registro in autorizacion.historial
+            ],
+            decidible=autorizacion.decidible,
+        )
+
+
+class AutorizacionesOrdenOut(BaseModel):
+    """``GET /api/orders/{id}/authorizations``."""
+
+    orden_id: str
+    requerida: bool
+    registrable: bool
+    detalles: list[AutorizacionDetalleOut]
+
+    @classmethod
+    def desde_aplicacion(
+        cls, autorizaciones: AutorizacionesOrden
+    ) -> "AutorizacionesOrdenOut":
+        return cls(
+            orden_id=autorizaciones.orden_id,
+            requerida=autorizaciones.requerida,
+            registrable=autorizaciones.registrable,
+            detalles=[
+                AutorizacionDetalleOut.desde_aplicacion(detalle)
+                for detalle in autorizaciones.detalles
+            ],
+        )
+
+
+class PendienteAutorizacionOut(BaseModel):
+    """``GET /api/orders/authorizations/pending``: un Detalle pendiente."""
+
+    orden_id: str
+    cliente_nombre: str
+    equipo: str
+    detalle_id: str
+    tipo_reparacion_nombre: str
+    precio: Decimal
+    version_definicion: int
+
+    @classmethod
+    def desde_aplicacion(
+        cls, pendiente: PendienteAutorizacion
+    ) -> "PendienteAutorizacionOut":
+        return cls(
+            orden_id=pendiente.orden_id,
+            cliente_nombre=pendiente.cliente_nombre,
+            equipo=pendiente.equipo,
+            detalle_id=pendiente.detalle_id,
+            tipo_reparacion_nombre=pendiente.tipo_reparacion_nombre,
+            precio=pendiente.precio,
+            version_definicion=pendiente.version_definicion,
         )
 
 

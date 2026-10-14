@@ -24,8 +24,15 @@ MVP.
 QUIEN puede cancelar no esta definido por negocio (V1.3 omite el actor de
 300/305): el MVP lo restringe a Recepcion y Coordinacion RMA
 (``ROLES_CANCELACION``), a confirmar.
+
+El rechazo del cliente y su desistimiento posterior (PROC-REP-047,
+``services.decision_cliente``) cancelan con estas mismas funciones y las
+mismas protecciones: lo unico que cambia es el ``origen`` que queda en
+``RegistroCancelacion`` (``RECHAZO_CLIENTE`` o ``DESISTIMIENTO_CLIENTE`` en
+vez de ``INTERNA``).
 """
 
+from collections.abc import Mapping
 from datetime import datetime
 
 from app.domain.models import (
@@ -34,6 +41,7 @@ from app.domain.models import (
     EstadoReparacionDetail,
     EstadoWorkflow,
     OrdenReparacion,
+    OrigenCancelacion,
     RegistroCancelacion,
     RolUsuario,
     Usuario,
@@ -64,7 +72,7 @@ def _motivo_obligatorio(motivo: str, que: str) -> str:
     return motivo.strip()
 
 
-def _exigir_orden_cancelable(orden: OrdenReparacion) -> None:
+def exigir_orden_cancelable(orden: OrdenReparacion) -> None:
     """La Orden todavia tiene un proceso que cancelar."""
     if orden.estado_workflow is EstadoWorkflow.CANCELADA:
         raise PrecondicionInvalidaError(
@@ -82,12 +90,35 @@ def _exigir_orden_cancelable(orden: OrdenReparacion) -> None:
         )
 
 
-def _sin_reservas_activas(orden: OrdenReparacion, detalle_id: str) -> None:
-    """Defensa: un Detalle nunca termina CANCELADO con reservas abiertas."""
-    if any(
+def tiene_ejecucion_activa(orden: OrdenReparacion, detalle_id: str) -> bool:
+    """El Detalle esta EN_PROGRESO o tiene una Ejecucion en curso."""
+    detalle = next(
+        (d for d in orden.reparaciones_detail if d.id == detalle_id), None
+    )
+    return (
+        detalle is not None
+        and detalle.estado is EstadoReparacionDetail.EN_PROGRESO
+    ) or any(
+        ejecucion.reparacion_detail_id == detalle_id
+        and ejecucion.estado is EstadoEjecucion.EN_PROGRESO
+        for ejecucion in orden.ejecuciones
+    )
+
+
+def tiene_reservas_sin_conciliar(
+    orden: OrdenReparacion,
+    detalle_id: str,
+) -> bool:
+    """El Detalle conserva reservas de insumos sin conciliar (PROC-REP-210)."""
+    return any(
         reserva.reparacion_detail_id == detalle_id
         for reserva in reservas_activas(orden.movimientos_insumo)
-    ):
+    )
+
+
+def _sin_reservas_activas(orden: OrdenReparacion, detalle_id: str) -> None:
+    """Defensa: un Detalle nunca termina CANCELADO con reservas abiertas."""
+    if tiene_reservas_sin_conciliar(orden, detalle_id):
         raise PrecondicionInvalidaError(
             f"El Detalle {detalle_id} tiene reservas de insumos sin "
             "conciliar: no se cancela."
@@ -101,32 +132,32 @@ def _cancelar(
     usuario: Usuario,
     motivo: str,
     fecha: datetime,
+    origen: OrigenCancelacion,
 ) -> None:
     """Pasa el Detalle a CANCELADO, sobre una Orden que ya es copia."""
     detalle = next(d for d in orden.reparaciones_detail if d.id == detalle_id)
     detalle.estado = EstadoReparacionDetail.CANCELADO
     detalle.cancelacion = RegistroCancelacion(
-        usuario_id=usuario.id, fecha=fecha, motivo=motivo
+        usuario_id=usuario.id, fecha=fecha, motivo=motivo, origen=origen
     )
 
 
-def cancelar_detalle(
+def validar_cancelacion_detalle(
     orden: OrdenReparacion,
     *,
     detalle_id: str,
     usuario: Usuario,
     motivo: str,
-    fecha: datetime,
-) -> OrdenReparacion:
-    """PROC-REP-300: cancela UN Detalle PENDIENTE (BR-REP-014).
+) -> None:
+    """Precondiciones de PROC-REP-300, sin registrar nada.
 
-    Solo un Detalle DEFINIDO (la representacion de PENDIENTE), sin
-    Ejecucion activa ni reservas abiertas. No cancela los demas Detalles.
-    Recalcular la Orden (PROC-REP-211) es del caller.
+    Las comparte el registro de la decision del cliente: valida todos los
+    rechazos antes de cancelar el primero, para que una operacion mixta
+    no quede a medias.
     """
     validar_alguno_de(usuario, ROLES_CANCELACION)
-    motivo = _motivo_obligatorio(motivo, "Cancelar un Detalle")
-    _exigir_orden_cancelable(orden)
+    _motivo_obligatorio(motivo, "Cancelar un Detalle")
+    exigir_orden_cancelable(orden)
 
     detalle = next(
         (d for d in orden.reparaciones_detail if d.id == detalle_id), None
@@ -144,17 +175,35 @@ def cancelar_detalle(
             f"El Detalle {detalle_id} esta COMPLETO: el trabajo realizado no "
             "se cancela."
         )
-    if detalle.estado is EstadoReparacionDetail.EN_PROGRESO or any(
-        ejecucion.reparacion_detail_id == detalle_id
-        and ejecucion.estado is EstadoEjecucion.EN_PROGRESO
-        for ejecucion in orden.ejecuciones
-    ):
+    if tiene_ejecucion_activa(orden, detalle_id):
         raise PrecondicionInvalidaError(
             f"El Detalle {detalle_id} tiene una Ejecucion activa: primero "
             "hay que interrumpirla o completarla (PROC-REP-200), para "
             "conciliar sus insumos, y recien despues se puede cancelar."
         )
     _sin_reservas_activas(orden, detalle_id)
+
+
+def cancelar_detalle(
+    orden: OrdenReparacion,
+    *,
+    detalle_id: str,
+    usuario: Usuario,
+    motivo: str,
+    fecha: datetime,
+    origen: OrigenCancelacion = OrigenCancelacion.INTERNA,
+) -> OrdenReparacion:
+    """PROC-REP-300: cancela UN Detalle PENDIENTE (BR-REP-014).
+
+    Solo un Detalle DEFINIDO (la representacion de PENDIENTE), sin
+    Ejecucion activa ni reservas abiertas. No cancela los demas Detalles.
+    Recalcular la Orden (PROC-REP-211) es del caller. ``origen`` dice si
+    lo cancela la organizacion, el rechazo o el desistimiento del cliente.
+    """
+    validar_cancelacion_detalle(
+        orden, detalle_id=detalle_id, usuario=usuario, motivo=motivo
+    )
+    motivo = motivo.strip()
 
     nueva_orden = registrar_paso(
         orden,
@@ -166,7 +215,12 @@ def cancelar_detalle(
         observacion=f"Motivo: {motivo}",
     )
     _cancelar(
-        nueva_orden, detalle_id, usuario=usuario, motivo=motivo, fecha=fecha
+        nueva_orden,
+        detalle_id,
+        usuario=usuario,
+        motivo=motivo,
+        fecha=fecha,
+        origen=origen,
     )
     return nueva_orden
 
@@ -177,6 +231,8 @@ def cancelar_orden(
     usuario: Usuario,
     motivo: str,
     fecha: datetime,
+    origen: OrigenCancelacion = OrigenCancelacion.INTERNA,
+    origenes: Mapping[str, OrigenCancelacion] | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-305 (con Detalles) o PROC-REP-306 (sin Detalles).
 
@@ -188,11 +244,13 @@ def cancelar_orden(
     decide entre CANCELADA y el cierre normal. Sin Detalles es una
     transicion EXPLICITA a CANCELADA (V1.4 PROC-REP-306: no se infiere con
     el resolver sobre una coleccion vacia), con la custodia resuelta por
-    ``marcar_orden_cancelada``.
+    ``marcar_orden_cancelada``. ``origen`` queda en cada Detalle cancelado,
+    salvo los que ``origenes`` indique por Detalle (el desistimiento total
+    del cliente mezcla rechazos de pendientes y desistimientos).
     """
     validar_alguno_de(usuario, ROLES_CANCELACION)
     motivo = _motivo_obligatorio(motivo, "Cancelar la Orden")
-    _exigir_orden_cancelable(orden)
+    exigir_orden_cancelable(orden)
 
     activa = next(
         (
@@ -251,6 +309,7 @@ def cancelar_orden(
             usuario=usuario,
             motivo=motivo,
             fecha=fecha,
+            origen=(origenes or {}).get(detalle_id, origen),
         )
     return nueva_orden
 

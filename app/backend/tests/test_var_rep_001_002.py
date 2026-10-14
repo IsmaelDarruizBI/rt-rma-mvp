@@ -351,8 +351,15 @@ def test_progreso_de_revision_por_origen(
     assert "PROC-REP-070" not in ruta
     i = ruta.index("PROC-REP-045")
     assert ruta[i + 1] == "PROC-REP-055"
-    j = ruta.index("PROC-REP-080")
-    assert ruta[j - 3 : j] == ["PROC-REP-065", "PROC-REP-068", "PROC-REP-075"]
+    k = ruta.index("PROC-REP-075")
+    assert ruta[k - 2 : k + 1] == [
+        "PROC-REP-065",
+        "PROC-REP-068",
+        "PROC-REP-075",
+    ]
+    # CLIENTE_EXTERNO decide sobre los Detalles hallados (046/047) antes
+    # de la factibilidad; los demas Origenes van directo a 080.
+    assert ruta.index("PROC-REP-080") > k
     assert ruta[-1] == "EVT-REP-999"
 
 
@@ -415,6 +422,7 @@ def test_habilitar_no_permite_saltear_080_090_desde_revision():
 
 def test_habilitar_funciona_desde_revision_tras_080_090_si():
     orden = _definir(_revisada(flujo_mvp.orden_creada()))
+    orden = flujo_mvp.autorizar_todo(orden, minuto=5)
     orden, factible = validar_factibilidad_detalles(
         orden,
         insumos=INSUMOS,
@@ -426,8 +434,12 @@ def test_habilitar_funciona_desde_revision_tras_080_090_si():
     habilitada = habilitar_orden(orden, fecha=t(10))
 
     assert habilitada.estado_workflow is EstadoWorkflow.HABILITADA
-    assert [p.referencia_id for p in habilitada.historial[-4:]] == [
+    assert [p.referencia_id for p in habilitada.historial[-8:]] == [
         "PROC-REP-075",
+        "PROC-REP-211",
+        "PROC-REP-129",
+        "PROC-REP-046",
+        "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",

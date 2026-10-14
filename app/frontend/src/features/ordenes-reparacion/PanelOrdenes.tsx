@@ -24,6 +24,7 @@ import {
   CancelacionesOrden,
   type EjecutorAcciones,
 } from "./AccionesOrden";
+import { AutorizacionClienteOrden } from "./AutorizacionCliente";
 import {
   CabeceraOrden,
   DetallesOrden,
@@ -328,6 +329,28 @@ export function PanelOrdenes() {
               estaciones={estaciones}
             />
             <DetallesOrden orden={orden} />
+            <AutorizacionClienteOrden
+              orden={orden}
+              actor={actor}
+              usuarios={usuarios}
+              ocupado={ocupado}
+              onRegistrar={(canal, observaciones, decisiones) =>
+                void ejecutarComando(() =>
+                  api.registrarDecisionCliente(
+                    idOrden,
+                    idActor,
+                    canal,
+                    observaciones || null,
+                    decisiones,
+                  ),
+                )
+              }
+              onDesistir={(detalleId, canal, motivo) =>
+                void ejecutarComando(() =>
+                  api.desistir(idOrden, detalleId, idActor, canal, motivo),
+                )
+              }
+            />
             <EjecucionesOrden orden={orden} />
             <AccionesOrden
               orden={orden}

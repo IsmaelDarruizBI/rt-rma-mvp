@@ -141,13 +141,18 @@ def test_var_rep_001_cliente_externo_de_punta_a_punta(cliente):
         "FINALIZAR_SIN_REPARACION",
     ]
 
-    # 068 Si -> 075, y al finalizar 080 -> 090 -> 140 (sin 050/060 otra vez)
+    # 068 Si -> 075, al finalizar 211 -> 129 (espera al cliente), y con la
+    # autorizacion 046/047 -> 080 -> 090 -> 140 (sin 050/060 otra vez)
     respuesta = _definir(cliente, orden_id)
     assert respuesta.status_code == 200, respuesta.text
     orden = respuesta.json()
-    assert _ids(orden)[-5:] == [
+    assert _ids(orden)[-9:] == [
         "PROC-REP-068",
         "PROC-REP-075",
+        "PROC-REP-211",
+        "PROC-REP-129",
+        "PROC-REP-046",
+        "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",
@@ -184,7 +189,12 @@ def test_progreso_de_la_variante_refleja_la_revision(cliente):
         "PROC-REP-065",
         "PROC-REP-068",
     ]
-    assert ruta[9:11] == ["PROC-REP-075", "PROC-REP-080"]
+    assert ruta[9:13] == [
+        "PROC-REP-075",
+        "PROC-REP-046",
+        "PROC-REP-047",
+        "PROC-REP-080",
+    ]
     assert "PROC-REP-070" not in ruta
     alcanzados = [p["process_id"] for p in orden["progreso"] if p["alcanzado"]]
     assert alcanzados[-1] == "PROC-REP-060"
@@ -418,8 +428,12 @@ def test_factibilidad_fallida_luego_de_revision_espera_recursos(tmp_path):
         assert orden["current_process"] == "PROC-REP-100"
         (detalle,) = orden["reparaciones_detail"]
         assert detalle["condicion"] == "BLOQUEADO_POR_RECURSOS"
-        assert _ids(orden)[-4:] == [
+        assert _ids(orden)[-8:] == [
             "PROC-REP-075",
+            "PROC-REP-211",
+            "PROC-REP-129",
+            "PROC-REP-046",
+            "PROC-REP-047",
             "PROC-REP-080",
             "PROC-REP-090",
             "PROC-REP-100",

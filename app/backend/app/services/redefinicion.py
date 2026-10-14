@@ -16,7 +16,10 @@ Detalle:
   (BR-REP-015), tambien si se confirma el mismo Tipo. Quita la condicion
   (SIN_BLOQUEO); PROC-REP-080 decide despues si hay recursos. Un 127
   invalida los overrides anteriores del Detalle (BR-REP-003, ver
-  ``services.recursos.tiene_override_factibilidad``).
+  ``services.recursos.tiene_override_factibilidad``) y, en un Origen que
+  exige autorizacion del cliente, tambien su autorizacion: la definicion
+  nueva es otra version y queda pendiente (BR-REP-029, derivado en
+  ``services.autorizacion_cliente``).
 
 El ciclo de redefinicion de un Detalle empieza en su ultimo PROC-REP-200
 "Requiere redefinicion": solo un 126 posterior habilita el 127. Todo se
@@ -37,8 +40,9 @@ from app.domain.models import (
 )
 
 from .autorizacion import validar_actor
+from .autorizacion_cliente import situacion_de_la_orden
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
-from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
+from .resolucion import ResultadoEvaluacionOrden
 from .tomas import hay_ejecucion_activa, toma_activa
 from .workflow import registrar_paso
 
@@ -98,7 +102,7 @@ def marcar_pendiente_revision(
             f"PROC-REP-125 se alcanza desde PROC-REP-211; la Orden esta en "
             f"{orden.current_process}."
         )
-    situacion = resolver_situacion_orden(orden.reparaciones_detail)
+    situacion = situacion_de_la_orden(orden)
     if situacion is not ResultadoEvaluacionOrden.REQUIERE_REVISION:
         raise PrecondicionInvalidaError(
             f"La Orden no requiere revision ({situacion.value})."

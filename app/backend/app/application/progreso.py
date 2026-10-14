@@ -31,6 +31,10 @@ _RUTA_CLIENTE_EXTERNO: tuple[tuple[str, str], ...] = (
     ("PROC-REP-070", "Definir Detalles"),
     ("PROC-REP-050", "Requiere comprobante de recepcion"),
     ("PROC-REP-060", "Generar comprobante de recepcion"),
+    # V1.4 (BR-REP-028): la decision del cliente por Detalle, antes de la
+    # factibilidad. En el MVP se registra despues del comprobante.
+    ("PROC-REP-046", "Registrar decision del cliente por Detalle"),
+    ("PROC-REP-047", "Que decidio el cliente"),
     ("PROC-REP-080", "Validar factibilidad"),
     ("PROC-REP-090", "Existe Detalle trabajable"),
     ("PROC-REP-140", "Habilitar Orden"),
@@ -250,19 +254,23 @@ def _con_revision(
     """La ruta de un Origen, pero pasando por revision (VAR-REP-001/002).
 
     PROC-REP-045 "No" reemplaza PROC-REP-070 por 055, y entre el
-    comprobante (050 [-> 060]) y 080 se intercala 065 -> 068 -> 075. De
-    080 en adelante converge con la ruta original. Una ruta que ya pasa
-    por revision (HP-REP-003) se devuelve tal cual.
+    comprobante (050 [-> 060]) y 080 se intercala 065 -> 068 -> 075 (antes
+    de la decision del cliente, 046, si el Origen la tiene: se decide sobre
+    los Detalles hallados). De ahi en adelante converge con la ruta
+    original. Una ruta que ya pasa por revision (HP-REP-003) se devuelve
+    tal cual.
     """
     if any(process_id == "PROC-REP-055" for process_id, _ in ruta):
         return ruta
     resultado: list[tuple[str, str]] = []
+    intercalado = False
     for nodo in ruta:
         process_id = nodo[0]
         if process_id == "PROC-REP-070":
             continue
-        if process_id == "PROC-REP-080":
+        if process_id in ("PROC-REP-046", "PROC-REP-080") and not intercalado:
             resultado.extend(_TRAMO_REVISION)
+            intercalado = True
         resultado.append(nodo)
         if process_id == "PROC-REP-045":
             resultado.append(("PROC-REP-055", "Marcar Orden en revision"))
@@ -298,6 +306,28 @@ def _sin_reparacion(
         if nodo[0] == "PROC-REP-068":
             resultado.append(_NODO_SIN_REPARACION)
             saltando = True
+    return tuple(resultado)
+
+
+_NODO_ESPERA_AUTORIZACION = (
+    "PROC-REP-129",
+    "Detalle(s) pendientes de autorizacion del cliente",
+)
+
+
+def _con_espera_de_autorizacion(
+    ruta: tuple[tuple[str, str], ...],
+) -> tuple[tuple[str, str], ...]:
+    """Intercala 129 antes de 046: la Orden espero la decision del cliente.
+
+    Se muestra UNA vez aunque haya esperado varias veces (por ejemplo,
+    tras una redefinicion): el historial conserva cada espera.
+    """
+    resultado: list[tuple[str, str]] = []
+    for nodo in ruta:
+        if nodo[0] == "PROC-REP-046":
+            resultado.append(_NODO_ESPERA_AUTORIZACION)
+        resultado.append(nodo)
     return tuple(resultado)
 
 
@@ -372,6 +402,8 @@ def _ruta_esperada(orden: OrdenReparacion) -> tuple[tuple[str, str], ...]:
         ruta = _con_revision(ruta)
     if "PROC-REP-069" in alcanzados:
         return _sin_reparacion(ruta)
+    if "PROC-REP-129" in alcanzados:
+        ruta = _con_espera_de_autorizacion(ruta)
     if "PROC-REP-100" in alcanzados:
         ruta = _con_espera_de_recursos(
             ruta, con_override="PROC-REP-130" in alcanzados

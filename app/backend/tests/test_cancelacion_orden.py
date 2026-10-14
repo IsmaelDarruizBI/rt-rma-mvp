@@ -24,6 +24,7 @@ from tests.fixtures.api_salidas import (
     TECNICO,
     aprobar,
     archivo,
+    autorizar_todo,
     cancelar_detalle,
     cancelar_orden,
     cliente_http,
@@ -320,12 +321,13 @@ def test_circuito_ingreso_definicion_cancelacion_devolucion_cierre(
                 json={"usuario_id": RECEPCION, "tipo_reparacion_id": tipo},
             )
         )
-    habilitada = ok(
+    ok(
         cliente.post(
             f"/api/orders/{orden_id}/definition/finalize",
             json={"usuario_id": RECEPCION},
         )
     )
+    habilitada = autorizar_todo(cliente, orden_id)
     assert habilitada["estado_workflow"] == "HABILITADA"
     ok(
         cliente.post(

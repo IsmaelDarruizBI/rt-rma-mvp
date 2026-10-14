@@ -16,6 +16,7 @@ from .catalogos import (
 )
 from .documentos import Documento, DocumentosOrden
 from .enums import (
+    CanalComunicacion,
     CondicionReparacionDetail,
     EstadoControl,
     EstadoEjecucion,
@@ -23,7 +24,9 @@ from .enums import (
     EstadoReparacionDetail,
     EstadoTomaOrden,
     EstadoWorkflow,
+    OrigenCancelacion,
     OrigenOrden,
+    ResultadoAutorizacion,
     ResultadoControl,
     RolUsuario,
     TipoMovimientoInsumo,
@@ -38,6 +41,7 @@ from .personas import Cliente, Usuario
 from .reparacion import (
     DefinicionAnteriorDetalle,
     EjecucionReparacion,
+    RegistroAutorizacionCliente,
     RegistroCancelacion,
     RegistroControlTecnico,
     ReparacionDetail,
@@ -47,6 +51,7 @@ from .workflow import HistorialWorkflow
 
 __all__ = [
     # Enums
+    "CanalComunicacion",
     "CondicionReparacionDetail",
     "DefinicionAnteriorDetalle",
     "EstadoControl",
@@ -55,7 +60,9 @@ __all__ = [
     "EstadoReparacionDetail",
     "EstadoTomaOrden",
     "EstadoWorkflow",
+    "OrigenCancelacion",
     "OrigenOrden",
+    "ResultadoAutorizacion",
     "ResultadoControl",
     "RolUsuario",
     "TipoMovimientoInsumo",
@@ -74,6 +81,7 @@ __all__ = [
     "TipoReparacionInsumos",
     # Trabajo tecnico
     "EjecucionReparacion",
+    "RegistroAutorizacionCliente",
     "RegistroCancelacion",
     "RegistroControlTecnico",
     "ReparacionDetail",

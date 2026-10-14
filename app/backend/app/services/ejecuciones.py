@@ -31,6 +31,7 @@ from app.domain.models import (
 )
 
 from .autorizacion import validar_actor
+from .autorizacion_cliente import exigir_autorizacion_vigente
 from .exceptions import (
     EntidadNoEncontradaError,
     PrecondicionInvalidaError,
@@ -173,9 +174,10 @@ def _validar_precondiciones_de_la_reserva(
 ) -> tuple[ReparacionDetail, TomaOrden]:
     """Precondiciones reales de PROC-REP-185: no son una reserva fallida.
 
-    Un Detalle no trabajable, sin toma, con la toma de otro tecnico (E2)
-    o con otra Ejecucion en curso es un error de precondicion, no el
-    resultado "Reserva fallida".
+    Un Detalle no trabajable, sin autorizacion vigente del cliente
+    (BR-REP-028), sin toma, con la toma de otro tecnico (E2) o con otra
+    Ejecucion en curso es un error de precondicion, no el resultado
+    "Reserva fallida": no se reserva nada.
     """
     detalle = buscar_detalle(orden, detalle_id)
     if detalle.estado is not EstadoReparacionDetail.DEFINIDO:
@@ -188,6 +190,7 @@ def _validar_precondiciones_de_la_reserva(
             f"El Detalle {detalle_id} no esta disponible para ejecutarse "
             f"(condicion {detalle.condicion.value})."
         )
+    exigir_autorizacion_vigente(orden, detalle)
 
     toma = validar_titular_de_la_toma(
         orden,

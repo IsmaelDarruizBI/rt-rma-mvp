@@ -202,12 +202,73 @@ def finalizar(cliente, orden_id) -> dict:
     )
 
 
-def definida(cliente, *tipos) -> str:
-    """CLIENTE_EXTERNO con esos Detalles, definida y habilitada."""
+def decidir(
+    cliente,
+    orden_id,
+    decisiones: dict[str, str],
+    *,
+    canal="WHATSAPP",
+    observaciones=None,
+    usuario=RECEPCION,
+    versiones: dict[str, int] | None = None,
+):
+    """``POST .../authorizations``: {detalle_id: AUTORIZADO | RECHAZADO}.
+
+    La version de cada Detalle es la vigente, salvo que ``versiones`` la
+    fije (para probar una respuesta vieja).
+    """
+    orden = ok(cliente.get(f"/api/orders/{orden_id}"))
+    vigentes = {
+        d["id"]: d["version_definicion"] for d in orden["reparaciones_detail"]
+    }
+    vigentes.update(versiones or {})
+    return cliente.post(
+        f"/api/orders/{orden_id}/authorizations",
+        json={
+            "usuario_id": usuario,
+            "canal": canal,
+            "observaciones": observaciones,
+            "decisiones": [
+                {
+                    "detalle_id": detalle_id,
+                    "version_definicion": vigentes.get(detalle_id, 1),
+                    "resultado": resultado,
+                }
+                for detalle_id, resultado in decisiones.items()
+            ],
+        },
+    )
+
+
+def autorizar_todo(cliente, orden_id) -> dict:
+    """El cliente autoriza todos los Detalles pendientes (explicito)."""
+    orden = ok(cliente.get(f"/api/orders/{orden_id}"))
+    return ok(
+        decidir(
+            cliente,
+            orden_id,
+            {
+                d["id"]: "AUTORIZADO"
+                for d in orden["reparaciones_detail"]
+                if d["estado_autorizacion"] == "PENDIENTE"
+            },
+        )
+    )
+
+
+def definida(cliente, *tipos, autorizar=True) -> str:
+    """CLIENTE_EXTERNO con esos Detalles, definida y habilitada.
+
+    Finalizar deja los Detalles pendientes de autorizacion del cliente
+    (BR-REP-028); con ``autorizar`` (default) Recepcion registra que el
+    cliente autoriza todos, y recien ahi la Orden queda habilitada.
+    """
     orden_id = crear(cliente)
     for tipo in tipos or (BATERIA,):
         agregar(cliente, orden_id, tipo)
     finalizar(cliente, orden_id)
+    if autorizar:
+        autorizar_todo(cliente, orden_id)
     return orden_id
 
 

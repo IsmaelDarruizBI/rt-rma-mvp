@@ -37,6 +37,7 @@ from app.domain.models import (
 )
 
 from .autorizacion import actor_valido, validar_actor
+from .autorizacion_cliente import es_trabajable, exigir_autorizacion_vigente
 from .exceptions import (
     EntidadNoEncontradaError,
     PrecondicionInvalidaError,
@@ -167,11 +168,12 @@ def validar_estacion_trabajo(
         )
         return _registrar_validacion_estacion(orden, fecha, usuario, motivo)
 
+    # Un Detalle pendiente de autorizacion del cliente no cuenta
+    # (BR-REP-028): con solo pendientes no hay nada que tomar.
     trabajables = [
         detalle
         for detalle in orden.reparaciones_detail
-        if detalle.estado is EstadoReparacionDetail.DEFINIDO
-        and detalle.condicion is CondicionReparacionDetail.SIN_BLOQUEO
+        if es_trabajable(orden, detalle)
     ]
     if not trabajables:
         motivo = "La Orden no tiene ningun Detalle trabajable"
@@ -318,7 +320,8 @@ def seleccionar_detalle(
     ``application.acciones.detalles_trabajables``: un Detalle bloqueado
     (``REQUIERE_DEFINICION`` o ``BLOQUEADO_POR_RECURSOS``) se rechaza
     aca tambien, aunque el caller no haya consultado antes las acciones
-    disponibles.
+    disponibles. Lo mismo uno sin autorizacion vigente del cliente,
+    cuando el Origen la exige (BR-REP-028).
 
     Solo el titular de la toma activa selecciona (E2).
     """
@@ -335,6 +338,7 @@ def seleccionar_detalle(
             f"El Detalle {detalle_id} no es trabajable "
             f"(condicion {detalle.condicion.value})."
         )
+    exigir_autorizacion_vigente(orden, detalle)
     validar_titular_de_la_toma(
         orden,
         usuario,

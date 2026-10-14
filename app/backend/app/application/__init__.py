@@ -22,8 +22,21 @@ porque es una decision funcional, no una configuracion.
 
 from .acciones import (
     AccionDisponible,
+    acciones_de_autorizacion,
     acciones_de_cancelacion,
     acciones_disponibles,
+)
+from .autorizacion_cliente import (
+    AutorizacionDetalle,
+    AutorizacionesOrden,
+    PendienteAutorizacion,
+    SituacionAutorizacion,
+    autorizaciones_de_orden,
+    decision_registrable,
+    pendientes_de_autorizacion,
+    registrar_decision_cliente,
+    registrar_desistimiento,
+    situacion_autorizacion,
 )
 from .cancelacion import cancelar_detalle, cancelar_orden, registrar_devolucion
 from .cierre import (
@@ -106,13 +119,22 @@ __all__ = [
     "listar_usuarios",
     "nombres_de_tipo_por_detalle",
     "obtener_orden",
+    "AutorizacionDetalle",
+    "AutorizacionesOrden",
+    "PendienteAutorizacion",
+    "autorizaciones_de_orden",
+    "pendientes_de_autorizacion",
     # Situacion de la Orden: acciones (por estado real) y progreso
     # (visualizacion, por Origen)
     "AccionDisponible",
     "PasoProgreso",
+    "SituacionAutorizacion",
+    "acciones_de_autorizacion",
     "acciones_de_cancelacion",
     "acciones_disponibles",
+    "decision_registrable",
     "progreso",
+    "situacion_autorizacion",
     # Comandos
     "crear_orden",
     "crear_orden_rt",
@@ -145,4 +167,6 @@ __all__ = [
     "cancelar_detalle",
     "cancelar_orden",
     "registrar_devolucion",
+    "registrar_decision_cliente",
+    "registrar_desistimiento",
 ]

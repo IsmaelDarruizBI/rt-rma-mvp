@@ -21,6 +21,7 @@ from app.application import (
 from app.application.contexto import ApplicationContext, construir_contexto
 from app.core.config import Settings
 from app.domain.models import (
+    CanalComunicacion,
     CondicionReparacionDetail,
     EstadoEjecucion,
     EstadoReparacionDetail,
@@ -28,12 +29,14 @@ from app.domain.models import (
     EstadoWorkflow,
     InsumoUtilizado,
     OrdenReparacion,
+    ResultadoAutorizacion,
     TipoMovimientoInsumo,
     TipoReparacion,
     TipoReparacionInsumos,
     Usuario,
 )
 from app.services import (
+    DecisionDetalle,
     EntidadNoEncontradaError,
     PrecondicionInvalidaError,
     ResultadoEvaluacionOrden,
@@ -44,6 +47,7 @@ from app.services import (
     habilitar_orden,
     marcar_pendiente_revision,
     registrar_accion_funcional,
+    registrar_decision_cliente,
     registrar_ejecucion_completada,
     registrar_ejecucion_interrumpida,
     registrar_ejecucion_requiere_redefinicion,
@@ -178,6 +182,30 @@ def _redefinir(
 
 def _detalle(orden, detalle_id="DET-001"):
     return next(d for d in orden.reparaciones_detail if d.id == detalle_id)
+
+
+def _reautorizar(orden, detalle_id="DET-001", minuto=91):
+    """El cliente autoriza la definicion NUEVA del Detalle (BR-REP-029).
+
+    En CLIENTE_EXTERNO un 127 deja la definicion nueva pendiente de
+    autorizacion: sin esta decision, PROC-REP-080 no la evalua.
+    """
+    orden, _ = registrar_decision_cliente(
+        orden,
+        decisiones=[
+            DecisionDetalle(
+                detalle_id=detalle_id,
+                version_definicion=_detalle(
+                    orden, detalle_id
+                ).version_definicion,
+                resultado=ResultadoAutorizacion.AUTORIZADO,
+            )
+        ],
+        usuario=RECEPCION,
+        canal=CanalComunicacion.TELEFONO,
+        fecha=t(minuto),
+    )
+    return orden
 
 
 # --- 1/2. Tercer resultado de PROC-REP-200 ---
@@ -528,12 +556,16 @@ def test_la_primera_definicion_no_genera_historico():
 
 
 def _ciclo_completo(orden, tipo, minuto):
-    """Una redefinicion completa: 200 -> 125 -> 126 -> 127 -> 080/140."""
+    """Una redefinicion completa: 125 -> 126 -> 127 -> 046/047 -> 080/140.
+
+    La definicion nueva necesita la autorizacion del cliente (BR-REP-029).
+    """
+    redefinida = _redefinir(
+        _revisar(orden, minuto=minuto), tipo=tipo, minuto=minuto + 1
+    )
     orden = habilitar_orden(
         _validar(
-            _redefinir(
-                _revisar(orden, minuto=minuto), tipo=tipo, minuto=minuto + 1
-            ),
+            _reautorizar(redefinida, minuto=minuto + 1),
             _insumos(a="5", b="5", c="5"),
             minuto=minuto + 2,
         )[0],
@@ -646,7 +678,7 @@ def test_un_127_invalida_el_override_anterior():
 
     assert not tiene_override_factibilidad(orden, "DET-001")
     # 080 sin stock: 090 Ninguno -> 100 (EXC-REP-001/002 siguen).
-    orden, factible = _validar(orden, _insumos(a="0"), minuto=95)
+    orden, factible = _validar(_reautorizar(orden), _insumos(a="0"), minuto=95)
     assert factible is False
     assert orden.current_process == "PROC-REP-100"
     assert _detalle(orden).condicion is (
@@ -662,7 +694,7 @@ def test_un_override_posterior_al_127_es_valido():
     orden = _con_override_y_ejecucion()
     orden, _ = _requiere_redefinicion(orden)
     orden = _redefinir(_revisar(orden), tipo=TIPO_BATERIA)
-    orden, _ = _validar(orden, _insumos(a="0"), minuto=95)
+    orden, _ = _validar(_reautorizar(orden), _insumos(a="0"), minuto=95)
 
     forzada = override_en_100(
         orden,
@@ -703,13 +735,15 @@ def test_el_127_de_otro_detalle_no_invalida_el_override():
 
 def test_127_y_080_con_stock_habilita():
     orden = _redefinir(_revisar(_en_125()))
-    orden, factible = _validar(orden, _insumos(a="5"), minuto=95)
+    orden, factible = _validar(_reautorizar(orden), _insumos(a="5"), minuto=95)
 
     assert factible is True
     habilitada = habilitar_orden(orden, fecha=t(96))
-    assert _ids(habilitada)[-5:] == [
+    assert _ids(habilitada)[-7:] == [
         "PROC-REP-126",
         "PROC-REP-127",
+        "PROC-REP-046",
+        "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",
@@ -860,7 +894,9 @@ def test_escrituras_de_la_orden_por_comando(tmp_path):
             tipo_reparacion_id="TR-002",
         )
         assert espia.guardados == 1
-        assert orden.historial[-1].referencia_id == "PROC-REP-140"
+        # CLIENTE_EXTERNO: la definicion nueva espera la decision del
+        # cliente (BR-REP-029); la factibilidad llega con la autorizacion.
+        assert orden.historial[-1].referencia_id == "PROC-REP-129"
 
 
 def test_interrumpir_tambien_escribe_dos_veces(tmp_path):

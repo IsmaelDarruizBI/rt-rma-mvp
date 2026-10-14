@@ -135,6 +135,47 @@ class ResultadoControl(str, Enum):
     RECHAZADO = "RECHAZADO"
 
 
+class ResultadoAutorizacion(str, Enum):
+    """Decision del cliente sobre UN Detalle (PROC-REP-046, BR-REP-028).
+
+    Solo los dos resultados que se REGISTRAN. "Sin respuesta" no es una
+    decision: no se persiste nada y el Detalle sigue pendiente (estado
+    derivado, ver ``app.services.autorizacion_cliente``).
+    """
+
+    AUTORIZADO = "AUTORIZADO"
+    RECHAZADO = "RECHAZADO"
+
+
+class CanalComunicacion(str, Enum):
+    """Por donde respondio el cliente (evidencia de consentimiento).
+
+    BR-REP-028 deja el canal pendiente de decision de negocio: estos
+    valores son la lista provisoria del MVP, con ``OTRO`` como salida.
+    """
+
+    PRESENCIAL = "PRESENCIAL"
+    TELEFONO = "TELEFONO"
+    WHATSAPP = "WHATSAPP"
+    EMAIL = "EMAIL"
+    OTRO = "OTRO"
+
+
+class OrigenCancelacion(str, Enum):
+    """Por que se cancelo un Detalle (PROC-REP-300/305).
+
+    ``INTERNA``: lo decidio Recepcion o Coordinacion. ``RECHAZO_CLIENTE``:
+    el cliente rechazo la propuesta pendiente (PROC-REP-047).
+    ``DESISTIMIENTO_CLIENTE``: el cliente la habia autorizado y desistio
+    despues, antes de que se realizara; su autorizacion queda en la
+    historia, sin reemplazarse.
+    """
+
+    INTERNA = "INTERNA"
+    RECHAZO_CLIENTE = "RECHAZO_CLIENTE"
+    DESISTIMIENTO_CLIENTE = "DESISTIMIENTO_CLIENTE"
+
+
 class TipoMovimientoInsumo(str, Enum):
     """Tipos de movimiento de inventario trazados a un Detalle."""
 

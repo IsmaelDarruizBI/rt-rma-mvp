@@ -35,8 +35,12 @@ from app.domain.models import (
 )
 
 from .autorizacion import validar_actor
+from .autorizacion_cliente import (
+    pendiente_de_autorizacion,
+    situacion_de_la_orden,
+)
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
-from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
+from .resolucion import ResultadoEvaluacionOrden
 from .workflow import registrar_accion_funcional, registrar_paso
 
 NODO_ADVERTENCIA = "PROC-REP-100"
@@ -66,7 +70,7 @@ def marcar_pendiente_recursos(
             f"PROC-REP-120 se alcanza desde PROC-REP-110 o PROC-REP-211; "
             f"la Orden esta en {orden.current_process}."
         )
-    situacion = resolver_situacion_orden(orden.reparaciones_detail)
+    situacion = situacion_de_la_orden(orden)
     if situacion is not ResultadoEvaluacionOrden.PENDIENTE_RECURSOS:
         raise PrecondicionInvalidaError(
             f"La Orden no esta pendiente de recursos ({situacion.value})."
@@ -95,7 +99,7 @@ def registrar_espera_recursos(
             f"Solo se espera por recursos desde {NODO_ADVERTENCIA}; la "
             f"Orden esta en {orden.current_process}."
         )
-    situacion = resolver_situacion_orden(orden.reparaciones_detail)
+    situacion = situacion_de_la_orden(orden)
     if situacion is not ResultadoEvaluacionOrden.PENDIENTE_RECURSOS:
         raise PrecondicionInvalidaError(
             f"La Orden no esta pendiente de recursos ({situacion.value})."
@@ -172,6 +176,13 @@ def validar_override_recursos(
         raise PrecondicionInvalidaError(
             f"El Detalle {detalle_id} no esta bloqueado por recursos "
             f"({detalle.estado.value} / {detalle.condicion.value})."
+        )
+    if pendiente_de_autorizacion(orden, detalle):
+        # BR-REP-028: la factibilidad de un Detalle pendiente no se evalua,
+        # y el override es saltear esa validacion.
+        raise PrecondicionInvalidaError(
+            f"El Detalle {detalle_id} esta pendiente de autorizacion del "
+            "cliente: no se fuerza su factibilidad."
         )
     if not motivo.strip():
         raise PrecondicionInvalidaError(

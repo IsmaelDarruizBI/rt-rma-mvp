@@ -7,6 +7,8 @@
  */
 
 import type {
+  CanalComunicacion,
+  DecisionDetalle,
   Estacion,
   ImpactoOverride,
   InsumoUtilizado,
@@ -464,6 +466,44 @@ export function cancelarOrden(
     usuario_id: usuarioId,
     motivo,
   });
+}
+
+/**
+ * Decisión del cliente sobre uno o varios Detalles (PROC-REP-046/047).
+ * Un Detalle sin respuesta no se envía: sigue pendiente. Cada decisión
+ * lleva la versión de la definición que se le presentó al cliente.
+ */
+export function registrarDecisionCliente(
+  ordenId: string,
+  usuarioId: string,
+  canal: CanalComunicacion,
+  observaciones: string | null,
+  decisiones: DecisionDetalle[],
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/authorizations`, {
+    usuario_id: usuarioId,
+    canal,
+    observaciones,
+    decisiones,
+  });
+}
+
+/**
+ * El cliente desiste de trabajos ya autorizados: de UN Detalle o, con
+ * `detalleId` en `null`, de todos los cancelables (los pendientes se
+ * rechazan). Si algo lo impide, el backend responde 409 y no cancela nada.
+ */
+export function desistir(
+  ordenId: string,
+  detalleId: string | null,
+  usuarioId: string,
+  canal: CanalComunicacion,
+  motivo: string,
+): Promise<Orden> {
+  const ruta = detalleId
+    ? `/api/orders/${ordenId}/details/${detalleId}/withdrawal`
+    : `/api/orders/${ordenId}/withdrawal`;
+  return post<Orden>(ruta, { usuario_id: usuarioId, canal, motivo });
 }
 
 /** Devolución física del equipo de una Orden CANCELADA (PROC-REP-270). */

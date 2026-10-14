@@ -577,7 +577,7 @@ def test_habilitar_rechaza_090_con_faltantes():
         INSUMO_BATERIA.model_copy(update={"stock_fisico": Decimal("0")})
     ]
     orden, factible = validar_factibilidad_detalles(
-        flujo_mvp.orden_con_detalle(),
+        flujo_mvp.orden_autorizada(),
         insumos=sin_stock,
         insumos_previstos=INSUMOS_PREVISTOS,
         fecha=t(15),

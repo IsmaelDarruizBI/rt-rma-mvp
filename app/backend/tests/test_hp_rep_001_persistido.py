@@ -18,6 +18,7 @@ from decimal import Decimal
 import pytest
 
 from app.domain.models import (
+    CanalComunicacion,
     EstadoControl,
     EstadoPago,
     EstadoReparacionDetail,
@@ -25,8 +26,10 @@ from app.domain.models import (
     EstadoWorkflow,
     InsumoUtilizado,
     OrdenReparacion,
+    ResultadoAutorizacion,
 )
 from app.services import (
+    DecisionDetalle,
     ResultadoEvaluacionOrden,
     aplicar_movimientos_inventario,
     aprobar_control_tecnico,
@@ -44,8 +47,10 @@ from app.services import (
     habilitar_orden,
     hay_reservas_activas,
     ingresar_a_cola,
+    marcar_pendiente_autorizacion,
     marcar_reparacion_lista,
     notificar_cliente,
+    registrar_decision_cliente,
     registrar_ejecucion_completada,
     registrar_pago,
     registrar_saldo_pendiente,
@@ -145,12 +150,36 @@ def test_hp_rep_001_persistido_end_to_end(repos):
         fecha=t(5),
     )
     orden = generar_comprobante_recepcion(orden, fecha=t(10))
+    orden, _ = evaluar_situacion_orden(orden, fecha=t(11))
+    orden = marcar_pendiente_autorizacion(orden, fecha=t(11))
+    assert orden.current_process == "PROC-REP-129"
+    ordenes_repo.guardar(orden)
+
+    # --- Tramo 2b: cargar -> el cliente autoriza el Detalle (046/047)
+    orden = ordenes_repo.obtener(ORDEN_ID)
+    orden, _ = registrar_decision_cliente(
+        orden,
+        decisiones=[
+            DecisionDetalle(
+                detalle_id=DETALLE_ID,
+                version_definicion=1,
+                resultado=ResultadoAutorizacion.AUTORIZADO,
+            )
+        ],
+        usuario=recepcion,
+        canal=CanalComunicacion.TELEFONO,
+        fecha=t(12),
+        observaciones="Confirmo por telefono.",
+    )
     ordenes_repo.guardar(orden)
 
     # --- Tramo 3: cargar -> factibilidad, habilitacion y cola
     orden = ordenes_repo.obtener(ORDEN_ID)
     assert orden.total == Decimal("80000")
     assert orden.documentos.comprobante_recepcion.generado is True
+    (decision,) = orden.reparaciones_detail[0].autorizaciones
+    assert decision.canal is CanalComunicacion.TELEFONO
+    assert decision.observaciones == "Confirmo por telefono."
 
     orden, factible = validar_factibilidad_detalles(
         orden,
@@ -353,6 +382,9 @@ def test_la_orden_persistida_recorre_los_nodos_del_scenario(repos):
         "PROC-REP-070",
         "PROC-REP-050",
         "PROC-REP-060",
+        "PROC-REP-129",
+        "PROC-REP-046",
+        "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",
@@ -382,6 +414,9 @@ def test_la_orden_persistida_recorre_los_nodos_del_scenario(repos):
 
     assert recorridos.count("PROC-REP-265") == 2
     assert all(paso.process_id != "EVT-REP-999" for paso in final.historial)
+    # La autorizacion queda antes de la factibilidad: nada se evaluo ni
+    # ejecuto sin ella.
+    assert recorridos.index("PROC-REP-047") < recorridos.index("PROC-REP-080")
 
 
 def test_el_archivo_final_es_una_orden_valida(repos, tmp_path):

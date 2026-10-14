@@ -50,6 +50,11 @@ class PoliticaOrigen:
     precio snapshot de cada Detalle: una Orden ``NO_COBRABLE`` sigue
     teniendo ``total`` -lo que hubiera costado-, solo que nadie debe
     pagarlo.
+
+    ``requiere_autorizacion_cliente`` (BR-REP-028): cada Detalle necesita
+    la decision del cliente sobre su definicion vigente antes de pasar a
+    factibilidad o ejecucion. Solo CLIENTE_EXTERNO: un equipo interno no
+    tiene cliente que decida, y una garantia RMA no se le cobra.
     """
 
     condicion_comercial: str
@@ -57,6 +62,7 @@ class PoliticaOrigen:
     requiere_notificacion: bool
     requiere_entrega_cliente: bool
     requiere_informar_rt: bool
+    requiere_autorizacion_cliente: bool
 
 
 _POLITICAS: dict[OrigenOrden, PoliticaOrigen] = {
@@ -66,6 +72,7 @@ _POLITICAS: dict[OrigenOrden, PoliticaOrigen] = {
         requiere_notificacion=True,
         requiere_entrega_cliente=True,
         requiere_informar_rt=False,
+        requiere_autorizacion_cliente=True,
     ),
     OrigenOrden.RT_INTERNO: PoliticaOrigen(
         condicion_comercial=CondicionComercial.NO_COBRABLE_AL_CLIENTE,
@@ -73,6 +80,7 @@ _POLITICAS: dict[OrigenOrden, PoliticaOrigen] = {
         requiere_notificacion=False,
         requiere_entrega_cliente=False,
         requiere_informar_rt=True,
+        requiere_autorizacion_cliente=False,
     ),
     OrigenOrden.RMA_GARANTIA_REPARACION: PoliticaOrigen(
         condicion_comercial=CondicionComercial.NO_COBRABLE,
@@ -80,6 +88,7 @@ _POLITICAS: dict[OrigenOrden, PoliticaOrigen] = {
         requiere_notificacion=True,
         requiere_entrega_cliente=True,
         requiere_informar_rt=False,
+        requiere_autorizacion_cliente=False,
     ),
 }
 

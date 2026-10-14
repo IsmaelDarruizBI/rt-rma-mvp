@@ -29,16 +29,21 @@ from datetime import datetime
 
 from app.domain.models import Cliente, Equipo, OrdenReparacion
 from app.services import (
+    ResultadoEvaluacionOrden,
     cargar_reservas_externas,
     crear_orden_cliente_externo,
     crear_orden_garantia_rma,
     crear_orden_rt_interno,
     definir_reparacion_detail,
     definir_reparacion_detail_luego_revision,
+    detalles_pendientes_de_autorizacion,
+    evaluar_situacion_orden,
     exigir_definicion_finalizable,
     generar_comprobante_recepcion,
     habilitar_orden,
+    hay_detalles_para_factibilidad,
     marcar_orden_en_revision,
+    marcar_pendiente_autorizacion,
     registrar_finalizacion_sin_reparacion,
     validar_factibilidad_detalles,
 )
@@ -165,6 +170,11 @@ def finalizar_definicion(
     La distincion sale del historial (PROC-REP-050 ya evaluado), no de un
     flag. Si ningun Detalle es trabajable, la Orden queda en PROC-REP-100
     (EXC-REP-001/002), sin error. Persiste una sola vez.
+
+    En CLIENTE_EXTERNO los Detalles recien definidos esperan la decision
+    del cliente (BR-REP-028): no hay factibilidad todavia y la Orden queda
+    en PROC-REP-129 hasta que Recepcion la registre
+    (``application.autorizacion_cliente``).
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
@@ -197,7 +207,25 @@ def _validar_y_habilitar(
     Si ninguno lo es (EXC-REP-001) NO es un error: la Orden queda detenida
     en PROC-REP-100 -con los Detalles BLOQUEADO_POR_RECURSOS- y el caller
     la persiste; despues se espera (110 No -> 120) y se revalida.
+
+    Si lo unico por evaluar son Detalles pendientes de autorizacion del
+    cliente, la factibilidad no corre (BR-REP-028): PROC-REP-211 deja la
+    Orden esperando la decision en PROC-REP-129.
     """
+    if not hay_detalles_para_factibilidad(
+        orden
+    ) and detalles_pendientes_de_autorizacion(orden):
+        orden, resultado = evaluar_situacion_orden(orden, fecha=fecha)
+        if (
+            resultado is ResultadoEvaluacionOrden.PENDIENTE_AUTORIZACION
+            and orden.current_process == "PROC-REP-211"
+        ):
+            # Finalizar la definicion: es aca donde se le presentan los
+            # Detalles al cliente, y la Orden pasa a esperarlo. (Tras un
+            # 127 la definicion ya estaba cerrada y 211 ya fue a 129.)
+            orden = marcar_pendiente_autorizacion(orden, fecha=fecha)
+        return orden
+
     orden, factible = validar_factibilidad_detalles(
         orden,
         insumos=contexto.catalogos.listar_insumos(),

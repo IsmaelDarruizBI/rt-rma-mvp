@@ -128,6 +128,46 @@ obligatorio en todas; la Orden se reevalua con el resolver de siempre
 CANCELADA no es ENTREGADA: si el equipo esta en custodia, queda abierta
 (`devolucion_pendiente`) hasta registrar su devolucion.
 
+Autorizacion del cliente por Detalle (BR-REP-028/029/037, V1.4 acotada):
+
+| Endpoint | Actor | Nodos |
+|---|---|---|
+| `POST /api/orders/{id}/authorizations` | RECEPCION | 046 (por Detalle) → 047 [→ 300 \| 305] → 080 → 090 → 140 \| 100 \| 211 |
+| `POST /api/orders/{id}/details/{detalle_id}/withdrawal` | RECEPCION | 046 (desiste) → 047 → 300 \| 305 → 211 |
+| `POST /api/orders/{id}/withdrawal` | RECEPCION | 046 (rechaza pendientes / desiste de autorizados) → 047 → 305 → 211 |
+| `GET /api/orders/{id}/authorizations` | lectura | decision vigente e historia por Detalle |
+| `GET /api/orders/authorizations/pending` | lectura | Detalles que esperan decision |
+
+Solo la exige `CLIENTE_EXTERNO` (`PoliticaOrigen.requiere_autorizacion_cliente`);
+RT_INTERNO y RMA_GARANTIA_REPARACION siguen igual. Al finalizar la
+definicion, los Detalles quedan pendientes y la Orden espera en
+PROC-REP-129, sin factibilidad. Recepcion registra, en una operacion, que
+Detalles autoriza el cliente y cuales rechaza (canal y observaciones); los
+no respondidos no se envian y siguen pendientes sin bloquear a los demas.
+Un autorizado pasa a factibilidad; un rechazado se cancela con origen
+`RECHAZO_CLIENTE`. La decision queda en `ReparacionDetail.autorizaciones`
+(append-only) atada a la version de la definicion: un PROC-REP-127 la deja
+sin efecto y la definicion nueva vuelve a estar pendiente. Un Detalle
+pendiente no se toma, selecciona, reserva ni ejecuta (409), y la Orden no
+llega al control final mientras quede alguno.
+
+Desistimiento: si el cliente ya habia autorizado un trabajo y lo deja sin
+efecto antes de que se realice, se registra su desistimiento (motivo
+obligatorio): la autorizacion queda en la historia y el Detalle se cancela
+con origen `DESISTIMIENTO_CLIENTE`. El desistimiento de todos los trabajos
+rechaza lo pendiente, desiste de lo autorizado y conserva lo COMPLETO (que
+sigue al control y al cierre); con una Ejecucion activa o reservas sin
+conciliar no se aplica nada (409 con los Detalles que lo impiden).
+`OrdenOut.desistimiento` muestra de antemano que se cancelaria y que lo
+impide.
+
+Compatibilidad: una Orden CLIENTE_EXTERNO guardada antes, sin
+`autorizaciones`, sigue cargando; sus Detalles DEFINIDO quedan pendientes
+(no se presume ninguna autorizacion) y lo ya ejecutado figura
+`SIN_DECISION`. Fuera de alcance: confirmacion tecnica previa
+(V1.4 182–184), reparaciones adicionales del tecnico (128) y devoluciones
+de dinero (267/268).
+
 Registrar Pago no corresponde a ningun `PROC-REP-*`: no mueve
 `current_process`, pero deja traza en el historial como accion funcional
 `ACC-REP-020`. `BR-REP-017` todavia no define que rol puede cobrar, asi

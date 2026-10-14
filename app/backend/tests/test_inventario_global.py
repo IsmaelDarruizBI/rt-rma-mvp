@@ -68,7 +68,8 @@ def repos(tmp_path):
 
 def test_caso_a_dos_ordenes_factibles_no_reservan_nada():
     """stock 1, dos Ordenes que lo necesitan, ninguna inicio Ejecucion."""
-    or_001 = flujo_mvp.orden_con_detalle()
+    # Las dos con el Detalle autorizado por el cliente (BR-REP-028).
+    or_001 = flujo_mvp.orden_autorizada()
     or_002 = or_001.model_copy(deep=True, update={"id": "OR-002"})
     ordenes = [or_001, or_002]
 

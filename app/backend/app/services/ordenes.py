@@ -31,6 +31,10 @@ from app.domain.models import (
 from app.domain.politicas import politica_de
 
 from .autorizacion import validar_actor, validar_alguno_de
+from .autorizacion_cliente import (
+    marcar_pendiente_autorizacion,
+    situacion_de_la_orden,
+)
 from .exceptions import (
     EntidadNoEncontradaError,
     OrdenCerradaError,
@@ -40,8 +44,8 @@ from .inventario import hay_reservas_activas
 from .pagos import condicion_entrega_cumplida
 from .recursos import marcar_pendiente_recursos, override_listo_para_habilitar
 from .redefinicion import marcar_pendiente_revision
-from .reparaciones import control_tecnico_completo
-from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
+from .reparaciones import control_tecnico_completo, definicion_finalizada
+from .resolucion import ResultadoEvaluacionOrden
 from .revisiones import finalizada_sin_reparacion, lista_para_cierre
 from .tomas import toma_activa
 from .workflow import registrar_paso
@@ -60,15 +64,16 @@ ROLES_ENTREGA = (
 
 # Resultados de BR-REP-012 que cierran la toma activa (BR-REP-018): no queda
 # ningun Detalle trabajable ni en ejecucion. COMPLETA y TODO_CANCELADO; y
-# PENDIENTE_RECURSOS (PROC-REP-211 caso e) y REQUIERE_REVISION (caso f),
-# donde ademas la Orden pasa a esperar en PROC-REP-120 / PROC-REP-125. Los
-# demas (ABIERTA_TRABAJABLE, EN_EJECUCION) preservan la toma: si continuar
-# o liberar lo resuelve PROC-REP-212/213.
+# PENDIENTE_RECURSOS (PROC-REP-211 caso e), REQUIERE_REVISION (caso f) y
+# PENDIENTE_AUTORIZACION (V1.4), donde ademas la Orden pasa a esperar en
+# PROC-REP-120 / 125 / 129. Los demas (ABIERTA_TRABAJABLE, EN_EJECUCION)
+# preservan la toma: si continuar o liberar lo resuelve PROC-REP-212/213.
 _RESULTADOS_QUE_CIERRAN_LA_TOMA = (
     ResultadoEvaluacionOrden.COMPLETA,
     ResultadoEvaluacionOrden.TODO_CANCELADO,
     ResultadoEvaluacionOrden.PENDIENTE_RECURSOS,
     ResultadoEvaluacionOrden.REQUIERE_REVISION,
+    ResultadoEvaluacionOrden.PENDIENTE_AUTORIZACION,
 )
 
 
@@ -565,7 +570,10 @@ def evaluar_situacion_orden(
     ``tests/test_resolucion_orden.py``). Con PENDIENTE_RECURSOS (EXC-REP-001)
     cierra la toma y continua directo a PROC-REP-120 (sin 100 ni 110); con
     REQUIERE_REVISION (EXC-REP-004) cierra la toma y continua a
-    PROC-REP-125.
+    PROC-REP-125; con PENDIENTE_AUTORIZACION (ningun Detalle trabajable y
+    alguno esperando la decision del cliente) cierra la toma y espera en
+    PROC-REP-129. Los Detalles pendientes de autorizacion los deriva
+    ``situacion_de_la_orden`` segun la politica del Origen.
 
     Se invoca tambien despues de cancelar Detalles (PROC-REP-300/305) y de
     rechazar un control (PROC-REP-235):
@@ -583,7 +591,7 @@ def evaluar_situacion_orden(
     se fija recien en PROC-REP-240, tras el control tecnico, y la espera de
     recursos conserva el ultimo hito (por ejemplo EN_REPARACION).
     """
-    resultado = resolver_situacion_orden(orden.reparaciones_detail)
+    resultado = situacion_de_la_orden(orden)
 
     nueva_orden = registrar_paso(
         orden,
@@ -605,6 +613,15 @@ def evaluar_situacion_orden(
     elif resultado is ResultadoEvaluacionOrden.REQUIERE_REVISION:
         # PROC-REP-211 -> PROC-REP-125 (EXC-REP-004).
         nueva_orden = marcar_pendiente_revision(nueva_orden, fecha=fecha)
+    elif (
+        resultado is ResultadoEvaluacionOrden.PENDIENTE_AUTORIZACION
+        and definicion_finalizada(nueva_orden)
+    ):
+        # PROC-REP-211 -> PROC-REP-129 (V1.4, BR-REP-028). Con la
+        # definicion todavia abierta (por ejemplo, al cancelar un Detalle
+        # mientras se cargan) no se le pregunto nada al cliente: la Orden
+        # sigue donde estaba. Al finalizar, 129 lo registra el comando.
+        nueva_orden = marcar_pendiente_autorizacion(nueva_orden, fecha=fecha)
     elif resultado is ResultadoEvaluacionOrden.TODO_CANCELADO:
         # PROC-REP-211 (d): CANCELADA [-> 270 devolucion] -> EVT-REP-999.
         nueva_orden = marcar_orden_cancelada(nueva_orden, fecha=fecha)

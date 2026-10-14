@@ -14,6 +14,7 @@ from decimal import Decimal
 import pytest
 
 from app.domain.models import (
+    CanalComunicacion,
     EstadoControl,
     EstadoEjecucion,
     EstadoPago,
@@ -22,9 +23,11 @@ from app.domain.models import (
     EstadoWorkflow,
     InsumoUtilizado,
     OrdenReparacion,
+    ResultadoAutorizacion,
     TipoMovimientoInsumo,
 )
 from app.services import (
+    DecisionDetalle,
     ResultadoEvaluacionOrden,
     aprobar_control_tecnico,
     calcular_puntaje,
@@ -41,8 +44,10 @@ from app.services import (
     habilitar_orden,
     hay_reservas_activas,
     ingresar_a_cola,
+    marcar_pendiente_autorizacion,
     marcar_reparacion_lista,
     notificar_cliente,
+    registrar_decision_cliente,
     registrar_ejecucion_completada,
     registrar_pago,
     registrar_saldo_pendiente,
@@ -116,6 +121,40 @@ def test_hp_rep_001_end_to_end():
 
     assert orden.documentos.comprobante_recepcion.generado is True
     assert orden.documentos.comprobante_recepcion.fecha_generacion == t(10)
+
+    # Finalizar la definicion: el Detalle espera la decision del cliente
+    # (BR-REP-028). PROC-REP-211 -> PROC-REP-129, sin factibilidad.
+    orden, resultado = evaluar_situacion_orden(orden, fecha=t(11))
+    assert resultado is ResultadoEvaluacionOrden.PENDIENTE_AUTORIZACION
+    orden = marcar_pendiente_autorizacion(orden, fecha=t(11))
+    assert orden.current_process == "PROC-REP-129"
+    _, factible_sin_autorizar = validar_factibilidad_detalles(
+        orden,
+        insumos=[INSUMO_BATERIA],
+        insumos_previstos=INSUMOS_PREVISTOS,
+        fecha=t(11),
+    )
+    assert factible_sin_autorizar is False
+
+    # PROC-REP-046 -> PROC-REP-047 ("Acepta trabajos")
+    orden, autorizados = registrar_decision_cliente(
+        orden,
+        decisiones=[
+            DecisionDetalle(
+                detalle_id="DET-001",
+                version_definicion=1,
+                resultado=ResultadoAutorizacion.AUTORIZADO,
+            )
+        ],
+        usuario=RECEPCION,
+        canal=CanalComunicacion.PRESENCIAL,
+        fecha=t(12),
+    )
+    assert autorizados == ("DET-001",)
+    (decision,) = orden.reparaciones_detail[0].autorizaciones
+    assert decision.resultado is ResultadoAutorizacion.AUTORIZADO
+    assert decision.usuario_id == RECEPCION.id
+    assert orden.historial[-1].observacion == "ACEPTA_TRABAJOS"
 
     # PROC-REP-080 -> PROC-REP-090 ("Existe Detalle trabajable")
     orden, es_factible = validar_factibilidad_detalles(
@@ -371,6 +410,9 @@ def test_hp_rep_001_recorre_los_nodos_del_scenario():
         "PROC-REP-070",
         "PROC-REP-050",
         "PROC-REP-060",
+        "PROC-REP-129",
+        "PROC-REP-046",
+        "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",

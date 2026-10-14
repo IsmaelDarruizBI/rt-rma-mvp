@@ -359,9 +359,21 @@ export function DetallesOrden({ orden }: { orden: Orden }) {
                     </Etiqueta>
                   </div>
                 )}
+              {detalle.estado_autorizacion === "PENDIENTE" && (
+                <div style={{ marginTop: "0.15rem" }}>
+                  <Etiqueta color={colores.alerta}>
+                    Pendiente de autorización del cliente
+                  </Etiqueta>
+                </div>
+              )}
               {detalle.cancelacion && (
                 <div style={{ fontSize: "0.8rem", color: colores.error }}>
-                  Cancelado por {detalle.cancelacion.usuario_id} ·{" "}
+                  {detalle.cancelacion.origen === "RECHAZO_CLIENTE"
+                    ? "Rechazado por el cliente, registrado por "
+                    : detalle.cancelacion.origen === "DESISTIMIENTO_CLIENTE"
+                      ? "El cliente desistió después de autorizar, registrado por "
+                      : "Cancelado por "}
+                  {detalle.cancelacion.usuario_id} ·{" "}
                   {fechaCorta(detalle.cancelacion.fecha)} ·{" "}
                   {detalle.cancelacion.motivo} (no se cobra)
                 </div>

@@ -20,6 +20,14 @@ declaran el valor NUEVO esperado, no ``roles=()``.
 No se caracteriza ``ejecucion_id``: es un ID generado (no determinista
 entre corridas), asi que se compara contra la Ejecucion real de la
 Orden en lugar de un valor hardcodeado.
+
+Tercera excepcion deliberada (autorizacion del cliente, BR-REP-028):
+HP-REP-001 pasa por la decision del cliente antes de la factibilidad.
+Finalizar la definicion evalua la Orden (PROC-REP-211, alcanzado desde
+ahi) y la deja esperando en PROC-REP-129; Recepcion registra la
+autorizacion (PROC-REP-046 -> 047). Las acciones de cada estado no
+cambian: registrar la decision se ofrece aparte
+(``acciones_de_autorizacion``).
 """
 
 from app.application import acciones_disponibles, progreso
@@ -45,15 +53,17 @@ ROLES_PAGO_ANTES_DEL_FIX = (
     RolUsuario.COORDINADOR_RMA,
 )
 
-# Los 33 nodos de HP-REP-001, en el orden en que el recorrido los expone.
-# Incluye PROC-REP-212 (transversal, Slice 1) entre 180 y 181.
-_TOTAL_NODOS_HP1 = 33
+# Los 35 nodos de HP-REP-001, en el orden en que el recorrido los expone.
+# Incluye PROC-REP-212 (transversal, Slice 1) entre 180 y 181, y la
+# decision del cliente (046/047, BR-REP-028); 36 cuando la Orden espero
+# esa decision (PROC-REP-129).
+_TOTAL_NODOS_HP1 = 35
 
 
 def _orden_habilitada():
     """Entre PROC-REP-140 y PROC-REP-150: HABILITADA, todavia sin cola."""
     orden, _ = validar_factibilidad_detalles(
-        flujo_mvp.orden_con_detalle(),
+        flujo_mvp.orden_autorizada(),
         insumos=INSUMOS,
         insumos_previstos=INSUMOS_PREVISTOS,
         fecha=t(15),
@@ -75,7 +85,10 @@ def _codigos_y_roles(orden):
 
 def _alcanzados(orden):
     pasos = progreso(orden)
-    assert len(pasos) == _TOTAL_NODOS_HP1
+    espero_al_cliente = any(
+        paso.process_id == "PROC-REP-129" for paso in orden.historial
+    )
+    assert len(pasos) == _TOTAL_NODOS_HP1 + espero_al_cliente
     return [paso.process_id for paso in pasos if paso.alcanzado]
 
 
@@ -113,9 +126,13 @@ def test_habilitada():
         "PROC-REP-070",
         "PROC-REP-050",
         "PROC-REP-060",
+        "PROC-REP-129",
+        "PROC-REP-046",
+        "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",
+        "PROC-REP-211",
     ]
 
 
@@ -134,11 +151,15 @@ def test_en_cola():
         "PROC-REP-070",
         "PROC-REP-050",
         "PROC-REP-060",
+        "PROC-REP-129",
+        "PROC-REP-046",
+        "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",
         "PROC-REP-150",
         "PROC-REP-170",
+        "PROC-REP-211",
     ]
 
 
@@ -162,6 +183,9 @@ def test_toma_activa_sin_ejecucion():
         "PROC-REP-070",
         "PROC-REP-050",
         "PROC-REP-060",
+        "PROC-REP-129",
+        "PROC-REP-046",
+        "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",
@@ -172,6 +196,7 @@ def test_toma_activa_sin_ejecucion():
         "PROC-REP-212",
         "PROC-REP-181",
         "PROC-REP-174",
+        "PROC-REP-211",
     ]
 
 
@@ -214,6 +239,9 @@ def test_en_reparacion():
         "PROC-REP-070",
         "PROC-REP-050",
         "PROC-REP-060",
+        "PROC-REP-129",
+        "PROC-REP-046",
+        "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",
@@ -226,6 +254,7 @@ def test_en_reparacion():
         "PROC-REP-174",
         "PROC-REP-185",
         "PROC-REP-190",
+        "PROC-REP-211",
     ]
 
 
@@ -259,6 +288,9 @@ def test_espera_control():
         "PROC-REP-070",
         "PROC-REP-050",
         "PROC-REP-060",
+        "PROC-REP-129",
+        "PROC-REP-046",
+        "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",
@@ -292,6 +324,9 @@ def test_reparacion_lista_sin_notificar():
         "PROC-REP-070",
         "PROC-REP-050",
         "PROC-REP-060",
+        "PROC-REP-129",
+        "PROC-REP-046",
+        "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",
@@ -328,6 +363,9 @@ def test_reparacion_lista_con_saldo():
         "PROC-REP-070",
         "PROC-REP-050",
         "PROC-REP-060",
+        "PROC-REP-129",
+        "PROC-REP-046",
+        "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",
@@ -370,6 +408,9 @@ def test_reparacion_lista_sin_saldo():
         "PROC-REP-070",
         "PROC-REP-050",
         "PROC-REP-060",
+        "PROC-REP-129",
+        "PROC-REP-046",
+        "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",
@@ -412,6 +453,9 @@ def test_entregada():
         "PROC-REP-070",
         "PROC-REP-050",
         "PROC-REP-060",
+        "PROC-REP-129",
+        "PROC-REP-046",
+        "PROC-REP-047",
         "PROC-REP-080",
         "PROC-REP-090",
         "PROC-REP-140",

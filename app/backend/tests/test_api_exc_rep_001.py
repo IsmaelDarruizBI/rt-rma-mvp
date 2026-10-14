@@ -91,12 +91,13 @@ def test_cliente_externo_sin_stock_espera_y_se_habilita_al_revalidar(tmp_path):
     with _cliente(tmp_path, stock="0") as cliente:
         orden_id = _crear_orden_cliente(cliente)
 
-        # 090 Ninguno trabajable -> 100: 200, no 409.
+        # Autorizado por el cliente (047), 090 Ninguno trabajable -> 100:
+        # 200, no 409.
         respuesta = _definir(cliente, orden_id)
         assert respuesta.status_code == 200, respuesta.text
         orden = respuesta.json()
         assert _ids(orden)[-4:] == [
-            "PROC-REP-060",
+            "PROC-REP-047",
             "PROC-REP-080",
             "PROC-REP-090",
             "PROC-REP-100",
@@ -487,7 +488,10 @@ def test_211_pendiente_de_recursos_pasa_directo_a_120_y_cierra_la_toma(
         assert orden["historial"][-2]["observacion"] == "PENDIENTE_RECURSOS"
         assert orden["historial"][-1]["usuario_id"] is None
         # Directo (211 -> 120): ningun 100/110 entre ambos ni despues de 211.
-        assert ids.index("PROC-REP-211") == len(ids) - 2
+        # (El primer 211 es el de finalizar la definicion, que espero al
+        # cliente en 129: se mira el ultimo.)
+        ultimo_211 = len(ids) - 1 - ids[::-1].index("PROC-REP-211")
+        assert ultimo_211 == len(ids) - 2
         assert "PROC-REP-100" not in ids and "PROC-REP-110" not in ids
         assert orden["current_process"] == "PROC-REP-120"
         assert orden["estado_workflow"] == "EN_REPARACION"

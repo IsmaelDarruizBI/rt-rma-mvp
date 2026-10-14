@@ -21,11 +21,32 @@ from .autorizacion import (
     validar_alguno_de,
     validar_usuario_activo,
 )
+from .autorizacion_cliente import (
+    EstadoAutorizacion,
+    decision_vigente,
+    detalles_pendientes_de_autorizacion,
+    es_trabajable,
+    estado_autorizacion,
+    exigir_autorizacion_vigente,
+    marcar_pendiente_autorizacion,
+    pendiente_de_autorizacion,
+    requiere_autorizacion_cliente,
+    situacion_de_la_orden,
+)
 from .cancelaciones import (
     ROLES_CANCELACION,
     cancelar_detalle,
     cancelar_orden,
     registrar_devolucion_equipo,
+    validar_cancelacion_detalle,
+)
+from .decision_cliente import (
+    AnalisisDesistimiento,
+    DecisionDetalle,
+    ResultadoComercial,
+    analizar_desistimiento,
+    registrar_decision_cliente,
+    registrar_desistimiento_cliente,
 )
 from .documentos import (
     generar_comprobante_final,
@@ -124,6 +145,7 @@ from .reparaciones import (
     definir_reparacion_detail,
     definir_reparacion_detail_luego_revision,
     exigir_definicion_finalizable,
+    hay_detalles_para_factibilidad,
     pendiente_de_retrabajo,
     rechazar_control_tecnico,
     validar_factibilidad_detalles,
@@ -188,6 +210,24 @@ __all__ = [
     "cancelar_detalle",
     "cancelar_orden",
     "registrar_devolucion_equipo",
+    "validar_cancelacion_detalle",
+    # Autorizacion del cliente por Detalle (BR-REP-028, PROC-REP-046/047)
+    "AnalisisDesistimiento",
+    "analizar_desistimiento",
+    "registrar_desistimiento_cliente",
+    "DecisionDetalle",
+    "EstadoAutorizacion",
+    "ResultadoComercial",
+    "decision_vigente",
+    "detalles_pendientes_de_autorizacion",
+    "es_trabajable",
+    "estado_autorizacion",
+    "exigir_autorizacion_vigente",
+    "marcar_pendiente_autorizacion",
+    "pendiente_de_autorizacion",
+    "registrar_decision_cliente",
+    "requiere_autorizacion_cliente",
+    "situacion_de_la_orden",
     # Resolver puro de BR-REP-012
     "ResultadoEvaluacionOrden",
     "resolver_situacion_orden",
@@ -214,6 +254,7 @@ __all__ = [
     "definir_reparacion_detail",
     "definicion_finalizada",
     "exigir_definicion_finalizable",
+    "hay_detalles_para_factibilidad",
     "definir_reparacion_detail_luego_revision",
     "validar_factibilidad_detalles",
     # Toma y seleccion

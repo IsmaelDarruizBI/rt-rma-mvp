@@ -10,8 +10,14 @@ hay ningun atajo que fabrique estado a mano.
 
 from decimal import Decimal
 
-from app.domain.models import InsumoUtilizado, OrdenReparacion
+from app.domain.models import (
+    CanalComunicacion,
+    InsumoUtilizado,
+    OrdenReparacion,
+    ResultadoAutorizacion,
+)
 from app.services import (
+    DecisionDetalle,
     aprobar_control_tecnico,
     calcular_puntaje,
     crear_orden_cliente_externo,
@@ -25,11 +31,14 @@ from app.services import (
     generar_movimientos_inventario,
     habilitar_orden,
     ingresar_a_cola,
+    marcar_pendiente_autorizacion,
     marcar_reparacion_lista,
     notificar_cliente,
+    registrar_decision_cliente,
     registrar_ejecucion_completada,
     registrar_pago,
     registrar_saldo_pendiente,
+    requiere_autorizacion_cliente,
     reservar_insumos_e_iniciar_ejecucion,
     seleccionar_detalle,
     tomar_orden,
@@ -81,10 +90,74 @@ def orden_con_detalle() -> OrdenReparacion:
     return generar_comprobante_recepcion(orden, fecha=t(10))
 
 
+def orden_esperando_autorizacion() -> OrdenReparacion:
+    """Hasta PROC-REP-129: definicion cerrada, el Detalle espera al cliente.
+
+    Es lo que hace "Finalizar definicion" en CLIENTE_EXTERNO: el Detalle
+    esta pendiente de autorizacion, asi que PROC-REP-211 deja la Orden
+    esperando la decision (BR-REP-028), sin factibilidad todavia.
+    """
+    return finalizar_esperando_autorizacion(orden_con_detalle(), minuto=11)
+
+
+def finalizar_esperando_autorizacion(
+    orden: OrdenReparacion,
+    *,
+    minuto: int,
+) -> OrdenReparacion:
+    """Lo que "Finalizar definicion" hace con Detalles pendientes (CE).
+
+    PROC-REP-211 (PENDIENTE_AUTORIZACION) -> 129: la definicion queda
+    cerrada y la Orden espera la decision del cliente.
+    """
+    orden, _ = evaluar_situacion_orden(orden, fecha=t(minuto))
+    return marcar_pendiente_autorizacion(orden, fecha=t(minuto))
+
+
+def autorizar_todo(
+    orden: OrdenReparacion,
+    *,
+    minuto: int = 11,
+) -> OrdenReparacion:
+    """El cliente autoriza todos los Detalles pendientes (046 -> 047).
+
+    Para los tests de services que parten de Detalles recien definidos y
+    con el comprobante emitido: cierra la definicion como "Finalizar
+    definicion" (211 -> 129) y registra la autorizacion con el service
+    real, en ``minuto`` y ``minuto + 1``. No toca la factibilidad: eso
+    sigue siendo del test. Explicito a proposito: en CLIENTE_EXTERNO nada
+    se ejecuta sin la decision del cliente. Un Origen que no la exige se
+    devuelve sin cambios.
+    """
+    if not requiere_autorizacion_cliente(orden):
+        return orden
+    orden = finalizar_esperando_autorizacion(orden, minuto=minuto)
+    orden, _ = registrar_decision_cliente(
+        orden,
+        decisiones=[
+            DecisionDetalle(
+                detalle_id=detalle.id,
+                version_definicion=detalle.version_definicion,
+                resultado=ResultadoAutorizacion.AUTORIZADO,
+            )
+            for detalle in orden.reparaciones_detail
+        ],
+        usuario=RECEPCION,
+        canal=CanalComunicacion.PRESENCIAL,
+        fecha=t(minuto + 1),
+    )
+    return orden
+
+
+def orden_autorizada() -> OrdenReparacion:
+    """Hasta PROC-REP-047: el cliente autorizo el Detalle (046 -> 047)."""
+    return autorizar_todo(orden_con_detalle())
+
+
 def orden_con_factibilidad() -> OrdenReparacion:
-    """Hasta PROC-REP-090 "Si": factible, todavia sin habilitar."""
+    """Hasta PROC-REP-090 "Si": autorizado y factible, sin habilitar."""
     orden, factible = validar_factibilidad_detalles(
-        orden_con_detalle(),
+        orden_autorizada(),
         insumos=INSUMOS,
         insumos_previstos=INSUMOS_PREVISTOS,
         fecha=t(15),

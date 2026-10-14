@@ -14,7 +14,7 @@ Features: FEAT-REP-002, FEAT-REP-003, FEAT-REP-006, FEAT-REP-007 (el
 precio snapshot se registra al crear el Detalle).
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from datetime import datetime
 from decimal import Decimal
 
@@ -37,6 +37,11 @@ from app.domain.models import (
 )
 
 from .autorizacion import validar_actor
+from .autorizacion_cliente import (
+    NODO_ESPERA_AUTORIZACION,
+    es_trabajable,
+    pendiente_de_autorizacion,
+)
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .inventario import faltantes_del_detalle
 from .recursos import tiene_override_factibilidad
@@ -48,10 +53,15 @@ def definicion_finalizada(orden: OrdenReparacion) -> bool:
     """La carga de Detalles ya se cerro: la Orden paso por PROC-REP-080.
 
     Vale para los dos caminos de definicion (070 y 075): en ambos la
-    factibilidad es lo primero que ocurre al finalizar. Derivado del
-    historial, sin flag persistido.
+    factibilidad es lo primero que ocurre al finalizar, salvo cuando todos
+    los Detalles esperan la autorizacion del cliente (CLIENTE_EXTERNO): ahi
+    la Orden pasa a esperarla (PROC-REP-129) y la factibilidad llega recien
+    con la autorizacion. Derivado del historial, sin flag persistido.
     """
-    return any(paso.process_id == "PROC-REP-080" for paso in orden.historial)
+    return any(
+        paso.process_id in ("PROC-REP-080", NODO_ESPERA_AUTORIZACION)
+        for paso in orden.historial
+    )
 
 
 def _exigir_definicion_abierta(orden: OrdenReparacion) -> None:
@@ -326,6 +336,27 @@ _CONDICIONES_DE_RECURSOS = (
 )
 
 
+def _evaluable(orden: OrdenReparacion, detalle: ReparacionDetail) -> bool:
+    """PROC-REP-080 evalua el Detalle: pendiente, de recursos, autorizado."""
+    return (
+        detalle.estado is EstadoReparacionDetail.DEFINIDO
+        and detalle.condicion in _CONDICIONES_DE_RECURSOS
+        and not pendiente_de_autorizacion(orden, detalle)
+    )
+
+
+def hay_detalles_para_factibilidad(orden: OrdenReparacion) -> bool:
+    """Algun Detalle puede evaluarse en PROC-REP-080.
+
+    False cuando los unicos Detalles por evaluar esperan la autorizacion
+    del cliente (BR-REP-028): no se evalua su factibilidad hasta que se
+    autoricen.
+    """
+    return any(
+        _evaluable(orden, detalle) for detalle in orden.reparaciones_detail
+    )
+
+
 def validar_factibilidad_detalles(
     orden: OrdenReparacion,
     *,
@@ -333,6 +364,8 @@ def validar_factibilidad_detalles(
     insumos_previstos: Sequence[TipoReparacionInsumos],
     fecha: datetime,
     reservas_externas: Mapping[str, Decimal] | None = None,
+    detalle_ids: Collection[str] | None = None,
+    registrar_faltantes: bool = True,
 ) -> tuple[OrdenReparacion, bool]:
     """PROC-REP-080 -> 090 [-> 100 por Detalle]: factibilidad POR Detalle.
 
@@ -352,6 +385,13 @@ def validar_factibilidad_detalles(
 
     Solo CONSULTA: no reserva, no genera movimientos y no toca el stock.
     La reserva real ocurre recien en PROC-REP-185 (BR-REP-006).
+
+    Un Detalle pendiente de autorizacion del cliente (BR-REP-028) no se
+    evalua ni cuenta como trabajable. ``detalle_ids`` limita la evaluacion
+    a esos Detalles -los recien autorizados-: los demas conservan su
+    condicion. ``registrar_faltantes=False`` es para una Orden ya
+    habilitada: 090 no lleva a 100 sino de vuelta a PROC-REP-211, que
+    compone el caller (V1.4).
     """
     ajenas = reservas_externas or {}
 
@@ -364,10 +404,9 @@ def validar_factibilidad_detalles(
 
     faltantes_por_detalle: dict[str, list[str]] = {}
     for detalle in nueva_orden.reparaciones_detail:
-        if (
-            detalle.estado is not EstadoReparacionDetail.DEFINIDO
-            or detalle.condicion not in _CONDICIONES_DE_RECURSOS
-        ):
+        if not _evaluable(nueva_orden, detalle):
+            continue
+        if detalle_ids is not None and detalle.id not in detalle_ids:
             continue
         if tiene_override_factibilidad(nueva_orden, detalle.id):
             # EXC-REP-002: el override autorizado persiste (BR-REP-003).
@@ -389,8 +428,7 @@ def validar_factibilidad_detalles(
             detalle.condicion = CondicionReparacionDetail.SIN_BLOQUEO
 
     hay_trabajable = any(
-        detalle.estado is EstadoReparacionDetail.DEFINIDO
-        and detalle.condicion is CondicionReparacionDetail.SIN_BLOQUEO
+        es_trabajable(nueva_orden, detalle)
         for detalle in nueva_orden.reparaciones_detail
     )
 
@@ -415,8 +453,8 @@ def validar_factibilidad_detalles(
         fecha=fecha,
         observacion="Si" if hay_trabajable else "Ninguno trabajable",
     )
-    if hay_trabajable:
-        return nueva_orden, True
+    if hay_trabajable or not registrar_faltantes:
+        return nueva_orden, hay_trabajable
 
     for detalle_id, faltantes in faltantes_por_detalle.items():
         nueva_orden = registrar_paso(

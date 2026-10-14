@@ -10,10 +10,20 @@ derivadas de los Detalles:
     4. existe un Detalle trabajable               -> ABIERTA_TRABAJABLE
     5. ninguno trabajable, alguno requiere        -> REQUIERE_REVISION
        revision
-    6. ninguno trabajable, alguno bloqueado       -> PENDIENTE_RECURSOS
+    6. ninguno trabajable, alguno pendiente       -> PENDIENTE_AUTORIZACION
+       de autorizacion del cliente
+    7. ninguno trabajable, alguno bloqueado       -> PENDIENTE_RECURSOS
        por recursos
     fail-safe: nada de lo anterior aplica         -> CONTEXTO_INCONSISTENTE
     con detalles > 0
+
+``pendientes_autorizacion`` (BR-REP-028, V1.4) son los Detalles cuya
+definicion vigente todavia espera la decision del cliente. Es una
+condicion DERIVADA de la autorizacion, no un estado: la calcula
+``app.services.autorizacion_cliente`` segun la politica del Origen, y este
+modulo solo la usa para clasificar. Un Detalle pendiente no es trabajable,
+pero tampoco bloquea a los demas; la prioridad 5 > 6 > 7 es la aprobada en
+V1.4 (BR-REP-012). Sin pendientes, la matriz es exactamente la de V1.3.
 
 ``resolver_situacion_orden`` es la unica funcion de este modulo: pura,
 determinista y sin excepciones para ningun resultado de negocio
@@ -33,7 +43,7 @@ control tecnico. Un Detalle reabierto por un control rechazado
 pendiente: no necesita un resultado propio.
 """
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from enum import Enum
 
 from app.domain.models import (
@@ -44,10 +54,11 @@ from app.domain.models import (
 
 
 class ResultadoEvaluacionOrden(str, Enum):
-    """Los ocho resultados que BR-REP-012 contempla para PROC-REP-211.
+    """Los resultados que BR-REP-012 contempla para PROC-REP-211.
 
     Todos son alcanzables por la API salvo ``CONTEXTO_INCONSISTENTE``,
-    el fail-safe tecnico.
+    el fail-safe tecnico. ``PENDIENTE_AUTORIZACION`` es de V1.4 y solo se
+    da en un Origen que exige la autorizacion del cliente.
     """
 
     SIN_DETALLES = "SIN_DETALLES"
@@ -56,6 +67,7 @@ class ResultadoEvaluacionOrden(str, Enum):
     EN_EJECUCION = "EN_EJECUCION"
     ABIERTA_TRABAJABLE = "ABIERTA_TRABAJABLE"
     REQUIERE_REVISION = "REQUIERE_REVISION"
+    PENDIENTE_AUTORIZACION = "PENDIENTE_AUTORIZACION"
     PENDIENTE_RECURSOS = "PENDIENTE_RECURSOS"
     CONTEXTO_INCONSISTENTE = "CONTEXTO_INCONSISTENTE"
 
@@ -76,10 +88,14 @@ def _esta_en_ejecucion(detalle: ReparacionDetail) -> bool:
     return detalle.estado is EstadoReparacionDetail.EN_PROGRESO
 
 
-def _es_trabajable(detalle: ReparacionDetail) -> bool:
+def _es_trabajable(
+    detalle: ReparacionDetail,
+    pendientes: Collection[str],
+) -> bool:
     return (
         detalle.estado is EstadoReparacionDetail.DEFINIDO
         and detalle.condicion is CondicionReparacionDetail.SIN_BLOQUEO
+        and detalle.id not in pendientes
     )
 
 
@@ -90,16 +106,32 @@ def _requiere_revision(detalle: ReparacionDetail) -> bool:
     )
 
 
-def _bloqueado_por_recursos(detalle: ReparacionDetail) -> bool:
+def _pendiente_autorizacion(
+    detalle: ReparacionDetail,
+    pendientes: Collection[str],
+) -> bool:
+    return (
+        detalle.estado is EstadoReparacionDetail.DEFINIDO
+        and detalle.id in pendientes
+    )
+
+
+def _bloqueado_por_recursos(
+    detalle: ReparacionDetail,
+    pendientes: Collection[str],
+) -> bool:
     return (
         detalle.estado is EstadoReparacionDetail.DEFINIDO
         and detalle.condicion
         is CondicionReparacionDetail.BLOQUEADO_POR_RECURSOS
+        and detalle.id not in pendientes
     )
 
 
 def resolver_situacion_orden(
     detalles: Sequence[ReparacionDetail],
+    *,
+    pendientes_autorizacion: Collection[str] = frozenset(),
 ) -> ResultadoEvaluacionOrden:
     """Clasifica la situacion agregada segun la matriz de BR-REP-012.
 
@@ -107,7 +139,12 @@ def resolver_situacion_orden(
     en el historial y no lanza excepciones por un resultado de negocio
     legitimo. Aplicar ese resultado -registrar el paso, decidir si se
     cierra la toma activa- es responsabilidad de quien la invoca.
+
+    ``pendientes_autorizacion``: IDs de los Detalles que esperan la
+    decision del cliente (vacio en los Origenes que no la exigen). Los
+    services pasan siempre por ``situacion_de_la_orden``, que la calcula.
     """
+    pendientes = pendientes_autorizacion
     if not detalles:
         return ResultadoEvaluacionOrden.SIN_DETALLES
 
@@ -127,13 +164,20 @@ def resolver_situacion_orden(
     if any(_esta_en_ejecucion(detalle) for detalle in detalles):
         return ResultadoEvaluacionOrden.EN_EJECUCION
 
-    if any(_es_trabajable(detalle) for detalle in detalles):
+    if any(_es_trabajable(detalle, pendientes) for detalle in detalles):
         return ResultadoEvaluacionOrden.ABIERTA_TRABAJABLE
 
     if any(_requiere_revision(detalle) for detalle in detalles):
         return ResultadoEvaluacionOrden.REQUIERE_REVISION
 
-    if any(_bloqueado_por_recursos(detalle) for detalle in detalles):
+    if any(
+        _pendiente_autorizacion(detalle, pendientes) for detalle in detalles
+    ):
+        return ResultadoEvaluacionOrden.PENDIENTE_AUTORIZACION
+
+    if any(
+        _bloqueado_por_recursos(detalle, pendientes) for detalle in detalles
+    ):
         return ResultadoEvaluacionOrden.PENDIENTE_RECURSOS
 
     return ResultadoEvaluacionOrden.CONTEXTO_INCONSISTENTE

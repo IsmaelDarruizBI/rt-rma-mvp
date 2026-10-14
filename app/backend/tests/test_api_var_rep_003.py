@@ -22,6 +22,7 @@ from tests import test_multidetalle as multi
 from tests.fixtures.api_definicion import (
     definir_y_finalizar,
     finalizar_definicion,
+    registrar_decision,
 )
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
@@ -393,6 +394,11 @@ def test_multidetalle_interrumpir_uno_ofrece_los_trabajables(tmp_path):
                 },
             )
         finalizar_definicion(cliente, orden_id, multi.RECEPCION)
+        registrar_decision(
+            cliente,
+            orden_id,
+            {"DET-001": "AUTORIZADO", "DET-002": "AUTORIZADO"},
+        )
         cliente.post(
             f"/api/orders/{orden_id}/queue",
             json={"usuario_id": multi.COORDINADOR, "prioridad": 1},

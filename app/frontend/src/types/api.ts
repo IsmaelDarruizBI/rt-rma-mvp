@@ -66,6 +66,77 @@ export interface Cancelacion {
   usuario_id: string;
   fecha: string;
   motivo: string;
+  /**
+   * INTERNA; RECHAZO_CLIENTE (rechazó la propuesta pendiente) o
+   * DESISTIMIENTO_CLIENTE (la había autorizado y desistió después).
+   */
+  origen: OrigenCancelacion;
+}
+
+export type OrigenCancelacion =
+  | "INTERNA"
+  | "RECHAZO_CLIENTE"
+  | "DESISTIMIENTO_CLIENTE";
+
+/** Decisión que se REGISTRA: "sin respuesta" no es una decisión. */
+export type ResultadoAutorizacion = "AUTORIZADO" | "RECHAZADO";
+
+/** Canal provisorio del MVP (BR-REP-028 deja el canal pendiente). */
+export type CanalComunicacion =
+  | "PRESENCIAL"
+  | "TELEFONO"
+  | "WHATSAPP"
+  | "EMAIL"
+  | "OTRO";
+
+/** Estado derivado por el backend para la definición vigente del Detalle. */
+export type EstadoAutorizacion =
+  | "NO_REQUERIDA"
+  | "PENDIENTE"
+  | "AUTORIZADO"
+  | "RECHAZADO"
+  | "SIN_DECISION";
+
+/** Dónde está el Detalle respecto de la decisión del cliente (derivado). */
+export type SituacionAutorizacion =
+  | "NO_REQUERIDA"
+  | "PENDIENTE_AUTORIZACION"
+  | "AUTORIZADO_FACTIBLE"
+  | "AUTORIZADO_SIN_STOCK"
+  | "REQUIERE_REDEFINICION"
+  | "EN_EJECUCION"
+  | "COMPLETO"
+  | "CANCELADO_POR_RECHAZO"
+  | "CANCELADO_POR_DESISTIMIENTO"
+  | "CANCELADO";
+
+/** Una decisión del cliente registrada (PROC-REP-046). Nunca se reemplaza. */
+export interface AutorizacionCliente {
+  version_definicion: number;
+  resultado: ResultadoAutorizacion;
+  usuario_id: string;
+  fecha: string;
+  canal: CanalComunicacion;
+  observaciones: string | null;
+}
+
+/**
+ * Qué haría hoy el desistimiento total del cliente (lo calcula el backend):
+ * pendientes que se rechazan, autorizados que se cancelan, lo COMPLETO que
+ * se conserva y lo que lo impide (con eso no se aplica nada).
+ */
+export interface Desistimiento {
+  rechazables: string[];
+  desistibles: string[];
+  conservados: string[];
+  bloqueantes: { detalle_id: string; motivo: string }[];
+}
+
+/** Lo que Recepción envía por cada Detalle con respuesta del cliente. */
+export interface DecisionDetalle {
+  detalle_id: string;
+  version_definicion: number;
+  resultado: ResultadoAutorizacion;
 }
 
 /** Devolución física del equipo de una Orden CANCELADA (PROC-REP-270). */
@@ -160,6 +231,12 @@ export interface Detalle {
   cancelacion: Cancelacion | null;
   /** Resuelto por la API contra el catálogo; no vive en el dominio. */
   insumos_previstos: InsumoPrevisto[];
+  /** Definición vigente: 1 + las reemplazadas por PROC-REP-127. */
+  version_definicion: number;
+  /** Todas las decisiones del cliente, de cualquier versión. */
+  autorizaciones: AutorizacionCliente[];
+  estado_autorizacion: EstadoAutorizacion;
+  situacion_autorizacion: SituacionAutorizacion;
 }
 
 /** Definición de un Detalle reemplazada por PROC-REP-127 (BR-REP-015). */
@@ -370,6 +447,12 @@ export interface Orden {
   acciones_disponibles: Accion[];
   /** Cancelaciones posibles ahora (Detalle u Orden), aparte del flujo. */
   acciones_cancelacion: Accion[];
+  /** El Origen exige la decisión del cliente por Detalle (BR-REP-028). */
+  autorizacion_requerida: boolean;
+  /** Decisiones comerciales del cliente posibles ahora (decidir, desistir). */
+  acciones_autorizacion: Accion[];
+  /** Vista previa del desistimiento total (Cliente Externo con Detalles). */
+  desistimiento: Desistimiento | null;
   /** Orden CANCELADA: devolución física registrada, o `null`. */
   devolucion: Devolucion | null;
   /** Orden CANCELADA con el equipo todavía en custodia. */

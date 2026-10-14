@@ -14,9 +14,11 @@ from fastapi import APIRouter, status
 
 from app.application import (
     ApplicationContext,
+    acciones_de_autorizacion,
     acciones_de_cancelacion,
     acciones_disponibles,
     aprobar_control,
+    autorizaciones_de_orden,
     cancelar_detalle,
     cancelar_orden,
     completar_ejecucion,
@@ -44,10 +46,13 @@ from app.application import (
     nombres_de_tipo_por_detalle,
     notificar,
     obtener_orden,
+    pendientes_de_autorizacion,
     progreso,
     realizar_revision,
     rechazar_control,
     redefinir_detalle,
+    registrar_decision_cliente,
+    registrar_desistimiento,
     registrar_devolucion,
     registrar_pago_de_orden,
     requerir_redefinicion_ejecucion,
@@ -56,10 +61,12 @@ from app.application import (
     tomar_orden_en_estacion,
 )
 from app.domain.models import OrdenReparacion
+from app.services import DecisionDetalle
 
 from .dependencias import ContextoDep
 from .schemas import (
     AprobarControlIn,
+    AutorizacionesOrdenOut,
     CancelarDetalleIn,
     CancelarOrdenIn,
     CompletarEjecucionIn,
@@ -67,6 +74,7 @@ from .schemas import (
     CrearOrdenRtIn,
     DefinirReparacionDesdeRevisionIn,
     DefinirReparacionIn,
+    DesistimientoIn,
     DevolverRtIn,
     EncolarIn,
     EntregarIn,
@@ -84,8 +92,10 @@ from .schemas import (
     OrdenResumenOut,
     OverrideRecursosIn,
     PagoIn,
+    PendienteAutorizacionOut,
     RechazarControlIn,
     RedefinirDetalleIn,
+    RegistrarDecisionClienteIn,
     RegistrarDevolucionIn,
     RequiereRedefinicionIn,
     RevisionDetalleIn,
@@ -112,6 +122,7 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
         nombres_de_tipo=nombres_de_tipo_por_detalle(contexto, orden),
         detalles_origen=detalles_origen_de(contexto, orden),
         acciones_cancelacion=acciones_de_cancelacion(orden),
+        acciones_autorizacion=acciones_de_autorizacion(orden),
     )
 
 
@@ -139,10 +150,40 @@ def get_ordenes(contexto: ContextoDep) -> list[OrdenResumenOut]:
     ]
 
 
+@router.get("/authorizations/pending")
+def get_pendientes_de_autorizacion(
+    contexto: ContextoDep,
+) -> list[PendienteAutorizacionOut]:
+    """Detalles que esperan la decision del cliente, de todas las Ordenes.
+
+    Solo los que Recepcion puede decidir ahora (definicion finalizada,
+    Orden abierta). Solo lectura.
+    """
+    return [
+        PendienteAutorizacionOut.desde_aplicacion(pendiente)
+        for pendiente in pendientes_de_autorizacion(contexto)
+    ]
+
+
 @router.get("/{orden_id}")
 def get_orden(orden_id: str, contexto: ContextoDep) -> OrdenOut:
     """Una Orden con su detalle completo."""
     return _salida(obtener_orden(contexto, orden_id), contexto)
+
+
+@router.get("/{orden_id}/authorizations")
+def get_autorizaciones(
+    orden_id: str,
+    contexto: ContextoDep,
+) -> AutorizacionesOrdenOut:
+    """Autorizacion del cliente de cada Detalle (BR-REP-028).
+
+    Estado y situacion de la definicion vigente, la decision vigente y la
+    historia completa de decisiones. Solo lectura.
+    """
+    return AutorizacionesOrdenOut.desde_aplicacion(
+        autorizaciones_de_orden(contexto, orden_id)
+    )
 
 
 @router.get("/{orden_id}/details/{detalle_id}/resources/override-preview")
@@ -663,6 +704,85 @@ def post_cancelar_orden(
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
         motivo=cuerpo.motivo,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/authorizations")
+def post_registrar_decision_cliente(
+    orden_id: str,
+    cuerpo: RegistrarDecisionClienteIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Registrar la decision del cliente por Detalle (ACT-RECEP).
+
+    Compone PROC-REP-046 (por Detalle) -> 047 -> 300/305 para los
+    rechazados, y la factibilidad de los autorizados (080 -> 090 -> 140 |
+    100 | 211). Un Detalle sin respuesta no se incluye y sigue pendiente.
+    Respuestas duplicadas, de una definicion anterior o sobre Detalles que
+    ya no esperan decision: 409, sin aplicar nada.
+    """
+    orden = registrar_decision_cliente(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        canal=cuerpo.canal,
+        observaciones=cuerpo.observaciones,
+        decisiones=[
+            DecisionDetalle(
+                detalle_id=decision.detalle_id,
+                version_definicion=decision.version_definicion,
+                resultado=decision.resultado,
+            )
+            for decision in cuerpo.decisiones
+        ],
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/withdrawal")
+def post_desistir_de_todo(
+    orden_id: str,
+    cuerpo: DesistimientoIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """El cliente desiste de TODOS los trabajos cancelables (ACT-RECEP).
+
+    Los pendientes se rechazan y los autorizados se cancelan por
+    desistimiento (046 -> 047 -> 305 -> 211); lo COMPLETO se conserva. Con
+    una Ejecucion activa o reservas sin conciliar no se cancela nada (409,
+    con los Detalles que lo impiden). Motivo obligatorio.
+    """
+    orden = registrar_desistimiento(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        canal=cuerpo.canal,
+        motivo=cuerpo.motivo,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/details/{detalle_id}/withdrawal")
+def post_desistir_de_detalle(
+    orden_id: str,
+    detalle_id: str,
+    cuerpo: DesistimientoIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """El cliente desiste de UN trabajo que habia autorizado (ACT-RECEP).
+
+    046 -> 047 -> 300 -> 211. La autorizacion anterior queda en la
+    historia. Un Detalle pendiente se rechaza (``.../authorizations``), no
+    se desiste. Motivo obligatorio.
+    """
+    orden = registrar_desistimiento(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        canal=cuerpo.canal,
+        motivo=cuerpo.motivo,
+        detalle_id=detalle_id,
     )
     return _salida(orden, contexto)
 

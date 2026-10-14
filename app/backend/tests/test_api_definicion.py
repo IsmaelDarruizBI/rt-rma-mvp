@@ -4,6 +4,9 @@
     POST /api/orders/{id}/review/details       agrega UN Detalle (075)
     POST /api/orders/{id}/definition/finalize  [050 -> 060] -> 080 -> 090
                                                -> 140 | 100
+                                               (CLIENTE_EXTERNO: -> 211
+                                               -> 129, hasta la decision
+                                               del cliente)
 
 Agregar nunca genera el comprobante, valida factibilidad ni habilita.
 Finalizar exige ACT-RECEP y al menos un Detalle, y en el camino de
@@ -16,7 +19,10 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
-from tests.fixtures.api_definicion import finalizar_definicion
+from tests.fixtures.api_definicion import (
+    finalizar_definicion,
+    registrar_decision,
+)
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     COORDINADOR,
@@ -78,17 +84,24 @@ def test_agregar_no_finaliza_y_finalizar_cierra_la_definicion(cliente):
     respuesta = finalizar_definicion(cliente, orden_id, RECEPCION)
     assert respuesta.status_code == 200, respuesta.text
     orden = respuesta.json()
-    assert _ids(orden)[-5:] == [
+    # CLIENTE_EXTERNO (BR-REP-028): los Detalles esperan al cliente; no
+    # hay factibilidad ni habilitacion todavia.
+    assert _ids(orden)[-4:] == [
         "PROC-REP-050",
         "PROC-REP-060",
-        "PROC-REP-080",
-        "PROC-REP-090",
-        "PROC-REP-140",
+        "PROC-REP-211",
+        "PROC-REP-129",
     ]
-    assert orden["estado_workflow"] == "HABILITADA"
+    assert orden["estado_workflow"] == "REQUERIMIENTO"
     assert orden["documentos"]["comprobante_recepcion"]["generado"] is True
     assert "AGREGAR_DETALLE" not in _codigos(orden)
     assert "FINALIZAR_DEFINICION" not in _codigos(orden)
+    assert [a["codigo"] for a in orden["acciones_autorizacion"]] == [
+        "REGISTRAR_DECISION_CLIENTE"
+    ]
+    assert [
+        d["estado_autorizacion"] for d in orden["reparaciones_detail"]
+    ] == ["PENDIENTE", "PENDIENTE"]
 
     # Cerrada la definicion, no se agrega ni se vuelve a finalizar.
     antes = cliente.get(f"/api/orders/{orden_id}").json()
@@ -97,6 +110,20 @@ def test_agregar_no_finaliza_y_finalizar_cierra_la_definicion(cliente):
         finalizar_definicion(cliente, orden_id, RECEPCION).status_code == 409
     )
     assert cliente.get(f"/api/orders/{orden_id}").json() == antes
+
+    # El cliente acepta los trabajos: factibilidad -> habilitacion.
+    orden = registrar_decision(
+        cliente, orden_id, {"DET-001": "AUTORIZADO", "DET-002": "AUTORIZADO"}
+    ).json()
+    assert _ids(orden)[-6:] == [
+        "PROC-REP-046",
+        "PROC-REP-046",
+        "PROC-REP-047",
+        "PROC-REP-080",
+        "PROC-REP-090",
+        "PROC-REP-140",
+    ]
+    assert orden["estado_workflow"] == "HABILITADA"
 
 
 def test_finalizar_sin_detalles_es_un_conflicto_sin_efectos(cliente):
@@ -132,13 +159,16 @@ def test_finalizar_valida_orden_y_request(cliente):
         assert respuesta.status_code == 422, respuesta.text
 
 
-def test_sin_stock_finalizar_deja_la_orden_en_100_sin_error(tmp_path):
+def test_sin_stock_autorizar_deja_la_orden_en_100_sin_error(tmp_path):
     _sembrar_catalogos(tmp_path, stock="0")
     with TestClient(create_app(Settings(data_dir=tmp_path))) as cliente:
         orden_id = _crear_orden_cliente(cliente)
         _agregar(cliente, orden_id)
+        finalizar_definicion(cliente, orden_id, RECEPCION)
 
-        respuesta = finalizar_definicion(cliente, orden_id, RECEPCION)
+        respuesta = registrar_decision(
+            cliente, orden_id, {"DET-001": "AUTORIZADO"}
+        )
 
         assert respuesta.status_code == 200, respuesta.text
         orden = respuesta.json()
@@ -172,6 +202,10 @@ def test_camino_de_revision_finaliza_sin_regenerar_el_comprobante(cliente):
         assert "PROC-REP-080" not in _ids(orden)
 
     orden = finalizar_definicion(cliente, orden_id, RECEPCION).json()
+    assert _ids(orden)[-2:] == ["PROC-REP-211", "PROC-REP-129"]
+    orden = registrar_decision(
+        cliente, orden_id, {"DET-001": "AUTORIZADO", "DET-002": "AUTORIZADO"}
+    ).json()
 
     ids = _ids(orden)
     assert ids[-3:] == ["PROC-REP-080", "PROC-REP-090", "PROC-REP-140"]
