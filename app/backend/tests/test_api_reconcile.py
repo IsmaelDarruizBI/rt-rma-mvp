@@ -3,7 +3,7 @@
 Cubre lo que surgio de la prueba manual del MVP desde el navegador:
 
 - el Detalle expone el nombre del Tipo de Reparacion, no solo su ID;
-- ``tipo_pago`` derivado (ANTICIPO / PAGO), distinto del medio;
+- ``tipo_pago`` derivado (ANTICIPO / PARCIAL / FINAL), distinto del medio;
 - el Pago es transversal: se puede registrar antes de REPARACION_LISTA;
 - PROC-REP-150 admite ACT-COORD o ACT-RECEP;
 - PROC-REP-270 admite ACT-ADMIN o ACT-RECEP.
@@ -144,7 +144,9 @@ def test_el_pago_del_cierre_es_de_tipo_pago(cliente):  # noqa: F811
         },
     ).json()
 
-    assert orden["pagos"][-1]["tipo_pago"] == "PAGO"
+    # Salda la cuenta en el cierre: FINAL (antes de pagos y devoluciones,
+    # PAGO; el valor viejo solo se conserva para leer JSON anteriores).
+    assert orden["pagos"][-1]["tipo_pago"] == "FINAL"
     # El cierre comercial todavia no empezo (current_process 240): el
     # Pago es transversal y NO evalua PROC-REP-265.
     assert orden["puede_entregar"] is False
@@ -187,7 +189,7 @@ def test_anticipo_y_pago_conviven_en_la_misma_orden(cliente):  # noqa: F811
 
     assert [pago["tipo_pago"] for pago in orden["pagos"]] == [
         "ANTICIPO",
-        "PAGO",
+        "FINAL",
     ]
     assert orden["resumen"]["saldo"] == "0"
     assert orden["puede_entregar"] is False

@@ -60,8 +60,36 @@ class EstacionTrabajo(BaseModel):
     activa: bool = True
 
 
+class MedioPago(BaseModel):
+    """Medio por el que se cobra o se devuelve dinero (catalogo).
+
+    Los Pagos y las devoluciones guardan solo el ``id``. Un medio inactivo
+    ya no se ofrece ni se acepta para movimientos nuevos, pero sigue
+    nombrando a los registrados. ``admite_devolucion`` permite excluir un
+    medio de las devoluciones sin tocar la logica financiera.
+    """
+
+    id: str
+    nombre: str
+    activo: bool = True
+    admite_devolucion: bool = True
+
+
 class TipoReparacionEstacion(BaseModel):
     """Compatibilidad entre un Tipo de Reparacion y una Estacion."""
 
     tipo_reparacion_id: str
     estacion_id: str
+
+
+# Unica definicion de los medios iniciales. Se usan mientras el directorio
+# de catalogos no traiga su propio ``medios_pago.json``: para ampliar o
+# cambiar los medios alcanza con crear ese archivo, la logica financiera
+# solo conoce IDs.
+MEDIOS_PAGO_PREDETERMINADOS = (
+    MedioPago(id="EFECTIVO", nombre="Efectivo"),
+    MedioPago(id="TRANSFERENCIA", nombre="Transferencia"),
+    MedioPago(id="TARJETA_DEBITO", nombre="Tarjeta de debito"),
+    MedioPago(id="TARJETA_CREDITO", nombre="Tarjeta de credito"),
+    MedioPago(id="OTRO", nombre="Otro"),
+)

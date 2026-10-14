@@ -236,18 +236,34 @@ class TipoPago(str, Enum):
     en EFECTIVO y un PAGO en EFECTIVO son el mismo medio y distinto tipo.
 
     No lo elige el usuario: se deriva del estado de la Orden al
-    registrarlo (ver ``app.services.pagos.registrar_pago``). BR-REP-017
+    registrarlo (ver ``app.services.pagos.tipo_de_pago_para``). BR-REP-017
     define el Pago como capacidad transversal, asi que puede registrarse
-    antes de que la reparacion este lista.
+    antes de que la reparacion este lista:
+
+        ANTICIPO  antes de que la Orden tenga resultado (seña, adelanto)
+        PARCIAL   en el cierre, sin saldar la cuenta
+        FINAL     en el cierre, salda la cuenta
+
+    ``PAGO`` es el valor anterior a esta distincion (cobro del cierre sin
+    distinguir parcial o final): se conserva para leer JSON anteriores y
+    ya no se genera.
     """
 
     ANTICIPO = "ANTICIPO"
+    PARCIAL = "PARCIAL"
+    FINAL = "FINAL"
     PAGO = "PAGO"
 
 
 class EstadoPago(str, Enum):
-    """Estado de cobro, siempre derivado del total y de lo pagado."""
+    """Estado de cobro, siempre derivado del total, lo pagado y lo devuelto.
+
+    ``SALDO_A_FAVOR``: el cliente pago mas que el total final (por ejemplo,
+    se cancelaron trabajos despues de un anticipo) y queda dinero por
+    devolverle (BR-REP-038).
+    """
 
     PENDIENTE = "PENDIENTE"
     PARCIAL = "PARCIAL"
     PAGADO = "PAGADO"
+    SALDO_A_FAVOR = "SALDO_A_FAVOR"

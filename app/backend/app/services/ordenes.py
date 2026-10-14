@@ -41,7 +41,12 @@ from .exceptions import (
     PrecondicionInvalidaError,
 )
 from .inventario import hay_reservas_activas
-from .pagos import condicion_entrega_cumplida
+from .pagos import (
+    cierre_financiero_resuelto,
+    condicion_entrega_cumplida,
+    credito_pendiente,
+    motivo_de_entrega_bloqueada,
+)
 from .recursos import marcar_pendiente_recursos, override_listo_para_habilitar
 from .redefinicion import marcar_pendiente_revision
 from .reparaciones import control_tecnico_completo, definicion_finalizada
@@ -118,11 +123,58 @@ def equipo_bajo_custodia(orden: OrdenReparacion) -> bool:
 
 
 def devolucion_pendiente(orden: OrdenReparacion) -> bool:
-    """Orden CANCELADA cuyo equipo todavia no se devolvio (PROC-REP-270)."""
+    """Orden CANCELADA cuyo equipo todavia no se devolvio (PROC-REP-270).
+
+    Es la devolucion FISICA del equipo: la de dinero (saldo a favor, V1.4
+    PROC-REP-267) es otra dimension y puede resolverse antes o despues.
+    """
     return (
         orden.estado_workflow is EstadoWorkflow.CANCELADA
         and not orden.esta_cerrada
+        and equipo_bajo_custodia(orden)
+        and orden.devolucion is None
     )
+
+
+def verificar_fin_financiero(
+    orden: OrdenReparacion,
+    *,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """PROC-REP-268 (V1.4): sin saldo a favor pendiente, la Orden termina.
+
+    Para una Orden CANCELADA que ya no espera la devolucion fisica del
+    equipo. Ninguna Orden termina (EVT-REP-999) con dinero del cliente sin
+    devolver (BR-REP-038): con saldo a favor queda abierta en PROC-REP-268
+    hasta registrar la devolucion de dinero; sin el, termina. Sin
+    movimientos de dinero la verificacion es trivial y no deja traza, como
+    el propio EVT-REP-999. ACT-SYSTEM: no recibe Usuario.
+    """
+    if not orden.resumen_pago.pagos:
+        nueva_orden = orden.model_copy(deep=True)
+        nueva_orden.current_process = "EVT-REP-999"
+        nueva_orden.updated_at = fecha
+        return nueva_orden
+    if not cierre_financiero_resuelto(orden):
+        return registrar_paso(
+            orden,
+            process_id="PROC-REP-268",
+            accion="VERIFICAR_SALDO_A_FAVOR_PENDIENTE",
+            fecha=fecha,
+            observacion=(
+                "Saldo a favor del cliente pendiente de devolver: "
+                f"{credito_pendiente(orden)}"
+            ),
+        )
+    nueva_orden = registrar_paso(
+        orden,
+        process_id="PROC-REP-268",
+        accion="VERIFICAR_SALDO_A_FAVOR_PENDIENTE",
+        fecha=fecha,
+        observacion="Sin saldo a favor pendiente",
+    )
+    nueva_orden.current_process = "EVT-REP-999"
+    return nueva_orden
 
 
 def marcar_orden_cancelada(
@@ -134,16 +186,16 @@ def marcar_orden_cancelada(
 
     Fija el hito y decide como sigue, sin inventar un nodo: si el equipo
     esta en custodia, la Orden espera su devolucion fisica (PROC-REP-270,
-    ``services.cancelaciones.registrar_devolucion_equipo``); si no, el
-    proceso termina aca (EVT-REP-999, sin entrada de historial, como la
-    entrega). CANCELADA nunca se convierte en ENTREGADA. Nodo ACT-SYSTEM:
-    no recibe Usuario.
+    ``services.cancelaciones.registrar_devolucion_equipo``); si no, pasa
+    por la verificacion financiera (``verificar_fin_financiero``): termina
+    aca (EVT-REP-999), o espera la devolucion de un anticipo. CANCELADA
+    nunca se convierte en ENTREGADA. Nodo ACT-SYSTEM: no recibe Usuario.
     """
     nueva_orden = orden.model_copy(deep=True)
     nueva_orden.estado_workflow = EstadoWorkflow.CANCELADA
     nueva_orden.updated_at = fecha
     if not equipo_bajo_custodia(nueva_orden):
-        nueva_orden.current_process = "EVT-REP-999"
+        nueva_orden = verificar_fin_financiero(nueva_orden, fecha=fecha)
     return nueva_orden
 
 
@@ -749,7 +801,7 @@ def entregar_equipo(
         )
     if not condicion_entrega_cumplida(orden):
         raise PrecondicionInvalidaError(
-            f"No se puede entregar con saldo pendiente: {orden.saldo}."
+            f"No se puede entregar: {motivo_de_entrega_bloqueada(orden)}."
         )
     if not orden.documentos.comprobante_final.generado:
         raise PrecondicionInvalidaError(

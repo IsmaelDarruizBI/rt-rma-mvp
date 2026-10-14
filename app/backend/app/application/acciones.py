@@ -43,7 +43,15 @@ from app.services import (
     toma_activa,
 )
 from app.services.ordenes import ROLES_ENTREGA, ROLES_PRIORIZACION
-from app.services.pagos import ROLES_PAGO, condicion_entrega_cumplida
+from app.services.pagos import (
+    ROLES_ANULACION_PAGO,
+    ROLES_DEVOLUCION_DINERO,
+    ROLES_PAGO,
+    admite_pago,
+    anulable,
+    condicion_entrega_cumplida,
+    credito_pendiente,
+)
 from app.services.reparaciones import definicion_finalizada
 from app.services.revisiones import (
     finalizada_sin_reparacion,
@@ -92,6 +100,8 @@ ACCION_CANCELAR_ORDEN = "CANCELAR_ORDEN"
 ACCION_REGISTRAR_DECISION_CLIENTE = "REGISTRAR_DECISION_CLIENTE"
 ACCION_DESISTIR_DETALLE = "DESISTIR_DETALLE"
 ACCION_DESISTIR_TODO = "DESISTIR_TODO"
+ACCION_ANULAR_PAGO = "ANULAR_PAGO"
+ACCION_DEVOLVER_DINERO = "REGISTRAR_DEVOLUCION_DINERO"
 
 # Terminales de un Detalle: lo realizado y lo cancelado (BR-REP-012).
 _TERMINALES = (
@@ -130,6 +140,7 @@ class AccionDisponible:
     ``usuario_id`` restringe la accion a UNA persona dentro del rol: el
     titular de la toma activa para las acciones tecnicas sobre ella
     (E2). ``None`` significa que cualquier usuario con el rol puede.
+    ``pago_id``: el Pago sobre el que actua un movimiento financiero.
     """
 
     codigo: str
@@ -139,6 +150,7 @@ class AccionDisponible:
     ejecucion_id: str | None = None
     requiere_actor: bool = True
     usuario_id: str | None = None
+    pago_id: str | None = None
 
 
 def detalle_trabajable(orden: OrdenReparacion) -> str | None:
@@ -260,9 +272,12 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
     ):
         return []
 
-    # Orden CANCELADA con el equipo en custodia: lo unico que queda es
-    # devolverlo (PROC-REP-270). Sin cobro, control ni entrega comercial.
-    if devolucion_pendiente(orden):
+    # Orden CANCELADA: lo unico que puede quedar del flujo es devolver el
+    # equipo (PROC-REP-270). Sin cobro, control ni entrega comercial; un
+    # anticipo a devolver es de ``acciones_financieras``.
+    if orden.estado_workflow is EstadoWorkflow.CANCELADA:
+        if not devolucion_pendiente(orden):
+            return []
         return [
             AccionDisponible(
                 codigo=ACCION_REGISTRAR_DEVOLUCION,
@@ -678,4 +693,53 @@ def acciones_de_autorizacion(
                 roles=(RolUsuario.RECEPCION,),
             )
         )
+    return acciones
+
+
+def acciones_financieras(orden: OrdenReparacion) -> list[AccionDisponible]:
+    """Movimientos de dinero que la Orden admite ahora (FEAT-REP-007).
+
+    Aparte de ``acciones_disponibles``: son capacidades transversales que
+    la UI presenta en "Pagos y movimientos", no un paso del flujo.
+
+    - Registrar un anticipo o un pago: hay saldo pendiente de cobro (o es
+      una seña antes de definir los Detalles).
+    - Anular un Pago vigente sin devoluciones (Administracion).
+    - Devolver dinero: hay saldo a favor del cliente.
+
+    Nada en una Orden cerrada ni en un Origen sin circuito comercial.
+    """
+    if orden.esta_cerrada:
+        return []
+    acciones: list[AccionDisponible] = []
+    if admite_pago(orden):
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_REGISTRAR_PAGO,
+                etiqueta=(
+                    "Registrar un pago"
+                    if lista_para_cierre(orden)
+                    else "Registrar un anticipo"
+                ),
+                roles=ROLES_PAGO,
+            )
+        )
+    if credito_pendiente(orden) > 0:
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_DEVOLVER_DINERO,
+                etiqueta="Devolver dinero al cliente",
+                roles=ROLES_DEVOLUCION_DINERO,
+            )
+        )
+    acciones.extend(
+        AccionDisponible(
+            codigo=ACCION_ANULAR_PAGO,
+            etiqueta=f"Anular el pago {pago.id}",
+            roles=ROLES_ANULACION_PAGO,
+            pago_id=pago.id,
+        )
+        for pago in orden.resumen_pago.pagos
+        if anulable(orden, pago)
+    )
     return acciones

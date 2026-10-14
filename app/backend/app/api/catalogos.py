@@ -1,20 +1,27 @@
 """Endpoints de consulta de catalogos.
 
 Solo lectura. El frontend los usa para poblar selectores: tipos de
-reparacion al definir un Detalle, estaciones al tomar una Orden y
-usuarios para el selector de actor DEMO.
+reparacion al definir un Detalle, estaciones al tomar una Orden,
+usuarios para el selector de actor DEMO y medios de pago para cobrar o
+devolver dinero.
 """
 
 from fastapi import APIRouter
 
 from app.application import (
     listar_estaciones,
+    listar_medios_pago,
     listar_tipos_reparacion,
     listar_usuarios,
 )
 
 from .dependencias import ContextoDep
-from .schemas import EstacionOut, TipoReparacionOut, UsuarioOut
+from .schemas import (
+    EstacionOut,
+    MedioPagoOut,
+    TipoReparacionOut,
+    UsuarioOut,
+)
 
 router = APIRouter(prefix="/api/catalogs", tags=["catalogos"])
 
@@ -43,4 +50,17 @@ def get_usuarios(contexto: ContextoDep) -> list[UsuarioOut]:
     return [
         UsuarioOut.desde_dominio(usuario)
         for usuario in listar_usuarios(contexto)
+    ]
+
+
+@router.get("/payment-methods")
+def get_medios_pago(contexto: ContextoDep) -> list[MedioPagoOut]:
+    """Medios de pago y de devolucion de dinero (catalogo configurable).
+
+    Los de ``medios_pago.json`` del directorio de catalogos o, si no
+    existe, los predeterminados.
+    """
+    return [
+        MedioPagoOut.desde_dominio(medio)
+        for medio in listar_medios_pago(contexto)
     ]

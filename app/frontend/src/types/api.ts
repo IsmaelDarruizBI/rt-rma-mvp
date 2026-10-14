@@ -28,10 +28,29 @@ export type CondicionComercial =
   | "NO_COBRABLE_AL_CLIENTE"
   | "NO_COBRABLE";
 
-export type EstadoPago = "PENDIENTE" | "PARCIAL" | "PAGADO";
+export type EstadoPago = "PENDIENTE" | "PARCIAL" | "PAGADO" | "SALDO_A_FAVOR";
 
-/** Momento comercial del cobro. Distinto del medio (`metodo`). */
-export type TipoPago = "ANTICIPO" | "PAGO";
+/**
+ * Momento comercial del cobro. Distinto del medio (`metodo`). `PAGO` es el
+ * valor anterior a PARCIAL/FINAL: solo aparece en datos viejos.
+ */
+export type TipoPago = "ANTICIPO" | "PARCIAL" | "FINAL" | "PAGO";
+
+/** Lectura de la cuenta de la Orden, derivada por el backend. */
+export type SituacionFinanciera =
+  | "NO_COBRABLE"
+  | "SALDO_PENDIENTE"
+  | "SALDO_A_FAVOR"
+  | "SALDADA"
+  | "SIN_MOVIMIENTOS";
+
+/** Medio de pago o de devolución (catálogo configurable). */
+export interface MedioPago {
+  id: string;
+  nombre: string;
+  activo: boolean;
+  admite_devolucion: boolean;
+}
 
 /** COMPLETO y CANCELADO son terminales. Un CANCELADO no se cobra ni se borra. */
 export type EstadoDetalle = "DEFINIDO" | "EN_PROGRESO" | "COMPLETO" | "CANCELADO";
@@ -277,6 +296,11 @@ export interface Ejecucion {
   motivo_redefinicion: string | null;
 }
 
+/**
+ * Pago registrado. `monto` es siempre el original: uno anulado trae
+ * `anulacion` y deja de contar como pagado. `devolvible` es lo que todavía
+ * puede devolverse desde este Pago.
+ */
 export interface Pago {
   id: string;
   monto: string;
@@ -284,6 +308,23 @@ export interface Pago {
   metodo: string;
   usuario_id: string;
   fecha: string;
+  referencia: string | null;
+  vigente: boolean;
+  anulacion: { usuario_id: string; fecha: string; motivo: string } | null;
+  devuelto: string;
+  devolvible: string;
+}
+
+/** Dinero devuelto al cliente desde un Pago (no es un pago negativo). */
+export interface DevolucionDinero {
+  id: string;
+  pago_id: string;
+  monto: string;
+  medio: string;
+  usuario_id: string;
+  fecha: string;
+  motivo: string;
+  referencia: string | null;
 }
 
 export interface Documento {
@@ -305,6 +346,10 @@ export interface ResumenComercial {
   puntaje_total: number;
   /** COBRABLE (cliente) / NO_COBRABLE_AL_CLIENTE (RT) / NO_COBRABLE. */
   condicion_comercial: CondicionComercial;
+  /** Saldo = Total - Pagado (válido) + Devuelto. */
+  devuelto: string;
+  credito_a_favor: string;
+  situacion_financiera: SituacionFinanciera;
 }
 
 /**
@@ -355,6 +400,8 @@ export interface Accion {
    * la toma activa en las acciones técnicas). `null` = cualquiera con el rol.
    */
   usuario_id: string | null;
+  /** Movimientos financieros: el Pago sobre el que actúa (anularlo). */
+  pago_id: string | null;
 }
 
 /** Un insumo previsto ante el override (E3): lo que se confirma. */
@@ -440,6 +487,8 @@ export interface Orden {
   toma_activa: Toma | null;
   ejecuciones: Ejecucion[];
   pagos: Pago[];
+  /** Devoluciones de dinero al cliente (BR-REP-038). */
+  devoluciones_dinero: DevolucionDinero[];
   documentos: Documentos;
   resumen: ResumenComercial;
   historial: PasoHistorial[];
@@ -453,6 +502,8 @@ export interface Orden {
   acciones_autorizacion: Accion[];
   /** Vista previa del desistimiento total (Cliente Externo con Detalles). */
   desistimiento: Desistimiento | null;
+  /** Cobrar, anular un Pago o devolver dinero, si corresponde ahora. */
+  acciones_financieras: Accion[];
   /** Orden CANCELADA: devolución física registrada, o `null`. */
   devolucion: Devolucion | null;
   /** Orden CANCELADA con el equipo todavía en custodia. */

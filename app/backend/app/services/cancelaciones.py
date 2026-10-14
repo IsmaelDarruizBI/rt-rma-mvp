@@ -16,10 +16,11 @@ cierre normal si queda trabajo realizado.
 
 Una Orden CANCELADA no es una Orden ENTREGADA. Si el equipo esta en
 custodia, su devolucion fisica se registra con
-``registrar_devolucion_equipo`` -sin cobro, comprobante final ni garantia-
-y recien ahi el proceso termina (EVT-REP-999). La devolucion de DINERO
-(saldo a favor por un anticipo, V1.4 PROC-REP-267/268) queda fuera del
-MVP.
+``registrar_devolucion_equipo`` -sin cobro, comprobante final ni garantia-.
+El proceso termina (EVT-REP-999) cuando el equipo ya no esta pendiente de
+devolucion Y no queda dinero a favor del cliente: la devolucion de DINERO
+de un anticipo (V1.4 PROC-REP-267/268, ``services.pagos``) puede
+registrarse antes o despues de la fisica.
 
 QUIEN puede cancelar no esta definido por negocio (V1.3 omite el actor de
 300/305): el MVP lo restringe a Recepcion y Coordinacion RMA
@@ -54,6 +55,7 @@ from .ordenes import (
     ROLES_ENTREGA,
     equipo_bajo_custodia,
     marcar_orden_cancelada,
+    verificar_fin_financiero,
 )
 from .revisiones import finalizada_sin_reparacion, lista_para_cierre
 from .tomas import hay_ejecucion_activa, toma_activa
@@ -327,8 +329,10 @@ def registrar_devolucion_equipo(
     Mismos actores que la entrega (``ROLES_ENTREGA``). No es una entrega
     comercial: no pasa por notificacion, cobro ni comprobante final, no
     emite garantia y la Orden sigue CANCELADA -nunca ENTREGADA-. Registra
-    quien entrega, quien recibe y cuando; despues el proceso termina
-    (EVT-REP-999) y la Orden queda cerrada. No se registra una segunda
+    quien entrega, quien recibe y cuando; despues pasa por la verificacion
+    financiera (PROC-REP-268): sin saldo a favor del cliente el proceso
+    termina (EVT-REP-999) y la Orden queda cerrada; con saldo a favor sigue
+    abierta hasta devolver el dinero. No se registra una segunda
     devolucion.
     """
     validar_alguno_de(usuario, ROLES_ENTREGA)
@@ -342,6 +346,12 @@ def registrar_devolucion_equipo(
         raise PrecondicionInvalidaError(
             f"El equipo de la Orden {orden.id} no quedo en custodia: no hay "
             "nada que devolver."
+        )
+    if orden.devolucion is not None:
+        raise PrecondicionInvalidaError(
+            f"La devolucion del equipo ya se registro el "
+            f"{orden.devolucion.fecha:%Y-%m-%d %H:%M}: no se registra dos "
+            "veces."
         )
     if hay_ejecucion_activa(orden) or toma_activa(orden) is not None:
         raise PrecondicionInvalidaError(
@@ -374,5 +384,6 @@ def registrar_devolucion_equipo(
         fecha=fecha,
         observaciones=(observaciones or "").strip() or None,
     )
-    nueva_orden.current_process = "EVT-REP-999"
-    return nueva_orden
+    # V1.4 PROC-REP-270 -> 268: con un anticipo sin devolver, la Orden sigue
+    # abierta hasta la devolucion de dinero.
+    return verificar_fin_financiero(nueva_orden, fecha=fecha)

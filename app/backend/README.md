@@ -92,7 +92,8 @@ Lectura:
 GET  /health
 GET  /api/orders
 GET  /api/orders/{orden_id}
-GET  /api/catalogs/repair-types | stations | users
+GET  /api/orders/{orden_id}/finances
+GET  /api/catalogs/repair-types | stations | users | payment-methods
 ```
 
 Comandos del Happy Path. Cada uno representa UNA intencion de una
@@ -109,7 +110,7 @@ frontera de actor humano:
 | `POST /api/orders/{id}/executions/{ejecucion_id}/complete` | TECNICO propietario | 190 → 200 → 210 → 211 |
 | `POST /api/orders/{id}/control/approve` | RECEPCION | 220 → 230 → 245 → 240 |
 | `POST /api/orders/{id}/notify` | RECEPCION | 250 → 260 → 265 [→ 266] |
-| `POST /api/orders/{id}/payments` | sin rol definido | capacidad transversal |
+| `POST /api/orders/{id}/payments` | ADMINISTRADOR, RECEPCION o COORDINADOR_RMA | `ACC-REP-020` [→ 265 \| 266] |
 | `POST /api/orders/{id}/deliver` | ADMINISTRADOR o RECEPCION | 280 → 270 → EVT-REP-999 |
 
 Salidas del proceso (cancelacion y rechazo de control). El motivo es
@@ -121,7 +122,7 @@ obligatorio en todas; la Orden se reevalua con el resolver de siempre
 | `POST /api/orders/{id}/control/reject` | RECEPCION | 220 → 230 (No) → 235 → 211 [→ 170] |
 | `POST /api/orders/{id}/details/{detalle_id}/cancel` | RECEPCION o COORDINADOR_RMA | 300 → 211 |
 | `POST /api/orders/{id}/cancel` | RECEPCION o COORDINADOR_RMA | 305 → 211, o 306 sin Detalles |
-| `POST /api/orders/{id}/return-equipment` | ADMINISTRADOR o RECEPCION | 270 (devolucion sin reparar) → EVT-REP-999 |
+| `POST /api/orders/{id}/return-equipment` | ADMINISTRADOR o RECEPCION | 270 (devolucion sin reparar) [→ 268] → EVT-REP-999 |
 
 `GET /api/orders/{id}` publica las cancelaciones posibles en
 `acciones_cancelacion`, aparte de `acciones_disponibles`. Una Orden
@@ -165,13 +166,57 @@ Compatibilidad: una Orden CLIENTE_EXTERNO guardada antes, sin
 `autorizaciones`, sigue cargando; sus Detalles DEFINIDO quedan pendientes
 (no se presume ninguna autorizacion) y lo ya ejecutado figura
 `SIN_DECISION`. Fuera de alcance: confirmacion tecnica previa
-(V1.4 182–184), reparaciones adicionales del tecnico (128) y devoluciones
-de dinero (267/268).
+(V1.4 182–184) y reparaciones adicionales del tecnico (128).
 
-Registrar Pago no corresponde a ningun `PROC-REP-*`: no mueve
-`current_process`, pero deja traza en el historial como accion funcional
-`ACC-REP-020`. `BR-REP-017` todavia no define que rol puede cobrar, asi
-que solo se exige usuario activo.
+Pagos, saldos y devoluciones de dinero (FEAT-REP-007, V1.4 265–268
+acotada):
+
+| Endpoint | Actor | Nodos |
+|---|---|---|
+| `POST /api/orders/{id}/payments` | ADMINISTRADOR, RECEPCION o COORDINADOR_RMA | `ACC-REP-020` [→ 265 \| 266] |
+| `POST /api/orders/{id}/payments/{pago_id}/void` | ADMINISTRADOR | `ACC-REP-021` [→ 265 \| 266 \| 268] |
+| `POST /api/orders/{id}/refunds` | ADMINISTRADOR o RECEPCION | `ACC-REP-022` [→ 265 \| 268 → EVT-REP-999] |
+| `GET /api/orders/{id}/finances` | lectura | saldo, credito, situacion y movimientos |
+| `GET /api/catalogs/payment-methods` | lectura | medios de pago activos |
+
+Pago, anulacion y devolucion son acciones funcionales transversales: no
+mueven `current_process` por si mismas y dejan traza en el historial.
+Despues de cada una, la Orden se reevalua: si esperaba en 265/266 se
+vuelve a validar la condicion de entrega; si esta CANCELADA y ya no
+espera la devolucion fisica, se verifica el cierre financiero (268). La
+logica vive en `services/pagos.py` y `application/finanzas.py`, no en
+los endpoints.
+
+- **Saldo** = total de la Orden − pagado vigente + devuelto. Positivo:
+  el cliente debe. Cero: saldada. Negativo: credito a favor del cliente
+  (`resumen.credito_a_favor`). Importes en `Decimal`, mayores a cero y
+  con hasta dos decimales (no se redondean: se rechazan).
+- **Pago**: solo en Ordenes cobrables (CLIENTE_EXTERNO), abiertas y no
+  CANCELADAS; nunca con saldo ≤ 0 ni por encima del saldo. Antes de
+  definir la reparacion se admite una seña sin tope. El tipo (ANTICIPO,
+  PARCIAL, FINAL) lo decide el backend. Un reintento con el mismo
+  `operacion_id` o una `referencia` ya usada en un pago vigente se
+  rechaza (409).
+- **Anulacion**: corrige un pago cargado por error; no es una devolucion
+  de dinero. Solo ADMINISTRADOR, motivo obligatorio, una sola vez, nunca
+  sobre un pago con devoluciones ni en una Orden cerrada. El pago queda
+  en la historia con su anulacion y deja de contar como pagado.
+- **Devolucion de dinero**: registra dinero efectivamente devuelto,
+  vinculado a un pago vigente; motivo, medio, usuario y fecha
+  obligatorios; no supera el credito a favor ni lo que queda devolvible
+  de ese pago; no toca inventario. Mismas reglas de duplicados que el
+  pago.
+- **Cierre financiero**: una Orden cobrable se entrega solo con saldo
+  cero. Una Orden CANCELADA con credito no llega a EVT-REP-999 hasta
+  devolver el dinero; la devolucion fisica y la financiera pueden
+  ocurrir en cualquier orden y la Orden sigue CANCELADA. RT_INTERNO y
+  RMA_GARANTIA_REPARACION no se cobran ni registran movimientos.
+
+Los medios de pago salen de `data/catalogs/medios_pago.json` (`id`,
+`nombre`, `activo`, `admite_devolucion`); si el archivo no existe se
+usan EFECTIVO, TRANSFERENCIA, TARJETA_DEBITO, TARJETA_CREDITO y OTRO.
+Los roles de anulacion y devolucion son una propuesta del MVP: **negocio
+debe validar la politica final**.
 
 Errores: `404` no encontrado · `409` precondicion invalida o recurso no
 disponible · `422` request mal formado · `500` fallo de infraestructura
@@ -222,6 +267,10 @@ Concretamente:
 - No se agrega un default como `tipo_pago = PAGO`: desde el objeto
   `Pago` no se puede inferir si aquel cobro fue un anticipo o el pago
   del cierre, y un default inventado seria trazabilidad falsa.
+- Pagos, saldos y devoluciones **si** cargan Ordenes anteriores:
+  `referencia`, `operacion_id`, `anulacion` y `resumen_pago.devoluciones`
+  tienen default, y el tipo historico `PAGO` sigue aceptandose (los pagos
+  nuevos son ANTICIPO, PARCIAL o FINAL).
 - Para el MVP se espera **recrear o resetear** los datos locales
   generados con versiones anteriores: borrar `data/ordenes/*.json`.
 - Esto debera resolverse con migraciones reales cuando exista una

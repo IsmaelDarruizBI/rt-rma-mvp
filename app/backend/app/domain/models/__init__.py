@@ -8,8 +8,10 @@ fuente de verdad funcional, y aqui solo se conservan sus IDs
 """
 
 from .catalogos import (
+    MEDIOS_PAGO_PREDETERMINADOS,
     EstacionTrabajo,
     Insumo,
+    MedioPago,
     TipoReparacion,
     TipoReparacionEstacion,
     TipoReparacionInsumos,
@@ -36,7 +38,7 @@ from .enums import (
 from .equipos import DevolucionEquipo, Equipo
 from .inventario import InsumoUtilizado, MovimientoInsumo
 from .orden_reparacion import OrdenReparacion
-from .pagos import Pago, ResumenPago
+from .pagos import AnulacionPago, DevolucionDinero, Pago, ResumenPago
 from .personas import Cliente, Usuario
 from .reparacion import (
     DefinicionAnteriorDetalle,
@@ -74,8 +76,10 @@ __all__ = [
     "Equipo",
     "Usuario",
     # Catalogos
+    "MEDIOS_PAGO_PREDETERMINADOS",
     "EstacionTrabajo",
     "Insumo",
+    "MedioPago",
     "TipoReparacion",
     "TipoReparacionEstacion",
     "TipoReparacionInsumos",
@@ -89,7 +93,9 @@ __all__ = [
     # Inventario
     "InsumoUtilizado",
     "MovimientoInsumo",
-    # Pagos
+    # Pagos y devoluciones de dinero
+    "AnulacionPago",
+    "DevolucionDinero",
     "Pago",
     "ResumenPago",
     # Documentos

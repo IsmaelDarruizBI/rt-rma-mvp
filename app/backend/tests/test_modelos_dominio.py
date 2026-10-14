@@ -195,7 +195,8 @@ def test_pagado_sin_pagos_es_cero():
 
 def test_resumen_pago_no_almacena_total():
     assert "total" not in ResumenPago.model_fields
-    assert set(ResumenPago.model_fields) == {"pagos"}
+    # Pagos y devoluciones de dinero (BR-REP-038): ningun total propio.
+    assert set(ResumenPago.model_fields) == {"pagos", "devoluciones"}
 
 
 # 5) total y saldo derivan en OrdenReparacion.

@@ -12,6 +12,7 @@ import type {
   Estacion,
   ImpactoOverride,
   InsumoUtilizado,
+  MedioPago,
   Orden,
   OrdenResumen,
   TipoReparacion,
@@ -31,6 +32,10 @@ export function listarEstaciones(): Promise<Estacion[]> {
 
 export function listarUsuarios(): Promise<Usuario[]> {
   return get<Usuario[]>("/api/catalogs/users");
+}
+
+export function listarMediosPago(): Promise<MedioPago[]> {
+  return get<MedioPago[]>("/api/catalogs/payment-methods");
 }
 
 // --- Lectura de Ordenes ------------------------------------------------
@@ -261,17 +266,59 @@ export function notificar(
   });
 }
 
-/** Capacidad transversal FEAT-REP-007 / BR-REP-017, sin rol exigido. */
+/**
+ * Registra un Pago (FEAT-REP-007 / BR-REP-017). `metodo` es un ID del
+ * catálogo de medios; `operacionId` identifica el envío para que un
+ * reintento no lo duplique.
+ */
 export function registrarPago(
   ordenId: string,
   usuarioId: string,
   monto: string,
   metodo: string,
+  referencia: string | null = null,
+  operacionId: string | null = null,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/payments`, {
     usuario_id: usuarioId,
     monto,
     metodo,
+    referencia,
+    operacion_id: operacionId,
+  });
+}
+
+/** Anula un Pago registrado por error (Administración, con motivo). */
+export function anularPago(
+  ordenId: string,
+  pagoId: string,
+  usuarioId: string,
+  motivo: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/payments/${pagoId}/void`, {
+    usuario_id: usuarioId,
+    motivo,
+  });
+}
+
+export interface DatosDevolucionDinero {
+  pago_id: string;
+  monto: string;
+  medio: string;
+  motivo: string;
+  referencia: string | null;
+  operacion_id: string | null;
+}
+
+/** Devuelve dinero al cliente desde un Pago (saldo a favor, BR-REP-038). */
+export function devolverDinero(
+  ordenId: string,
+  usuarioId: string,
+  datos: DatosDevolucionDinero,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/refunds`, {
+    usuario_id: usuarioId,
+    ...datos,
   });
 }
 

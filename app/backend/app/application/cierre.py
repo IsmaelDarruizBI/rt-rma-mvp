@@ -3,8 +3,12 @@
     aprobar_control    PROC-REP-220 -> 230 -> 245 -> 240
     rechazar_control   PROC-REP-220 -> 230 (No) -> 235 -> 211 [-> 170]
     notificar          PROC-REP-250 -> 260 -> 265 [-> 266]
-    registrar_pago_de_orden   (capacidad transversal) [-> 265]
+    registrar_pago_de_orden   (capacidad transversal) [-> 265 [-> 266]]
     entregar           PROC-REP-280 -> 270 -> EVT-REP-999
+
+La condicion de entrega exige saldo exactamente cero (V1.4, BR-REP-038):
+una deuda se cobra y un saldo a favor se devuelve
+(``application.finanzas``) antes de entregar.
 
 PROC-REP-265 se evalua exactamente dos veces en HP-REP-001: una al
 notificar (resultado "No", hay saldo) y otra despues del pago (resultado
@@ -36,14 +40,13 @@ from app.services import (
     validar_condicion_entrega,
 )
 from app.services.ordenes import ROLES_ENTREGA
+from app.services.pagos import motivo_de_entrega_bloqueada
 
 from .contexto import ApplicationContext
+from .finanzas import reevaluar_tras_movimiento
 from .modificacion import orden_para_modificar
 
 CERO = Decimal("0")
-
-# Nodos en los que la Orden ya esta en Completar Cobro (BR-REP-017-B).
-_NODOS_DE_CONDICION_DE_ENTREGA = frozenset({"PROC-REP-265", "PROC-REP-266"})
 
 
 def aprobar_control(
@@ -134,7 +137,8 @@ def notificar(
 
     PROC-REP-250 -> 260 (aviso) y PROC-REP-265 (condicion). Si queda
     saldo, PROC-REP-266 deja constancia del bloqueo y la entrega espera
-    a que se registre el Pago.
+    a que se registre el Pago. Con saldo a favor del cliente no hay 266:
+    la entrega espera la devolucion de dinero.
 
     Devuelve tambien si la Orden ya puede entregarse.
     """
@@ -144,7 +148,9 @@ def notificar(
     with orden_para_modificar(contexto, orden_id) as orden:
         orden = notificar_cliente(orden, usuario=usuario, fecha=fecha)
         orden, puede_entregar = validar_condicion_entrega(orden, fecha=fecha)
-        if not puede_entregar:
+        # 266 solo por deuda real: no por un saldo a favor ni por el saldo
+        # nominal de un Origen NO_COBRABLE (garantia).
+        if not puede_entregar and orden.saldo > 0:
             orden = registrar_saldo_pendiente(orden, fecha=fecha)
 
         contexto.ordenes.guardar(orden)
@@ -158,6 +164,8 @@ def registrar_pago_de_orden(
     usuario_id: str,
     monto: Decimal,
     metodo: str,
+    referencia: str | None = None,
+    operacion_id: str | None = None,
 ) -> tuple[OrdenReparacion, bool]:
     """Registra un Pago (FEAT-REP-007, BR-REP-017-A).
 
@@ -175,27 +183,29 @@ def registrar_pago_de_orden(
     el proceso no da.
 
     NO genera el comprobante final: eso es PROC-REP-280 y ocurre en la
-    entrega.
+    entrega. El medio se valida contra el catalogo de medios de pago;
+    ``operacion_id`` evita duplicar el Pago ante un reintento.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
     with orden_para_modificar(contexto, orden_id) as orden:
         orden = registrar_pago(
-            orden, monto=monto, metodo=metodo, usuario=usuario, fecha=fecha
+            orden,
+            monto=monto,
+            metodo=metodo,
+            usuario=usuario,
+            fecha=fecha,
+            medios=contexto.catalogos.listar_medios_pago(),
+            referencia=referencia,
+            operacion_id=operacion_id,
         )
 
         # PROC-REP-265 es de la fase SECUENCIAL de cierre: solo se
         # revalida si la Orden ya llego a ella (tras 250 -> 260 -> 265).
         # Un Pago anterior solo baja el saldo; el Pago es transversal y no
         # mueve el proceso.
-        puede_entregar = False
-        if orden.current_process in _NODOS_DE_CONDICION_DE_ENTREGA:
-            orden, puede_entregar = validar_condicion_entrega(
-                orden, fecha=fecha
-            )
-            if not puede_entregar:
-                orden = registrar_saldo_pendiente(orden, fecha=fecha)
+        orden, puede_entregar = reevaluar_tras_movimiento(orden, fecha=fecha)
 
         contexto.ordenes.guardar(orden)
     return orden, puede_entregar
@@ -237,8 +247,8 @@ def entregar(
             )
         if not condicion_entrega_cumplida(orden):
             raise PrecondicionInvalidaError(
-                f"No se puede entregar con saldo pendiente: {orden.saldo}. "
-                "Registra el Pago y volve a intentarlo."
+                f"No se puede entregar: {motivo_de_entrega_bloqueada(orden)}. "
+                "Resolve la cuenta (cobro o devolucion) y volve a intentarlo."
             )
 
         orden = generar_comprobante_final(orden, fecha=fecha)

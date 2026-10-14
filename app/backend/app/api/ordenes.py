@@ -17,6 +17,8 @@ from app.application import (
     acciones_de_autorizacion,
     acciones_de_cancelacion,
     acciones_disponibles,
+    acciones_financieras,
+    anular_pago_de_orden,
     aprobar_control,
     autorizaciones_de_orden,
     cancelar_detalle,
@@ -54,6 +56,7 @@ from app.application import (
     registrar_decision_cliente,
     registrar_desistimiento,
     registrar_devolucion,
+    registrar_devolucion_de_dinero,
     registrar_pago_de_orden,
     requerir_redefinicion_ejecucion,
     revalidar_recursos,
@@ -65,6 +68,7 @@ from app.services import DecisionDetalle
 
 from .dependencias import ContextoDep
 from .schemas import (
+    AnularPagoIn,
     AprobarControlIn,
     AutorizacionesOrdenOut,
     CancelarDetalleIn,
@@ -75,12 +79,14 @@ from .schemas import (
     DefinirReparacionDesdeRevisionIn,
     DefinirReparacionIn,
     DesistimientoIn,
+    DevolucionDineroIn,
     DevolverRtIn,
     EncolarIn,
     EntregarIn,
     EnviarARevisionIn,
     FinalizarDefinicionIn,
     FinalizarSinReparacionIn,
+    FinanzasOrdenOut,
     ImpactoOverrideOut,
     IniciarDetalleIn,
     IniciarGarantiaRmaIn,
@@ -123,6 +129,7 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
         detalles_origen=detalles_origen_de(contexto, orden),
         acciones_cancelacion=acciones_de_cancelacion(orden),
         acciones_autorizacion=acciones_de_autorizacion(orden),
+        acciones_financieras=acciones_financieras(orden),
     )
 
 
@@ -169,6 +176,15 @@ def get_pendientes_de_autorizacion(
 def get_orden(orden_id: str, contexto: ContextoDep) -> OrdenOut:
     """Una Orden con su detalle completo."""
     return _salida(obtener_orden(contexto, orden_id), contexto)
+
+
+@router.get("/{orden_id}/finances")
+def get_finanzas(orden_id: str, contexto: ContextoDep) -> FinanzasOrdenOut:
+    """Saldo, credito a favor y movimientos de dinero, en orden cronologico.
+
+    Pagos, anulaciones y devoluciones. Solo lectura.
+    """
+    return FinanzasOrdenOut.desde_dominio(obtener_orden(contexto, orden_id))
 
 
 @router.get("/{orden_id}/authorizations")
@@ -855,9 +871,11 @@ def post_registrar_pago(
 ) -> OrdenConEntregaOut:
     """Registrar un Pago (capacidad transversal).
 
-    FEAT-REP-007 / BR-REP-017. No corresponde a ningun PROC-REP-* propio
-    y no exige un rol: el negocio todavia no definio cual. Despues del
-    pago se revalida PROC-REP-265.
+    FEAT-REP-007 / BR-REP-017. No corresponde a ningun PROC-REP-* propio.
+    Roles: Administracion, Recepcion o Coordinacion (nunca un Tecnico).
+    Medio del catalogo, importe positivo con dos decimales como maximo y
+    sin superar el saldo pendiente; ``operacion_id`` evita duplicarlo.
+    En el cierre comercial se revalida PROC-REP-265.
     """
     orden, puede_entregar = registrar_pago_de_orden(
         contexto,
@@ -865,6 +883,56 @@ def post_registrar_pago(
         usuario_id=cuerpo.usuario_id,
         monto=cuerpo.monto,
         metodo=cuerpo.metodo,
+        referencia=cuerpo.referencia,
+        operacion_id=cuerpo.operacion_id,
+    )
+    return _salida_con_entrega(orden, contexto, puede_entregar)
+
+
+@router.post("/{orden_id}/payments/{pago_id}/void")
+def post_anular_pago(
+    orden_id: str,
+    pago_id: str,
+    cuerpo: AnularPagoIn,
+    contexto: ContextoDep,
+) -> OrdenConEntregaOut:
+    """Anular un Pago registrado por error (Administracion, con motivo).
+
+    El Pago se conserva con su anulacion y deja de contar como pagado. No
+    se anula dos veces ni con devoluciones registradas.
+    """
+    orden, puede_entregar = anular_pago_de_orden(
+        contexto,
+        orden_id=orden_id,
+        pago_id=pago_id,
+        usuario_id=cuerpo.usuario_id,
+        motivo=cuerpo.motivo,
+    )
+    return _salida_con_entrega(orden, contexto, puede_entregar)
+
+
+@router.post("/{orden_id}/refunds")
+def post_devolver_dinero(
+    orden_id: str,
+    cuerpo: DevolucionDineroIn,
+    contexto: ContextoDep,
+) -> OrdenConEntregaOut:
+    """Devolver dinero al cliente desde un Pago (V1.4 PROC-REP-267).
+
+    Solo con saldo a favor del cliente y sin superarlo, ni superar lo que
+    queda por devolver del Pago. Administracion o Recepcion, con motivo.
+    Revalida la entrega o, en una Orden CANCELADA, su cierre.
+    """
+    orden, puede_entregar = registrar_devolucion_de_dinero(
+        contexto,
+        orden_id=orden_id,
+        pago_id=cuerpo.pago_id,
+        usuario_id=cuerpo.usuario_id,
+        monto=cuerpo.monto,
+        medio=cuerpo.medio,
+        motivo=cuerpo.motivo,
+        referencia=cuerpo.referencia,
+        operacion_id=cuerpo.operacion_id,
     )
     return _salida_con_entrega(orden, contexto, puede_entregar)
 

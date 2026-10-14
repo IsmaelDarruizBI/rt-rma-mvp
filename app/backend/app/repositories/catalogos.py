@@ -16,6 +16,7 @@ from typing import Protocol, runtime_checkable
 from app.domain.models import (
     EstacionTrabajo,
     Insumo,
+    MedioPago,
     TipoReparacion,
     TipoReparacionEstacion,
     TipoReparacionInsumos,
@@ -83,4 +84,14 @@ class CatalogosRepository(Protocol):
         ...
 
     def listar_usuarios(self) -> list[Usuario]:
+        ...
+
+    # --- Medios de pago ---
+
+    def listar_medios_pago(self) -> list[MedioPago]:
+        """Medios configurados (o los predeterminados si no hay)."""
+        ...
+
+    def obtener_medio_pago(self, medio_id: str) -> MedioPago:
+        """Lanza ``EntidadPersistidaNoEncontradaError`` si no existe."""
         ...

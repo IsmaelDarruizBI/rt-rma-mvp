@@ -141,8 +141,20 @@ class OrdenReparacion(BaseModel):
     @computed_field
     @property
     def saldo(self) -> Decimal:
-        """Diferencia entre el total cobrable y lo efectivamente pagado."""
-        return self.total - self.resumen_pago.pagado
+        """Saldo = Total - Pagado valido + Devuelto (BR-REP-038).
+
+        Positivo: el cliente debe. Cero: no hay diferencias. Negativo:
+        credito a favor del cliente, pendiente de devolver. Los Pagos
+        anulados no cuentan como pagados.
+        """
+        return (
+            self.total - self.resumen_pago.pagado + self.resumen_pago.devuelto
+        )
+
+    @property
+    def credito_a_favor(self) -> Decimal:
+        """Dinero a devolver al cliente: el saldo negativo, o 0."""
+        return max(-self.saldo, Decimal("0"))
 
     @computed_field
     @property
@@ -152,14 +164,17 @@ class OrdenReparacion(BaseModel):
         Una Orden sin Detalles todavia no tiene nada que cobrar, y no es
         lo mismo que una Orden con Detalles cuyo total da 0: la primera
         queda PENDIENTE, la segunda PAGADA. Los Detalles CANCELADO no
-        cuentan: una Orden con todos cancelados no figura PAGADA.
+        cuentan: una Orden con todos cancelados no figura PAGADA. Con
+        credito a favor del cliente es SALDO_A_FAVOR, haya Detalles o no.
         """
+        if self.saldo < 0:
+            return EstadoPago.SALDO_A_FAVOR
         if all(
             detalle.estado is EstadoReparacionDetail.CANCELADO
             for detalle in self.reparaciones_detail
         ):
             return EstadoPago.PENDIENTE
-        if self.saldo <= 0:
+        if self.saldo == 0:
             return EstadoPago.PAGADO
         if self.resumen_pago.pagado > 0:
             return EstadoPago.PARCIAL

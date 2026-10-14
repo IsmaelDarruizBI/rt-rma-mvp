@@ -28,10 +28,14 @@ from app.application import (
     DetalleOrigen,
     ImpactoOverride,
     InsumoPrevisto,
+    MovimientoFinanciero,
     PasoProgreso,
     PendienteAutorizacion,
     SituacionAutorizacion,
+    SituacionFinanciera,
+    movimientos_financieros,
     situacion_autorizacion,
+    situacion_financiera,
 )
 from app.domain.models import (
     CanalComunicacion,
@@ -48,6 +52,7 @@ from app.domain.models import (
     EstadoWorkflow,
     HistorialWorkflow,
     InsumoUtilizado,
+    MedioPago,
     OrdenReparacion,
     OrigenCancelacion,
     OrigenOrden,
@@ -68,6 +73,7 @@ from app.services import (
     EstadoAutorizacion,
     analizar_desistimiento,
     devolucion_pendiente,
+    devolvible_de,
     estado_autorizacion,
     finalizada_sin_reparacion,
     nuevo_id,
@@ -104,6 +110,19 @@ class EstacionOut(BaseModel):
     @classmethod
     def desde_dominio(cls, estacion: EstacionTrabajo) -> "EstacionOut":
         return cls(**estacion.model_dump())
+
+
+class MedioPagoOut(BaseModel):
+    """Medio de pago o de devolucion de dinero (catalogo)."""
+
+    id: str
+    nombre: str
+    activo: bool
+    admite_devolucion: bool
+
+    @classmethod
+    def desde_dominio(cls, medio: MedioPago) -> "MedioPagoOut":
+        return cls(**medio.model_dump())
 
 
 class UsuarioOut(BaseModel):
@@ -320,11 +339,41 @@ class NotificarIn(BaseModel):
 
 
 class PagoIn(BaseModel):
-    """``POST /api/orders/{id}/payments`` (capacidad transversal)."""
+    """``POST /api/orders/{id}/payments`` (capacidad transversal).
+
+    ``metodo``: ID del catalogo de medios de pago. ``referencia``: dato
+    opcional de la operacion. ``operacion_id``: clave del envio (la UI la
+    genera por formulario) para que un reintento no duplique el Pago.
+    """
 
     usuario_id: str = Field(min_length=1)
     monto: Decimal = Field(gt=0)
     metodo: str = Field(min_length=1)
+    referencia: str | None = None
+    operacion_id: str | None = None
+
+
+class AnularPagoIn(BaseModel):
+    """``POST /api/orders/{id}/payments/{pago_id}/void`` (Administracion)."""
+
+    usuario_id: str = Field(min_length=1)
+    motivo: str = Field(min_length=1)
+
+
+class DevolucionDineroIn(BaseModel):
+    """``POST /api/orders/{id}/refunds``: devolucion de dinero al cliente.
+
+    Vinculada a un Pago (``pago_id``), con medio del catalogo y motivo
+    obligatorio. ``operacion_id`` evita duplicarla ante un reintento.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    pago_id: str = Field(min_length=1)
+    monto: Decimal = Field(gt=0)
+    medio: str = Field(min_length=1)
+    motivo: str = Field(min_length=1)
+    referencia: str | None = None
+    operacion_id: str | None = None
 
 
 class EntregarIn(BaseModel):
@@ -684,11 +733,20 @@ class EjecucionOut(BaseModel):
         return cls(**ejecucion.model_dump())
 
 
+class AnulacionPagoOut(BaseModel):
+    usuario_id: str
+    fecha: datetime
+    motivo: str
+
+
 class PagoOut(BaseModel):
     """Pago registrado.
 
-    ``tipo_pago`` (ANTICIPO / PAGO) y ``metodo`` (EFECTIVO,
-    TRANSFERENCIA, ...) son dimensiones distintas.
+    ``tipo_pago`` (ANTICIPO / PARCIAL / FINAL) y ``metodo`` (ID del medio:
+    EFECTIVO, TRANSFERENCIA, ...) son dimensiones distintas. ``monto`` es
+    siempre el original; un Pago anulado trae ``anulacion`` y no cuenta como
+    pagado. ``devuelto``: lo devuelto desde este Pago; ``devolvible``: lo que
+    todavia puede devolverse desde el.
     """
 
     id: str
@@ -697,6 +755,24 @@ class PagoOut(BaseModel):
     metodo: str
     usuario_id: str
     fecha: datetime
+    referencia: str | None = None
+    vigente: bool = True
+    anulacion: AnulacionPagoOut | None = None
+    devuelto: Decimal = Decimal("0")
+    devolvible: Decimal = Decimal("0")
+
+
+class DevolucionDineroOut(BaseModel):
+    """Dinero devuelto al cliente desde un Pago (V1.4 PROC-REP-267)."""
+
+    id: str
+    pago_id: str
+    monto: Decimal
+    medio: str
+    usuario_id: str
+    fecha: datetime
+    motivo: str
+    referencia: str | None = None
 
 
 class DocumentoOut(BaseModel):
@@ -734,6 +810,10 @@ class ResumenComercialOut(BaseModel):
     estado_pago: EstadoPago
     puntaje_total: int
     condicion_comercial: str
+    # BR-REP-038: Saldo = Total - Pagado (valido) + Devuelto.
+    devuelto: Decimal = Decimal("0")
+    credito_a_favor: Decimal = Decimal("0")
+    situacion_financiera: SituacionFinanciera = SituacionFinanciera.SALDADA
 
 
 class HistorialOut(BaseModel):
@@ -814,6 +894,8 @@ class AccionOut(BaseModel):
     ejecucion_id: str | None = None
     requiere_actor: bool = True
     usuario_id: str | None = None
+    # Movimientos financieros: el Pago sobre el que actua (anularlo).
+    pago_id: str | None = None
 
     @classmethod
     def desde_dominio(cls, accion: AccionDisponible) -> "AccionOut":
@@ -825,6 +907,7 @@ class AccionOut(BaseModel):
             ejecucion_id=accion.ejecucion_id,
             requiere_actor=accion.requiere_actor,
             usuario_id=accion.usuario_id,
+            pago_id=accion.pago_id,
         )
 
 
@@ -976,6 +1059,20 @@ class DesistimientoOut(BaseModel):
         )
 
 
+def _resumen_comercial(orden: OrdenReparacion) -> "ResumenComercialOut":
+    return ResumenComercialOut(
+        total=orden.total,
+        pagado=orden.resumen_pago.pagado,
+        saldo=orden.saldo,
+        estado_pago=orden.estado_pago,
+        puntaje_total=orden.puntaje_total,
+        condicion_comercial=politica_de(orden.origen).condicion_comercial,
+        devuelto=orden.resumen_pago.devuelto,
+        credito_a_favor=orden.credito_a_favor,
+        situacion_financiera=situacion_financiera(orden),
+    )
+
+
 class OrdenOut(BaseModel):
     """La Orden completa tal como la consume el frontend."""
 
@@ -1005,6 +1102,9 @@ class OrdenOut(BaseModel):
     toma_activa: TomaOut | None = None
     ejecuciones: list[EjecucionOut]
     pagos: list[PagoOut]
+    devoluciones_dinero: list[DevolucionDineroOut] = Field(
+        default_factory=list
+    )
     documentos: DocumentosOut
     resumen: ResumenComercialOut
     historial: list[HistorialOut]
@@ -1019,6 +1119,8 @@ class OrdenOut(BaseModel):
     acciones_autorizacion: list[AccionOut] = Field(default_factory=list)
     # Vista previa del desistimiento total (CLIENTE_EXTERNO con Detalles).
     desistimiento: DesistimientoOut | None = None
+    # FEAT-REP-007: cobrar, anular un Pago o devolver dinero, si corresponde.
+    acciones_financieras: list[AccionOut] = Field(default_factory=list)
     # Orden CANCELADA: devolucion fisica del equipo (registrada o pendiente).
     devolucion: DevolucionOut | None = None
     devolucion_pendiente: bool = False
@@ -1038,6 +1140,7 @@ class OrdenOut(BaseModel):
         detalles_origen: Sequence[DetalleOrigen] = (),
         acciones_cancelacion: Sequence[AccionDisponible] = (),
         acciones_autorizacion: Sequence[AccionDisponible] = (),
+        acciones_financieras: Sequence[AccionDisponible] = (),
     ) -> "OrdenOut":
         return cls(
             id=orden.id,
@@ -1082,20 +1185,22 @@ class OrdenOut(BaseModel):
                 for ejecucion in orden.ejecuciones
             ],
             pagos=[
-                PagoOut(**pago.model_dump())
+                PagoOut(
+                    **pago.model_dump(exclude={"operacion_id"}),
+                    vigente=pago.vigente,
+                    devuelto=orden.resumen_pago.devuelto_de(pago.id),
+                    devolvible=devolvible_de(orden, pago),
+                )
                 for pago in orden.resumen_pago.pagos
             ],
+            devoluciones_dinero=[
+                DevolucionDineroOut(
+                    **devolucion.model_dump(exclude={"operacion_id"})
+                )
+                for devolucion in orden.resumen_pago.devoluciones
+            ],
             documentos=DocumentosOut(**orden.documentos.model_dump()),
-            resumen=ResumenComercialOut(
-                total=orden.total,
-                pagado=orden.resumen_pago.pagado,
-                saldo=orden.saldo,
-                estado_pago=orden.estado_pago,
-                puntaje_total=orden.puntaje_total,
-                condicion_comercial=politica_de(
-                    orden.origen
-                ).condicion_comercial,
-            ),
+            resumen=_resumen_comercial(orden),
             historial=[
                 HistorialOut.desde_dominio(paso) for paso in orden.historial
             ],
@@ -1119,6 +1224,10 @@ class OrdenOut(BaseModel):
             acciones_autorizacion=[
                 AccionOut.desde_dominio(accion)
                 for accion in acciones_autorizacion
+            ],
+            acciones_financieras=[
+                AccionOut.desde_dominio(accion)
+                for accion in acciones_financieras
             ],
             devolucion=(
                 DevolucionOut(**orden.devolucion.model_dump())
@@ -1246,3 +1355,56 @@ class RespuestaErrorOut(BaseModel):
     """Envoltorio del error. Nunca incluye stack traces."""
 
     error: ErrorOut
+
+
+class MovimientoFinancieroOut(BaseModel):
+    """Un movimiento de dinero de la Orden (``GET .../finances``).
+
+    ``efecto``: como movio el saldo (negativo lo baja: un Pago; positivo lo
+    sube: una anulacion o una devolucion).
+    """
+
+    fecha: datetime
+    tipo: str
+    id: str
+    pago_id: str
+    monto: Decimal
+    efecto: Decimal
+    medio: str | None = None
+    usuario_id: str
+    detalle: str
+
+    @classmethod
+    def desde_aplicacion(
+        cls, movimiento: MovimientoFinanciero
+    ) -> "MovimientoFinancieroOut":
+        return cls(
+            fecha=movimiento.fecha,
+            tipo=movimiento.tipo.value,
+            id=movimiento.id,
+            pago_id=movimiento.pago_id,
+            monto=movimiento.monto,
+            efecto=movimiento.efecto,
+            medio=movimiento.medio,
+            usuario_id=movimiento.usuario_id,
+            detalle=movimiento.detalle,
+        )
+
+
+class FinanzasOrdenOut(BaseModel):
+    """``GET /api/orders/{id}/finances``: saldo, credito y movimientos."""
+
+    orden_id: str
+    resumen: ResumenComercialOut
+    movimientos: list[MovimientoFinancieroOut]
+
+    @classmethod
+    def desde_dominio(cls, orden: OrdenReparacion) -> "FinanzasOrdenOut":
+        return cls(
+            orden_id=orden.id,
+            resumen=_resumen_comercial(orden),
+            movimientos=[
+                MovimientoFinancieroOut.desde_aplicacion(movimiento)
+                for movimiento in movimientos_financieros(orden)
+            ],
+        )

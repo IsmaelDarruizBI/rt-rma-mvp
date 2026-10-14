@@ -14,6 +14,7 @@ import { ApiError } from "../../api/client";
 import { Boton, MensajeError, Panel, colores } from "../../components/ui";
 import type {
   Estacion,
+  MedioPago,
   Orden,
   OrdenResumen,
   TipoReparacion,
@@ -31,8 +32,8 @@ import {
   EjecucionesOrden,
   HistorialOrden,
   ProgresoHappyPath,
-  ResumenComercialOrden,
 } from "./DetalleOrden";
+import { PagosYMovimientos } from "./PagosOrden";
 import {
   FormularioAltaOrden,
   ListadoOrdenes,
@@ -43,6 +44,7 @@ export function PanelOrdenes() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [tipos, setTipos] = useState<TipoReparacion[]>([]);
   const [estaciones, setEstaciones] = useState<Estacion[]>([]);
+  const [medios, setMedios] = useState<MedioPago[]>([]);
   const [actorId, setActorId] = useState("");
 
   const [ordenes, setOrdenes] = useState<OrdenResumen[]>([]);
@@ -66,15 +68,17 @@ export function PanelOrdenes() {
   useEffect(() => {
     async function cargar() {
       try {
-        const [listaUsuarios, listaTipos, listaEstaciones] =
+        const [listaUsuarios, listaTipos, listaEstaciones, listaMedios] =
           await Promise.all([
             api.listarUsuarios(),
             api.listarTiposReparacion(),
             api.listarEstaciones(),
+            api.listarMediosPago(),
           ]);
         setUsuarios(listaUsuarios);
         setTipos(listaTipos);
         setEstaciones(listaEstaciones);
+        setMedios(listaMedios);
         setActorId((actual) => actual || (listaUsuarios[0]?.id ?? ""));
         await refrescarListado();
       } catch (fallo) {
@@ -216,10 +220,6 @@ export function PanelOrdenes() {
       void ejecutarComando(() => api.liberarOrden(idOrden, idActor)),
     notificar: () =>
       void ejecutarComando(() => api.notificar(idOrden, idActor)),
-    registrarPago: (monto, metodo) =>
-      void ejecutarComando(() =>
-        api.registrarPago(idOrden, idActor, monto, metodo),
-      ),
     entregar: () =>
       void ejecutarComando(() => api.entregar(idOrden, idActor)),
     informarRt: () => void ejecutarComando(() => api.informarRt(idOrden)),
@@ -370,7 +370,35 @@ export function PanelOrdenes() {
               ocupado={ocupado}
               ejecutar={ejecutor}
             />
-            <ResumenComercialOrden orden={orden} />
+            <PagosYMovimientos
+              orden={orden}
+              actor={actor}
+              usuarios={usuarios}
+              medios={medios}
+              ocupado={ocupado}
+              onPagar={(monto, metodo, referencia, operacionId) =>
+                void ejecutarComando(() =>
+                  api.registrarPago(
+                    idOrden,
+                    idActor,
+                    monto,
+                    metodo,
+                    referencia,
+                    operacionId,
+                  ),
+                )
+              }
+              onAnular={(pagoId, motivo) =>
+                void ejecutarComando(() =>
+                  api.anularPago(idOrden, pagoId, idActor, motivo),
+                )
+              }
+              onDevolver={(datos) =>
+                void ejecutarComando(() =>
+                  api.devolverDinero(idOrden, idActor, datos),
+                )
+              }
+            />
             <ProgresoHappyPath orden={orden} />
             <HistorialOrden orden={orden} />
           </div>

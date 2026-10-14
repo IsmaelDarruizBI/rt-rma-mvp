@@ -65,7 +65,6 @@ export interface EjecutorAcciones {
   aprobarControl: (detalleId: string | null, observaciones: string) => void;
   liberarOrden: () => void;
   notificar: () => void;
-  registrarPago: (monto: string, metodo: string) => void;
   entregar: () => void;
   informarRt: () => void;
   devolverRt: () => void;
@@ -615,12 +614,12 @@ function FormularioAccion({
       );
 
     case "REGISTRAR_PAGO":
+      // Los cobros, anulaciones y devoluciones viven en "Pagos y
+      // movimientos", con el catálogo de medios y el saldo a la vista.
       return (
-        <FormularioPago
-          saldo={orden.resumen.saldo}
-          deshabilitado={deshabilitado}
-          onConfirmar={ejecutar.registrarPago}
-        />
+        <p style={{ margin: 0, fontSize: "0.85rem", color: colores.suave }}>
+          Registrá el pago en <strong>Pagos y movimientos</strong>.
+        </p>
       );
 
     case "ENTREGAR":
@@ -1597,46 +1596,6 @@ function FormularioObservaciones({
         onClick={() => onConfirmar(observaciones)}
       >
         {textoBoton}
-      </Boton>
-    </div>
-  );
-}
-
-function FormularioPago({
-  saldo,
-  deshabilitado,
-  onConfirmar,
-}: {
-  saldo: string;
-  deshabilitado: boolean;
-  onConfirmar: (monto: string, metodo: string) => void;
-}) {
-  const [monto, setMonto] = useState(saldo);
-  const [metodo, setMetodo] = useState("EFECTIVO");
-
-  return (
-    <div>
-      <Campo etiqueta="Monto">
-        <input
-          value={monto}
-          onChange={(evento) => setMonto(evento.target.value)}
-          disabled={deshabilitado}
-          style={estiloInput}
-        />
-      </Campo>
-      <Campo etiqueta="Medio de pago">
-        <input
-          value={metodo}
-          onChange={(evento) => setMetodo(evento.target.value)}
-          disabled={deshabilitado}
-          style={estiloInput}
-        />
-      </Campo>
-      <Boton
-        disabled={deshabilitado}
-        onClick={() => onConfirmar(monto, metodo)}
-      >
-        Registrar pago
       </Boton>
     </div>
   );

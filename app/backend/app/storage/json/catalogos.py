@@ -8,6 +8,7 @@ Un archivo por catalogo, cada uno con un array JSON:
     estaciones.json
     tipo_reparacion_estaciones.json
     usuarios.json
+    medios_pago.json        (opcional: sin el archivo, los predeterminados)
 
 Los catalogos se releen en cada consulta: son chicos y asi dos procesos
 no trabajan sobre una copia en memoria desactualizada. Cuando el volumen
@@ -21,8 +22,10 @@ from typing import TypeVar
 from pydantic import BaseModel, ValidationError
 
 from app.domain.models import (
+    MEDIOS_PAGO_PREDETERMINADOS,
     EstacionTrabajo,
     Insumo,
+    MedioPago,
     TipoReparacion,
     TipoReparacionEstacion,
     TipoReparacionInsumos,
@@ -41,6 +44,7 @@ ARCHIVO_TIPO_REPARACION_INSUMOS = "tipo_reparacion_insumos.json"
 ARCHIVO_ESTACIONES = "estaciones.json"
 ARCHIVO_TIPO_REPARACION_ESTACIONES = "tipo_reparacion_estaciones.json"
 ARCHIVO_USUARIOS = "usuarios.json"
+ARCHIVO_MEDIOS_PAGO = "medios_pago.json"
 
 ModeloT = TypeVar("ModeloT", bound=BaseModel)
 
@@ -129,6 +133,18 @@ class JsonCatalogosRepository:
     def obtener_usuario(self, usuario_id: str) -> Usuario:
         return self._buscar_por_id(
             self.listar_usuarios(), usuario_id, "Usuario"
+        )
+
+    # --- Medios de pago ---
+
+    def listar_medios_pago(self) -> list[MedioPago]:
+        if not (self._directorio / ARCHIVO_MEDIOS_PAGO).is_file():
+            return list(MEDIOS_PAGO_PREDETERMINADOS)
+        return self._listar(ARCHIVO_MEDIOS_PAGO, MedioPago)
+
+    def obtener_medio_pago(self, medio_id: str) -> MedioPago:
+        return self._buscar_por_id(
+            self.listar_medios_pago(), medio_id, "Medio de pago"
         )
 
     # --- Interno ---

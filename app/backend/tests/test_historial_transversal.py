@@ -292,7 +292,8 @@ def test_el_pago_final_queda_entre_266_y_265(cliente):  # noqa: F811
     pago = orden["historial"][indice_266 + 1]
     assert pago["accion"] == "REGISTRAR_PAGO"
     assert pago["usuario_id"] == RECEP_ID
-    assert "PAGO" in pago["observacion"]
+    # El cobro que salda la cuenta en el cierre es FINAL (antes: PAGO).
+    assert "FINAL" in pago["observacion"]
     assert "EFECTIVO" in pago["observacion"]
     assert "80000" in pago["observacion"]
     # PROC-REP-266 no se reemplaza: el bloqueo fue real.
