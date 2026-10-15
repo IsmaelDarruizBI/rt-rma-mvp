@@ -27,6 +27,7 @@ from .acciones import (
     acciones_de_custodia,
     acciones_disponibles,
     acciones_financieras,
+    puede_ejecutar,
 )
 from .autorizacion_cliente import (
     AutorizacionDetalle,
@@ -39,6 +40,16 @@ from .autorizacion_cliente import (
     registrar_decision_cliente,
     registrar_desistimiento,
     situacion_autorizacion,
+)
+from .bandejas import (
+    Bandeja,
+    DestinoBandeja,
+    ItemBandeja,
+    TipoBandeja,
+    TrabajoEnBandeja,
+    VistaBandejas,
+    bandejas_de_inicio,
+    bandejas_de_taller,
 )
 from .cancelacion import cancelar_detalle, cancelar_orden, registrar_devolucion
 from .cierre import (
@@ -256,4 +267,14 @@ __all__ = [
     "revalidar_ordenes_pendientes",
     "agregar_observacion_recepcion",
     "emitir_comprobante_recepcion",
+    # Bandejas de trabajo (lectura)
+    "Bandeja",
+    "DestinoBandeja",
+    "ItemBandeja",
+    "TipoBandeja",
+    "TrabajoEnBandeja",
+    "VistaBandejas",
+    "bandejas_de_inicio",
+    "bandejas_de_taller",
+    "puede_ejecutar",
 ]

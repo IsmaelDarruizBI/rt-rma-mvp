@@ -57,7 +57,7 @@ const CRITERIOS: { valor: CriterioOrden; texto: string }[] = [
 ];
 
 /** Color del chip de situación (el mismo criterio que la cabecera). */
-function colorDeSituacion(codigo: string | undefined): string {
+export function colorDeSituacion(codigo: string | undefined): string {
   if (!codigo) return colores.suave;
   if (codigo === "CERRADA") return colores.texto;
   if (codigo.startsWith("CANCELADA")) return colores.error;
@@ -72,7 +72,10 @@ function colorDeSituacion(codigo: string | undefined): string {
   return colores.acento;
 }
 
-function nombreDe(usuarios: Usuario[], usuarioId: string | null): string {
+export function nombreDe(
+  usuarios: Usuario[],
+  usuarioId: string | null,
+): string {
   if (!usuarioId) return "";
   return usuarios.find((usuario) => usuario.id === usuarioId)?.nombre ?? usuarioId;
 }

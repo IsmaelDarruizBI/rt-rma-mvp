@@ -10,10 +10,10 @@
  * «Próximo paso», trabajos, situaciones especiales, información
  * complementaria (en el orden que más le sirve a cada rol) e historial.
  *
- * Qué pantalla se ve lo decide la URL (`#/ordenes`, `#/ordenes/nueva`,
- * `#/ordenes/OR-000001`, `#/inventario`): navegar solo lee, nunca envía
- * comandos. La búsqueda, los filtros y el usuario de demostración
- * sobreviven a la navegación.
+ * Qué pantalla se ve lo decide la URL (`#/inicio`, `#/ordenes`,
+ * `#/ordenes/nueva`, `#/ordenes/OR-000001`, `#/taller`, `#/inventario`):
+ * navegar solo lee, nunca envía comandos. La búsqueda, los filtros y el
+ * usuario de demostración sobreviven a la navegación.
  */
 
 import {
@@ -46,6 +46,7 @@ import {
 } from "./AccionesOrden";
 import { InventarioPanel } from "../inventario/Inventario";
 import { AutorizacionClienteOrden } from "./AutorizacionCliente";
+import { PantallaInicio, PantallaTaller } from "./PantallasTrabajo";
 import { CustodiaOrden } from "./CustodiaOrden";
 import {
   Bloque,
@@ -180,6 +181,14 @@ export function PanelOrdenes() {
 
   const actor = usuarios.find((usuario) => usuario.id === actorId) ?? null;
 
+  // Nombres de usuarios y estaciones, para decirlos así en los errores.
+  const nombresConocidos = useRef<Record<string, string>>({});
+  useEffect(() => {
+    nombresConocidos.current = Object.fromEntries(
+      [...usuarios, ...estaciones].map((item) => [item.id, item.nombre]),
+    );
+  }, [usuarios, estaciones]);
+
   // La Orden en pantalla, para recargarla si un comando choca (409) y para
   // traducir los mensajes de error con los nombres de sus pasos.
   const ordenEnPantalla = useRef<Orden | null>(null);
@@ -270,7 +279,15 @@ export function PanelOrdenes() {
             // Si la recarga tambien falla, queda el mensaje original.
           }
         }
-        setError(errorDe(fallo, ordenEnPantalla.current, clave, recargada));
+        setError(
+          errorDe(
+            fallo,
+            ordenEnPantalla.current,
+            clave,
+            recargada,
+            nombresConocidos.current,
+          ),
+        );
       } finally {
         setOcupado(false);
       }
@@ -488,6 +505,17 @@ export function PanelOrdenes() {
     error,
   };
 
+  // Tomar desde la cola del taller: el mismo comando que en la Orden. Si
+  // sale bien, `ejecutarComando` abre la Orden tomada.
+  const tomarDesdeCola = (ordenId: string, estacionId: string) =>
+    ejecutarComando(() => api.tomarOrden(ordenId, idActor, estacionId));
+
+  // La sección del menú que corresponde a la pantalla actual.
+  const seccion =
+    ruta.pantalla === "nueva" || ruta.pantalla === "orden"
+      ? "ordenes"
+      : ruta.pantalla;
+
   return (
     <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1rem" }}>
       <style>{ESTILOS_RESPONSIVOS}</style>
@@ -525,17 +553,15 @@ export function PanelOrdenes() {
       >
         {(
           [
+            ["inicio", "Inicio"],
             ["ordenes", "Órdenes"],
+            ["taller", "Taller"],
             ["inventario", "Inventario"],
           ] as const
         ).map(([clave, nombre]) => (
           <Boton
             key={clave}
-            variante={
-              (ruta.pantalla === "inventario") === (clave === "inventario")
-                ? "primario"
-                : "secundario"
-            }
+            variante={seccion === clave ? "primario" : "secundario"}
             onClick={() => {
               setError(null);
               navegar({ pantalla: clave });
@@ -544,19 +570,38 @@ export function PanelOrdenes() {
             {nombre}
           </Boton>
         ))}
+        {/* En el celular «Órdenes» ya vuelve al listado. */}
         {(ruta.pantalla === "orden" || ruta.pantalla === "nueva") && (
-          <Boton
-            variante="secundario"
-            onClick={() => navegar({ pantalla: "ordenes" })}
-          >
-            ← Volver al listado
-          </Boton>
+          <span className="rt-solo-escritorio">
+            <Boton
+              variante="secundario"
+              onClick={() => navegar({ pantalla: "ordenes" })}
+            >
+              ← Volver al listado
+            </Boton>
+          </span>
         )}
       </nav>
 
       {error && !enDetalle && <MensajeDeComando error={error} />}
 
-      {ruta.pantalla === "inventario" ? (
+      {ruta.pantalla === "inicio" ? (
+        <PantallaInicio
+          actor={actor}
+          usuarios={usuarios}
+          estaciones={estaciones}
+          onIr={(pantalla) => navegar({ pantalla })}
+        />
+      ) : ruta.pantalla === "taller" ? (
+        <PantallaTaller
+          actor={actor}
+          usuarios={usuarios}
+          estaciones={estaciones}
+          ocupado={ocupado}
+          onIr={(pantalla) => navegar({ pantalla })}
+          onTomar={tomarDesdeCola}
+        />
+      ) : ruta.pantalla === "inventario" ? (
         <InventarioPanel actor={actor} usuarios={usuarios} />
       ) : ruta.pantalla === "nueva" ? (
         <FormularioAltaOrden
@@ -861,6 +906,7 @@ function errorDe(
   orden: Orden | null,
   clave: string | null = null,
   recargada = false,
+  nombres: Record<string, string> = {},
 ): ErrorDeComando {
   if (!(fallo instanceof ApiError)) {
     return {
@@ -875,7 +921,8 @@ function errorDe(
       : "";
   const sufijo = recargada ? " Se recargó la Orden con su estado actual." : "";
   return {
-    mensaje: `${prefijo}${mensajeLegible(fallo.message, orden)}${sufijo}`,
+    mensaje: `${prefijo}${mensajeLegible(fallo.message, orden, nombres)}` +
+      sufijo,
     tecnico: fallo.message,
     clave,
   };

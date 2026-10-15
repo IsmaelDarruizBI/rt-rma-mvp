@@ -946,3 +946,64 @@ export interface ResultadoRevalidacion {
   errores: number;
   ordenes: RevalidacionOrden[];
 }
+
+// --- Bandejas de trabajo (GET /api/work/inbox | workshop) -------------------
+
+/** TAREAS: lo que el usuario resuelve; SEGUIMIENTO: para tener a la vista. */
+export type TipoBandeja = "TAREAS" | "SEGUIMIENTO";
+
+/** Un trabajo vigente de la Orden en una bandeja (los cancelados no vienen). */
+export interface TrabajoBandeja {
+  detalle_id: string;
+  nombre: string;
+  estado: string;
+  trabajable: boolean;
+  pendiente_autorizacion: boolean;
+  condicion: string;
+  en_curso: boolean;
+  /** Insumos que hoy no alcanzan, si está bloqueado por recursos. */
+  faltantes: string[];
+}
+
+/** Una Orden en una bandeja y por qué está ahí (lo calcula el backend). */
+export interface ItemBandeja {
+  orden: OrdenResumen;
+  falla: string;
+  /** Lo que hay que hacer en esta bandeja. */
+  tarea: string | null;
+  responsable: string | null;
+  /** El usuario elegido puede ejecutar la acción que la resuelve. */
+  puede_resolver: boolean;
+  /** Desde cuándo está en esta situación (o tomada), si se conoce. */
+  desde: string | null;
+  /** Los demás pendientes de la Orden (estados mixtos). */
+  condiciones: string[];
+  trabajos: TrabajoBandeja[];
+  estacion_id: string | null;
+  tomada_desde: string | null;
+  trabajo_en_curso: string | null;
+  en_curso_desde: string | null;
+  credito: string;
+  /** Solo en la cola: estaciones que pueden tomarla. */
+  estaciones: { id: string; nombre: string }[];
+  puede_tomar: boolean;
+}
+
+export interface Bandeja {
+  codigo: string;
+  titulo: string;
+  descripcion: string;
+  tipo: TipoBandeja;
+  /** Exactamente lo que lista: órdenes o insumos. */
+  cantidad: number;
+  /** Pantalla donde también se resuelve. */
+  destino: "INVENTARIO" | null;
+  ordenes: ItemBandeja[];
+  insumos: SituacionInsumo[];
+}
+
+export interface Bandejas {
+  usuario_id: string;
+  rol: RolUsuario;
+  bandejas: Bandeja[];
+}

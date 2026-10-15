@@ -18,9 +18,11 @@ import { elegirUsuarioDemo } from "../src/features/ordenes-reparacion/usuarioDem
 describe("rutas", () => {
   test("cada pantalla tiene su URL y se lee de vuelta", () => {
     const rutas: [Ruta, string][] = [
+      [{ pantalla: "inicio" }, "#/inicio"],
       [{ pantalla: "ordenes" }, "#/ordenes"],
       [{ pantalla: "nueva" }, "#/ordenes/nueva"],
       [{ pantalla: "orden", ordenId: "OR-000001" }, "#/ordenes/OR-000001"],
+      [{ pantalla: "taller" }, "#/taller"],
       [{ pantalla: "inventario" }, "#/inventario"],
     ];
     for (const [ruta, hash] of rutas) {
@@ -30,9 +32,9 @@ describe("rutas", () => {
     }
   });
 
-  test("lo vacío o desconocido va al listado", () => {
+  test("lo vacío o desconocido va al inicio", () => {
     for (const hash of ["", "#", "#/", "#/otra", "#/ordenes/a/b", "#/inventario/x"]) {
-      assert.deepEqual(parsearRuta(hash), { pantalla: "ordenes" }, hash);
+      assert.deepEqual(parsearRuta(hash), { pantalla: "inicio" }, hash);
     }
   });
 

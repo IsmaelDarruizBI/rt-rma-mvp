@@ -27,6 +27,7 @@ import { createPortal } from "react-dom";
 
 import { colores } from "../../components/ui";
 import type { Accion, Orden, Usuario } from "../../types/api";
+import { puedeEjecutar } from "./permisos";
 
 /** Acciones excepcionales: van plegadas, aparte del flujo normal. */
 export const CODIGOS_ESPECIALES = new Set([
@@ -61,18 +62,8 @@ export function claveDeAccion(accion: Accion): string {
   ].join("|");
 }
 
-/**
- * Lo mismo que valida el backend, para no ofrecer lo que va a rechazar:
- * rol (salvo un paso de sistema o sin rol definido) y titular de la toma.
- */
-export function puedeEjecutar(accion: Accion, actor: Usuario | null): boolean {
-  if (!accion.requiere_actor) return true;
-  if (actor === null) return false;
-  if (accion.roles.length > 0 && !accion.roles.includes(actor.rol)) {
-    return false;
-  }
-  return accion.usuario_id === null || accion.usuario_id === actor.id;
-}
+// La regla vive en `permisos.ts` (pura, con tests); se reexporta acá.
+export { puedeEjecutar };
 
 /** Todas las acciones que la Orden publica, de todos sus grupos. */
 export function accionesDeLaOrden(orden: Orden): Accion[] {

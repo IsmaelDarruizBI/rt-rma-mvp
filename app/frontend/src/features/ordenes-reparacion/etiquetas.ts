@@ -216,10 +216,15 @@ const TODAS_LAS_ETIQUETAS: Record<string, string> = {
 /**
  * Un mensaje del backend sin códigos técnicos: cada «PROC-REP-120» se
  * reemplaza por el nombre del paso (si la Orden lo conoce) y se quitan
- * las referencias a reglas o escenarios entre paréntesis. El texto
- * original se conserva aparte, como detalle técnico.
+ * las referencias a reglas o escenarios entre paréntesis. Los IDs de
+ * usuarios y estaciones conocidos (`nombres`) se dicen por su nombre. El
+ * texto original se conserva aparte, como detalle técnico.
  */
-export function mensajeLegible(texto: string, orden: Orden | null): string {
+export function mensajeLegible(
+  texto: string,
+  orden: Orden | null,
+  nombres: Record<string, string> = {},
+): string {
   const pasos = new Map(
     (orden?.progreso ?? []).map((paso) => [paso.process_id, paso.etiqueta]),
   );
@@ -232,6 +237,7 @@ export function mensajeLegible(texto: string, orden: Orden | null): string {
       const etiquetaPaso = pasos.get(codigo);
       return etiquetaPaso ? `«${etiquetaPaso}»` : "un paso del proceso";
     })
+    .replace(/\b[A-Z]+-\d{3}\b/g, (id) => nombres[id] ?? id)
     .replace(/\b[A-Z]+(?:_[A-Z]+)+\b|\b[A-Z]{6,}\b/g, (palabra) =>
       TODAS_LAS_ETIQUETAS[palabra]
         ? `«${TODAS_LAS_ETIQUETAS[palabra]}»`

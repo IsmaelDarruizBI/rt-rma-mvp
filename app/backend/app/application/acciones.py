@@ -31,6 +31,7 @@ from app.domain.models import (
     EstadoWorkflow,
     OrdenReparacion,
     RolUsuario,
+    Usuario,
 )
 from app.domain.politicas import CondicionComercial, politica_de
 from app.services import (
@@ -166,6 +167,24 @@ class AccionDisponible:
     usuario_id: str | None = None
     pago_id: str | None = None
     bloqueo: str | None = None
+
+
+def puede_ejecutar(accion: AccionDisponible, usuario: Usuario) -> bool:
+    """Si la accion le corresponde a ese usuario: activo, rol y titular.
+
+    Lo mismo que exigen los services (``validar_actor``,
+    ``validar_alguno_de``, ``validar_titular_de_la_toma``) y que lee la
+    pantalla para ofrecer un formulario (``puedeEjecutar`` del frontend).
+    No autoriza nada: el service valida igual al recibir el comando. Un
+    paso de sistema no tiene actor: lo dispara cualquiera.
+    """
+    if not accion.requiere_actor:
+        return True
+    if not usuario.activo:
+        return False
+    if accion.roles and usuario.rol not in accion.roles:
+        return False
+    return accion.usuario_id is None or accion.usuario_id == usuario.id
 
 
 def detalle_trabajable(orden: OrdenReparacion) -> str | None:

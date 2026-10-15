@@ -8,14 +8,17 @@
  */
 
 export type Ruta =
+  | { pantalla: "inicio" }
   | { pantalla: "ordenes" }
   | { pantalla: "nueva" }
   | { pantalla: "orden"; ordenId: string }
+  | { pantalla: "taller" }
   | { pantalla: "inventario" };
 
-export const RUTA_INICIAL: Ruta = { pantalla: "ordenes" };
+/** Al entrar: las tareas del usuario. */
+export const RUTA_INICIAL: Ruta = { pantalla: "inicio" };
 
-/** `#/ordenes/OR-000001` -> la ruta; lo desconocido va al listado. */
+/** `#/ordenes/OR-000001` -> la ruta; lo desconocido va al inicio. */
 export function parsearRuta(hash: string): Ruta {
   const partes = hash
     .replace(/^#/, "")
@@ -29,8 +32,10 @@ export function parsearRuta(hash: string): Ruta {
         return parte;
       }
     });
-  if (partes[0] === "inventario" && partes.length === 1) {
-    return { pantalla: "inventario" };
+  if (partes.length === 1) {
+    if (partes[0] === "inicio") return { pantalla: "inicio" };
+    if (partes[0] === "taller") return { pantalla: "taller" };
+    if (partes[0] === "inventario") return { pantalla: "inventario" };
   }
   if (partes[0] === "ordenes") {
     if (partes.length === 1) return { pantalla: "ordenes" };
@@ -47,14 +52,18 @@ export function parsearRuta(hash: string): Ruta {
 /** La ruta como hash, lista para un `href` o `location.hash`. */
 export function hashDe(ruta: Ruta): string {
   switch (ruta.pantalla) {
+    case "inicio":
+      return "#/inicio";
+    case "ordenes":
+      return "#/ordenes";
+    case "taller":
+      return "#/taller";
     case "nueva":
       return "#/ordenes/nueva";
     case "orden":
       return `#/ordenes/${encodeURIComponent(ruta.ordenId)}`;
     case "inventario":
       return "#/inventario";
-    default:
-      return "#/ordenes";
   }
 }
 
