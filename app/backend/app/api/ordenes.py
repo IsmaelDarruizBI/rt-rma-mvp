@@ -69,6 +69,7 @@ from app.application import (
     requerir_redefinicion_ejecucion,
     revalidar_recursos,
     revisar_detalle,
+    situacion_operativa,
     tomar_orden_en_estacion,
     vista_previa_documento,
 )
@@ -140,17 +141,30 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
     conocer ningun ID de insumo. Lo mismo con los Detalles origen de una
     garantia RMA: su Tipo se lee de la Orden origen.
     """
+    acciones = acciones_disponibles(orden)
+    nombres = nombres_de_tipo_por_detalle(contexto, orden)
+    autorizacion = acciones_de_autorizacion(orden)
+    financieras = acciones_financieras(orden)
+    custodia = acciones_de_custodia(orden)
     return OrdenOut.desde_dominio(
         orden,
         progreso=progreso(orden),
-        acciones=acciones_disponibles(orden),
+        acciones=acciones,
         insumos_previstos=insumos_previstos_por_detalle(contexto, orden),
-        nombres_de_tipo=nombres_de_tipo_por_detalle(contexto, orden),
+        nombres_de_tipo=nombres,
         detalles_origen=detalles_origen_de(contexto, orden),
         acciones_cancelacion=acciones_de_cancelacion(orden),
-        acciones_autorizacion=acciones_de_autorizacion(orden),
-        acciones_financieras=acciones_financieras(orden),
-        acciones_custodia=acciones_de_custodia(orden),
+        acciones_autorizacion=autorizacion,
+        acciones_financieras=financieras,
+        acciones_custodia=custodia,
+        situacion=situacion_operativa(
+            orden,
+            acciones=acciones,
+            acciones_autorizacion=autorizacion,
+            acciones_financieras=financieras,
+            acciones_custodia=custodia,
+            nombres_de_detalle=nombres,
+        ),
     )
 
 

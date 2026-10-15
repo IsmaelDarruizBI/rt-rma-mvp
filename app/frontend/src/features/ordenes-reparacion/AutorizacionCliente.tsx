@@ -18,7 +18,6 @@ import {
   Boton,
   Campo,
   Etiqueta,
-  Panel,
   colores,
   estiloInput,
   fechaCorta,
@@ -37,6 +36,7 @@ import type {
   Usuario,
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
+import { TituloAccion, UbicacionAccion } from "./presentacion";
 
 type Eleccion = ResultadoAutorizacion | "PENDIENTE";
 
@@ -112,35 +112,45 @@ export function AutorizacionClienteOrden({
     candidata.codigo.startsWith("DESISTIR_"),
   );
   return (
-    <Panel titulo="Autorización del cliente">
-      <TablaAutorizaciones orden={orden} usuarios={usuarios} />
+    <div>
       {accion ? (
-        <FormularioDecision
-          key={orden.updated_at}
-          orden={orden}
-          actor={actor}
-          rolesPermitidos={accion.roles}
-          ocupado={ocupado}
-          onRegistrar={onRegistrar}
-        />
+        <UbicacionAccion accion={accion}>
+          <FormularioDecision
+            key={orden.updated_at}
+            orden={orden}
+            actor={actor}
+            rolesPermitidos={accion.roles}
+            ocupado={ocupado}
+            onRegistrar={onRegistrar}
+          />
+        </UbicacionAccion>
       ) : (
-        <p style={{ margin: "0.6rem 0 0", fontSize: "0.85rem", color: colores.suave }}>
-          {hayPendientes(orden)
-            ? "La decisión se registra una vez finalizada la definición de los Detalles."
-            : "No hay Detalles esperando la decisión del cliente."}
-        </p>
+        hayPendientes(orden) && (
+          <p style={{ margin: "0.6rem 0 0", fontSize: "0.85rem", color: colores.suave }}>
+            La decisión del cliente se registra al finalizar la definición de
+            los trabajos.
+          </p>
+        )
       )}
       {desistimientos.length > 0 && (
-        <FormularioDesistimiento
-          key={`desistir-${orden.updated_at}`}
-          orden={orden}
-          actor={actor}
-          acciones={desistimientos}
-          ocupado={ocupado}
-          onDesistir={onDesistir}
-        />
+        <UbicacionAccion accion={desistimientos[0]}>
+          <FormularioDesistimiento
+            key={`desistir-${orden.updated_at}`}
+            orden={orden}
+            actor={actor}
+            acciones={desistimientos}
+            ocupado={ocupado}
+            onDesistir={onDesistir}
+          />
+        </UbicacionAccion>
       )}
-    </Panel>
+      <details style={{ marginTop: "0.8rem", fontSize: "0.85rem" }}>
+        <summary style={{ cursor: "pointer", color: colores.suave }}>
+          Ver todas las decisiones del cliente
+        </summary>
+        <TablaAutorizaciones orden={orden} usuarios={usuarios} />
+      </details>
+    </div>
   );
 }
 
@@ -528,9 +538,7 @@ function FormularioDecision({
 
   return (
     <div style={{ marginTop: "0.9rem" }}>
-      <p style={{ margin: "0 0 0.5rem", fontWeight: 600 }}>
-        Registrar la decisión del cliente
-      </p>
+      <TituloAccion>Registrar la decisión del cliente</TituloAccion>
       {!rolHabilitado && (
         <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.alerta }}>
           Requiere el rol {rolesPermitidos.join(" o ")}. Cambiá el actor demo
@@ -549,8 +557,7 @@ function FormularioDecision({
           }}
         >
           <legend style={{ fontSize: "0.8rem", padding: "0 0.25rem" }}>
-            {detalle.id} · {detalle.tipo_reparacion_nombre} ·{" "}
-            {importe(detalle.precio)} · v{detalle.version_definicion}
+            {detalle.tipo_reparacion_nombre} · {importe(detalle.precio)}
           </legend>
           <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
             {ELECCIONES.map((opcion) => (
@@ -623,7 +630,7 @@ function FormularioDecision({
         />
       </Campo>
       <p style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: colores.suave }}>
-        Se registra con {actor ? `${actor.nombre} (${actor.id})` : "el actor demo"}{" "}
+        Se registra con {actor ? actor.nombre : "el usuario actual"}{" "}
         y la fecha y hora actuales. Un Detalle rechazado se cancela (no se
         cobra); los que quedan pendientes no se ejecutan, pero no frenan a
         los autorizados.

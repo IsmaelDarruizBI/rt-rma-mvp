@@ -33,6 +33,7 @@ from app.application import (
     PendienteAutorizacion,
     SituacionAutorizacion,
     SituacionFinanciera,
+    SituacionOperativa,
     movimientos_financieros,
     situacion_autorizacion,
     situacion_financiera,
@@ -1162,6 +1163,91 @@ class AccionOut(BaseModel):
         )
 
 
+class TareaOut(BaseModel):
+    """Algo que hay que hacer ahora y las acciones que lo resuelven."""
+
+    titulo: str
+    motivo: str
+    responsable: str
+    acciones: list[AccionOut]
+
+
+class AvisoOut(BaseModel):
+    """Un bloqueo secundario de la Orden (estado mixto)."""
+
+    codigo: str
+    titulo: str
+    responsable: str | None = None
+    acciones: list[AccionOut] = Field(default_factory=list)
+
+
+class EtapaOut(BaseModel):
+    """Una de las seis etapas del negocio y su estado."""
+
+    codigo: str
+    titulo: str
+    estado: str
+    detalle: str | None = None
+
+
+class SituacionOut(BaseModel):
+    """Situacion operativa: que pasa, a quien le toca, que sigue.
+
+    Solo lectura, para la pantalla (``application.situacion``): no cambia
+    estados ni habilita nada. Las acciones de cada tarea son las mismas
+    que la Orden ya publica en sus grupos de acciones.
+    """
+
+    codigo: str
+    titulo: str
+    descripcion: str
+    responsable: str | None = None
+    desde: datetime | None = None
+    tareas: list[TareaOut] = Field(default_factory=list)
+    avisos: list[AvisoOut] = Field(default_factory=list)
+    etapas: list[EtapaOut] = Field(default_factory=list)
+
+    @classmethod
+    def desde_aplicacion(cls, situacion: SituacionOperativa) -> "SituacionOut":
+        def acciones(grupo):
+            return [AccionOut.desde_dominio(accion) for accion in grupo]
+
+        return cls(
+            codigo=situacion.codigo,
+            titulo=situacion.titulo,
+            descripcion=situacion.descripcion,
+            responsable=situacion.responsable,
+            desde=situacion.desde,
+            tareas=[
+                TareaOut(
+                    titulo=tarea.titulo,
+                    motivo=tarea.motivo,
+                    responsable=tarea.responsable,
+                    acciones=acciones(tarea.acciones),
+                )
+                for tarea in situacion.tareas
+            ],
+            avisos=[
+                AvisoOut(
+                    codigo=aviso.codigo,
+                    titulo=aviso.titulo,
+                    responsable=aviso.responsable,
+                    acciones=acciones(aviso.acciones),
+                )
+                for aviso in situacion.avisos
+            ],
+            etapas=[
+                EtapaOut(
+                    codigo=etapa.codigo,
+                    titulo=etapa.titulo,
+                    estado=etapa.estado,
+                    detalle=etapa.detalle,
+                )
+                for etapa in situacion.etapas
+            ],
+        )
+
+
 def _nombre_para_listado(orden: OrdenReparacion) -> str:
     """Identificacion legible de la Orden para el listado.
 
@@ -1391,6 +1477,8 @@ class OrdenOut(BaseModel):
     # Orden CANCELADA abierta: que falta para cerrarla (custodia, devolucion
     # fisica, saldo a favor). Vacio en los demas casos.
     pendientes_de_cierre: list[str] = Field(default_factory=list)
+    # Situacion operativa para la pantalla (solo lectura).
+    situacion: SituacionOut | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -1409,6 +1497,7 @@ class OrdenOut(BaseModel):
         acciones_autorizacion: Sequence[AccionDisponible] = (),
         acciones_financieras: Sequence[AccionDisponible] = (),
         acciones_custodia: Sequence[AccionDisponible] = (),
+        situacion: SituacionOperativa | None = None,
     ) -> "OrdenOut":
         vigentes = _vigentes(orden)
         return cls(
@@ -1526,6 +1615,11 @@ class OrdenOut(BaseModel):
                 AccionOut.desde_dominio(accion) for accion in acciones_custodia
             ],
             pendientes_de_cierre=pendientes_para_cerrar(orden),
+            situacion=(
+                SituacionOut.desde_aplicacion(situacion)
+                if situacion is not None
+                else None
+            ),
             created_at=orden.created_at,
             updated_at=orden.updated_at,
         )

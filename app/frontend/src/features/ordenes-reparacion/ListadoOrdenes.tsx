@@ -20,6 +20,7 @@ import {
 } from "../../components/ui";
 import type { OrdenResumen, Usuario } from "../../types/api";
 import type { DatosNuevaOrden, DatosNuevaOrdenRt } from "../../api/ordenes";
+import { ESTADO_WORKFLOW, ROL, etiqueta } from "./etiquetas";
 
 export function ListadoOrdenes({
   ordenes,
@@ -87,7 +88,9 @@ export function ListadoOrdenes({
                 )}
               </span>
               <span style={{ textAlign: "right" }}>
-                <Etiqueta>{orden.estado_workflow}</Etiqueta>
+                <Etiqueta>
+                  {etiqueta(ESTADO_WORKFLOW, orden.estado_workflow)}
+                </Etiqueta>
                 <span
                   style={{
                     display: "block",
@@ -96,7 +99,9 @@ export function ListadoOrdenes({
                     marginTop: "0.2rem",
                   }}
                 >
-                  saldo {importe(orden.saldo)}
+                  {orden.origen === "CLIENTE_EXTERNO"
+                    ? `saldo ${importe(orden.saldo)}`
+                    : "no se cobra"}
                 </span>
               </span>
             </button>
@@ -313,7 +318,7 @@ export function FormularioNuevaOrden({
             color: colores.alerta,
           }}
         >
-          Requiere el rol RECEPCION. Cambiá el actor demo para crearla.
+          La crea Recepción: elegí ese usuario arriba para cargarla.
         </p>
       )}
       <Campo etiqueta="Cliente">
@@ -405,7 +410,7 @@ export function FormularioNuevaOrdenRt({
             color: colores.alerta,
           }}
         >
-          Requiere el rol RECEPCION. Cambiá el actor demo para crearla.
+          La crea Recepción: elegí ese usuario arriba para cargarla.
         </p>
       )}
       <Campo etiqueta="Referencia de Gestión RT">
@@ -471,18 +476,25 @@ export function SelectorActor({
   onCambiar: (usuarioId: string) => void;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+        maxWidth: "100%",
+      }}
+    >
       <span style={{ fontSize: "0.8rem", color: colores.suave }}>
-        Actor demo
+        Usuario (demo)
       </span>
       <select
         value={actorId}
         onChange={(evento) => onCambiar(evento.target.value)}
-        style={{ ...estiloInput, width: "auto" }}
+        style={{ ...estiloInput, width: "auto", maxWidth: "100%" }}
       >
         {usuarios.map((usuario) => (
           <option key={usuario.id} value={usuario.id}>
-            {usuario.nombre} ({usuario.rol})
+            {usuario.nombre} · {ROL[usuario.rol] ?? usuario.rol}
           </option>
         ))}
       </select>

@@ -15,7 +15,6 @@ import type { DatosRetiro } from "../../api/ordenes";
 import {
   Boton,
   Campo,
-  Panel,
   colores,
   estiloInput,
   importe,
@@ -31,9 +30,9 @@ import type {
   TipoReparacion,
   Usuario,
 } from "../../types/api";
-import { PendientesDeCierre } from "./CustodiaOrden";
-import { nombreDeUsuario } from "./DetalleOrden";
+import { nombreAccion, nombreTrabajo } from "./etiquetas";
 import { Confirmacion } from "./PagosOrden";
+import { TituloAccion, UbicacionAccion } from "./presentacion";
 
 export interface EjecutorAcciones {
   agregarDetalle: (tipoReparacionId: string) => void;
@@ -101,285 +100,83 @@ interface Props {
 }
 
 /**
- * E1: una Orden cerrada solo se consulta. El backend ya no ofrece
- * acciones operativas (solo iniciar una garantía RMA, que crea OTRA Orden)
- * y las rechaza igual si llegan; esto solo lo explica.
+ * Las acciones del flujo que la Orden admite ahora (`acciones_disponibles`).
+ *
+ * La lista la manda el backend. Cada formulario se ubica solo: el de la
+ * tarea pendiente va a «Próximo paso», el excepcional a «Otras acciones»
+ * y el resto queda acá. Registrar un pago vive en «Cobros», con el saldo
+ * y los medios de pago.
  */
-function AvisoOrdenCerrada({ orden }: { orden: Orden }) {
-  const situacion =
-    orden.estado_workflow === "ENTREGADA"
-      ? "fue entregada"
-      : orden.estado_workflow === "CANCELADA"
-        ? orden.devolucion
-          ? `fue cancelada y el equipo se devolvió a ${orden.devolucion.recibido_por}`
-          : orden.custodia.estado === "NO_RECIBIDO"
-            ? "fue cancelada (se registró que el equipo nunca ingresó)"
-            : "fue cancelada sin devolución física registrada"
-        : "fue devuelta a Gestión RT";
-  return (
-    <p
-      role="status"
-      style={{
-        margin: "0 0 0.75rem",
-        padding: "0.6rem 0.8rem",
-        borderRadius: 6,
-        border: `1px solid ${colores.ok}`,
-        background: "#f3faf4",
-        color: colores.texto,
-        fontSize: "0.85rem",
-      }}
-    >
-      <strong>Orden cerrada:</strong> {situacion}. Se puede consultar, pero
-      no admite acciones operativas.
-    </p>
+export function AccionesOrden(props: Props) {
+  const acciones = props.orden.acciones_disponibles.filter(
+    (accion) => accion.codigo !== "REGISTRAR_PAGO",
   );
-}
-
-export function AccionesOrden({
-  orden,
-  actor,
-  usuarios,
-  tipos,
-  estaciones,
-  ocupado,
-  ejecutar,
-}: Props) {
-  const acciones = orden.acciones_disponibles;
-
-  if (acciones.length === 0) {
-    return (
-      <Panel titulo="Acción disponible">
-        {orden.cerrada ? (
-          <AvisoOrdenCerrada orden={orden} />
-        ) : orden.pendientes_de_cierre.length > 0 ? (
-          <PendientesDeCierre orden={orden} />
-        ) : (
-          <p style={{ margin: 0, color: colores.suave, fontSize: "0.9rem" }}>
-            No hay acciones disponibles para el estado actual.
-          </p>
-        )}
-      </Panel>
-    );
-  }
-
-  const renderizar = (accion: Accion) => (
-    <AccionUnica
-      key={accion.codigo + (accion.detalle_id ?? "")}
-      accion={accion}
-      actor={actor}
-      usuarios={usuarios}
-      orden={orden}
-      tipos={tipos}
-      estaciones={estaciones}
-      ocupado={ocupado}
-      ejecutar={ejecutar}
-    />
-  );
-
   return (
-    <Panel titulo="Acción disponible">
-      {orden.cerrada && <AvisoOrdenCerrada orden={orden} />}
-      {orden.devolucion_pendiente && (
-        <p
-          role="status"
-          style={{
-            margin: "0 0 0.75rem",
-            padding: "0.6rem 0.8rem",
-            borderRadius: 6,
-            border: `1px solid ${colores.alerta}`,
-            background: "#fff8e6",
-            fontSize: "0.85rem",
-          }}
-        >
-          <strong>Orden cancelada:</strong> el equipo sigue en custodia.
-          Registrá su devolución para cerrar la Orden (sin cobro).
-        </p>
-      )}
-      {agruparEnPares(acciones).map((grupo) =>
-        grupo.length === 1 ? (
-          renderizar(grupo[0])
-        ) : (
-          <div
-            key={grupo.map((accion) => accion.codigo).join("|")}
-            style={{
-              display: "grid",
-              columnGap: "1rem",
-              // Lado a lado en escritorio; apiladas en pantallas angostas.
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
-            }}
-          >
-            {grupo.map(renderizar)}
-          </div>
-        ),
-      )}
-    </Panel>
+    <>
+      {acciones.map((accion) => (
+        <AccionUnica
+          key={accion.codigo + (accion.detalle_id ?? "")}
+          accion={accion}
+          {...props}
+        />
+      ))}
+    </>
   );
 }
 
 /**
  * Cancelaciones de la Orden (PROC-REP-300/305/306), aparte de la acción del
  * flujo: son capacidades excepcionales, posibles en casi cualquier etapa.
- * Las publica el backend en `acciones_cancelacion`; acá solo se muestran,
- * con las mismas reglas de rol que el resto. Cancelar la Orden completa
- * pide confirmación.
+ * Las publica el backend en `acciones_cancelacion`; van a «Otras acciones».
+ * Cancelar la Orden completa pide confirmación.
  */
-export function CancelacionesOrden({
-  orden,
-  actor,
-  usuarios,
-  tipos,
-  estaciones,
-  ocupado,
-  ejecutar,
-}: Props) {
-  if (orden.acciones_cancelacion.length === 0) return null;
+export function CancelacionesOrden(props: Props) {
   return (
-    <Panel titulo="Cancelaciones">
-      <p
-        style={{
-          margin: "0 0 0.75rem",
-          fontSize: "0.8rem",
-          color: colores.suave,
-        }}
-      >
-        Cancelar no borra nada: el Detalle queda CANCELADO con su motivo y
-        deja de cobrarse. Lo ya realizado no se cancela.
-      </p>
-      {orden.acciones_cancelacion.map((accion) => (
+    <>
+      {props.orden.acciones_cancelacion.map((accion) => (
         <AccionUnica
           key={accion.codigo + (accion.detalle_id ?? "")}
           accion={accion}
-          actor={actor}
-          usuarios={usuarios}
-          orden={orden}
-          tipos={tipos}
-          estaciones={estaciones}
-          ocupado={ocupado}
-          ejecutar={ejecutar}
+          {...props}
         />
       ))}
-    </Panel>
+    </>
   );
 }
 
 /**
- * Pares que se muestran juntos porque son las dos salidas de lo MISMO:
- * Completar e Interrumpir de una Ejecución (PROC-REP-200), y Aprobar o
- * Rechazar el control de un Detalle (PROC-REP-220/230). Es solo
- * presentación: qué acciones existen lo sigue decidiendo el backend.
+ * Una acción con su formulario. Si el usuario actual no puede ejecutarla
+ * (rol o titular de la toma) no se dibuja: «Próximo paso» dice a quién le
+ * toca. Ocultarla es comodidad, no seguridad: el backend valida igual.
  */
-const PARES: [Set<string>, (accion: Accion) => string | null][] = [
-  [
-    new Set(["COMPLETAR_EJECUCION", "INTERRUMPIR_EJECUCION"]),
-    (accion) => accion.ejecucion_id,
-  ],
-  [
-    new Set(["APROBAR_CONTROL", "RECHAZAR_CONTROL"]),
-    (accion) => accion.detalle_id,
-  ],
-];
-
-function emparejan(anterior: Accion, accion: Accion): boolean {
-  return PARES.some(
-    ([codigos, clave]) =>
-      codigos.has(anterior.codigo) &&
-      codigos.has(accion.codigo) &&
-      anterior.codigo !== accion.codigo &&
-      clave(anterior) === clave(accion),
-  );
-}
-
-function agruparEnPares(acciones: Accion[]): Accion[][] {
-  const grupos: Accion[][] = [];
-  for (const accion of acciones) {
-    const anterior = grupos[grupos.length - 1];
-    const empareja =
-      anterior !== undefined &&
-      anterior.length === 1 &&
-      emparejan(anterior[0], accion);
-    if (empareja) {
-      anterior.push(accion);
-    } else {
-      grupos.push([accion]);
-    }
-  }
-  return grupos;
-}
-
 function AccionUnica({
   accion,
-  actor,
-  usuarios,
   orden,
   tipos,
   estaciones,
   ocupado,
   ejecutar,
 }: Props & { accion: Accion }) {
-  // El backend manda TODOS los roles autorizados: un nodo puede declarar
-  // actores_alternativos. Vacio = el negocio no definio rol (Registrar
-  // Pago, BR-REP-017). Ocultar el boton es UX; la autoridad es el backend.
-  //
-  // requiere_actor: false marca un nodo actor: ACT-SYSTEM (p. ej.
-  // Informar a Gestión RT): no hay ningún actor humano que elegir, así
-  // que ni la habilitación ni el mensaje de rol dependen del actor demo.
-  const rolHabilitado =
-    !accion.requiere_actor ||
-    (actor !== null &&
-      (accion.roles.length === 0 || accion.roles.includes(actor.rol)));
-  // E2: las acciones técnicas sobre la toma son solo de su titular.
-  const titularAjeno =
-    accion.usuario_id !== null &&
-    actor !== null &&
-    accion.usuario_id !== actor.id;
-  const habilitada = rolHabilitado && !titularAjeno;
-
   return (
-    <div
-      style={{
-        marginBottom: "0.9rem",
-        paddingBottom: "0.9rem",
-        borderBottom: `1px solid ${colores.borde}`,
-      }}
-    >
-      <p style={{ margin: "0 0 0.5rem", fontWeight: 600 }}>
-        {accion.etiqueta}
-      </p>
-      {!rolHabilitado && accion.requiere_actor && (
-        <p
-          style={{
-            margin: "0 0 0.5rem",
-            fontSize: "0.8rem",
-            color: colores.alerta,
-          }}
-        >
-          Requiere el rol {accion.roles.join(" o ") || "—"}. Cambiá el
-          actor demo para ejecutarla.
-        </p>
-      )}
-      {rolHabilitado && titularAjeno && (
-        <p
-          style={{
-            margin: "0 0 0.5rem",
-            fontSize: "0.8rem",
-            color: colores.alerta,
-          }}
-        >
-          Orden tomada por otro técnico:{" "}
-          {nombreDeUsuario(usuarios, accion.usuario_id)}. Solo el titular de
-          la toma puede operarla.
-        </p>
-      )}
-      <FormularioAccion
-        accion={accion}
-        orden={orden}
-        tipos={tipos}
-        estaciones={estaciones}
-        deshabilitado={!habilitada || ocupado}
-        ejecutar={ejecutar}
-      />
-    </div>
+    <UbicacionAccion accion={accion}>
+      <div
+        style={{
+          marginBottom: "0.9rem",
+          paddingBottom: "0.9rem",
+          borderBottom: `1px solid ${colores.borde}`,
+        }}
+      >
+        <TituloAccion>{nombreAccion(orden, accion)}</TituloAccion>
+        <FormularioAccion
+          accion={accion}
+          orden={orden}
+          tipos={tipos}
+          estaciones={estaciones}
+          deshabilitado={ocupado}
+          ejecutar={ejecutar}
+        />
+      </div>
+    </UbicacionAccion>
   );
 }
 
@@ -422,7 +219,7 @@ function FormularioAccion({
     case "ESPERAR_RECURSOS":
       return (
         <Boton disabled={deshabilitado} onClick={ejecutar.esperarRecursos}>
-          Esperar recursos (no forzar el Detalle)
+          Dejar esperando repuestos (sin forzar el trabajo)
         </Boton>
       );
 
@@ -440,7 +237,7 @@ function FormularioAccion({
     case "REVALIDAR_RECURSOS":
       return (
         <Boton disabled={deshabilitado} onClick={ejecutar.revalidarRecursos}>
-          Revalidar disponibilidad de recursos
+          Revalidar la disponibilidad de repuestos
         </Boton>
       );
 
@@ -516,7 +313,7 @@ function FormularioAccion({
             >
               <strong>{accion.bloqueo}.</strong>
               {accion.bloqueo.startsWith("Debe confirmarse") && (
-                <> Confirmala desde <strong>Recepción y custodia</strong> en esta Orden.</>
+                <> La confirma Recepción, desde «Cliente y equipo».</>
               )}
             </p>
           )}
@@ -589,9 +386,10 @@ function FormularioAccion({
       return (
         <FormularioResultadoRevision
           deshabilitado={deshabilitado || !accion.detalle_id}
-          textoBoton={`Realizar revisión técnica del Detalle ${
-            accion.detalle_id ?? ""
-          }`}
+          textoBoton={`Registrar la revisión de ${nombreTrabajo(
+            orden,
+            accion.detalle_id,
+          )}`}
           onConfirmar={(resultado) =>
             accion.detalle_id &&
             ejecutar.revisarDetalle(accion.detalle_id, resultado)
@@ -620,8 +418,8 @@ function FormularioAccion({
           deshabilitado={deshabilitado}
           textoBoton={
             accion.detalle_id
-              ? `Aprobar control del Detalle ${accion.detalle_id}`
-              : "Aprobar control"
+              ? `Aprobar ${nombreTrabajo(orden, accion.detalle_id)}`
+              : "Aprobar el control"
           }
           onConfirmar={(observaciones) =>
             ejecutar.aprobarControl(accion.detalle_id, observaciones)
@@ -639,17 +437,8 @@ function FormularioAccion({
     case "NOTIFICAR":
       return (
         <Boton disabled={deshabilitado} onClick={ejecutar.notificar}>
-          Notificar al cliente
+          Avisar al cliente
         </Boton>
-      );
-
-    case "REGISTRAR_PAGO":
-      // Los cobros, anulaciones y devoluciones viven en "Pagos y
-      // movimientos", con el catálogo de medios y el saldo a la vista.
-      return (
-        <p style={{ margin: 0, fontSize: "0.85rem", color: colores.suave }}>
-          Registrá el pago en <strong>Pagos y movimientos</strong>.
-        </p>
       );
 
     case "ENTREGAR":
@@ -689,7 +478,7 @@ function FormularioAccion({
         <FormularioMotivo
           deshabilitado={deshabilitado || accion.detalle_id === null}
           etiqueta="Motivo del rechazo (obligatorio)"
-          textoBoton={`Rechazar control del Detalle ${accion.detalle_id ?? ""}`}
+          textoBoton={`Rechazar ${nombreTrabajo(orden, accion.detalle_id)}`}
           onConfirmar={(motivo) =>
             accion.detalle_id &&
             ejecutar.rechazarControl(accion.detalle_id, motivo)
@@ -710,8 +499,8 @@ function FormularioAccion({
       return (
         <FormularioMotivo
           deshabilitado={deshabilitado || accion.detalle_id === null}
-          etiqueta={`Motivo de la cancelación de ${accion.detalle_id ?? ""} (obligatorio)`}
-          textoBoton={`Cancelar el Detalle ${accion.detalle_id ?? ""}`}
+          etiqueta="Motivo de la cancelación (obligatorio)"
+          textoBoton={`Cancelar ${nombreTrabajo(orden, accion.detalle_id)}`}
           onConfirmar={(motivo) =>
             accion.detalle_id &&
             ejecutar.cancelarDetalle(accion.detalle_id, motivo)
@@ -750,15 +539,15 @@ function mensajeCancelarOrden(orden: Orden): string {
     (detalle) => detalle.estado === "COMPLETO",
   ).length;
   if (orden.reparaciones_detail.length === 0) {
-    return `¿Cancelar la Orden ${orden.id}? No tiene Detalles: queda CANCELADA.`;
+    return `¿Cancelar la Orden ${orden.id}? No tiene trabajos: queda cancelada.`;
   }
   return (
     `¿Cancelar la Orden ${orden.id}? Se cancelan ${pendientes} trabajo(s) ` +
     "pendiente(s). " +
     (completos > 0
-      ? `Los ${completos} Detalle(s) ya realizados no se cancelan y siguen ` +
+      ? `Los ${completos} trabajo(s) ya realizados no se cancelan y siguen ` +
         "al control y la entrega."
-      : "Sin trabajo realizado, la Orden queda CANCELADA.")
+      : "Sin trabajo realizado, la Orden queda cancelada.")
   );
 }
 
@@ -1011,7 +800,7 @@ function FormularioAgregarDetalle({
   return (
     <div>
       {pideOrigen && (
-        <Campo etiqueta="Detalle origen de la garantía">
+        <Campo etiqueta="Trabajo original de la garantía">
           <select
             value={origenId}
             onChange={(evento) => setOrigenId(evento.target.value)}
@@ -1031,7 +820,7 @@ function FormularioAgregarDetalle({
           <Campo
             etiqueta={
               cantidadDetallesActual > 0
-                ? `Tipo de reparación (Detalle ${cantidadDetallesActual + 1})`
+                ? `Tipo de reparación (trabajo ${cantidadDetallesActual + 1})`
                 : "Tipo de reparación"
             }
           >
@@ -1054,7 +843,7 @@ function FormularioAgregarDetalle({
             disabled={deshabilitado || !tipoId || (pideOrigen && !origenId)}
             onClick={() => onConfirmar(tipoId, pideOrigen ? origenId : null)}
           >
-            Agregar Detalle
+            Agregar trabajo
           </Boton>
         </div>
       </div>
@@ -1305,17 +1094,17 @@ const MODOS_EJECUCION: Record<
   }
 > = {
   completar: {
-    textoBoton: "Completar ejecución",
+    textoBoton: "Registrar la reparación",
     cantidadInicial: (previsto) => previsto.cantidad_prevista,
     pideMotivo: false,
   },
   interrumpir: {
-    textoBoton: "Interrumpir ejecución",
+    textoBoton: "Interrumpir la reparación",
     cantidadInicial: () => "0",
     pideMotivo: false,
   },
   redefinir: {
-    textoBoton: "Requiere redefinición",
+    textoBoton: "Pedir la redefinición del trabajo",
     cantidadInicial: (previsto) => previsto.cantidad_prevista,
     pideMotivo: true,
   },
@@ -1507,7 +1296,7 @@ function FormularioMotivoOverride({
     <div>
       <ImpactoEnStock impacto={impacto} error={errorImpacto} />
       <Campo
-        etiqueta={`Motivo del override del Detalle ${detalleId ?? ""} (obligatorio)`}
+        etiqueta="Motivo para forzar el trabajo sin stock (obligatorio)"
       >
         <input
           value={motivo}
@@ -1544,7 +1333,7 @@ function FormularioMotivoOverride({
           detalleId !== null && listo && onConfirmar(detalleId, motivo.trim())
         }
       >
-        Forzar el Detalle (override)
+        Forzar el trabajo sin stock
       </Boton>
     </div>
   );

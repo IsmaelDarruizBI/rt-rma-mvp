@@ -736,10 +736,53 @@ export interface Orden {
   acciones_custodia: Accion[];
   /** Orden CANCELADA abierta: qué falta para cerrarla. */
   pendientes_de_cierre: string[];
+  /** Situación operativa para la pantalla (solo lectura). */
+  situacion: Situacion | null;
   created_at: string;
   updated_at: string;
   /** Solo lo devuelven notificar y registrar pago (PROC-REP-265). */
   puede_entregar?: boolean;
+}
+
+// --- Situación operativa (solo lectura) --------------------------------------
+
+/** Algo que hay que hacer ahora; sus acciones son las que la Orden publica. */
+export interface TareaSituacion {
+  titulo: string;
+  motivo: string;
+  responsable: string;
+  acciones: Accion[];
+}
+
+/** Un bloqueo secundario que la situación principal no oculta. */
+export interface AvisoSituacion {
+  codigo: string;
+  titulo: string;
+  responsable: string | null;
+  acciones: Accion[];
+}
+
+export type EstadoEtapa = "COMPLETA" | "EN_CURSO" | "PENDIENTE" | "NO_APLICA";
+
+/** Una de las seis etapas del negocio (no es un paso lineal). */
+export interface EtapaSituacion {
+  codigo: string;
+  titulo: string;
+  estado: EstadoEtapa;
+  detalle: string | null;
+}
+
+/** Qué pasa con la Orden, a quién le toca y qué sigue. */
+export interface Situacion {
+  codigo: string;
+  titulo: string;
+  descripcion: string;
+  responsable: string | null;
+  /** Desde cuándo, solo si el historial lo registra. */
+  desde: string | null;
+  tareas: TareaSituacion[];
+  avisos: AvisoSituacion[];
+  etapas: EtapaSituacion[];
 }
 
 export interface Catalogos {

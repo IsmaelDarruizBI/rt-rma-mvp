@@ -126,6 +126,15 @@ from .recursos import (
 )
 from .redefinicion import redefinir_detalle, revisar_detalle
 from .revision import realizar_revision
+from .situacion import (
+    AvisoOperativo,
+    CodigoSituacion,
+    EstadoEtapa,
+    EtapaOperativa,
+    SituacionOperativa,
+    TareaOperativa,
+    situacion_operativa,
+)
 from .taller import (
     completar_ejecucion,
     iniciar_detalle,
@@ -198,6 +207,13 @@ __all__ = [
     "esperar_recursos",
     "forzar_detalle_por_recursos",
     "revalidar_recursos",
+    "AvisoOperativo",
+    "CodigoSituacion",
+    "EstadoEtapa",
+    "EtapaOperativa",
+    "SituacionOperativa",
+    "TareaOperativa",
+    "situacion_operativa",
     "encolar_orden",
     "tomar_orden_en_estacion",
     "iniciar_detalle",

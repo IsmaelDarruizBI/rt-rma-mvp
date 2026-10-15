@@ -16,7 +16,6 @@ import {
   Boton,
   Campo,
   Etiqueta,
-  Panel,
   colores,
   estiloInput,
   fechaCorta,
@@ -120,7 +119,7 @@ export function DocumentosOrden({
   );
 
   return (
-    <Panel titulo="Documentos">
+    <div>
       {emitidos.length === 0 && sinCopia.length === 0 ? (
         <p style={{ margin: "0 0 0.6rem", fontSize: "0.85rem", color: colores.suave }}>
           Todavía no se emitió ningún documento.
@@ -213,7 +212,7 @@ export function DocumentosOrden({
       {visible && (
         <VisorDocumento visible={visible} onCerrar={() => setVisible(null)} />
       )}
-    </Panel>
+    </div>
   );
 }
 

@@ -15,7 +15,6 @@ import {
   Boton,
   Campo,
   Etiqueta,
-  Panel,
   colores,
   estiloInput,
   fechaCorta,
@@ -29,6 +28,8 @@ import type {
   Usuario,
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
+import { ESTADO_PAGO, etiqueta } from "./etiquetas";
+import { TituloAccion, UbicacionAccion } from "./presentacion";
 
 interface Props {
   orden: Orden;
@@ -107,8 +108,7 @@ export function PagosYMovimientos(props: Props) {
           : "Saldo pendiente",
       importe(saldo < 0 ? resumen.credito_a_favor : resumen.saldo),
     ],
-    ["Estado de pago", resumen.estado_pago],
-    ["Puntaje", String(resumen.puntaje_total)],
+    ["Estado de pago", etiqueta(ESTADO_PAGO, resumen.estado_pago)],
   ];
   const aviso = AVISO[resumen.situacion_financiera];
   const acciones = orden.acciones_financieras;
@@ -119,7 +119,7 @@ export function PagosYMovimientos(props: Props) {
   const anulaciones = acciones.filter((a) => a.codigo === "ANULAR_PAGO");
 
   return (
-    <Panel titulo="Pagos y movimientos">
+    <div>
       <p
         style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: colores.suave }}
       >
@@ -176,7 +176,7 @@ export function PagosYMovimientos(props: Props) {
           {...props}
         />
       )}
-    </Panel>
+    </div>
   );
 }
 
@@ -323,34 +323,34 @@ function ListaMovimientos({
   );
 }
 
+/**
+ * El formulario de UNA acción, con su título. `UbicacionAccion` lo oculta
+ * si el usuario no puede ejecutarla y lo lleva a «Próximo paso» o a «Otras
+ * acciones» cuando corresponde.
+ */
 export function Seccion({
   titulo,
   accion,
-  actor,
   children,
 }: {
   titulo: string;
   accion: Accion;
-  actor: Usuario | null;
+  actor?: Usuario | null;
   children: ReactNode;
 }) {
   return (
-    <div
-      style={{
-        marginTop: "1rem",
-        paddingTop: "0.9rem",
-        borderTop: `1px solid ${colores.borde}`,
-      }}
-    >
-      <p style={{ margin: "0 0 0.5rem", fontWeight: 600 }}>{titulo}</p>
-      {!habilitada(accion, actor) && (
-        <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.alerta }}>
-          Requiere el rol {accion.roles.join(" o ")}. Cambiá el actor demo
-          para registrarlo.
-        </p>
-      )}
-      {children}
-    </div>
+    <UbicacionAccion accion={accion}>
+      <div
+        style={{
+          marginTop: "1rem",
+          paddingTop: "0.9rem",
+          borderTop: `1px solid ${colores.borde}`,
+        }}
+      >
+        <TituloAccion>{titulo}</TituloAccion>
+        {children}
+      </div>
+    </UbicacionAccion>
   );
 }
 

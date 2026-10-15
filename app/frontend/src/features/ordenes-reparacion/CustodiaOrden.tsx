@@ -15,7 +15,6 @@ import {
   Boton,
   Campo,
   Etiqueta,
-  Panel,
   colores,
   estiloInput,
   fechaCorta,
@@ -28,8 +27,10 @@ import type {
   Usuario,
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
+import { CUSTODIA, etiqueta } from "./etiquetas";
 import { listaDeAccesorios } from "./ListadoOrdenes";
 import { Confirmacion, Seccion, habilitada } from "./PagosOrden";
+import { UbicacionAccion } from "./presentacion";
 
 interface Props {
   orden: Orden;
@@ -117,11 +118,22 @@ export function CustodiaOrden(props: Props) {
   const observar = buscar("AGREGAR_OBSERVACION_RECEPCION");
 
   return (
-    <Panel titulo="Recepción y custodia">
+    <div>
+      {orden.cliente ? (
+        <>
+          <Fila etiqueta="Cliente" valor={orden.cliente.nombre} />
+          <Fila etiqueta="Teléfono" valor={orden.cliente.telefono} />
+        </>
+      ) : (
+        <Fila
+          etiqueta="Referencia RT"
+          valor={orden.referencia_rt ?? "—"}
+        />
+      )}
       <p
         role="status"
         style={{
-          margin: "0 0 0.75rem",
+          margin: "0.75rem 0",
           padding: "0.6rem 0.8rem",
           borderRadius: 6,
           border: `1px solid ${COLOR_CUSTODIA[custodia.estado]}`,
@@ -129,7 +141,7 @@ export function CustodiaOrden(props: Props) {
         }}
       >
         <Etiqueta color={COLOR_CUSTODIA[custodia.estado]}>
-          {custodia.estado}
+          {etiqueta(CUSTODIA, custodia.estado)}
         </Etiqueta>{" "}
         {descripcionCustodia(orden, usuarios)}
       </p>
@@ -138,8 +150,8 @@ export function CustodiaOrden(props: Props) {
         Comprobante de recepción:{" "}
         <strong>
           {custodia.comprobante_recepcion_emitido ? "emitido" : "no emitido"}
-        </strong>{" "}
-        (es un hecho aparte de la custodia).
+        </strong>
+        .
       </p>
 
       <Fila etiqueta="Equipo" valor={`${equipo.marca} ${equipo.modelo}`} />
@@ -228,7 +240,7 @@ export function CustodiaOrden(props: Props) {
       {noRecibido && <FormularioNoRecibido {...props} accion={noRecibido} />}
       {registrar && <FormularioDatosIngreso {...props} accion={registrar} />}
       {observar && <FormularioNota {...props} accion={observar} />}
-    </Panel>
+    </div>
   );
 }
 
@@ -398,11 +410,13 @@ function FormularioDatosIngreso({
 
   if (!abierto) {
     return (
-      <div style={{ marginTop: "0.8rem" }}>
-        <Boton variante="secundario" onClick={() => setAbierto(true)}>
-          {titulo}
-        </Boton>
-      </div>
+      <UbicacionAccion accion={accion}>
+        <div style={{ marginTop: "0.8rem" }}>
+          <Boton variante="secundario" onClick={() => setAbierto(true)}>
+            {titulo}
+          </Boton>
+        </div>
+      </UbicacionAccion>
     );
   }
 
