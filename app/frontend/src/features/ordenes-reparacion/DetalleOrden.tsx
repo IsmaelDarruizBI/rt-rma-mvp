@@ -102,8 +102,8 @@ export function CabeceraOrden({
       </>,
     );
   }
-  if (orden.prioridad > 0 && !orden.cerrada) {
-    datos.push(<>Prioridad {orden.prioridad}</>);
+  if (orden.prioridad_texto) {
+    datos.push(<>{orden.prioridad_texto}</>);
   }
   // En el celular solo el tiempo relativo; la fecha queda en el tooltip.
   if (desde) {

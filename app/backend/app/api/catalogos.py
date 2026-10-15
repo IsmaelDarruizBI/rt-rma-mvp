@@ -2,8 +2,8 @@
 
 Solo lectura. El frontend los usa para poblar selectores: tipos de
 reparacion al definir un Detalle, estaciones al tomar una Orden,
-usuarios para el selector de actor DEMO y medios de pago para cobrar o
-devolver dinero.
+usuarios para el selector de actor DEMO, medios de pago para cobrar o
+devolver dinero y prioridades al ingresar una Orden a la cola.
 """
 
 from fastapi import APIRouter
@@ -19,6 +19,7 @@ from .dependencias import ContextoDep
 from .schemas import (
     EstacionOut,
     MedioPagoOut,
+    PrioridadOut,
     TipoReparacionOut,
     UsuarioOut,
 )
@@ -51,6 +52,12 @@ def get_usuarios(contexto: ContextoDep) -> list[UsuarioOut]:
         UsuarioOut.desde_dominio(usuario)
         for usuario in listar_usuarios(contexto)
     ]
+
+
+@router.get("/priorities")
+def get_prioridades() -> list[PrioridadOut]:
+    """Prioridades de la Orden: 1 Urgente ... 4 Normal (predeterminada)."""
+    return PrioridadOut.catalogo()
 
 
 @router.get("/payment-methods")

@@ -16,6 +16,7 @@ import type {
   ImpactoOverride,
   InsumoUtilizado,
   MedioPago,
+  Prioridad,
   Orden,
   OrdenResumen,
   TipoDocumento,
@@ -41,6 +42,10 @@ export function listarUsuarios(): Promise<Usuario[]> {
 
 export function listarMediosPago(): Promise<MedioPago[]> {
   return get<MedioPago[]>("/api/catalogs/payment-methods");
+}
+
+export function listarPrioridades(): Promise<Prioridad[]> {
+  return get<Prioridad[]>("/api/catalogs/priorities");
 }
 
 // --- Lectura de Ordenes ------------------------------------------------

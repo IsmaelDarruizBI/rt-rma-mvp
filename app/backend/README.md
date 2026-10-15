@@ -97,7 +97,7 @@ GET  /api/orders/{orden_id}/custody
 GET  /api/orders/{orden_id}/documents
 GET  /api/orders/{orden_id}/documents/{documento_id}
 GET  /api/orders/{orden_id}/documents/preview/{tipo}
-GET  /api/catalogs/repair-types | stations | users | payment-methods
+GET  /api/catalogs/repair-types | stations | users | payment-methods | priorities
 GET  /api/inventory?buscar=&solo_faltantes=
 GET  /api/inventory/movements?insumo_id=&tipo=
 GET  /api/inventory/{insumo_id}
@@ -368,6 +368,35 @@ Errores: `404` no encontrado · `409` precondicion invalida o recurso no
 disponible · `422` request mal formado · `500` fallo de infraestructura
 (sin filtrar detalle interno).
 
+## Prioridad de la Orden
+
+Convencion unica (`app/domain/prioridad.py`): **cuanto menor el numero,
+mayor la prioridad**.
+
+| Prioridad | Significado |
+|---|---|
+| 1 | Urgente: maxima prioridad |
+| 2 | Alta |
+| 3 | Media |
+| 4 | Normal: la predeterminada |
+
+- `GET /api/catalogs/priorities` publica la tabla; el formulario de
+  priorizacion propone la predeterminada (4 — Normal) y se puede elegir
+  1, 2 o 3. `POST /api/orders/{id}/queue` admite solo 1-4 (`422` fuera
+  de rango); sin `prioridad` registra 4.
+- La prioridad se asigna **una sola vez**, al priorizar (PROC-REP-150,
+  inmediatamente despues de la habilitacion, que tampoco se repite). Antes
+  la Orden no tiene prioridad (`prioridad = 0`). Los regresos a la cola
+  conservan la prioridad asignada.
+- Orden por prioridad (listado y futura cola de taller,
+  `clave_de_prioridad`): 1, 2, 3, 4; despues los valores historicos
+  mayores; al final las Ordenes sin prioridad vigente (sin asignar,
+  cerradas o canceladas). Con la misma prioridad va primero la que
+  ingreso antes y, a igual ingreso, el menor numero de Orden.
+  `GET /api/orders` publica en cada fila `posicion_por_prioridad` y
+  `prioridad_texto` («Prioridad 1 · Urgente»): el frontend no vuelve a
+  interpretar los numeros.
+
 ## Configuracion
 
 Variables de entorno con prefijo `RMA_` (ver `app/core/config.py`):
@@ -430,6 +459,12 @@ Concretamente:
   un registro sin `no_recibido` sigue pendiente: "no recibido" nunca se
   infiere. Por eso tampoco se pueden iniciar en el taller hasta
   regularizar la recepcion.
+- Prioridad **si** carga datos anteriores y **no se migra**: un valor
+  fuera de 1-4 guardado antes de la convencion 1 (Urgente) - 4 (Normal)
+  se conserva tal cual, no se invierte ni se corrige. Se muestra como
+  «Fuera de la escala 1-4» y se ordena despues de 4 (de menor a mayor)
+  y antes de las Ordenes sin prioridad. Solo las priorizaciones nuevas
+  se validan contra 1-4.
 - Inventario operativo **si** carga datos anteriores: sin
   `catalogs/movimientos_stock.json` el libro esta vacio (los movimientos
   de las Ordenes siguen visibles) y `Insumo.unidad` es opcional.

@@ -30,6 +30,7 @@ from app.domain.models import (
     RolUsuario,
     Usuario,
 )
+from app.domain.prioridad import NOMBRES_DE_PRIORIDAD, es_prioridad_valida
 
 from .autorizacion import validar_actor, validar_alguno_de
 from .autorizacion_cliente import (
@@ -530,6 +531,16 @@ def fue_habilitada(orden: OrdenReparacion) -> bool:
     return any(paso.process_id == "PROC-REP-140" for paso in orden.historial)
 
 
+def fue_priorizada(orden: OrdenReparacion) -> bool:
+    """PROC-REP-150 ya ocurrio: la Orden tiene su prioridad asignada.
+
+    Como la habilitacion, se deriva del historial. Los regresos a la cola
+    (retrabajo, redefinicion, revalidacion, autorizacion del cliente)
+    conservan esa prioridad: no se vuelve a priorizar.
+    """
+    return any(paso.process_id == "PROC-REP-150" for paso in orden.historial)
+
+
 def habilitar_orden(
     orden: OrdenReparacion,
     *,
@@ -628,8 +639,13 @@ def definir_prioridad(
 ) -> OrdenReparacion:
     """PROC-REP-150: se asigna la prioridad de la Orden.
 
-    El catalogo definitivo de prioridades sigue pendiente en V1.3: aqui
-    solo se valida que sea un entero no negativo.
+    Convencion de ``app.domain.prioridad``: 1 Urgente, 2 Alta, 3 Media,
+    4 Normal (la predeterminada); cuanto menor, mas prioritaria. Solo se
+    admiten esos valores; los historicos fuera de 1-4 se conservan, pero
+    no se asignan de nuevo.
+
+    Se asigna una sola vez: la Orden habilitada se prioriza al entrar a la
+    cola y los regresos posteriores conservan su prioridad.
 
     El nodo declara ``actores_alternativos: [ACT-RECEP]``: la
     priorizacion la puede hacer Coordinacion o Recepcion, sin
@@ -637,9 +653,18 @@ def definir_prioridad(
     """
     validar_alguno_de(usuario, ROLES_PRIORIZACION)
 
-    if prioridad < 0:
+    if not es_prioridad_valida(prioridad):
+        opciones = ", ".join(
+            f"{valor} ({nombre})"
+            for valor, nombre in NOMBRES_DE_PRIORIDAD.items()
+        )
         raise PrecondicionInvalidaError(
-            f"La prioridad no puede ser negativa: {prioridad}."
+            f"Prioridad invalida: {prioridad}. Valores admitidos: {opciones}."
+        )
+    if fue_priorizada(orden):
+        raise PrecondicionInvalidaError(
+            f"La Orden ya tiene prioridad {orden.prioridad} (PROC-REP-150): "
+            "la priorizacion no se repite."
         )
     if orden.estado_workflow is not EstadoWorkflow.HABILITADA:
         raise PrecondicionInvalidaError(

@@ -181,7 +181,7 @@ def test_pendiente_de_prioridad_en_cola_y_tomada(tmp_path):
         )
         situacion = _situacion(cliente, orden_id)
         assert situacion["codigo"] == "EN_COLA"
-        assert situacion["titulo"] == "En cola (prioridad 4)"
+        assert situacion["titulo"] == "En cola (prioridad 4 · Normal)"
         (tarea,) = situacion["tareas"]
         assert _codigos(tarea) == ["TOMAR"]
         assert tarea["responsable"] == "Técnico"

@@ -88,6 +88,26 @@ export const ESTADO_PAGO: Record<string, string> = {
   SALDO_A_FAVOR: "Saldo a favor del cliente",
 };
 
+/** Situación operativa (código de `situacion`), para filtrar. */
+export const SITUACION: Record<string, string> = {
+  PENDIENTE_RECEPCION: "Pendiente de recepción",
+  PENDIENTE_DEFINICION: "Pendiente de definición",
+  ESPERANDO_AUTORIZACION: "Esperando autorización",
+  ESPERANDO_RECURSOS: "Esperando repuestos",
+  PENDIENTE_PRIORIDAD: "Pendiente de prioridad",
+  EN_COLA: "En cola",
+  TOMADA: "Tomada por el técnico",
+  EN_REPARACION: "En reparación",
+  REQUIERE_REVISION_TECNICA: "Requiere revisión técnica",
+  CONTROL_TECNICO: "Control de la reparación",
+  PENDIENTE_NOTIFICACION: "Pendiente de aviso",
+  PENDIENTE_COBRO: "Pendiente de cobro",
+  LISTA_PARA_ENTREGAR: "Lista para entregar",
+  CANCELADA_PENDIENTE_DEVOLUCION: "Cancelada, pendiente de devolución",
+  CERRADA: "Cerrada",
+  SIN_TAREAS: "Sin tareas pendientes",
+};
+
 /** Resultado del resolver de la Orden (aparece en mensajes del backend). */
 export const SITUACION_RESOLVER: Record<string, string> = {
   SIN_DETALLES: "Sin trabajos",

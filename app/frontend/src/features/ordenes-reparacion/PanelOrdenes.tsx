@@ -9,6 +9,11 @@
  * La pantalla de una Orden sigue el trabajo del empleado: cabecera,
  * «Próximo paso», trabajos, situaciones especiales, información
  * complementaria (en el orden que más le sirve a cada rol) e historial.
+ *
+ * Qué pantalla se ve lo decide la URL (`#/ordenes`, `#/ordenes/nueva`,
+ * `#/ordenes/OR-000001`, `#/inventario`): navegar solo lee, nunca envía
+ * comandos. La búsqueda, los filtros y el usuario de demostración
+ * sobreviven a la navegación.
  */
 
 import {
@@ -29,6 +34,7 @@ import type {
   MedioPago,
   Orden,
   OrdenResumen,
+  Prioridad,
   RolUsuario,
   TipoReparacion,
   Usuario,
@@ -62,9 +68,17 @@ import {
 import { PagosYMovimientos } from "./PagosOrden";
 import {
   FormularioAltaOrden,
-  ListadoOrdenes,
+  PantallaOrdenes,
   SelectorActor,
 } from "./ListadoOrdenes";
+import { type FiltrosListado, filtrosValidos } from "./listado";
+import { type Ruta } from "./rutas";
+import {
+  elegirUsuarioDemo,
+  guardarUsuarioDemo,
+  leerUsuarioDemo,
+} from "./usuarioDemo";
+import { useRuta } from "./useRuta";
 import {
   CODIGOS_ESPECIALES,
   type ErrorDeComando,
@@ -100,11 +114,32 @@ const ABIERTA_POR_ROL: Partial<Record<RolUsuario, Complementaria>> = {
   ADMINISTRADOR: "cobros",
 };
 
+// Búsqueda y filtros del listado: duran lo que la sesión del navegador.
+const CLAVE_FILTROS = "rt-rma.filtrosOrdenes";
+
+function leerFiltros(): FiltrosListado {
+  try {
+    const guardado = window.sessionStorage.getItem(CLAVE_FILTROS);
+    return filtrosValidos(guardado ? JSON.parse(guardado) : null);
+  } catch {
+    return filtrosValidos(null);
+  }
+}
+
+function guardarFiltros(filtros: FiltrosListado): void {
+  try {
+    window.sessionStorage.setItem(CLAVE_FILTROS, JSON.stringify(filtros));
+  } catch {
+    // Sin almacenamiento: los filtros duran mientras la pestaña esté abierta.
+  }
+}
+
 export function PanelOrdenes() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [tipos, setTipos] = useState<TipoReparacion[]>([]);
   const [estaciones, setEstaciones] = useState<Estacion[]>([]);
   const [medios, setMedios] = useState<MedioPago[]>([]);
+  const [prioridades, setPrioridades] = useState<Prioridad[]>([]);
   const [actorId, setActorId] = useState("");
 
   const [ordenes, setOrdenes] = useState<OrdenResumen[]>([]);
@@ -112,7 +147,14 @@ export function PanelOrdenes() {
 
   const [error, setError] = useState<ErrorDeComando | null>(null);
   const [ocupado, setOcupado] = useState(false);
-  const [vista, setVista] = useState<"ordenes" | "inventario">("ordenes");
+  const [ruta, navegar] = useRuta();
+  const rutaActual = useRef<Ruta>(ruta);
+  rutaActual.current = ruta;
+  // La Orden pedida por URL que no existe.
+  const [noEncontrada, setNoEncontrada] = useState<string | null>(null);
+  const [listadoCargado, setListadoCargado] = useState(false);
+  const [filtros, setFiltros] = useState<FiltrosListado>(leerFiltros);
+  useEffect(() => guardarFiltros(filtros), [filtros]);
 
   // Lugares donde los paneles dibujan sus formularios con un portal.
   const [lugares, setLugares] = useState<Record<number, HTMLElement | null>>(
@@ -147,30 +189,43 @@ export function PanelOrdenes() {
 
   const refrescarListado = useCallback(async () => {
     setOrdenes(await api.listarOrdenes());
+    setListadoCargado(true);
+  }, []);
+
+  const elegirActor = useCallback((usuarioId: string) => {
+    setActorId(usuarioId);
+    guardarUsuarioDemo(usuarioId);
   }, []);
 
   useEffect(() => {
     async function cargar() {
       try {
-        const [listaUsuarios, listaTipos, listaEstaciones, listaMedios] =
-          await Promise.all([
-            api.listarUsuarios(),
-            api.listarTiposReparacion(),
-            api.listarEstaciones(),
-            api.listarMediosPago(),
-          ]);
+        const [
+          listaUsuarios,
+          listaTipos,
+          listaEstaciones,
+          listaMedios,
+          listaPrioridades,
+        ] = await Promise.all([
+          api.listarUsuarios(),
+          api.listarTiposReparacion(),
+          api.listarEstaciones(),
+          api.listarMediosPago(),
+          api.listarPrioridades(),
+        ]);
         setUsuarios(listaUsuarios);
         setTipos(listaTipos);
         setEstaciones(listaEstaciones);
         setMedios(listaMedios);
-        setActorId((actual) => actual || (listaUsuarios[0]?.id ?? ""));
-        await refrescarListado();
+        setPrioridades(listaPrioridades);
+        // El usuario de demostración recordado, si sigue en el catálogo.
+        setActorId(elegirUsuarioDemo(listaUsuarios, leerUsuarioDemo()));
       } catch (fallo) {
         setError(errorDe(fallo, null));
       }
     }
     void cargar();
-  }, [refrescarListado]);
+  }, []);
 
   /**
    * Ejecuta un comando y deja la Orden devuelta como estado actual.
@@ -194,7 +249,13 @@ export function PanelOrdenes() {
       setError(null);
       try {
         const actualizada = await comando();
+        ordenEnPantalla.current = actualizada;
         setOrden(actualizada);
+        // Una Orden nueva (alta o garantía RMA) se abre en su propia URL.
+        const actual = rutaActual.current;
+        if (actual.pantalla !== "orden" || actual.ordenId !== actualizada.id) {
+          navegar({ pantalla: "orden", ordenId: actualizada.id });
+        }
         await refrescarListado();
       } catch (fallo) {
         const ordenId = ordenEnPantalla.current?.id ?? null;
@@ -214,17 +275,47 @@ export function PanelOrdenes() {
         setOcupado(false);
       }
     },
-    [refrescarListado],
+    [refrescarListado, navegar],
   );
 
   const abrirOrden = useCallback(async (ordenId: string) => {
     setError(null);
+    setNoEncontrada(null);
     try {
-      setOrden(await api.obtenerOrden(ordenId));
+      const leida = await api.obtenerOrden(ordenId);
+      // Si mientras tanto se navegó a otra pantalla, la respuesta ya no va.
+      const actual = rutaActual.current;
+      if (actual.pantalla === "orden" && actual.ordenId === ordenId) {
+        ordenEnPantalla.current = leida;
+        setOrden(leida);
+      }
     } catch (fallo) {
-      setError(errorDe(fallo, null));
+      if (fallo instanceof ApiError && fallo.status === 404) {
+        setOrden(null);
+        setNoEncontrada(ordenId);
+      } else {
+        setError(errorDe(fallo, null));
+      }
     }
   }, []);
+
+  // La URL manda: abre la Orden pedida o vuelve al listado (solo lecturas).
+  useEffect(() => {
+    if (ruta.pantalla === "orden") {
+      if (ordenEnPantalla.current?.id !== ruta.ordenId) {
+        setOrden(null);
+        void abrirOrden(ruta.ordenId);
+      }
+      return;
+    }
+    ordenEnPantalla.current = null;
+    setOrden(null);
+    setNoEncontrada(null);
+    setError(null);
+    if (ruta.pantalla === "ordenes") {
+      refrescarListado().catch((fallo) => setError(errorDe(fallo, null)));
+    }
+  }, [ruta, abrirOrden, refrescarListado]);
 
   // A qué tarea de «Próximo paso» corresponde cada acción que el usuario
   // puede ejecutar (la lista la manda el backend en la situación).
@@ -255,6 +346,8 @@ export function PanelOrdenes() {
 
   const idActor = actor?.id ?? "";
   const idOrden = orden?.id ?? "";
+  // Se muestra la Orden de la URL, no otra que quedó de la pantalla anterior.
+  const enDetalle = ruta.pantalla === "orden" && orden?.id === ruta.ordenId;
 
   const ejecutor: EjecutorAcciones = {
     agregarDetalle: (tipoId) =>
@@ -417,7 +510,7 @@ export function PanelOrdenes() {
         <SelectorActor
           usuarios={usuarios}
           actorId={actorId}
-          onCambiar={setActorId}
+          onCambiar={elegirActor}
         />
       </header>
 
@@ -438,33 +531,76 @@ export function PanelOrdenes() {
         ).map(([clave, nombre]) => (
           <Boton
             key={clave}
-            variante={vista === clave ? "primario" : "secundario"}
+            variante={
+              (ruta.pantalla === "inventario") === (clave === "inventario")
+                ? "primario"
+                : "secundario"
+            }
             onClick={() => {
-              setVista(clave);
               setError(null);
-              if (clave === "ordenes") {
-                void refrescarListado();
-                if (orden) void abrirOrden(orden.id);
-              }
+              navegar({ pantalla: clave });
             }}
           >
             {nombre}
           </Boton>
         ))}
-        {vista === "ordenes" && orden && (
-          <Boton variante="secundario" onClick={() => setOrden(null)}>
+        {(ruta.pantalla === "orden" || ruta.pantalla === "nueva") && (
+          <Boton
+            variante="secundario"
+            onClick={() => navegar({ pantalla: "ordenes" })}
+          >
             ← Volver al listado
           </Boton>
         )}
       </nav>
 
-      {error && (vista === "inventario" || !orden) && (
-        <MensajeDeComando error={error} />
-      )}
+      {error && !enDetalle && <MensajeDeComando error={error} />}
 
-      {vista === "inventario" ? (
+      {ruta.pantalla === "inventario" ? (
         <InventarioPanel actor={actor} usuarios={usuarios} />
-      ) : orden ? (
+      ) : ruta.pantalla === "nueva" ? (
+        <FormularioAltaOrden
+          actor={actor}
+          ocupado={ocupado}
+          onCrearClienteExterno={(datos) =>
+            void ejecutarComando(() => api.crearOrden(datos))
+          }
+          onCrearRtInterno={(datos) =>
+            void ejecutarComando(() => api.crearOrdenRt(datos))
+          }
+          onCancelar={() => navegar({ pantalla: "ordenes" })}
+        />
+      ) : ruta.pantalla === "ordenes" ? (
+        <PantallaOrdenes
+          ordenes={ordenes}
+          usuarios={usuarios}
+          actor={actor}
+          filtros={filtros}
+          onFiltros={setFiltros}
+          onNueva={() => navegar({ pantalla: "nueva" })}
+          cargado={listadoCargado}
+        />
+      ) : noEncontrada === ruta.ordenId ? (
+        <Panel>
+          <h2 style={{ margin: "0 0 0.4rem", fontSize: "1.1rem" }}>
+            No existe la orden «{ruta.ordenId}»
+          </h2>
+          <p style={{ margin: "0 0 0.8rem", color: colores.suave }}>
+            Revisá el número o buscá la orden en el listado.
+          </p>
+          <Boton onClick={() => navegar({ pantalla: "ordenes" })}>
+            Ir al listado de órdenes
+          </Boton>
+        </Panel>
+      ) : !orden || !enDetalle ? (
+        !error && (
+          <Panel>
+            <p style={{ margin: 0, color: colores.suave }}>
+              Cargando la orden {ruta.ordenId}…
+            </p>
+          </Panel>
+        )
+      ) : (
         <ProveedorPresentacion value={contexto}>
           {/*
             Jerarquía vertical, cada bloque a ancho completo. minmax(0,
@@ -526,6 +662,7 @@ export function PanelOrdenes() {
                   usuarios={usuarios}
                   tipos={tipos}
                   estaciones={estaciones}
+                  prioridades={prioridades}
                   ocupado={ocupado}
                   ejecutar={ejecutor}
                 />
@@ -555,6 +692,7 @@ export function PanelOrdenes() {
                   usuarios={usuarios}
                   tipos={tipos}
                   estaciones={estaciones}
+                  prioridades={prioridades}
                   ocupado={ocupado}
                   ejecutar={ejecutor}
                 />
@@ -707,26 +845,6 @@ export function PanelOrdenes() {
             </SeccionPlegable>
           </div>
         </ProveedorPresentacion>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gap: "0.75rem",
-            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
-          }}
-        >
-          <ListadoOrdenes ordenes={ordenes} onAbrir={abrirOrden} />
-          <FormularioAltaOrden
-            actor={actor}
-            ocupado={ocupado}
-            onCrearClienteExterno={(datos) =>
-              void ejecutarComando(() => api.crearOrden(datos))
-            }
-            onCrearRtInterno={(datos) =>
-              void ejecutarComando(() => api.crearOrdenRt(datos))
-            }
-          />
-        </div>
       )}
 
       {usuarios.length === 0 && !error && (

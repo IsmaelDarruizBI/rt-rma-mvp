@@ -76,7 +76,15 @@ from app.domain.models import (
     TomaOrden,
     Usuario,
 )
-from app.domain.politicas import politica_de
+from app.domain.politicas import CondicionComercial, politica_de
+from app.domain.prioridad import (
+    NOMBRES_DE_PRIORIDAD,
+    PRIORIDAD_NORMAL,
+    PRIORIDAD_PREDETERMINADA,
+    PRIORIDAD_URGENTE,
+    prioridad_vigente,
+    texto_de_prioridad,
+)
 from app.services import (
     AnalisisDesistimiento,
     EstadoAutorizacion,
@@ -121,6 +129,26 @@ class EstacionOut(BaseModel):
     @classmethod
     def desde_dominio(cls, estacion: EstacionTrabajo) -> "EstacionOut":
         return cls(**estacion.model_dump())
+
+
+class PrioridadOut(BaseModel):
+    """Una prioridad del catalogo (``app.domain.prioridad``)."""
+
+    valor: int
+    nombre: str
+    predeterminada: bool
+
+    @classmethod
+    def catalogo(cls) -> list["PrioridadOut"]:
+        """1 Urgente ... 4 Normal, de la mas a la menos prioritaria."""
+        return [
+            cls(
+                valor=valor,
+                nombre=nombre,
+                predeterminada=valor == PRIORIDAD_PREDETERMINADA,
+            )
+            for valor, nombre in sorted(NOMBRES_DE_PRIORIDAD.items())
+        ]
 
 
 class MedioPagoOut(BaseModel):
@@ -258,10 +286,18 @@ class FinalizarDefinicionIn(BaseModel):
 
 
 class EncolarIn(BaseModel):
-    """``POST /api/orders/{id}/queue`` (ACT-COORD)."""
+    """``POST /api/orders/{id}/queue`` (ACT-COORD).
+
+    ``prioridad``: 1 Urgente ... 4 Normal (``app.domain.prioridad``). Sin
+    valor se registra la predeterminada, 4, recien al priorizar.
+    """
 
     usuario_id: str = Field(min_length=1)
-    prioridad: int = Field(ge=0)
+    prioridad: int = Field(
+        default=PRIORIDAD_PREDETERMINADA,
+        ge=PRIORIDAD_URGENTE,
+        le=PRIORIDAD_NORMAL,
+    )
 
 
 class TomarIn(BaseModel):
@@ -1206,6 +1242,8 @@ class SituacionOut(BaseModel):
     tareas: list[TareaOut] = Field(default_factory=list)
     avisos: list[AvisoOut] = Field(default_factory=list)
     etapas: list[EtapaOut] = Field(default_factory=list)
+    roles: list[RolUsuario] = Field(default_factory=list)
+    titular_id: str | None = None
 
     @classmethod
     def desde_aplicacion(cls, situacion: SituacionOperativa) -> "SituacionOut":
@@ -1218,6 +1256,8 @@ class SituacionOut(BaseModel):
             descripcion=situacion.descripcion,
             responsable=situacion.responsable,
             desde=situacion.desde,
+            roles=list(situacion.roles),
+            titular_id=situacion.titular_id,
             tareas=[
                 TareaOut(
                     titulo=tarea.titulo,
@@ -1259,8 +1299,50 @@ def _nombre_para_listado(orden: OrdenReparacion) -> str:
     return f"RT Interno · {orden.referencia_rt or orden.id}"
 
 
+class SituacionResumenOut(BaseModel):
+    """La situacion operativa resumida para una fila del listado."""
+
+    codigo: str
+    titulo: str
+    responsable: str | None = None
+    roles: list[RolUsuario] = Field(default_factory=list)
+    titular_id: str | None = None
+    desde: datetime | None = None
+
+    @classmethod
+    def desde_aplicacion(
+        cls, situacion: SituacionOperativa
+    ) -> "SituacionResumenOut":
+        return cls(
+            codigo=situacion.codigo,
+            titulo=situacion.titulo,
+            responsable=situacion.responsable,
+            roles=list(situacion.roles),
+            titular_id=situacion.titular_id,
+            desde=situacion.desde,
+        )
+
+
+def _texto_de_prioridad_vigente(orden: OrdenReparacion) -> str | None:
+    """«Prioridad 1 · Urgente» si la prioridad sigue contando."""
+    vigente = prioridad_vigente(orden)
+    return texto_de_prioridad(vigente) if vigente is not None else None
+
+
 class OrdenResumenOut(BaseModel):
-    """Fila del listado de Ordenes."""
+    """Fila del listado de Ordenes.
+
+    Incluye los datos por los que se busca una Orden (telefono, equipo,
+    IMEI, serie, referencia RT) y su situacion operativa, para que el
+    listado no tenga que pedir cada Orden. Todo es de solo lectura.
+    ``updated_at`` cambia con cada modificacion registrada de la Orden: es
+    su ultima actividad.
+
+    ``prioridad_texto`` («Prioridad 1 · Urgente») existe solo con una
+    prioridad vigente. ``posicion_por_prioridad`` es el lugar de la Orden
+    en el criterio unico de ``app.domain.prioridad`` (0 = la primera): el
+    frontend ordena con ese numero y no reinterpreta la prioridad.
+    """
 
     id: str
     origen: OrigenOrden
@@ -1268,16 +1350,35 @@ class OrdenResumenOut(BaseModel):
     estado_workflow: EstadoWorkflow
     current_process: str
     prioridad: int
+    prioridad_texto: str | None = None
+    posicion_por_prioridad: int = 0
     cliente_nombre: str
+    cliente_telefono: str | None = None
     equipo: str
+    equipo_marca: str = ""
+    equipo_modelo: str = ""
+    imei: str | None = None
+    numero_serie: str | None = None
+    referencia_rt: str | None = None
     total: Decimal
     saldo: Decimal
     estado_pago: EstadoPago
+    cobrable: bool = False
+    cerrada: bool = False
+    # Titular de la toma activa, si la hay.
+    tecnico_id: str | None = None
+    situacion: SituacionResumenOut | None = None
     created_at: datetime
     updated_at: datetime
 
     @classmethod
-    def desde_dominio(cls, orden: OrdenReparacion) -> "OrdenResumenOut":
+    def desde_dominio(
+        cls,
+        orden: OrdenReparacion,
+        situacion: SituacionOperativa | None = None,
+        posicion_por_prioridad: int = 0,
+    ) -> "OrdenResumenOut":
+        toma = toma_activa(orden)
         return cls(
             id=orden.id,
             origen=orden.origen,
@@ -1285,11 +1386,32 @@ class OrdenResumenOut(BaseModel):
             estado_workflow=orden.estado_workflow,
             current_process=orden.current_process,
             prioridad=orden.prioridad,
+            prioridad_texto=_texto_de_prioridad_vigente(orden),
+            posicion_por_prioridad=posicion_por_prioridad,
             cliente_nombre=_nombre_para_listado(orden),
+            cliente_telefono=(
+                orden.cliente.telefono if orden.cliente is not None else None
+            ),
             equipo=f"{orden.equipo.marca} {orden.equipo.modelo}",
+            equipo_marca=orden.equipo.marca,
+            equipo_modelo=orden.equipo.modelo,
+            imei=orden.equipo.imei,
+            numero_serie=orden.equipo.numero_serie,
+            referencia_rt=orden.referencia_rt,
             total=orden.total,
             saldo=orden.saldo,
             estado_pago=orden.estado_pago,
+            cobrable=(
+                politica_de(orden.origen).condicion_comercial
+                == CondicionComercial.COBRABLE
+            ),
+            cerrada=orden.esta_cerrada,
+            tecnico_id=toma.usuario_id if toma is not None else None,
+            situacion=(
+                SituacionResumenOut.desde_aplicacion(situacion)
+                if situacion is not None
+                else None
+            ),
             created_at=orden.created_at,
             updated_at=orden.updated_at,
         )
@@ -1418,6 +1540,8 @@ class OrdenOut(BaseModel):
     estado_workflow: EstadoWorkflow
     current_process: str
     prioridad: int
+    # «Prioridad 1 · Urgente», solo con una prioridad vigente.
+    prioridad_texto: str | None = None
     cliente: ClienteOut | None
     equipo: EquipoOut
     referencia_rt: str | None
@@ -1506,6 +1630,7 @@ class OrdenOut(BaseModel):
             estado_workflow=orden.estado_workflow,
             current_process=orden.current_process,
             prioridad=orden.prioridad,
+            prioridad_texto=_texto_de_prioridad_vigente(orden),
             cliente=(
                 ClienteOut(**orden.cliente.model_dump())
                 if orden.cliente is not None

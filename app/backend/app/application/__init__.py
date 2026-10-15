@@ -133,6 +133,7 @@ from .situacion import (
     EtapaOperativa,
     SituacionOperativa,
     TareaOperativa,
+    situacion_de_orden,
     situacion_operativa,
 )
 from .taller import (
@@ -213,6 +214,7 @@ __all__ = [
     "EtapaOperativa",
     "SituacionOperativa",
     "TareaOperativa",
+    "situacion_de_orden",
     "situacion_operativa",
     "encolar_orden",
     "tomar_orden_en_estacion",

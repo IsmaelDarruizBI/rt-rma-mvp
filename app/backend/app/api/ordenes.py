@@ -69,11 +69,13 @@ from app.application import (
     requerir_redefinicion_ejecucion,
     revalidar_recursos,
     revisar_detalle,
+    situacion_de_orden,
     situacion_operativa,
     tomar_orden_en_estacion,
     vista_previa_documento,
 )
 from app.domain.models import OrdenReparacion, TipoDocumento
+from app.domain.prioridad import clave_de_prioridad
 from app.services import DecisionDetalle
 
 from .dependencias import ContextoDep
@@ -185,10 +187,26 @@ def _salida_con_entrega(
 
 @router.get("")
 def get_ordenes(contexto: ContextoDep) -> list[OrdenResumenOut]:
-    """Listado de Ordenes."""
+    """Listado de Ordenes, con la situacion operativa de cada una.
+
+    Cada fila trae tambien su lugar en el orden por prioridad
+    (``clave_de_prioridad``). Solo lectura: calcular la situacion o la
+    prioridad no modifica ninguna Orden.
+    """
+    ordenes = listar_ordenes(contexto)
+    posiciones = {
+        orden.id: posicion
+        for posicion, orden in enumerate(
+            sorted(ordenes, key=clave_de_prioridad)
+        )
+    }
     return [
-        OrdenResumenOut.desde_dominio(orden)
-        for orden in listar_ordenes(contexto)
+        OrdenResumenOut.desde_dominio(
+            orden,
+            situacion=situacion_de_orden(orden),
+            posicion_por_prioridad=posiciones[orden.id],
+        )
+        for orden in ordenes
     ]
 
 

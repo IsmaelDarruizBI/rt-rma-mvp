@@ -45,6 +45,18 @@ export type SituacionFinanciera =
   | "SIN_MOVIMIENTOS";
 
 /** Medio de pago o de devolución (catálogo configurable). */
+/**
+ * Prioridad de la Orden (catálogo del backend): 1 Urgente … 4 Normal.
+ * Cuanto menor el número, mayor la prioridad; la convención vive en
+ * `app/domain/prioridad.py`.
+ */
+export interface Prioridad {
+  valor: number;
+  nombre: string;
+  /** La que propone el formulario al priorizar (4 — Normal). */
+  predeterminada: boolean;
+}
+
 export interface MedioPago {
   id: string;
   nombre: string;
@@ -662,14 +674,45 @@ export interface OrdenResumen {
   estado_workflow: EstadoWorkflow;
   current_process: string;
   prioridad: number;
+  /** «Prioridad 1 · Urgente»; `null` sin prioridad vigente. */
+  prioridad_texto: string | null;
+  /** Lugar de la Orden al ordenar por prioridad (0 = la primera). */
+  posicion_por_prioridad: number;
   /** Nombre del Cliente, o identificación RT cuando no hay Cliente. */
   cliente_nombre: string;
+  /** `null` cuando no hay Cliente (equipo RT interno). */
+  cliente_telefono: string | null;
   equipo: string;
+  equipo_marca: string;
+  equipo_modelo: string;
+  imei: string | null;
+  numero_serie: string | null;
+  referencia_rt: string | null;
   total: string;
   saldo: string;
   estado_pago: EstadoPago;
+  /** El Origen se cobra al cliente: solo entonces importa el saldo. */
+  cobrable: boolean;
+  /** Entregada o devuelta: solo consulta. */
+  cerrada: boolean;
+  /** Titular de la toma activa, si la hay. */
+  tecnico_id: string | null;
+  /** Situación operativa resumida (la calcula el backend). */
+  situacion: SituacionResumen | null;
   created_at: string;
+  /** Cambia con cada modificación registrada: la última actividad. */
   updated_at: string;
+}
+
+/** La situación operativa de una fila del listado. */
+export interface SituacionResumen {
+  codigo: string;
+  titulo: string;
+  responsable: string | null;
+  /** Roles del sector que debe actuar (filtro «pendientes de mi sector»). */
+  roles: RolUsuario[];
+  titular_id: string | null;
+  desde: string | null;
 }
 
 export interface Orden {
@@ -678,6 +721,8 @@ export interface Orden {
   estado_workflow: EstadoWorkflow;
   current_process: string;
   prioridad: number;
+  /** «Prioridad 1 · Urgente»; `null` sin prioridad vigente. */
+  prioridad_texto: string | null;
   /** `null` en RT_INTERNO: el equipo es de Rosario Tecno, no hay Cliente. */
   cliente: Cliente | null;
   equipo: Equipo;
@@ -783,6 +828,10 @@ export interface Situacion {
   tareas: TareaSituacion[];
   avisos: AvisoSituacion[];
   etapas: EtapaSituacion[];
+  /** Roles del sector que debe actuar. */
+  roles: RolUsuario[];
+  /** Técnico titular, si la tarea es de él. */
+  titular_id: string | null;
 }
 
 export interface Catalogos {

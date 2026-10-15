@@ -27,12 +27,14 @@ import type {
   InsumoPrevisto,
   InsumoUtilizado,
   Orden,
+  Prioridad,
   TipoReparacion,
   Usuario,
 } from "../../types/api";
 import { nombreAccion, nombreTrabajo } from "./etiquetas";
 import { Confirmacion } from "./PagosOrden";
 import { TituloAccion, UbicacionAccion } from "./presentacion";
+import { opcionDePrioridad, prioridadPropuesta } from "./prioridad";
 
 export interface EjecutorAcciones {
   agregarDetalle: (tipoReparacionId: string) => void;
@@ -95,6 +97,7 @@ interface Props {
   usuarios: Usuario[];
   tipos: TipoReparacion[];
   estaciones: Estacion[];
+  prioridades: Prioridad[];
   ocupado: boolean;
   ejecutar: EjecutorAcciones;
 }
@@ -154,6 +157,7 @@ function AccionUnica({
   orden,
   tipos,
   estaciones,
+  prioridades,
   ocupado,
   ejecutar,
 }: Props & { accion: Accion }) {
@@ -172,6 +176,7 @@ function AccionUnica({
           orden={orden}
           tipos={tipos}
           estaciones={estaciones}
+          prioridades={prioridades}
           deshabilitado={ocupado}
           ejecutar={ejecutar}
         />
@@ -185,6 +190,7 @@ function FormularioAccion({
   orden,
   tipos,
   estaciones,
+  prioridades,
   deshabilitado,
   ejecutar,
 }: {
@@ -192,6 +198,7 @@ function FormularioAccion({
   orden: Orden;
   tipos: TipoReparacion[];
   estaciones: Estacion[];
+  prioridades: Prioridad[];
   deshabilitado: boolean;
   ejecutar: EjecutorAcciones;
 }) {
@@ -278,6 +285,7 @@ function FormularioAccion({
     case "ENCOLAR":
       return (
         <FormularioPrioridad
+          prioridades={prioridades}
           deshabilitado={deshabilitado}
           onConfirmar={ejecutar.encolar}
         />
@@ -1040,33 +1048,51 @@ function SelectorSimple({
   );
 }
 
+/**
+ * PROC-REP-150: propone la prioridad predeterminada del catálogo
+ * (4 — Normal) y la registra recién al confirmar; se puede elegir 1, 2 o 3.
+ */
 function FormularioPrioridad({
+  prioridades,
   deshabilitado,
   onConfirmar,
 }: {
+  prioridades: Prioridad[];
   deshabilitado: boolean;
   onConfirmar: (prioridad: number) => void;
 }) {
-  const [prioridad, setPrioridad] = useState("1");
+  const [elegida, setElegida] = useState<number | null>(null);
+  const prioridad = elegida ?? prioridadPropuesta(prioridades);
 
   return (
-    <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
-      <div style={{ width: 120 }}>
+    <div
+      style={{
+        display: "flex",
+        gap: "0.5rem",
+        alignItems: "flex-end",
+        flexWrap: "wrap",
+      }}
+    >
+      <div style={{ width: 180, maxWidth: "100%" }}>
         <Campo etiqueta="Prioridad">
-          <input
-            type="number"
-            min={0}
-            value={prioridad}
-            onChange={(evento) => setPrioridad(evento.target.value)}
-            disabled={deshabilitado}
+          <select
+            value={prioridad ?? ""}
+            onChange={(evento) => setElegida(Number(evento.target.value))}
+            disabled={deshabilitado || prioridad === null}
             style={estiloInput}
-          />
+          >
+            {prioridades.map((opcion) => (
+              <option key={opcion.valor} value={opcion.valor}>
+                {opcionDePrioridad(opcion)}
+              </option>
+            ))}
+          </select>
         </Campo>
       </div>
       <div style={{ marginBottom: "0.6rem" }}>
         <Boton
-          disabled={deshabilitado}
-          onClick={() => onConfirmar(Number(prioridad) || 0)}
+          disabled={deshabilitado || prioridad === null}
+          onClick={() => prioridad !== null && onConfirmar(prioridad)}
         >
           Ingresar a la cola
         </Boton>

@@ -29,6 +29,7 @@ from app.domain.models import (
     RolUsuario,
 )
 from app.domain.politicas import CondicionComercial, politica_de
+from app.domain.prioridad import nombre_de_prioridad
 from app.services import (
     ResultadoEvaluacionOrden,
     control_tecnico_completo,
@@ -46,7 +47,13 @@ from app.services import (
     toma_activa,
 )
 
-from .acciones import AccionDisponible
+from .acciones import (
+    AccionDisponible,
+    acciones_de_autorizacion,
+    acciones_de_custodia,
+    acciones_disponibles,
+    acciones_financieras,
+)
 from .progreso import nodos_alcanzados
 
 
@@ -127,6 +134,11 @@ class SituacionOperativa:
     tareas: tuple[TareaOperativa, ...] = ()
     avisos: tuple[AvisoOperativo, ...] = ()
     etapas: tuple[EtapaOperativa, ...] = ()
+    # Los roles del sector que debe actuar (todos si es un paso de sistema
+    # o sin rol definido) y el tecnico titular si la tarea es de el. Sirven
+    # para filtrar "lo pendiente de mi sector"; no autorizan nada.
+    roles: tuple[RolUsuario, ...] = ()
+    titular_id: str | None = None
 
 
 _NOMBRE_ROL = {
@@ -239,6 +251,24 @@ class _Principal:
     desde: datetime | None = None
     tareas: tuple[TareaOperativa, ...] = ()
     responsable: str | None = None
+    roles: tuple[RolUsuario, ...] = ()
+
+
+def _roles_del_sector(principal: _Principal) -> tuple[RolUsuario, ...]:
+    """Los roles que pueden resolver las tareas principales."""
+    if principal.roles:
+        return principal.roles
+    acciones = [
+        accion for tarea in principal.tareas for accion in tarea.acciones
+    ]
+    if not acciones:
+        return ()
+    if any(
+        not accion.requiere_actor or not accion.roles for accion in acciones
+    ):
+        return tuple(_NOMBRE_ROL)
+    roles = {rol for accion in acciones for rol in accion.roles}
+    return tuple(rol for rol in _NOMBRE_ROL if rol in roles)
 
 
 def situacion_operativa(
@@ -279,6 +309,36 @@ def situacion_operativa(
         tareas=principal.tareas,
         avisos=_avisos(datos, principal.codigo),
         etapas=_etapas(datos),
+        roles=_roles_del_sector(principal),
+        titular_id=next(
+            (
+                accion.usuario_id
+                for tarea in principal.tareas
+                for accion in tarea.acciones
+                if accion.usuario_id
+            ),
+            None,
+        ),
+    )
+
+
+def situacion_de_orden(
+    orden: OrdenReparacion,
+    *,
+    nombres_de_detalle: Mapping[str, str] | None = None,
+) -> SituacionOperativa:
+    """La situacion calculando antes las acciones de la Orden.
+
+    Para el listado, que no arma la vista completa de cada Orden. Solo
+    lee: no modifica la Orden ni su historial.
+    """
+    return situacion_operativa(
+        orden,
+        acciones=acciones_disponibles(orden),
+        acciones_autorizacion=acciones_de_autorizacion(orden),
+        acciones_financieras=acciones_financieras(orden),
+        acciones_custodia=acciones_de_custodia(orden),
+        nombres_de_detalle=nombres_de_detalle,
     )
 
 
@@ -676,6 +736,7 @@ def _recursos(datos: _Datos) -> _Principal | None:
         desde=_ultimo_paso(orden, *_NODOS_RECURSOS),
         tareas=tuple(tareas),
         responsable=_NOMBRE_ROL[RolUsuario.COORDINADOR_RMA],
+        roles=(RolUsuario.COORDINADOR_RMA,),
     )
 
 
@@ -775,9 +836,14 @@ def _cola(datos: _Datos) -> _Principal | None:
     tomar = datos.flujo("TOMAR")
     if not tomar:
         return None
+    nombre = nombre_de_prioridad(datos.orden.prioridad)
     return _Principal(
         codigo=CodigoSituacion.EN_COLA,
-        titulo=f"En cola (prioridad {datos.orden.prioridad})",
+        titulo=(
+            f"En cola (prioridad {datos.orden.prioridad} · {nombre})"
+            if nombre
+            else "En cola"
+        ),
         descripcion="Esperando que un técnico la tome.",
         desde=_ultimo_paso(datos.orden, "PROC-REP-170"),
         tareas=(
