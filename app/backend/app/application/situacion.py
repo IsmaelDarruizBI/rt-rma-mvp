@@ -5,8 +5,10 @@ grupos de acciones (``application.acciones``), la custodia, la
 autorizacion del cliente, el resolver de PROC-REP-211 y la cuenta. No es
 otra maquina de estados: no se persiste, no habilita nada y no decide
 ninguna regla. Cada tarea apunta a las acciones que la resuelven tal como
-la API ya las ofrece; si dos son igual de relevantes se listan las dos,
-sin inventar una prioridad.
+la API ya las ofrece; si hay varias se listan todas. En el ingreso siguen
+la secuencia recomendada (cargar los trabajos, confirmar la recepcion
+fisica, finalizar la definicion), que es solo un orden de presentacion:
+ninguna depende de la otra.
 
     situacion_operativa   codigo, titulo, descripcion, responsable, desde,
                           tareas, avisos (bloqueos secundarios) y las seis
@@ -603,6 +605,10 @@ def _en_reparacion(datos: _Datos) -> _Principal | None:
     if not completar or ejecucion is None:
         return None
     trabajo = datos.nombre(ejecucion.reparacion_detail_id)
+    # Interrumpir es la otra salida de la misma Ejecucion (VAR-REP-003):
+    # va junto a completar, como opcion secundaria. Pedir la redefinicion
+    # sigue siendo una situacion especial.
+    interrumpir = datos.flujo("INTERRUMPIR_EJECUCION")
     return _Principal(
         codigo=CodigoSituacion.EN_REPARACION,
         titulo="En reparación",
@@ -611,8 +617,9 @@ def _en_reparacion(datos: _Datos) -> _Principal | None:
         tareas=(
             _tarea(
                 "Completar la reparación",
-                "Al terminar, registrar lo realizado y los insumos usados.",
-                completar,
+                "Al terminar, registrar lo realizado y los insumos usados. "
+                "Si hay que dejarla a medias, se interrumpe con su motivo.",
+                [*completar, *interrumpir],
             ),
         ),
     )
@@ -775,33 +782,43 @@ def _definicion(datos: _Datos) -> _Principal | None:
     if not definir:
         return None
     orden = datos.orden
-    tarea = _tarea(
-        "Definir la reparación",
-        (
-            "Cargar los trabajos y finalizar la definición."
-            if orden.reparaciones_detail
-            else "Cargar los trabajos a realizar o enviar el equipo a "
-            "revisión técnica."
-        ),
-        definir,
+    con_trabajos = bool(orden.reparaciones_detail)
+    tarea = (
+        _tarea(
+            "Finalizar la definición",
+            "Revisar los trabajos cargados (se pueden agregar otros) y "
+            "finalizar para presentárselos al cliente.",
+            definir,
+        )
+        if con_trabajos
+        else _tarea(
+            "Cargar los trabajos",
+            "Cargar los trabajos a realizar o enviar el equipo a revisión "
+            "técnica.",
+            definir,
+        )
     )
     confirmar = datos.equipo("CONFIRMAR_RECEPCION")
     if confirmar:
+        recepcion = _tarea(
+            "Confirmar la recepción física del equipo",
+            "Sin el equipo en custodia la reparación no puede empezar.",
+            confirmar,
+        )
+        # Secuencia recomendada: 1 crear, 2 cargar los trabajos, 3
+        # confirmar la recepcion, 4 finalizar. Ninguna espera a la otra.
         return _Principal(
             codigo=CodigoSituacion.PENDIENTE_RECEPCION,
             titulo="Pendiente de recepción",
-            descripcion="Orden recién ingresada: falta confirmar que el "
-            "equipo quedó en el local y definir la reparación.",
-            desde=orden.created_at,
-            tareas=(
-                _tarea(
-                    "Confirmar la recepción física del equipo",
-                    "Sin el equipo en custodia la reparación no puede "
-                    "empezar.",
-                    confirmar,
-                ),
-                tarea,
+            descripcion=(
+                "Orden recién ingresada: falta confirmar que el equipo quedó "
+                "en el local y finalizar la definición."
+                if con_trabajos
+                else "Orden recién ingresada: falta cargar los trabajos y "
+                "confirmar que el equipo quedó en el local."
             ),
+            desde=orden.created_at,
+            tareas=(recepcion, tarea) if con_trabajos else (tarea, recepcion),
         )
     return _Principal(
         codigo=CodigoSituacion.PENDIENTE_DEFINICION,

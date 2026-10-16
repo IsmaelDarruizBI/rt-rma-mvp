@@ -1,9 +1,15 @@
 """Documentos de la Orden: emision, consulta y vista previa.
 
-    emitir_comprobante_recepcion  nueva version a pedido (Recepcion)
-    documentos_de_orden           emitidos y que se puede previsualizar
-    documento_de_orden            un documento emitido, tal cual se entrego
-    vista_previa_documento        contenido con datos vigentes, sin emitir
+    emitir_comprobante_recepcion      nueva version a pedido (Recepcion)
+    emitir_comprobante_autorizacion   los trabajos autorizados, a pedido
+                                      (Recepcion); version nueva solo si
+                                      cambio lo autorizado
+    documentos_de_orden               emitidos y que se puede previsualizar
+    documento_de_orden                un documento emitido, tal cual se
+                                      entrego
+    pdf_documento_de_orden            el PDF de un documento emitido
+    vista_previa_documento            contenido con datos vigentes, sin
+                                      emitir
 
 Los documentos que emite el proceso se agregan dentro de los comandos que
 los disparan, en la misma operacion: el comprobante de recepcion tras
@@ -28,6 +34,7 @@ from app.repositories import EntidadPersistidaNoEncontradaError
 from app.services import (
     ContextoDocumentos,
     PrecondicionInvalidaError,
+    contenido_comprobante_autorizacion,
     contenido_comprobante_entrega,
     contenido_comprobante_recepcion,
     contenido_de,
@@ -38,11 +45,15 @@ from app.services import (
     ultimo_documento,
 )
 from app.services import (
+    emitir_comprobante_autorizacion as emitir_comprobante_autorizacion_srv,
+)
+from app.services import (
     emitir_comprobante_recepcion as emitir_comprobante_recepcion_servicio,
 )
 
 from .consultas import nombres_de_tipo_por_detalle
 from .contexto import ApplicationContext
+from .documentos_pdf import pdf_de_documento
 from .modificacion import orden_para_modificar
 
 
@@ -205,6 +216,36 @@ def emitir_comprobante_recepcion(
     return orden
 
 
+def emitir_comprobante_autorizacion(
+    contexto: ApplicationContext,
+    *,
+    orden_id: str,
+    usuario_id: str,
+) -> OrdenReparacion:
+    """Recepcion emite el comprobante de los trabajos autorizados.
+
+    Solo cuando lo pide (el boton): el proceso nunca lo emite. Si lo
+    autorizado no cambio desde la ultima version, no se crea otra; si
+    cambio, la version nueva lleva el motivo calculado y la anterior se
+    conserva.
+    """
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden, _, creado = emitir_comprobante_autorizacion_srv(
+            orden,
+            usuario=usuario,
+            contenido=contenido_comprobante_autorizacion(
+                orden, contexto_documentos(contexto, orden)
+            ),
+            fecha=fecha,
+        )
+        if creado:
+            contexto.ordenes.guardar(orden)
+    return orden
+
+
 # --- Consultas ---------------------------------------------------------------
 
 
@@ -228,6 +269,22 @@ def documento_de_orden(
 ) -> DocumentoEmitido:
     """Un documento emitido, tal como se entrego."""
     return documento_emitido(contexto.ordenes.obtener(orden_id), documento_id)
+
+
+def pdf_documento_de_orden(
+    contexto: ApplicationContext,
+    orden_id: str,
+    documento_id: str,
+) -> tuple[str, bytes]:
+    """Nombre de archivo y PDF de un documento emitido (solo lectura).
+
+    Se arma desde el snapshot: no modifica la Orden ni deja nada en su
+    historial (descargar o compartir no prueba que el cliente lo recibio).
+    """
+    documento = documento_emitido(
+        contexto.ordenes.obtener(orden_id), documento_id
+    )
+    return pdf_de_documento(documento, zona_horaria=contexto.zona_horaria)
 
 
 def vista_previa_documento(

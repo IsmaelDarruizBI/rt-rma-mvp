@@ -192,6 +192,10 @@ class EjecucionReparacion(BaseModel):
     fin: datetime | None = None
     insumos_utilizados: list[InsumoUtilizado] = Field(default_factory=list)
     observaciones: str | None = None
+    # PROC-REP-200 "Interrumpido" (VAR-REP-003): motivo obligatorio por el
+    # que el tecnico dejo el trabajo a medias. ``None`` en las Ejecuciones
+    # interrumpidas antes de exigirlo.
+    motivo_interrupcion: str | None = None
     # PROC-REP-200 "Requiere redefinicion" (EXC-REP-004): motivo
     # obligatorio por el que la definicion del Detalle dejo de servir.
     motivo_redefinicion: str | None = None

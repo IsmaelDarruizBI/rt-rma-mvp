@@ -36,7 +36,9 @@ from app.domain.models import (
 from app.domain.politicas import CondicionComercial, politica_de
 from app.services import (
     ROLES_CANCELACION,
+    ROLES_COMPROBANTE_AUTORIZACION,
     ROLES_RECEPCION_EQUIPO,
+    comprobante_autorizacion_emitible,
     custodia_por_definir,
     devolucion_pendiente,
     ejecucion_activa,
@@ -114,6 +116,7 @@ ACCION_CONFIRMAR_RECEPCION = "CONFIRMAR_RECEPCION"
 ACCION_EQUIPO_NO_RECIBIDO = "REGISTRAR_EQUIPO_NO_RECIBIDO"
 ACCION_AGREGAR_OBSERVACION_RECEPCION = "AGREGAR_OBSERVACION_RECEPCION"
 ACCION_EMITIR_COMPROBANTE_RECEPCION = "EMITIR_COMPROBANTE_RECEPCION"
+ACCION_EMITIR_COMPROBANTE_AUTORIZACION = "EMITIR_COMPROBANTE_AUTORIZACION"
 
 # Terminales de un Detalle: lo realizado y lo cancelado (BR-REP-012).
 _TERMINALES = (
@@ -702,6 +705,9 @@ def acciones_de_autorizacion(
     - Desistir de un Detalle ya autorizado y todavia cancelable.
     - Desistir de todos los trabajos cancelables, si queda trabajo ya
       autorizado sin terminar (aunque algo lo impida: la UI lo informa).
+    - Generar el comprobante de autorizacion: hay trabajos autorizados que
+      el ultimo comprobante no refleja (ninguno todavia, u otro trabajo
+      autorizado despues). Nunca se emite solo.
     """
     acciones: list[AccionDisponible] = []
     if decision_registrable(orden):
@@ -727,6 +733,14 @@ def acciones_de_autorizacion(
                 codigo=ACCION_DESISTIR_TODO,
                 etiqueta="Cliente desiste de todos los trabajos cancelables",
                 roles=(RolUsuario.RECEPCION,),
+            )
+        )
+    if comprobante_autorizacion_emitible(orden):
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_EMITIR_COMPROBANTE_AUTORIZACION,
+                etiqueta="Generar el comprobante de autorizacion",
+                roles=ROLES_COMPROBANTE_AUTORIZACION,
             )
         )
     return acciones

@@ -443,19 +443,26 @@ def registrar_ejecucion_interrumpida(
     insumos_utilizados: Sequence[InsumoUtilizado],
     usuario: Usuario,
     fecha: datetime,
+    motivo: str,
     observaciones: str | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-200 con resultado "Interrumpido" (VAR-REP-003).
 
     Misma validacion que ``registrar_ejecucion_completada``. La Ejecucion
     pasa a INTERRUMPIDO -terminal: conserva fin, insumos realmente
-    utilizados hasta ese momento y observaciones- y el Detalle vuelve a
-    DEFINIDO (la representacion tecnica de PENDIENTE), sin bloqueo.
+    utilizados hasta ese momento, motivo y observaciones- y el Detalle
+    vuelve a DEFINIDO (la representacion tecnica de PENDIENTE), sin
+    bloqueo. El motivo es obligatorio: sin el (vacio o solo espacios) se
+    rechaza antes de tocar nada.
 
     NO cierra la toma: el tecnico puede continuar (una Ejecucion nueva,
     con reserva nueva) o liberar la Orden con la mecanica de
     PROC-REP-212/213.
     """
+    if not (motivo or "").strip():
+        raise PrecondicionInvalidaError(
+            "Interrumpir la reparacion exige un motivo (VAR-REP-003)."
+        )
     return _registrar_fin_ejecucion(
         orden,
         ejecucion_id=ejecucion_id,
@@ -466,6 +473,7 @@ def registrar_ejecucion_interrumpida(
         resultado=EstadoEjecucion.INTERRUMPIDO,
         estado_del_detalle=EstadoReparacionDetail.DEFINIDO,
         observacion_200="Interrumpido",
+        motivo_interrupcion=motivo.strip(),
     )
 
 
@@ -522,6 +530,7 @@ def _registrar_fin_ejecucion(
     estado_del_detalle: EstadoReparacionDetail,
     observacion_200: str,
     condicion_del_detalle: CondicionReparacionDetail | None = None,
+    motivo_interrupcion: str | None = None,
     motivo_redefinicion: str | None = None,
 ) -> OrdenReparacion:
     """Cierre de una Ejecucion en PROC-REP-200, comun a sus tres resultados.
@@ -568,6 +577,7 @@ def _registrar_fin_ejecucion(
         utilizado.model_copy(deep=True) for utilizado in insumos_utilizados
     ]
     nueva_ejecucion.observaciones = observaciones
+    nueva_ejecucion.motivo_interrupcion = motivo_interrupcion
     nueva_ejecucion.motivo_redefinicion = motivo_redefinicion
 
     detalle = buscar_detalle(nueva_orden, detalle_id)

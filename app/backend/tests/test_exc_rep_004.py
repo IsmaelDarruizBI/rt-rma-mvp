@@ -252,7 +252,7 @@ def test_el_motivo_es_obligatorio(motivo):
 
 def test_interrumpido_y_requiere_redefinicion_difieren_solo_en_la_condicion():
     interrumpida, _ = _cerrar_200(
-        _en_ejecucion(), registrar_ejecucion_interrumpida
+        _en_ejecucion(), registrar_ejecucion_interrumpida, motivo=MOTIVO
     )
     redefinir, _ = _cerrar_200(
         _en_ejecucion(),
@@ -269,7 +269,10 @@ def test_interrumpido_y_requiere_redefinicion_difieren_solo_en_la_condicion():
     assert _detalle(redefinir).condicion is (
         CondicionReparacionDetail.REQUIERE_DEFINICION
     )
+    # Cada resultado guarda su motivo en su propio campo.
+    assert interrumpida.ejecuciones[0].motivo_interrupcion == MOTIVO
     assert interrumpida.ejecuciones[0].motivo_redefinicion is None
+    assert redefinir.ejecuciones[0].motivo_interrupcion is None
     assert interrumpida.historial[-1].observacion == "Interrumpido"
 
 
@@ -935,5 +938,6 @@ def test_interrumpir_tambien_escribe_dos_veces(tmp_path):
             ejecucion_id=ejecucion_id,
             usuario_id="TECH-001",
             insumos_utilizados=[],
+            motivo="Falta una pieza.",
         )
         assert espia.guardados == 2

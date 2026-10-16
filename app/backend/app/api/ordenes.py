@@ -10,7 +10,7 @@ El router es fino a proposito: valida la forma del request, delega en
 atrapa excepciones -de eso se ocupa ``errores.py``-.
 """
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Response, status
 
 from app.application import (
     ApplicationContext,
@@ -35,6 +35,7 @@ from app.application import (
     devolver_rt,
     documento_de_orden,
     documentos_de_orden,
+    emitir_comprobante_autorizacion,
     emitir_comprobante_recepcion,
     encolar_orden,
     entregar,
@@ -54,6 +55,7 @@ from app.application import (
     nombres_de_tipo_por_detalle,
     notificar,
     obtener_orden,
+    pdf_documento_de_orden,
     pendientes_de_autorizacion,
     progreso,
     realizar_revision,
@@ -98,6 +100,7 @@ from .schemas import (
     DocumentoEmitidoOut,
     DocumentosOrdenOut,
     DocumentosOut,
+    EmitirComprobanteAutorizacionIn,
     EmitirDocumentoIn,
     EncolarIn,
     EntregarIn,
@@ -296,6 +299,32 @@ def get_vista_previa_documento(
         orden_id=orden_id,
         tipo=tipo,
         contenido=vista_previa_documento(contexto, orden_id, tipo),
+    )
+
+
+@router.get(
+    "/{orden_id}/documents/{documento_id}/pdf",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}}},
+)
+def get_documento_pdf(
+    orden_id: str,
+    documento_id: str,
+    contexto: ContextoDep,
+) -> Response:
+    """El PDF de un documento emitido (hoy, el comprobante de autorizacion).
+
+    Se arma del snapshot cada vez: la misma version da el mismo PDF. Solo
+    lectura: descargarlo o compartirlo no registra que el cliente lo
+    recibio.
+    """
+    nombre, contenido = pdf_documento_de_orden(
+        contexto, orden_id, documento_id
+    )
+    return Response(
+        content=contenido,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
     )
 
 
@@ -699,7 +728,7 @@ def post_interrumpir_ejecucion(
 
     Compone PROC-REP-190 -> 200 (Interrumpido) -> 210 -> 211: lo realmente
     utilizado se consume, lo reservado que no se uso se libera, el Detalle
-    vuelve a DEFINIDO y la toma sigue activa.
+    vuelve a DEFINIDO y la toma sigue activa. El motivo es obligatorio.
     """
     orden, _ = interrumpir_ejecucion(
         contexto,
@@ -709,6 +738,7 @@ def post_interrumpir_ejecucion(
         insumos_utilizados=[
             insumo.a_dominio() for insumo in cuerpo.insumos_utilizados
         ],
+        motivo=cuerpo.motivo,
         observaciones=cuerpo.observaciones,
     )
     return _salida(orden, contexto)
@@ -1061,6 +1091,27 @@ def post_emitir_comprobante_recepcion(
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
         motivo=cuerpo.motivo,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/documents/authorization-receipt")
+def post_emitir_comprobante_autorizacion(
+    orden_id: str,
+    cuerpo: EmitirComprobanteAutorizacionIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Emitir el comprobante de los trabajos autorizados (ACT-RECEP).
+
+    Solo a pedido. Lista los Detalles con autorizacion vigente, sin los
+    pendientes, rechazados ni cancelados. Si lo autorizado no cambio desde
+    la ultima version, no se duplica; si cambio, se emite la version
+    siguiente y la anterior se conserva.
+    """
+    orden = emitir_comprobante_autorizacion(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
     )
     return _salida(orden, contexto)
 

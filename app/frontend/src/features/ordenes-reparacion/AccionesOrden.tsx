@@ -9,7 +9,7 @@
  * igual (PROC-REP V1.3 define el actor de cada nodo).
  */
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import type { DatosRetiro } from "../../api/ordenes";
 import {
@@ -31,9 +31,13 @@ import type {
   TipoReparacion,
   Usuario,
 } from "../../types/api";
-import { nombreAccion, nombreTrabajo } from "./etiquetas";
+import { NOMBRE_ACCION, nombreAccion, nombreTrabajo } from "./etiquetas";
 import { Confirmacion } from "./PagosOrden";
-import { TituloAccion, UbicacionAccion } from "./presentacion";
+import {
+  CODIGOS_SECUNDARIOS,
+  TituloAccion,
+  UbicacionAccion,
+} from "./presentacion";
 import { opcionDePrioridad, prioridadPropuesta } from "./prioridad";
 
 export interface EjecutorAcciones {
@@ -56,6 +60,7 @@ export interface EjecutorAcciones {
   interrumpirEjecucion: (
     ejecucionId: string,
     insumosUtilizados: InsumoUtilizado[],
+    motivo: string,
     observaciones: string,
   ) => void;
   requerirRedefinicion: (
@@ -161,6 +166,17 @@ function AccionUnica({
   ocupado,
   ejecutar,
 }: Props & { accion: Accion }) {
+  const formulario = (
+    <FormularioAccion
+      accion={accion}
+      orden={orden}
+      tipos={tipos}
+      estaciones={estaciones}
+      prioridades={prioridades}
+      deshabilitado={ocupado}
+      ejecutar={ejecutar}
+    />
+  );
   return (
     <UbicacionAccion accion={accion}>
       <div
@@ -170,18 +186,81 @@ function AccionUnica({
           borderBottom: `1px solid ${colores.borde}`,
         }}
       >
-        <TituloAccion>{nombreAccion(orden, accion)}</TituloAccion>
-        <FormularioAccion
-          accion={accion}
-          orden={orden}
-          tipos={tipos}
-          estaciones={estaciones}
-          prioridades={prioridades}
-          deshabilitado={ocupado}
-          ejecutar={ejecutar}
-        />
+        {CODIGOS_SECUNDARIOS.has(accion.codigo) ? (
+          // La tarea ya dice en qué trabajo: el botón va corto.
+          <OpcionSecundaria
+            titulo={NOMBRE_ACCION[accion.codigo] ?? accion.etiqueta}
+          >
+            {formulario}
+          </OpcionSecundaria>
+        ) : (
+          <>
+            <TituloAccion>{nombreAccion(orden, accion)}</TituloAccion>
+            {formulario}
+          </>
+        )}
       </div>
     </UbicacionAccion>
+  );
+}
+
+/**
+ * Otra salida de la misma tarea, menos habitual (interrumpir junto a
+ * completar): un botón secundario a la vista que despliega su formulario.
+ */
+function OpcionSecundaria({
+  titulo,
+  children,
+}: {
+  titulo: string;
+  children: ReactNode;
+}) {
+  const [abierta, setAbierta] = useState(false);
+  if (!abierta) {
+    return (
+      <Boton variante="secundario" onClick={() => setAbierta(true)}>
+        {titulo}
+      </Boton>
+    );
+  }
+  return (
+    <div
+      style={{
+        padding: "0.7rem 0.8rem",
+        borderRadius: 6,
+        border: `1px solid ${colores.alerta}`,
+        background: "#fffaf0",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: "0.5rem",
+          marginBottom: "0.5rem",
+        }}
+      >
+        <strong>{titulo}</strong>
+        <button
+          type="button"
+          onClick={() => setAbierta(false)}
+          style={{
+            border: "none",
+            background: "none",
+            padding: 0,
+            color: colores.acento,
+            textDecoration: "underline",
+            cursor: "pointer",
+            font: "inherit",
+            fontSize: "0.85rem",
+          }}
+        >
+          Volver
+        </button>
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -361,11 +440,12 @@ function FormularioAccion({
           modo="interrumpir"
           previstos={insumosPrevistosDe(orden, accion.ejecucion_id)}
           deshabilitado={deshabilitado || !accion.ejecucion_id}
-          onConfirmar={(insumosUtilizados, observaciones) =>
+          onConfirmar={(insumosUtilizados, observaciones, motivo) =>
             accion.ejecucion_id &&
             ejecutar.interrumpirEjecucion(
               accion.ejecucion_id,
               insumosUtilizados,
+              motivo,
               observaciones,
             )
           }
@@ -1106,7 +1186,8 @@ function FormularioPrioridad({
  * propuesta inicial de cantidades:
  *
  * - completar:   lo previsto (el caso habitual es usar todo);
- * - interrumpir: 0 (se registra solo lo realmente usado hasta ahora);
+ * - interrumpir: 0 (se registra solo lo realmente usado hasta ahora), y
+ *                pide el motivo de la interrupción;
  * - redefinir:   lo previsto, y exige un motivo (EXC-REP-004).
  */
 type ModoEjecucion = "completar" | "interrumpir" | "redefinir";
@@ -1116,23 +1197,24 @@ const MODOS_EJECUCION: Record<
   {
     textoBoton: string;
     cantidadInicial: (previsto: InsumoPrevisto) => string;
-    pideMotivo: boolean;
+    /** Etiqueta del motivo obligatorio, si el modo lo pide. */
+    motivo: string | null;
   }
 > = {
   completar: {
     textoBoton: "Registrar la reparación",
     cantidadInicial: (previsto) => previsto.cantidad_prevista,
-    pideMotivo: false,
+    motivo: null,
   },
   interrumpir: {
     textoBoton: "Interrumpir la reparación",
     cantidadInicial: () => "0",
-    pideMotivo: false,
+    motivo: "Motivo de la interrupción (obligatorio)",
   },
   redefinir: {
     textoBoton: "Pedir la redefinición del trabajo",
     cantidadInicial: (previsto) => previsto.cantidad_prevista,
-    pideMotivo: true,
+    motivo: "Motivo de la redefinición (obligatorio)",
   },
 };
 
@@ -1159,7 +1241,12 @@ function FormularioEjecucion({
     motivo: string,
   ) => void;
 }) {
-  const { textoBoton, cantidadInicial, pideMotivo } = MODOS_EJECUCION[modo];
+  const {
+    textoBoton,
+    cantidadInicial,
+    motivo: etiquetaMotivo,
+  } = MODOS_EJECUCION[modo];
+  const pideMotivo = etiquetaMotivo !== null;
   const [motivo, setMotivo] = useState("");
   const [cantidades, setCantidades] = useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -1217,8 +1304,8 @@ function FormularioEjecucion({
           </Campo>
         ))
       )}
-      {pideMotivo && (
-        <Campo etiqueta="Motivo de la redefinición (obligatorio)">
+      {etiquetaMotivo && (
+        <Campo etiqueta={etiquetaMotivo}>
           <input
             value={motivo}
             onChange={(evento) => setMotivo(evento.target.value)}

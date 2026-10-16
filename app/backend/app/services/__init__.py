@@ -68,7 +68,10 @@ from .decision_cliente import (
     registrar_desistimiento_cliente,
 )
 from .documentos import (
+    ROLES_COMPROBANTE_AUTORIZACION,
     ContextoDocumentos,
+    comprobante_autorizacion_emitible,
+    contenido_comprobante_autorizacion,
     contenido_comprobante_entrega,
     contenido_comprobante_recepcion,
     contenido_de,
@@ -76,6 +79,7 @@ from .documentos import (
     documento_emitido,
     documentos_de_tipo,
     documentos_previsualizables,
+    emitir_comprobante_autorizacion,
     emitir_comprobante_recepcion,
     generar_comprobante_final,
     generar_comprobante_recepcion,
@@ -428,7 +432,10 @@ __all__ = [
     "registrar_saldo_pendiente",
     "validar_condicion_entrega",
     # Documentos
+    "ROLES_COMPROBANTE_AUTORIZACION",
     "ContextoDocumentos",
+    "comprobante_autorizacion_emitible",
+    "contenido_comprobante_autorizacion",
     "contenido_comprobante_entrega",
     "contenido_comprobante_recepcion",
     "contenido_de",
@@ -436,6 +443,7 @@ __all__ = [
     "documento_emitido",
     "documentos_de_tipo",
     "documentos_previsualizables",
+    "emitir_comprobante_autorizacion",
     "emitir_comprobante_recepcion",
     "generar_comprobante_final",
     "generar_comprobante_recepcion",

@@ -336,12 +336,14 @@ class CompletarEjecucionIn(BaseModel):
 class InterrumpirEjecucionIn(BaseModel):
     """``POST /api/orders/{id}/executions/{ejecucion_id}/interrupt``.
 
-    Misma forma que ``CompletarEjecucionIn``: ``insumos_utilizados`` es lo
-    realmente usado hasta la interrupcion.
+    ``insumos_utilizados`` es lo realmente usado hasta la interrupcion.
+    ``motivo`` es obligatorio (VAR-REP-003): vacio o solo espacios se
+    rechaza sin efectos.
     """
 
     usuario_id: str = Field(min_length=1)
     insumos_utilizados: list[InsumoUtilizadoIn] = Field(default_factory=list)
+    motivo: str = Field(min_length=1)
     observaciones: str | None = None
 
 
@@ -633,6 +635,16 @@ class EmitirDocumentoIn(BaseModel):
     motivo: str | None = None
 
 
+class EmitirComprobanteAutorizacionIn(BaseModel):
+    """``POST .../documents/authorization-receipt`` (Recepcion).
+
+    Sin motivo: si es una version nueva, el motivo es lo que cambio en los
+    trabajos autorizados y lo calcula el backend.
+    """
+
+    usuario_id: str = Field(min_length=1)
+
+
 class DecisionDetalleIn(BaseModel):
     """La respuesta del cliente sobre UN Detalle.
 
@@ -868,6 +880,7 @@ class EjecucionOut(BaseModel):
     fin: datetime | None = None
     insumos_utilizados: list[InsumoUtilizadoOut] = Field(default_factory=list)
     observaciones: str | None = None
+    motivo_interrupcion: str | None = None
     motivo_redefinicion: str | None = None
 
     @classmethod

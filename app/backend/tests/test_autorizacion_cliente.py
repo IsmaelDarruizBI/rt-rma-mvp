@@ -182,11 +182,13 @@ def test_1_autorizar_todo_pasa_a_factibilidad_y_habilita(cliente):
         assert registro["canal"] == "WHATSAPP"
         assert registro["observaciones"] == "Acepta el presupuesto."
         assert registro["fecha"] is not None
-    # Nada pendiente: queda solo desistir de lo autorizado.
+    # Nada pendiente: queda desistir de lo autorizado y generar su
+    # comprobante (a pedido, nunca solo).
     assert _decisiones_ofrecidas(orden) == [
         ("DESISTIR_DETALLE", "DET-001"),
         ("DESISTIR_DETALLE", "DET-002"),
         ("DESISTIR_TODO", None),
+        ("EMITIR_COMPROBANTE_AUTORIZACION", None),
     ]
     assert "ENCOLAR" in codigos(orden)
 
@@ -304,6 +306,7 @@ def test_4_sin_respuesta_no_registra_nada_ni_bloquea_a_los_demas(
         ("REGISTRAR_DECISION_CLIENTE", None),
         ("DESISTIR_DETALLE", "DET-001"),
         ("DESISTIR_TODO", None),
+        ("EMITIR_COMPROBANTE_AUTORIZACION", None),
     ]
     pendientes = ok(cliente.get("/api/orders/authorizations/pending"))
     assert [(p["orden_id"], p["detalle_id"]) for p in pendientes] == [
@@ -380,6 +383,7 @@ def test_7_rechazo_individual_distinto_de_la_cancelacion_interna(cliente):
     assert _decisiones_ofrecidas(orden) == [
         ("DESISTIR_DETALLE", "DET-001"),
         ("DESISTIR_TODO", None),
+        ("EMITIR_COMPROBANTE_AUTORIZACION", None),
     ]
 
 

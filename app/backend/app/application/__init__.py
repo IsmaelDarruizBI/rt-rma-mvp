@@ -91,7 +91,9 @@ from .documentos import (
     contexto_documentos,
     documento_de_orden,
     documentos_de_orden,
+    emitir_comprobante_autorizacion,
     emitir_comprobante_recepcion,
+    pdf_documento_de_orden,
     vista_previa_documento,
 )
 from .finanzas import (
@@ -197,6 +199,7 @@ __all__ = [
     "contexto_documentos",
     "documento_de_orden",
     "documentos_de_orden",
+    "pdf_documento_de_orden",
     "vista_previa_documento",
     "MovimientoFinanciero",
     "SituacionFinanciera",
@@ -266,6 +269,7 @@ __all__ = [
     "registrar_ingreso_stock",
     "revalidar_ordenes_pendientes",
     "agregar_observacion_recepcion",
+    "emitir_comprobante_autorizacion",
     "emitir_comprobante_recepcion",
     # Bandejas de trabajo (lectura)
     "Bandeja",

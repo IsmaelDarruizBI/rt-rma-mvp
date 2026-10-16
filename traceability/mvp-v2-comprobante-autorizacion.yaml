@@ -1,0 +1,88 @@
+# Trazabilidad de una extension del MVP v2 - Comprobante de autorizacion de
+# reparacion (ACC-REP-060).
+#
+# Archivo propio (ver traceability/README.md, "Cuando crear un archivo
+# distinto"): no implementa un Scenario de PROC-REP V1.3 sino una capacidad
+# transversal agregada durante las pruebas UAT del MVP v2, sin nodo de
+# proceso. Recepcion la ejecuta a pedido despues de registrar la autorizacion
+# del cliente.
+#
+# Identificadores de emision de documentos a pedido (historial
+# FUNCTIONAL_ACTION):
+#   - ACC-REP-002  version nueva del comprobante de recepcion (hp-rep-001.yaml,
+#                  "Emitir el comprobante de recepcion de la Orden").
+#   - ACC-REP-060  comprobante de autorizacion de reparacion (este archivo).
+#   - ACC-REP-026  conserva exclusivamente su significado documentado: la
+#                  entrega del equipo. Ningun documento se emite con ese id.
+#
+# Formalizacion pendiente: la autorizacion del cliente por Detalle (regla,
+# nodos de proceso, User Story y Functional Requirements) esta definida solo
+# en la baseline V1.4 de rt-rma-app, todavia no incorporada a business/ de
+# este repositorio. No se inventan vinculos: ACC-REP-060 declara
+# `pending_formalization` y queda sin `realizes` hasta esa conciliacion.
+#
+# Validacion: npx tsx scripts/validate-traceability.ts traceability/mvp-v2-comprobante-autorizacion.yaml
+
+meta:
+  id: TRACE-MVP2-COMPROBANTE-AUTORIZACION
+  name: Trazabilidad del comprobante de autorizacion de reparacion (extension MVP v2)
+  generated_from: rama mvp-v2, mejoras UAT (recepcion, documentos e interfaz)
+  date: "2026-10-15"
+  business_domain: DOM-RMA
+  business_process: PROC-REP
+  business_process_version: "1.3"
+  related_trace_files:
+    - traceability/hp-rep-001.yaml (ACC-REP-002 y ACC-REP-026; no se modifica)
+  sources:
+    convention: traceability/README.md
+    implementation_notes: traceability/IMPLEMENTATION.md
+    backend: app/backend/
+    frontend: app/frontend/
+  relationship_vocabulary:
+    belongs_to: el origen pertenece al destino (jerarquia)
+    realizes: la System Action realiza la User Story
+    covers: la System Action cubre el nodo del Business Process
+    governed_by: el item esta gobernado por la Business Rule
+
+items:
+
+  - {id: DOM-RMA, type: business_domain, name: Area funcional RMA, status: active, source: traceability/README.md}
+  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: draft, version: "1.3", source: business/processes/repair-management-v1.3.yaml}
+
+  - id: ACC-REP-060
+    type: system_action
+    name: "Emitir comprobante de autorización de reparación"
+    status: IMPLEMENTED
+    transversal: true
+    process_node: null
+    scenario_step_kind: FUNCTIONAL_ACTION
+    actor: ACT-RECEP
+    trigger: "Solicitud explicita de Recepcion: boton «Generar comprobante de autorizacion» (paso recomendado en Proximo paso)."
+    precondition: "La Orden exige la autorizacion del cliente y tiene al menos un Detalle con una decision AUTORIZADO vigente (sobre su definicion actual) y sin cancelar; la Orden no esta cerrada ni cancelada."
+    result: "Documento COMPROBANTE_AUTORIZACION versionado (OR-xxxxxx-AUT-nn) con el snapshot de los trabajos autorizados -precio, version de definicion autorizada, fecha y canal de la decision- y el total autorizado. Se descarga como PDF armado desde el snapshot. Deja ACC-REP-060 (EMITIR_DOCUMENTO) en el historial."
+    restrictions:
+      - "No se genera automaticamente: ni al autorizar ni en ningun nodo del proceso."
+      - "No es un comprobante de pago ni una factura, y no lleva firma."
+      - "Solo lista Detalles autorizados: los pendientes, rechazados, desistidos y cancelados no figuran."
+      - "Sin cambios en lo autorizado no crea otra version (un reintento no duplica). Si cambio, la version nueva lleva el motivo calculado y referencia a la anterior, que se conserva sin cambios."
+    functional_relation: "Deriva de la autorizacion del cliente por Detalle: refleja la decision AUTORIZADO vigente de cada Detalle sobre su definicion actual. No modifica autorizaciones, factibilidad, custodia ni transiciones del workflow."
+    sharing: "Se puede descargar o compartir por WhatsApp (menu del sistema con el PDF, o descarga y wa.me con el mensaje y el telefono del cliente). Compartir no se registra: no confirma el envio ni que el cliente lo recibio."
+    pending_formalization: "Sin User Story, Functional Requirement ni Business Rule formales en rt-rma-mvp para la autorizacion del cliente por Detalle (definidas solo en la baseline V1.4 de rt-rma-app, pendiente de conciliacion). Los vinculos realizes, covers y governed_by se agregan al incorporar esa baseline."
+    implementation:
+      - "app/backend/app/services/documentos.py::emitir_comprobante_autorizacion"
+      - "app/backend/app/services/documentos.py::comprobante_autorizacion_emitible"
+      - "app/backend/app/application/documentos.py::emitir_comprobante_autorizacion"
+      - "app/backend/app/application/documentos_pdf.py::pdf_de_documento"
+      - "app/backend/app/api/ordenes.py::post_emitir_comprobante_autorizacion"
+      - "app/backend/app/api/ordenes.py::get_documento_pdf"
+      - "app/backend/app/application/acciones.py::acciones_de_autorizacion (EMITIR_COMPROBANTE_AUTORIZACION)"
+      - "app/frontend/src/features/ordenes-reparacion/DocumentosOrden.tsx"
+      - "app/frontend/src/features/ordenes-reparacion/whatsapp.ts"
+    tests:
+      - "app/backend/tests/test_comprobante_autorizacion.py"
+      - "app/backend/tests/test_pdf.py"
+      - "app/frontend/tests/whatsapp.test.ts"
+
+links:
+
+  - {from: PROC-REP, to: DOM-RMA, relationship: belongs_to}

@@ -6,6 +6,10 @@
  * formularios no se dibujan acá: cada panel dibuja el suyo y
  * `UbicacionAccion` lo trae al lugar de su tarea con un portal, así que
  * no hay un segundo mecanismo para ejecutar acciones.
+ *
+ * Antes de las tareas puede ir un paso recomendado que no es una tarea
+ * del backend (`PASOS_RECOMENDADOS`: generar el comprobante de
+ * autorización), solo si el usuario puede hacerlo.
  */
 
 import { colores } from "../../components/ui";
@@ -20,10 +24,15 @@ import {
   type ErrorDeComando,
   LugarDeFormularios,
   MensajeDeComando,
+  PASOS_RECOMENDADOS,
+  accionesDeLaOrden,
   claveDeAccion,
   irAAccion,
   puedeEjecutar,
 } from "./presentacion";
+
+/** Lugar del paso recomendado (no es el índice de ninguna tarea). */
+export const INDICE_PASO_RECOMENDADO = -1;
 
 /** Quién debe actuar, con el nombre del titular si la tarea es suya. */
 function quienDebe(
@@ -57,6 +66,12 @@ export function ProximoPaso({
   const situacion = orden.situacion;
   if (!situacion) return null;
   const { tareas, avisos } = situacion;
+  const recomendado = orden.cerrada
+    ? undefined
+    : accionesDeLaOrden(orden).find(
+        (accion) =>
+          accion.codigo in PASOS_RECOMENDADOS && puedeEjecutar(accion, actor),
+      );
 
   return (
     <section
@@ -83,7 +98,42 @@ export function ProximoPaso({
         {situacion.descripcion}
       </p>
 
-      {tareas.length === 0 && (
+      {recomendado && (
+        <div
+          style={{
+            marginBottom: "0.8rem",
+            paddingBottom: tareas.length ? "0.8rem" : 0,
+            borderBottom: tareas.length ? `1px solid ${colores.borde}` : "none",
+          }}
+        >
+          <p style={{ margin: "0 0 0.15rem", fontWeight: 700 }}>
+            {PASOS_RECOMENDADOS[recomendado.codigo].titulo}
+          </p>
+          <p
+            style={{
+              margin: "0 0 0.5rem",
+              fontSize: "0.8rem",
+              color: colores.suave,
+            }}
+          >
+            Lo hace: {quienDebe(
+              {
+                responsable: recomendado.roles.includes("RECEPCION")
+                  ? "Recepción"
+                  : null,
+                acciones: [recomendado],
+              },
+              usuarios,
+            )}{" "}
+            · {PASOS_RECOMENDADOS[recomendado.codigo].motivo}
+          </p>
+          <LugarDeFormularios
+            onElemento={registrarTarea(INDICE_PASO_RECOMENDADO)}
+          />
+        </div>
+      )}
+
+      {tareas.length === 0 && !recomendado && (
         <p style={{ margin: 0, fontSize: "0.85rem", color: colores.suave }}>
           {orden.cerrada
             ? "Orden cerrada: se puede consultar, pero no admite tareas."

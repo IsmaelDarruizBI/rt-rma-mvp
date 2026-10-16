@@ -327,7 +327,11 @@ def test_interrumpir_con_override_sin_usar_nada_no_toca_el_stock(tmp_path):
 
         cliente.post(
             f"/api/orders/{orden_id}/executions/{ejecucion_id}/interrupt",
-            json={"usuario_id": TECNICO, "insumos_utilizados": []},
+            json={
+                "usuario_id": TECNICO,
+                "insumos_utilizados": [],
+                "motivo": "Falta una pieza.",
+            },
         )
 
         # LIBERACION_RESERVA no descuenta: el stock sigue en 0.

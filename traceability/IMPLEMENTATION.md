@@ -106,6 +106,16 @@ explicitamente (`transversal: true`, `process_node: null`):
   invento un `PROC-REP-*`.**
 - `ACC-REP-023` — mantener derivada la situacion comercial.
 
+Emisiones de documentos a pedido (MVP v2), tambien sin nodo propio:
+
+- `ACC-REP-002` — **version nueva del comprobante de recepcion** a pedido
+  de Recepcion (la primera la emite el proceso en `PROC-REP-060`).
+- `ACC-REP-060` — **Emitir comprobante de autorizacion de reparacion**,
+  documentado en `traceability/mvp-v2-comprobante-autorizacion.yaml` con
+  `pending_formalization` (ver "Deuda de trazabilidad").
+- `ACC-REP-026` conserva exclusivamente su significado documentado (la
+  entrega del equipo): ningun documento se emite con ese id.
+
 ## Validacion
 
 ```bash
@@ -129,7 +139,10 @@ comportamiento, no integridad de artefactos: otra responsabilidad.
 1. IDs unicos.
 2. Links sin referencias rotas y con `relationship` dentro del vocabulario.
 3. Toda User Story pertenece a una Feature.
-4. Toda System Action realiza al menos una User Story.
+4. Toda System Action realiza al menos una User Story, salvo las que
+   declaran `pending_formalization: <motivo>`: capacidades implementadas
+   cuya User Story todavia no esta definida formalmente en `business/`.
+   No se ocultan: el validador las informa como advertencia con su motivo.
 5. Todo Functional Requirement deriva de al menos una System Action.
 6. Todo Technical Requirement satisface al menos un Functional
    Requirement, salvo los marcados `cross_cutting: true`.
@@ -307,6 +320,29 @@ baseline funcional, no una tarea de implementacion.
   codigo registra el hecho "generado + fecha".
 - `BR-REP-012` — el resolver implementa solo la regla de prioridad 2 de
   las 7, coherente con el fail-safe que la propia regla exige.
+
+### Deuda de trazabilidad: IDs de System Action del historial
+
+El backend registra algunas acciones funcionales con `ACC-REP-*` que en
+los archivos de trazabilidad significan otra cosa. Estan **pendientes de
+conciliacion con `rt-rma-app`** y no se reasignan todavia (tampoco se
+asignan `ACC-REP-061` a `ACC-REP-066`):
+
+| ID | En el codigo (historial) | En la trazabilidad |
+|---|---|---|
+| `ACC-REP-021` | Anular un pago | Determinar el importe a cobrar y el saldo y validar la condicion de entrega |
+| `ACC-REP-022` | Devolver dinero al cliente | Registrar que la entrega queda bloqueada por saldo pendiente |
+| `ACC-REP-023` | Registrar o corregir los datos del ingreso | Mantener derivados el importe a cobrar, lo pagado, el saldo y el estado de cobro |
+| `ACC-REP-024` | Confirmar la recepcion fisica | Determinar que la Orden requiere entrega y notificar al cliente |
+| `ACC-REP-025` | Agregar una observacion de recepcion | Generar el comprobante final y la garantia de reparacion |
+| `ACC-REP-027` | Registrar equipo no recibido | Crear la Orden de origen RT_INTERNO |
+| `ACC-REP-028` | Revalidar recursos desde Inventario | Determinar segun la politica del Origen si corresponde comprobante de recepcion |
+
+`ACC-REP-026` ya se concilio: la emision de documentos usa `ACC-REP-002`
+(recepcion) y `ACC-REP-060` (autorizacion). `ACC-REP-060` queda con
+`pending_formalization` hasta incorporar a `business/` la autorizacion del
+cliente por Detalle, hoy definida solo en la baseline V1.4 de
+`rt-rma-app`.
 
 ## Gaps de cobertura de test conocidos
 

@@ -527,7 +527,10 @@ def test_7_un_documento_emitido_no_cambia(cliente, reloj, tmp_path):
     assert nueva["reemplaza_a"] == original["id"]
     assert nueva["motivo"] == "Estado fisico corregido"
     assert nueva["contenido"]["estado_fisico"] == "Tapa trasera rota."
-    assert ids(orden)[-1] == "ACC-REP-026"
+    # La version a pedido queda como ACC-REP-002 (emitir el comprobante
+    # de recepcion); ACC-REP-026 es la entrega, no una emision.
+    assert ids(orden)[-1] == "ACC-REP-002"
+    assert "ACC-REP-026" not in ids(orden)
     assert (
         ok(cliente.get(f"/api/orders/{orden_id}/documents/{original['id']}"))[
             "contenido"

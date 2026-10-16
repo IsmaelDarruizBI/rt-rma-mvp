@@ -20,6 +20,7 @@ from .catalogos import (
 )
 from .documentos import (
     CoberturaGarantia,
+    ContenidoComprobanteAutorizacion,
     ContenidoComprobanteEntrega,
     ContenidoComprobanteRecepcion,
     ContenidoDocumento,
@@ -29,6 +30,7 @@ from .documentos import (
     DocumentoEmitido,
     DocumentosOrden,
     PagoEnDocumento,
+    TrabajoAutorizadoEnDocumento,
     TrabajoCanceladoEnDocumento,
     TrabajoEnDocumento,
     UsuarioEnDocumento,
@@ -143,6 +145,7 @@ __all__ = [
     "ResumenPago",
     # Documentos
     "CoberturaGarantia",
+    "ContenidoComprobanteAutorizacion",
     "ContenidoComprobanteEntrega",
     "ContenidoComprobanteRecepcion",
     "ContenidoDocumento",
@@ -152,6 +155,7 @@ __all__ = [
     "DocumentoEmitido",
     "DocumentosOrden",
     "PagoEnDocumento",
+    "TrabajoAutorizadoEnDocumento",
     "TrabajoCanceladoEnDocumento",
     "TrabajoEnDocumento",
     "UsuarioEnDocumento",

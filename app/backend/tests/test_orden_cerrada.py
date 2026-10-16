@@ -100,7 +100,11 @@ def _comandos(orden: dict) -> list[tuple[str, dict | None]]:
         ),
         (
             f"{base}/executions/{ejecucion}/interrupt",
-            {"usuario_id": TECNICO, "insumos_utilizados": []},
+            {
+                "usuario_id": TECNICO,
+                "insumos_utilizados": [],
+                "motivo": "Falta una pieza.",
+            },
         ),
         (
             f"{base}/executions/{ejecucion}/requires-redefinition",

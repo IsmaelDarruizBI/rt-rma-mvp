@@ -2,13 +2,16 @@
  * Dónde se muestra cada acción de la Orden y para quién.
  *
  * Los formularios siguen siendo los mismos y los sigue dibujando su panel
- * de siempre; `UbicacionAccion` solo decide DÓNDE aparecen:
+ * de siempre; `UbicacionAccion` solo decide DÓNDE aparecen. Todos van al
+ * panel de acciones (a la derecha en escritorio, arriba en el celular),
+ * separados de la información de la Orden:
  *
  * - en la tarjeta «Próximo paso», si la acción resuelve una tarea de la
  *   situación (la lista la manda el backend en `orden.situacion`);
- * - en «Otras acciones / Situaciones especiales», si es excepcional
- *   (cancelar, desistir, interrumpir, forzar…);
- * - en su sección, en cualquier otro caso.
+ * - en «Situaciones especiales», si es excepcional (cancelar, desistir,
+ *   pedir redefinición, forzar sin stock, anular un pago…);
+ * - en «Otras acciones», en cualquier otro caso (o en su sección, si la
+ *   pantalla no tiene ese lugar).
  *
  * Una acción que el usuario actual no puede ejecutar no se dibuja (la
  * tarjeta dice a quién le toca). Es presentación: el backend vuelve a
@@ -29,7 +32,11 @@ import { colores } from "../../components/ui";
 import type { Accion, Orden, Usuario } from "../../types/api";
 import { puedeEjecutar } from "./permisos";
 
-/** Acciones excepcionales: van plegadas, aparte del flujo normal. */
+/**
+ * Acciones excepcionales: van plegadas, aparte del flujo normal. Si una
+ * resuelve la tarea actual (interrumpir junto a completar, forzar sin
+ * stock al esperar repuestos) va a «Próximo paso» con su tarea.
+ */
 export const CODIGOS_ESPECIALES = new Set([
   "INTERRUMPIR_EJECUCION",
   "REQUIERE_REDEFINICION",
@@ -76,10 +83,16 @@ export function accionesDeLaOrden(orden: Orden): Accion[] {
   ];
 }
 
+/**
+ * Opciones secundarias de una tarea: van debajo de la principal, plegadas
+ * detrás de su botón (interrumpir la reparación junto a completarla).
+ */
+export const CODIGOS_SECUNDARIOS = new Set(["INTERRUMPIR_EJECUCION"]);
+
 /** Dónde va una acción que resuelve una tarea de «Próximo paso». */
 export interface LugarEnTarjeta {
   lugar: HTMLElement;
-  /** Es la única acción de su tarea: el título de la tarea alcanza. */
+  /** Es la única acción principal de su tarea: su título alcanza. */
   unica: boolean;
 }
 
@@ -87,8 +100,10 @@ interface Presentacion {
   actor: Usuario | null;
   /** Lugar de la acción en «Próximo paso», si resuelve una tarea. */
   enProximoPaso: (accion: Accion) => LugarEnTarjeta | null;
-  /** Lugar de «Otras acciones / Situaciones especiales». */
+  /** Lugar de «Situaciones especiales». */
   especiales: HTMLElement | null;
+  /** Lugar de «Otras acciones» (las demás que el usuario puede hacer). */
+  otras: HTMLElement | null;
   error: ErrorDeComando | null;
 }
 
@@ -96,6 +111,7 @@ const PresentacionContext = createContext<Presentacion>({
   actor: null,
   enProximoPaso: () => null,
   especiales: null,
+  otras: null,
   error: null,
 });
 
@@ -127,7 +143,7 @@ export function UbicacionAccion({
   accion: Accion;
   children: ReactNode;
 }) {
-  const { actor, enProximoPaso, especiales } = usePresentacion();
+  const { actor, enProximoPaso, especiales, otras } = usePresentacion();
   if (!puedeEjecutar(accion, actor)) return null;
   const clave = claveDeAccion(accion);
   const contenido = (
@@ -145,10 +161,59 @@ export function UbicacionAccion({
       tarea.lugar,
     );
   }
-  return CODIGOS_ESPECIALES.has(accion.codigo) && especiales
-    ? createPortal(contenido, especiales)
-    : contenido;
+  if (CODIGOS_ESPECIALES.has(accion.codigo)) {
+    return especiales ? createPortal(contenido, especiales) : contenido;
+  }
+  return otras ? createPortal(contenido, otras) : contenido;
 }
+
+/**
+ * Las acciones que el usuario puede hacer y que van a cada lugar del
+ * panel: las de las tareas, las especiales y las otras. Es la misma
+ * regla que `UbicacionAccion`, para decir qué hay en cada sección plegada.
+ */
+export function accionesPorLugar(
+  orden: Orden,
+  actor: Usuario | null,
+): { especiales: Accion[]; otras: Accion[] } {
+  const enTareas = new Set(
+    (orden.situacion?.tareas ?? []).flatMap((tarea) =>
+      tarea.acciones
+        .filter((accion) => puedeEjecutar(accion, actor))
+        .map(claveDeAccion),
+    ),
+  );
+  const propias = accionesDeLaOrden(orden).filter(
+    (accion) =>
+      puedeEjecutar(accion, actor) && !enTareas.has(claveDeAccion(accion)),
+  );
+  return {
+    especiales: propias.filter((accion) => CODIGOS_ESPECIALES.has(accion.codigo)),
+    otras: propias.filter(
+      (accion) =>
+        !CODIGOS_ESPECIALES.has(accion.codigo) &&
+        !(accion.codigo in PASOS_RECOMENDADOS),
+    ),
+  };
+}
+
+/**
+ * Pasos recomendados que no son una tarea del backend: si el usuario puede
+ * hacerlos, «Próximo paso» los muestra como un paso propio (antes de las
+ * tareas). Generar el comprobante de autorización sigue a registrar la
+ * autorización del cliente; nunca se genera solo.
+ */
+export const PASOS_RECOMENDADOS: Record<
+  string,
+  { titulo: string; motivo: string }
+> = {
+  EMITIR_COMPROBANTE_AUTORIZACION: {
+    titulo: "Generar el comprobante de autorización",
+    motivo:
+      "Para enviarle al cliente los trabajos que autorizó (no es un " +
+      "comprobante de pago).",
+  },
+};
 
 export function idDeAccion(clave: string): string {
   return `accion-${clave.replace(/[^\w-]/g, "_")}`;

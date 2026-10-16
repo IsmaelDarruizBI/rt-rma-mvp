@@ -24,7 +24,7 @@ import type {
   Usuario,
   VistaPreviaDocumento,
 } from "../types/api";
-import { get, post, put } from "./client";
+import { get, getArchivo, post, put } from "./client";
 
 // --- Catalogos ---------------------------------------------------------
 
@@ -186,6 +186,7 @@ export function interrumpirEjecucion(
   ejecucionId: string,
   usuarioId: string,
   insumosUtilizados: InsumoUtilizado[],
+  motivo: string,
   observaciones: string | null,
 ): Promise<Orden> {
   return post<Orden>(
@@ -193,6 +194,7 @@ export function interrumpirEjecucion(
     {
       usuario_id: usuarioId,
       insumos_utilizados: insumosUtilizados,
+      motivo,
       observaciones,
     },
   );
@@ -682,6 +684,29 @@ export function vistaPreviaDocumento(
   return get<VistaPreviaDocumento>(
     `/api/orders/${ordenId}/documents/preview/${tipo}`,
   );
+}
+
+/**
+ * Comprobante de los trabajos autorizados (Recepción). Solo a pedido: si
+ * lo autorizado no cambió, el backend devuelve la versión vigente sin
+ * duplicarla.
+ */
+export function emitirComprobanteAutorizacion(
+  ordenId: string,
+  usuarioId: string,
+): Promise<Orden> {
+  return post<Orden>(
+    `/api/orders/${ordenId}/documents/authorization-receipt`,
+    { usuario_id: usuarioId },
+  );
+}
+
+/** El PDF de un documento emitido (hoy, el comprobante de autorización). */
+export function obtenerPdfDocumento(
+  ordenId: string,
+  documentoId: string,
+): Promise<Blob> {
+  return getArchivo(`/api/orders/${ordenId}/documents/${documentoId}/pdf`);
 }
 
 /** Versión nueva del comprobante de recepción (con motivo si ya hay una). */

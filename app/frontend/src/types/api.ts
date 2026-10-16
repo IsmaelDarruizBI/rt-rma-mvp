@@ -245,7 +245,8 @@ export interface Custodia {
 export type TipoDocumento =
   | "COMPROBANTE_RECEPCION"
   | "COMPROBANTE_ENTREGA"
-  | "GARANTIA";
+  | "GARANTIA"
+  | "COMPROBANTE_AUTORIZACION";
 
 /** Documento emitido, sin contenido (listado en la Orden). */
 export interface DocumentoResumen {
@@ -366,10 +367,32 @@ export interface ContenidoGarantia extends ContenidoBase {
   observaciones_entrega: string | null;
 }
 
+/** Un trabajo autorizado, con la decisión vigente que lo autorizó. */
+export interface TrabajoAutorizadoEnDocumento extends TrabajoEnDocumento {
+  precio: string;
+  version_definicion: number;
+  autorizado_en: string;
+  canal: CanalComunicacion;
+  registrado_por: UsuarioEnDocumento | null;
+}
+
+/**
+ * Comprobante de autorización: solo los trabajos autorizados (sin
+ * pendientes, rechazados ni cancelados) y su total. No es un comprobante
+ * de pago.
+ */
+export interface ContenidoAutorizacion extends ContenidoBase {
+  tipo: "COMPROBANTE_AUTORIZACION";
+  trabajos: TrabajoAutorizadoEnDocumento[];
+  total_autorizado: string;
+  leyenda: string;
+}
+
 export type ContenidoDocumento =
   | ContenidoRecepcion
   | ContenidoEntrega
-  | ContenidoGarantia;
+  | ContenidoGarantia
+  | ContenidoAutorizacion;
 
 /** Documento emitido con su contenido, tal como se entregó. */
 export interface DocumentoEmitido extends DocumentoResumen {
@@ -520,6 +543,8 @@ export interface Ejecucion {
   fin: string | null;
   insumos_utilizados: InsumoUtilizado[];
   observaciones: string | null;
+  /** PROC-REP-200 "Interrumpido" (VAR-REP-003): motivo obligatorio. */
+  motivo_interrupcion: string | null;
   /** PROC-REP-200 "Requiere redefinicion" (EXC-REP-004). */
   motivo_redefinicion: string | null;
 }

@@ -123,7 +123,8 @@ def _interrumpir(cliente, orden_id, ejecucion_id, usuario=TECNICO, usado="1"):
         json={
             "usuario_id": usuario,
             "insumos_utilizados": insumos,
-            "observaciones": "Falta una herramienta.",
+            "motivo": "Falta una herramienta.",
+            "observaciones": "Vuelve el lunes.",
         },
     )
 
@@ -172,7 +173,8 @@ def test_var_rep_003_interrupcion_de_punta_a_punta(cliente, tmp_path):
     (ejecucion,) = orden["ejecuciones"]
     assert ejecucion["estado"] == "INTERRUMPIDO"
     assert ejecucion["fin"] is not None
-    assert ejecucion["observaciones"] == "Falta una herramienta."
+    assert ejecucion["motivo_interrupcion"] == "Falta una herramienta."
+    assert ejecucion["observaciones"] == "Vuelve el lunes."
     assert ejecucion["insumos_utilizados"] == [
         {"insumo_id": INSUMO, "cantidad": "1"}
     ]
@@ -426,7 +428,7 @@ def test_multidetalle_interrumpir_uno_ofrece_los_trabajables(tmp_path):
             json={
                 "usuario_id": multi.TECNICO,
                 "insumos_utilizados": [],
-                "observaciones": "Cambio de prioridad.",
+                "motivo": "Cambio de prioridad.",
             },
         ).json()
 

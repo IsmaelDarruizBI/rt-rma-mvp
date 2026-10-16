@@ -6,9 +6,12 @@
  * vive en el backend: acá solo se llama a la API y se muestra lo que
  * devuelve, incluidas las acciones disponibles y la situación operativa.
  *
- * La pantalla de una Orden sigue el trabajo del empleado: cabecera,
- * «Próximo paso», trabajos, situaciones especiales, información
- * complementaria (en el orden que más le sirve a cada rol) e historial.
+ * La pantalla de una Orden separa la información de lo que el empleado
+ * hace: a la izquierda la cabecera y la información (cliente y equipo,
+ * trabajos, autorización, ejecuciones e insumos, cobros, documentos,
+ * historial); a la derecha, fijo, el panel de acciones («Próximo paso»,
+ * «Otras acciones» y «Situaciones especiales»). En el celular es una sola
+ * columna con el panel de acciones arriba, después de la cabecera.
  *
  * Qué pantalla se ve lo decide la URL (`#/inicio`, `#/ordenes`,
  * `#/ordenes/nueva`, `#/ordenes/OR-000001`, `#/taller`, `#/inventario`):
@@ -52,6 +55,7 @@ import {
   Bloque,
   CabeceraOrden,
   DatosTecnicos,
+  EjecucionesEInsumos,
   EjecucionesOrden,
   HistorialOrden,
   ProgresoHappyPath,
@@ -81,37 +85,67 @@ import {
 } from "./usuarioDemo";
 import { useRuta } from "./useRuta";
 import {
-  CODIGOS_ESPECIALES,
+  CODIGOS_SECUNDARIOS,
   type ErrorDeComando,
   LugarDeFormularios,
   MensajeDeComando,
+  PASOS_RECOMENDADOS,
   ProveedorPresentacion,
   SeccionPlegable,
   accionesDeLaOrden,
+  accionesPorLugar,
   claveDeAccion,
   puedeEjecutar,
 } from "./presentacion";
-import { ProximoPaso } from "./ProximoPaso";
+import { INDICE_PASO_RECOMENDADO, ProximoPaso } from "./ProximoPaso";
 
-type Complementaria = "cliente" | "cobros" | "documentos";
+type Informativa =
+  | "cliente"
+  | "trabajos"
+  | "autorizacion"
+  | "ejecuciones"
+  | "cobros"
+  | "documentos";
 
-/** Lo que se oculta en pantallas angostas (sin una hoja de estilos aparte). */
+/**
+ * Lo que se oculta en pantallas angostas y la grilla de la Orden: dos
+ * columnas en escritorio (información | acciones, fijas al desplazarse),
+ * una sola en el celular con las acciones arriba.
+ */
 const ESTILOS_RESPONSIVOS = `
 @media (max-width: 520px) {
   .rt-solo-escritorio { display: none; }
 }
+.rt-orden {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "cabecera" "acciones" "informacion";
+}
+.rt-orden-cabecera { grid-area: cabecera; min-width: 0; }
+.rt-orden-acciones { grid-area: acciones; min-width: 0; display: grid; gap: 0.75rem; align-content: start; }
+.rt-orden-informacion { grid-area: informacion; min-width: 0; display: grid; gap: 0.75rem; align-content: start; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 960px) {
+  .rt-orden {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "cabecera acciones" "informacion acciones";
+    align-items: start;
+  }
+  .rt-orden-acciones {
+    position: sticky;
+    top: 0.75rem;
+    box-sizing: border-box;
+    max-height: calc(100vh - 2.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: 0.25rem;
+  }
+}
 `;
 
-/** Orden de la información complementaria según lo que más usa cada rol. */
-const COMPLEMENTARIAS: Record<RolUsuario, Complementaria[]> = {
-  RECEPCION: ["cliente", "cobros", "documentos"],
-  TECNICO: ["cliente", "documentos", "cobros"],
-  COORDINADOR_RMA: ["cliente", "cobros", "documentos"],
-  ADMINISTRADOR: ["cobros", "cliente", "documentos"],
-};
-
-/** Qué sección complementaria abre cada rol sin que la pida. */
-const ABIERTA_POR_ROL: Partial<Record<RolUsuario, Complementaria>> = {
+/** Qué sección de información abre cada rol sin que la pida. */
+const ABIERTA_POR_ROL: Partial<Record<RolUsuario, Informativa>> = {
   ADMINISTRADOR: "cobros",
 };
 
@@ -162,6 +196,7 @@ export function PanelOrdenes() {
     {},
   );
   const [especiales, setEspeciales] = useState<HTMLElement | null>(null);
+  const [otras, setOtras] = useState<HTMLElement | null>(null);
   const registradores = useRef(
     new Map<number, (elemento: HTMLElement | null) => void>(),
   );
@@ -342,13 +377,34 @@ export function PanelOrdenes() {
       const propias = tarea.acciones.filter((accion) =>
         puedeEjecutar(accion, actor),
       );
+      // Una opción secundaria (interrumpir) no le quita el título a la
+      // principal: va plegada detrás de su propio botón.
+      const principales = propias.filter(
+        (accion) => !CODIGOS_SECUNDARIOS.has(accion.codigo),
+      );
       propias.forEach((accion) =>
         mapa.set(claveDeAccion(accion), {
           indice,
-          unica: propias.length === 1,
+          unica: principales.length <= 1,
         }),
       );
     });
+    // Pasos recomendados que no son tareas del backend (el comprobante de
+    // autorización): su propio lugar al principio de «Próximo paso».
+    if (orden && !orden.cerrada) {
+      accionesDeLaOrden(orden)
+        .filter(
+          (accion) =>
+            accion.codigo in PASOS_RECOMENDADOS &&
+            puedeEjecutar(accion, actor),
+        )
+        .forEach((accion) =>
+          mapa.set(claveDeAccion(accion), {
+            indice: INDICE_PASO_RECOMENDADO,
+            unica: true,
+          }),
+        );
+    }
     return mapa;
   }, [orden, actor]);
 
@@ -406,13 +462,19 @@ export function PanelOrdenes() {
       ),
     revalidarRecursos: () =>
       void ejecutarComando(() => api.revalidarRecursos(idOrden)),
-    interrumpirEjecucion: (ejecucionId, insumosUtilizados, observaciones) =>
+    interrumpirEjecucion: (
+      ejecucionId,
+      insumosUtilizados,
+      motivo,
+      observaciones,
+    ) =>
       void ejecutarComando(() =>
         api.interrumpirEjecucion(
           idOrden,
           ejecucionId,
           idActor,
           insumosUtilizados,
+          motivo,
           observaciones || null,
         ),
       ),
@@ -502,6 +564,7 @@ export function PanelOrdenes() {
     actor,
     enProximoPaso,
     especiales,
+    otras,
     error,
   };
 
@@ -510,6 +573,13 @@ export function PanelOrdenes() {
   const tomarDesdeCola = (ordenId: string, estacionId: string) =>
     ejecutarComando(() => api.tomarOrden(ordenId, idActor, estacionId));
 
+  // Qué acciones van a «Otras acciones» y a «Situaciones especiales».
+  const porLugar = orden
+    ? accionesPorLugar(orden, actor)
+    : { especiales: [], otras: [] };
+  const abiertaPara = (seccion: Informativa) =>
+    actor !== null && ABIERTA_POR_ROL[actor.rol] === seccion;
+
   // La sección del menú que corresponde a la pantalla actual.
   const seccion =
     ruta.pantalla === "nueva" || ruta.pantalla === "orden"
@@ -517,7 +587,13 @@ export function PanelOrdenes() {
       : ruta.pantalla;
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1rem" }}>
+    <div
+      style={{
+        maxWidth: enDetalle ? 1360 : 1040,
+        margin: "0 auto",
+        padding: "1rem",
+      }}
+    >
       <style>{ESTILOS_RESPONSIVOS}</style>
       <header
         style={{
@@ -648,246 +724,250 @@ export function PanelOrdenes() {
       ) : (
         <ProveedorPresentacion value={contexto}>
           {/*
-            Jerarquía vertical, cada bloque a ancho completo. minmax(0,
-            1fr): ningún contenido ancho (por ejemplo el historial) ensancha
-            la pantalla en el celular.
+            minmax(0, 1fr): ningún contenido ancho (por ejemplo el
+            historial) ensancha la pantalla en el celular.
           */}
-          <div
-            style={{
-              display: "grid",
-              gap: "0.75rem",
-              gridTemplateColumns: "minmax(0, 1fr)",
-            }}
-          >
-            <CabeceraOrden
-              orden={orden}
-              usuarios={usuarios}
-              estaciones={estaciones}
-            />
-            <ProximoPaso
-              orden={orden}
-              actor={actor}
-              usuarios={usuarios}
-              registrarTarea={registrarTarea}
-              errorGeneral={errorSinLugar(error, orden, actor)}
-            />
-            <SeccionPlegable
-              key={`${orden.id}-trabajos`}
-              titulo="Trabajos"
-              resumen={resumenTrabajos(orden)}
-              abierta
-            >
-              <TrabajosOrden orden={orden} usuarios={usuarios} />
-              <AutorizacionClienteOrden
+          <div className="rt-orden">
+            <div className="rt-orden-cabecera">
+              <CabeceraOrden
+                orden={orden}
+                usuarios={usuarios}
+                estaciones={estaciones}
+              />
+            </div>
+
+            <aside className="rt-orden-acciones" aria-label="Acciones de la orden">
+              <ProximoPaso
                 orden={orden}
                 actor={actor}
                 usuarios={usuarios}
-                ocupado={ocupado}
-                onRegistrar={(canal, observaciones, decisiones) =>
-                  void ejecutarComando(() =>
-                    api.registrarDecisionCliente(
-                      idOrden,
-                      idActor,
-                      canal,
-                      observaciones || null,
-                      decisiones,
-                    ),
-                  )
-                }
-                onDesistir={(detalleId, canal, motivo) =>
-                  void ejecutarComando(() =>
-                    api.desistir(idOrden, detalleId, idActor, canal, motivo),
-                  )
-                }
+                registrarTarea={registrarTarea}
+                errorGeneral={errorSinLugar(error, orden, actor)}
               />
-              <div style={{ marginTop: "0.8rem" }}>
-                <AccionesOrden
-                  orden={orden}
-                  actor={actor}
-                  usuarios={usuarios}
-                  tipos={tipos}
-                  estaciones={estaciones}
-                  prioridades={prioridades}
-                  ocupado={ocupado}
-                  ejecutar={ejecutor}
-                />
-              </div>
-            </SeccionPlegable>
-
-            {especialesDe(orden, actor).length > 0 && (
-              <SeccionPlegable
-                key={`${orden.id}-${actorId}-especiales`}
-                titulo="Otras acciones / Situaciones especiales"
-                resumen={especialesDe(orden, actor).join(" · ")}
-              >
-                <p
-                  style={{
-                    margin: "0 0 0.8rem",
-                    fontSize: "0.8rem",
-                    color: colores.suave,
-                  }}
+              {porLugar.otras.length > 0 && (
+                <SeccionPlegable
+                  key={`${orden.id}-${actorId}-otras`}
+                  titulo="Otras acciones"
+                  resumen={nombresDe(porLugar.otras).join(" · ")}
                 >
-                  Situaciones excepcionales. Cancelar no borra nada: el trabajo
-                  queda cancelado con su motivo y deja de cobrarse.
-                </p>
-                <LugarDeFormularios onElemento={setEspeciales} />
-                <CancelacionesOrden
+                  <LugarDeFormularios onElemento={setOtras} />
+                </SeccionPlegable>
+              )}
+              {porLugar.especiales.length > 0 && (
+                <SeccionPlegable
+                  key={`${orden.id}-${actorId}-especiales`}
+                  titulo="Situaciones especiales"
+                  resumen={nombresDe(porLugar.especiales).join(" · ")}
+                >
+                  <p
+                    style={{
+                      margin: "0 0 0.8rem",
+                      fontSize: "0.8rem",
+                      color: colores.suave,
+                    }}
+                  >
+                    Situaciones excepcionales. Cancelar no borra nada: el
+                    trabajo queda cancelado con su motivo y deja de cobrarse.
+                  </p>
+                  <LugarDeFormularios onElemento={setEspeciales} />
+                </SeccionPlegable>
+              )}
+            </aside>
+
+            <div className="rt-orden-informacion">
+              {/* Solo formularios: cada uno va a su lugar del panel. */}
+              <AccionesOrden
+                orden={orden}
+                actor={actor}
+                usuarios={usuarios}
+                tipos={tipos}
+                estaciones={estaciones}
+                prioridades={prioridades}
+                ocupado={ocupado}
+                ejecutar={ejecutor}
+              />
+              <CancelacionesOrden
+                orden={orden}
+                actor={actor}
+                usuarios={usuarios}
+                tipos={tipos}
+                estaciones={estaciones}
+                prioridades={prioridades}
+                ocupado={ocupado}
+                ejecutar={ejecutor}
+              />
+
+              <SeccionPlegable
+                key={`${orden.id}-${actorId}-cliente`}
+                titulo="Cliente y equipo"
+                resumen={resumenCliente(orden)}
+                abierta={abiertaPara("cliente")}
+              >
+                <CustodiaOrden
                   orden={orden}
                   actor={actor}
                   usuarios={usuarios}
-                  tipos={tipos}
-                  estaciones={estaciones}
-                  prioridades={prioridades}
                   ocupado={ocupado}
-                  ejecutar={ejecutor}
+                  onRegistrar={(datos, equipo) =>
+                    void ejecutarComando(() =>
+                      api.registrarRecepcion(idOrden, idActor, datos, equipo),
+                    )
+                  }
+                  onConfirmar={(observaciones) =>
+                    void ejecutarComando(() =>
+                      api.confirmarRecepcion(idOrden, idActor, observaciones),
+                    )
+                  }
+                  onNoRecibido={(motivo) =>
+                    void ejecutarComando(() =>
+                      api.registrarEquipoNoRecibido(idOrden, idActor, motivo),
+                    )
+                  }
+                  onObservar={(texto) =>
+                    void ejecutarComando(() =>
+                      api.agregarObservacionRecepcion(idOrden, idActor, texto),
+                    )
+                  }
                 />
               </SeccionPlegable>
-            )}
 
-            {(actor ? COMPLEMENTARIAS[actor.rol] : COMPLEMENTARIAS.RECEPCION).map(
-              (seccion) => {
-                const abierta =
-                  actor !== null && ABIERTA_POR_ROL[actor.rol] === seccion;
-                const llave = `${orden.id}-${actorId}-${seccion}`;
-                if (seccion === "cliente") {
-                  return (
-                    <SeccionPlegable
-                      key={llave}
-                      titulo="Cliente y equipo"
-                      resumen={resumenCliente(orden)}
-                      abierta={abierta}
-                    >
-                      <CustodiaOrden
-                        orden={orden}
-                        actor={actor}
-                        usuarios={usuarios}
-                        ocupado={ocupado}
-                        onRegistrar={(datos, equipo) =>
-                          void ejecutarComando(() =>
-                            api.registrarRecepcion(
-                              idOrden,
-                              idActor,
-                              datos,
-                              equipo,
-                            ),
-                          )
-                        }
-                        onConfirmar={(observaciones) =>
-                          void ejecutarComando(() =>
-                            api.confirmarRecepcion(
-                              idOrden,
-                              idActor,
-                              observaciones,
-                            ),
-                          )
-                        }
-                        onNoRecibido={(motivo) =>
-                          void ejecutarComando(() =>
-                            api.registrarEquipoNoRecibido(
-                              idOrden,
-                              idActor,
-                              motivo,
-                            ),
-                          )
-                        }
-                        onObservar={(texto) =>
-                          void ejecutarComando(() =>
-                            api.agregarObservacionRecepcion(
-                              idOrden,
-                              idActor,
-                              texto,
-                            ),
-                          )
-                        }
-                      />
-                    </SeccionPlegable>
-                  );
-                }
-                if (seccion === "cobros") {
-                  return (
-                    <SeccionPlegable
-                      key={llave}
-                      titulo="Cobros"
-                      resumen={resumenCobros(orden)}
-                      abierta={abierta}
-                    >
-                      <PagosYMovimientos
-                        orden={orden}
-                        actor={actor}
-                        usuarios={usuarios}
-                        medios={medios}
-                        ocupado={ocupado}
-                        onPagar={(monto, metodo, referencia, operacionId) =>
-                          void ejecutarComando(() =>
-                            api.registrarPago(
-                              idOrden,
-                              idActor,
-                              monto,
-                              metodo,
-                              referencia,
-                              operacionId,
-                            ),
-                          )
-                        }
-                        onAnular={(pagoId, motivo) =>
-                          void ejecutarComando(() =>
-                            api.anularPago(idOrden, pagoId, idActor, motivo),
-                          )
-                        }
-                        onDevolver={(datos) =>
-                          void ejecutarComando(() =>
-                            api.devolverDinero(idOrden, idActor, datos),
-                          )
-                        }
-                      />
-                    </SeccionPlegable>
-                  );
-                }
-                return (
+              <SeccionPlegable
+                key={`${orden.id}-trabajos`}
+                titulo="Trabajos"
+                resumen={resumenTrabajos(orden)}
+                abierta
+              >
+                <TrabajosOrden orden={orden} usuarios={usuarios} />
+              </SeccionPlegable>
+
+              {orden.autorizacion_requerida &&
+                orden.reparaciones_detail.length > 0 && (
                   <SeccionPlegable
-                    key={llave}
-                    titulo="Documentos"
-                    resumen={resumenDocumentos(orden)}
-                    abierta={abierta}
+                    key={`${orden.id}-${actorId}-autorizacion`}
+                    titulo="Autorización del cliente"
+                    resumen={resumenAutorizacion(orden)}
+                    abierta={abiertaPara("autorizacion")}
                   >
-                    <DocumentosOrden
+                    <AutorizacionClienteOrden
                       orden={orden}
                       actor={actor}
                       usuarios={usuarios}
                       ocupado={ocupado}
-                      onEmitirRecepcion={(motivo) =>
+                      onRegistrar={(canal, observaciones, decisiones) =>
                         void ejecutarComando(() =>
-                          api.emitirComprobanteRecepcion(
+                          api.registrarDecisionCliente(
                             idOrden,
                             idActor,
+                            canal,
+                            observaciones || null,
+                            decisiones,
+                          ),
+                        )
+                      }
+                      onDesistir={(detalleId, canal, motivo) =>
+                        void ejecutarComando(() =>
+                          api.desistir(
+                            idOrden,
+                            detalleId,
+                            idActor,
+                            canal,
                             motivo,
                           ),
                         )
                       }
                     />
                   </SeccionPlegable>
-                );
-              },
-            )}
+                )}
 
-            <SeccionPlegable
-              key={`${orden.id}-historial`}
-              titulo="Historial y datos técnicos"
-              resumen={`${orden.historial.length} eventos registrados`}
-            >
-              <Bloque titulo="Datos técnicos">
-                <DatosTecnicos orden={orden} />
-              </Bloque>
-              <Bloque titulo="Recorrido técnico del proceso">
-                <ProgresoHappyPath orden={orden} />
-              </Bloque>
-              <Bloque titulo="Ejecuciones">
-                <EjecucionesOrden orden={orden} />
-              </Bloque>
-              <Bloque titulo="Historial">
-                <HistorialOrden orden={orden} />
-              </Bloque>
-            </SeccionPlegable>
+              <SeccionPlegable
+                key={`${orden.id}-${actorId}-ejecuciones`}
+                titulo="Ejecuciones e insumos"
+                resumen={resumenEjecuciones(orden)}
+                abierta={abiertaPara("ejecuciones")}
+              >
+                <EjecucionesEInsumos orden={orden} usuarios={usuarios} />
+              </SeccionPlegable>
+
+              <SeccionPlegable
+                key={`${orden.id}-${actorId}-cobros`}
+                titulo="Cobros"
+                resumen={resumenCobros(orden)}
+                abierta={abiertaPara("cobros")}
+              >
+                <PagosYMovimientos
+                  orden={orden}
+                  actor={actor}
+                  usuarios={usuarios}
+                  medios={medios}
+                  ocupado={ocupado}
+                  onPagar={(monto, metodo, referencia, operacionId) =>
+                    void ejecutarComando(() =>
+                      api.registrarPago(
+                        idOrden,
+                        idActor,
+                        monto,
+                        metodo,
+                        referencia,
+                        operacionId,
+                      ),
+                    )
+                  }
+                  onAnular={(pagoId, motivo) =>
+                    void ejecutarComando(() =>
+                      api.anularPago(idOrden, pagoId, idActor, motivo),
+                    )
+                  }
+                  onDevolver={(datos) =>
+                    void ejecutarComando(() =>
+                      api.devolverDinero(idOrden, idActor, datos),
+                    )
+                  }
+                />
+              </SeccionPlegable>
+
+              <SeccionPlegable
+                key={`${orden.id}-${actorId}-documentos`}
+                titulo="Documentos"
+                resumen={resumenDocumentos(orden)}
+                abierta={abiertaPara("documentos")}
+              >
+                <DocumentosOrden
+                  orden={orden}
+                  actor={actor}
+                  usuarios={usuarios}
+                  ocupado={ocupado}
+                  onEmitirRecepcion={(motivo) =>
+                    void ejecutarComando(() =>
+                      api.emitirComprobanteRecepcion(idOrden, idActor, motivo),
+                    )
+                  }
+                  onEmitirAutorizacion={() =>
+                    void ejecutarComando(() =>
+                      api.emitirComprobanteAutorizacion(idOrden, idActor),
+                    )
+                  }
+                />
+              </SeccionPlegable>
+
+              <SeccionPlegable
+                key={`${orden.id}-historial`}
+                titulo="Historial y datos técnicos"
+                resumen={`${orden.historial.length} eventos registrados`}
+              >
+                <Bloque titulo="Datos técnicos">
+                  <DatosTecnicos orden={orden} />
+                </Bloque>
+                <Bloque titulo="Recorrido técnico del proceso">
+                  <ProgresoHappyPath orden={orden} />
+                </Bloque>
+                <Bloque titulo="Ejecuciones (técnico)">
+                  <EjecucionesOrden orden={orden} />
+                </Bloque>
+                <Bloque titulo="Historial">
+                  <HistorialOrden orden={orden} />
+                </Bloque>
+              </SeccionPlegable>
+            </div>
           </div>
         </ProveedorPresentacion>
       )}
@@ -946,22 +1026,13 @@ function errorSinLugar(
   return visible ? null : error;
 }
 
-/** Nombres de las acciones excepcionales que el usuario puede usar. */
-function especialesDe(orden: Orden, actor: Usuario | null): string[] {
-  const principales = new Set(
-    (orden.situacion?.tareas ?? []).flatMap((tarea) =>
-      tarea.acciones.map(claveDeAccion),
+/** Nombres (sin repetir) de un grupo de acciones, para el resumen. */
+function nombresDe(acciones: Accion[]): string[] {
+  return [
+    ...new Set(
+      acciones.map((accion) => NOMBRE_ACCION[accion.codigo] ?? accion.etiqueta),
     ),
-  );
-  const nombres = accionesDeLaOrden(orden)
-    .filter(
-      (accion) =>
-        CODIGOS_ESPECIALES.has(accion.codigo) &&
-        !principales.has(claveDeAccion(accion)) &&
-        puedeEjecutar(accion, actor),
-    )
-    .map((accion) => NOMBRE_ACCION[accion.codigo] ?? accion.etiqueta);
-  return [...new Set(nombres)];
+  ];
 }
 
 function resumenTrabajos(orden: Orden): ReactNode {
@@ -979,6 +1050,43 @@ function resumenTrabajos(orden: Orden): ReactNode {
         ).toLowerCase()})`,
     )
     .join(" · ");
+}
+
+/** [singular, plural] para el resumen de la autorización. */
+const RESUMEN_AUTORIZACION: Record<string, [string, string]> = {
+  AUTORIZADO: ["autorizado", "autorizados"],
+  PENDIENTE: ["esperando al cliente", "esperando al cliente"],
+  RECHAZADO: ["rechazado", "rechazados"],
+  SIN_DECISION: ["sin decisión", "sin decisión"],
+  NO_REQUERIDA: ["sin autorización requerida", "sin autorización requerida"],
+};
+
+function resumenAutorizacion(orden: Orden): string {
+  const cuenta = new Map<string, number>();
+  for (const detalle of orden.reparaciones_detail) {
+    if (detalle.estado === "CANCELADO") continue;
+    const estado = detalle.estado_autorizacion;
+    cuenta.set(estado, (cuenta.get(estado) ?? 0) + 1);
+  }
+  return (
+    [...cuenta]
+      .map(([estado, cantidad]) => {
+        const [uno, varios] = RESUMEN_AUTORIZACION[estado] ?? [estado, estado];
+        return `${cantidad} ${cantidad === 1 ? uno : varios}`;
+      })
+      .join(" · ") || "Sin trabajos vigentes"
+  );
+}
+
+function resumenEjecuciones(orden: Orden): string {
+  const cantidad = orden.ejecuciones.length;
+  if (cantidad === 0) return "Todavía no se empezó ningún trabajo";
+  const enCurso = orden.ejecuciones.some(
+    (ejecucion) => ejecucion.estado === "EN_PROGRESO",
+  );
+  return `${cantidad} ejecución${cantidad === 1 ? "" : "es"}${
+    enCurso ? " · una en curso" : ""
+  }`;
 }
 
 function resumenCliente(orden: Orden): string {

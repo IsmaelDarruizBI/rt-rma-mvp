@@ -547,7 +547,11 @@ def test_un_detalle_interrumpido_sin_stock_entra_en_exc_003(tmp_path):
         ejecucion_id = orden["ejecuciones"][0]["id"]
         orden = cliente.post(
             f"/api/orders/{orden_id}/executions/{ejecucion_id}/interrupt",
-            json={"usuario_id": TECNICO, "insumos_utilizados": []},
+            json={
+                "usuario_id": TECNICO,
+                "insumos_utilizados": [],
+                "motivo": "Falta una pieza.",
+            },
         ).json()
         assert orden["reparaciones_detail"][0]["estado"] == "DEFINIDO"
         assert [t["estado"] for t in orden["tomas"]] == ["ACTIVA"]

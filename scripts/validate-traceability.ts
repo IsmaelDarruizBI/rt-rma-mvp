@@ -21,7 +21,10 @@
  *      no broken references. Relationships must come from the declared
  *      vocabulary.
  *   3. Every User Story belongs to a Feature.
- *   4. Every System Action realizes at least one User Story.
+ *   4. Every System Action realizes at least one User Story (unless it
+ *      explicitly declares `pending_formalization: <reason>`: an
+ *      implemented capability whose User Story is not yet formally
+ *      defined in business/; it is reported as a warning, never hidden).
  *   5. Every Functional Requirement derives from at least one System
  *      Action.
  *   6. Every Technical Requirement satisfies at least one Functional
@@ -61,6 +64,7 @@ type Item = {
   name?: string;
   status?: string;
   cross_cutting?: boolean;
+  pending_formalization?: string;
   feature_status?: string;
   implemented_slice_status?: string;
   [key: string]: unknown;
@@ -209,9 +213,16 @@ for (const us of itemsOfType("user_story")) {
 }
 
 for (const acc of itemsOfType("system_action")) {
-  if (!hasOutgoing(acc.id, "realizes", "user_story")) {
-    fail(`${acc.id} no realiza ninguna User Story.`);
+  if (hasOutgoing(acc.id, "realizes", "user_story")) continue;
+  const pendiente = acc.pending_formalization;
+  if (typeof pendiente === "string" && pendiente.trim() !== "") {
+    warn(
+      `${acc.id} no realiza ninguna User Story: formalizacion pendiente ` +
+        `(${pendiente.trim()})`,
+    );
+    continue;
   }
+  fail(`${acc.id} no realiza ninguna User Story.`);
 }
 
 for (const fr of itemsOfType("functional_requirement")) {

@@ -573,7 +573,11 @@ def test_circuito_desistimiento_posterior_a_la_autorizacion(cliente, tmp_path):
     ok(
         cliente.post(
             f"/api/orders/{orden_id}/executions/{ejecucion_id}/interrupt",
-            json={"usuario_id": TECNICO, "insumos_utilizados": []},
+            json={
+                "usuario_id": TECNICO,
+                "insumos_utilizados": [],
+                "motivo": "El cliente desiste.",
+            },
         )
     )
     movimientos = len(

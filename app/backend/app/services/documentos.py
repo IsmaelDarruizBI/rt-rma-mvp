@@ -4,6 +4,12 @@ Nodos cubiertos: PROC-REP-050/060 (comprobante de recepcion) y
 PROC-REP-280 (comprobante final y garantia de reparacion).
 Features: FEAT-REP-001, FEAT-REP-007, FEAT-REP-008.
 
+El comprobante de autorizacion no es un nodo del proceso: lo emite
+Recepcion a pedido (``emitir_comprobante_autorizacion``, ACC-REP-060) con
+los trabajos que el cliente autorizo. Convive con el de recepcion, que sigue
+siendo la constancia de ingreso y custodia del equipo; una version nueva de
+este a pedido queda como ACC-REP-002.
+
 Dos niveles:
 
 - las marcas del proceso (``generar_comprobante_recepcion`` y
@@ -20,9 +26,11 @@ documento existente: nunca se duplica.
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone, tzinfo
+from decimal import Decimal
 
 from app.domain.models import (
     CoberturaGarantia,
+    ContenidoComprobanteAutorizacion,
     ContenidoComprobanteEntrega,
     ContenidoComprobanteRecepcion,
     ContenidoDocumento,
@@ -38,8 +46,13 @@ from app.domain.models import (
     EstadoWorkflow,
     OrdenReparacion,
     PagoEnDocumento,
+    RegistroAutorizacionCliente,
+    ReparacionDetail,
+    ResultadoAutorizacion,
+    RolUsuario,
     TipoDocumento,
     TipoEntrega,
+    TrabajoAutorizadoEnDocumento,
     TrabajoCanceladoEnDocumento,
     TrabajoEnDocumento,
     Usuario,
@@ -48,19 +61,31 @@ from app.domain.models import (
 from app.domain.politicas import CondicionComercial, politica_de
 
 from .autorizacion import validar_alguno_de
+from .autorizacion_cliente import (
+    decision_vigente,
+    requiere_autorizacion_cliente,
+)
 from .custodia import ROLES_RECEPCION_EQUIPO, estado_custodia, tipo_de_entrega
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .pagos import condicion_entrega_cumplida
 from .revisiones import finalizada_sin_reparacion, lista_para_cierre
 from .workflow import registrar_accion_funcional, registrar_paso
 
-ACCION_EMITIR_DOCUMENTO = "ACC-REP-026"
+# Emision a pedido de un documento: accion funcional sin nodo propio, con
+# la System Action de CADA documento. ACC-REP-026 es la entrega del equipo
+# (traceability/hp-rep-001.yaml) y nunca se usa para emitir documentos.
+ACCION_EMITIR_COMPROBANTE_RECEPCION = "ACC-REP-002"
+ACCION_EMITIR_COMPROBANTE_AUTORIZACION = "ACC-REP-060"
 
 SIGLA_DOCUMENTO = {
     TipoDocumento.COMPROBANTE_RECEPCION: "REC",
     TipoDocumento.COMPROBANTE_ENTREGA: "ENT",
     TipoDocumento.GARANTIA: "GAR",
+    TipoDocumento.COMPROBANTE_AUTORIZACION: "AUT",
 }
+
+# Lo emite quien registra la decision del cliente (PROC-REP-046).
+ROLES_COMPROBANTE_AUTORIZACION = (RolUsuario.RECEPCION,)
 
 LEYENDA_RECEPCION = (
     "Este comprobante acredita la recepcion del equipo en las condiciones "
@@ -71,6 +96,11 @@ LEYENDA_RECEPCION_GARANTIA = (
     "Este comprobante acredita la recepcion del equipo en las condiciones "
     "indicadas para su revision en garantia. No implica que el reclamo este "
     "aceptado ni compromete ningun cobro."
+)
+LEYENDA_AUTORIZACION = (
+    "Este comprobante detalla los trabajos que el cliente autorizó y su "
+    "precio. No es un comprobante de pago ni una factura, y no requiere "
+    "firma. Los trabajos pendientes, rechazados o cancelados no figuran."
 )
 
 
@@ -452,6 +482,198 @@ def contenido_garantia(
     )
 
 
+# --- Comprobante de autorizacion ---------------------------------------------
+
+
+def _autorizados(
+    orden: OrdenReparacion,
+) -> list[tuple[ReparacionDetail, RegistroAutorizacionCliente]]:
+    """Detalles con una decision AUTORIZADO vigente y sin cancelar.
+
+    Vigente es la decision sobre la definicion actual del Detalle: si se
+    redefinio, la autorizacion anterior ya no cuenta (BR-REP-029). Un
+    Detalle desistido o cancelado despues de autorizarse no figura.
+    """
+    if not requiere_autorizacion_cliente(orden):
+        return []
+    autorizados = []
+    for detalle in orden.reparaciones_detail:
+        if detalle.estado is EstadoReparacionDetail.CANCELADO:
+            continue
+        vigente = decision_vigente(detalle)
+        if (
+            vigente is not None
+            and vigente.resultado is ResultadoAutorizacion.AUTORIZADO
+        ):
+            autorizados.append((detalle, vigente))
+    return autorizados
+
+
+def contenido_comprobante_autorizacion(
+    orden: OrdenReparacion,
+    contexto: ContextoDocumentos,
+) -> ContenidoComprobanteAutorizacion:
+    """Los trabajos autorizados, cada uno con su precio y su decision."""
+    trabajos = [
+        TrabajoAutorizadoEnDocumento(
+            detalle_id=detalle.id,
+            tipo_reparacion_id=detalle.tipo_reparacion_id,
+            nombre=contexto.tipos.get(
+                detalle.tipo_reparacion_id, detalle.tipo_reparacion_id
+            ),
+            precio=detalle.precio,
+            detalle_origen_id=detalle.detalle_origen_id,
+            version_definicion=decision.version_definicion,
+            autorizado_en=decision.fecha,
+            canal=decision.canal,
+            registrado_por=_usuario(contexto, decision.usuario_id),
+        )
+        for detalle, decision in _autorizados(orden)
+    ]
+    return ContenidoComprobanteAutorizacion(
+        **_datos_comunes(orden, contexto),
+        trabajos=trabajos,
+        total_autorizado=sum(
+            (trabajo.precio for trabajo in trabajos), Decimal("0")
+        ),
+        leyenda=LEYENDA_AUTORIZACION,
+    )
+
+
+def _firma(trabajos) -> tuple:
+    """Que se autorizo: Detalle, definicion autorizada y precio."""
+    return tuple(
+        (trabajo.detalle_id, trabajo.version_definicion, trabajo.precio)
+        for trabajo in trabajos
+    )
+
+
+def _firma_vigente(orden: OrdenReparacion) -> tuple:
+    return tuple(
+        (detalle.id, decision.version_definicion, detalle.precio)
+        for detalle, decision in _autorizados(orden)
+    )
+
+
+def comprobante_autorizacion_emitible(orden: OrdenReparacion) -> bool:
+    """Hay trabajos autorizados que el ultimo comprobante no refleja.
+
+    Sin comprobante todavia, alcanza con un trabajo autorizado. Con uno ya
+    emitido, solo si cambio lo autorizado (otro trabajo autorizado, uno
+    cancelado o redefinido): asi un segundo clic no lo duplica.
+    """
+    if (
+        orden.esta_cerrada
+        or orden.estado_workflow is EstadoWorkflow.CANCELADA
+        or not requiere_autorizacion_cliente(orden)
+    ):
+        return False
+    vigente = _firma_vigente(orden)
+    if not vigente:
+        return False
+    ultimo = ultimo_documento(orden, TipoDocumento.COMPROBANTE_AUTORIZACION)
+    return ultimo is None or _firma(ultimo.contenido.trabajos) != vigente
+
+
+def _lista(nombres: Sequence[str]) -> str:
+    citados = [f"«{nombre}»" for nombre in nombres]
+    if len(citados) < 2:
+        return "".join(citados)
+    return ", ".join(citados[:-1]) + " y " + citados[-1]
+
+
+def _motivo_autorizacion(
+    anterior: ContenidoComprobanteAutorizacion,
+    actual: ContenidoComprobanteAutorizacion,
+) -> str:
+    """Motivo de una version nueva: que cambio en lo autorizado."""
+    previos = {trabajo.detalle_id: trabajo for trabajo in anterior.trabajos}
+    vigentes = {trabajo.detalle_id: trabajo for trabajo in actual.trabajos}
+    agregados = [t.nombre for d, t in vigentes.items() if d not in previos]
+    cambiados = [
+        t.nombre
+        for d, t in vigentes.items()
+        if d in previos and _firma([t]) != _firma([previos[d]])
+    ]
+    quitados = [t.nombre for d, t in previos.items() if d not in vigentes]
+    partes = []
+    if agregados:
+        partes.append(f"se autorizó {_lista(agregados)}")
+    if cambiados:
+        partes.append(f"cambió lo autorizado de {_lista(cambiados)}")
+    if quitados:
+        partes.append(
+            f"{_lista(quitados)} ya no figura (cancelado o redefinido)"
+        )
+    return "Cambiaron los trabajos autorizados: " + "; ".join(partes) + "."
+
+
+def emitir_comprobante_autorizacion(
+    orden: OrdenReparacion,
+    *,
+    usuario: Usuario,
+    contenido: ContenidoComprobanteAutorizacion,
+    fecha: datetime,
+) -> tuple[OrdenReparacion, DocumentoEmitido, bool]:
+    """Recepcion emite el comprobante de los trabajos autorizados.
+
+    Solo a pedido (nunca lo emite el proceso) y solo con algun trabajo
+    autorizado. Si lo autorizado no cambio desde la ultima version, la
+    devuelve sin crear otra (un doble clic no duplica). Si cambio, emite la
+    version siguiente con el motivo calculado: las anteriores se conservan
+    tal como se entregaron. Deja la accion en el historial (ACC-REP-060).
+    """
+    validar_alguno_de(usuario, ROLES_COMPROBANTE_AUTORIZACION)
+    if not requiere_autorizacion_cliente(orden):
+        raise PrecondicionInvalidaError(
+            f"Una Orden {orden.origen.value} no registra la autorizacion "
+            "del cliente: no emite comprobante de autorizacion."
+        )
+    if orden.estado_workflow is EstadoWorkflow.CANCELADA:
+        raise PrecondicionInvalidaError(
+            "La Orden esta cancelada: no emite comprobante de autorizacion."
+        )
+    if not contenido.trabajos:
+        raise PrecondicionInvalidaError(
+            "No hay trabajos autorizados por el cliente: el comprobante de "
+            "autorizacion solo lista trabajos autorizados."
+        )
+    ultimo = ultimo_documento(orden, TipoDocumento.COMPROBANTE_AUTORIZACION)
+    if ultimo is not None and _firma(ultimo.contenido.trabajos) == _firma(
+        contenido.trabajos
+    ):
+        return orden, ultimo, False
+
+    nueva_orden, documento, creado = registrar_documento(
+        orden,
+        contenido=contenido,
+        fecha=fecha,
+        usuario_id=usuario.id,
+        motivo=(
+            _motivo_autorizacion(ultimo.contenido, contenido)
+            if ultimo is not None
+            else None
+        ),
+    )
+    if creado:
+        observacion = (
+            f"{documento.id} (version {documento.version}): "
+            f"{_lista([t.nombre for t in contenido.trabajos])}, total "
+            f"{contenido.total_autorizado}"
+        )
+        if documento.motivo:
+            observacion += f". {documento.motivo}"
+        nueva_orden = registrar_accion_funcional(
+            nueva_orden,
+            accion_id=ACCION_EMITIR_COMPROBANTE_AUTORIZACION,
+            accion="EMITIR_DOCUMENTO",
+            fecha=fecha,
+            usuario_id=usuario.id,
+            observacion=observacion,
+        )
+    return nueva_orden, documento, creado
+
+
 # --- Documentos emitidos -----------------------------------------------------
 
 
@@ -574,7 +796,7 @@ def emitir_comprobante_recepcion(
             observacion += f": {documento.motivo}"
         nueva_orden = registrar_accion_funcional(
             nueva_orden,
-            accion_id=ACCION_EMITIR_DOCUMENTO,
+            accion_id=ACCION_EMITIR_COMPROBANTE_RECEPCION,
             accion="EMITIR_DOCUMENTO",
             fecha=fecha,
             usuario_id=usuario.id,
@@ -629,4 +851,6 @@ def contenido_de(
         return contenido_comprobante_recepcion(orden, contexto)
     if tipo is TipoDocumento.COMPROBANTE_ENTREGA:
         return contenido_comprobante_entrega(orden, contexto)
+    if tipo is TipoDocumento.COMPROBANTE_AUTORIZACION:
+        return contenido_comprobante_autorizacion(orden, contexto)
     return contenido_garantia(orden, contexto)

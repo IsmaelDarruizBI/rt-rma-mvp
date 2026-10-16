@@ -6,6 +6,13 @@
  * vigentes, sin emitir). La hoja se imprime en A4 o se guarda como PDF
  * desde el navegador; en la impresión no salen la navegación ni los
  * botones.
+ *
+ * Dos comprobantes distintos al ingreso: el de RECEPCIÓN (lo emite el
+ * proceso al finalizar la definición; acredita el ingreso y la custodia
+ * del equipo, sin trabajos ni precios) y el de AUTORIZACIÓN (lo genera
+ * Recepción con un botón; lista lo que el cliente autorizó y su precio, se
+ * descarga como PDF y se comparte por WhatsApp). Ninguno es un
+ * comprobante de pago.
  */
 
 import { type ReactNode, useCallback, useEffect, useState } from "react";
@@ -22,6 +29,8 @@ import {
   importe,
 } from "../../components/ui";
 import type {
+  Accion,
+  ContenidoAutorizacion,
   ContenidoDocumento,
   ContenidoEntrega,
   ContenidoGarantia,
@@ -33,12 +42,29 @@ import type {
   Usuario,
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
+import { CANAL, etiqueta } from "./etiquetas";
 import { Seccion, habilitada } from "./PagosOrden";
+import {
+  type ResultadoCompartir,
+  compartirPorWhatsapp,
+  descargarArchivo,
+  mensajeComprobante,
+  telefonoParaWhatsapp,
+} from "./whatsapp";
 
 const NOMBRE_TIPO: Record<TipoDocumento, string> = {
   COMPROBANTE_RECEPCION: "Comprobante de recepción",
   COMPROBANTE_ENTREGA: "Comprobante de entrega",
   GARANTIA: "Garantía",
+  COMPROBANTE_AUTORIZACION: "Comprobante de autorización",
+};
+
+/** Para qué sirve cada uno: los dos del ingreso no son lo mismo. */
+const PARA_QUE: Partial<Record<TipoDocumento, string>> = {
+  COMPROBANTE_RECEPCION:
+    "Constancia de ingreso y custodia del equipo. No incluye trabajos ni precios.",
+  COMPROBANTE_AUTORIZACION:
+    "Trabajos que autorizó el cliente y su precio. No es un comprobante de pago.",
 };
 
 /** Título del documento: una devolución sin reparación no es una entrega. */
@@ -49,6 +75,9 @@ function tituloDe(contenido: ContenidoDocumento): string {
       : "Comprobante de entrega";
   }
   if (contenido.tipo === "GARANTIA") return "Certificado de garantía";
+  if (contenido.tipo === "COMPROBANTE_AUTORIZACION") {
+    return "Comprobante de autorización";
+  }
   return "Comprobante de recepción";
 }
 
@@ -63,6 +92,7 @@ interface Props {
   usuarios: Usuario[];
   ocupado: boolean;
   onEmitirRecepcion: (motivo: string | null) => void;
+  onEmitirAutorizacion: () => void;
 }
 
 export function DocumentosOrden({
@@ -71,10 +101,14 @@ export function DocumentosOrden({
   usuarios,
   ocupado,
   onEmitirRecepcion,
+  onEmitirAutorizacion,
 }: Props) {
   const [documentos, setDocumentos] = useState<DocumentosDeOrden | null>(null);
   const [visible, setVisible] = useState<Visible | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Comprobante de autorización pedido desde esta pantalla: al llegar la
+  // versión nueva se abre para descargarla o compartirla.
+  const [pedido, setPedido] = useState<string | null>(null);
 
   // Se recargan cuando la Orden cambia (emisión, entrega, devolución).
   useEffect(() => {
@@ -87,6 +121,17 @@ export function DocumentosOrden({
       vigente = false;
     };
   }, [orden.id, orden.updated_at]);
+
+  useEffect(() => {
+    if (pedido === null || !documentos) return;
+    const ultimo = documentos.emitidos
+      .filter((documento) => documento.tipo === "COMPROBANTE_AUTORIZACION")
+      .at(-1);
+    if (ultimo && ultimo.id !== pedido) {
+      setPedido(null);
+      setVisible({ clase: "emitido", documento: ultimo });
+    }
+  }, [documentos, pedido]);
 
   const verPrevia = useCallback(
     async (tipo: TipoDocumento) => {
@@ -103,6 +148,9 @@ export function DocumentosOrden({
 
   const emitir = orden.acciones_custodia.find(
     (accion) => accion.codigo === "EMITIR_COMPROBANTE_RECEPCION",
+  );
+  const generar = orden.acciones_autorizacion.find(
+    (accion) => accion.codigo === "EMITIR_COMPROBANTE_AUTORIZACION",
   );
   const emitidos = documentos?.emitidos ?? [];
   const marcas = documentos?.marcas ?? orden.documentos;
@@ -152,18 +200,30 @@ export function DocumentosOrden({
                 ) : (
                   <Etiqueta color={colores.suave}>REEMPLAZADO</Etiqueta>
                 )}
+                {PARA_QUE[documento.tipo] && (
+                  <span style={{ display: "block", color: colores.suave }}>
+                    {PARA_QUE[documento.tipo]}
+                  </span>
+                )}
                 {documento.motivo && (
                   <span style={{ display: "block", color: colores.suave }}>
                     Motivo de la versión: {documento.motivo}
                   </span>
                 )}
               </span>
-              <Boton
-                variante="secundario"
-                onClick={() => setVisible({ clase: "emitido", documento })}
-              >
-                Ver / imprimir
-              </Boton>
+              <span style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                <Boton
+                  variante="secundario"
+                  onClick={() => setVisible({ clase: "emitido", documento })}
+                >
+                  {documento.contenido.tipo === "COMPROBANTE_AUTORIZACION"
+                    ? "Ver"
+                    : "Ver / imprimir"}
+                </Boton>
+                {documento.contenido.tipo === "COMPROBANTE_AUTORIZACION" && (
+                  <AccionesPdf documento={documento} />
+                )}
+              </span>
             </li>
           ))}
           {sinCopia.map(([tipo, marca]) => (
@@ -194,6 +254,23 @@ export function DocumentosOrden({
         </div>
       )}
 
+      {generar && (
+        <FormularioComprobanteAutorizacion
+          accion={generar}
+          orden={orden}
+          emitidos={emitidos}
+          ocupado={ocupado}
+          onGenerar={() => {
+            setPedido(
+              emitidos
+                .filter((documento) => documento.tipo === "COMPROBANTE_AUTORIZACION")
+                .at(-1)?.id ?? "",
+            );
+            onEmitirAutorizacion();
+          }}
+        />
+      )}
+
       {emitir && (
         <FormularioReemision
           accion={emitir}
@@ -213,6 +290,141 @@ export function DocumentosOrden({
         <VisorDocumento visible={visible} onCerrar={() => setVisible(null)} />
       )}
     </div>
+  );
+}
+
+/**
+ * Generar el comprobante de autorización (solo con el botón). Muestra qué
+ * va a incluir: los trabajos autorizados, sin pendientes, rechazados ni
+ * cancelados. El backend arma el contenido y no duplica si nada cambió.
+ */
+function FormularioComprobanteAutorizacion({
+  accion,
+  orden,
+  emitidos,
+  ocupado,
+  onGenerar,
+}: {
+  accion: Accion;
+  orden: Orden;
+  emitidos: DocumentoEmitido[];
+  ocupado: boolean;
+  onGenerar: () => void;
+}) {
+  const autorizados = orden.reparaciones_detail.filter(
+    (detalle) =>
+      detalle.estado_autorizacion === "AUTORIZADO" &&
+      detalle.estado !== "CANCELADO",
+  );
+  const total = autorizados.reduce(
+    (suma, detalle) => suma + Number(detalle.precio),
+    0,
+  );
+  const anterior = emitidos
+    .filter((documento) => documento.tipo === "COMPROBANTE_AUTORIZACION")
+    .at(-1);
+  return (
+    <Seccion titulo="Generar el comprobante de autorización" accion={accion}>
+      <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", color: colores.suave }}>
+        Incluye solo lo que el cliente autorizó. No es un comprobante de pago
+        y no lleva firma.
+        {anterior &&
+          ` Reemplaza a ${anterior.id}, que se conserva sin cambios.`}
+      </p>
+      <ul style={{ margin: "0 0 0.4rem", paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
+        {autorizados.map((detalle) => (
+          <li key={detalle.id}>
+            {detalle.tipo_reparacion_nombre} · {importe(detalle.precio)}
+          </li>
+        ))}
+      </ul>
+      <p style={{ margin: "0 0 0.6rem", fontSize: "0.85rem" }}>
+        Total autorizado: <strong>{importe(String(total))}</strong>
+      </p>
+      <Boton disabled={ocupado} onClick={onGenerar}>
+        Generar comprobante de autorización
+      </Boton>
+    </Seccion>
+  );
+}
+
+/**
+ * «Descargar PDF» y «Compartir por WhatsApp» de un comprobante emitido.
+ * Compartir no registra nada: no prueba que el cliente lo recibió.
+ */
+function AccionesPdf({ documento }: { documento: DocumentoEmitido }) {
+  const [trabajando, setTrabajando] = useState(false);
+  const [aviso, setAviso] = useState<ReactNode>(null);
+  const nombre = `${documento.id}.pdf`;
+  const contenido = documento.contenido as ContenidoAutorizacion;
+
+  const conPdf = async (usar: (pdf: Blob) => Promise<void> | void) => {
+    setTrabajando(true);
+    setAviso(null);
+    try {
+      await usar(await api.obtenerPdfDocumento(documento.orden_id, documento.id));
+    } catch {
+      setAviso("No se pudo obtener el PDF. Probá de nuevo.");
+    } finally {
+      setTrabajando(false);
+    }
+  };
+
+  const compartir = () =>
+    conPdf(async (pdf) => {
+      const resultado = await compartirPorWhatsapp({
+        pdf,
+        nombre,
+        mensaje: mensajeComprobante(contenido),
+        telefono: telefonoParaWhatsapp(contenido.cliente?.telefono),
+      });
+      setAviso(textoCompartir(resultado, nombre));
+    });
+
+  return (
+    <>
+      <Boton
+        variante="secundario"
+        disabled={trabajando}
+        onClick={() =>
+          void conPdf((pdf) => {
+            descargarArchivo(pdf, nombre);
+            setAviso(`Se descargó ${nombre}.`);
+          })
+        }
+      >
+        Descargar PDF
+      </Boton>
+      <Boton variante="secundario" disabled={trabajando} onClick={() => void compartir()}>
+        Compartir por WhatsApp
+      </Boton>
+      {aviso && (
+        <span
+          role="status"
+          style={{ flexBasis: "100%", fontSize: "0.8rem", color: colores.suave }}
+        >
+          {aviso}
+        </span>
+      )}
+    </>
+  );
+}
+
+function textoCompartir(resultado: ResultadoCompartir, nombre: string): ReactNode {
+  if (resultado.forma === "menu") {
+    return "Se abrió el menú para compartir. Confirmá en WhatsApp que se envió: el sistema no lo registra.";
+  }
+  if (resultado.forma === "cancelado") {
+    return "No se compartió.";
+  }
+  return (
+    <>
+      Se descargó {nombre} y {resultado.abierto ? "se abrió" : "se preparó"}{" "}
+      WhatsApp con el mensaje: adjuntá el PDF antes de enviarlo.{" "}
+      <a href={resultado.enlace} target="_blank" rel="noopener noreferrer">
+        Abrir WhatsApp
+      </a>
+    </>
   );
 }
 
@@ -330,7 +542,12 @@ function VisorDocumento({
           marginBottom: "0.75rem",
         }}
       >
-        <Boton onClick={() => window.print()}>Imprimir / guardar PDF</Boton>
+        {visible.clase === "emitido" &&
+        visible.documento.contenido.tipo === "COMPROBANTE_AUTORIZACION" ? (
+          <AccionesPdf documento={visible.documento} />
+        ) : (
+          <Boton onClick={() => window.print()}>Imprimir / guardar PDF</Boton>
+        )}
         <Boton variante="secundario" onClick={onCerrar}>
           Cerrar
         </Boton>
@@ -434,6 +651,15 @@ function HojaDocumento({ visible }: { visible: Visible }) {
         <CuerpoEntrega contenido={contenido} />
       )}
       {contenido.tipo === "GARANTIA" && <CuerpoGarantia contenido={contenido} />}
+      {contenido.tipo === "COMPROBANTE_AUTORIZACION" && (
+        <CuerpoAutorizacion
+          contenido={contenido}
+          reemplazaA={
+            visible.clase === "emitido" ? visible.documento.reemplaza_a : null
+          }
+          motivo={visible.clase === "emitido" ? visible.documento.motivo : null}
+        />
+      )}
     </article>
   );
 }
@@ -610,6 +836,49 @@ function CuerpoRecepcion({ contenido }: { contenido: ContenidoRecepcion }) {
         {contenido.leyenda}
       </p>
       <Firmas izquierda="Recibió por la empresa" derecha="Cliente (firma y aclaración)" />
+    </>
+  );
+}
+
+/** Lo autorizado y su total: sin firma, no es un comprobante de pago. */
+function CuerpoAutorizacion({
+  contenido,
+  reemplazaA,
+  motivo,
+}: {
+  contenido: ContenidoAutorizacion;
+  reemplazaA: string | null;
+  motivo: string | null;
+}) {
+  return (
+    <>
+      <Dato etiqueta="Falla declarada" valor={contenido.equipo.falla_reportada} />
+      <Titulo>Trabajos autorizados por el cliente</Titulo>
+      <Tabla
+        columnas={["Trabajo", "Autorización", "Precio"]}
+        filas={contenido.trabajos.map((trabajo) => [
+          trabajo.nombre,
+          `${fechaHora(trabajo.autorizado_en)} · ${etiqueta(CANAL, trabajo.canal)}`,
+          importe(trabajo.precio),
+        ])}
+      />
+      <Dato etiqueta="Total autorizado" valor={<strong>{importe(contenido.total_autorizado)}</strong>} />
+      {reemplazaA && (
+        <p style={{ margin: "0.6rem 0 0", fontSize: "9pt", color: "#555" }}>
+          Esta versión reemplaza a {reemplazaA}, que se conserva sin cambios.
+          {motivo ? ` ${motivo}` : ""}
+        </p>
+      )}
+      <p
+        style={{
+          margin: "1rem 0 0",
+          padding: "0.5rem 0.6rem",
+          border: "1px solid #999",
+          fontSize: "9pt",
+        }}
+      >
+        <strong>No es un comprobante de pago.</strong> {contenido.leyenda}
+      </p>
     </>
   );
 }

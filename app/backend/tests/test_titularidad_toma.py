@@ -85,11 +85,13 @@ def _iniciar(cliente, orden_id, usuario):
 
 
 def _cerrar(cliente, orden_id, ejecucion_id, usuario, accion="complete"):
+    motivo = {} if accion == "complete" else {"motivo": "Falta una pieza."}
     return cliente.post(
         f"/api/orders/{orden_id}/executions/{ejecucion_id}/{accion}",
         json={
             "usuario_id": usuario,
             "insumos_utilizados": [{"insumo_id": INSUMO, "cantidad": "1"}],
+            **motivo,
         },
     )
 

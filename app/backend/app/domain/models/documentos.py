@@ -11,7 +11,8 @@ Dos cosas distintas:
   correccion es una version nueva que referencia a la anterior.
 
 No se guarda ningun PDF ni binario: el snapshot alcanza para reproducir la
-version imprimible.
+version imprimible (y el PDF del comprobante de autorizacion, que se arma
+del snapshot cada vez que se descarga).
 """
 
 from datetime import date, datetime
@@ -22,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from .catalogos import DatosEmpresa
 from .enums import (
+    CanalComunicacion,
     EstadoCustodia,
     EstadoWorkflow,
     OrigenCancelacion,
@@ -198,10 +200,45 @@ class ContenidoGarantia(_ContenidoBase):
     observaciones_entrega: str | None = None
 
 
+class TrabajoAutorizadoEnDocumento(TrabajoEnDocumento):
+    """Un Detalle autorizado, con la decision vigente que lo autorizo.
+
+    ``version_definicion`` es la definicion del Detalle que el cliente
+    autorizo: una redefinicion posterior abre otra version y pide otra
+    decision (BR-REP-029). Fecha, canal y quien la registro son los de esa
+    decision.
+    """
+
+    precio: Decimal
+    version_definicion: int = Field(ge=1)
+    autorizado_en: datetime
+    canal: CanalComunicacion
+    registrado_por: UsuarioEnDocumento | None = None
+
+
+class ContenidoComprobanteAutorizacion(_ContenidoBase):
+    """Comprobante de autorizacion: lo que el cliente autorizo y su precio.
+
+    Lo emite Recepcion a pedido, no un nodo del proceso. Lista solo los
+    Detalles con una decision AUTORIZADO vigente que no fueron cancelados:
+    los pendientes, rechazados, desistidos y cancelados no figuran.
+    ``total_autorizado`` es la suma de sus precios. No es un comprobante de
+    pago ni lleva firma (``leyenda``).
+    """
+
+    tipo: Literal[TipoDocumento.COMPROBANTE_AUTORIZACION] = (
+        TipoDocumento.COMPROBANTE_AUTORIZACION
+    )
+    trabajos: list[TrabajoAutorizadoEnDocumento] = Field(default_factory=list)
+    total_autorizado: Decimal
+    leyenda: str
+
+
 ContenidoDocumento = Annotated[
     ContenidoComprobanteRecepcion
     | ContenidoComprobanteEntrega
-    | ContenidoGarantia,
+    | ContenidoGarantia
+    | ContenidoComprobanteAutorizacion,
     Field(discriminator="tipo"),
 ]
 

@@ -342,12 +342,18 @@ class TipoEntrega(str, Enum):
 class TipoDocumento(str, Enum):
     """Documentos que la Orden emite al cliente.
 
-    COMPROBANTE_RECEPCION  PROC-REP-060 (FEAT-REP-001)
-    COMPROBANTE_ENTREGA    PROC-REP-280, o la devolucion sin reparar
-                           de una Orden CANCELADA (PROC-REP-270)
-    GARANTIA               PROC-REP-280, solo con trabajos realizados
+    COMPROBANTE_RECEPCION      PROC-REP-060 (FEAT-REP-001): constancia
+                               de ingreso y custodia del equipo
+    COMPROBANTE_ENTREGA        PROC-REP-280, o la devolucion sin reparar
+                               de una Orden CANCELADA (PROC-REP-270)
+    GARANTIA                   PROC-REP-280, solo con trabajos realizados
+    COMPROBANTE_AUTORIZACION   a pedido de Recepcion (ACC-REP-060): los
+                               trabajos que el cliente autorizo y su
+                               precio. No es un nodo del proceso ni un
+                               comprobante de pago.
     """
 
     COMPROBANTE_RECEPCION = "COMPROBANTE_RECEPCION"
     COMPROBANTE_ENTREGA = "COMPROBANTE_ENTREGA"
     GARANTIA = "GARANTIA"
+    COMPROBANTE_AUTORIZACION = "COMPROBANTE_AUTORIZACION"

@@ -258,6 +258,7 @@ def interrumpir_ejecucion(
     ejecucion_id: str,
     usuario_id: str,
     insumos_utilizados: Sequence[InsumoUtilizado],
+    motivo: str,
     observaciones: str | None = None,
 ) -> tuple[OrdenReparacion, ResultadoEvaluacionOrden]:
     """El tecnico interrumpe la Ejecucion (190 -> 200 Interrumpido -> 210
@@ -270,11 +271,14 @@ def interrumpir_ejecucion(
     ABIERTA_TRABAJABLE), no se fija aqui.
 
     NO cierra la toma: el tecnico puede iniciar una Ejecucion nueva
-    (mismo u otro Detalle) o liberar la Orden (PROC-REP-212/213).
+    (mismo u otro Detalle) o liberar la Orden (PROC-REP-212/213). El
+    motivo es obligatorio; sin el no se guarda nada ni se mueve stock.
     """
     return _cerrar_ejecucion(
         contexto,
-        registrar_resultado=registrar_ejecucion_interrumpida,
+        registrar_resultado=partial(
+            registrar_ejecucion_interrumpida, motivo=motivo
+        ),
         orden_id=orden_id,
         ejecucion_id=ejecucion_id,
         usuario_id=usuario_id,
@@ -330,8 +334,10 @@ def _cerrar_ejecucion(
 ) -> tuple[OrdenReparacion, ResultadoEvaluacionOrden]:
     """190 -> 200 -> 210 -> 211 para cualquier resultado de PROC-REP-200.
 
-    El motivo de "Requiere redefinicion" se fija antes, con
-    ``functools.partial``: el cierre es uno solo para los tres resultados.
+    El motivo de "Interrumpido" y el de "Requiere redefinicion" se fijan
+    antes, con ``functools.partial``: el cierre es uno solo para los tres
+    resultados. El resultado se registra antes de mover el inventario, asi
+    que un rechazo no deja movimientos.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha: datetime = contexto.ahora()

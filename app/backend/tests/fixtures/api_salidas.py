@@ -329,9 +329,15 @@ def cerrar_ejecucion(
     utilizados = (
         [{"insumo_id": insumo, "cantidad": cantidad}] if cantidad else []
     )
+    # Interrumpir (y pedir redefinicion) exigen motivo.
+    motivo = {} if accion == "complete" else {"motivo": "Falta una pieza."}
     return cliente.post(
         f"/api/orders/{orden_id}/executions/{ejecucion_id}/{accion}",
-        json={"usuario_id": tecnico, "insumos_utilizados": utilizados},
+        json={
+            "usuario_id": tecnico,
+            "insumos_utilizados": utilizados,
+            **motivo,
+        },
     )
 
 

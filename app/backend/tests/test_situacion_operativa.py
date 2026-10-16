@@ -93,12 +93,14 @@ def test_recien_creada_pendiente_de_recepcion_y_de_definicion(tmp_path):
 
         assert situacion["codigo"] == "PENDIENTE_RECEPCION"
         assert situacion["titulo"] == "Pendiente de recepción"
-        # Dos tareas igual de relevantes: no se inventa una prioridad.
-        confirmar, definir = situacion["tareas"]
+        # Secuencia recomendada: primero cargar los trabajos, despues
+        # confirmar la recepcion. Ninguna espera a la otra.
+        cargar, confirmar = situacion["tareas"]
+        assert cargar["titulo"] == "Cargar los trabajos"
+        assert _codigos(cargar) == ["AGREGAR_DETALLE", "ENVIAR_A_REVISION"]
         assert _codigos(confirmar) == ["CONFIRMAR_RECEPCION"]
         assert confirmar["responsable"] == "Recepción o Administración"
-        assert _codigos(definir) == ["AGREGAR_DETALLE", "ENVIAR_A_REVISION"]
-        assert situacion["responsable"] == "Recepción o Administración"
+        assert situacion["responsable"] == cargar["responsable"]
         assert situacion["desde"] is not None
         assert _etapas(situacion) == {
             "INGRESO": "EN_CURSO",
@@ -108,6 +110,25 @@ def test_recien_creada_pendiente_de_recepcion_y_de_definicion(tmp_path):
             "CONTROL": "PENDIENTE",
             "ENTREGA": "PENDIENTE",
         }
+
+
+def test_con_trabajos_cargados_confirmar_y_despues_finalizar(tmp_path):
+    with _cliente(tmp_path, stock_bateria="5") as cliente:
+        orden_id = crear(cliente)
+        agregar(cliente, orden_id)
+
+        situacion = _situacion(cliente, orden_id)
+
+        # 3 confirmar la recepcion fisica, 4 finalizar la definicion.
+        assert situacion["codigo"] == "PENDIENTE_RECEPCION"
+        confirmar, finalizar_ = situacion["tareas"]
+        assert _codigos(confirmar) == ["CONFIRMAR_RECEPCION"]
+        assert finalizar_["titulo"] == "Finalizar la definición"
+        assert _codigos(finalizar_) == [
+            "AGREGAR_DETALLE",
+            "FINALIZAR_DEFINICION",
+        ]
+        assert situacion["avisos"] == []
 
 
 def test_con_recepcion_confirmada_queda_pendiente_de_definicion(tmp_path):
@@ -120,6 +141,7 @@ def test_con_recepcion_confirmada_queda_pendiente_de_definicion(tmp_path):
 
         assert situacion["codigo"] == "PENDIENTE_DEFINICION"
         (tarea,) = situacion["tareas"]
+        assert tarea["titulo"] == "Finalizar la definición"
         assert _codigos(tarea) == ["AGREGAR_DETALLE", "FINALIZAR_DEFINICION"]
         assert situacion["avisos"] == []
 
@@ -219,7 +241,7 @@ def test_tomada_sin_custodia_la_recepcion_es_lo_que_sigue(tmp_path):
         assert "RECEPCION_PENDIENTE" not in _avisos(situacion)
 
 
-def test_en_reparacion_solo_completar_es_la_tarea(tmp_path):
+def test_en_reparacion_completar_o_interrumpir(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
         orden_id = definida(cliente)
         tomada(cliente, orden_id)
@@ -230,9 +252,15 @@ def test_en_reparacion_solo_completar_es_la_tarea(tmp_path):
         assert situacion["codigo"] == "EN_REPARACION"
         assert "Cambio" in situacion["descripcion"]
         (tarea,) = situacion["tareas"]
-        # Interrumpir y pedir redefinicion son situaciones especiales.
-        assert _codigos(tarea) == ["COMPLETAR_EJECUCION"]
-        assert tarea["acciones"][0]["ejecucion_id"] == ejecucion_id
+        # Interrumpir es la otra salida de la misma Ejecucion: va en la
+        # tarea. Pedir la redefinicion sigue siendo especial.
+        assert _codigos(tarea) == [
+            "COMPLETAR_EJECUCION",
+            "INTERRUMPIR_EJECUCION",
+        ]
+        for accion in tarea["acciones"]:
+            assert accion["ejecucion_id"] == ejecucion_id
+            assert accion["usuario_id"] == TECNICO
         ejecucion = _orden(cliente, orden_id)["ejecuciones"][0]
         assert situacion["desde"] == ejecucion["inicio"]
 

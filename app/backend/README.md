@@ -96,6 +96,7 @@ GET  /api/orders/{orden_id}/finances
 GET  /api/orders/{orden_id}/custody
 GET  /api/orders/{orden_id}/documents
 GET  /api/orders/{orden_id}/documents/{documento_id}
+GET  /api/orders/{orden_id}/documents/{documento_id}/pdf
 GET  /api/orders/{orden_id}/documents/preview/{tipo}
 GET  /api/catalogs/repair-types | stations | users | payment-methods | priorities
 GET  /api/inventory?buscar=&solo_faltantes=
@@ -233,7 +234,8 @@ Recepcion fisica, custodia, entrega y documentos:
 | `POST /api/orders/{id}/reception/confirm` | RECEPCION o ADMINISTRADOR | `ACC-REP-024`: el equipo quedo en el local (custodia) |
 | `POST /api/orders/{id}/reception/not-received` | RECEPCION o ADMINISTRADOR | `ACC-REP-027`: el equipo nunca ingreso (Orden cancelada, motivo obligatorio) [→ 268 → EVT-REP-999] |
 | `POST /api/orders/{id}/reception/notes` | RECEPCION o ADMINISTRADOR | `ACC-REP-025`: observacion complementaria |
-| `POST /api/orders/{id}/documents/reception-receipt` | RECEPCION o ADMINISTRADOR | `ACC-REP-026`: version nueva del comprobante de recepcion (con motivo) |
+| `POST /api/orders/{id}/documents/reception-receipt` | RECEPCION o ADMINISTRADOR | `ACC-REP-002`: version nueva del comprobante de recepcion (con motivo) |
+| `POST /api/orders/{id}/documents/authorization-receipt` | RECEPCION | `ACC-REP-060`: comprobante de los trabajos autorizados (solo a pedido; version nueva solo si cambio lo autorizado, con motivo calculado). El PDF: `GET .../documents/{documento_id}/pdf` |
 
 - **Comprobante != custodia.** El comprobante de recepcion es un
   documento; la custodia es una decision explicita, con usuario y fecha:

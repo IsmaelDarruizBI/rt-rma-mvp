@@ -373,6 +373,9 @@ function Trabajo({
           {nombreDeUsuario(usuarios, ejecucion.usuario_id)} ·{" "}
           {fechaCorta(ejecucion.inicio)}
           {ejecucion.fin ? ` a ${fechaCorta(ejecucion.fin)}` : ""}
+          {ejecucion.motivo_interrupcion
+            ? ` · Interrumpida: ${ejecucion.motivo_interrupcion}`
+            : ""}
           {ejecucion.observaciones ? ` · ${ejecucion.observaciones}` : ""}
           {ejecucion.motivo_redefinicion
             ? ` · Requiere redefinición: ${ejecucion.motivo_redefinicion}`
@@ -528,6 +531,107 @@ export function ProgresoHappyPath({ orden }: { orden: Orden }) {
  * nunca se reabre: continuar el Detalle crea una Ejecución nueva, y todas
  * quedan listadas.
  */
+/**
+ * Ejecuciones e insumos en términos del negocio: qué trabajo, quién, cuándo,
+ * cómo terminó, qué insumos usó y por qué se interrumpió. Los IDs quedan en
+ * «Historial y datos técnicos».
+ */
+export function EjecucionesEInsumos({
+  orden,
+  usuarios,
+}: {
+  orden: Orden;
+  usuarios: Usuario[];
+}) {
+  if (orden.ejecuciones.length === 0) {
+    return (
+      <p style={{ margin: 0, fontSize: "0.85rem", color: colores.suave }}>
+        Todavía no se empezó ningún trabajo.
+      </p>
+    );
+  }
+  return (
+    <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+      {orden.ejecuciones.map((ejecucion) => {
+        const detalle = orden.reparaciones_detail.find(
+          (candidato) => candidato.id === ejecucion.reparacion_detail_id,
+        );
+        const nombreInsumo = (insumoId: string) =>
+          detalle?.insumos_previstos.find(
+            (previsto) => previsto.insumo_id === insumoId,
+          )?.nombre ?? insumoId;
+        const usados = ejecucion.insumos_utilizados.filter(
+          (insumo) => Number(insumo.cantidad) > 0,
+        );
+        return (
+          <li
+            key={ejecucion.id}
+            style={{
+              padding: "0.5rem 0",
+              borderBottom: `1px solid ${colores.borde}`,
+              fontSize: "0.85rem",
+            }}
+          >
+            <strong>
+              {detalle?.tipo_reparacion_nombre ?? ejecucion.reparacion_detail_id}
+            </strong>{" "}
+            <Etiqueta
+              color={
+                ejecucion.estado === "EN_PROGRESO"
+                  ? colores.acento
+                  : ejecucion.estado === "COMPLETADO"
+                    ? colores.ok
+                    : colores.alerta
+              }
+            >
+              {etiqueta(EJECUCION, ejecucion.estado)}
+            </Etiqueta>
+            <Linea>
+              {nombreDeUsuario(usuarios, ejecucion.usuario_id)} · desde{" "}
+              {fechaCorta(ejecucion.inicio)}
+              {ejecucion.fin ? ` hasta ${fechaCorta(ejecucion.fin)}` : ""}
+            </Linea>
+            {ejecucion.estado === "EN_PROGRESO" ? (
+              detalle && detalle.insumos_previstos.length > 0 && (
+                <Linea>
+                  Insumos reservados:{" "}
+                  {detalle.insumos_previstos
+                    .map(
+                      (previsto) =>
+                        `${previsto.nombre} × ${Number(previsto.cantidad_prevista)}`,
+                    )
+                    .join(", ")}
+                </Linea>
+              )
+            ) : (
+              <Linea>
+                Insumos utilizados:{" "}
+                {usados.length
+                  ? usados
+                      .map(
+                        (insumo) =>
+                          `${nombreInsumo(insumo.insumo_id)} × ${Number(insumo.cantidad)}`,
+                      )
+                      .join(", ")
+                  : "ninguno"}
+              </Linea>
+            )}
+            {ejecucion.motivo_interrupcion && (
+              <Linea>Motivo de la interrupción: {ejecucion.motivo_interrupcion}</Linea>
+            )}
+            {ejecucion.observaciones && (
+              <Linea>Observaciones: {ejecucion.observaciones}</Linea>
+            )}
+            {ejecucion.motivo_redefinicion && (
+              <Linea>Pidió redefinición: {ejecucion.motivo_redefinicion}</Linea>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function EjecucionesOrden({ orden }: { orden: Orden }) {
   if (orden.ejecuciones.length === 0) {
     return (

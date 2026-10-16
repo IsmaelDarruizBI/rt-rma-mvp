@@ -9,6 +9,7 @@ Origenes (HP-REP-001/002/003).
 
 import json
 from decimal import Decimal
+from functools import partial
 
 import pytest
 
@@ -94,6 +95,7 @@ def _interrumpida(
         insumos_utilizados=_utilizado(utilizado),
         usuario=TECNICO,
         fecha=t(100),
+        motivo="Falta una herramienta.",
         observaciones="Falta una herramienta.",
     )
 
@@ -170,6 +172,7 @@ def test_solo_el_tecnico_propietario_puede_interrumpir():
             insumos_utilizados=[],
             usuario=TECNICO_DOS,
             fecha=t(100),
+            motivo="Falta una pieza.",
         )
     with pytest.raises(PrecondicionInvalidaError):
         registrar_ejecucion_interrumpida(
@@ -178,6 +181,7 @@ def test_solo_el_tecnico_propietario_puede_interrumpir():
             insumos_utilizados=[],
             usuario=flujo_mvp.RECEPCION,
             fecha=t(100),
+            motivo="Falta una pieza.",
         )
     assert orden.ejecuciones[0].estado is EstadoEjecucion.EN_PROGRESO
 
@@ -189,7 +193,7 @@ def test_una_ejecucion_terminal_no_puede_interrumpirse(terminal):
     cierre = (
         registrar_ejecucion_completada
         if terminal == "completar"
-        else registrar_ejecucion_interrumpida
+        else partial(registrar_ejecucion_interrumpida, motivo="Una pausa.")
     )
     orden = cierre(
         orden,
@@ -206,6 +210,7 @@ def test_una_ejecucion_terminal_no_puede_interrumpirse(terminal):
             insumos_utilizados=[],
             usuario=TECNICO,
             fecha=t(110),
+            motivo="Falta una pieza.",
         )
 
 
@@ -217,6 +222,7 @@ def test_no_se_interrumpe_una_ejecucion_inexistente():
             insumos_utilizados=[],
             usuario=TECNICO,
             fecha=t(100),
+            motivo="Falta una pieza.",
         )
 
 
