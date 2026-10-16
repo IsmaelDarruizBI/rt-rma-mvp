@@ -81,6 +81,19 @@ function tituloDe(contenido: ContenidoDocumento): string {
   return "Comprobante de recepción";
 }
 
+/**
+ * La última versión emitida del comprobante de autorización, si hay. Sin
+ * `Array.prototype.at`: no está en `lib` ES2020 ni en Safari < 15.4.
+ */
+function ultimoComprobanteAutorizacion(
+  emitidos: DocumentoEmitido[],
+): DocumentoEmitido | undefined {
+  const versiones = emitidos.filter(
+    (documento) => documento.tipo === "COMPROBANTE_AUTORIZACION",
+  );
+  return versiones[versiones.length - 1];
+}
+
 /** Lo que se muestra en el visor: un emitido o una vista previa. */
 type Visible =
   | { clase: "emitido"; documento: DocumentoEmitido }
@@ -124,9 +137,7 @@ export function DocumentosOrden({
 
   useEffect(() => {
     if (pedido === null || !documentos) return;
-    const ultimo = documentos.emitidos
-      .filter((documento) => documento.tipo === "COMPROBANTE_AUTORIZACION")
-      .at(-1);
+    const ultimo = ultimoComprobanteAutorizacion(documentos.emitidos);
     if (ultimo && ultimo.id !== pedido) {
       setPedido(null);
       setVisible({ clase: "emitido", documento: ultimo });
@@ -261,11 +272,7 @@ export function DocumentosOrden({
           emitidos={emitidos}
           ocupado={ocupado}
           onGenerar={() => {
-            setPedido(
-              emitidos
-                .filter((documento) => documento.tipo === "COMPROBANTE_AUTORIZACION")
-                .at(-1)?.id ?? "",
-            );
+            setPedido(ultimoComprobanteAutorizacion(emitidos)?.id ?? "");
             onEmitirAutorizacion();
           }}
         />
@@ -320,9 +327,7 @@ function FormularioComprobanteAutorizacion({
     (suma, detalle) => suma + Number(detalle.precio),
     0,
   );
-  const anterior = emitidos
-    .filter((documento) => documento.tipo === "COMPROBANTE_AUTORIZACION")
-    .at(-1);
+  const anterior = ultimoComprobanteAutorizacion(emitidos);
   return (
     <Seccion titulo="Generar el comprobante de autorización" accion={accion}>
       <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", color: colores.suave }}>
