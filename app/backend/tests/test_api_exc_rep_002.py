@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tests import test_multidetalle as multi
+from tests.fixtures.api_salidas import encolar
 from tests.test_api_exc_rep_001 import (
     _cliente,
     _cliente_multi,
@@ -71,10 +72,7 @@ def _hasta_100(cliente) -> str:
 
 
 def _tomar(cliente, orden_id) -> None:
-    cliente.post(
-        f"/api/orders/{orden_id}/queue",
-        json={"usuario_id": COORDINADOR, "prioridad": 1},
-    )
+    encolar(cliente, orden_id, 1, COORDINADOR)
     cliente.post(
         f"/api/orders/{orden_id}/take",
         json={"usuario_id": TECNICO, "estacion_id": ESTACION},
@@ -111,15 +109,19 @@ def test_cliente_externo_override_090_ninguno_100_110_si_130_140(tmp_path):
         orden = respuesta.json()
 
         # La autorizacion es la capacidad transversal (ACC-REP-049); en el
-        # circuito de 100 el proceso continua 110 Si -> 130 -> 140.
-        assert _ids(orden)[-7:] == [
+        # circuito de 100 el proceso continua 110 Si -> 130 -> 140 y, con el
+        # comprobante de ingreso (ACC-REP-060), entra sola a la cola.
+        assert _ids(orden)[-10:] == [
             "PROC-REP-080",
             "PROC-REP-090",
             "PROC-REP-100",
+            "ACC-REP-060",
             "ACC-REP-049",
             "PROC-REP-110",
             "PROC-REP-130",
             "PROC-REP-140",
+            "PROC-REP-150",
+            "PROC-REP-170",
         ]
         observaciones_090 = [
             p["observacion"]
@@ -127,7 +129,7 @@ def test_cliente_externo_override_090_ninguno_100_110_si_130_140(tmp_path):
             if p["referencia_id"] == "PROC-REP-090"
         ]
         assert observaciones_090 == ["Ninguno trabajable"]  # sin 090 "Si"
-        autorizacion, paso_110, paso_130 = orden["historial"][-4:-1]
+        autorizacion, paso_110, paso_130 = orden["historial"][-6:-3]
         assert autorizacion["process_id"] is None
         assert autorizacion["usuario_id"] == COORDINADOR
         assert autorizacion["reparacion_detail_id"] == "DET-001"
@@ -137,10 +139,10 @@ def test_cliente_externo_override_090_ninguno_100_110_si_130_140(tmp_path):
         assert paso_110["usuario_id"] == COORDINADOR
         assert paso_130["usuario_id"] == COORDINADOR
         assert paso_130["reparacion_detail_id"] == "DET-001"
-        assert orden["estado_workflow"] == "HABILITADA"
-        assert orden["current_process"] == "PROC-REP-140"
+        assert orden["estado_workflow"] == "EN_COLA"
+        assert orden["current_process"] == "PROC-REP-170"
         assert orden["reparaciones_detail"][0]["condicion"] == "SIN_BLOQUEO"
-        assert "ENCOLAR" in _codigos(orden)
+        assert "ENCOLAR" not in _codigos(orden)
         # 130 no reserva ni descuenta stock.
         assert _stock(tmp_path, INSUMO) == Decimal("0")
 
@@ -227,11 +229,13 @@ def test_override_en_120_autoriza_el_detalle_sin_mover_el_proceso(tmp_path):
         orden = cliente.post(
             f"/api/orders/{orden_id}/resources/revalidate"
         ).json()
-        assert orden["estado_workflow"] == "HABILITADA"
-        assert _ids(orden)[-3:] == [
+        assert orden["estado_workflow"] == "EN_COLA"
+        assert _ids(orden)[-5:] == [
             "PROC-REP-080",
             "PROC-REP-090",
             "PROC-REP-140",
+            "PROC-REP-150",
+            "PROC-REP-170",
         ]
         assert _stock(tmp_path, INSUMO) == Decimal("0")
 
@@ -254,16 +258,13 @@ def test_multidetalle_override_de_uno_habilita_y_solo_ese_se_inicia(tmp_path):
         respuesta = _override(cliente, orden_id, "DET-001", COORDINADOR)
         assert respuesta.status_code == 200, respuesta.text
         orden = respuesta.json()
-        assert orden["estado_workflow"] == "HABILITADA"
+        assert orden["estado_workflow"] == "EN_COLA"
         assert [d["condicion"] for d in orden["reparaciones_detail"]] == [
             "SIN_BLOQUEO",
             "BLOQUEADO_POR_RECURSOS",
         ]
 
-        cliente.post(
-            f"/api/orders/{orden_id}/queue",
-            json={"usuario_id": multi.COORDINADOR, "prioridad": 1},
-        )
+        encolar(cliente, orden_id, 1, multi.COORDINADOR)
         orden = cliente.post(
             f"/api/orders/{orden_id}/take",
             json={"usuario_id": multi.TECNICO, "estacion_id": multi.ESTACION},
@@ -406,7 +407,7 @@ def _parcial_tomada_con_ejecucion(cliente) -> str:
     """DET-001 bloqueado; DET-002 trabajable y en curso (Orden tomada)."""
     orden_id = multi._crear_orden(cliente)
     orden = _definir_dos(cliente, orden_id).json()
-    assert orden["estado_workflow"] == "HABILITADA"
+    assert orden["estado_workflow"] == "EN_COLA"
     assert [d["condicion"] for d in orden["reparaciones_detail"]] == [
         "BLOQUEADO_POR_RECURSOS",
         "SIN_BLOQUEO",

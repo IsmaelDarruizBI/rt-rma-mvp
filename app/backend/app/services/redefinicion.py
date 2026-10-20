@@ -28,6 +28,7 @@ deriva del historial, sin flags persistidos.
 
 from datetime import datetime
 
+from app.domain.garantia import garantia_sugerida
 from app.domain.models import (
     CondicionReparacionDetail,
     DefinicionAnteriorDetalle,
@@ -41,6 +42,7 @@ from app.domain.models import (
 
 from .autorizacion import validar_actor
 from .autorizacion_cliente import situacion_de_la_orden
+from .custodia import checkin_de
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .resolucion import ResultadoEvaluacionOrden
 from .tomas import hay_ejecucion_activa, toma_activa
@@ -241,8 +243,16 @@ def redefinir_detalle(
         )
     )
     redefinido.tipo_reparacion_id = tipo_reparacion.id
+    redefinido.descripcion = None
     redefinido.precio = tipo_reparacion.precio
     redefinido.puntaje = tipo_reparacion.puntaje
-    redefinido.garantia_dias = tipo_reparacion.garantia_dias
+    # La garantia sigue la sugerencia (check-in o Tipo), salvo que una
+    # persona ya la haya ajustado: ese plazo se conserva.
+    if not redefinido.ajustes_garantia:
+        dias = garantia_sugerida(
+            checkin_de(orden), tipo_reparacion.garantia_dias
+        )
+        redefinido.garantia_dias = dias
+        redefinido.garantia_dias_sugerida = dias
     redefinido.condicion = CondicionReparacionDetail.SIN_BLOQUEO
     return nueva_orden

@@ -196,6 +196,22 @@ def agregar(cliente, orden_id, tipo=BATERIA) -> dict:
     )
 
 
+def generar_ingreso(cliente, orden_id) -> dict:
+    """Comprobante de ingreso y autorizacion (ingreso inicial).
+
+    Prepara el estado fisico y el check-in si faltan y lo genera: confirma
+    la recepcion, cierra la definicion, autoriza los trabajos cargados y
+    deja la Orden en la cola con prioridad 4.
+    """
+    custodia.preparar_ingreso(cliente, orden_id)
+    return ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/documents/intake-receipt",
+            json={"usuario_id": RECEPCION},
+        )
+    )
+
+
 def finalizar(cliente, orden_id, confirmar_recepcion=True) -> dict:
     """Finaliza la definicion y devuelve esa respuesta.
 
@@ -203,7 +219,14 @@ def finalizar(cliente, orden_id, confirmar_recepcion=True) -> dict:
     recepcion fisica del equipo: estos tests asumen el equipo en custodia
     desde aqui, como antes lo aproximaba el comprobante emitido al
     finalizar. Ahora es una confirmacion explicita.
+
+    En el ingreso inicial de CLIENTE_EXTERNO la definicion se cierra con el
+    comprobante de ingreso y autorizacion (``generar_ingreso``): los
+    trabajos quedan autorizados y la Orden en la cola.
     """
+    orden = ok(cliente.get(f"/api/orders/{orden_id}"))
+    if custodia.en_ingreso_inicial(orden):
+        return generar_ingreso(cliente, orden_id)
     respuesta = ok(
         cliente.post(
             f"/api/orders/{orden_id}/definition/finalize",
@@ -254,8 +277,17 @@ def decidir(
 
 
 def autorizar_todo(cliente, orden_id) -> dict:
-    """El cliente autoriza todos los Detalles pendientes (explicito)."""
+    """El cliente autoriza todos los Detalles pendientes (explicito).
+
+    Sin pendientes (por ejemplo, ya autorizados con el comprobante de
+    ingreso) devuelve la Orden sin registrar nada.
+    """
     orden = ok(cliente.get(f"/api/orders/{orden_id}"))
+    if not any(
+        d["estado_autorizacion"] == "PENDIENTE"
+        for d in orden["reparaciones_detail"]
+    ):
+        return orden
     return ok(
         decidir(
             cliente,
@@ -270,28 +302,83 @@ def autorizar_todo(cliente, orden_id) -> dict:
 
 
 def definida(cliente, *tipos, autorizar=True) -> str:
-    """CLIENTE_EXTERNO con esos Detalles, definida y habilitada.
+    """CLIENTE_EXTERNO con esos Detalles, definida y autorizada.
 
-    Finalizar deja los Detalles pendientes de autorizacion del cliente
-    (BR-REP-028); con ``autorizar`` (default) Recepcion registra que el
-    cliente autoriza todos, y recien ahi la Orden queda habilitada.
+    Con ``autorizar`` (default) es el ingreso inicial: el comprobante de
+    ingreso autoriza los trabajos y la Orden queda en la cola. Sin
+    autorizar, los trabajos quedan pendientes de la decision explicita del
+    cliente (BR-REP-028), que en CLIENTE_EXTERNO llega por el camino de la
+    revision tecnica (``por_revision``).
     """
+    if not autorizar:
+        return por_revision(cliente, *tipos)
     orden_id = crear(cliente)
     for tipo in tipos or (BATERIA,):
         agregar(cliente, orden_id, tipo)
     finalizar(cliente, orden_id)
-    if autorizar:
-        autorizar_todo(cliente, orden_id)
     return orden_id
 
 
-def tomada(cliente, orden_id, tecnico=TECNICO) -> dict:
+def por_revision(cliente, *tipos) -> str:
+    """CLIENTE_EXTERNO definida por el camino de revision (065 -> 075).
+
+    Recepcion la envia a revision, confirma la recepcion, el tecnico la
+    revisa y Recepcion carga los trabajos y finaliza: quedan pendientes de
+    la decision explicita del cliente (PROC-REP-129).
+    """
+    orden_id = crear(cliente)
     ok(
         cliente.post(
-            f"/api/orders/{orden_id}/queue",
-            json={"usuario_id": COORDINADOR, "prioridad": 3},
+            f"/api/orders/{orden_id}/send-to-review",
+            json={"usuario_id": RECEPCION},
         )
     )
+    custodia.confirmar_recepcion(cliente, orden_id)
+    ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/technical-review",
+            json={"usuario_id": TECNICO, "resultado": "Diagnostico."},
+        )
+    )
+    for tipo in tipos or (BATERIA,):
+        ok(
+            cliente.post(
+                f"/api/orders/{orden_id}/review/details",
+                json={"usuario_id": RECEPCION, "tipo_reparacion_id": tipo},
+            )
+        )
+    ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/definition/finalize",
+            json={"usuario_id": RECEPCION},
+        )
+    )
+    return orden_id
+
+
+def encolar(cliente, orden_id, prioridad=3, usuario=COORDINADOR):
+    """Ingresa la Orden a la cola con esa prioridad (PROC-REP-150 -> 170).
+
+    Si ya entro sola con el comprobante de ingreso (prioridad 4), deja la
+    prioridad pedida con el cambio de prioridad (ACC-REP-007). Devuelve la
+    respuesta HTTP.
+    """
+    orden = ok(cliente.get(f"/api/orders/{orden_id}"))
+    if orden["estado_workflow"] != "EN_COLA":
+        return cliente.post(
+            f"/api/orders/{orden_id}/queue",
+            json={"usuario_id": usuario, "prioridad": prioridad},
+        )
+    if orden["prioridad"] == prioridad:
+        return cliente.get(f"/api/orders/{orden_id}")
+    return cliente.post(
+        f"/api/orders/{orden_id}/priority",
+        json={"usuario_id": usuario, "prioridad": prioridad},
+    )
+
+
+def tomada(cliente, orden_id, tecnico=TECNICO) -> dict:
+    ok(encolar(cliente, orden_id, 3))
     return tomar(cliente, orden_id, tecnico)
 
 

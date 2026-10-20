@@ -344,6 +344,127 @@ asignan `ACC-REP-061` a `ACC-REP-066`):
 cliente por Detalle, hoy definida solo en la baseline V1.4 de
 `rt-rma-app`.
 
+## Iteracion 1 del UAT (mvp-v2): reglas que cambian
+
+Mejoras del primer UAT implementadas en `mvp-v2`. Ninguna crea User
+Stories, nodos de proceso ni IDs nuevos: reutilizan los existentes con el
+mismo significado y dejan registradas aca las diferencias con
+`business/` (PROC-REP V1.3) y con la baseline V1.4 de `rt-rma-app`, que
+quedan **pendientes de formalizacion** (no se modifica `rt-rma-app`).
+`ACC-REP-061` a `ACC-REP-066` siguen sin asignar.
+
+### Ingreso inicial simplificado de CLIENTE_EXTERNO (UAT-008)
+
+- Recepcion crea la Orden, carga los trabajos con su precio y genera el
+  comprobante de ingreso y autorizacion
+  (`application/ingreso_inicial.py::generar_comprobante_ingreso`). Un solo
+  comando compone, en memoria y con un unico guardado: confirmacion fisica
+  (`ACC-REP-024`), `PROC-REP-050`/`060` (marca del comprobante),
+  factibilidad y habilitacion (`080`/`090`/`140`), la decision del cliente
+  por Detalle (`046`/`047`, canal elegido, observacion "Autorizacion
+  inicial en el ingreso"), la emision del documento (`ACC-REP-060`,
+  `OR-xxxxxx-ING-01`) y la entrada a la cola (`150` -> `170`).
+- Aplica solo a la politica que exige confirmacion fisica y autorizacion
+  del cliente, en REQUERIMIENTO con la definicion abierta
+  (`services/reparaciones.py::es_ingreso_inicial`). RT_INTERNO, garantia
+  RMA y el camino de revision conservan su circuito.
+- En ese paso la UI ya no ofrece "Confirmar la recepcion" ni "Finalizar la
+  definicion" (`acciones.py`), y la API tampoco los acepta por separado:
+  confirmar la recepcion, finalizar la definicion y registrar la
+  autorizacion inicial responden 409 sin efectos mientras la Orden esta en
+  el ingreso inicial (`services/reparaciones.py::exigir_fuera_del_ingreso_inicial`).
+  Siguen vigentes para RT_INTERNO, garantia RMA, el camino de revision y
+  las autorizaciones posteriores.
+- Sin estados sin salida: si el ingreso todavia no registra el check-in
+  (por ejemplo, una Orden anterior con la recepcion ya confirmada, que ya
+  no admite correcciones), el comprobante de ingreso lo recibe y lo
+  completa en la misma operacion (`services/custodia.py::completar_checkin`).
+  Un check-in ya registrado no se cambia desde ahi.
+- Presentacion derivada, sin estados nuevos: `OrdenOut.ingreso_inicial`,
+  `DetalleOut.pendiente_comprobante_ingreso` y `autorizado_en_ingreso`
+  (la definicion vigente es la que autorizo el comprobante). La UI muestra
+  "Pendiente de comprobante de ingreso" y, generado, "Autorizado"; una
+  autorizacion posterior conserva su representacion.
+- **Divergencia**: PROC-REP V1.3 emite el comprobante de recepcion en
+  `PROC-REP-060`; en este camino la marca del nodo queda pero el documento
+  es el de ingreso (sin documentos redundantes). Las autorizaciones
+  posteriores siguen el circuito explicito.
+
+### Entrada automatica a la cola con prioridad 4
+
+- Tras el comprobante de ingreso (o al volver a ser factible si quedo
+  esperando repuestos), `PROC-REP-150` se registra con observacion
+  "4 (predeterminada)" y la Orden pasa a EN_COLA
+  (`application/cola.py::encolar_si_ingreso_automatico`).
+- **Divergencia**: en V1.3 `PROC-REP-150` es de ACT-COORD. Solo se
+  automatiza para Ordenes con comprobante de ingreso; extenderlo a
+  RT_INTERNO y garantia RMA es una **decision pendiente**.
+- Cambiar la prioridad despues es otra accion: `ACC-REP-007` ("Asignar la
+  prioridad de ejecucion de la Orden", mismo significado) como
+  FUNCTIONAL_ACTION `CAMBIAR_PRIORIDAD`, con observacion
+  "anterior -> nueva (Nombre): motivo". Roles: TECNICO, COORDINADOR_RMA y
+  RECEPCION; en cola o en reparacion. No vuelve a encolar.
+
+### Liberar una Orden tomada por otro tecnico
+
+- Ajusta la decision E2 (toma exclusiva del titular): otro tecnico o
+  Coordinacion la puede liberar con motivo y confirmacion explicita
+  (409 `CONFIRMACION_REQUERIDA` sin ella). Si hay una Ejecucion en curso se
+  interrumpe con la logica de `PROC-REP-210` (lo usado se consume, lo
+  reservado vuelve) antes de `PROC-REP-213` -> `170`.
+- Trazabilidad: `TomaOrden.liberada_por` y `motivo_liberacion`, y la
+  observacion de `PROC-REP-213` con titular, quien libera, estacion, motivo
+  y el estado de la Orden y de cada trabajo. El titular libera como
+  siempre. El aviso (y el 409 `CONFIRMACION_REQUERIDA`) dice quien la tiene
+  y, con una reparacion en curso, que se interrumpe, que lo utilizado se
+  consume y que lo reservado sin usar se libera. **Pendiente**: formalizar
+  la enmienda de E2.
+
+### Descuento comercial
+
+- Porcentaje o importe fijo con motivo, por RECEPCION o ADMINISTRADOR
+  (`services/descuentos.py`). Total = Subtotal - descuento; el precio
+  snapshot de cada Detalle no cambia. Se rechaza si supera su base o deja
+  el total por debajo de lo ya cobrado. Auditoria en la entidad
+  (`OrdenReparacion.descuentos`: tipo, valor, motivo, usuario, fecha, con
+  cada cambio y retiro), visible en Cobros como "Historial de descuentos".
+  No entra al historial del proceso: no hay un ID de accion con ese
+  significado y `ACC-REP-061` a `066` siguen reservados (**pendiente** de
+  formalizar junto con `TASK-REP-118`/`125`).
+- **Divergencia**: `BR-REP-016` reserva la cortesia a ACT-ADMIN; el
+  descuento por Recepcion no esta en `business/`.
+
+### Trabajo "Otros — Reparacion no tipificada"
+
+- Tipo reservado del sistema `TR-OTROS` (no es una fila del catalogo):
+  descripcion y precio manual por Detalle, puntaje 0, sin insumos
+  previstos y cualquier estacion. Se nombra "Otros: <descripcion>" en
+  lecturas y documentos.
+- **Divergencia**: `BR-REP-015` toma el precio del catalogo. La futura
+  tabla de configuracion de tipos reemplazara el tipo reservado.
+
+### Garantia por Detalle segun el check-in
+
+- `DatosRecepcion.checkin`: con check-in 90 dias, sin check-in 30
+  (`domain/garantia.py`), sobre cualquier plazo del Tipo. Se guarda la
+  sugerida (`garantia_dias_sugerida`) y la definitiva (`garantia_dias`);
+  RECEPCION o COORDINADOR_RMA la ajustan con motivo antes de la entrega
+  (`ajustes_garantia`). Sin dato de check-in rige el catalogo. El
+  vencimiento sigue corriendo desde la entrega (`vencimiento_garantia`).
+- **Divergencia**: el plazo deja de ser el del catalogo cuando hay
+  check-in.
+
+### Observaciones visibles y notas internas
+
+- `DatosRecepcion.observaciones` son visibles y salen en los comprobantes;
+  `DatosRecepcion.notas_internas` y las notas con `interna: true` son solo
+  para el personal y no salen en ningun documento ni PDF.
+
+### Compatibilidad
+
+Los campos nuevos tienen valor por defecto: las Ordenes ya guardadas se
+leen sin migracion (sin check-in, sin descuento, sin notas internas).
+
 ## Gaps de cobertura de test conocidos
 
 Requerimientos declarados sin un Internal Test que los verifique

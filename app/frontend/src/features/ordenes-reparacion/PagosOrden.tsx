@@ -1,9 +1,10 @@
 /**
  * Pagos y movimientos de la Orden (FEAT-REP-007, BR-REP-017/038).
  *
- * Muestra la cuenta -Total, Pagado válido, Devuelto y Saldo o crédito a
- * favor- y la lista cronológica de pagos, anulaciones y devoluciones de
- * dinero. Los formularios aparecen solo si el backend los ofrece en
+ * Muestra la cuenta -Subtotal y descuento (si hay), Total, Pagado válido,
+ * Devuelto y Saldo o crédito a favor- y la lista cronológica de pagos,
+ * anulaciones y devoluciones de dinero. El descuento no cambia el precio
+ * de ningún trabajo ni los pagos. Los formularios aparecen solo si el backend los ofrece en
  * `acciones_financieras`; el backend vuelve a validar todo (rol, importe,
  * saldo, duplicados) igual.
  */
@@ -25,6 +26,7 @@ import type {
   MedioPago,
   Orden,
   SituacionFinanciera,
+  TipoDescuento,
   Usuario,
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
@@ -45,6 +47,12 @@ interface Props {
   ) => void;
   onAnular: (pagoId: string, motivo: string) => void;
   onDevolver: (datos: DatosDevolucionDinero) => void;
+  /** `tipo: null` quita el descuento vigente. */
+  onDescontar: (
+    tipo: TipoDescuento | null,
+    valor: string | null,
+    motivo: string,
+  ) => void;
 }
 
 const ETIQUETA_CONDICION_COMERCIAL: Record<string, string> = {
@@ -96,7 +104,17 @@ export function PagosYMovimientos(props: Props) {
   const { resumen } = orden;
   const cobrable = resumen.condicion_comercial === "COBRABLE";
   const saldo = Number(resumen.saldo);
+  const descuento = resumen.descuento;
   const filas: [string, string][] = [
+    ...(descuento
+      ? ([
+          ["Subtotal", importe(resumen.subtotal)],
+          [
+            `Descuento (${descuento.descripcion})`,
+            `−${importe(resumen.descuento_aplicado)}`,
+          ],
+        ] as [string, string][])
+      : []),
     [cobrable ? "Total" : "Total (nominal)", importe(resumen.total)],
     ["Pagado válido", importe(resumen.pagado)],
     ["Devuelto", importe(resumen.devuelto)],
@@ -117,6 +135,7 @@ export function PagosYMovimientos(props: Props) {
     (a) => a.codigo === "REGISTRAR_DEVOLUCION_DINERO",
   );
   const anulaciones = acciones.filter((a) => a.codigo === "ANULAR_PAGO");
+  const descontar = acciones.find((a) => a.codigo === "APLICAR_DESCUENTO");
 
   return (
     <div>
@@ -154,7 +173,15 @@ export function PagosYMovimientos(props: Props) {
           </div>
         ))}
       </dl>
+      <HistorialDescuentos orden={orden} usuarios={usuarios} />
       <ListaMovimientos orden={orden} medios={medios} usuarios={usuarios} />
+      {descontar && (
+        <FormularioDescuento
+          key={`descuento-${orden.updated_at}`}
+          accion={descontar}
+          {...props}
+        />
+      )}
       {cobro && (
         <FormularioCobro
           key={`cobro-${orden.updated_at}`}
@@ -176,6 +203,159 @@ export function PagosYMovimientos(props: Props) {
           {...props}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Descuento comercial: porcentaje o importe fijo, con motivo. No supera el
+ * subtotal ni deja el total por debajo de lo ya cobrado (el backend lo
+ * rechaza con el motivo). Quitarlo también pide motivo.
+ */
+function FormularioDescuento({
+  orden,
+  actor,
+  ocupado,
+  onDescontar,
+  accion,
+}: Props & { accion: Accion }) {
+  const vigente = orden.resumen.descuento;
+  const [tipo, setTipo] = useState<TipoDescuento>(vigente?.tipo ?? "PORCENTAJE");
+  const [valor, setValor] = useState(vigente ? String(Number(vigente.valor)) : "");
+  const [motivo, setMotivo] = useState("");
+  const deshabilitado = !habilitada(accion, actor) || ocupado;
+  const numero = Number(valor.replace(",", "."));
+  const valido =
+    /^\d+(?:[.,]\d{1,2})?$/.test(valor.trim()) &&
+    numero > 0 &&
+    (tipo === "IMPORTE"
+      ? numero <= Number(orden.resumen.subtotal)
+      : numero <= 100);
+  const base = Number(orden.resumen.subtotal);
+  const previsto = valido
+    ? tipo === "PORCENTAJE"
+      ? Math.round(base * numero) / 100
+      : numero
+    : 0;
+  return (
+    <Seccion
+      titulo={vigente ? "Cambiar o quitar el descuento" : "Aplicar un descuento"}
+      accion={accion}
+      actor={actor}
+    >
+      <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
+        Sobre el subtotal de los trabajos ({importe(orden.resumen.subtotal)}). El
+        precio de cada trabajo no cambia; queda registrado quién lo aplicó,
+        cuándo y por qué.
+      </p>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <div style={{ width: 170, maxWidth: "100%" }}>
+          <Campo etiqueta="Tipo">
+            <select
+              value={tipo}
+              disabled={deshabilitado}
+              onChange={(evento) => setTipo(evento.target.value as TipoDescuento)}
+              style={estiloInput}
+            >
+              <option value="PORCENTAJE">Porcentaje (%)</option>
+              <option value="IMPORTE">Importe fijo ($)</option>
+            </select>
+          </Campo>
+        </div>
+        <div style={{ width: 140 }}>
+          <Campo etiqueta={tipo === "PORCENTAJE" ? "Porcentaje" : "Importe"}>
+            <input
+              value={valor}
+              disabled={deshabilitado}
+              inputMode="decimal"
+              onChange={(evento) => setValor(evento.target.value)}
+              style={estiloInput}
+            />
+          </Campo>
+        </div>
+      </div>
+      <Campo etiqueta="Motivo (obligatorio)">
+        <input
+          value={motivo}
+          disabled={deshabilitado}
+          onChange={(evento) => setMotivo(evento.target.value)}
+          style={estiloInput}
+        />
+      </Campo>
+      {valido && (
+        <p style={{ margin: "0 0 0.5rem", fontSize: "0.85rem" }}>
+          Descuento {importe(String(previsto))} · Total{" "}
+          <strong>{importe(String(base - previsto))}</strong>
+        </p>
+      )}
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <Boton
+          disabled={deshabilitado || !valido || !motivo.trim()}
+          onClick={() =>
+            onDescontar(tipo, valor.trim().replace(",", "."), motivo.trim())
+          }
+        >
+          {vigente ? "Cambiar el descuento" : "Aplicar el descuento"}
+        </Boton>
+        {vigente && (
+          <Boton
+            variante="secundario"
+            disabled={deshabilitado || !motivo.trim()}
+            onClick={() => onDescontar(null, null, motivo.trim())}
+          >
+            Quitar el descuento
+          </Boton>
+        )}
+      </div>
+    </Seccion>
+  );
+}
+
+/** «10 %» o «$ 5.000,00»: como se expresó el descuento. */
+function textoDescuento(tipo: TipoDescuento, valor: string): string {
+  return tipo === "PORCENTAJE" ? `${Number(valor)} %` : importe(valor);
+}
+
+/**
+ * Cada vez que se aplicó, cambió o quitó el descuento: quién, cuándo y por
+ * qué. El descuento no es un movimiento de dinero: los pagos no cambian.
+ */
+function HistorialDescuentos({
+  orden,
+  usuarios,
+}: {
+  orden: Orden;
+  usuarios: Usuario[];
+}) {
+  const registros = orden.descuentos ?? [];
+  if (registros.length === 0) return null;
+  return (
+    <div style={{ marginTop: "0.8rem" }}>
+      <h4
+        style={{
+          margin: "0 0 0.4rem",
+          fontSize: "0.8rem",
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+          color: colores.suave,
+        }}
+      >
+        Historial de descuentos
+      </h4>
+      <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.82rem" }}>
+        {registros.map((registro) => (
+          <li key={registro.fecha + registro.motivo}>
+            {registro.tipo && registro.valor
+              ? `Descuento ${textoDescuento(registro.tipo, registro.valor)}`
+              : "Descuento quitado"}{" "}
+            · {registro.motivo}{" "}
+            <span style={{ color: colores.suave }}>
+              ({nombreDeUsuario(usuarios, registro.usuario_id)},{" "}
+              {fechaCorta(registro.fecha)})
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

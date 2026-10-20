@@ -247,7 +247,41 @@ def normalizar_datos_recepcion(datos: DatosRecepcion | None) -> DatosRecepcion:
             if accesorio.strip()
         ],
         observaciones=_texto(datos.observaciones),
+        checkin=datos.checkin,
+        notas_internas=_texto(datos.notas_internas),
     )
+
+
+def checkin_de(orden: OrdenReparacion) -> bool | None:
+    """El check-in registrado al ingreso, o ``None`` si no se registro."""
+    return orden.recepcion.datos.checkin if orden.recepcion else None
+
+
+def completar_checkin(
+    orden: OrdenReparacion, *, checkin: bool
+) -> OrdenReparacion:
+    """Registra el check-in que el ingreso todavia no tiene.
+
+    No corrige un dato registrado (eso es la correccion del ingreso, antes
+    de confirmarlo): completa uno que falta. Sirve a las Ordenes anteriores
+    a la iteracion 1 que ya tienen la recepcion confirmada y todavia no el
+    comprobante de ingreso, que exige el check-in.
+    """
+    if orden.recepcion is None:
+        raise PrecondicionInvalidaError(
+            "La Orden no tiene datos de ingreso: registralos primero."
+        )
+    registrado = orden.recepcion.datos.checkin
+    if registrado is not None:
+        if registrado == checkin:
+            return orden
+        raise PrecondicionInvalidaError(
+            "El check-in ya esta registrado; se corrige en los datos del "
+            "ingreso, antes de confirmar la recepcion."
+        )
+    nueva_orden = orden.model_copy(deep=True)
+    nueva_orden.recepcion.datos.checkin = checkin
+    return nueva_orden
 
 
 def recepcion_inicial(
@@ -515,10 +549,12 @@ def agregar_nota_recepcion(
     usuario: Usuario,
     fecha: datetime,
     texto: str,
+    interna: bool = False,
 ) -> OrdenReparacion:
     """Observacion complementaria del ingreso, antes o despues de confirmar.
 
-    No reemplaza nada: se agrega con su usuario y fecha.
+    No reemplaza nada: se agrega con su usuario y fecha. Una nota
+    ``interna`` es solo para el personal: nunca sale en un documento.
     """
     validar_alguno_de(usuario, ROLES_RECEPCION_EQUIPO)
     texto = _texto(texto)
@@ -532,7 +568,9 @@ def agregar_nota_recepcion(
 
     nueva_orden = orden.model_copy(deep=True)
     nueva_orden.recepcion.notas.append(
-        NotaRecepcion(usuario_id=usuario.id, fecha=fecha, texto=texto)
+        NotaRecepcion(
+            usuario_id=usuario.id, fecha=fecha, texto=texto, interna=interna
+        )
     )
     return registrar_accion_funcional(
         nueva_orden,
@@ -540,7 +578,7 @@ def agregar_nota_recepcion(
         accion="AGREGAR_OBSERVACION_RECEPCION",
         fecha=fecha,
         usuario_id=usuario.id,
-        observacion=texto,
+        observacion=f"Nota interna: {texto}" if interna else texto,
     )
 
 

@@ -16,6 +16,7 @@ from tests.fixtures.api_salidas import (
     cerrar_ejecucion,
     crear,
     definida,
+    encolar,
     finalizar,
     iniciar,
     ok,
@@ -86,12 +87,7 @@ def test_la_situacion_del_listado_es_la_del_detalle(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
         recien = crear(cliente)
         en_cola = definida(cliente)
-        ok(
-            cliente.post(
-                f"/api/orders/{en_cola}/queue",
-                json={"usuario_id": COORDINADOR, "prioridad": 2},
-            )
-        )
+        ok(encolar(cliente, en_cola, 2, COORDINADOR))
         tomada_id = definida(cliente)
         tomada(cliente, tomada_id)
 
@@ -119,9 +115,9 @@ def test_la_situacion_del_listado_es_la_del_detalle(tmp_path):
 
 def test_roles_del_sector_y_tecnico_titular(tmp_path):
     with _cliente(tmp_path, stock_bateria="0") as cliente:
-        esperando_cliente = crear(cliente)
-        agregar(cliente, esperando_cliente)
-        finalizar(cliente, esperando_cliente)
+        # Esperando la decision del cliente: camino de revision (el
+        # ingreso inicial autoriza con el comprobante de ingreso).
+        esperando_cliente = definida(cliente, autorizar=False)
         sin_repuestos = definida(cliente)
 
         filas = _listado(cliente)

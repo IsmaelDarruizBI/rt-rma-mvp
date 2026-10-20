@@ -14,15 +14,19 @@ from fastapi import APIRouter, Response, status
 
 from app.application import (
     ApplicationContext,
+    acciones_complementarias,
     acciones_de_autorizacion,
     acciones_de_cancelacion,
     acciones_de_custodia,
     acciones_disponibles,
     acciones_financieras,
     agregar_observacion_recepcion,
+    ajustar_garantia,
     anular_pago_de_orden,
+    aplicar_descuento_de_orden,
     aprobar_control,
     autorizaciones_de_orden,
+    cambiar_prioridad_de_orden,
     cancelar_detalle,
     cancelar_orden,
     completar_ejecucion,
@@ -44,6 +48,7 @@ from app.application import (
     finalizar_definicion,
     finalizar_sin_reparacion,
     forzar_detalle_por_recursos,
+    generar_comprobante_ingreso,
     impacto_override,
     informar_rt,
     iniciar_detalle,
@@ -82,9 +87,11 @@ from app.services import DecisionDetalle
 
 from .dependencias import ContextoDep
 from .schemas import (
+    AjustarGarantiaIn,
     AnularPagoIn,
     AprobarControlIn,
     AutorizacionesOrdenOut,
+    CambiarPrioridadIn,
     CancelarDetalleIn,
     CancelarOrdenIn,
     CompletarEjecucionIn,
@@ -94,6 +101,7 @@ from .schemas import (
     CustodiaOut,
     DefinirReparacionDesdeRevisionIn,
     DefinirReparacionIn,
+    DescuentoIn,
     DesistimientoIn,
     DevolucionDineroIn,
     DevolverRtIn,
@@ -109,6 +117,7 @@ from .schemas import (
     FinalizarDefinicionIn,
     FinalizarSinReparacionIn,
     FinanzasOrdenOut,
+    GenerarComprobanteIngresoIn,
     ImpactoOverrideOut,
     IniciarDetalleIn,
     IniciarGarantiaRmaIn,
@@ -162,6 +171,7 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
         acciones_autorizacion=autorizacion,
         acciones_financieras=financieras,
         acciones_custodia=custodia,
+        acciones_complementarias=acciones_complementarias(orden),
         situacion=situacion_operativa(
             orden,
             acciones=acciones,
@@ -312,7 +322,7 @@ def get_documento_pdf(
     documento_id: str,
     contexto: ContextoDep,
 ) -> Response:
-    """El PDF de un documento emitido (hoy, el comprobante de autorizacion).
+    """El PDF de un documento emitido (ingreso o autorizacion).
 
     Se arma del snapshot cada vez: la misma version da el mismo PDF. Solo
     lectura: descargarlo o compartirlo no registra que el cliente lo
@@ -444,6 +454,8 @@ def post_definir_reparacion(
         usuario_id=cuerpo.usuario_id,
         tipo_reparacion_id=cuerpo.tipo_reparacion_id,
         observaciones=cuerpo.observaciones,
+        descripcion=cuerpo.descripcion,
+        precio=cuerpo.precio,
     )
     return _salida(orden, contexto)
 
@@ -549,6 +561,8 @@ def post_definir_reparacion_desde_revision(
         tipo_reparacion_id=cuerpo.tipo_reparacion_id,
         observaciones=cuerpo.observaciones,
         detalle_origen_id=cuerpo.detalle_origen_id,
+        descripcion=cuerpo.descripcion,
+        precio=cuerpo.precio,
     )
     return _salida(orden, contexto)
 
@@ -1065,12 +1079,13 @@ def post_observacion_recepcion(
     cuerpo: ObservacionRecepcionIn,
     contexto: ContextoDep,
 ) -> OrdenOut:
-    """Agregar una observacion complementaria del ingreso."""
+    """Agregar una observacion complementaria del ingreso (o interna)."""
     orden = agregar_observacion_recepcion(
         contexto,
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
         texto=cuerpo.texto,
+        interna=cuerpo.interna,
     )
     return _salida(orden, contexto)
 
@@ -1091,6 +1106,31 @@ def post_emitir_comprobante_recepcion(
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
         motivo=cuerpo.motivo,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/documents/intake-receipt")
+def post_generar_comprobante_ingreso(
+    orden_id: str,
+    cuerpo: GenerarComprobanteIngresoIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Generar el comprobante de ingreso y autorizacion (ACT-RECEP).
+
+    Ingreso inicial de CLIENTE_EXTERNO, en una sola operacion: confirma la
+    recepcion fisica, finaliza la definicion (PROC-REP-050/060),
+    factibilidad y habilitacion, registra la autorizacion de los trabajos
+    cargados (046/047) y emite el comprobante; la Orden entra a la cola
+    con prioridad 4. Un reintento no duplica nada. Generarlo no registra
+    que el cliente lo recibio.
+    """
+    orden = generar_comprobante_ingreso(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        canal=cuerpo.canal,
+        checkin=cuerpo.checkin,
     )
     return _salida(orden, contexto)
 
@@ -1128,11 +1168,86 @@ def post_liberar_orden(
     Orden vuelve a EN_COLA. Solo tiene sentido cuando todavia queda al
     menos un Detalle trabajable -si no, ``evaluar_situacion_orden`` ya
     cerro la toma automaticamente al terminar el ultimo-.
+
+    Otro tecnico (o Coordinacion) puede liberar la de su titular con
+    motivo y confirmacion; una reparacion en curso se interrumpe antes.
     """
     orden = liberar_orden(
         contexto,
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
+        motivo=cuerpo.motivo,
+        confirmado=cuerpo.confirmado,
+        insumos_utilizados=[
+            insumo.a_dominio() for insumo in cuerpo.insumos_utilizados
+        ],
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/priority")
+def post_cambiar_prioridad(
+    orden_id: str,
+    cuerpo: CambiarPrioridadIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Cambiar la prioridad de una Orden en el taller (ACC-REP-007).
+
+    Tecnico, Coordinacion o Recepcion; en cola o en reparacion. La cola se
+    reordena sola. No es ingresarla a la cola: eso ya ocurrio.
+    """
+    orden = cambiar_prioridad_de_orden(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        prioridad=cuerpo.prioridad,
+        motivo=cuerpo.motivo,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/discount")
+def post_aplicar_descuento(
+    orden_id: str,
+    cuerpo: DescuentoIn,
+    contexto: ContextoDep,
+) -> OrdenConEntregaOut:
+    """Aplicar, cambiar o quitar el descuento comercial (Recepcion).
+
+    Porcentaje o importe fijo, con motivo. No toca el precio de ningun
+    trabajo ni los Pagos; se rechaza si deja el total por debajo de lo ya
+    pagado. En el cierre comercial se revalida PROC-REP-265.
+    """
+    orden, puede_entregar = aplicar_descuento_de_orden(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        tipo=cuerpo.tipo,
+        valor=cuerpo.valor,
+        motivo=cuerpo.motivo,
+    )
+    return _salida_con_entrega(orden, contexto, puede_entregar)
+
+
+@router.post("/{orden_id}/details/{detalle_id}/warranty")
+def post_ajustar_garantia(
+    orden_id: str,
+    detalle_id: str,
+    cuerpo: AjustarGarantiaIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Ajustar el plazo de garantia de un trabajo (Recepcion o Coordinacion).
+
+    Antes de la entrega, con motivo. Se conservan la sugerida y cada
+    ajuste; el plazo corre desde la entrega.
+    """
+    orden = ajustar_garantia(
+        contexto,
+        orden_id=orden_id,
+        detalle_id=detalle_id,
+        usuario_id=cuerpo.usuario_id,
+        dias=cuerpo.dias,
+        motivo=cuerpo.motivo,
     )
     return _salida(orden, contexto)
 

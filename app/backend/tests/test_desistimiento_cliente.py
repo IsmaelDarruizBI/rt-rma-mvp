@@ -157,11 +157,11 @@ def test_2_desistir_de_un_detalle_autorizado_sin_ejecucion(cliente):
     assert desistido["estado"] == "CANCELADO"
     assert desistido["cancelacion"]["origen"] == "DESISTIMIENTO_CLIENTE"
     assert desistido["situacion_autorizacion"] == "CANCELADO_POR_DESISTIMIENTO"
-    # El otro sigue igual y la Orden sigue habilitada.
+    # El otro sigue igual y la Orden sigue en la cola.
     assert detalle(orden, "DET-001")["situacion_autorizacion"] == (
         "AUTORIZADO_FACTIBLE"
     )
-    assert orden["estado_workflow"] == "HABILITADA"
+    assert orden["estado_workflow"] == "EN_COLA"
     assert Decimal(orden["resumen"]["total"]) == Decimal("80000")
 
 

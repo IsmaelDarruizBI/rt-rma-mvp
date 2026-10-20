@@ -21,9 +21,8 @@ from app.storage.json.base import escribir_json_atomico
 from tests import test_multidetalle as multi
 from tests.fixtures.api_definicion import (
     definir_y_finalizar,
-    finalizar_definicion,
-    registrar_decision,
 )
+from tests.fixtures.api_salidas import encolar, generar_ingreso
 from tests.fixtures.custodia import confirmar_recepcion
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
@@ -397,16 +396,9 @@ def test_multidetalle_interrumpir_uno_ofrece_los_trabajables(tmp_path):
                     "tipo_reparacion_id": tipo,
                 },
             )
-        finalizar_definicion(cliente, orden_id, multi.RECEPCION)
-        registrar_decision(
-            cliente,
-            orden_id,
-            {"DET-001": "AUTORIZADO", "DET-002": "AUTORIZADO"},
-        )
-        cliente.post(
-            f"/api/orders/{orden_id}/queue",
-            json={"usuario_id": multi.COORDINADOR, "prioridad": 1},
-        )
+        # Comprobante de ingreso: autoriza los dos y entra a la cola.
+        generar_ingreso(cliente, orden_id)
+        encolar(cliente, orden_id, 1, multi.COORDINADOR)
         cliente.post(
             f"/api/orders/{orden_id}/take",
             json={"usuario_id": multi.TECNICO, "estacion_id": multi.ESTACION},

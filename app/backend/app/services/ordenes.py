@@ -30,7 +30,12 @@ from app.domain.models import (
     RolUsuario,
     Usuario,
 )
-from app.domain.prioridad import NOMBRES_DE_PRIORIDAD, es_prioridad_valida
+from app.domain.prioridad import (
+    NOMBRES_DE_PRIORIDAD,
+    PRIORIDAD_PREDETERMINADA,
+    es_prioridad_valida,
+    nombre_de_prioridad,
+)
 
 from .autorizacion import validar_actor, validar_alguno_de
 from .autorizacion_cliente import (
@@ -62,7 +67,7 @@ from .reparaciones import control_tecnico_completo, definicion_finalizada
 from .resolucion import ResultadoEvaluacionOrden
 from .revisiones import finalizada_sin_reparacion, lista_para_cierre
 from .tomas import toma_activa
-from .workflow import registrar_paso
+from .workflow import registrar_accion_funcional, registrar_paso
 
 # Nodos que PROC-REP V1.3 declara con ``actores_alternativos``:
 # actores equivalentes, sin jerarquia entre ellos.
@@ -679,6 +684,113 @@ def definir_prioridad(
         fecha=fecha,
         usuario_id=usuario.id,
         observacion=str(prioridad),
+    )
+    nueva_orden.prioridad = prioridad
+    return nueva_orden
+
+
+# Cambiar la prioridad de una Orden que ya esta en el taller (MVP v2):
+# los tecnicos segun el diagnostico, y Coordinacion y Recepcion como antes.
+ROLES_CAMBIO_PRIORIDAD = (
+    RolUsuario.TECNICO,
+    RolUsuario.COORDINADOR_RMA,
+    RolUsuario.RECEPCION,
+)
+# ACC-REP-007 (hp-rep-001.yaml): "Asignar la prioridad de ejecucion de la
+# Orden". La primera asignacion es PROC-REP-150 (una sola vez); los
+# cambios posteriores son esta accion funcional y no repiten el nodo.
+ACCION_CAMBIAR_PRIORIDAD = "ACC-REP-007"
+_ESTADOS_EN_TALLER = (EstadoWorkflow.EN_COLA, EstadoWorkflow.EN_REPARACION)
+
+
+def ingresar_a_cola_con_prioridad_predeterminada(
+    orden: OrdenReparacion,
+    *,
+    fecha: datetime,
+    usuario_id: str | None = None,
+) -> OrdenReparacion:
+    """PROC-REP-150 (4 - Normal) -> PROC-REP-170 sin un paso humano.
+
+    Para el ingreso inicial de CLIENTE_EXTERNO (MVP v2): la Orden
+    habilitada entra sola a la cola con la prioridad predeterminada.
+    ``usuario_id`` es quien ejecuto el comando que la habilito (o ``None``
+    si fue un paso del sistema). Igual que la priorizacion manual, ocurre
+    una sola vez.
+    """
+    if fue_priorizada(orden):
+        raise PrecondicionInvalidaError(
+            f"La Orden ya tiene prioridad {orden.prioridad} (PROC-REP-150): "
+            "la priorizacion no se repite."
+        )
+    if orden.estado_workflow is not EstadoWorkflow.HABILITADA:
+        raise PrecondicionInvalidaError(
+            f"Solo entra a la cola una Orden HABILITADA; "
+            f"esta en {orden.estado_workflow.value}."
+        )
+    nueva_orden = registrar_paso(
+        orden,
+        process_id="PROC-REP-150",
+        accion="DEFINIR_PRIORIDAD",
+        fecha=fecha,
+        usuario_id=usuario_id,
+        observacion=f"{PRIORIDAD_PREDETERMINADA} (predeterminada)",
+    )
+    nueva_orden.prioridad = PRIORIDAD_PREDETERMINADA
+    return ingresar_a_cola(nueva_orden, fecha=fecha)
+
+
+def cambiar_prioridad(
+    orden: OrdenReparacion,
+    *,
+    prioridad: int,
+    usuario: Usuario,
+    fecha: datetime,
+    motivo: str | None = None,
+) -> OrdenReparacion:
+    """Cambia la prioridad de una Orden en el taller (ACC-REP-007).
+
+    Distinto de entrar a la cola: la Orden ya fue priorizada (150) y esta
+    en cola o en reparacion. No mueve el proceso ni la cola de lugar: la
+    cola se reordena sola por prioridad. Deja en el historial quien la
+    cambio, cuando, el valor anterior y el nuevo.
+    """
+    validar_alguno_de(usuario, ROLES_CAMBIO_PRIORIDAD)
+    if not es_prioridad_valida(prioridad):
+        opciones = ", ".join(
+            f"{valor} ({nombre})"
+            for valor, nombre in NOMBRES_DE_PRIORIDAD.items()
+        )
+        raise PrecondicionInvalidaError(
+            f"Prioridad invalida: {prioridad}. Valores admitidos: {opciones}."
+        )
+    if not fue_priorizada(orden):
+        raise PrecondicionInvalidaError(
+            "La Orden todavia no entro a la cola: la prioridad se asigna "
+            "al ingresar."
+        )
+    if orden.estado_workflow not in _ESTADOS_EN_TALLER:
+        raise PrecondicionInvalidaError(
+            "La prioridad solo cambia mientras la Orden esta en el taller "
+            f"(en cola o en reparacion); esta en "
+            f"{orden.estado_workflow.value}."
+        )
+    if prioridad == orden.prioridad:
+        raise PrecondicionInvalidaError(
+            f"La Orden ya tiene prioridad {prioridad}."
+        )
+    observacion = (
+        f"{orden.prioridad} -> {prioridad} ({nombre_de_prioridad(prioridad)})"
+    )
+    motivo = (motivo or "").strip()
+    if motivo:
+        observacion += f": {motivo}"
+    nueva_orden = registrar_accion_funcional(
+        orden,
+        accion_id=ACCION_CAMBIAR_PRIORIDAD,
+        accion="CAMBIAR_PRIORIDAD",
+        fecha=fecha,
+        usuario_id=usuario.id,
+        observacion=observacion,
     )
     nueva_orden.prioridad = prioridad
     return nueva_orden

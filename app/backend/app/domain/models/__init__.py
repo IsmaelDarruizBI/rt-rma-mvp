@@ -10,6 +10,8 @@ fuente de verdad funcional, y aqui solo se conservan sus IDs
 from .catalogos import (
     DATOS_EMPRESA_PREDETERMINADOS,
     MEDIOS_PAGO_PREDETERMINADOS,
+    NOMBRE_TIPO_REPARACION_OTROS,
+    TIPO_REPARACION_OTROS,
     DatosEmpresa,
     EstacionTrabajo,
     Insumo,
@@ -18,13 +20,16 @@ from .catalogos import (
     TipoReparacionEstacion,
     TipoReparacionInsumos,
 )
+from .descuentos import RegistroDescuento, importe_de_descuento
 from .documentos import (
     CoberturaGarantia,
     ContenidoComprobanteAutorizacion,
     ContenidoComprobanteEntrega,
+    ContenidoComprobanteIngreso,
     ContenidoComprobanteRecepcion,
     ContenidoDocumento,
     ContenidoGarantia,
+    DescuentoEnDocumento,
     DevolucionDineroEnDocumento,
     Documento,
     DocumentoEmitido,
@@ -51,6 +56,7 @@ from .enums import (
     ResultadoAutorizacion,
     ResultadoControl,
     RolUsuario,
+    TipoDescuento,
     TipoDocumento,
     TipoEntrega,
     TipoMovimientoInsumo,
@@ -71,6 +77,7 @@ from .recepcion import (
     VersionRecepcion,
 )
 from .reparacion import (
+    AjusteGarantia,
     DefinicionAnteriorDetalle,
     EjecucionReparacion,
     RegistroAutorizacionCliente,
@@ -146,6 +153,14 @@ __all__ = [
     # Documentos
     "CoberturaGarantia",
     "ContenidoComprobanteAutorizacion",
+    "ContenidoComprobanteIngreso",
+    "DescuentoEnDocumento",
+    "RegistroDescuento",
+    "TipoDescuento",
+    "AjusteGarantia",
+    "TIPO_REPARACION_OTROS",
+    "NOMBRE_TIPO_REPARACION_OTROS",
+    "importe_de_descuento",
     "ContenidoComprobanteEntrega",
     "ContenidoComprobanteRecepcion",
     "ContenidoDocumento",

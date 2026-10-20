@@ -195,7 +195,8 @@ def test_hp_rep_001_end_to_end_por_http(cliente):
     assert orden["resumen"]["total"] == "0"
     assert orden["resumen"]["estado_pago"] == "PENDIENTE"
 
-    # PROC-REP-045 -> 070 -> 050 -> 060 -> 080 -> 090 -> 140
+    # PROC-REP-045 -> 070, y el comprobante de ingreso y autorizacion:
+    # 050 -> 060 -> 046/047 -> 080 -> 090 -> 140 -> 150 (4) -> 170
     respuesta = definir_y_finalizar(
         cliente,
         orden_id,
@@ -205,15 +206,16 @@ def test_hp_rep_001_end_to_end_por_http(cliente):
     orden = respuesta.json()
     detalle_id = orden["reparaciones_detail"][0]["id"]
 
-    assert orden["estado_workflow"] == "HABILITADA"
+    assert orden["estado_workflow"] == "EN_COLA"
+    assert orden["prioridad"] == 4
     assert orden["resumen"]["total"] == "80000"
     assert orden["documentos"]["comprobante_recepcion"]["generado"] is True
     # La factibilidad consulta, no reserva.
     assert cliente.get("/api/catalogs/repair-types").status_code == 200
 
-    # PROC-REP-150 -> 170
+    # Coordinacion la sube a urgente (ACC-REP-007), sin volver a encolar.
     orden = cliente.post(
-        f"/api/orders/{orden_id}/queue",
+        f"/api/orders/{orden_id}/priority",
         json={"usuario_id": COORDINADOR, "prioridad": 1},
     ).json()
     assert orden["estado_workflow"] == "EN_COLA"

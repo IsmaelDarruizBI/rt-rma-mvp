@@ -399,7 +399,9 @@ def test_211_con_la_definicion_abierta_no_la_cierra():
 
     assert resultado is ResultadoEvaluacionOrden.PENDIENTE_AUTORIZACION
     assert evaluada.current_process == "PROC-REP-211"
-    assert "FINALIZAR_DEFINICION" in [
+    # La definicion sigue abierta: en el ingreso inicial se cierra con el
+    # comprobante de ingreso.
+    assert "GENERAR_COMPROBANTE_INGRESO" in [
         a.codigo for a in acciones_disponibles(evaluada)
     ]
 

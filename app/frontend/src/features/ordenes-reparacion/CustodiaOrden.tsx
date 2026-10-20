@@ -28,7 +28,7 @@ import type {
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
 import { CUSTODIA, etiqueta } from "./etiquetas";
-import { listaDeAccesorios } from "./ListadoOrdenes";
+import { CampoCheckin, listaDeAccesorios } from "./ListadoOrdenes";
 import { Confirmacion, Seccion, habilitada } from "./PagosOrden";
 import { UbicacionAccion } from "./presentacion";
 
@@ -40,7 +40,15 @@ interface Props {
   onRegistrar: (datos: DatosRecepcion, equipo: DatosEquipo | null) => void;
   onConfirmar: (observaciones: string | null) => void;
   onNoRecibido: (motivo: string) => void;
-  onObservar: (texto: string) => void;
+  /** `interna`: solo para el personal; nunca sale en un documento. */
+  onObservar: (texto: string, interna: boolean) => void;
+}
+
+/** «Sí — 90 días» / «No — 30 días» / sin indicar. */
+function textoCheckin(checkin: boolean | null | undefined): string {
+  if (checkin === true) return "Realizado (garantía sugerida: 90 días)";
+  if (checkin === false) return "No realizado (garantía sugerida: 30 días)";
+  return "Sin indicar";
 }
 
 const COLOR_CUSTODIA: Record<EstadoCustodia, string> = {
@@ -116,6 +124,15 @@ export function CustodiaOrden(props: Props) {
   const confirmar = buscar("CONFIRMAR_RECEPCION");
   const noRecibido = buscar("REGISTRAR_EQUIPO_NO_RECIBIDO");
   const observar = buscar("AGREGAR_OBSERVACION_RECEPCION");
+  // Ingreso inicial de Cliente Externo: la confirmación va dentro del
+  // comprobante de ingreso y autorización, no es un paso suelto.
+  const confirmaConElIngreso =
+    !confirmar &&
+    custodia.estado === "PENDIENTE_CONFIRMACION" &&
+    orden.estado_workflow === "REQUERIMIENTO";
+  const conIngreso = orden.documentos_emitidos.some(
+    (documento) => documento.tipo === "COMPROBANTE_INGRESO",
+  );
 
   return (
     <div>
@@ -143,13 +160,17 @@ export function CustodiaOrden(props: Props) {
         <Etiqueta color={COLOR_CUSTODIA[custodia.estado]}>
           {etiqueta(CUSTODIA, custodia.estado)}
         </Etiqueta>{" "}
-        {descripcionCustodia(orden, usuarios)}
+        {confirmaConElIngreso
+          ? "Se confirma al generar el comprobante de ingreso y autorización."
+          : descripcionCustodia(orden, usuarios)}
       </p>
       <PendientesDeCierre orden={orden} />
       <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: colores.suave }}>
-        Comprobante de recepción:{" "}
+        {conIngreso ? "Comprobante de ingreso y autorización" : "Comprobante de recepción"}:{" "}
         <strong>
-          {custodia.comprobante_recepcion_emitido ? "emitido" : "no emitido"}
+          {conIngreso || custodia.comprobante_recepcion_emitido
+            ? "emitido"
+            : "no emitido"}
         </strong>
         .
       </p>
@@ -173,9 +194,18 @@ export function CustodiaOrden(props: Props) {
             }
           />
           <Fila
-            etiqueta="Observaciones"
+            etiqueta="Observaciones del equipo"
             valor={recepcion.datos.observaciones ?? "—"}
           />
+          {recepcion.datos.notas_internas && (
+            <Fila
+              etiqueta="Notas internas"
+              valor={`${recepcion.datos.notas_internas} (no salen en documentos)`}
+            />
+          )}
+          {orden.origen === "CLIENTE_EXTERNO" && (
+            <Fila etiqueta="Check-in" valor={textoCheckin(recepcion.datos.checkin)} />
+          )}
           <Fila
             etiqueta={
               recepcion.registro === "REGULARIZACION"
@@ -219,6 +249,11 @@ export function CustodiaOrden(props: Props) {
               <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
                 {recepcion.notas.map((nota) => (
                   <li key={nota.fecha + nota.texto}>
+                    {nota.interna && (
+                      <>
+                        <Etiqueta color={colores.suave}>INTERNA</Etiqueta>{" "}
+                      </>
+                    )}
                     {nota.texto}{" "}
                     <span style={{ color: colores.suave }}>
                       ({nombreDeUsuario(usuarios, nota.usuario_id)},{" "}
@@ -401,6 +436,14 @@ function FormularioDatosIngreso({
   const [observaciones, setObservaciones] = useState(
     recepcion?.datos.observaciones ?? "",
   );
+  const [notasInternas, setNotasInternas] = useState(
+    recepcion?.datos.notas_internas ?? "",
+  );
+  const checkinActual = recepcion?.datos.checkin;
+  const [checkin, setCheckin] = useState<"" | "si" | "no">(
+    checkinActual === true ? "si" : checkinActual === false ? "no" : "",
+  );
+  const pideCheckin = orden.origen === "CLIENTE_EXTERNO";
   const deshabilitado = !habilitada(accion, actor) || ocupado;
 
   const titulo =
@@ -456,7 +499,23 @@ function FormularioDatosIngreso({
       {campo("Falla declarada", falla, setFalla)}
       {campo("Estado físico", estado, setEstado)}
       {campo("Accesorios (separados por coma)", accesorios, setAccesorios)}
-      {campo("Observaciones iniciales", observaciones, setObservaciones)}
+      {campo(
+        "Observaciones del equipo (salen en el comprobante)",
+        observaciones,
+        setObservaciones,
+      )}
+      {campo(
+        "Notas internas (no salen en documentos)",
+        notasInternas,
+        setNotasInternas,
+      )}
+      {pideCheckin && (
+        <CampoCheckin
+          valor={checkin}
+          deshabilitado={deshabilitado}
+          onCambiar={setCheckin}
+        />
+      )}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         <Boton
           disabled={deshabilitado || !marca.trim() || !modelo.trim() || !falla.trim()}
@@ -466,6 +525,13 @@ function FormularioDatosIngreso({
                 estado_fisico: estado.trim() || null,
                 accesorios: listaDeAccesorios(accesorios),
                 observaciones: observaciones.trim() || null,
+                notas_internas: notasInternas.trim() || null,
+                // Sin el campo (otros Orígenes) se conserva lo registrado.
+                checkin: pideCheckin
+                  ? checkin === ""
+                    ? null
+                    : checkin === "si"
+                  : (checkinActual ?? null),
               },
               {
                 marca: marca.trim(),
@@ -496,6 +562,7 @@ function FormularioNota({
   accion,
 }: Props & { accion: Accion }) {
   const [texto, setTexto] = useState("");
+  const [interna, setInterna] = useState(false);
   const deshabilitado = !habilitada(accion, actor) || ocupado;
   return (
     <Seccion
@@ -511,15 +578,33 @@ function FormularioNota({
           style={estiloInput}
         />
       </Campo>
+      <label
+        style={{
+          display: "flex",
+          gap: "0.4rem",
+          alignItems: "center",
+          margin: "0 0 0.6rem",
+          fontSize: "0.85rem",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={interna}
+          disabled={deshabilitado}
+          onChange={(evento) => setInterna(evento.target.checked)}
+        />
+        Nota interna (solo el personal; no sale en documentos)
+      </label>
       <Boton
         variante="secundario"
         disabled={deshabilitado || !texto.trim()}
         onClick={() => {
-          onObservar(texto.trim());
+          onObservar(texto.trim(), interna);
           setTexto("");
+          setInterna(false);
         }}
       >
-        Agregar observación
+        {interna ? "Agregar nota interna" : "Agregar observación"}
       </Boton>
     </Seccion>
   );

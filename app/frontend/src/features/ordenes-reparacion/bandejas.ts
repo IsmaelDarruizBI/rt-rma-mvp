@@ -88,6 +88,9 @@ export function trabajosDe(
 /** Cómo está un trabajo, con los datos que manda el backend. */
 export function estadoDeTrabajo(trabajo: TrabajoBandeja): string {
   if (trabajo.en_curso) return "en reparación";
+  if (trabajo.pendiente_comprobante_ingreso) {
+    return "pendiente de comprobante de ingreso";
+  }
   if (trabajo.pendiente_autorizacion) return "esperando autorización";
   if (trabajo.condicion === "BLOQUEADO_POR_RECURSOS") return "sin repuestos";
   if (trabajo.condicion === "REQUIERE_DEFINICION") return "requiere revisión";

@@ -25,6 +25,7 @@ from tests.fixtures.api_salidas import (
     conflicto,
     definida,
     ejecutar,
+    encolar,
     finalizar,
     ids,
     iniciar,
@@ -125,22 +126,18 @@ def test_una_orden_nunca_habilitada_se_habilita_en_140(tmp_path):
 
         orden = ok(_revalidar_orden(cliente, orden_id))
 
-        assert ids(orden)[-3:] == [
+        # Recien ahora se habilita (140) y, con el comprobante de ingreso,
+        # entra sola a la cola con prioridad 4 (150 -> 170).
+        assert ids(orden)[-5:] == [
             "PROC-REP-080",
             "PROC-REP-090",
             "PROC-REP-140",
+            "PROC-REP-150",
+            "PROC-REP-170",
         ]
-        assert orden["estado_workflow"] == "HABILITADA"
         assert ids(orden).count("PROC-REP-140") == 1
-        # Recien ahora se prioriza y entra a la cola.
-        assert "ENCOLAR" in codigos(orden)
-        orden = ok(
-            cliente.post(
-                f"/api/orders/{orden_id}/queue",
-                json={"usuario_id": COORDINADOR, "prioridad": 2},
-            )
-        )
-        assert (orden["estado_workflow"], orden["prioridad"]) == ("EN_COLA", 2)
+        assert "ENCOLAR" not in codigos(orden)
+        assert (orden["estado_workflow"], orden["prioridad"]) == ("EN_COLA", 4)
 
 
 # --- Ya habilitada: reserva fallida (EXC-REP-003) ----------------------------
@@ -287,17 +284,21 @@ def test_override_antes_de_la_habilitacion_habilita_en_140(tmp_path):
 
         orden = _override(cliente, orden_id)
 
-        assert ids(orden)[-3:] == [
+        # Primera habilitacion y, con el comprobante de ingreso, la primera
+        # priorizacion (4) y la cola.
+        assert ids(orden)[-5:] == [
             "PROC-REP-110",
             "PROC-REP-130",
             "PROC-REP-140",
+            "PROC-REP-150",
+            "PROC-REP-170",
         ]
-        assert orden["estado_workflow"] == "HABILITADA"
-        # Primera priorizacion.
-        assert "ENCOLAR" in codigos(orden)
+        assert orden["estado_workflow"] == "EN_COLA"
+        assert "ENCOLAR" not in codigos(orden)
         tomada(cliente, orden_id)
         orden = _orden(cliente, orden_id)
         assert (ids(orden).count("PROC-REP-140"), orden["prioridad"]) == (1, 3)
+        assert ids(orden).count("PROC-REP-150") == 1
 
 
 def test_override_despues_de_la_habilitacion_no_repite_140(tmp_path):
@@ -386,12 +387,7 @@ def _rt_en_revision(cliente) -> str:
     orden_id = _crear_orden_rt(cliente)
     agregar(cliente, orden_id, BATERIA)
     finalizar(cliente, orden_id, confirmar_recepcion=False)
-    ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/queue",
-            json={"usuario_id": COORDINADOR, "prioridad": 2},
-        )
-    )
+    ok(encolar(cliente, orden_id, 2, COORDINADOR))
     _tomar(cliente, orden_id)
     ejecucion_id = iniciar(cliente, orden_id)
     orden = ok(

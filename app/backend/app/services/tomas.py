@@ -23,6 +23,7 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from app.domain.models import (
+    TIPO_REPARACION_OTROS,
     CondicionReparacionDetail,
     EstacionTrabajo,
     EstadoEjecucion,
@@ -36,7 +37,7 @@ from app.domain.models import (
     Usuario,
 )
 
-from .autorizacion import actor_valido, validar_actor
+from .autorizacion import actor_valido, validar_actor, validar_alguno_de
 from .autorizacion_cliente import es_trabajable, exigir_autorizacion_vigente
 from .exceptions import (
     EntidadNoEncontradaError,
@@ -97,7 +98,13 @@ def estacion_habilitada_para(
     estacion_id: str,
     compatibilidades: Sequence[TipoReparacionEstacion],
 ) -> bool:
-    """True si esa Estacion puede realizar ese Tipo de Reparacion."""
+    """True si esa Estacion puede realizar ese Tipo de Reparacion.
+
+    Una reparacion "Otros" no tiene Tipo de catalogo: no restringe
+    estaciones (la puede hacer cualquier estacion activa).
+    """
+    if tipo_reparacion_id == TIPO_REPARACION_OTROS:
+        return True
     return any(
         compatibilidad.tipo_reparacion_id == tipo_reparacion_id
         and compatibilidad.estacion_id == estacion_id
@@ -361,11 +368,23 @@ def seleccionar_detalle(
     )
 
 
+# Liberar una Orden tomada por OTRO tecnico (MVP v2): cualquier tecnico, o
+# Coordinacion, con motivo. El titular libera la suya como siempre.
+ROLES_LIBERACION_AJENA = (RolUsuario.TECNICO, RolUsuario.COORDINADOR_RMA)
+
+
+def es_liberacion_ajena(orden: OrdenReparacion, usuario: Usuario) -> bool:
+    """Hay una toma activa y no es de ``usuario``."""
+    toma = toma_activa(orden)
+    return toma is not None and toma.usuario_id != usuario.id
+
+
 def liberar_orden(
     orden: OrdenReparacion,
     *,
     usuario: Usuario,
     fecha: datetime,
+    motivo: str | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-212 ("No") -> PROC-REP-213 -> PROC-REP-170: libera la Orden.
 
@@ -377,16 +396,30 @@ def liberar_orden(
     deja la Orden EN_COLA. Nunca se sobrescribe el historial de
     participaciones anteriores.
 
-    Solo libera el titular de la toma (E2): otro tecnico no puede
-    sacarsela.
+    El titular libera la suya (E2). Otro tecnico -o Coordinacion- puede
+    liberarla tambien (MVP v2), con ``motivo`` obligatorio: queda en la
+    toma (quien la libero y por que) y en PROC-REP-213 (titular anterior,
+    quien libera, motivo y el estado de los trabajos). Una Ejecucion
+    activa se interrumpe antes con la logica de interrupcion
+    (``registrar_interrupcion_por_liberacion``): aca nunca debe quedar
+    una en curso.
     """
-    validar_actor(usuario, RolUsuario.TECNICO)
-
-    validar_titular_de_la_toma(
-        orden,
-        usuario,
-        sin_toma="La Orden no tiene una toma activa para liberar.",
-    )
+    toma = toma_activa(orden)
+    if toma is None:
+        raise PrecondicionInvalidaError(
+            "La Orden no tiene una toma activa para liberar."
+        )
+    ajena = toma.usuario_id != usuario.id
+    if ajena:
+        validar_alguno_de(usuario, ROLES_LIBERACION_AJENA)
+        motivo = (motivo or "").strip()
+        if not motivo:
+            raise PrecondicionInvalidaError(
+                f"La Orden la tiene {toma.usuario_id} (estacion "
+                f"{toma.estacion_id}): liberarla exige indicar el motivo."
+            )
+    else:
+        validar_actor(usuario, RolUsuario.TECNICO)
     if hay_ejecucion_activa(orden):
         raise PrecondicionInvalidaError(
             "No se puede liberar la Orden con una Ejecucion activa."
@@ -401,11 +434,19 @@ def liberar_orden(
         accion="LIBERAR_ORDEN",
         fecha=fecha,
         usuario_id=usuario.id,
+        observacion=(
+            _observacion_liberacion_ajena(nueva_orden, toma, usuario, motivo)
+            if ajena
+            else None
+        ),
     )
     for toma_de_la_orden in nueva_orden.tomas:
         if toma_de_la_orden.estado is EstadoTomaOrden.ACTIVA:
             toma_de_la_orden.estado = EstadoTomaOrden.CERRADA
             toma_de_la_orden.fin = fecha
+            if ajena:
+                toma_de_la_orden.liberada_por = usuario.id
+                toma_de_la_orden.motivo_liberacion = motivo
 
     nueva_orden = registrar_paso(
         nueva_orden,
@@ -415,6 +456,23 @@ def liberar_orden(
     )
     nueva_orden.estado_workflow = EstadoWorkflow.EN_COLA
     return nueva_orden
+
+
+def _observacion_liberacion_ajena(
+    orden: OrdenReparacion,
+    toma: TomaOrden,
+    usuario: Usuario,
+    motivo: str,
+) -> str:
+    trabajos = ", ".join(
+        f"{detalle.id} {detalle.estado.value}"
+        for detalle in orden.reparaciones_detail
+    )
+    return (
+        f"Liberada por {usuario.id} (titular {toma.usuario_id}, estacion "
+        f"{toma.estacion_id}): {motivo}. Orden "
+        f"{orden.estado_workflow.value}; trabajos: {trabajos or 'ninguno'}."
+    )
 
 
 def validar_compatibilidad_detalle(

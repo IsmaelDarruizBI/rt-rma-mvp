@@ -8,7 +8,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { ContenidoAutorizacion } from "../src/types/api.ts";
+import type {
+  ContenidoAutorizacion,
+  ContenidoIngreso,
+} from "../src/types/api.ts";
 import {
   enlaceWhatsapp,
   mensajeComprobante,
@@ -102,4 +105,32 @@ test("el mensaje nombra la orden, lo autorizado y que no es un pago", () => {
   assert.match(mensaje, /Total autorizado: \$\s?85\.000/);
   assert.match(mensaje, /No es un comprobante de pago\./);
   assert.doesNotMatch(mensaje, /DET-|enviado|recibido/);
+});
+
+const INGRESO: ContenidoIngreso = {
+  ...CONTENIDO,
+  tipo: "COMPROBANTE_INGRESO",
+  estado_fisico: "Sin golpes.",
+  accesorios: ["Cargador"],
+  observaciones: null,
+  notas: [],
+  checkin: true,
+  registrado_por: null,
+  recepcion_fisica: "EN_CUSTODIA",
+  confirmada_por: null,
+  confirmada_en: null,
+  subtotal: "85000",
+  descuento: { descripcion: "10 %", motivo: "Promo", importe: "8500" },
+  total: "76500",
+};
+
+test("el comprobante de ingreso: con descuento, sin decir que se recibió", () => {
+  const mensaje = mensajeComprobante(INGRESO);
+
+  assert.match(mensaje, /comprobante de ingreso y autorización de la orden OR-000007/);
+  assert.match(mensaje, /Subtotal: \$\s?85\.000/);
+  assert.match(mensaje, /Descuento \(10 %\): -\$\s?8\.500/);
+  assert.match(mensaje, /Total autorizado: \$\s?76\.500/);
+  assert.match(mensaje, /No es un comprobante de pago\./);
+  assert.doesNotMatch(mensaje, /DET-|enviado|recibido|firm/);
 });

@@ -41,8 +41,10 @@ from app.domain.prioridad import clave_de_prioridad
 from app.services import (
     SituacionInsumo,
     ejecucion_activa,
+    es_ingreso_inicial,
     es_trabajable,
     faltantes_de_detalles_bloqueados,
+    nombre_del_trabajo,
     pendiente_de_autorizacion,
     reservas_externas_a,
     situacion_inventario,
@@ -91,6 +93,8 @@ class TrabajoEnBandeja:
     # Nombres de los insumos que hoy no alcanzan (solo si esta bloqueado
     # por recursos).
     faltantes: tuple[str, ...] = ()
+    # Ingreso inicial: la autorizacion llega con el comprobante de ingreso.
+    pendiente_comprobante_ingreso: bool = False
 
 
 @dataclass(frozen=True)
@@ -197,9 +201,7 @@ class _Lectura:
     @staticmethod
     def _leer(orden: OrdenReparacion, tipos: Mapping[str, str]) -> _Orden:
         nombres = {
-            detalle.id: tipos.get(
-                detalle.tipo_reparacion_id, detalle.tipo_reparacion_id
-            )
+            detalle.id: nombre_del_trabajo(detalle, tipos)
             for detalle in orden.reparaciones_detail
         }
         acciones = acciones_disponibles(orden)
@@ -240,6 +242,7 @@ class _Lectura:
     def _trabajos(self, leida: _Orden) -> tuple[TrabajoEnBandeja, ...]:
         orden = leida.orden
         en_curso = ejecucion_activa(orden)
+        en_ingreso = es_ingreso_inicial(orden)
         faltantes = (
             self._faltantes(orden)
             if any(
@@ -264,6 +267,8 @@ class _Lectura:
                     and en_curso.reparacion_detail_id == detalle.id
                 ),
                 faltantes=faltantes.get(detalle.id, ()),
+                pendiente_comprobante_ingreso=en_ingreso
+                and pendiente_de_autorizacion(orden, detalle),
             )
             for detalle in orden.reparaciones_detail
             if detalle.estado is not EstadoReparacionDetail.CANCELADO
@@ -558,12 +563,14 @@ def _recepcion(lectura: _Lectura) -> list[Bandeja]:
         _bandeja(
             "DEFINICION",
             "Definir reparaciones",
-            "Cargar los trabajos, finalizar la definición o redefinir "
-            "después de una revisión técnica.",
+            "Cargar los trabajos, generar el comprobante de ingreso, "
+            "finalizar la definición o redefinir después de una revisión "
+            "técnica.",
             tareas,
             lectura.por_acciones(
                 "AGREGAR_DETALLE",
                 "FINALIZAR_DEFINICION",
+                "GENERAR_COMPROBANTE_INGRESO",
                 "ENVIAR_A_REVISION",
                 "AGREGAR_DETALLE_DESDE_REVISION",
                 "FINALIZAR_SIN_REPARACION",

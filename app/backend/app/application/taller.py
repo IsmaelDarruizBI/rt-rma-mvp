@@ -25,19 +25,25 @@ from app.domain.models import (
     OrdenReparacion,
 )
 from app.services import (
+    ROLES_LIBERACION_AJENA,
+    ConfirmacionRequeridaError,
     EntidadNoEncontradaError,
     PrecondicionInvalidaError,
     ResultadoEvaluacionOrden,
     aplicar_movimientos_inventario,
     cargar_reservas_externas,
+    ejecucion_activa,
     ejecutar_detalle,
     evaluar_situacion_orden,
     intentar_reserva_e_inicio,
     registrar_ejecucion_completada,
     registrar_ejecucion_interrumpida,
     registrar_ejecucion_requiere_redefinicion,
+    registrar_interrupcion_por_liberacion,
     seleccionar_detalle,
+    toma_activa,
     tomar_orden,
+    validar_alguno_de,
     validar_compatibilidad_detalle,
     validar_estacion_trabajo,
 )
@@ -190,17 +196,72 @@ def liberar_orden(
     *,
     orden_id: str,
     usuario_id: str,
+    motivo: str | None = None,
+    confirmado: bool = False,
+    insumos_utilizados: Sequence[InsumoUtilizado] = (),
 ) -> OrdenReparacion:
-    """El tecnico libera la Orden sin terminarla (PROC-REP-212 "No" -> 213).
+    """Libera la Orden sin terminarla (PROC-REP-212 "No" -> 213 -> 170).
 
-    Cierra la toma activa y devuelve la Orden a EN_COLA. No requiere la
-    seccion critica de inventario: no reserva ni consume stock.
+    El titular la libera como siempre. Otro tecnico (o Coordinacion)
+    tambien puede (MVP v2): exige ``motivo`` y ``confirmado`` -el aviso
+    dice quien la tiene- y, si hay una reparacion en curso, primero la
+    interrumpe con la logica de interrupcion: lo usado
+    (``insumos_utilizados``) se consume y lo reservado se libera. Todo se
+    valida antes de tocar el inventario y se guarda una sola vez.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    with orden_para_modificar(contexto, orden_id) as orden:
-        orden = liberar_orden_servicio(orden, usuario=usuario, fecha=fecha)
+    with (
+        seccion_critica_inventario(),
+        orden_para_modificar(contexto, orden_id) as orden,
+    ):
+        toma = toma_activa(orden)
+        if toma is not None and toma.usuario_id != usuario.id:
+            validar_alguno_de(usuario, ROLES_LIBERACION_AJENA)
+            if not (motivo or "").strip():
+                raise PrecondicionInvalidaError(
+                    f"La Orden la tiene {toma.usuario_id} (estacion "
+                    f"{toma.estacion_id}): liberarla exige indicar el motivo."
+                )
+            if not confirmado:
+                raise ConfirmacionRequeridaError(
+                    f"La Orden la tiene {toma.usuario_id} (estacion "
+                    f"{toma.estacion_id}). Liberarla devuelve la Orden a la "
+                    "cola"
+                    + (
+                        " e interrumpe la reparacion en curso: los insumos "
+                        "utilizados se consumen y los reservados sin usar se "
+                        "liberan"
+                        if ejecucion_activa(orden)
+                        else ""
+                    )
+                    + ". Confirma para continuar."
+                )
+            en_curso = ejecucion_activa(orden)
+            if en_curso is not None:
+                orden = registrar_interrupcion_por_liberacion(
+                    orden,
+                    ejecucion_id=en_curso.id,
+                    insumos_utilizados=insumos_utilizados,
+                    usuario=usuario,
+                    fecha=fecha,
+                    motivo=motivo,
+                )
+                orden = aplicar_movimientos_inventario(
+                    orden,
+                    ejecucion_id=en_curso.id,
+                    fecha=fecha,
+                    ordenes_repo=contexto.ordenes,
+                    catalogos_repo=contexto.catalogos,
+                )
+                orden, _ = evaluar_situacion_orden(orden, fecha=fecha)
+            if toma_activa(orden) is not None:
+                orden = liberar_orden_servicio(
+                    orden, usuario=usuario, fecha=fecha, motivo=motivo
+                )
+        else:
+            orden = liberar_orden_servicio(orden, usuario=usuario, fecha=fecha)
         contexto.ordenes.guardar(orden)
     return orden
 

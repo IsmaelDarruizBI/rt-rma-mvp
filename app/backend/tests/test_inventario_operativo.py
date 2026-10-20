@@ -47,6 +47,7 @@ from tests.fixtures.api_salidas import (
     finalizar,
     iniciar,
     ok,
+    por_revision,
     repo_ordenes,
     stock,
     tomada,
@@ -135,9 +136,21 @@ def _con_reserva(cliente, tipo=BATERIA) -> str:
 
 
 def _sin_custodia_tomada(cliente) -> str:
-    """Definida, autorizada y tomada, con la recepcion SIN confirmar."""
+    """Definida, autorizada y tomada, con la recepcion SIN confirmar.
+
+    En CLIENTE_EXTERNO, por el camino de revision: el ingreso inicial
+    confirma la recepcion con el comprobante de ingreso.
+    """
     orden_id = crear(cliente)
-    agregar(cliente, orden_id)
+    for ruta, cuerpo in (
+        ("send-to-review", {"usuario_id": RECEPCION}),
+        ("technical-review", {"usuario_id": TECNICO, "resultado": "Bateria."}),
+        (
+            "review/details",
+            {"usuario_id": RECEPCION, "tipo_reparacion_id": BATERIA},
+        ),
+    ):
+        ok(cliente.post(f"/api/orders/{orden_id}/{ruta}", json=cuerpo))
     finalizar(cliente, orden_id, confirmar_recepcion=False)
     autorizar_todo(cliente, orden_id)
     tomada(cliente, orden_id)
@@ -441,15 +454,18 @@ def test_13_revalidacion_de_ordenes_esperando_recursos(tmp_path):
         )
         assert fila["detalles_revalidados"] == ["DET-001"]
         orden = ok(cliente.get(f"/api/orders/{orden_id}"))
-        assert orden["estado_workflow"] == "HABILITADA"
-        assert orden["current_process"] == "PROC-REP-140"
-        assert _ids(orden)[-6:] == [
+        # Con el comprobante de ingreso entra sola a la cola (150 -> 170).
+        assert orden["estado_workflow"] == "EN_COLA"
+        assert orden["current_process"] == "PROC-REP-170"
+        assert _ids(orden)[-8:] == [
             "ACC-REP-028",
             "PROC-REP-110",
             "PROC-REP-120",
             "PROC-REP-080",
             "PROC-REP-090",
             "PROC-REP-140",
+            "PROC-REP-150",
+            "PROC-REP-170",
         ]
         traza = [
             p
@@ -467,10 +483,8 @@ def test_13_revalidacion_de_ordenes_esperando_recursos(tmp_path):
 
 def test_14_revalidacion_respeta_la_autorizacion_pendiente(tmp_path):
     with _cliente(tmp_path, stock_bateria="0") as cliente:
-        orden_id = crear(cliente)
-        agregar(cliente, orden_id, BATERIA)
-        agregar(cliente, orden_id, PANTALLA)
-        finalizar(cliente, orden_id)
+        # Autorizacion parcial: camino de revision (decision explicita).
+        orden_id = por_revision(cliente, BATERIA, PANTALLA)
         ok(decidir(cliente, orden_id, {"DET-001": "AUTORIZADO"}))
         assert (
             ok(cliente.get(f"/api/orders/{orden_id}"))["current_process"]
@@ -546,7 +560,7 @@ def _parcial(cliente) -> str:
     bloqueado: no hay pantallas."""
     orden_id = definida(cliente, BATERIA, PANTALLA)
     orden = _orden(cliente, orden_id)
-    assert orden["current_process"] == "PROC-REP-140"
+    assert orden["current_process"] == "PROC-REP-170"  # entro a la cola
     assert {d: v["condicion"] for d, v in _detalles(orden).items()} == {
         "DET-001": "SIN_BLOQUEO",
         "DET-002": "BLOQUEADO_POR_RECURSOS",
@@ -643,10 +657,7 @@ def test_13_parcial_no_toca_la_toma_ni_la_ejecucion(tmp_path):
 
 def test_13_parcial_respeta_la_autorizacion_pendiente(tmp_path):
     with _cliente(tmp_path, stock_bateria="5", stock_pantalla="0") as cliente:
-        orden_id = crear(cliente)
-        for tipo in (BATERIA, PANTALLA, PANTALLA):
-            agregar(cliente, orden_id, tipo)
-        finalizar(cliente, orden_id)
+        orden_id = por_revision(cliente, BATERIA, PANTALLA, PANTALLA)
         ok(
             decidir(
                 cliente,

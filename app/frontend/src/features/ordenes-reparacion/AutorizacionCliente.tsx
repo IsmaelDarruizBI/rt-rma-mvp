@@ -36,6 +36,7 @@ import type {
   Usuario,
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
+import { PENDIENTE_COMPROBANTE_INGRESO } from "./etiquetas";
 import { TituloAccion, UbicacionAccion } from "./presentacion";
 
 type Eleccion = ResultadoAutorizacion | "PENDIENTE";
@@ -127,8 +128,9 @@ export function AutorizacionClienteOrden({
       ) : (
         hayPendientes(orden) && (
           <p style={{ margin: "0.6rem 0 0", fontSize: "0.85rem", color: colores.suave }}>
-            La decisión del cliente se registra al finalizar la definición de
-            los trabajos.
+            {orden.ingreso_inicial
+              ? "La autorización inicial se registra al generar el comprobante de ingreso y autorización."
+              : "La decisión del cliente se registra al finalizar la definición de los trabajos."}
           </p>
         )
       )}
@@ -407,7 +409,9 @@ function TablaAutorizaciones({
             const anteriores = detalle.autorizaciones.filter(
               (registro) => registro !== vigente,
             );
-            const estado = ESTADO[detalle.estado_autorizacion];
+            const estado = detalle.pendiente_comprobante_ingreso
+              ? { texto: PENDIENTE_COMPROBANTE_INGRESO, color: colores.alerta }
+              : ESTADO[detalle.estado_autorizacion];
             return (
               <tr key={detalle.id} style={{ verticalAlign: "top" }}>
                 <td style={celda}>
@@ -462,7 +466,9 @@ function TablaAutorizaciones({
                           : 400,
                     }}
                   >
-                    {SITUACION[detalle.situacion_autorizacion]}
+                    {detalle.pendiente_comprobante_ingreso
+                      ? "Se autoriza al generar el comprobante de ingreso"
+                      : SITUACION[detalle.situacion_autorizacion]}
                   </span>
                 </td>
               </tr>

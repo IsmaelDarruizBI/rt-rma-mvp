@@ -201,7 +201,12 @@ export type EstadoCustodia =
 export interface DatosRecepcion {
   estado_fisico: string | null;
   accesorios: string[];
+  /** Observaciones visibles del equipo: salen en el comprobante. */
   observaciones: string | null;
+  /** Solo para el personal: nunca salen en un documento. */
+  notas_internas?: string | null;
+  /** Check-in del equipo: define la garantía sugerida (90 o 30 días). */
+  checkin?: boolean | null;
 }
 
 /** Datos del ingreso reemplazados por una corrección (antes de confirmar). */
@@ -228,7 +233,13 @@ export interface Recepcion {
   } | null;
   /** Decisión explícita: el equipo nunca ingresó (nunca se deduce). */
   no_recibido: { usuario_id: string; fecha: string; motivo: string } | null;
-  notas: { usuario_id: string; fecha: string; texto: string }[];
+  /** `interna`: solo para el personal; nunca sale en un documento. */
+  notas: {
+    usuario_id: string;
+    fecha: string;
+    texto: string;
+    interna: boolean;
+  }[];
 }
 
 export interface Custodia {
@@ -246,7 +257,17 @@ export type TipoDocumento =
   | "COMPROBANTE_RECEPCION"
   | "COMPROBANTE_ENTREGA"
   | "GARANTIA"
-  | "COMPROBANTE_AUTORIZACION";
+  | "COMPROBANTE_AUTORIZACION"
+  | "COMPROBANTE_INGRESO";
+
+/** Un descuento comercial tal como figura en un documento. */
+export interface DescuentoEnDocumento {
+  /** «10 %» o «$ 5000.00»: como se expresó. */
+  descripcion: string;
+  motivo: string;
+  /** Lo que descuenta sobre el subtotal del documento. */
+  importe: string;
+}
 
 /** Documento emitido, sin contenido (listado en la Orden). */
 export interface DocumentoResumen {
@@ -327,6 +348,8 @@ export interface ContenidoEntrega extends ContenidoBase {
     origen_cancelacion: string | null;
   })[];
   cobrable: boolean;
+  subtotal?: string | null;
+  descuento?: DescuentoEnDocumento | null;
   total: string | null;
   pagado: string | null;
   devuelto: string | null;
@@ -384,7 +407,33 @@ export interface TrabajoAutorizadoEnDocumento extends TrabajoEnDocumento {
 export interface ContenidoAutorizacion extends ContenidoBase {
   tipo: "COMPROBANTE_AUTORIZACION";
   trabajos: TrabajoAutorizadoEnDocumento[];
+  /** Con descuento: la suma de los precios, antes de descontar. */
+  subtotal_autorizado?: string | null;
+  descuento?: DescuentoEnDocumento | null;
   total_autorizado: string;
+  leyenda: string;
+}
+
+/**
+ * Comprobante de ingreso y autorización (ingreso inicial de Cliente
+ * Externo): la recepción del equipo y los trabajos autorizados con su
+ * precio, el descuento y el total. Nunca incluye notas internas.
+ */
+export interface ContenidoIngreso extends ContenidoBase {
+  tipo: "COMPROBANTE_INGRESO";
+  estado_fisico: string | null;
+  accesorios: string[];
+  observaciones: string | null;
+  notas: string[];
+  checkin: boolean | null;
+  registrado_por: UsuarioEnDocumento | null;
+  recepcion_fisica: EstadoCustodia;
+  confirmada_por: UsuarioEnDocumento | null;
+  confirmada_en: string | null;
+  trabajos: TrabajoAutorizadoEnDocumento[];
+  subtotal: string;
+  descuento: DescuentoEnDocumento | null;
+  total: string;
   leyenda: string;
 }
 
@@ -392,7 +441,8 @@ export type ContenidoDocumento =
   | ContenidoRecepcion
   | ContenidoEntrega
   | ContenidoGarantia
-  | ContenidoAutorizacion;
+  | ContenidoAutorizacion
+  | ContenidoIngreso;
 
 /** Documento emitido con su contenido, tal como se entregó. */
 export interface DocumentoEmitido extends DocumentoResumen {
@@ -507,6 +557,26 @@ export interface Detalle {
   autorizaciones: AutorizacionCliente[];
   estado_autorizacion: EstadoAutorizacion;
   situacion_autorizacion: SituacionAutorizacion;
+  /** «Otros — Reparación no tipificada»: su descripción manual. */
+  descripcion?: string | null;
+  /** Garantía sugerida (90 con check-in, 30 sin); `garantia_dias` es la definitiva. */
+  garantia_dias_sugerida?: number | null;
+  ajustes_garantia?: AjusteGarantia[];
+  /**
+   * Presentación del ingreso inicial (derivada, no es un estado nuevo):
+   * espera el comprobante de ingreso, o lo autorizó ese comprobante.
+   */
+  pendiente_comprobante_ingreso?: boolean;
+  autorizado_en_ingreso?: boolean;
+}
+
+/** Un cambio manual del plazo de garantía de un trabajo. */
+export interface AjusteGarantia {
+  dias_anteriores: number;
+  dias_nuevos: number;
+  motivo: string;
+  usuario_id: string;
+  fecha: string;
 }
 
 /** Definición de un Detalle reemplazada por PROC-REP-127 (BR-REP-015). */
@@ -526,6 +596,9 @@ export interface Toma {
   estado: EstadoToma;
   inicio: string;
   fin: string | null;
+  /** Liberada por otro técnico: quién y por qué. */
+  liberada_por?: string | null;
+  motivo_liberacion?: string | null;
 }
 
 export interface InsumoUtilizado {
@@ -603,6 +676,32 @@ export interface ResumenComercial {
   devuelto: string;
   credito_a_favor: string;
   situacion_financiera: SituacionFinanciera;
+  /** Total = Subtotal − descuento. El precio de cada trabajo no cambia. */
+  subtotal: string;
+  descuento_aplicado: string;
+  descuento: DescuentoVigente | null;
+}
+
+export type TipoDescuento = "PORCENTAJE" | "IMPORTE";
+
+/** El descuento comercial que rige hoy. */
+export interface DescuentoVigente {
+  tipo: TipoDescuento;
+  valor: string;
+  descripcion: string;
+  importe: string;
+  motivo: string;
+  usuario_id: string;
+  fecha: string;
+}
+
+/** Cada aplicación, cambio o retiro (sin `tipo`) de un descuento. */
+export interface RegistroDescuento {
+  tipo: TipoDescuento | null;
+  valor: string | null;
+  motivo: string;
+  usuario_id: string;
+  fecha: string;
 }
 
 /**
@@ -657,6 +756,8 @@ export interface Accion {
   pago_id: string | null;
   /** La acción corresponde pero hoy no puede ejecutarse (y por qué). */
   bloqueo: string | null;
+  /** Cualquiera con el rol SALVO esta persona (liberar la Orden de otro). */
+  usuario_excluido_id?: string | null;
 }
 
 /** Un insumo previsto ante el override (E3): lo que se confirma. */
@@ -804,10 +905,16 @@ export interface Orden {
   documentos_emitidos: DocumentoResumen[];
   /** Registrar/corregir el ingreso, confirmar (o "no recibido"), observar, re-emitir. */
   acciones_custodia: Accion[];
+  /** Cambiar la prioridad, liberar la Orden de otro técnico, ajustar garantía. */
+  acciones_complementarias: Accion[];
+  /** Historia de descuentos; el último es el vigente (sin tipo: quitado). */
+  descuentos: RegistroDescuento[];
   /** Orden CANCELADA abierta: qué falta para cerrarla. */
   pendientes_de_cierre: string[];
   /** Situación operativa para la pantalla (solo lectura). */
   situacion: Situacion | null;
+  /** Ingreso inicial de Cliente Externo: falta el comprobante de ingreso. */
+  ingreso_inicial?: boolean;
   created_at: string;
   updated_at: string;
   /** Solo lo devuelven notificar y registrar pago (PROC-REP-265). */
@@ -984,6 +1091,8 @@ export interface TrabajoBandeja {
   estado: string;
   trabajable: boolean;
   pendiente_autorizacion: boolean;
+  /** Ingreso inicial: se autoriza con el comprobante de ingreso. */
+  pendiente_comprobante_ingreso?: boolean;
   condicion: string;
   en_curso: boolean;
   /** Insumos que hoy no alcanzan, si está bloqueado por recursos. */

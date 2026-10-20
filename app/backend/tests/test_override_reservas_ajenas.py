@@ -43,6 +43,7 @@ from app.main import create_app
 from app.services import stock_disponible_global
 from app.storage.json.base import escribir_json_atomico
 from tests.fixtures.api_definicion import definir_y_finalizar
+from tests.fixtures.api_salidas import encolar
 
 RECEPCION = "RECEP-001"
 COORDINADOR = "COORD-001"
@@ -178,10 +179,7 @@ def _definida(cliente, tipo) -> dict:
 
 def _iniciada(cliente, orden_id, tecnico) -> str:
     """Encola, toma e inicia DET-001: devuelve la Ejecucion abierta."""
-    cliente.post(
-        f"/api/orders/{orden_id}/queue",
-        json={"usuario_id": COORDINADOR, "prioridad": 1},
-    )
+    encolar(cliente, orden_id, 1, COORDINADOR)
     tomada = cliente.post(
         f"/api/orders/{orden_id}/take",
         json={"usuario_id": tecnico, "estacion_id": ESTACION},
@@ -284,7 +282,8 @@ def test_override_conserva_la_reserva_ajena_y_no_bloquea_su_consumo(tmp_path):
         confirmado = _override(cliente, orden_b, confirmado=True)
         assert confirmado.status_code == 200, confirmado.text
         orden = confirmado.json()
-        assert orden["estado_workflow"] == "HABILITADA"
+        # Habilitada, y con el comprobante de ingreso entra a la cola.
+        assert orden["estado_workflow"] == "EN_COLA"
         (autorizacion,) = [
             p
             for p in orden["historial"]
@@ -389,7 +388,7 @@ def test_override_con_stock_disponible_suficiente(tmp_path):
 
         respuesta = _override(cliente, orden_id, confirmado=True)
         assert respuesta.status_code == 200, respuesta.text
-        assert respuesta.json()["estado_workflow"] == "HABILITADA"
+        assert respuesta.json()["estado_workflow"] == "EN_COLA"
 
 
 def test_override_con_stock_insuficiente_exige_confirmacion(tmp_path):

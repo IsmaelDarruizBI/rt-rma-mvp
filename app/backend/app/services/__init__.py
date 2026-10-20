@@ -44,6 +44,8 @@ from .custodia import (
     ROLES_RECEPCION_EQUIPO,
     agregar_nota_recepcion,
     armar_entrega,
+    checkin_de,
+    completar_checkin,
     confirmar_recepcion_fisica,
     custodia_por_definir,
     custodia_resuelta,
@@ -67,12 +69,20 @@ from .decision_cliente import (
     registrar_decision_cliente,
     registrar_desistimiento_cliente,
 )
+from .descuentos import (
+    ROLES_DESCUENTO,
+    aplicar_descuento,
+    descripcion_de_descuento,
+    descuento_editable,
+)
 from .documentos import (
     ROLES_COMPROBANTE_AUTORIZACION,
     ContextoDocumentos,
+    autorizados_en_el_ingreso,
     comprobante_autorizacion_emitible,
     contenido_comprobante_autorizacion,
     contenido_comprobante_entrega,
+    contenido_comprobante_ingreso,
     contenido_comprobante_recepcion,
     contenido_de,
     contenido_garantia,
@@ -80,10 +90,12 @@ from .documentos import (
     documentos_de_tipo,
     documentos_previsualizables,
     emitir_comprobante_autorizacion,
+    emitir_comprobante_ingreso,
     emitir_comprobante_recepcion,
     generar_comprobante_final,
     generar_comprobante_recepcion,
     registrar_documento,
+    ultimo_con_trabajos_autorizados,
     ultimo_documento,
     vencimiento_garantia,
 )
@@ -94,6 +106,7 @@ from .ejecuciones import (
     registrar_ejecucion_completada,
     registrar_ejecucion_interrumpida,
     registrar_ejecucion_requiere_redefinicion,
+    registrar_interrupcion_por_liberacion,
     registrar_reserva_fallida,
     reservar_insumos_e_iniciar_ejecucion,
 )
@@ -105,6 +118,11 @@ from .exceptions import (
     PrecondicionInvalidaError,
     RecursoNoDisponibleError,
     TomaDeOtroTecnicoError,
+)
+from .garantias import (
+    ROLES_AJUSTE_GARANTIA,
+    ajustar_garantia_detalle,
+    garantia_ajustable,
 )
 from .identificadores import nuevo_id
 from .inventario import (
@@ -144,6 +162,8 @@ from .inventario_operativo import (
     tipo_de_ajuste,
 )
 from .ordenes import (
+    ROLES_CAMBIO_PRIORIDAD,
+    cambiar_prioridad,
     cerrar_cancelada_si_corresponde,
     crear_orden_cliente_externo,
     crear_orden_garantia_rma,
@@ -160,6 +180,7 @@ from .ordenes import (
     habilitar_orden,
     informar_resultado_rt,
     ingresar_a_cola,
+    ingresar_a_cola_con_prioridad_predeterminada,
     marcar_orden_cancelada,
     marcar_orden_en_revision,
     marcar_reparacion_lista,
@@ -214,11 +235,17 @@ from .reparaciones import (
     definicion_finalizada,
     definir_reparacion_detail,
     definir_reparacion_detail_luego_revision,
+    es_ingreso_inicial,
     exigir_definicion_finalizable,
+    exigir_fuera_del_ingreso_inicial,
     faltantes_de_detalles_bloqueados,
+    faltantes_para_ingreso,
     hay_detalles_para_factibilidad,
+    nombre_del_trabajo,
     pendiente_de_retrabajo,
+    reaplicar_garantia_sugerida,
     rechazar_control_tecnico,
+    tipo_reparacion_otros,
     validar_factibilidad_detalles,
 )
 from .resolucion import ResultadoEvaluacionOrden, resolver_situacion_orden
@@ -229,6 +256,8 @@ from .revisiones import (
     registrar_revision_tecnica,
 )
 from .tomas import (
+    ROLES_LIBERACION_AJENA,
+    es_liberacion_ajena,
     hay_ejecucion_activa,
     liberar_orden,
     seleccionar_detalle,
@@ -450,4 +479,29 @@ __all__ = [
     "registrar_documento",
     "ultimo_documento",
     "vencimiento_garantia",
+    "checkin_de",
+    "completar_checkin",
+    "contenido_comprobante_ingreso",
+    "emitir_comprobante_ingreso",
+    "ultimo_con_trabajos_autorizados",
+    "autorizados_en_el_ingreso",
+    "registrar_interrupcion_por_liberacion",
+    "ROLES_CAMBIO_PRIORIDAD",
+    "cambiar_prioridad",
+    "ingresar_a_cola_con_prioridad_predeterminada",
+    "nombre_del_trabajo",
+    "reaplicar_garantia_sugerida",
+    "tipo_reparacion_otros",
+    "ROLES_LIBERACION_AJENA",
+    "es_liberacion_ajena",
+    "ROLES_DESCUENTO",
+    "aplicar_descuento",
+    "descripcion_de_descuento",
+    "descuento_editable",
+    "ROLES_AJUSTE_GARANTIA",
+    "ajustar_garantia_detalle",
+    "garantia_ajustable",
+    "es_ingreso_inicial",
+    "exigir_fuera_del_ingreso_inicial",
+    "faltantes_para_ingreso",
 ]

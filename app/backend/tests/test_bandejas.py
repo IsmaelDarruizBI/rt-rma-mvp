@@ -23,12 +23,14 @@ from tests.fixtures.api_salidas import (
     agregar,
     aprobar,
     archivo,
+    autorizar_todo,
     cancelar_orden,
     cerrar_ejecucion,
     conflicto,
     crear,
     decidir,
     definida,
+    encolar,
     finalizar,
     iniciar,
     ok,
@@ -58,12 +60,8 @@ def _item(bandeja: dict, orden_id: str) -> dict:
 
 
 def _encolar(cliente, orden_id, prioridad):
-    return ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/queue",
-            json={"usuario_id": COORDINADOR, "prioridad": prioridad},
-        )
-    )
+    """A la cola con esa prioridad (si ya entro sola, se la cambia)."""
+    return ok(encolar(cliente, orden_id, prioridad))
 
 
 def _en_cola(cliente, prioridad, *tipos) -> str:
@@ -192,20 +190,29 @@ def test_consultar_las_bandejas_no_modifica_nada(tmp_path):
 # --- 3, 4 y 5. Recepcion -----------------------------------------------------
 
 
-def test_orden_recien_ingresada_con_dos_tareas(tmp_path):
+def test_orden_recien_ingresada_en_definicion(tmp_path):
+    """Ingreso inicial (MVP v2): la confirmacion fisica va dentro del
+    comprobante de ingreso, asi que la Orden no espera en "Confirmar la
+    recepcion": esta en "Definir reparaciones"."""
     with _cliente(tmp_path, stock_bateria="5") as cliente:
         orden_id = crear(cliente)
 
         bandejas = _bandejas(cliente, RECEPCION)
 
-        assert _ids(bandejas["RECEPCION_FISICA"]) == [orden_id]
+        assert _ids(bandejas["RECEPCION_FISICA"]) == []
         assert _ids(bandejas["DEFINICION"]) == [orden_id]
-        fisica = _item(bandejas["RECEPCION_FISICA"], orden_id)
-        assert fisica["tarea"] == "Confirmar la recepción física del equipo"
-        assert fisica["puede_resolver"] is True
-        assert fisica["orden"]["situacion"]["codigo"] == "PENDIENTE_RECEPCION"
+        item = _item(bandejas["DEFINICION"], orden_id)
+        assert item["tarea"] == "Cargar los trabajos"
+        assert item["puede_resolver"] is True
+        assert item["orden"]["situacion"]["codigo"] == "PENDIENTE_RECEPCION"
         # No es del taller ni de Coordinacion.
         assert not _bandejas(cliente, TECNICO)["COLA"]["ordenes"]
+
+        agregar(cliente, orden_id)
+        item = _item(_bandejas(cliente, RECEPCION)["DEFINICION"], orden_id)
+        assert item["tarea"] == (
+            "Generar el comprobante de ingreso y autorización"
+        )
 
         confirmar_recepcion(cliente, orden_id)
         bandejas = _bandejas(cliente, RECEPCION)
@@ -426,8 +433,7 @@ def test_coordinacion_ve_faltantes_y_disponible_negativo(tmp_path):
                 json={"usuario_id": RECEPCION, "tipo_reparacion_id": BATERIA},
             )
         )
-        finalizar(cliente, esperando)
-        ok(decidir(cliente, esperando, {"DET-001": "AUTORIZADO"}))
+        finalizar(cliente, esperando)  # comprobante de ingreso: autoriza
         # Se rompe la unica bateria del stock: queda reservada sin fisico.
         ok(
             cliente.post(
@@ -509,13 +515,16 @@ def _usuario(usuario_id, rol, activo=True) -> Usuario:
     return Usuario(id=usuario_id, nombre=usuario_id, rol=rol, activo=activo)
 
 
-def _accion(roles, requiere_actor=True, usuario_id=None) -> AccionDisponible:
+def _accion(
+    roles, requiere_actor=True, usuario_id=None, usuario_excluido_id=None
+) -> AccionDisponible:
     return AccionDisponible(
         codigo="X",
         etiqueta="X",
         roles=tuple(roles),
         requiere_actor=requiere_actor,
         usuario_id=usuario_id,
+        usuario_excluido_id=usuario_excluido_id,
     )
 
 
@@ -551,6 +560,18 @@ CASOS_DE_PERMISO = [
     ),
     ("usuario inactivo", _accion([RolUsuario.RECEPCION]), _INACTIVO, False),
     ("inactivo sin rol definido", _accion([]), _INACTIVO, False),
+    (
+        "liberar la de otro: no el titular",
+        _accion([RolUsuario.TECNICO], usuario_excluido_id=TECNICO),
+        _TECNICO,
+        False,
+    ),
+    (
+        "liberar la de otro: otro tecnico",
+        _accion([RolUsuario.TECNICO], usuario_excluido_id=TECNICO),
+        _OTRO_TECNICO,
+        True,
+    ),
 ]
 
 
@@ -597,7 +618,7 @@ def test_un_usuario_inactivo_no_ve_como_suyo_lo_que_el_servidor_rechaza(
         activa = _bandejas(cliente, RECEPCION)
         inactiva = _bandejas(cliente, "RECEP-009")
 
-        assert _ids(activa["RECEPCION_FISICA"]) == [orden_id]
+        assert _ids(activa["DEFINICION"]) == [orden_id]
         assert not [
             codigo
             for codigo, bandeja in inactiva.items()
@@ -662,8 +683,11 @@ def test_avisar_al_cliente_e_informar_a_gestion_rt_por_separado(tmp_path):
 
 
 def test_recepcion_prioriza_desde_su_bandeja_una_sola_vez(tmp_path):
+    """Una Orden habilitada fuera del ingreso inicial (revision con la
+    autorizacion explicita del cliente) espera que la prioricen."""
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = definida(cliente)
+        orden_id = definida(cliente, autorizar=False)
+        autorizar_todo(cliente, orden_id)
         item = _item(_bandejas(cliente, RECEPCION)["PRIORIZAR"], orden_id)
         assert item["puede_resolver"] is True
 

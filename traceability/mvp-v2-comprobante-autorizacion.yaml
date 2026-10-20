@@ -11,7 +11,11 @@
 # FUNCTIONAL_ACTION):
 #   - ACC-REP-002  version nueva del comprobante de recepcion (hp-rep-001.yaml,
 #                  "Emitir el comprobante de recepcion de la Orden").
-#   - ACC-REP-060  comprobante de autorizacion de reparacion (este archivo).
+#   - ACC-REP-060  comprobante de autorizacion de reparacion (este archivo) y,
+#                  desde la iteracion 1 del UAT, tambien el comprobante de
+#                  ingreso y autorizacion del ingreso inicial de
+#                  CLIENTE_EXTERNO (OR-xxxxxx-ING-01): mismo significado,
+#                  emitir el documento con los trabajos autorizados.
 #   - ACC-REP-026  conserva exclusivamente su significado documentado: la
 #                  entrega del equipo. Ningun documento se emite con ese id.
 #
@@ -57,13 +61,15 @@ items:
     process_node: null
     scenario_step_kind: FUNCTIONAL_ACTION
     actor: ACT-RECEP
-    trigger: "Solicitud explicita de Recepcion: boton «Generar comprobante de autorizacion» (paso recomendado en Proximo paso)."
+    trigger: "Solicitud explicita de Recepcion: boton «Generar comprobante de autorizacion» (paso recomendado en Proximo paso) o, en el ingreso inicial de CLIENTE_EXTERNO, boton «Generar comprobante de ingreso y autorizacion» (iteracion 1 del UAT)."
     precondition: "La Orden exige la autorizacion del cliente y tiene al menos un Detalle con una decision AUTORIZADO vigente (sobre su definicion actual) y sin cancelar; la Orden no esta cerrada ni cancelada."
-    result: "Documento COMPROBANTE_AUTORIZACION versionado (OR-xxxxxx-AUT-nn) con el snapshot de los trabajos autorizados -precio, version de definicion autorizada, fecha y canal de la decision- y el total autorizado. Se descarga como PDF armado desde el snapshot. Deja ACC-REP-060 (EMITIR_DOCUMENTO) en el historial."
+    result: "Documento COMPROBANTE_AUTORIZACION versionado (OR-xxxxxx-AUT-nn) con el snapshot de los trabajos autorizados -precio, version de definicion autorizada, fecha y canal de la decision- y el total autorizado. Se descarga como PDF armado desde el snapshot. Deja ACC-REP-060 (EMITIR_DOCUMENTO) en el historial. En el ingreso inicial el mismo id registra la emision del COMPROBANTE_INGRESO (OR-xxxxxx-ING-01): recepcion del equipo (estado fisico, accesorios, observaciones visibles, check-in) mas los trabajos autorizados, subtotal, descuento y total; reemplaza al comprobante de recepcion y al primero de autorizacion de ese camino."
     restrictions:
       - "No se genera automaticamente: ni al autorizar ni en ningun nodo del proceso."
       - "No es un comprobante de pago ni una factura, y no lleva firma."
       - "Solo lista Detalles autorizados: los pendientes, rechazados, desistidos y cancelados no figuran."
+      - "El comprobante de ingreso se emite una sola vez por Orden (un reintento devuelve el existente) y nunca incluye notas internas ni registra que el cliente lo recibio o lo firmo."
+      - "Un descuento comercial vigente figura como subtotal, descuento y total; un cambio de descuento habilita una version nueva del comprobante de autorizacion."
       - "Sin cambios en lo autorizado no crea otra version (un reintento no duplica). Si cambio, la version nueva lleva el motivo calculado y referencia a la anterior, que se conserva sin cambios."
     functional_relation: "Deriva de la autorizacion del cliente por Detalle: refleja la decision AUTORIZADO vigente de cada Detalle sobre su definicion actual. No modifica autorizaciones, factibilidad, custodia ni transiciones del workflow."
     sharing: "Se puede descargar o compartir por WhatsApp (menu del sistema con el PDF, o descarga y wa.me con el mensaje y el telefono del cliente). Compartir no se registra: no confirma el envio ni que el cliente lo recibio."
@@ -76,11 +82,16 @@ items:
       - "app/backend/app/api/ordenes.py::post_emitir_comprobante_autorizacion"
       - "app/backend/app/api/ordenes.py::get_documento_pdf"
       - "app/backend/app/application/acciones.py::acciones_de_autorizacion (EMITIR_COMPROBANTE_AUTORIZACION)"
+      - "app/backend/app/services/documentos.py::emitir_comprobante_ingreso"
+      - "app/backend/app/application/ingreso_inicial.py::generar_comprobante_ingreso"
+      - "app/backend/app/api/ordenes.py::post_generar_comprobante_ingreso"
       - "app/frontend/src/features/ordenes-reparacion/DocumentosOrden.tsx"
       - "app/frontend/src/features/ordenes-reparacion/whatsapp.ts"
     tests:
       - "app/backend/tests/test_comprobante_autorizacion.py"
       - "app/backend/tests/test_pdf.py"
+      - "app/backend/tests/test_ingreso_inicial.py"
+      - "app/backend/tests/test_descuentos.py"
       - "app/frontend/tests/whatsapp.test.ts"
 
 links:

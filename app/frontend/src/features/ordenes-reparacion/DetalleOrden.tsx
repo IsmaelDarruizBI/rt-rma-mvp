@@ -17,7 +17,6 @@ import {
 import type { Detalle, Estacion, Orden, Usuario } from "../../types/api";
 import { EtapasNegocio } from "./ProximoPaso";
 import {
-  AUTORIZACION,
   CANAL,
   CONDICION_TRABAJO,
   CONTROL,
@@ -25,6 +24,7 @@ import {
   ESTADO_TRABAJO,
   ESTADO_WORKFLOW,
   etiqueta,
+  etiquetaAutorizacion,
   hace,
 } from "./etiquetas";
 
@@ -335,7 +335,7 @@ function Trabajo({
                   : colores.suave
               }
             >
-              {etiqueta(AUTORIZACION, detalle.estado_autorizacion)}
+              {etiquetaAutorizacion(detalle)}
             </Etiqueta>
           )}
         {detalle.estado === "COMPLETO" && (
@@ -353,9 +353,10 @@ function Trabajo({
       </div>
       {decision && (
         <Linea>
-          {decision.resultado === "AUTORIZADO" ? "Autorizado" : "Rechazado"}{" "}
-          por el cliente {etiqueta(CANAL, decision.canal)} · lo registró{" "}
-          {nombreDeUsuario(usuarios, decision.usuario_id)} el{" "}
+          {detalle.autorizado_en_ingreso
+            ? `Autorizado con el comprobante de ingreso (${etiqueta(CANAL, decision.canal)})`
+            : `${decision.resultado === "AUTORIZADO" ? "Autorizado" : "Rechazado"} por el cliente ${etiqueta(CANAL, decision.canal)}`}{" "}
+          · lo registró {nombreDeUsuario(usuarios, decision.usuario_id)} el{" "}
           {fechaCorta(decision.fecha)}
         </Linea>
       )}
@@ -420,7 +421,23 @@ function Trabajo({
           está en los datos técnicos)
         </Linea>
       )}
-      {!cancelado && <Linea>Garantía: {detalle.garantia_dias} días</Linea>}
+      {!cancelado && (
+        <Linea>
+          Garantía: {detalle.garantia_dias} días desde la entrega
+          {detalle.garantia_dias_sugerida !== null &&
+          detalle.garantia_dias_sugerida !== undefined &&
+          detalle.garantia_dias_sugerida !== detalle.garantia_dias
+            ? ` (sugerida: ${detalle.garantia_dias_sugerida})`
+            : ""}
+          {(detalle.ajustes_garantia ?? []).map((ajuste) => (
+            <span key={ajuste.fecha} style={{ display: "block" }}>
+              Ajustada de {ajuste.dias_anteriores} a {ajuste.dias_nuevos} días
+              por {nombreDeUsuario(usuarios, ajuste.usuario_id)} el{" "}
+              {fechaCorta(ajuste.fecha)} · {ajuste.motivo}
+            </span>
+          ))}
+        </Linea>
+      )}
     </li>
   );
 }

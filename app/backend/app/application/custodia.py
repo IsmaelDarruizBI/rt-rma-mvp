@@ -16,7 +16,10 @@ from app.domain.models import DatosRecepcion, Equipo, OrdenReparacion
 from app.services import (
     agregar_nota_recepcion,
     cerrar_cancelada_si_corresponde,
+    checkin_de,
     confirmar_recepcion_fisica,
+    exigir_fuera_del_ingreso_inicial,
+    reaplicar_garantia_sugerida,
     registrar_datos_recepcion,
     registrar_equipo_no_recibido,
 )
@@ -33,14 +36,21 @@ def registrar_recepcion(
     datos: DatosRecepcion,
     equipo: Equipo | None = None,
 ) -> OrdenReparacion:
-    """Recepcion registra o corrige los datos del ingreso."""
+    """Recepcion registra o corrige los datos del ingreso.
+
+    Si cambia el check-in, la garantia sugerida de los Detalles ya
+    cargados se recalcula (salvo los ajustados a mano).
+    """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
     with orden_para_modificar(contexto, orden_id) as orden:
+        checkin_anterior = checkin_de(orden)
         orden = registrar_datos_recepcion(
             orden, usuario=usuario, fecha=fecha, datos=datos, equipo=equipo
         )
+        if checkin_de(orden) != checkin_anterior:
+            orden = reaplicar_garantia_sugerida(orden)
         contexto.ordenes.guardar(orden)
     return orden
 
@@ -52,11 +62,16 @@ def confirmar_recepcion(
     usuario_id: str,
     observaciones: str | None = None,
 ) -> OrdenReparacion:
-    """Recepcion confirma que el equipo quedo fisicamente en el local."""
+    """Recepcion confirma que el equipo quedo fisicamente en el local.
+
+    En el ingreso inicial de CLIENTE_EXTERNO no: la confirmacion va dentro
+    del comprobante de ingreso y autorizacion.
+    """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
     with orden_para_modificar(contexto, orden_id) as orden:
+        exigir_fuera_del_ingreso_inicial(orden, "confirmar la recepcion")
         orden = confirmar_recepcion_fisica(
             orden, usuario=usuario, fecha=fecha, observaciones=observaciones
         )
@@ -94,14 +109,18 @@ def agregar_observacion_recepcion(
     orden_id: str,
     usuario_id: str,
     texto: str,
+    interna: bool = False,
 ) -> OrdenReparacion:
-    """Agrega una observacion complementaria del ingreso."""
+    """Agrega una observacion complementaria del ingreso.
+
+    ``interna``: solo para el personal; nunca sale en un documento.
+    """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
     with orden_para_modificar(contexto, orden_id) as orden:
         orden = agregar_nota_recepcion(
-            orden, usuario=usuario, fecha=fecha, texto=texto
+            orden, usuario=usuario, fecha=fecha, texto=texto, interna=interna
         )
         contexto.ordenes.guardar(orden)
     return orden

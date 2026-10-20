@@ -38,7 +38,9 @@ from app.application import (
     situacion_autorizacion,
     situacion_financiera,
 )
+from app.domain.garantia import GARANTIA_MAXIMA_DIAS
 from app.domain.models import (
+    AjusteGarantia,
     CanalComunicacion,
     Cliente,
     CondicionReparacionDetail,
@@ -63,11 +65,13 @@ from app.domain.models import (
     OrigenOrden,
     RecepcionEquipo,
     RegistroAutorizacionCliente,
+    RegistroDescuento,
     RegistroRecepcion,
     ReparacionDetail,
     ResultadoAutorizacion,
     ResultadoControl,
     RolUsuario,
+    TipoDescuento,
     TipoDocumento,
     TipoEntrega,
     TipoPago,
@@ -89,8 +93,11 @@ from app.services import (
     AnalisisDesistimiento,
     EstadoAutorizacion,
     analizar_desistimiento,
+    autorizados_en_el_ingreso,
+    descripcion_de_descuento,
     devolucion_pendiente,
     devolvible_de,
+    es_ingreso_inicial,
     estado_autorizacion,
     estado_custodia,
     finalizada_sin_reparacion,
@@ -223,18 +230,25 @@ class DatosRecepcionIn(BaseModel):
     """Condiciones en que se recibe el equipo (todas opcionales al alta).
 
     ``accesorios``: lo que se recibe junto con el equipo (vacio: ninguno).
-    ``observaciones``: observaciones iniciales del ingreso.
+    ``observaciones``: observaciones visibles del equipo (salen en el
+    comprobante). ``notas_internas``: solo para el personal, nunca en un
+    documento. ``checkin``: si se hizo el check-in del equipo (define la
+    garantia sugerida de cada trabajo: 90 o 30 dias).
     """
 
     estado_fisico: str | None = None
     accesorios: list[str] = Field(default_factory=list)
     observaciones: str | None = None
+    notas_internas: str | None = None
+    checkin: bool | None = None
 
     def a_dominio(self) -> DatosRecepcion:
         return DatosRecepcion(
             estado_fisico=self.estado_fisico,
             accesorios=list(self.accesorios),
             observaciones=self.observaciones,
+            notas_internas=self.notas_internas,
+            checkin=self.checkin,
         )
 
 
@@ -269,11 +283,15 @@ class DefinirReparacionIn(BaseModel):
 
     Agrega UN Detalle (PROC-REP-070). No finaliza la definicion: eso es
     otra intencion, ``POST /api/orders/{id}/definition/finalize``.
+    ``descripcion`` y ``precio`` son solo de "Otros" (``TR-OTROS``): una
+    reparacion no tipificada, con su descripcion y su precio manual.
     """
 
     usuario_id: str = Field(min_length=1)
     tipo_reparacion_id: str = Field(min_length=1)
     observaciones: str | None = None
+    descripcion: str | None = None
+    precio: Decimal | None = Field(default=None, ge=0, decimal_places=2)
 
 
 class FinalizarDefinicionIn(BaseModel):
@@ -401,9 +419,70 @@ class LiberarOrdenIn(BaseModel):
 
     PROC-REP-212 ("No") -> PROC-REP-213: el tecnico libera la Orden sin
     terminarla, con la toma activa todavia sobre ella.
+
+    Liberar la de OTRO tecnico (o Coordinacion) exige ``motivo`` y
+    ``confirmado: true`` (sin confirmar: 409 CONFIRMACION_REQUERIDA, con
+    el aviso de quien la tiene). Si hay una reparacion en curso se
+    interrumpe: ``insumos_utilizados`` es lo usado hasta ahi.
     """
 
     usuario_id: str = Field(min_length=1)
+    motivo: str | None = None
+    confirmado: bool = False
+    insumos_utilizados: list[InsumoUtilizadoIn] = Field(default_factory=list)
+
+
+class CambiarPrioridadIn(BaseModel):
+    """``POST /api/orders/{id}/priority`` (Tecnico, Coordinacion o Recepcion).
+
+    Cambia la prioridad de una Orden que ya esta en el taller (en cola o
+    en reparacion). Es distinto de ingresarla a la cola.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    prioridad: int = Field(ge=PRIORIDAD_URGENTE, le=PRIORIDAD_NORMAL)
+    motivo: str | None = None
+
+
+class GenerarComprobanteIngresoIn(BaseModel):
+    """``POST .../documents/intake-receipt`` (Recepcion).
+
+    Ingreso inicial de CLIENTE_EXTERNO: confirma la recepcion, finaliza la
+    definicion, autoriza los trabajos cargados y emite el comprobante de
+    ingreso y autorizacion. ``canal``: por donde autorizo el cliente.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    canal: CanalComunicacion = CanalComunicacion.PRESENCIAL
+    # Solo si el ingreso todavia no registra el check-in (por ejemplo, una
+    # Orden anterior con la recepcion ya confirmada).
+    checkin: bool | None = None
+
+
+class DescuentoIn(BaseModel):
+    """``POST /api/orders/{id}/discount`` (Recepcion o Administracion).
+
+    ``tipo``: PORCENTAJE (``valor`` de 0 a 100) o IMPORTE (``valor`` en
+    pesos). ``tipo: null`` quita el descuento vigente. ``motivo`` es
+    obligatorio siempre. El precio de cada trabajo no cambia.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    tipo: TipoDescuento | None = None
+    valor: Decimal | None = Field(default=None, gt=0, decimal_places=2)
+    motivo: str = Field(min_length=1)
+
+
+class AjustarGarantiaIn(BaseModel):
+    """``POST .../details/{detalle_id}/warranty`` (Recepcion o Coordinacion).
+
+    Plazo definitivo de garantia del trabajo, en dias desde la entrega. La
+    sugerida (90 con check-in, 30 sin) se conserva.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    dias: int = Field(ge=0, le=GARANTIA_MAXIMA_DIAS)
+    motivo: str = Field(min_length=1)
 
 
 class NotificarIn(BaseModel):
@@ -511,13 +590,16 @@ class DefinirReparacionDesdeRevisionIn(BaseModel):
 
     Agrega UN Detalle luego de la revision. ``detalle_origen_id`` elige,
     en una garantia RMA, a cual de sus Detalles origen corresponde
-    (obligatorio si hay mas de uno).
+    (obligatorio si hay mas de uno). ``descripcion`` y ``precio``: solo
+    "Otros", como en ``DefinirReparacionIn``.
     """
 
     usuario_id: str = Field(min_length=1)
     tipo_reparacion_id: str = Field(min_length=1)
     observaciones: str | None = None
     detalle_origen_id: str | None = None
+    descripcion: str | None = None
+    precio: Decimal | None = Field(default=None, ge=0, decimal_places=2)
 
 
 class FinalizarSinReparacionIn(BaseModel):
@@ -589,6 +671,8 @@ class RegistrarRecepcionIn(BaseModel):
     estado_fisico: str | None = None
     accesorios: list[str] = Field(default_factory=list)
     observaciones: str | None = None
+    notas_internas: str | None = None
+    checkin: bool | None = None
     equipo: EquipoIn | None = None
 
     def datos(self) -> DatosRecepcion:
@@ -596,6 +680,8 @@ class RegistrarRecepcionIn(BaseModel):
             estado_fisico=self.estado_fisico,
             accesorios=list(self.accesorios),
             observaciones=self.observaciones,
+            notas_internas=self.notas_internas,
+            checkin=self.checkin,
         )
 
 
@@ -622,10 +708,14 @@ class EquipoNoRecibidoIn(BaseModel):
 
 
 class ObservacionRecepcionIn(BaseModel):
-    """``POST .../reception/notes``: observacion complementaria."""
+    """``POST .../reception/notes``: observacion complementaria.
+
+    ``interna``: solo para el personal; nunca sale en un documento.
+    """
 
     usuario_id: str = Field(min_length=1)
     texto: str = Field(min_length=1)
+    interna: bool = False
 
 
 class EmitirDocumentoIn(BaseModel):
@@ -821,6 +911,17 @@ class DetalleOut(BaseModel):
     situacion_autorizacion: SituacionAutorizacion = (
         SituacionAutorizacion.NO_REQUERIDA
     )
+    # "Otros": la descripcion manual del trabajo.
+    descripcion: str | None = None
+    # Garantia: la sugerida (check-in) y los ajustes manuales; el plazo
+    # definitivo es ``garantia_dias``.
+    garantia_dias_sugerida: int | None = None
+    ajustes_garantia: list[AjusteGarantia] = Field(default_factory=list)
+    # Presentacion del ingreso inicial (derivada, no es un estado nuevo):
+    # el trabajo espera el comprobante de ingreso, o lo autorizo ese
+    # comprobante (su definicion vigente es la que figura en el).
+    pendiente_comprobante_ingreso: bool = False
+    autorizado_en_ingreso: bool = False
 
     @classmethod
     def desde_dominio(
@@ -835,12 +936,16 @@ class DetalleOut(BaseModel):
         situacion_autorizacion: SituacionAutorizacion = (
             SituacionAutorizacion.NO_REQUERIDA
         ),
+        pendiente_comprobante_ingreso: bool = False,
+        autorizado_en_ingreso: bool = False,
     ) -> "DetalleOut":
         return cls(
             **detalle.model_dump(),
             version_definicion=detalle.version_definicion,
             estado_autorizacion=estado_autorizacion,
             situacion_autorizacion=situacion_autorizacion,
+            pendiente_comprobante_ingreso=pendiente_comprobante_ingreso,
+            autorizado_en_ingreso=autorizado_en_ingreso,
             pendiente_de_retrabajo=pendiente_de_retrabajo(detalle),
             tipo_reparacion_nombre=(
                 tipo_reparacion_nombre or detalle.tipo_reparacion_id
@@ -859,6 +964,9 @@ class TomaOut(BaseModel):
     estado: EstadoTomaOrden
     inicio: datetime
     fin: datetime | None = None
+    # Liberada por otro tecnico (MVP v2): quien y por que.
+    liberada_por: str | None = None
+    motivo_liberacion: str | None = None
 
     @classmethod
     def desde_dominio(cls, toma: TomaOrden) -> "TomaOut":
@@ -956,6 +1064,8 @@ class DatosRecepcionOut(BaseModel):
     estado_fisico: str | None = None
     accesorios: list[str] = Field(default_factory=list)
     observaciones: str | None = None
+    notas_internas: str | None = None
+    checkin: bool | None = None
 
 
 class VersionRecepcionOut(BaseModel):
@@ -985,6 +1095,7 @@ class NotaRecepcionOut(BaseModel):
     usuario_id: str
     fecha: datetime
     texto: str
+    interna: bool = False
 
 
 class RecepcionOut(BaseModel):
@@ -1093,6 +1204,18 @@ def _vigentes(orden: OrdenReparacion) -> set[str]:
     return set(ultimos.values())
 
 
+class DescuentoVigenteOut(BaseModel):
+    """El descuento que rige hoy: como se expreso, cuanto y por que."""
+
+    tipo: TipoDescuento
+    valor: Decimal
+    descripcion: str
+    importe: Decimal
+    motivo: str
+    usuario_id: str
+    fecha: datetime
+
+
 class ResumenComercialOut(BaseModel):
     """Situacion comercial derivada. Nunca se persiste: se calcula.
 
@@ -1112,6 +1235,11 @@ class ResumenComercialOut(BaseModel):
     devuelto: Decimal = Decimal("0")
     credito_a_favor: Decimal = Decimal("0")
     situacion_financiera: SituacionFinanciera = SituacionFinanciera.SALDADA
+    # Descuento comercial (MVP v2): Total = Subtotal - descuento. El precio
+    # de cada trabajo no cambia.
+    subtotal: Decimal = Decimal("0")
+    descuento_aplicado: Decimal = Decimal("0")
+    descuento: DescuentoVigenteOut | None = None
 
 
 class HistorialOut(BaseModel):
@@ -1196,6 +1324,8 @@ class AccionOut(BaseModel):
     pago_id: str | None = None
     # La accion corresponde pero hoy no puede ejecutarse (y por que).
     bloqueo: str | None = None
+    # Cualquiera con el rol SALVO esta persona (liberar la Orden de otro).
+    usuario_excluido_id: str | None = None
 
     @classmethod
     def desde_dominio(cls, accion: AccionDisponible) -> "AccionOut":
@@ -1209,6 +1339,7 @@ class AccionOut(BaseModel):
             usuario_id=accion.usuario_id,
             pago_id=accion.pago_id,
             bloqueo=accion.bloqueo,
+            usuario_excluido_id=accion.usuario_excluido_id,
         )
 
 
@@ -1531,6 +1662,21 @@ class DesistimientoOut(BaseModel):
         )
 
 
+def _descuento_vigente(orden: OrdenReparacion) -> DescuentoVigenteOut | None:
+    registro = orden.descuento_vigente
+    if registro is None:
+        return None
+    return DescuentoVigenteOut(
+        tipo=registro.tipo,
+        valor=registro.valor,
+        descripcion=descripcion_de_descuento(registro),
+        importe=orden.descuento_aplicado,
+        motivo=registro.motivo,
+        usuario_id=registro.usuario_id,
+        fecha=registro.fecha,
+    )
+
+
 def _resumen_comercial(orden: OrdenReparacion) -> "ResumenComercialOut":
     return ResumenComercialOut(
         total=orden.total,
@@ -1542,6 +1688,9 @@ def _resumen_comercial(orden: OrdenReparacion) -> "ResumenComercialOut":
         devuelto=orden.resumen_pago.devuelto,
         credito_a_favor=orden.credito_a_favor,
         situacion_financiera=situacion_financiera(orden),
+        subtotal=orden.subtotal,
+        descuento_aplicado=orden.descuento_aplicado,
+        descuento=_descuento_vigente(orden),
     )
 
 
@@ -1611,11 +1760,19 @@ class OrdenOut(BaseModel):
     # "Equipo no recibido", observacion complementaria, nueva version del
     # comprobante de recepcion.
     acciones_custodia: list[AccionOut] = Field(default_factory=list)
+    # Cambiar la prioridad, liberar la Orden de otro tecnico y ajustar la
+    # garantia de un trabajo (MVP v2): no avanzan el proceso.
+    acciones_complementarias: list[AccionOut] = Field(default_factory=list)
+    # Historia de los descuentos (el ultimo es el vigente; sin tipo: quitado).
+    descuentos: list[RegistroDescuento] = Field(default_factory=list)
     # Orden CANCELADA abierta: que falta para cerrarla (custodia, devolucion
     # fisica, saldo a favor). Vacio en los demas casos.
     pendientes_de_cierre: list[str] = Field(default_factory=list)
     # Situacion operativa para la pantalla (solo lectura).
     situacion: SituacionOut | None = None
+    # Ingreso inicial de Cliente Externo: falta el comprobante de ingreso y
+    # autorizacion (presentacion derivada).
+    ingreso_inicial: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -1634,9 +1791,12 @@ class OrdenOut(BaseModel):
         acciones_autorizacion: Sequence[AccionDisponible] = (),
         acciones_financieras: Sequence[AccionDisponible] = (),
         acciones_custodia: Sequence[AccionDisponible] = (),
+        acciones_complementarias: Sequence[AccionDisponible] = (),
         situacion: SituacionOperativa | None = None,
     ) -> "OrdenOut":
         vigentes = _vigentes(orden)
+        en_ingreso = es_ingreso_inicial(orden)
+        del_ingreso = autorizados_en_el_ingreso(orden)
         return cls(
             id=orden.id,
             origen=orden.origen,
@@ -1671,6 +1831,13 @@ class OrdenOut(BaseModel):
                     situacion_autorizacion=situacion_autorizacion(
                         orden, detalle
                     ),
+                    pendiente_comprobante_ingreso=en_ingreso
+                    and estado_autorizacion(orden, detalle)
+                    is EstadoAutorizacion.PENDIENTE,
+                    autorizado_en_ingreso=estado_autorizacion(orden, detalle)
+                    is EstadoAutorizacion.AUTORIZADO
+                    and (detalle.id, detalle.version_definicion)
+                    in del_ingreso,
                 )
                 for detalle in orden.reparaciones_detail
             ],
@@ -1752,12 +1919,18 @@ class OrdenOut(BaseModel):
             acciones_custodia=[
                 AccionOut.desde_dominio(accion) for accion in acciones_custodia
             ],
+            acciones_complementarias=[
+                AccionOut.desde_dominio(accion)
+                for accion in acciones_complementarias
+            ],
+            descuentos=list(orden.descuentos),
             pendientes_de_cierre=pendientes_para_cerrar(orden),
             situacion=(
                 SituacionOut.desde_aplicacion(situacion)
                 if situacion is not None
                 else None
             ),
+            ingreso_inicial=en_ingreso,
             created_at=orden.created_at,
             updated_at=orden.updated_at,
         )

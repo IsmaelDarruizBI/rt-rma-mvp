@@ -43,6 +43,7 @@ from app.domain.models import (
 from app.main import create_app
 from app.storage.json.base import escribir_json_atomico
 from tests.fixtures.api_definicion import definir_y_finalizar
+from tests.fixtures.api_salidas import encolar
 
 RECEPCION = "RECEP-001"
 COORDINADOR = "COORD-001"
@@ -192,10 +193,11 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
     assert orden["estado_workflow"] == "REQUERIMIENTO"
     assert len(orden["reparaciones_detail"]) == 1
     det1 = orden["reparaciones_detail"][0]["id"]
-    # Recepcion puede agregar otro Detalle o finalizar la definicion:
-    # dos intenciones distintas, publicadas por el backend.
+    # Recepcion puede agregar otro Detalle o cerrar la carga: dos
+    # intenciones distintas, publicadas por el backend. En el ingreso
+    # inicial se cierra con el comprobante de ingreso (MVP v2).
     codigos = [a["codigo"] for a in orden["acciones_disponibles"]]
-    assert codigos[:2] == ["AGREGAR_DETALLE", "FINALIZAR_DEFINICION"]
+    assert codigos[:2] == ["AGREGAR_DETALLE", "GENERAR_COMPROBANTE_INGRESO"]
     assert "ENVIAR_A_REVISION" not in codigos
     # Sin finalizar, el comprobante y la habilitacion todavia no corren.
     assert orden["documentos"]["comprobante_recepcion"]["generado"] is False
@@ -207,7 +209,8 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
     )
     assert respuesta.status_code == 200, respuesta.text
     orden = respuesta.json()
-    assert orden["estado_workflow"] == "HABILITADA"
+    # Comprobante de ingreso: autorizados y en la cola.
+    assert orden["estado_workflow"] == "EN_COLA"
     assert len(orden["reparaciones_detail"]) == 2
     det2 = next(
         d["id"] for d in orden["reparaciones_detail"] if d["id"] != det1
@@ -222,7 +225,8 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
     assert d1["garantia_dias"] == 90
     assert d2["precio"] == "50000"
     assert d2["puntaje"] == 5
-    assert d2["garantia_dias"] == 60
+    # Con check-in, 90 dias para todos (el catalogo dice 60).
+    assert d2["garantia_dias"] == 90
     assert orden["resumen"]["total"] == "130000"
 
     # Un unico comprobante de recepcion, aunque hubo 2 Detalles agregados.
@@ -234,10 +238,7 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
 
     # --- Cola y toma ------------------------------------------------------
 
-    orden = cliente.post(
-        f"/api/orders/{orden_id}/queue",
-        json={"usuario_id": COORDINADOR, "prioridad": 1},
-    ).json()
+    orden = encolar(cliente, orden_id, 1, COORDINADOR).json()
     assert orden["estado_workflow"] == "EN_COLA"
 
     orden = cliente.post(
@@ -464,11 +465,11 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
 
 
 def test_hp_rep_001_un_solo_detalle_sigue_igual(cliente):
-    """HP-REP-001 con 1 Detalle: agregar y finalizar dejan la Orden lista.
+    """HP-REP-001 con 1 Detalle: agregar y el comprobante de ingreso dejan
+    la Orden lista.
 
-    Agregar el unico Detalle y finalizar la definicion son dos
-    intenciones; juntas producen el mismo resultado que antes: comprobante
-    generado y Orden HABILITADA.
+    Agregar el unico Detalle y generar el comprobante de ingreso son dos
+    intenciones; juntas dejan el comprobante generado y la Orden en la cola.
     """
     orden_id = _crear_orden(cliente)
 
@@ -478,7 +479,7 @@ def test_hp_rep_001_un_solo_detalle_sigue_igual(cliente):
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO_BATERIA},
     ).json()
 
-    assert orden["estado_workflow"] == "HABILITADA"
+    assert orden["estado_workflow"] == "EN_COLA"
     assert len(orden["reparaciones_detail"]) == 1
     assert orden["documentos"]["comprobante_recepcion"]["generado"] is True
 
@@ -503,10 +504,7 @@ def test_liberar_orden_devuelve_la_orden_a_en_cola(cliente):
         orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO_PANTALLA},
     )
-    cliente.post(
-        f"/api/orders/{orden_id}/queue",
-        json={"usuario_id": COORDINADOR, "prioridad": 1},
-    )
+    encolar(cliente, orden_id, 1, COORDINADOR)
     orden = cliente.post(
         f"/api/orders/{orden_id}/take",
         json={"usuario_id": TECNICO, "estacion_id": ESTACION},
@@ -556,10 +554,7 @@ def test_control_tecnico_rechaza_si_algun_detalle_no_es_terminal(cliente):
         orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO_PANTALLA},
     )
-    cliente.post(
-        f"/api/orders/{orden_id}/queue",
-        json={"usuario_id": COORDINADOR, "prioridad": 1},
-    )
+    encolar(cliente, orden_id, 1, COORDINADOR)
     orden = cliente.post(
         f"/api/orders/{orden_id}/take",
         json={"usuario_id": TECNICO, "estacion_id": ESTACION},

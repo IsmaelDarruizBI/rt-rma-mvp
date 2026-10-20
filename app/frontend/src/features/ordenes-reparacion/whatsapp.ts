@@ -11,7 +11,7 @@
  * enviado ni como entregado.
  */
 
-import type { ContenidoAutorizacion } from "../../types/api";
+import type { ContenidoAutorizacion, ContenidoIngreso } from "../../types/api";
 
 /**
  * El teléfono como lo pide wa.me (solo dígitos, con código de país), o
@@ -65,22 +65,40 @@ function pesos(valor: string): string {
   });
 }
 
-/** El texto que acompaña al PDF. No dice que sea un comprobante de pago. */
-export function mensajeComprobante(contenido: ContenidoAutorizacion): string {
+/**
+ * El texto que acompaña al PDF (comprobante de autorización o de ingreso).
+ * No dice que sea un comprobante de pago ni que el cliente lo recibió.
+ */
+export function mensajeComprobante(
+  contenido: ContenidoAutorizacion | ContenidoIngreso,
+): string {
   const saludo = contenido.cliente
     ? `Hola ${contenido.cliente.nombre.split(" ")[0]}!`
     : "Hola!";
   const equipo = `${contenido.equipo.marca} ${contenido.equipo.modelo}`;
+  const ingreso = contenido.tipo === "COMPROBANTE_INGRESO";
   const trabajos = contenido.trabajos
     .map((trabajo) => `• ${trabajo.nombre}: ${pesos(trabajo.precio)}`)
     .join("\n");
+  const total = ingreso ? contenido.total : contenido.total_autorizado;
+  const subtotal = ingreso ? contenido.subtotal : contenido.subtotal_autorizado;
+  const descuento = contenido.descuento
+    ? [
+        `Subtotal: ${pesos(subtotal ?? total)}`,
+        `Descuento (${contenido.descuento.descripcion}): -${pesos(contenido.descuento.importe)}`,
+      ]
+    : [];
   return [
-    `${saludo} Te enviamos el comprobante de autorización de la orden ` +
-      `${contenido.orden_id} (${equipo}).`,
+    ingreso
+      ? `${saludo} Te enviamos el comprobante de ingreso y autorización de ` +
+        `la orden ${contenido.orden_id} (${equipo}).`
+      : `${saludo} Te enviamos el comprobante de autorización de la orden ` +
+        `${contenido.orden_id} (${equipo}).`,
     "",
     "Trabajos autorizados:",
     trabajos,
-    `Total autorizado: ${pesos(contenido.total_autorizado)}`,
+    ...descuento,
+    `Total autorizado: ${pesos(total)}`,
     "",
     "No es un comprobante de pago.",
     contenido.empresa.nombre,

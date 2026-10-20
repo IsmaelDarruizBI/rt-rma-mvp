@@ -3,8 +3,11 @@
 Decision de negocio aprobada (auditoria funcional MVP v2, E2): mientras
 la toma pertenece a un tecnico, la Orden queda bajo su responsabilidad
 operativa. Los demas tecnicos pueden consultarla y ver quien la tiene,
-pero no pueden iniciar, completar, interrumpir ni liberar. Liberada (y si
-sigue siendo trabajable), otro tecnico puede tomarla.
+pero no pueden iniciar, completar ni interrumpir. Liberada (y si sigue
+siendo trabajable), otro tecnico puede tomarla.
+
+Iteracion 1 del UAT: otro tecnico SI puede liberarla, pero solo con
+motivo y confirmacion explicita (``test_liberacion_cruzada.py``).
 
 Antes de la correccion, TECH-002 podia iniciar una Ejecucion sobre la
 toma de TECH-001 y la Orden quedaba trabada: ni uno ni otro podia
@@ -182,11 +185,21 @@ def test_otro_tecnico_no_puede_completar_ni_interrumpir(cliente, tmp_path):
     assert cerrada.status_code == 200, cerrada.text
 
 
-def test_otro_tecnico_no_puede_liberar_la_orden(cliente, tmp_path):
+def test_otro_tecnico_no_libera_sin_motivo_ni_confirmacion(cliente, tmp_path):
     orden_id = _tomada_por_tech_001(cliente)
     archivo_antes = _archivo(tmp_path, orden_id)
 
-    _assert_rechazo_toma_ajena(_liberar(cliente, orden_id, TECNICO_B))
+    sin_motivo = _liberar(cliente, orden_id, TECNICO_B)
+    assert sin_motivo.status_code == 409, sin_motivo.text
+    assert TECNICO in sin_motivo.json()["error"]["mensaje"]
+    sin_confirmar = cliente.post(
+        f"/api/orders/{orden_id}/release",
+        json={"usuario_id": TECNICO_B, "motivo": "TECH-001 no vino hoy."},
+    )
+    assert sin_confirmar.status_code == 409, sin_confirmar.text
+    error = sin_confirmar.json()["error"]
+    assert error["codigo"] == "CONFIRMACION_REQUERIDA"
+    assert TECNICO in error["mensaje"]
 
     assert _archivo(tmp_path, orden_id) == archivo_antes
     orden = cliente.get(f"/api/orders/{orden_id}").json()

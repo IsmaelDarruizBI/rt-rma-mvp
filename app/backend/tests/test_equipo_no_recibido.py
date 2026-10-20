@@ -14,9 +14,9 @@ import json
 import pytest
 
 from tests.fixtures.api_salidas import (
+    BATERIA,
     RECEPCION,
     TECNICO,
-    agregar,
     archivo,
     autorizar_todo,
     cancelar_orden,
@@ -46,10 +46,35 @@ def cliente(tmp_path):
 
 
 def _sin_custodia(cliente) -> str:
-    """Definida y autorizada, con el comprobante emitido y la recepcion
-    fisica SIN confirmar."""
+    """Con el comprobante de recepcion emitido y la recepcion fisica SIN
+    confirmar.
+
+    En CLIENTE_EXTERNO el ingreso inicial confirma la recepcion con el
+    comprobante de ingreso; sin confirmar queda una Orden enviada a
+    revision (que emite el de recepcion) todavia no revisada.
+    """
     orden_id = crear(cliente)
-    agregar(cliente, orden_id)
+    ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/send-to-review",
+            json={"usuario_id": RECEPCION},
+        )
+    )
+    return orden_id
+
+
+def _revisada_sin_custodia(cliente) -> str:
+    """Revisada, definida y autorizada sin confirmar la recepcion: lista
+    para la cola (la revision no exige la custodia)."""
+    orden_id = _sin_custodia(cliente)
+    for ruta, cuerpo in (
+        ("technical-review", {"usuario_id": TECNICO, "resultado": "Bateria."}),
+        (
+            "review/details",
+            {"usuario_id": RECEPCION, "tipo_reparacion_id": BATERIA},
+        ),
+    ):
+        ok(cliente.post(f"/api/orders/{orden_id}/{ruta}", json=cuerpo))
     finalizar(cliente, orden_id, confirmar_recepcion=False)
     autorizar_todo(cliente, orden_id)
     return orden_id
@@ -108,7 +133,8 @@ def test_1_cancelar_con_custodia_pendiente_no_cierra(cliente):
 
     assert orden["estado_workflow"] == "CANCELADA"
     assert orden["cerrada"] is False
-    assert orden["current_process"] == "PROC-REP-211"
+    # Sin trabajos definidos todavia: cancelacion de la Orden (306).
+    assert orden["current_process"] == "PROC-REP-306"
     assert orden["custodia"]["estado"] == "PENDIENTE_CONFIRMACION"
     assert orden["devolucion_pendiente"] is False
     assert orden["pendientes_de_cierre"] == [
@@ -259,8 +285,7 @@ def test_8_no_recibido_con_ejecucion_previa_se_rechaza(cliente, tmp_path):
     """Historial contradictorio: una Orden ejecutada con las reglas de antes
     (sin custodia registrada). Hoy ninguna Ejecucion empieza sin custodia,
     asi que la contradiccion se simula como un JSON anterior."""
-    orden_id = _sin_custodia(cliente)
-    confirmar_recepcion(cliente, orden_id)
+    orden_id = definida(cliente)
     tomada(cliente, orden_id)
     ejecucion_id = iniciar(cliente, orden_id)
     ok(
@@ -291,7 +316,7 @@ def test_8_no_recibido_con_ejecucion_previa_se_rechaza(cliente, tmp_path):
 
 def test_no_recibido_con_una_toma_previa_se_rechaza(cliente):
     """Tomar la Orden no exige custodia, pero prueba que hubo equipo."""
-    orden_id = _sin_custodia(cliente)
+    orden_id = _revisada_sin_custodia(cliente)
     tomada(cliente, orden_id)
     ok(
         cliente.post(

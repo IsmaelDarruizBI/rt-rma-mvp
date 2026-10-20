@@ -351,9 +351,21 @@ class TipoDocumento(str, Enum):
                                trabajos que el cliente autorizo y su
                                precio. No es un nodo del proceso ni un
                                comprobante de pago.
+    COMPROBANTE_INGRESO        ingreso inicial de CLIENTE_EXTERNO: una
+                               sola constancia de recepcion del equipo y
+                               de autorizacion de los trabajos (reemplaza
+                               a los dos anteriores en ese camino).
     """
 
     COMPROBANTE_RECEPCION = "COMPROBANTE_RECEPCION"
     COMPROBANTE_ENTREGA = "COMPROBANTE_ENTREGA"
     GARANTIA = "GARANTIA"
     COMPROBANTE_AUTORIZACION = "COMPROBANTE_AUTORIZACION"
+    COMPROBANTE_INGRESO = "COMPROBANTE_INGRESO"
+
+
+class TipoDescuento(str, Enum):
+    """Como se expresa un descuento comercial sobre los trabajos."""
+
+    PORCENTAJE = "PORCENTAJE"
+    IMPORTE = "IMPORTE"

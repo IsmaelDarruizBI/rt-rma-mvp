@@ -32,10 +32,12 @@ from app.domain.models import (
     CoberturaGarantia,
     ContenidoComprobanteAutorizacion,
     ContenidoComprobanteEntrega,
+    ContenidoComprobanteIngreso,
     ContenidoComprobanteRecepcion,
     ContenidoDocumento,
     ContenidoGarantia,
     DatosEmpresa,
+    DescuentoEnDocumento,
     DevolucionDineroEnDocumento,
     Documento,
     DocumentoEmitido,
@@ -57,6 +59,7 @@ from app.domain.models import (
     TrabajoEnDocumento,
     Usuario,
     UsuarioEnDocumento,
+    importe_de_descuento,
 )
 from app.domain.politicas import CondicionComercial, politica_de
 
@@ -66,8 +69,10 @@ from .autorizacion_cliente import (
     requiere_autorizacion_cliente,
 )
 from .custodia import ROLES_RECEPCION_EQUIPO, estado_custodia, tipo_de_entrega
+from .descuentos import descripcion_de_descuento
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .pagos import condicion_entrega_cumplida
+from .reparaciones import nombre_del_trabajo
 from .revisiones import finalizada_sin_reparacion, lista_para_cierre
 from .workflow import registrar_accion_funcional, registrar_paso
 
@@ -82,7 +87,15 @@ SIGLA_DOCUMENTO = {
     TipoDocumento.COMPROBANTE_ENTREGA: "ENT",
     TipoDocumento.GARANTIA: "GAR",
     TipoDocumento.COMPROBANTE_AUTORIZACION: "AUT",
+    TipoDocumento.COMPROBANTE_INGRESO: "ING",
 }
+
+# Documentos que listan trabajos autorizados: el de ingreso (al ingresar)
+# y el de autorizacion (autorizaciones posteriores).
+_CON_TRABAJOS_AUTORIZADOS = (
+    TipoDocumento.COMPROBANTE_INGRESO,
+    TipoDocumento.COMPROBANTE_AUTORIZACION,
+)
 
 # Lo emite quien registra la decision del cliente (PROC-REP-046).
 ROLES_COMPROBANTE_AUTORIZACION = (RolUsuario.RECEPCION,)
@@ -96,6 +109,11 @@ LEYENDA_RECEPCION_GARANTIA = (
     "Este comprobante acredita la recepcion del equipo en las condiciones "
     "indicadas para su revision en garantia. No implica que el reclamo este "
     "aceptado ni compromete ningun cobro."
+)
+LEYENDA_INGRESO = (
+    "Constancia de recepción del equipo en las condiciones indicadas y de "
+    "la autorización de los trabajos detallados con su precio. No es un "
+    "comprobante de pago ni una factura, y no requiere firma."
 )
 LEYENDA_AUTORIZACION = (
     "Este comprobante detalla los trabajos que el cliente autorizó y su "
@@ -296,7 +314,7 @@ def contenido_comprobante_recepcion(
         estado_fisico=recepcion.datos.estado_fisico if recepcion else None,
         accesorios=list(recepcion.datos.accesorios) if recepcion else [],
         observaciones=recepcion.datos.observaciones if recepcion else None,
-        notas=[nota.texto for nota in recepcion.notas] if recepcion else [],
+        notas=_notas_visibles(recepcion),
         registrado_por=(
             _usuario(contexto, recepcion.registrado_por) if recepcion else None
         ),
@@ -313,6 +331,28 @@ def contenido_comprobante_recepcion(
             if orden.orden_origen_id
             else LEYENDA_RECEPCION
         ),
+    )
+
+
+def _notas_visibles(recepcion) -> list[str]:
+    """Las notas posteriores que ve el cliente: nunca las internas."""
+    if recepcion is None:
+        return []
+    return [nota.texto for nota in recepcion.notas if not nota.interna]
+
+
+def _descuento_en_documento(
+    orden: OrdenReparacion, subtotal: Decimal
+) -> DescuentoEnDocumento | None:
+    """El descuento vigente sobre ``subtotal``, si descuenta algo."""
+    vigente = orden.descuento_vigente
+    importe = importe_de_descuento(subtotal, vigente)
+    if vigente is None or importe == 0:
+        return None
+    return DescuentoEnDocumento(
+        descripcion=descripcion_de_descuento(vigente),
+        motivo=vigente.motivo,
+        importe=importe,
     )
 
 
@@ -360,9 +400,7 @@ def contenido_comprobante_entrega(
         return {
             "detalle_id": detalle.id,
             "tipo_reparacion_id": detalle.tipo_reparacion_id,
-            "nombre": contexto.tipos.get(
-                detalle.tipo_reparacion_id, detalle.tipo_reparacion_id
-            ),
+            "nombre": nombre_del_trabajo(detalle, contexto.tipos),
             "precio": detalle.precio if cobrable else None,
             "detalle_origen_id": detalle.detalle_origen_id,
         }
@@ -399,6 +437,14 @@ def contenido_comprobante_entrega(
             if detalle.estado is EstadoReparacionDetail.CANCELADO
         ],
         cobrable=cobrable,
+        subtotal=(
+            orden.subtotal if cobrable and orden.descuento_vigente else None
+        ),
+        descuento=(
+            _descuento_en_documento(orden, orden.subtotal)
+            if cobrable
+            else None
+        ),
         total=orden.total if cobrable else None,
         pagado=resumen.pagado if cobrable else None,
         devuelto=resumen.devuelto if cobrable else None,
@@ -463,9 +509,7 @@ def contenido_garantia(
             CoberturaGarantia(
                 detalle_id=detalle.id,
                 tipo_reparacion_id=detalle.tipo_reparacion_id,
-                nombre=contexto.tipos.get(
-                    detalle.tipo_reparacion_id, detalle.tipo_reparacion_id
-                ),
+                nombre=nombre_del_trabajo(detalle, contexto.tipos),
                 garantia_dias=detalle.garantia_dias,
                 vence=vencimiento_garantia(
                     fecha_inicio, detalle.garantia_dias, contexto.zona_horaria
@@ -509,18 +553,14 @@ def _autorizados(
     return autorizados
 
 
-def contenido_comprobante_autorizacion(
-    orden: OrdenReparacion,
-    contexto: ContextoDocumentos,
-) -> ContenidoComprobanteAutorizacion:
-    """Los trabajos autorizados, cada uno con su precio y su decision."""
-    trabajos = [
+def _trabajos_autorizados(
+    orden: OrdenReparacion, contexto: ContextoDocumentos
+) -> list[TrabajoAutorizadoEnDocumento]:
+    return [
         TrabajoAutorizadoEnDocumento(
             detalle_id=detalle.id,
             tipo_reparacion_id=detalle.tipo_reparacion_id,
-            nombre=contexto.tipos.get(
-                detalle.tipo_reparacion_id, detalle.tipo_reparacion_id
-            ),
+            nombre=nombre_del_trabajo(detalle, contexto.tipos),
             precio=detalle.precio,
             detalle_origen_id=detalle.detalle_origen_id,
             version_definicion=decision.version_definicion,
@@ -530,13 +570,69 @@ def contenido_comprobante_autorizacion(
         )
         for detalle, decision in _autorizados(orden)
     ]
+
+
+def contenido_comprobante_autorizacion(
+    orden: OrdenReparacion,
+    contexto: ContextoDocumentos,
+) -> ContenidoComprobanteAutorizacion:
+    """Los trabajos autorizados, cada uno con su precio y su decision.
+
+    Con descuento vigente: el subtotal de lo autorizado, el descuento
+    sobre ese subtotal y el total resultante.
+    """
+    trabajos = _trabajos_autorizados(orden, contexto)
+    subtotal = sum((trabajo.precio for trabajo in trabajos), Decimal("0"))
+    descuento = _descuento_en_documento(orden, subtotal)
     return ContenidoComprobanteAutorizacion(
         **_datos_comunes(orden, contexto),
         trabajos=trabajos,
-        total_autorizado=sum(
-            (trabajo.precio for trabajo in trabajos), Decimal("0")
-        ),
+        subtotal_autorizado=subtotal if descuento else None,
+        descuento=descuento,
+        total_autorizado=subtotal - (descuento.importe if descuento else 0),
         leyenda=LEYENDA_AUTORIZACION,
+    )
+
+
+def contenido_comprobante_ingreso(
+    orden: OrdenReparacion,
+    contexto: ContextoDocumentos,
+) -> ContenidoComprobanteIngreso:
+    """Ingreso y autorizacion en un solo documento (MVP v2).
+
+    La recepcion (estado fisico, accesorios, observaciones del equipo,
+    notas visibles, check-in y la confirmacion fisica) y los trabajos
+    autorizados con su precio, el descuento y el total. Las notas internas
+    nunca figuran.
+    """
+    recepcion = orden.recepcion
+    datos = recepcion.datos if recepcion else None
+    confirmacion = recepcion.confirmacion if recepcion else None
+    trabajos = _trabajos_autorizados(orden, contexto)
+    subtotal = sum((trabajo.precio for trabajo in trabajos), Decimal("0"))
+    descuento = _descuento_en_documento(orden, subtotal)
+    return ContenidoComprobanteIngreso(
+        **_datos_comunes(orden, contexto),
+        estado_fisico=datos.estado_fisico if datos else None,
+        accesorios=list(datos.accesorios) if datos else [],
+        observaciones=datos.observaciones if datos else None,
+        notas=_notas_visibles(recepcion),
+        checkin=datos.checkin if datos else None,
+        registrado_por=(
+            _usuario(contexto, recepcion.registrado_por) if recepcion else None
+        ),
+        recepcion_fisica=estado_custodia(orden),
+        confirmada_por=(
+            _usuario(contexto, confirmacion.usuario_id)
+            if confirmacion
+            else None
+        ),
+        confirmada_en=confirmacion.fecha if confirmacion else None,
+        trabajos=trabajos,
+        subtotal=subtotal,
+        descuento=descuento,
+        total=subtotal - (descuento.importe if descuento else 0),
+        leyenda=LEYENDA_INGRESO,
     )
 
 
@@ -548,11 +644,52 @@ def _firma(trabajos) -> tuple:
     )
 
 
-def _firma_vigente(orden: OrdenReparacion) -> tuple:
-    return tuple(
-        (detalle.id, decision.version_definicion, detalle.precio)
-        for detalle, decision in _autorizados(orden)
+def _firma_de(contenido) -> tuple:
+    """Lo autorizado y el descuento de un documento con trabajos."""
+    descuento = contenido.descuento
+    return (
+        _firma(contenido.trabajos),
+        (descuento.descripcion, descuento.importe) if descuento else None,
     )
+
+
+def _firma_vigente(orden: OrdenReparacion) -> tuple:
+    autorizados = _autorizados(orden)
+    subtotal = sum((detalle.precio for detalle, _ in autorizados), Decimal(0))
+    descuento = _descuento_en_documento(orden, subtotal)
+    return (
+        tuple(
+            (detalle.id, decision.version_definicion, detalle.precio)
+            for detalle, decision in autorizados
+        ),
+        (descuento.descripcion, descuento.importe) if descuento else None,
+    )
+
+
+def autorizados_en_el_ingreso(
+    orden: OrdenReparacion,
+) -> frozenset[tuple[str, int]]:
+    """(Detalle, version de definicion) que autorizo el comprobante de
+    ingreso. Una redefinicion posterior abre otra version: esa ya no es la
+    autorizacion inicial."""
+    ingreso = ultimo_documento(orden, TipoDocumento.COMPROBANTE_INGRESO)
+    if ingreso is None:
+        return frozenset()
+    return frozenset(
+        (trabajo.detalle_id, trabajo.version_definicion)
+        for trabajo in ingreso.contenido.trabajos
+    )
+
+
+def ultimo_con_trabajos_autorizados(
+    orden: OrdenReparacion,
+) -> DocumentoEmitido | None:
+    """El ultimo documento emitido que lista lo autorizado (ingreso o
+    autorizacion): contra el se decide si hace falta una version nueva."""
+    for documento in reversed(orden.documentos.emitidos):
+        if documento.tipo in _CON_TRABAJOS_AUTORIZADOS:
+            return documento
+    return None
 
 
 def comprobante_autorizacion_emitible(orden: OrdenReparacion) -> bool:
@@ -569,10 +706,10 @@ def comprobante_autorizacion_emitible(orden: OrdenReparacion) -> bool:
     ):
         return False
     vigente = _firma_vigente(orden)
-    if not vigente:
+    if not vigente[0]:
         return False
-    ultimo = ultimo_documento(orden, TipoDocumento.COMPROBANTE_AUTORIZACION)
-    return ultimo is None or _firma(ultimo.contenido.trabajos) != vigente
+    ultimo = ultimo_con_trabajos_autorizados(orden)
+    return ultimo is None or _firma_de(ultimo.contenido) != vigente
 
 
 def _lista(nombres: Sequence[str]) -> str:
@@ -582,10 +719,7 @@ def _lista(nombres: Sequence[str]) -> str:
     return ", ".join(citados[:-1]) + " y " + citados[-1]
 
 
-def _motivo_autorizacion(
-    anterior: ContenidoComprobanteAutorizacion,
-    actual: ContenidoComprobanteAutorizacion,
-) -> str:
+def _motivo_autorizacion(anterior, actual) -> str:
     """Motivo de una version nueva: que cambio en lo autorizado."""
     previos = {trabajo.detalle_id: trabajo for trabajo in anterior.trabajos}
     vigentes = {trabajo.detalle_id: trabajo for trabajo in actual.trabajos}
@@ -605,6 +739,8 @@ def _motivo_autorizacion(
         partes.append(
             f"{_lista(quitados)} ya no figura (cancelado o redefinido)"
         )
+    if _firma_de(anterior)[1] != _firma_de(actual)[1]:
+        partes.append("cambió el descuento")
     return "Cambiaron los trabajos autorizados: " + "; ".join(partes) + "."
 
 
@@ -638,9 +774,9 @@ def emitir_comprobante_autorizacion(
             "No hay trabajos autorizados por el cliente: el comprobante de "
             "autorizacion solo lista trabajos autorizados."
         )
-    ultimo = ultimo_documento(orden, TipoDocumento.COMPROBANTE_AUTORIZACION)
-    if ultimo is not None and _firma(ultimo.contenido.trabajos) == _firma(
-        contenido.trabajos
+    ultimo = ultimo_con_trabajos_autorizados(orden)
+    if ultimo is not None and _firma_de(ultimo.contenido) == _firma_de(
+        contenido
     ):
         return orden, ultimo, False
 
@@ -670,6 +806,50 @@ def emitir_comprobante_autorizacion(
             fecha=fecha,
             usuario_id=usuario.id,
             observacion=observacion,
+        )
+    return nueva_orden, documento, creado
+
+
+def emitir_comprobante_ingreso(
+    orden: OrdenReparacion,
+    *,
+    usuario: Usuario,
+    contenido: ContenidoComprobanteIngreso,
+    fecha: datetime,
+) -> tuple[OrdenReparacion, DocumentoEmitido, bool]:
+    """Emite el comprobante de ingreso y autorizacion (una sola vez).
+
+    Lo emite el ingreso inicial de CLIENTE_EXTERNO (Recepcion), ya con la
+    recepcion confirmada y los trabajos autorizados. Si ya existe, lo
+    devuelve sin crear otro: un reintento no lo duplica. Las
+    autorizaciones posteriores usan el comprobante de autorizacion. Deja
+    ACC-REP-060 en el historial (emitir el comprobante de autorizacion; la
+    recepcion ya quedo en PROC-REP-060).
+    """
+    validar_alguno_de(usuario, ROLES_COMPROBANTE_AUTORIZACION)
+    existente = ultimo_documento(orden, TipoDocumento.COMPROBANTE_INGRESO)
+    if existente is not None:
+        return orden, existente, False
+    if not contenido.trabajos:
+        raise PrecondicionInvalidaError(
+            "El comprobante de ingreso necesita al menos un trabajo "
+            "autorizado."
+        )
+    nueva_orden, documento, creado = registrar_documento(
+        orden, contenido=contenido, fecha=fecha, usuario_id=usuario.id
+    )
+    if creado:
+        nueva_orden = registrar_accion_funcional(
+            nueva_orden,
+            accion_id=ACCION_EMITIR_COMPROBANTE_AUTORIZACION,
+            accion="EMITIR_DOCUMENTO",
+            fecha=fecha,
+            usuario_id=usuario.id,
+            observacion=(
+                f"{documento.id} (ingreso y autorizacion): "
+                f"{_lista([t.nombre for t in contenido.trabajos])}, total "
+                f"{contenido.total}"
+            ),
         )
     return nueva_orden, documento, creado
 
@@ -817,7 +997,10 @@ def documentos_previsualizables(
     """
     politica = politica_de(orden.origen)
     tipos: list[TipoDocumento] = []
-    if politica.requiere_comprobante_recepcion:
+    # Con el comprobante de ingreso, el de recepcion ya esta incluido.
+    if politica.requiere_comprobante_recepcion and not ultimo_documento(
+        orden, TipoDocumento.COMPROBANTE_INGRESO
+    ):
         tipos.append(TipoDocumento.COMPROBANTE_RECEPCION)
     if not politica.requiere_entrega_cliente or orden.esta_cerrada:
         return tipos
@@ -853,4 +1036,6 @@ def contenido_de(
         return contenido_comprobante_entrega(orden, contexto)
     if tipo is TipoDocumento.COMPROBANTE_AUTORIZACION:
         return contenido_comprobante_autorizacion(orden, contexto)
+    if tipo is TipoDocumento.COMPROBANTE_INGRESO:
+        return contenido_comprobante_ingreso(orden, contexto)
     return contenido_garantia(orden, contexto)

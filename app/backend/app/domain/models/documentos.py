@@ -74,6 +74,19 @@ class TrabajoCanceladoEnDocumento(TrabajoEnDocumento):
     origen_cancelacion: OrigenCancelacion | None = None
 
 
+class DescuentoEnDocumento(BaseModel):
+    """El descuento comercial tal como figura en el documento.
+
+    ``descripcion`` es como se expreso ("10 %" o un importe fijo) e
+    ``importe`` lo que efectivamente descuenta sobre el subtotal del
+    documento.
+    """
+
+    descripcion: str
+    motivo: str
+    importe: Decimal
+
+
 class PagoEnDocumento(BaseModel):
     """Un Pago vigente (los anulados no figuran)."""
 
@@ -176,6 +189,9 @@ class ContenidoComprobanteEntrega(_ContenidoBase):
         default_factory=list
     )
     cobrable: bool
+    # Con descuento: el subtotal de lo realizado y el descuento aplicado.
+    subtotal: Decimal | None = None
+    descuento: DescuentoEnDocumento | None = None
     total: Decimal | None = None
     pagado: Decimal | None = None
     devuelto: Decimal | None = None
@@ -230,7 +246,40 @@ class ContenidoComprobanteAutorizacion(_ContenidoBase):
         TipoDocumento.COMPROBANTE_AUTORIZACION
     )
     trabajos: list[TrabajoAutorizadoEnDocumento] = Field(default_factory=list)
+    # Con descuento: subtotal de lo autorizado y el descuento sobre el.
+    # ``None`` sin descuento (y en las versiones anteriores).
+    subtotal_autorizado: Decimal | None = None
+    descuento: DescuentoEnDocumento | None = None
     total_autorizado: Decimal
+    leyenda: str
+
+
+class ContenidoComprobanteIngreso(_ContenidoBase):
+    """Comprobante de ingreso y autorizacion (ingreso inicial, MVP v2).
+
+    Un solo documento para el cliente al ingresar el equipo: acredita la
+    recepcion fisica (estado, accesorios, observaciones del equipo,
+    check-in) y la autorizacion de los trabajos incluidos, con su precio,
+    el descuento y el total. Las notas internas nunca figuran. No es un
+    comprobante de pago ni lleva firma.
+    """
+
+    tipo: Literal[TipoDocumento.COMPROBANTE_INGRESO] = (
+        TipoDocumento.COMPROBANTE_INGRESO
+    )
+    estado_fisico: str | None = None
+    accesorios: list[str] = Field(default_factory=list)
+    observaciones: str | None = None
+    notas: list[str] = Field(default_factory=list)
+    checkin: bool | None = None
+    registrado_por: UsuarioEnDocumento | None = None
+    recepcion_fisica: EstadoCustodia
+    confirmada_por: UsuarioEnDocumento | None = None
+    confirmada_en: datetime | None = None
+    trabajos: list[TrabajoAutorizadoEnDocumento] = Field(default_factory=list)
+    subtotal: Decimal
+    descuento: DescuentoEnDocumento | None = None
+    total: Decimal
     leyenda: str
 
 
@@ -238,7 +287,8 @@ ContenidoDocumento = Annotated[
     ContenidoComprobanteRecepcion
     | ContenidoComprobanteEntrega
     | ContenidoGarantia
-    | ContenidoComprobanteAutorizacion,
+    | ContenidoComprobanteAutorizacion
+    | ContenidoComprobanteIngreso,
     Field(discriminator="tipo"),
 ]
 

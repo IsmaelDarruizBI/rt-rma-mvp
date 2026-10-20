@@ -37,7 +37,6 @@ from tests.fixtures.api_salidas import (
     agregar,
     aprobar,
     archivo,
-    autorizar_todo,
     cancelar_detalle,
     cancelar_orden,
     conflicto,
@@ -98,6 +97,7 @@ def _ingresar(
     estado_fisico=ESTADO,
     accesorios=("Cargador", "Funda"),
     observaciones="El cliente pide conservar los datos.",
+    checkin=True,
 ) -> str:
     return ok(
         cliente.post(
@@ -120,6 +120,7 @@ def _ingresar(
                     "estado_fisico": estado_fisico,
                     "accesorios": list(accesorios),
                     "observaciones": observaciones,
+                    "checkin": checkin,
                 },
             },
         )
@@ -130,6 +131,17 @@ def _confirmar(cliente, orden_id, observaciones=None, usuario=RECEPCION):
     return cliente.post(
         f"/api/orders/{orden_id}/reception/confirm",
         json={"usuario_id": usuario, "observaciones": observaciones},
+    )
+
+
+def _a_revision(cliente, orden_id):
+    """Sin diagnostico: PROC-REP-055 -> 050 -> 060. En CLIENTE_EXTERNO es
+    el camino que emite el comprobante de recepcion (el ingreso inicial
+    emite el de ingreso y autorizacion) y donde la recepcion se confirma
+    aparte."""
+    return cliente.post(
+        f"/api/orders/{orden_id}/send-to-review",
+        json={"usuario_id": RECEPCION},
     )
 
 
@@ -147,15 +159,14 @@ def _nota(cliente, orden_id, texto):
     )
 
 
-def _definida(cliente, *tipos, confirmar=True) -> str:
-    """Ingreso con datos fisicos, Detalles, definicion y autorizacion."""
+def _definida(cliente, *tipos) -> str:
+    """Ingreso con datos fisicos y Detalles, y el comprobante de ingreso y
+    autorizacion: recepcion confirmada, definicion cerrada, trabajos
+    autorizados."""
     orden_id = _ingresar(cliente)
-    if confirmar:
-        ok(_confirmar(cliente, orden_id))
     for tipo in tipos or (BATERIA,):
         agregar(cliente, orden_id, tipo)
-    finalizar(cliente, orden_id, confirmar_recepcion=False)
-    autorizar_todo(cliente, orden_id)
+    finalizar(cliente, orden_id)
     return orden_id
 
 
@@ -271,6 +282,8 @@ def test_1_datos_fisicos_de_recepcion(cliente):
         "estado_fisico": ESTADO,
         "accesorios": ["Cargador", "Funda"],
         "observaciones": "El cliente pide conservar los datos.",
+        "notas_internas": None,
+        "checkin": True,
     }
     assert recepcion["registrado_por"] == RECEPCION
     assert recepcion["registrado_en"].startswith("2026-10-01T13:00")
@@ -326,6 +339,9 @@ def test_2_accesorios_y_observaciones(cliente, reloj):
     )
     assert len(mismo["recepcion"]["versiones_anteriores"]) == 1
 
+    # En el ingreso inicial la confirmacion va con el comprobante de
+    # ingreso; enviada a revision, se confirma aparte.
+    ok(_a_revision(cliente, orden_id))
     ok(_confirmar(cliente, orden_id))
     # Confirmada: los datos no se corrigen, se complementan.
     mensaje = conflicto(_corregir(cliente, orden_id, estado_fisico="Otro"))
@@ -343,8 +359,6 @@ def test_2_accesorios_y_observaciones(cliente, reloj):
 
 def test_3_comprobante_de_recepcion_emitido(cliente):
     orden_id = _ingresar(cliente)
-    ok(_confirmar(cliente, orden_id))
-    agregar(cliente, orden_id, BATERIA)
 
     # Antes de PROC-REP-060 solo hay vista previa, que no guarda nada.
     previa = ok(
@@ -361,11 +375,22 @@ def test_3_comprobante_de_recepcion_emitido(cliente):
         )
     )
 
-    finalizar(cliente, orden_id, confirmar_recepcion=False)
+    # Enviada a revision (sin diagnostico) se emite (PROC-REP-060).
+    ok(_a_revision(cliente, orden_id))
+    emitido = _vigente(cliente, orden_id, "COMPROBANTE_RECEPCION")
+    assert emitido["id"] == f"{orden_id}-REC-01"
+    assert emitido["contenido"]["recepcion_fisica"] == "PENDIENTE_CONFIRMACION"
+    ok(_confirmar(cliente, orden_id))
+    ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/documents/reception-receipt",
+            json={"usuario_id": RECEPCION, "motivo": "Custodia confirmada"},
+        )
+    )
 
     documento = _vigente(cliente, orden_id, "COMPROBANTE_RECEPCION")
-    assert documento["id"] == f"{orden_id}-REC-01"
-    assert documento["version"] == 1
+    assert documento["id"] == f"{orden_id}-REC-02"
+    assert documento["version"] == 2
     assert documento["usuario_id"] == RECEPCION
     contenido = documento["contenido"]
     assert contenido["empresa"]["nombre"] == "Rosario Tecno"
@@ -389,8 +414,21 @@ def test_3_comprobante_de_recepcion_emitido(cliente):
 
 def test_4_el_comprobante_no_implica_autorizacion_comercial(cliente):
     orden_id = _ingresar(cliente)
-    agregar(cliente, orden_id, BATERIA)
-    agregar(cliente, orden_id, PANTALLA)
+    ok(_a_revision(cliente, orden_id))
+    ok(_confirmar(cliente, orden_id))
+    ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/technical-review",
+            json={"usuario_id": TECNICO, "resultado": "Bateria y pantalla."},
+        )
+    )
+    for tipo in (BATERIA, PANTALLA):
+        ok(
+            cliente.post(
+                f"/api/orders/{orden_id}/review/details",
+                json={"usuario_id": RECEPCION, "tipo_reparacion_id": tipo},
+            )
+        )
     orden = finalizar(cliente, orden_id, confirmar_recepcion=False)
     # La propuesta queda pendiente de autorizacion del cliente.
     assert {
@@ -414,8 +452,7 @@ def test_4_el_comprobante_no_implica_autorizacion_comercial(cliente):
 def test_5_la_custodia_se_confirma_aparte_del_comprobante(cliente):
     # Comprobante emitido sin custodia confirmada.
     con_comprobante = _ingresar(cliente)
-    agregar(cliente, con_comprobante, BATERIA)
-    orden = finalizar(cliente, con_comprobante, confirmar_recepcion=False)
+    orden = ok(_a_revision(cliente, con_comprobante))
     assert orden["custodia"]["comprobante_recepcion_emitido"] is True
     assert orden["custodia"]["estado"] == "PENDIENTE_CONFIRMACION"
     contenido = _vigente(cliente, con_comprobante, "COMPROBANTE_RECEPCION")[
@@ -424,11 +461,15 @@ def test_5_la_custodia_se_confirma_aparte_del_comprobante(cliente):
     assert contenido["recepcion_fisica"] == "PENDIENTE_CONFIRMACION"
     assert contenido["confirmada_por"] is None
 
-    # Custodia confirmada sin comprobante emitido.
+    # En el ingreso inicial no se confirma suelta: la confirma el
+    # comprobante de ingreso y autorizacion.
+    inicial = _ingresar(cliente)
+    assert "comprobante de ingreso" in conflicto(_confirmar(cliente, inicial))
+    # La confirmacion es un hecho propio, aparte del comprobante emitido.
     sin_comprobante = _ingresar(cliente)
+    ok(_a_revision(cliente, sin_comprobante))
     orden = ok(_confirmar(cliente, sin_comprobante, "Queda en el local."))
     assert orden["custodia"]["estado"] == "EN_CUSTODIA"
-    assert orden["custodia"]["comprobante_recepcion_emitido"] is False
     assert orden["custodia"]["confirmada_por"] == RECEPCION
     assert orden["custodia"]["confirmada_en"].startswith("2026-10-01")
     assert orden["recepcion"]["confirmacion"]["observaciones"] == (
@@ -438,9 +479,11 @@ def test_5_la_custodia_se_confirma_aparte_del_comprobante(cliente):
     # Una sola confirmacion; un tecnico no confirma.
     conflicto(_confirmar(cliente, sin_comprobante))
     otra = _ingresar(cliente)
+    ok(_a_revision(cliente, otra))
     conflicto(_confirmar(cliente, otra, usuario=TECNICO))
     # Sin estado fisico no se confirma.
     sin_estado = _ingresar(cliente, estado_fisico=None)
+    ok(_a_revision(cliente, sin_estado))
     assert "estado fisico" in conflicto(_confirmar(cliente, sin_estado))
 
 
@@ -483,8 +526,7 @@ def test_6_orden_anterior_se_regulariza_antes_de_entregar(cliente, tmp_path):
 
 def test_7_un_documento_emitido_no_cambia(cliente, reloj, tmp_path):
     orden_id = _ingresar(cliente)
-    agregar(cliente, orden_id, BATERIA)
-    finalizar(cliente, orden_id, confirmar_recepcion=False)
+    ok(_a_revision(cliente, orden_id))
     original = _vigente(cliente, orden_id, "COMPROBANTE_RECEPCION")
 
     reloj.avanzar(minutes=10)
@@ -545,8 +587,7 @@ def test_7_un_documento_emitido_no_cambia(cliente, reloj, tmp_path):
 
 def test_8_un_reintento_no_duplica_documentos(cliente, tmp_path):
     orden_id = _ingresar(cliente)
-    agregar(cliente, orden_id, BATERIA)
-    finalizar(cliente, orden_id, confirmar_recepcion=False)
+    ok(_a_revision(cliente, orden_id))
     antes = archivo(tmp_path, orden_id)
 
     # Mismo contenido: devuelve el vigente, sin version ni traza nueva.
@@ -613,7 +654,7 @@ def test_10_no_se_entrega_dos_veces(cliente, tmp_path):
     assert archivo(tmp_path, orden_id) == antes
     tipos = [d["tipo"] for d in _documentos(cliente, orden_id)["emitidos"]]
     assert tipos == [
-        "COMPROBANTE_RECEPCION",
+        "COMPROBANTE_INGRESO",
         "COMPROBANTE_ENTREGA",
         "GARANTIA",
     ]
@@ -634,7 +675,7 @@ def test_11_no_se_entrega_con_saldo_pendiente(cliente):
     orden = _orden(cliente, orden_id)
     assert orden["resumen"]["saldo"] == "80000"
     assert orden["entrega"] is None
-    assert orden["documentos_emitidos"][-1]["tipo"] == "COMPROBANTE_RECEPCION"
+    assert orden["documentos_emitidos"][-1]["tipo"] == "COMPROBANTE_INGRESO"
 
 
 def _con_credito(cliente) -> tuple[str, str]:
@@ -801,6 +842,13 @@ def test_16_comprobante_final(cliente, reloj):
 
 def test_18_19_cada_trabajo_con_su_plazo(cliente):
     orden_id = _lista_y_cobrada(cliente, BATERIA, PANTALLA)
+    # Con check-in ambos sugieren 90 dias; la pantalla se ajusta a 60.
+    ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/details/DET-002/warranty",
+            json={"usuario_id": RECEPCION, "dias": 60, "motivo": "Convenio"},
+        )
+    )
 
     ok(_entregar(cliente, orden_id, **RETIRA))
 
@@ -933,7 +981,8 @@ def test_22_una_orden_cerrada_se_consulta_sin_acciones(cliente, tmp_path):
     assert custodia["custodia"]["estado"] == "ENTREGADO"
     assert custodia["custodia"]["salida"]["recibido_por"] == "Maria Gomez"
     assert _orden(cliente, orden_id)["acciones_custodia"] == []
-    assert documentos["previsualizables"] == ["COMPROBANTE_RECEPCION"]
+    # El de ingreso ya acredita la recepcion: no se ofrece otro aparte.
+    assert documentos["previsualizables"] == []
 
     for respuesta in (
         _corregir(cliente, orden_id, estado_fisico="x"),
@@ -1031,14 +1080,12 @@ def test_24_ordenes_json_anteriores_siguen_cargando(cliente, tmp_path):
 
 
 def test_circuito_a_cliente_externo(cliente, reloj):
-    """Ingreso con accesorios y estado -> recepcion -> definicion ->
-    autorizacion -> reparacion -> control -> pago -> entrega -> comprobante
-    final y garantia."""
+    """Ingreso con accesorios y estado -> trabajos -> comprobante de ingreso
+    y autorizacion (recepcion, definicion y autorizacion) -> reparacion ->
+    control -> pago -> entrega -> comprobante final y garantia."""
     orden_id = _ingresar(cliente)
-    ok(_confirmar(cliente, orden_id))
     agregar(cliente, orden_id, BATERIA)
-    finalizar(cliente, orden_id, confirmar_recepcion=False)
-    autorizar_todo(cliente, orden_id)
+    finalizar(cliente, orden_id)
     reloj.avanzar(hours=3)
     _reparada(cliente, orden_id)
     _pagar(
@@ -1051,7 +1098,7 @@ def test_circuito_a_cliente_externo(cliente, reloj):
     assert orden["estado_workflow"] == "ENTREGADA"
     assert orden["current_process"] == "EVT-REP-999"
     assert [d["id"] for d in orden["documentos_emitidos"]] == [
-        f"{orden_id}-REC-01",
+        f"{orden_id}-ING-01",
         f"{orden_id}-ENT-01",
         f"{orden_id}-GAR-01",
     ]

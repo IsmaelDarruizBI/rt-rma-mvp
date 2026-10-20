@@ -17,7 +17,10 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.fixtures.api_definicion import definir_y_finalizar
+from tests.fixtures.api_definicion import (
+    autorizar_pendientes,
+    definir_y_finalizar,
+)
 from tests.fixtures.custodia import entregar
 
 from .test_api_hp_rep_001 import (
@@ -244,12 +247,17 @@ def test_el_anticipo_habilita_la_accion_de_pago_temprano(cliente):  # noqa: F811
 
 
 def _hasta_habilitada(cliente) -> str:  # noqa: F811
+    """Habilitada y sin cola: autorizada fuera del ingreso inicial
+    (revision). El ingreso inicial de Cliente Externo entra solo a la cola
+    con el comprobante de ingreso."""
     orden_id = _crear_orden(cliente)
-    definir_y_finalizar(
+    finalizada = definir_y_finalizar(
         cliente,
         orden_id,
         json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
+        autorizar=False,
     )
+    autorizar_pendientes(cliente, orden_id, finalizada)
     return orden_id
 
 
@@ -354,7 +362,7 @@ def test_recepcion_no_entrega_con_saldo_pendiente(cliente):  # noqa: F811
 
 
 def test_el_happy_path_no_cambio_de_actores(cliente):  # noqa: F811
-    """HP-REP-001 no cambia: sigue encolando con COORD."""
+    """Fuera del ingreso inicial se sigue encolando con COORD."""
     orden_id = _hasta_habilitada(cliente)
     cliente.post(
         f"/api/orders/{orden_id}/queue",

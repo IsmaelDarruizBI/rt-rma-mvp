@@ -73,8 +73,9 @@ def test_cancelar_un_detalle_pendiente(cliente):
     assert MOTIVO in paso_300["observacion"]
     # Un Detalle cancelado no se cobra.
     assert Decimal(orden["resumen"]["total"]) == Decimal("50000")
-    # La definicion sigue abierta para el Detalle vigente.
-    assert "FINALIZAR_DEFINICION" in codigos(orden)
+    # La definicion sigue abierta para el Detalle vigente (ingreso inicial:
+    # se cierra con el comprobante de ingreso).
+    assert "GENERAR_COMPROBANTE_INGRESO" in codigos(orden)
     assert ("CANCELAR_DETALLE", "DET-001") not in codigos_cancelacion(orden)
     assert ("CANCELAR_DETALLE", "DET-002") in codigos_cancelacion(orden)
 

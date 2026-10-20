@@ -17,6 +17,7 @@ import type {
   InsumoUtilizado,
   MedioPago,
   Prioridad,
+  TipoDescuento,
   Orden,
   OrdenResumen,
   TipoDocumento,
@@ -103,11 +104,86 @@ export function definirReparacion(
   ordenId: string,
   usuarioId: string,
   tipoReparacionId: string,
+  otros: TrabajoOtros | null = null,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/details`, {
     usuario_id: usuarioId,
     tipo_reparacion_id: tipoReparacionId,
+    ...(otros ?? {}),
   });
+}
+
+/** Tipo reservado de «Otros — Reparación no tipificada». */
+export const TIPO_REPARACION_OTROS = "TR-OTROS";
+
+/** Descripción y precio manual de un trabajo «Otros». */
+export interface TrabajoOtros {
+  descripcion: string;
+  precio: string;
+}
+
+/**
+ * Ingreso inicial de Cliente Externo (Recepción), en una sola operación:
+ * confirma la recepción, finaliza la definición, registra la autorización
+ * de los trabajos cargados y emite el comprobante de ingreso. Un reintento
+ * no duplica nada. No registra que el cliente lo recibió.
+ */
+export function generarComprobanteIngreso(
+  ordenId: string,
+  usuarioId: string,
+  canal: CanalComunicacion = "PRESENCIAL",
+  /** Solo si el ingreso todavía no registra el check-in. */
+  checkin: boolean | null = null,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/documents/intake-receipt`, {
+    usuario_id: usuarioId,
+    canal,
+    checkin,
+  });
+}
+
+/** Cambiar la prioridad de una Orden en cola o en reparación. */
+export function cambiarPrioridad(
+  ordenId: string,
+  usuarioId: string,
+  prioridad: number,
+  motivo: string | null,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/priority`, {
+    usuario_id: usuarioId,
+    prioridad,
+    motivo,
+  });
+}
+
+/** Aplicar, cambiar (o quitar, con `tipo: null`) el descuento comercial. */
+export function aplicarDescuento(
+  ordenId: string,
+  usuarioId: string,
+  tipo: TipoDescuento | null,
+  valor: string | null,
+  motivo: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/discount`, {
+    usuario_id: usuarioId,
+    tipo,
+    valor,
+    motivo,
+  });
+}
+
+/** Ajustar el plazo de garantía de un trabajo (antes de la entrega). */
+export function ajustarGarantia(
+  ordenId: string,
+  detalleId: string,
+  usuarioId: string,
+  dias: number,
+  motivo: string,
+): Promise<Orden> {
+  return post<Orden>(
+    `/api/orders/${ordenId}/details/${detalleId}/warranty`,
+    { usuario_id: usuarioId, dias, motivo },
+  );
 }
 
 /**
@@ -280,6 +356,24 @@ export function liberarOrden(
   });
 }
 
+/**
+ * Liberar la Orden que tiene OTRO técnico: motivo y confirmación. Si hay
+ * una reparación en curso, se interrumpe (`insumosUtilizados`: lo usado).
+ */
+export function liberarOrdenAjena(
+  ordenId: string,
+  usuarioId: string,
+  motivo: string,
+  insumosUtilizados: InsumoUtilizado[] = [],
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/release`, {
+    usuario_id: usuarioId,
+    motivo,
+    confirmado: true,
+    insumos_utilizados: insumosUtilizados,
+  });
+}
+
 /** PROC-REP-250 -> 260 -> 265 [-> 266] (Recepción). */
 export function notificar(
   ordenId: string,
@@ -428,11 +522,13 @@ export function definirReparacionDesdeRevision(
   usuarioId: string,
   tipoReparacionId: string,
   detalleOrigenId: string | null,
+  otros: TrabajoOtros | null = null,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/review/details`, {
     usuario_id: usuarioId,
     tipo_reparacion_id: tipoReparacionId,
     detalle_origen_id: detalleOrigenId,
+    ...(otros ?? {}),
   });
 }
 
@@ -653,10 +749,12 @@ export function agregarObservacionRecepcion(
   ordenId: string,
   usuarioId: string,
   texto: string,
+  interna = false,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/reception/notes`, {
     usuario_id: usuarioId,
     texto,
+    interna,
   });
 }
 

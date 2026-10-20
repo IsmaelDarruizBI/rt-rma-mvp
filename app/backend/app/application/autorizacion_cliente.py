@@ -24,6 +24,7 @@ devuelve la Orden a la cola con su prioridad (BR-REP-034/037).
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
@@ -36,6 +37,7 @@ from app.domain.models import (
     OrigenCancelacion,
     RegistroAutorizacionCliente,
     ReparacionDetail,
+    Usuario,
 )
 from app.services import (
     DecisionDetalle,
@@ -46,6 +48,7 @@ from app.services import (
     definicion_finalizada,
     estado_autorizacion,
     evaluar_situacion_orden,
+    exigir_fuera_del_ingreso_inicial,
     finalizada_sin_reparacion,
     fue_habilitada,
     habilitar_orden,
@@ -61,6 +64,7 @@ from app.services import (
     registrar_desistimiento_cliente as registrar_desistimiento_servicio,
 )
 
+from .cola import encolar_si_ingreso_automatico
 from .concurrencia import seccion_critica_inventario
 from .consultas import nombres_de_tipo_por_detalle
 from .contexto import ApplicationContext
@@ -311,7 +315,9 @@ def registrar_decision_cliente(
     cierre de lo realizado.
 
     Corre en la seccion critica de inventario porque la factibilidad lee
-    el stock y las reservas de las demas Ordenes.
+    el stock y las reservas de las demas Ordenes. En el ingreso inicial de
+    CLIENTE_EXTERNO la autorizacion se registra con el comprobante de
+    ingreso, no por separado.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
@@ -320,37 +326,66 @@ def registrar_decision_cliente(
         seccion_critica_inventario(),
         orden_para_modificar(contexto, orden_id) as orden,
     ):
-        ya_habilitada = fue_habilitada(orden)
-        orden, autorizados = registrar_decision_cliente_servicio(
+        exigir_fuera_del_ingreso_inicial(
+            orden, "registrar la autorizacion inicial"
+        )
+        orden = aplicar_decision_cliente(
+            contexto,
             orden,
-            decisiones=decisiones,
             usuario=usuario,
             canal=canal,
-            fecha=fecha,
+            decisiones=decisiones,
             observaciones=observaciones,
+            fecha=fecha,
         )
-        if not autorizados:
-            orden, _ = evaluar_situacion_orden(orden, fecha=fecha)
-        else:
-            orden, factible = validar_factibilidad_detalles(
-                orden,
-                insumos=contexto.catalogos.listar_insumos(),
-                insumos_previstos=(
-                    contexto.catalogos.listar_tipo_reparacion_insumos()
-                ),
-                fecha=fecha,
-                reservas_externas=cargar_reservas_externas(
-                    orden.id, contexto.ordenes
-                ),
-                detalle_ids=autorizados,
-                registrar_faltantes=not ya_habilitada,
-            )
-            if ya_habilitada:
-                orden, _ = evaluar_situacion_orden(orden, fecha=fecha)
-            elif factible:
-                orden = habilitar_orden(orden, fecha=fecha)
-
         contexto.ordenes.guardar(orden)
+    return orden
+
+
+def aplicar_decision_cliente(
+    contexto: ApplicationContext,
+    orden: OrdenReparacion,
+    *,
+    usuario: Usuario,
+    canal: CanalComunicacion,
+    decisiones: Sequence[DecisionDetalle],
+    observaciones: str | None,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """La decision y lo que sigue (factibilidad, 140 o 211), en memoria.
+
+    El caller ya esta dentro de la seccion critica de inventario y
+    persiste: lo usan el registro explicito de la decision y el ingreso
+    inicial, que la compone con la recepcion y la definicion.
+    """
+    ya_habilitada = fue_habilitada(orden)
+    orden, autorizados = registrar_decision_cliente_servicio(
+        orden,
+        decisiones=decisiones,
+        usuario=usuario,
+        canal=canal,
+        fecha=fecha,
+        observaciones=observaciones,
+    )
+    if not autorizados:
+        orden, _ = evaluar_situacion_orden(orden, fecha=fecha)
+        return orden
+    orden, factible = validar_factibilidad_detalles(
+        orden,
+        insumos=contexto.catalogos.listar_insumos(),
+        insumos_previstos=contexto.catalogos.listar_tipo_reparacion_insumos(),
+        fecha=fecha,
+        reservas_externas=cargar_reservas_externas(orden.id, contexto.ordenes),
+        detalle_ids=autorizados,
+        registrar_faltantes=not ya_habilitada,
+    )
+    if ya_habilitada:
+        orden, _ = evaluar_situacion_orden(orden, fecha=fecha)
+    elif factible:
+        orden = habilitar_orden(orden, fecha=fecha)
+        orden = encolar_si_ingreso_automatico(
+            orden, fecha=fecha, usuario_id=usuario.id
+        )
     return orden
 
 

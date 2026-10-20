@@ -20,13 +20,12 @@ from tests.fixtures.api_salidas import (
     archivo,
     autorizar_todo,
     conflicto,
-    crear,
     decidir,
     definida,
     ejecutar,
-    finalizar,
     notificar_pagar_entregar,
     ok,
+    por_revision,
     tomada,
 )
 from tests.test_api_hp_rep_002 import _crear_orden_rt
@@ -65,10 +64,19 @@ def _pdf(cliente, orden_id, documento_id):
 
 
 def _dos_trabajos_presentados(cliente) -> str:
-    orden_id = crear(cliente)
-    agregar(cliente, orden_id, BATERIA)
-    agregar(cliente, orden_id, PANTALLA)
-    finalizar(cliente, orden_id)
+    """Dos trabajos presentados al cliente, esperando su decision.
+
+    En CLIENTE_EXTERNO la decision explicita es del camino de revision (y
+    de las redefiniciones): el ingreso inicial los autoriza con el
+    comprobante de ingreso, que reemplaza al primero de autorizacion.
+    """
+    return por_revision(cliente, BATERIA, PANTALLA)
+
+
+def _autorizada(cliente) -> str:
+    """Un trabajo presentado y autorizado por el cliente (revision)."""
+    orden_id = definida(cliente, autorizar=False)
+    autorizar_todo(cliente, orden_id)
     return orden_id
 
 
@@ -117,7 +125,7 @@ def test_rt_interno_no_lo_ofrece_ni_lo_emite(tmp_path):
 
 def test_solo_recepcion_lo_emite(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = definida(cliente)
+        orden_id = _autorizada(cliente)
         antes = archivo(tmp_path, orden_id)
 
         for usuario in (TECNICO, ADMINISTRADOR):
@@ -133,10 +141,7 @@ def test_solo_recepcion_lo_emite(tmp_path):
 
 def test_autorizacion_parcial_lista_solo_lo_autorizado(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = crear(cliente)
-        for tipo in (BATERIA, PANTALLA, PANTALLA):
-            agregar(cliente, orden_id, tipo)
-        finalizar(cliente, orden_id)
+        orden_id = por_revision(cliente, BATERIA, PANTALLA, PANTALLA)
         # DET-001 autorizado, DET-002 rechazado, DET-003 sin respuesta.
         ok(
             decidir(
@@ -199,7 +204,7 @@ def test_un_cancelado_despues_de_autorizar_no_figura(tmp_path):
 
 def test_un_reintento_no_duplica_el_comprobante(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = definida(cliente)
+        orden_id = _autorizada(cliente)
         ok(_emitir(cliente, orden_id))
         guardado = archivo(tmp_path, orden_id)
 
@@ -250,7 +255,7 @@ def test_otro_trabajo_autorizado_da_una_version_nueva(tmp_path):
 
 def test_el_comprobante_de_recepcion_sigue_igual(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = definida(cliente)
+        orden_id = _autorizada(cliente)
         ok(_emitir(cliente, orden_id))
 
         documentos = ok(cliente.get(f"/api/orders/{orden_id}/documents"))
@@ -269,7 +274,7 @@ def test_el_comprobante_de_recepcion_sigue_igual(tmp_path):
 
 def test_pdf_del_comprobante(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = definida(cliente)
+        orden_id = _autorizada(cliente)
         ok(_emitir(cliente, orden_id))
         guardado = archivo(tmp_path, orden_id)
         documento_id = f"{orden_id}-AUT-01"
@@ -299,7 +304,7 @@ def test_pdf_del_comprobante(tmp_path):
 
 def test_pdf_solo_del_comprobante_de_autorizacion(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = definida(cliente)
+        orden_id = _autorizada(cliente)
 
         respuesta = _pdf(cliente, orden_id, f"{orden_id}-REC-01")
         assert "no se descarga como PDF" in conflicto(respuesta)

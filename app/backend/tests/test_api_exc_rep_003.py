@@ -15,6 +15,7 @@ import pytest
 
 from app.storage import JsonOrdenReparacionRepository
 from tests import test_multidetalle as multi
+from tests.fixtures.api_salidas import encolar
 from tests.test_api_exc_rep_001 import (
     _cliente,
     _cliente_multi,
@@ -66,9 +67,7 @@ def _sin_pago(orden: dict) -> list[str]:
 def _uno_tomado(cliente, directorio, stock_al_iniciar="0") -> str:
     """Un Detalle factible y tomado; despues el stock desaparece."""
     orden_id = _crear_orden_cliente(cliente)
-    assert _definir(cliente, orden_id).json()["estado_workflow"] == (
-        "HABILITADA"
-    )
+    assert _definir(cliente, orden_id).json()["estado_workflow"] == ("EN_COLA")
     _tomar(cliente, orden_id)
     _fijar_stock(directorio, **{INSUMO: stock_al_iniciar})
     return orden_id
@@ -77,12 +76,9 @@ def _uno_tomado(cliente, directorio, stock_al_iniciar="0") -> str:
 def _dos_tomados(cliente, directorio, a_al_iniciar="0", b_al_iniciar="1"):
     orden_id = multi._crear_orden(cliente)
     assert _definir_dos(cliente, orden_id).json()["estado_workflow"] == (
-        "HABILITADA"
+        "EN_COLA"
     )
-    cliente.post(
-        f"/api/orders/{orden_id}/queue",
-        json={"usuario_id": multi.COORDINADOR, "prioridad": 1},
-    )
+    encolar(cliente, orden_id, 1, multi.COORDINADOR)
     cliente.post(
         f"/api/orders/{orden_id}/take",
         json={"usuario_id": multi.TECNICO, "estacion_id": multi.ESTACION},
@@ -410,10 +406,7 @@ def test_el_override_de_otro_detalle_no_evita_la_reserva_fallida(tmp_path):
         assert (
             _override(cliente, orden_id, "DET-001").status_code == 200
         )  # solo DET-001 queda autorizado
-        cliente.post(
-            f"/api/orders/{orden_id}/queue",
-            json={"usuario_id": multi.COORDINADOR, "prioridad": 1},
-        )
+        encolar(cliente, orden_id, 1, multi.COORDINADOR)
         cliente.post(
             f"/api/orders/{orden_id}/take",
             json={"usuario_id": multi.TECNICO, "estacion_id": multi.ESTACION},

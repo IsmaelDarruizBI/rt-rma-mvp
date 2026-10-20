@@ -350,9 +350,16 @@ def _clasificar(
     """Resultado de una Orden que esperaba en 100/120, tras 080 -> 090."""
     proceso = orden.current_process
     ultimo = orden.historial[-1].observacion if orden.historial else None
-    if proceso == "PROC-REP-140":
+    recientes = [paso.process_id for paso in orden.historial[-3:]]
+    if proceso == "PROC-REP-140" or recientes == [
+        "PROC-REP-140",
+        "PROC-REP-150",
+        "PROC-REP-170",
+    ]:
         resultado = ResultadoRevalidacion.TRABAJABLE
         detalle = "Habilitada: tiene Detalles trabajables (PROC-REP-140)."
+        if proceso == "PROC-REP-170":
+            detalle += " Entro a la cola con la prioridad predeterminada."
         if detalles_bloqueados_por_recursos(orden):
             detalle += " Algun Detalle sigue bloqueado por recursos."
     elif proceso in ("PROC-REP-170", "PROC-REP-211") and (

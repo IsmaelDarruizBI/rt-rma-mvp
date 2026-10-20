@@ -1,4 +1,8 @@
-"""PDF del comprobante de autorizacion, armado desde su snapshot.
+"""PDF de los comprobantes con trabajos y precios, desde su snapshot.
+
+    COMPROBANTE_INGRESO       ingreso y autorizacion inicial (MVP v2):
+                              recepcion del equipo + trabajos autorizados
+    COMPROBANTE_AUTORIZACION  trabajos autorizados por el cliente
 
 Se genera cada vez que se descarga, a partir del documento emitido (que
 nunca cambia): no se guarda ningun binario y la misma version da siempre
@@ -15,6 +19,8 @@ from app.core.pdf import ALTO_A4, ANCHO_A4, Pdf, ancho_texto, cortar
 from app.domain.models import (
     CanalComunicacion,
     ContenidoComprobanteAutorizacion,
+    ContenidoComprobanteIngreso,
+    DescuentoEnDocumento,
     DocumentoEmitido,
 )
 from app.services import PrecondicionInvalidaError
@@ -38,6 +44,11 @@ ANCHO_TRABAJO = 250
 COL_AUTORIZACION = COL_TRABAJO + ANCHO_TRABAJO + 12
 ANCHO_AUTORIZACION = 150
 COL_PRECIO = DERECHA - 6
+
+TITULO_DOCUMENTO = {
+    ContenidoComprobanteAutorizacion: "COMPROBANTE DE AUTORIZACIÓN",
+    ContenidoComprobanteIngreso: "COMPROBANTE DE INGRESO",
+}
 
 
 def importe(valor: Decimal) -> str:
@@ -120,7 +131,7 @@ def _encabezado(hoja: _Hoja, documento: DocumentoEmitido, zona: tzinfo):
     pdf.texto(
         DERECHA,
         arriba - 14,
-        "COMPROBANTE DE AUTORIZACIÓN",
+        TITULO_DOCUMENTO[type(contenido)],
         tamano=12,
         negrita=True,
         derecha=True,
@@ -190,6 +201,53 @@ def _cliente_y_equipo(hoja: _Hoja, contenido, zona: tzinfo) -> None:
     hoja.parrafo(f"Falla declarada: {equipo.falla_reportada}", tamano=9)
 
 
+def _dato(hoja: _Hoja, etiqueta: str, valor: str) -> None:
+    """Una linea "Etiqueta: valor" que corta el valor si es largo."""
+    sangria = ancho_texto(f"{etiqueta}: ", 9)
+    lineas = cortar(valor, ANCHO_UTIL - sangria, 9.5)
+    for indice, linea in enumerate(lineas):
+        hoja.asegurar(13)
+        hoja.bajar(13)
+        if indice == 0:
+            hoja.pdf.texto(MARGEN, hoja.y, f"{etiqueta}:", tamano=9, gris=0.35)
+        hoja.pdf.texto(MARGEN + sangria, hoja.y, linea, tamano=9.5)
+
+
+def _recepcion(
+    hoja: _Hoja, contenido: ContenidoComprobanteIngreso, zona: tzinfo
+) -> None:
+    """Como se recibio el equipo. Solo lo visible: nunca notas internas."""
+    hoja.titulo("Recepción del equipo")
+    hoja.bajar(2)
+    _dato(hoja, "Estado físico", contenido.estado_fisico or "—")
+    _dato(
+        hoja,
+        "Accesorios",
+        ", ".join(contenido.accesorios) if contenido.accesorios else "Ninguno",
+    )
+    if contenido.checkin is not None:
+        _dato(
+            hoja,
+            "Check-in",
+            "Realizado" if contenido.checkin else "No realizado",
+        )
+    if contenido.observaciones:
+        _dato(hoja, "Observaciones", contenido.observaciones)
+    for nota in contenido.notas:
+        _dato(hoja, "Observación", nota)
+    if contenido.confirmada_en is not None:
+        recibio = (
+            f" por {contenido.confirmada_por.nombre}"
+            if contenido.confirmada_por
+            else ""
+        )
+        _dato(
+            hoja,
+            "Recibido",
+            f"{fecha_hora(contenido.confirmada_en, zona)}{recibio}",
+        )
+
+
 def _encabezado_tabla(hoja: _Hoja) -> None:
     pdf = hoja.pdf
     hoja.bajar(18)
@@ -208,6 +266,50 @@ def _encabezado_tabla(hoja: _Hoja) -> None:
         COL_PRECIO, hoja.y, "Precio", tamano=8.5, negrita=True, derecha=True
     )
     hoja.bajar(6)
+
+
+def _totales(
+    hoja: _Hoja,
+    subtotal: Decimal | None,
+    descuento: DescuentoEnDocumento | None,
+    total: Decimal,
+) -> None:
+    """Total autorizado; con descuento, antes el subtotal y el descuento."""
+    pdf = hoja.pdf
+    filas: list[tuple[str, str, bool]] = []
+    if descuento is not None and subtotal is not None:
+        filas.append(("Subtotal", importe(subtotal), False))
+        filas.append(
+            (
+                f"Descuento ({descuento.descripcion})",
+                "- " + importe(descuento.importe),
+                False,
+            )
+        )
+    filas.append(("Total autorizado", importe(total), True))
+    hoja.asegurar(8 + 16 * len(filas) + (13 if descuento else 0))
+    for etiqueta, valor, negrita in filas:
+        hoja.bajar(18 if negrita else 15)
+        tamano = 10.5 if negrita else 9.5
+        pdf.texto(
+            COL_AUTORIZACION, hoja.y, etiqueta, tamano=tamano, negrita=negrita
+        )
+        pdf.texto(
+            COL_PRECIO,
+            hoja.y,
+            valor,
+            tamano=tamano,
+            negrita=negrita,
+            derecha=True,
+        )
+    if descuento is not None:
+        hoja.parrafo(
+            f"Motivo del descuento: {descuento.motivo}",
+            tamano=8.5,
+            gris=0.3,
+            x=COL_AUTORIZACION,
+            ancho=DERECHA - COL_AUTORIZACION,
+        )
 
 
 def _trabajos(hoja: _Hoja, contenido, zona: tzinfo) -> None:
@@ -246,19 +348,17 @@ def _trabajos(hoja: _Hoja, contenido, zona: tzinfo) -> None:
         hoja.bajar(alto)
         pdf.linea(MARGEN, hoja.y + 3, DERECHA, hoja.y + 3, gris=0.85)
     hoja.encabezado_tabla = None
-    hoja.asegurar(26)
-    hoja.bajar(18)
-    pdf.texto(
-        COL_AUTORIZACION, hoja.y, "Total autorizado", tamano=10.5, negrita=True
-    )
-    pdf.texto(
-        COL_PRECIO,
-        hoja.y,
-        importe(contenido.total_autorizado),
-        tamano=10.5,
-        negrita=True,
-        derecha=True,
-    )
+    if isinstance(contenido, ContenidoComprobanteIngreso):
+        _totales(
+            hoja, contenido.subtotal, contenido.descuento, contenido.total
+        )
+    else:
+        _totales(
+            hoja,
+            contenido.subtotal_autorizado,
+            contenido.descuento,
+            contenido.total_autorizado,
+        )
 
 
 def _version(hoja: _Hoja, documento: DocumentoEmitido) -> None:
@@ -324,18 +424,22 @@ def _pies(pdf: Pdf, documento: DocumentoEmitido) -> None:
 def pdf_comprobante_autorizacion(
     documento: DocumentoEmitido, *, zona_horaria: tzinfo
 ) -> bytes:
+    """PDF del comprobante de autorizacion o del de ingreso.
+
+    Comparten el armado; el de ingreso suma la recepcion del equipo.
+    """
     contenido = documento.contenido
+    nombre = TITULO_DOCUMENTO[type(contenido)].capitalize()
     pdf = Pdf(
-        titulo=(
-            f"Comprobante de autorización {documento.id} — Orden "
-            f"{contenido.orden_id}"
-        ),
+        titulo=f"{nombre} {documento.id} — Orden {contenido.orden_id}",
         fecha=documento.fecha_emision,
         autor=contenido.empresa.nombre,
     )
     hoja = _Hoja(pdf)
     _encabezado(hoja, documento, zona_horaria)
     _cliente_y_equipo(hoja, contenido, zona_horaria)
+    if isinstance(contenido, ContenidoComprobanteIngreso):
+        _recepcion(hoja, contenido, zona_horaria)
     _trabajos(hoja, contenido, zona_horaria)
     _version(hoja, documento)
     _leyenda(hoja, contenido)
@@ -348,10 +452,10 @@ def pdf_de_documento(
 ) -> tuple[str, bytes]:
     """Nombre de archivo y PDF de un documento emitido.
 
-    Hoy solo el comprobante de autorizacion se descarga como PDF; los
-    demas se imprimen (o guardan como PDF) desde el navegador.
+    Se descargan como PDF el comprobante de ingreso y el de autorizacion;
+    los demas se imprimen (o guardan como PDF) desde el navegador.
     """
-    if not isinstance(documento.contenido, ContenidoComprobanteAutorizacion):
+    if not isinstance(documento.contenido, tuple(TITULO_DOCUMENTO)):
         raise PrecondicionInvalidaError(
             f"{documento.id} no se descarga como PDF: se imprime desde la "
             "pantalla de la Orden."

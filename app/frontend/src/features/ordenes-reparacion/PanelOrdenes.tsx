@@ -45,6 +45,7 @@ import type {
 import {
   AccionesOrden,
   CancelacionesOrden,
+  ComplementariasOrden,
   type EjecutorAcciones,
 } from "./AccionesOrden";
 import { InventarioPanel } from "../inventario/Inventario";
@@ -423,9 +424,9 @@ export function PanelOrdenes() {
   const enDetalle = ruta.pantalla === "orden" && orden?.id === ruta.ordenId;
 
   const ejecutor: EjecutorAcciones = {
-    agregarDetalle: (tipoId) =>
+    agregarDetalle: (tipoId, otros) =>
       void ejecutarComando(() =>
-        api.definirReparacion(idOrden, idActor, tipoId),
+        api.definirReparacion(idOrden, idActor, tipoId, otros),
       ),
     finalizarDefinicion: () =>
       void ejecutarComando(() => api.finalizarDefinicion(idOrden, idActor)),
@@ -521,13 +522,14 @@ export function PanelOrdenes() {
       void ejecutarComando(() =>
         api.realizarRevision(idOrden, idActor, resultado),
       ),
-    agregarDetalleDesdeRevision: (tipoId, detalleOrigenId) =>
+    agregarDetalleDesdeRevision: (tipoId, detalleOrigenId, otros) =>
       void ejecutarComando(() =>
         api.definirReparacionDesdeRevision(
           idOrden,
           idActor,
           tipoId,
           detalleOrigenId,
+          otros,
         ),
       ),
     finalizarSinReparacion: (motivo, observaciones) =>
@@ -558,6 +560,18 @@ export function PanelOrdenes() {
       ),
     cancelarOrden: (motivo) =>
       void ejecutarComando(() => api.cancelarOrden(idOrden, idActor, motivo)),
+    cambiarPrioridad: (prioridad, motivo) =>
+      void ejecutarComando(() =>
+        api.cambiarPrioridad(idOrden, idActor, prioridad, motivo),
+      ),
+    liberarOrdenAjena: (motivo, insumosUtilizados) =>
+      void ejecutarComando(() =>
+        api.liberarOrdenAjena(idOrden, idActor, motivo, insumosUtilizados),
+      ),
+    ajustarGarantia: (detalleId, dias, motivo) =>
+      void ejecutarComando(() =>
+        api.ajustarGarantia(idOrden, detalleId, idActor, dias, motivo),
+      ),
   };
 
   const contexto = {
@@ -796,6 +810,16 @@ export function PanelOrdenes() {
                 ocupado={ocupado}
                 ejecutar={ejecutor}
               />
+              <ComplementariasOrden
+                orden={orden}
+                actor={actor}
+                usuarios={usuarios}
+                tipos={tipos}
+                estaciones={estaciones}
+                prioridades={prioridades}
+                ocupado={ocupado}
+                ejecutar={ejecutor}
+              />
 
               <SeccionPlegable
                 key={`${orden.id}-${actorId}-cliente`}
@@ -823,9 +847,14 @@ export function PanelOrdenes() {
                       api.registrarEquipoNoRecibido(idOrden, idActor, motivo),
                     )
                   }
-                  onObservar={(texto) =>
+                  onObservar={(texto, interna) =>
                     void ejecutarComando(() =>
-                      api.agregarObservacionRecepcion(idOrden, idActor, texto),
+                      api.agregarObservacionRecepcion(
+                        idOrden,
+                        idActor,
+                        texto,
+                        interna,
+                      ),
                     )
                   }
                 />
@@ -922,6 +951,11 @@ export function PanelOrdenes() {
                       api.devolverDinero(idOrden, idActor, datos),
                     )
                   }
+                  onDescontar={(tipo, valor, motivo) =>
+                    void ejecutarComando(() =>
+                      api.aplicarDescuento(idOrden, idActor, tipo, valor, motivo),
+                    )
+                  }
                 />
               </SeccionPlegable>
 
@@ -944,6 +978,16 @@ export function PanelOrdenes() {
                   onEmitirAutorizacion={() =>
                     void ejecutarComando(() =>
                       api.emitirComprobanteAutorizacion(idOrden, idActor),
+                    )
+                  }
+                  onGenerarIngreso={(canal, checkin) =>
+                    void ejecutarComando(() =>
+                      api.generarComprobanteIngreso(
+                        idOrden,
+                        idActor,
+                        canal,
+                        checkin,
+                      ),
                     )
                   }
                 />
@@ -1054,6 +1098,10 @@ function resumenTrabajos(orden: Orden): ReactNode {
 
 /** [singular, plural] para el resumen de la autorización. */
 const RESUMEN_AUTORIZACION: Record<string, [string, string]> = {
+  PENDIENTE_COMPROBANTE_INGRESO: [
+    "pendiente de comprobante de ingreso",
+    "pendientes de comprobante de ingreso",
+  ],
   AUTORIZADO: ["autorizado", "autorizados"],
   PENDIENTE: ["esperando al cliente", "esperando al cliente"],
   RECHAZADO: ["rechazado", "rechazados"],
@@ -1065,7 +1113,9 @@ function resumenAutorizacion(orden: Orden): string {
   const cuenta = new Map<string, number>();
   for (const detalle of orden.reparaciones_detail) {
     if (detalle.estado === "CANCELADO") continue;
-    const estado = detalle.estado_autorizacion;
+    const estado = detalle.pendiente_comprobante_ingreso
+      ? "PENDIENTE_COMPROBANTE_INGRESO"
+      : detalle.estado_autorizacion;
     cuenta.set(estado, (cuenta.get(estado) ?? 0) + 1);
   }
   return (

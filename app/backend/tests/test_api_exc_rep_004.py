@@ -14,9 +14,9 @@ import pytest
 from tests import test_multidetalle as multi
 from tests.fixtures.api_definicion import (
     definir_y_finalizar,
-    finalizar_definicion,
     registrar_decision,
 )
+from tests.fixtures.api_salidas import encolar, generar_ingreso
 from tests.fixtures.custodia import confirmar_recepcion
 from tests.test_api_exc_rep_001 import (
     _cliente,
@@ -53,10 +53,7 @@ def _detalle(orden: dict, detalle_id="DET-001") -> dict:
 
 
 def _encolar_y_tomar(cliente, orden_id) -> None:
-    cliente.post(
-        f"/api/orders/{orden_id}/queue",
-        json={"usuario_id": multi.COORDINADOR, "prioridad": 1},
-    )
+    encolar(cliente, orden_id, 1, multi.COORDINADOR)
     respuesta = cliente.post(
         f"/api/orders/{orden_id}/take",
         json={"usuario_id": multi.TECNICO, "estacion_id": multi.ESTACION},
@@ -135,7 +132,7 @@ def _hasta_en_ejecucion(tmp_path, a="2", b="2"):
             "tipo_reparacion_id": multi.TIPO_BATERIA,
         },
     ).json()
-    assert definida["estado_workflow"] == "HABILITADA"
+    assert definida["estado_workflow"] == "EN_COLA"
     _encolar_y_tomar(cliente, orden_id)
     return cliente, orden_id, _iniciar(cliente, orden_id)
 
@@ -305,12 +302,8 @@ def test_caso_a_multidetalle_continua_b_y_despues_entra_a_125(tmp_path):
                     "tipo_reparacion_id": tipo,
                 },
             )
-        finalizar_definicion(cliente, orden_id, multi.RECEPCION)
-        registrar_decision(
-            cliente,
-            orden_id,
-            {"DET-001": "AUTORIZADO", "DET-002": "AUTORIZADO"},
-        )
+        # Comprobante de ingreso: confirma, define y autoriza los dos.
+        generar_ingreso(cliente, orden_id)
         _encolar_y_tomar(cliente, orden_id)
         ejecucion_a = _iniciar(cliente, orden_id, "DET-001")
 

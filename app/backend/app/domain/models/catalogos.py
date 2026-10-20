@@ -9,6 +9,12 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
+# Reparacion no tipificada: un tipo del sistema, no una fila del catalogo.
+# El Detalle lleva su descripcion y su precio manual; asi se distingue en
+# reportes de un tipo parametrizado sin crear un tipo por cada caso.
+TIPO_REPARACION_OTROS = "TR-OTROS"
+NOMBRE_TIPO_REPARACION_OTROS = "Otros — Reparación no tipificada"
+
 
 class TipoReparacion(BaseModel):
     """Tipo de reparacion ofrecido, con sus valores vigentes de catalogo.

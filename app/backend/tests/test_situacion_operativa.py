@@ -7,6 +7,8 @@ resume el avance en seis etapas. No cambia ninguna regla: consultarla no
 modifica la Orden.
 """
 
+import json
+
 from tests.fixtures.api_salidas import (
     BATERIA,
     COORDINADOR,
@@ -30,6 +32,37 @@ from tests.fixtures.api_salidas import (
 from tests.fixtures.custodia import confirmar_recepcion, entregar
 from tests.test_api_hp_rep_002 import _crear_orden_rt
 from tests.test_inventario_operativo import _cliente
+
+
+def _revisada(cliente, *tipos) -> str:
+    """Revisada y definida (camino de revision), con los trabajos
+    esperando la decision del cliente y la recepcion SIN confirmar.
+
+    En CLIENTE_EXTERNO el ingreso inicial confirma y autoriza con el
+    comprobante de ingreso: estos estados quedan del camino de revision.
+    """
+    orden_id = crear(cliente)
+    ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/send-to-review",
+            json={"usuario_id": RECEPCION},
+        )
+    )
+    ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/technical-review",
+            json={"usuario_id": TECNICO, "resultado": "Diagnostico."},
+        )
+    )
+    for tipo in tipos or (BATERIA,):
+        ok(
+            cliente.post(
+                f"/api/orders/{orden_id}/review/details",
+                json={"usuario_id": RECEPCION, "tipo_reparacion_id": tipo},
+            )
+        )
+    finalizar(cliente, orden_id, confirmar_recepcion=False)
+    return orden_id
 
 
 def _orden(cliente, orden_id) -> dict:
@@ -93,13 +126,13 @@ def test_recien_creada_pendiente_de_recepcion_y_de_definicion(tmp_path):
 
         assert situacion["codigo"] == "PENDIENTE_RECEPCION"
         assert situacion["titulo"] == "Pendiente de recepción"
-        # Secuencia recomendada: primero cargar los trabajos, despues
-        # confirmar la recepcion. Ninguna espera a la otra.
-        cargar, confirmar = situacion["tareas"]
+        # Ingreso inicial (MVP v2): cargar los trabajos y generar el
+        # comprobante de ingreso, que confirma la recepcion. No hay una
+        # tarea suelta de confirmacion.
+        (cargar,) = situacion["tareas"]
         assert cargar["titulo"] == "Cargar los trabajos"
         assert _codigos(cargar) == ["AGREGAR_DETALLE", "ENVIAR_A_REVISION"]
-        assert _codigos(confirmar) == ["CONFIRMAR_RECEPCION"]
-        assert confirmar["responsable"] == "Recepción o Administración"
+        assert cargar["responsable"] == "Recepción"
         assert situacion["responsable"] == cargar["responsable"]
         assert situacion["desde"] is not None
         assert _etapas(situacion) == {
@@ -112,45 +145,65 @@ def test_recien_creada_pendiente_de_recepcion_y_de_definicion(tmp_path):
         }
 
 
-def test_con_trabajos_cargados_confirmar_y_despues_finalizar(tmp_path):
+def test_con_trabajos_cargados_genera_el_comprobante_de_ingreso(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
         orden_id = crear(cliente)
         agregar(cliente, orden_id)
 
         situacion = _situacion(cliente, orden_id)
 
-        # 3 confirmar la recepcion fisica, 4 finalizar la definicion.
+        # 2 cargar los trabajos, 3 generar el comprobante de ingreso.
         assert situacion["codigo"] == "PENDIENTE_RECEPCION"
-        confirmar, finalizar_ = situacion["tareas"]
-        assert _codigos(confirmar) == ["CONFIRMAR_RECEPCION"]
-        assert finalizar_["titulo"] == "Finalizar la definición"
-        assert _codigos(finalizar_) == [
+        (generar,) = situacion["tareas"]
+        assert generar["titulo"] == (
+            "Generar el comprobante de ingreso y autorización"
+        )
+        assert _codigos(generar) == [
             "AGREGAR_DETALLE",
-            "FINALIZAR_DEFINICION",
+            "GENERAR_COMPROBANTE_INGRESO",
         ]
+        # Sin estado fisico ni check-in, el motivo dice que falta.
+        assert "estado fisico" in generar["motivo"]
+        assert "check-in" in generar["motivo"]
+        accion = generar["acciones"][1]
+        assert accion["bloqueo"].startswith("Para generarlo falta")
         assert situacion["avisos"] == []
 
 
 def test_con_recepcion_confirmada_queda_pendiente_de_definicion(tmp_path):
+    """Una Orden anterior a la iteracion 1, con la recepcion confirmada
+    por separado: solo le falta el comprobante de ingreso."""
     with _cliente(tmp_path, stock_bateria="5") as cliente:
         orden_id = crear(cliente)
-        confirmar_recepcion(cliente, orden_id)
+        confirmar_recepcion(cliente, orden_id)  # prepara los datos
         agregar(cliente, orden_id)
+        ruta = tmp_path / "ordenes" / f"{orden_id}.json"
+        datos = json.loads(ruta.read_text(encoding="utf-8"))
+        datos["recepcion"]["confirmacion"] = {
+            "usuario_id": RECEPCION,
+            "fecha": datos["created_at"],
+            "observaciones": None,
+        }
+        ruta.write_text(json.dumps(datos), encoding="utf-8")
 
         situacion = _situacion(cliente, orden_id)
 
         assert situacion["codigo"] == "PENDIENTE_DEFINICION"
         (tarea,) = situacion["tareas"]
-        assert tarea["titulo"] == "Finalizar la definición"
-        assert _codigos(tarea) == ["AGREGAR_DETALLE", "FINALIZAR_DEFINICION"]
+        assert tarea["titulo"] == (
+            "Generar el comprobante de ingreso y autorización"
+        )
+        assert _codigos(tarea) == [
+            "AGREGAR_DETALLE",
+            "GENERAR_COMPROBANTE_INGRESO",
+        ]
         assert situacion["avisos"] == []
 
 
 def test_esperando_autorizacion_del_cliente(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = crear(cliente)
-        agregar(cliente, orden_id)
-        finalizar(cliente, orden_id)
+        orden_id = _revisada(cliente)
+        confirmar_recepcion(cliente, orden_id)
 
         situacion = _situacion(cliente, orden_id)
 
@@ -190,7 +243,9 @@ def test_esperando_repuestos_en_100_y_en_120(tmp_path):
 
 def test_pendiente_de_prioridad_en_cola_y_tomada(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = definida(cliente)
+        # Fuera del ingreso inicial (revision) no entra sola a la cola.
+        orden_id = definida(cliente, autorizar=False)
+        ok(decidir(cliente, orden_id, {"DET-001": "AUTORIZADO"}))
         situacion = _situacion(cliente, orden_id)
         assert situacion["codigo"] == "PENDIENTE_PRIORIDAD"
         assert situacion["responsable"] == "Recepción o Coordinación RMA"
@@ -227,9 +282,7 @@ def test_pendiente_de_prioridad_en_cola_y_tomada(tmp_path):
 
 def test_tomada_sin_custodia_la_recepcion_es_lo_que_sigue(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = crear(cliente)
-        agregar(cliente, orden_id)
-        finalizar(cliente, orden_id, confirmar_recepcion=False)
+        orden_id = _revisada(cliente)
         ok(decidir(cliente, orden_id, {"DET-001": "AUTORIZADO"}))
         tomada(cliente, orden_id)
 
@@ -394,10 +447,7 @@ def test_rt_interno_informa_a_gestion_rt_sin_autorizacion(tmp_path):
 
 def test_estado_mixto_conserva_los_bloqueos_secundarios(tmp_path):
     with _cliente(tmp_path, stock_bateria="5", stock_pantalla="0") as cliente:
-        orden_id = crear(cliente)
-        for tipo in (BATERIA, PANTALLA, PANTALLA):
-            agregar(cliente, orden_id, tipo)
-        finalizar(cliente, orden_id, confirmar_recepcion=False)
+        orden_id = _revisada(cliente, BATERIA, PANTALLA, PANTALLA)
         ok(
             decidir(
                 cliente,

@@ -32,6 +32,7 @@ from tests.fixtures.api_salidas import (
     RECEPCION,
     aprobar,
     archivo,
+    autorizar_todo,
     cerrar_ejecucion,
     conflicto,
     definida,
@@ -45,6 +46,16 @@ from tests.fixtures.catalogos_mvp import COORDINADOR as COORDINADOR_DOMINIO
 from tests.fixtures.catalogos_mvp import t
 from tests.fixtures.custodia import entregar
 from tests.test_inventario_operativo import _cliente
+
+
+def _habilitada(cliente) -> str:
+    """Habilitada y todavia sin cola: autorizada por el cliente fuera del
+    ingreso inicial (revision tecnica). El ingreso inicial de Cliente
+    Externo entra solo a la cola con prioridad 4."""
+    orden_id = definida(cliente, autorizar=False)
+    autorizar_todo(cliente, orden_id)
+    return orden_id
+
 
 # --- Convencion -----------------------------------------------------------
 
@@ -207,7 +218,7 @@ def test_el_catalogo_propone_4_normal(tmp_path):
 
 def test_habilitada_todavia_no_tiene_prioridad(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = definida(cliente)
+        orden_id = _habilitada(cliente)
 
         orden = _orden(cliente, orden_id)
         fila = _filas(cliente)[orden_id]
@@ -221,7 +232,7 @@ def test_habilitada_todavia_no_tiene_prioridad(tmp_path):
 
 def test_confirmar_sin_elegir_registra_4(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = definida(cliente)
+        orden_id = _habilitada(cliente)
 
         orden = ok(_encolar(cliente, orden_id))
 
@@ -244,7 +255,7 @@ def test_confirmar_sin_elegir_registra_4(tmp_path):
 )
 def test_se_puede_elegir_1_2_o_3(tmp_path, prioridad, texto):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = definida(cliente)
+        orden_id = _habilitada(cliente)
 
         orden = ok(_encolar(cliente, orden_id, prioridad=prioridad))
         fila = _filas(cliente)[orden_id]
@@ -259,7 +270,7 @@ def test_se_puede_elegir_1_2_o_3(tmp_path, prioridad, texto):
 @pytest.mark.parametrize("prioridad", [0, 5, -1])
 def test_la_api_rechaza_valores_fuera_de_1_a_4(tmp_path, prioridad):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = definida(cliente)
+        orden_id = _habilitada(cliente)
         antes = archivo(tmp_path, orden_id)
 
         respuesta = _encolar(cliente, orden_id, prioridad=prioridad)
@@ -270,7 +281,7 @@ def test_la_api_rechaza_valores_fuera_de_1_a_4(tmp_path, prioridad):
 
 def test_no_repite_140_ni_la_priorizacion(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        orden_id = definida(cliente)
+        orden_id = _habilitada(cliente)
         ok(_encolar(cliente, orden_id, prioridad=2))
         antes = archivo(tmp_path, orden_id)
 
@@ -294,7 +305,7 @@ def test_no_repite_140_ni_la_priorizacion(tmp_path):
 
 def _con_prioridad_historica(tmp_path, cliente, valor: int) -> str:
     """Una Orden en cola cuyo JSON guarda un valor anterior a la escala."""
-    orden_id = definida(cliente)
+    orden_id = _habilitada(cliente)
     ok(_encolar(cliente, orden_id, prioridad=3))
     ruta = tmp_path / "ordenes" / f"{orden_id}.json"
     datos = json.loads(ruta.read_text("utf-8"))
@@ -323,17 +334,17 @@ def test_las_prioridades_historicas_se_conservan(tmp_path):
 
 def test_el_listado_trae_el_orden_por_prioridad(tmp_path):
     with _cliente(tmp_path, stock_bateria="9") as cliente:
-        normal = definida(cliente)
+        normal = _habilitada(cliente)
         ok(_encolar(cliente, normal))  # 4 Normal
-        urgente = definida(cliente)
+        urgente = _habilitada(cliente)
         ok(_encolar(cliente, urgente, prioridad=1))
-        sin_prioridad = definida(cliente)  # habilitada, todavia sin cola
-        alta = definida(cliente)
+        sin_prioridad = _habilitada(cliente)  # habilitada, todavia sin cola
+        alta = _habilitada(cliente)
         ok(_encolar(cliente, alta, prioridad=2))
         historica = _con_prioridad_historica(tmp_path, cliente, 7)
-        urgente_despues = definida(cliente)
+        urgente_despues = _habilitada(cliente)
         ok(_encolar(cliente, urgente_despues, prioridad=1))
-        entregada = definida(cliente)
+        entregada = _habilitada(cliente)
         tomada(cliente, entregada)  # 3 Media, hasta que se entrega
         ok(cerrar_ejecucion(cliente, entregada, iniciar(cliente, entregada)))
         ok(aprobar(cliente, entregada, "DET-001"))

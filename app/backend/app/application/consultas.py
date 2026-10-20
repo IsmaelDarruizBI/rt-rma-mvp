@@ -24,6 +24,7 @@ from app.repositories import (
     EntidadPersistidaNoEncontradaError,
     PersistenciaError,
 )
+from app.services import nombre_del_trabajo
 
 from .contexto import ApplicationContext
 
@@ -163,6 +164,7 @@ def nombres_de_tipo_por_detalle(
     nombre, en vez de romper la lectura: a diferencia de un insumo
     previsto, aqui no se pierde informacion operativa -el precio, el
     puntaje y la garantia son snapshot del Detalle-, solo la etiqueta.
+    Un Detalle "Otros" se nombra con su descripcion manual.
     """
     if not orden.reparaciones_detail:
         return {}
@@ -172,9 +174,7 @@ def nombres_de_tipo_por_detalle(
         for tipo in contexto.catalogos.listar_tipos_reparacion()
     }
     return {
-        detalle.id: tipos.get(
-            detalle.tipo_reparacion_id, detalle.tipo_reparacion_id
-        )
+        detalle.id: nombre_del_trabajo(detalle, tipos)
         for detalle in orden.reparaciones_detail
     }
 

@@ -7,12 +7,14 @@
  * desde el navegador; en la impresión no salen la navegación ni los
  * botones.
  *
- * Dos comprobantes distintos al ingreso: el de RECEPCIÓN (lo emite el
- * proceso al finalizar la definición; acredita el ingreso y la custodia
- * del equipo, sin trabajos ni precios) y el de AUTORIZACIÓN (lo genera
- * Recepción con un botón; lista lo que el cliente autorizó y su precio, se
- * descarga como PDF y se comparte por WhatsApp). Ninguno es un
- * comprobante de pago.
+ * En el ingreso inicial de Cliente Externo hay UN solo documento: el
+ * comprobante de INGRESO Y AUTORIZACIÓN (lo genera Recepción con un
+ * botón; acredita la recepción del equipo y los trabajos autorizados con
+ * su precio). En los demás caminos siguen los dos de siempre: el de
+ * RECEPCIÓN (lo emite el proceso al finalizar la definición, sin trabajos
+ * ni precios) y el de AUTORIZACIÓN (a pedido, cuando cambia lo
+ * autorizado). Los que llevan trabajos se descargan como PDF y se
+ * comparten por WhatsApp. Ninguno es un comprobante de pago.
  */
 
 import { type ReactNode, useCallback, useEffect, useState } from "react";
@@ -30,11 +32,14 @@ import {
 } from "../../components/ui";
 import type {
   Accion,
+  CanalComunicacion,
   ContenidoAutorizacion,
   ContenidoDocumento,
   ContenidoEntrega,
   ContenidoGarantia,
+  ContenidoIngreso,
   ContenidoRecepcion,
+  DescuentoEnDocumento,
   DocumentoEmitido,
   DocumentosDeOrden,
   Orden,
@@ -43,6 +48,7 @@ import type {
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
 import { CANAL, etiqueta } from "./etiquetas";
+import { CampoCheckin } from "./ListadoOrdenes";
 import { Seccion, habilitada } from "./PagosOrden";
 import {
   type ResultadoCompartir,
@@ -57,6 +63,7 @@ const NOMBRE_TIPO: Record<TipoDocumento, string> = {
   COMPROBANTE_ENTREGA: "Comprobante de entrega",
   GARANTIA: "Garantía",
   COMPROBANTE_AUTORIZACION: "Comprobante de autorización",
+  COMPROBANTE_INGRESO: "Comprobante de ingreso y autorización",
 };
 
 /** Para qué sirve cada uno: los dos del ingreso no son lo mismo. */
@@ -65,7 +72,24 @@ const PARA_QUE: Partial<Record<TipoDocumento, string>> = {
     "Constancia de ingreso y custodia del equipo. No incluye trabajos ni precios.",
   COMPROBANTE_AUTORIZACION:
     "Trabajos que autorizó el cliente y su precio. No es un comprobante de pago.",
+  COMPROBANTE_INGRESO:
+    "Recepción del equipo y trabajos autorizados con su precio. No es un comprobante de pago.",
 };
+
+/** Los que llevan trabajos y precios: se descargan como PDF y se comparten. */
+const CON_PDF = new Set<TipoDocumento>([
+  "COMPROBANTE_AUTORIZACION",
+  "COMPROBANTE_INGRESO",
+]);
+
+/** Canales por los que el cliente puede autorizar al ingresar. */
+const CANALES: CanalComunicacion[] = [
+  "PRESENCIAL",
+  "WHATSAPP",
+  "TELEFONO",
+  "EMAIL",
+  "OTRO",
+];
 
 /** Título del documento: una devolución sin reparación no es una entrega. */
 function tituloDe(contenido: ContenidoDocumento): string {
@@ -77,6 +101,9 @@ function tituloDe(contenido: ContenidoDocumento): string {
   if (contenido.tipo === "GARANTIA") return "Certificado de garantía";
   if (contenido.tipo === "COMPROBANTE_AUTORIZACION") {
     return "Comprobante de autorización";
+  }
+  if (contenido.tipo === "COMPROBANTE_INGRESO") {
+    return "Comprobante de ingreso y autorización";
   }
   return "Comprobante de recepción";
 }
@@ -94,6 +121,14 @@ function ultimoComprobanteAutorizacion(
   return versiones[versiones.length - 1];
 }
 
+/** El último emitido que se descarga como PDF (ingreso o autorización). */
+function ultimoConPdf(
+  emitidos: DocumentoEmitido[],
+): DocumentoEmitido | undefined {
+  const conPdf = emitidos.filter((documento) => CON_PDF.has(documento.tipo));
+  return conPdf[conPdf.length - 1];
+}
+
 /** Lo que se muestra en el visor: un emitido o una vista previa. */
 type Visible =
   | { clase: "emitido"; documento: DocumentoEmitido }
@@ -106,6 +141,8 @@ interface Props {
   ocupado: boolean;
   onEmitirRecepcion: (motivo: string | null) => void;
   onEmitirAutorizacion: () => void;
+  /** Ingreso inicial: confirma, autoriza y genera el comprobante. */
+  onGenerarIngreso: (canal: CanalComunicacion, checkin: boolean | null) => void;
 }
 
 export function DocumentosOrden({
@@ -115,12 +152,14 @@ export function DocumentosOrden({
   ocupado,
   onEmitirRecepcion,
   onEmitirAutorizacion,
+  onGenerarIngreso,
 }: Props) {
   const [documentos, setDocumentos] = useState<DocumentosDeOrden | null>(null);
   const [visible, setVisible] = useState<Visible | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Comprobante de autorización pedido desde esta pantalla: al llegar la
-  // versión nueva se abre para descargarla o compartirla.
+  // Comprobante (ingreso o autorización) pedido desde esta pantalla: al
+  // llegar el nuevo se abre para descargarlo o compartirlo. Generarlo no
+  // es enviarlo: compartir es otro paso, a cargo de Recepción.
   const [pedido, setPedido] = useState<string | null>(null);
 
   // Se recargan cuando la Orden cambia (emisión, entrega, devolución).
@@ -137,7 +176,7 @@ export function DocumentosOrden({
 
   useEffect(() => {
     if (pedido === null || !documentos) return;
-    const ultimo = ultimoComprobanteAutorizacion(documentos.emitidos);
+    const ultimo = ultimoConPdf(documentos.emitidos);
     if (ultimo && ultimo.id !== pedido) {
       setPedido(null);
       setVisible({ clase: "emitido", documento: ultimo });
@@ -163,8 +202,16 @@ export function DocumentosOrden({
   const generar = orden.acciones_autorizacion.find(
     (accion) => accion.codigo === "EMITIR_COMPROBANTE_AUTORIZACION",
   );
+  const ingreso = orden.acciones_disponibles.find(
+    (accion) => accion.codigo === "GENERAR_COMPROBANTE_INGRESO",
+  );
   const emitidos = documentos?.emitidos ?? [];
   const marcas = documentos?.marcas ?? orden.documentos;
+  // El comprobante de ingreso incluye la recepción: la marca del proceso
+  // (PROC-REP-060) no es un documento aparte sin copia.
+  const conIngreso = emitidos.some(
+    (documento) => documento.tipo === "COMPROBANTE_INGRESO",
+  );
   // Marcas del proceso sin copia del documento: Orden anterior.
   const sinCopia = (
     [
@@ -174,7 +221,9 @@ export function DocumentosOrden({
     ] as const
   ).filter(
     ([tipo, marca]) =>
-      marca.generado && !emitidos.some((documento) => documento.tipo === tipo),
+      marca.generado &&
+      !emitidos.some((documento) => documento.tipo === tipo) &&
+      !(tipo === "COMPROBANTE_RECEPCION" && conIngreso),
   );
 
   return (
@@ -227,11 +276,9 @@ export function DocumentosOrden({
                   variante="secundario"
                   onClick={() => setVisible({ clase: "emitido", documento })}
                 >
-                  {documento.contenido.tipo === "COMPROBANTE_AUTORIZACION"
-                    ? "Ver"
-                    : "Ver / imprimir"}
+                  {CON_PDF.has(documento.tipo) ? "Ver" : "Ver / imprimir"}
                 </Boton>
-                {documento.contenido.tipo === "COMPROBANTE_AUTORIZACION" && (
+                {CON_PDF.has(documento.tipo) && (
                   <AccionesPdf documento={documento} />
                 )}
               </span>
@@ -265,6 +312,18 @@ export function DocumentosOrden({
         </div>
       )}
 
+      {ingreso && (
+        <FormularioComprobanteIngreso
+          accion={ingreso}
+          orden={orden}
+          ocupado={ocupado}
+          onGenerar={(canal, checkin) => {
+            setPedido(ultimoConPdf(emitidos)?.id ?? "");
+            onGenerarIngreso(canal, checkin);
+          }}
+        />
+      )}
+
       {generar && (
         <FormularioComprobanteAutorizacion
           accion={generar}
@@ -272,7 +331,7 @@ export function DocumentosOrden({
           emitidos={emitidos}
           ocupado={ocupado}
           onGenerar={() => {
-            setPedido(ultimoComprobanteAutorizacion(emitidos)?.id ?? "");
+            setPedido(ultimoConPdf(emitidos)?.id ?? "");
             onEmitirAutorizacion();
           }}
         />
@@ -323,10 +382,13 @@ function FormularioComprobanteAutorizacion({
       detalle.estado_autorizacion === "AUTORIZADO" &&
       detalle.estado !== "CANCELADO",
   );
-  const total = autorizados.reduce(
+  const subtotal = autorizados.reduce(
     (suma, detalle) => suma + Number(detalle.precio),
     0,
   );
+  // El descuento vigente se calcula sobre todos los trabajos; el
+  // comprobante lo aplica sobre lo autorizado (lo arma el backend).
+  const descuento = orden.resumen.descuento;
   const anterior = ultimoComprobanteAutorizacion(emitidos);
   return (
     <Seccion titulo="Generar el comprobante de autorización" accion={accion}>
@@ -344,10 +406,119 @@ function FormularioComprobanteAutorizacion({
         ))}
       </ul>
       <p style={{ margin: "0 0 0.6rem", fontSize: "0.85rem" }}>
-        Total autorizado: <strong>{importe(String(total))}</strong>
+        {descuento
+          ? `Subtotal autorizado: ${importe(String(subtotal))} · Descuento ${descuento.descripcion} (${descuento.motivo}).`
+          : <>Total autorizado: <strong>{importe(String(subtotal))}</strong></>}
       </p>
       <Boton disabled={ocupado} onClick={onGenerar}>
         Generar comprobante de autorización
+      </Boton>
+    </Seccion>
+  );
+}
+
+/**
+ * Ingreso inicial de Cliente Externo: un solo botón confirma la recepción
+ * del equipo, registra que el cliente autorizó los trabajos cargados y
+ * genera el comprobante. Si falta información obligatoria lo dice antes
+ * (el backend igual lo valida). Generarlo no es enviarlo: después se
+ * descarga o se comparte por WhatsApp, y nada registra que el cliente lo
+ * recibió o lo firmó.
+ */
+function FormularioComprobanteIngreso({
+  accion,
+  orden,
+  ocupado,
+  onGenerar,
+}: {
+  accion: Accion;
+  orden: Orden;
+  ocupado: boolean;
+  onGenerar: (canal: CanalComunicacion, checkin: boolean | null) => void;
+}) {
+  const [canal, setCanal] = useState<CanalComunicacion>("PRESENCIAL");
+  const [eleccionCheckin, setEleccionCheckin] = useState<"" | "si" | "no">("");
+  const trabajos = orden.reparaciones_detail.filter(
+    (detalle) => detalle.estado !== "CANCELADO",
+  );
+  const { resumen } = orden;
+  const checkin = orden.recepcion?.datos.checkin;
+  // Si el ingreso no registra el check-in (por ejemplo, una Orden anterior
+  // con la recepción ya confirmada), se indica acá y viaja con el
+  // comprobante. Con el estado físico y los trabajos, es lo único que
+  // puede faltar.
+  const pideCheckin = checkin === null || checkin === undefined;
+  const conEstado = Boolean(orden.recepcion?.datos.estado_fisico);
+  const habilitado =
+    !ocupado &&
+    (accion.bloqueo === null ||
+      (pideCheckin && eleccionCheckin !== "" && conEstado));
+  return (
+    <Seccion titulo="Generar el comprobante de ingreso y autorización" accion={accion}>
+      <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", color: colores.suave }}>
+        Confirma que el equipo quedó en el local, registra que el cliente
+        autorizó estos trabajos y genera un único comprobante para
+        compartirle. No es un comprobante de pago.
+      </p>
+      <ul style={{ margin: "0 0 0.4rem", paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
+        {trabajos.map((detalle) => (
+          <li key={detalle.id}>
+            {detalle.tipo_reparacion_nombre} · {importe(detalle.precio)}
+          </li>
+        ))}
+      </ul>
+      {resumen.descuento && (
+        <p style={{ margin: "0 0 0.2rem", fontSize: "0.85rem" }}>
+          Subtotal {importe(resumen.subtotal)} · Descuento{" "}
+          {resumen.descuento.descripcion} (−{importe(resumen.descuento_aplicado)}
+          , {resumen.descuento.motivo})
+        </p>
+      )}
+      <p style={{ margin: "0 0 0.4rem", fontSize: "0.85rem" }}>
+        Total autorizado: <strong>{importe(resumen.total)}</strong>
+        {checkin !== null && checkin !== undefined && (
+          <span style={{ color: colores.suave }}>
+            {" "}
+            · Check-in {checkin ? "realizado (90 días)" : "no realizado (30 días)"}
+          </span>
+        )}
+      </p>
+      <Campo etiqueta="El cliente autorizó">
+        <select
+          value={canal}
+          disabled={ocupado}
+          onChange={(evento) => setCanal(evento.target.value as CanalComunicacion)}
+          style={estiloInput}
+        >
+          {CANALES.map((opcion) => (
+            <option key={opcion} value={opcion}>
+              {etiqueta(CANAL, opcion)}
+            </option>
+          ))}
+        </select>
+      </Campo>
+      {pideCheckin && (
+        <CampoCheckin
+          valor={eleccionCheckin}
+          deshabilitado={ocupado}
+          onCambiar={setEleccionCheckin}
+        />
+      )}
+      {accion.bloqueo && !habilitado && (
+        <p role="alert" style={{ margin: "0 0 0.5rem", fontSize: "0.85rem", color: colores.alerta }}>
+          {accion.bloqueo}.
+        </p>
+      )}
+      <Boton
+        disabled={!habilitado}
+        onClick={() =>
+          onGenerar(
+            canal,
+            pideCheckin && eleccionCheckin !== "" ? eleccionCheckin === "si" : null,
+          )
+        }
+      >
+        Generar comprobante de ingreso y autorización
       </Boton>
     </Seccion>
   );
@@ -361,7 +532,9 @@ function AccionesPdf({ documento }: { documento: DocumentoEmitido }) {
   const [trabajando, setTrabajando] = useState(false);
   const [aviso, setAviso] = useState<ReactNode>(null);
   const nombre = `${documento.id}.pdf`;
-  const contenido = documento.contenido as ContenidoAutorizacion;
+  const contenido = documento.contenido as
+    | ContenidoAutorizacion
+    | ContenidoIngreso;
 
   const conPdf = async (usar: (pdf: Blob) => Promise<void> | void) => {
     setTrabajando(true);
@@ -547,8 +720,7 @@ function VisorDocumento({
           marginBottom: "0.75rem",
         }}
       >
-        {visible.clase === "emitido" &&
-        visible.documento.contenido.tipo === "COMPROBANTE_AUTORIZACION" ? (
+        {visible.clase === "emitido" && CON_PDF.has(visible.documento.tipo) ? (
           <AccionesPdf documento={visible.documento} />
         ) : (
           <Boton onClick={() => window.print()}>Imprimir / guardar PDF</Boton>
@@ -656,6 +828,9 @@ function HojaDocumento({ visible }: { visible: Visible }) {
         <CuerpoEntrega contenido={contenido} />
       )}
       {contenido.tipo === "GARANTIA" && <CuerpoGarantia contenido={contenido} />}
+      {contenido.tipo === "COMPROBANTE_INGRESO" && (
+        <CuerpoIngreso contenido={contenido} />
+      )}
       {contenido.tipo === "COMPROBANTE_AUTORIZACION" && (
         <CuerpoAutorizacion
           contenido={contenido}
@@ -845,6 +1020,94 @@ function CuerpoRecepcion({ contenido }: { contenido: ContenidoRecepcion }) {
   );
 }
 
+/** Subtotal y descuento (si hay) y el total, al pie de los trabajos. */
+function Totales({
+  subtotal,
+  descuento,
+  total,
+  etiquetaTotal,
+}: {
+  subtotal: string | null | undefined;
+  descuento: DescuentoEnDocumento | null | undefined;
+  total: string;
+  etiquetaTotal: string;
+}) {
+  return (
+    <>
+      {descuento && (
+        <>
+          <Dato etiqueta="Subtotal" valor={importe(subtotal ?? total)} />
+          <Dato
+            etiqueta={`Descuento (${descuento.descripcion})`}
+            valor={`− ${importe(descuento.importe)} · ${descuento.motivo}`}
+          />
+        </>
+      )}
+      <Dato etiqueta={etiquetaTotal} valor={<strong>{importe(total)}</strong>} />
+    </>
+  );
+}
+
+/**
+ * Ingreso y autorización: cómo se recibió el equipo (nunca notas
+ * internas) y lo autorizado con su precio. Sin firma: no registra que el
+ * cliente lo recibió.
+ */
+function CuerpoIngreso({ contenido }: { contenido: ContenidoIngreso }) {
+  return (
+    <>
+      <Titulo>Recepción del equipo</Titulo>
+      <Dato etiqueta="Falla declarada" valor={contenido.equipo.falla_reportada} />
+      <Dato etiqueta="Estado físico" valor={contenido.estado_fisico ?? "No registrado"} />
+      <Dato
+        etiqueta="Accesorios recibidos"
+        valor={contenido.accesorios.length ? contenido.accesorios.join(", ") : "Ninguno"}
+      />
+      {contenido.checkin !== null && (
+        <Dato
+          etiqueta="Check-in"
+          valor={contenido.checkin ? "Realizado" : "No realizado"}
+        />
+      )}
+      <Dato etiqueta="Observaciones" valor={contenido.observaciones ?? "—"} />
+      {contenido.notas.length > 0 && (
+        <Dato etiqueta="Observaciones posteriores" valor={contenido.notas.join(" · ")} />
+      )}
+      <Dato
+        etiqueta="Recibido"
+        valor={`${fechaHora(contenido.confirmada_en)}${
+          contenido.confirmada_por ? ` · ${contenido.confirmada_por.nombre}` : ""
+        }`}
+      />
+      <Titulo>Trabajos autorizados por el cliente</Titulo>
+      <Tabla
+        columnas={["Trabajo", "Autorización", "Precio"]}
+        filas={contenido.trabajos.map((trabajo) => [
+          trabajo.nombre,
+          `${fechaHora(trabajo.autorizado_en)} · ${etiqueta(CANAL, trabajo.canal)}`,
+          importe(trabajo.precio),
+        ])}
+      />
+      <Totales
+        subtotal={contenido.subtotal}
+        descuento={contenido.descuento}
+        total={contenido.total}
+        etiquetaTotal="Total autorizado"
+      />
+      <p
+        style={{
+          margin: "1rem 0 0",
+          padding: "0.5rem 0.6rem",
+          border: "1px solid #999",
+          fontSize: "9pt",
+        }}
+      >
+        <strong>No es un comprobante de pago.</strong> {contenido.leyenda}
+      </p>
+    </>
+  );
+}
+
 /** Lo autorizado y su total: sin firma, no es un comprobante de pago. */
 function CuerpoAutorizacion({
   contenido,
@@ -867,7 +1130,12 @@ function CuerpoAutorizacion({
           importe(trabajo.precio),
         ])}
       />
-      <Dato etiqueta="Total autorizado" valor={<strong>{importe(contenido.total_autorizado)}</strong>} />
+      <Totales
+        subtotal={contenido.subtotal_autorizado}
+        descuento={contenido.descuento}
+        total={contenido.total_autorizado}
+        etiquetaTotal="Total autorizado"
+      />
       {reemplazaA && (
         <p style={{ margin: "0.6rem 0 0", fontSize: "9pt", color: "#555" }}>
           Esta versión reemplaza a {reemplazaA}, que se conserva sin cambios.
@@ -945,7 +1213,12 @@ function CuerpoEntrega({ contenido }: { contenido: ContenidoEntrega }) {
       <Titulo>Cobro</Titulo>
       {contenido.cobrable ? (
         <>
-          <Dato etiqueta="Total final" valor={importe(contenido.total ?? "0")} />
+          <Totales
+            subtotal={contenido.subtotal}
+            descuento={contenido.descuento}
+            total={contenido.total ?? "0"}
+            etiquetaTotal="Total final"
+          />
           {contenido.pagos.map((pago) => (
             <Dato
               key={pago.id}

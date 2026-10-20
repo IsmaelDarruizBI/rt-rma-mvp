@@ -27,13 +27,21 @@ class DatosRecepcion(BaseModel):
     """Condiciones en que se recibe el equipo.
 
     ``accesorios`` es la lista de lo que se recibe junto con el equipo
-    (vacia: ninguno). ``observaciones`` son las observaciones iniciales
-    del ingreso.
+    (vacia: ninguno). ``observaciones`` son las observaciones DEL EQUIPO
+    (danos, humedad, faltantes): las ve el taller y salen en el
+    comprobante del cliente. ``notas_internas`` es informacion operativa
+    que solo se ve dentro de la aplicacion: nunca sale en un documento.
+
+    ``checkin`` es la verificacion de funciones basicas al ingreso
+    (``True`` realizado, ``False`` no realizado). ``None`` en una Orden
+    anterior o sin el dato: no se presume ninguno de los dos.
     """
 
     estado_fisico: str | None = None
     accesorios: list[str] = Field(default_factory=list)
     observaciones: str | None = None
+    checkin: bool | None = None
+    notas_internas: str | None = None
 
 
 class VersionRecepcion(BaseModel):
@@ -70,11 +78,16 @@ class NoRecepcion(BaseModel):
 
 
 class NotaRecepcion(BaseModel):
-    """Observacion complementaria, posterior al registro del ingreso."""
+    """Observacion complementaria, posterior al registro del ingreso.
+
+    ``interna``: solo para el personal, nunca sale en un documento.
+    Default ``False``: las notas anteriores siguen siendo visibles.
+    """
 
     usuario_id: str
     fecha: datetime
     texto: str
+    interna: bool = False
 
 
 class RecepcionEquipo(BaseModel):

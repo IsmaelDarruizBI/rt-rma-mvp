@@ -17,6 +17,12 @@ Tambien confirman la recepcion fisica del equipo antes de definir:
 sin custodia confirmada no se inicia ninguna Ejecucion, y estos atajos
 preparan Ordenes que van a ejecutarse. Es la confirmacion explicita de
 Recepcion (``POST .../reception/confirm``), no una custodia presumida.
+
+Ingreso inicial de CLIENTE_EXTERNO (iteracion 1 del UAT): confirmar,
+finalizar y autorizar se hacen juntos con el comprobante de ingreso y
+autorizacion (``POST .../documents/intake-receipt``), que deja la Orden en
+la cola. Los trabajos pendientes de la decision del cliente
+(``autorizar=False``) llegan por el camino de la revision tecnica.
 """
 
 from typing import Any
@@ -24,9 +30,14 @@ from typing import Any
 from fastapi.testclient import TestClient
 from httpx import Response
 
-from .custodia import confirmar_recepcion
+from .custodia import (
+    confirmar_recepcion,
+    en_ingreso_inicial,
+    preparar_ingreso,
+)
 
 RECEPCION_ID = "RECEP-001"
+TECNICO_ID = "TECH-001"
 
 
 def finalizar_definicion(
@@ -112,16 +123,54 @@ def definir_y_finalizar(
 ) -> Response:
     """Agrega UN Detalle, finaliza la definicion y (CLIENTE_EXTERNO) autoriza.
 
-    Si agregar el Detalle falla, devuelve esa respuesta sin finalizar.
+    Si agregar el Detalle falla, devuelve esa respuesta sin finalizar. En
+    el ingreso inicial de CLIENTE_EXTERNO finalizar y autorizar es el
+    comprobante de ingreso; sin autorizar, la Orden va por revision.
     """
+    if not autorizar and en_ingreso_inicial(
+        cliente.get(f"/api/orders/{orden_id}").json()
+    ):
+        return _por_revision(cliente, orden_id, json)
     confirmar_recepcion(cliente, orden_id)
     agregado = cliente.post(f"/api/orders/{orden_id}/details", json=json)
     if agregado.status_code != 200:
         return agregado
+    if en_ingreso_inicial(agregado.json()):
+        preparar_ingreso(cliente, orden_id)
+        return cliente.post(
+            f"/api/orders/{orden_id}/documents/intake-receipt",
+            json={"usuario_id": json["usuario_id"]},
+        )
     finalizada = finalizar_definicion(cliente, orden_id, json["usuario_id"])
     if not autorizar:
         return finalizada
     return autorizar_pendientes(cliente, orden_id, finalizada)
+
+
+def _por_revision(
+    cliente: TestClient, orden_id: str, json: dict[str, Any]
+) -> Response:
+    """Envia a revision, confirma, revisa, define ese Detalle y finaliza:
+    queda pendiente de la decision del cliente (PROC-REP-129)."""
+    enviada = cliente.post(
+        f"/api/orders/{orden_id}/send-to-review",
+        json={"usuario_id": json["usuario_id"]},
+    )
+    if enviada.status_code != 200:
+        return enviada
+    confirmar_recepcion(cliente, orden_id)
+    revisada = cliente.post(
+        f"/api/orders/{orden_id}/technical-review",
+        json={"usuario_id": TECNICO_ID, "resultado": "Diagnostico de prueba."},
+    )
+    if revisada.status_code != 200:
+        return revisada
+    agregado = cliente.post(
+        f"/api/orders/{orden_id}/review/details", json=json
+    )
+    if agregado.status_code != 200:
+        return agregado
+    return finalizar_definicion(cliente, orden_id, json["usuario_id"])
 
 
 def definir_desde_revision_y_finalizar(

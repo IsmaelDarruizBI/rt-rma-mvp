@@ -18,7 +18,13 @@ from collections.abc import Collection, Mapping, Sequence
 from datetime import datetime
 from decimal import Decimal
 
+from app.domain.garantia import (
+    GARANTIA_SIN_CHECKIN_DIAS,
+    garantia_sugerida,
+)
 from app.domain.models import (
+    NOMBRE_TIPO_REPARACION_OTROS,
+    TIPO_REPARACION_OTROS,
     CondicionReparacionDetail,
     EstadoControl,
     EstadoEjecucion,
@@ -35,6 +41,7 @@ from app.domain.models import (
     TipoReparacionInsumos,
     Usuario,
 )
+from app.domain.politicas import politica_de
 
 from .autorizacion import validar_actor
 from .autorizacion_cliente import (
@@ -42,6 +49,7 @@ from .autorizacion_cliente import (
     es_trabajable,
     pendiente_de_autorizacion,
 )
+from .custodia import checkin_de
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .inventario import faltantes_del_detalle
 from .recursos import (
@@ -105,6 +113,107 @@ def exigir_definicion_finalizable(
         )
 
 
+def es_ingreso_inicial(orden: OrdenReparacion) -> bool:
+    """La Orden esta en su ingreso inicial de CLIENTE_EXTERNO (MVP v2).
+
+    REQUERIMIENTO con la definicion abierta, en un Origen que exige la
+    confirmacion fisica y la autorizacion del cliente. Ahi Recepcion
+    carga los trabajos y genera el comprobante de ingreso y autorizacion,
+    que confirma, finaliza y autoriza en un solo paso. Una Orden enviada a
+    revision (EN_REVISION) ya no lo esta.
+    """
+    politica = politica_de(orden.origen)
+    return (
+        politica.requiere_autorizacion_cliente
+        and politica.requiere_confirmacion_recepcion
+        and orden.estado_workflow is EstadoWorkflow.REQUERIMIENTO
+        and not definicion_finalizada(orden)
+    )
+
+
+def exigir_fuera_del_ingreso_inicial(
+    orden: OrdenReparacion, accion: str
+) -> None:
+    """Rechaza un paso suelto del circuito explicito en el ingreso inicial.
+
+    En el ingreso inicial de CLIENTE_EXTERNO, confirmar la recepcion,
+    finalizar la definicion y registrar la autorizacion inicial se hacen
+    juntos al generar el comprobante de ingreso y autorizacion, con sus
+    validaciones (estado fisico, check-in, al menos un trabajo). Por
+    separado dejarian la Orden fuera de ese recorrido. Los demas Origenes
+    y los demas caminos (revision, autorizaciones posteriores) no cambian.
+    """
+    if es_ingreso_inicial(orden):
+        raise PrecondicionInvalidaError(
+            f"En el ingreso inicial de Cliente Externo no se puede {accion} "
+            "por separado: se hace al generar el comprobante de ingreso y "
+            "autorizacion."
+        )
+
+
+def faltantes_para_ingreso(orden: OrdenReparacion) -> list[str]:
+    """Lo que Recepcion tiene que completar antes de generar el comprobante
+    de ingreso: trabajos, estado fisico y el check-in."""
+    faltan = []
+    if not any(
+        detalle.estado is not EstadoReparacionDetail.CANCELADO
+        for detalle in orden.reparaciones_detail
+    ):
+        faltan.append("cargar al menos un trabajo")
+    datos = orden.recepcion.datos if orden.recepcion else None
+    if datos is None or not datos.estado_fisico:
+        faltan.append("registrar el estado fisico del equipo")
+    if datos is None or datos.checkin is None:
+        faltan.append("indicar si se hizo el check-in")
+    return faltan
+
+
+def nombre_del_trabajo(
+    detalle: ReparacionDetail, nombres_de_tipo: Mapping[str, str]
+) -> str:
+    """Como se nombra un Detalle: el Tipo, o "Otros: <descripcion>"."""
+    if detalle.es_otros:
+        return f"Otros: {detalle.descripcion or 'sin descripcion'}"
+    return nombres_de_tipo.get(
+        detalle.tipo_reparacion_id, detalle.tipo_reparacion_id
+    )
+
+
+def tipo_reparacion_otros(precio: Decimal) -> TipoReparacion:
+    """El tipo del sistema para una reparacion no tipificada.
+
+    No es una fila del catalogo: lleva el precio manual que carga
+    Recepcion, puntaje 0 y, sin check-in, la garantia reducida. No prevé
+    insumos ni restringe estaciones.
+    """
+    return TipoReparacion(
+        id=TIPO_REPARACION_OTROS,
+        nombre=NOMBRE_TIPO_REPARACION_OTROS,
+        precio=precio,
+        puntaje=0,
+        garantia_dias=GARANTIA_SIN_CHECKIN_DIAS,
+    )
+
+
+def _descripcion_para(
+    tipo_reparacion: TipoReparacion, descripcion: str | None
+) -> str | None:
+    """La descripcion es obligatoria en "Otros" y no existe en los demas."""
+    texto = (descripcion or "").strip() or None
+    if tipo_reparacion.id == TIPO_REPARACION_OTROS:
+        if texto is None:
+            raise PrecondicionInvalidaError(
+                "Una reparacion «Otros» necesita la descripcion de lo que "
+                "se repara."
+            )
+        return texto
+    if texto is not None:
+        raise PrecondicionInvalidaError(
+            "La descripcion manual es solo para una reparacion «Otros»."
+        )
+    return None
+
+
 def definir_reparacion_detail(
     orden: OrdenReparacion,
     *,
@@ -113,6 +222,7 @@ def definir_reparacion_detail(
     usuario: Usuario,
     fecha: datetime,
     observaciones: str | None = None,
+    descripcion: str | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-045 ("Si") -> PROC-REP-070 (FEAT-REP-002 / FEAT-REP-007).
 
@@ -159,6 +269,7 @@ def definir_reparacion_detail(
         raise PrecondicionInvalidaError(
             f"La Orden ya tiene un Detalle con id {detalle_id}."
         )
+    descripcion = _descripcion_para(tipo_reparacion, descripcion)
 
     nueva_orden = orden
     if not orden.reparaciones_detail:
@@ -185,6 +296,8 @@ def definir_reparacion_detail(
             tipo_reparacion=tipo_reparacion,
             observaciones=observaciones,
             detalle_origen_id=None,
+            checkin=checkin_de(orden),
+            descripcion=descripcion,
         )
     )
     return nueva_orden
@@ -196,23 +309,51 @@ def _detalle_con_snapshot(
     tipo_reparacion: TipoReparacion,
     observaciones: str | None,
     detalle_origen_id: str | None,
+    checkin: bool | None = None,
+    descripcion: str | None = None,
 ) -> ReparacionDetail:
     """Detalle DEFINIDO con el snapshot del Tipo (BR-REP-015).
 
     Compartido por PROC-REP-070 y PROC-REP-075: mismo snapshot, nodos
-    funcionales distintos.
+    funcionales distintos. La garantia es la sugerida por el check-in del
+    ingreso (o la del Tipo si no hay check-in): sugerida y definitiva
+    nacen iguales.
     """
+    dias = garantia_sugerida(checkin, tipo_reparacion.garantia_dias)
     return ReparacionDetail(
         id=detalle_id,
         tipo_reparacion_id=tipo_reparacion.id,
+        descripcion=descripcion,
         precio=tipo_reparacion.precio,
         puntaje=tipo_reparacion.puntaje,
-        garantia_dias=tipo_reparacion.garantia_dias,
+        garantia_dias=dias,
+        garantia_dias_sugerida=dias,
         estado=EstadoReparacionDetail.DEFINIDO,
         control_estado=EstadoControl.PENDIENTE,
         observaciones=observaciones,
         detalle_origen_id=detalle_origen_id,
     )
+
+
+def reaplicar_garantia_sugerida(orden: OrdenReparacion) -> OrdenReparacion:
+    """Tras corregir el check-in: actualiza la garantia sugerida.
+
+    En los Detalles no cancelados. El plazo definitivo la sigue, salvo
+    que tenga un ajuste manual (ese plazo lo decidio una persona). Sin
+    check-in registrado no cambia nada.
+    """
+    checkin = checkin_de(orden)
+    if checkin is None:
+        return orden
+    nueva_orden = orden.model_copy(deep=True)
+    for detalle in nueva_orden.reparaciones_detail:
+        if detalle.estado is EstadoReparacionDetail.CANCELADO:
+            continue
+        dias = garantia_sugerida(checkin, detalle.garantia_dias)
+        detalle.garantia_dias_sugerida = dias
+        if not detalle.ajustes_garantia:
+            detalle.garantia_dias = dias
+    return nueva_orden
 
 
 def definir_reparacion_detail_luego_revision(
@@ -224,6 +365,7 @@ def definir_reparacion_detail_luego_revision(
     fecha: datetime,
     observaciones: str | None = None,
     detalle_origen_id: str | None = None,
+    descripcion: str | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-068 ("Si") -> PROC-REP-075 (VAR-REP-001/002).
 
@@ -270,6 +412,7 @@ def definir_reparacion_detail_luego_revision(
         )
 
     origen_del_detalle = _detalle_origen_para(orden, detalle_origen_id)
+    descripcion = _descripcion_para(tipo_reparacion, descripcion)
 
     nueva_orden = orden
     if not orden.reparaciones_detail:
@@ -296,6 +439,8 @@ def definir_reparacion_detail_luego_revision(
             tipo_reparacion=tipo_reparacion,
             observaciones=observaciones,
             detalle_origen_id=origen_del_detalle,
+            checkin=checkin_de(orden),
+            descripcion=descripcion,
         )
     )
     return nueva_orden

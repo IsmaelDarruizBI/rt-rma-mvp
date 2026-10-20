@@ -23,6 +23,7 @@ from tests.fixtures.api_definicion import (
     finalizar_definicion,
     registrar_decision,
 )
+from tests.fixtures.custodia import preparar_ingreso
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     COORDINADOR,
@@ -56,7 +57,15 @@ def _agregar(cliente, orden_id, ruta="details", usuario=RECEPCION):
     )
 
 
-def test_agregar_no_finaliza_y_finalizar_cierra_la_definicion(cliente):
+def _generar_ingreso(cliente, orden_id):
+    preparar_ingreso(cliente, orden_id)
+    return cliente.post(
+        f"/api/orders/{orden_id}/documents/intake-receipt",
+        json={"usuario_id": RECEPCION},
+    )
+
+
+def test_agregar_no_finaliza_y_el_comprobante_cierra_la_definicion(cliente):
     orden_id = _crear_orden_cliente(cliente)
     assert _codigos(cliente.get(f"/api/orders/{orden_id}").json()) == [
         "AGREGAR_DETALLE",
@@ -73,35 +82,52 @@ def test_agregar_no_finaliza_y_finalizar_cierra_la_definicion(cliente):
             orden["documentos"]["comprobante_recepcion"]["generado"] is False
         )
         assert not {"PROC-REP-050", "PROC-REP-080"} & set(_ids(orden))
+        # Ingreso inicial de Cliente Externo: la carga se cierra con el
+        # comprobante de ingreso y autorizacion (MVP v2).
         assert _codigos(orden)[:2] == [
             "AGREGAR_DETALLE",
-            "FINALIZAR_DEFINICION",
+            "GENERAR_COMPROBANTE_INGRESO",
         ]
         assert "ENVIAR_A_REVISION" not in _codigos(orden)
     assert _ids(orden).count("PROC-REP-045") == 1  # "Si", una sola vez
     assert _ids(orden).count("PROC-REP-070") == 2
 
+    # Finalizar por separado no elude el comprobante de ingreso.
+    antes = cliente.get(f"/api/orders/{orden_id}").json()
     respuesta = finalizar_definicion(cliente, orden_id, RECEPCION)
+    assert respuesta.status_code == 409, respuesta.text
+    assert "comprobante de ingreso" in respuesta.json()["error"]["mensaje"]
+    assert cliente.get(f"/api/orders/{orden_id}").json() == antes
+
+    # El comprobante cierra la definicion (050/060), registra la decision
+    # del cliente (046/047), la factibilidad y la habilitacion, y la Orden
+    # entra a la cola.
+    respuesta = _generar_ingreso(cliente, orden_id)
     assert respuesta.status_code == 200, respuesta.text
     orden = respuesta.json()
-    # CLIENTE_EXTERNO (BR-REP-028): los Detalles esperan al cliente; no
-    # hay factibilidad ni habilitacion todavia.
-    assert _ids(orden)[-4:] == [
+    pasos = _ids(orden)
+    assert pasos[pasos.index("PROC-REP-050") :] == [
         "PROC-REP-050",
         "PROC-REP-060",
         "PROC-REP-211",
         "PROC-REP-129",
+        "PROC-REP-046",
+        "PROC-REP-046",
+        "PROC-REP-047",
+        "PROC-REP-080",
+        "PROC-REP-090",
+        "PROC-REP-140",
+        "ACC-REP-060",
+        "PROC-REP-150",
+        "PROC-REP-170",
     ]
-    assert orden["estado_workflow"] == "REQUERIMIENTO"
+    assert orden["estado_workflow"] == "EN_COLA"
     assert orden["documentos"]["comprobante_recepcion"]["generado"] is True
     assert "AGREGAR_DETALLE" not in _codigos(orden)
     assert "FINALIZAR_DEFINICION" not in _codigos(orden)
-    assert [a["codigo"] for a in orden["acciones_autorizacion"]] == [
-        "REGISTRAR_DECISION_CLIENTE"
-    ]
     assert [
         d["estado_autorizacion"] for d in orden["reparaciones_detail"]
-    ] == ["PENDIENTE", "PENDIENTE"]
+    ] == ["AUTORIZADO", "AUTORIZADO"]
 
     # Cerrada la definicion, no se agrega ni se vuelve a finalizar.
     antes = cliente.get(f"/api/orders/{orden_id}").json()
@@ -110,20 +136,6 @@ def test_agregar_no_finaliza_y_finalizar_cierra_la_definicion(cliente):
         finalizar_definicion(cliente, orden_id, RECEPCION).status_code == 409
     )
     assert cliente.get(f"/api/orders/{orden_id}").json() == antes
-
-    # El cliente acepta los trabajos: factibilidad -> habilitacion.
-    orden = registrar_decision(
-        cliente, orden_id, {"DET-001": "AUTORIZADO", "DET-002": "AUTORIZADO"}
-    ).json()
-    assert _ids(orden)[-6:] == [
-        "PROC-REP-046",
-        "PROC-REP-046",
-        "PROC-REP-047",
-        "PROC-REP-080",
-        "PROC-REP-090",
-        "PROC-REP-140",
-    ]
-    assert orden["estado_workflow"] == "HABILITADA"
 
 
 def test_finalizar_sin_detalles_es_un_conflicto_sin_efectos(cliente):
@@ -164,11 +176,8 @@ def test_sin_stock_autorizar_deja_la_orden_en_100_sin_error(tmp_path):
     with TestClient(create_app(Settings(data_dir=tmp_path))) as cliente:
         orden_id = _crear_orden_cliente(cliente)
         _agregar(cliente, orden_id)
-        finalizar_definicion(cliente, orden_id, RECEPCION)
 
-        respuesta = registrar_decision(
-            cliente, orden_id, {"DET-001": "AUTORIZADO"}
-        )
+        respuesta = _generar_ingreso(cliente, orden_id)
 
         assert respuesta.status_code == 200, respuesta.text
         orden = respuesta.json()

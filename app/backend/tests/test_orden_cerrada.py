@@ -293,10 +293,12 @@ def test_una_orden_sin_reparacion_entregada_queda_cerrada(cliente, tmp_path):
             {"usuario_id": ADMINISTRADOR, **RECEPTOR},
         ),
     ]
-    confirmar_recepcion(cliente, orden_id)
-    for ruta, cuerpo in pasos:
+    for numero, (ruta, cuerpo) in enumerate(pasos):
         respuesta = cliente.post(ruta, json=cuerpo)
         assert respuesta.status_code == 200, (ruta, respuesta.text)
+        if numero == 0:
+            # Enviada a revision, la recepcion se confirma aparte.
+            confirmar_recepcion(cliente, orden_id)
     entregada = respuesta.json()
     assert entregada["estado_workflow"] == "ENTREGADA"
 

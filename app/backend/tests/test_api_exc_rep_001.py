@@ -21,6 +21,7 @@ from tests.fixtures.api_definicion import (
     definir_desde_revision_y_finalizar,
     definir_y_finalizar,
 )
+from tests.fixtures.api_salidas import encolar
 from tests.test_api_hp_rep_002 import (
     INSUMO,
     RECEPCION,
@@ -92,15 +93,16 @@ def test_cliente_externo_sin_stock_espera_y_se_habilita_al_revalidar(tmp_path):
         orden_id = _crear_orden_cliente(cliente)
 
         # Autorizado por el cliente (047), 090 Ninguno trabajable -> 100:
-        # 200, no 409.
+        # 200, no 409. El comprobante de ingreso se emite igual (060).
         respuesta = _definir(cliente, orden_id)
         assert respuesta.status_code == 200, respuesta.text
         orden = respuesta.json()
-        assert _ids(orden)[-4:] == [
+        assert _ids(orden)[-5:] == [
             "PROC-REP-047",
             "PROC-REP-080",
             "PROC-REP-090",
             "PROC-REP-100",
+            "ACC-REP-060",
         ]
         assert orden["current_process"] == "PROC-REP-100"
         assert orden["estado_workflow"] == "REQUERIMIENTO"
@@ -108,7 +110,7 @@ def test_cliente_externo_sin_stock_espera_y_se_habilita_al_revalidar(tmp_path):
         assert orden["reparaciones_detail"][0]["condicion"] == (
             "BLOQUEADO_POR_RECURSOS"
         )
-        paso_100 = orden["historial"][-1]
+        paso_100 = orden["historial"][-2]
         assert paso_100["reparacion_detail_id"] == "DET-001"
         assert paso_100["observacion"] == f"Faltantes: {INSUMO}"
         assert _codigos(orden) == [
@@ -141,19 +143,23 @@ def test_cliente_externo_sin_stock_espera_y_se_habilita_al_revalidar(tmp_path):
         orden = _esperar(cliente, orden_id).json()
         assert orden["current_process"] == "PROC-REP-120"
 
-        # Llega stock: revalidar -> 090 Si -> 140.
+        # Llega stock: revalidar -> 090 Si -> 140 y, con el comprobante de
+        # ingreso, entra sola a la cola con prioridad 4 (150 -> 170).
         _fijar_stock(tmp_path, **{INSUMO: 2})
         respuesta = _revalidar(cliente, orden_id)
         assert respuesta.status_code == 200, respuesta.text
         orden = respuesta.json()
-        assert _ids(orden)[-3:] == [
+        assert _ids(orden)[-5:] == [
             "PROC-REP-080",
             "PROC-REP-090",
             "PROC-REP-140",
+            "PROC-REP-150",
+            "PROC-REP-170",
         ]
-        assert orden["estado_workflow"] == "HABILITADA"
+        assert orden["estado_workflow"] == "EN_COLA"
+        assert orden["prioridad"] == 4
         assert orden["reparaciones_detail"][0]["condicion"] == "SIN_BLOQUEO"
-        assert "ENCOLAR" in _codigos(orden)
+        assert "ENCOLAR" not in _codigos(orden)
         ids = _ids(orden)
         assert ids.count("PROC-REP-060") == 1  # sin comprobante nuevo
         assert ids.count("PROC-REP-070") == 1
@@ -213,8 +219,8 @@ def test_una_reserva_ajena_bloquea_y_su_liberacion_desbloquea(tmp_path):
 
         _esperar(cliente, orden_b)
         orden = _revalidar(cliente, orden_b).json()
-        assert orden["current_process"] == "PROC-REP-140"
-        assert orden["estado_workflow"] == "HABILITADA"
+        assert orden["current_process"] == "PROC-REP-170"
+        assert orden["estado_workflow"] == "EN_COLA"
         assert orden["reparaciones_detail"][0]["condicion"] == "SIN_BLOQUEO"
 
 
@@ -353,17 +359,14 @@ def test_multidetalle_parcial_habilita_y_solo_el_trabajable_se_inicia(
         respuesta = _definir_dos(cliente, orden_id)
         assert respuesta.status_code == 200, respuesta.text
         orden = respuesta.json()
-        assert orden["estado_workflow"] == "HABILITADA"
-        assert orden["current_process"] == "PROC-REP-140"
+        assert orden["estado_workflow"] == "EN_COLA"
+        assert orden["current_process"] == "PROC-REP-170"
         det1, det2 = orden["reparaciones_detail"]
         assert det1["condicion"] == "BLOQUEADO_POR_RECURSOS"
         assert det2["condicion"] == "SIN_BLOQUEO"
         assert "PROC-REP-100" not in _ids(orden)  # hay uno trabajable
 
-        cliente.post(
-            f"/api/orders/{orden_id}/queue",
-            json={"usuario_id": multi.COORDINADOR, "prioridad": 1},
-        )
+        encolar(cliente, orden_id, 1, multi.COORDINADOR)
         orden = cliente.post(
             f"/api/orders/{orden_id}/take",
             json={"usuario_id": multi.TECNICO, "estacion_id": multi.ESTACION},
@@ -427,7 +430,7 @@ def test_un_detalle_se_desbloquea_y_otro_sigue_bloqueado_al_revalidar(
         _fijar_stock(tmp_path, **{"INS-002": 1})
         orden = _revalidar(cliente, orden_id).json()
 
-        assert orden["estado_workflow"] == "HABILITADA"
+        assert orden["estado_workflow"] == "EN_COLA"
         assert [d["condicion"] for d in orden["reparaciones_detail"]] == [
             "BLOQUEADO_POR_RECURSOS",
             "SIN_BLOQUEO",
@@ -435,12 +438,12 @@ def test_un_detalle_se_desbloquea_y_otro_sigue_bloqueado_al_revalidar(
 
 
 def test_el_happy_path_con_stock_no_cambia(tmp_path):
-    """Con recursos, 090 Si -> 140 directo: sin 100/110/120."""
+    """Con recursos, 090 Si -> 140 directo (y a la cola): sin 100/110/120."""
     with _cliente(tmp_path, stock="5") as cliente:
         orden_id = _crear_orden_cliente(cliente)
         orden = _definir(cliente, orden_id).json()
 
-        assert orden["estado_workflow"] == "HABILITADA"
+        assert orden["estado_workflow"] == "EN_COLA"
         assert not {"PROC-REP-100", "PROC-REP-110", "PROC-REP-120"} & set(
             _ids(orden)
         )
@@ -453,11 +456,8 @@ def _hasta_211_pendiente_recursos(cliente, directorio):
     """Parcial (A bloqueado, B trabajable) -> completar B -> 211 -> 120."""
     orden_id = multi._crear_orden(cliente)
     orden = _definir_dos(cliente, orden_id).json()
-    assert orden["estado_workflow"] == "HABILITADA"
-    cliente.post(
-        f"/api/orders/{orden_id}/queue",
-        json={"usuario_id": multi.COORDINADOR, "prioridad": 1},
-    )
+    assert orden["estado_workflow"] == "EN_COLA"
+    encolar(cliente, orden_id, 1, multi.COORDINADOR)
     cliente.post(
         f"/api/orders/{orden_id}/take",
         json={"usuario_id": multi.TECNICO, "estacion_id": multi.ESTACION},

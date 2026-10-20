@@ -30,7 +30,7 @@ from app.domain.models import (
     Usuario,
 )
 
-from .autorizacion import validar_actor
+from .autorizacion import validar_actor, validar_alguno_de
 from .autorizacion_cliente import exigir_autorizacion_vigente
 from .custodia import exigir_custodia_para_ejecutar
 from .exceptions import (
@@ -46,8 +46,10 @@ from .inventario import (
 )
 from .recursos import tiene_override_factibilidad
 from .tomas import (
+    ROLES_LIBERACION_AJENA,
     buscar_detalle,
     hay_ejecucion_activa,
+    toma_activa,
     validar_titular_de_la_toma,
 )
 from .workflow import registrar_paso
@@ -518,6 +520,54 @@ def registrar_ejecucion_requiere_redefinicion(
     )
 
 
+def registrar_interrupcion_por_liberacion(
+    orden: OrdenReparacion,
+    *,
+    ejecucion_id: str,
+    insumos_utilizados: Sequence[InsumoUtilizado],
+    usuario: Usuario,
+    fecha: datetime,
+    motivo: str,
+) -> OrdenReparacion:
+    """PROC-REP-200 "Interrumpido" de una Ejecucion AJENA, para liberarla.
+
+    Cuando otro tecnico (o Coordinacion) libera una Orden con una
+    reparacion en curso (MVP v2): la misma interrupcion que haria el
+    titular -lo usado se declara y se consume, lo reservado se libera,
+    el Detalle vuelve a DEFINIDO-, pero hecha por quien libera y con su
+    motivo. Solo para una toma de otro: el titular interrumpe la suya
+    con ``registrar_ejecucion_interrumpida``.
+    """
+    validar_alguno_de(usuario, ROLES_LIBERACION_AJENA)
+    motivo = (motivo or "").strip()
+    if not motivo:
+        raise PrecondicionInvalidaError(
+            "Liberar una Orden ajena con una reparacion en curso exige un "
+            "motivo."
+        )
+    toma = toma_activa(orden)
+    if toma is None or toma.usuario_id == usuario.id:
+        raise PrecondicionInvalidaError(
+            "La interrupcion por liberacion es solo para una Orden tomada "
+            "por otro tecnico."
+        )
+    return _registrar_fin_ejecucion(
+        orden,
+        ejecucion_id=ejecucion_id,
+        insumos_utilizados=insumos_utilizados,
+        usuario=usuario,
+        fecha=fecha,
+        observaciones=None,
+        resultado=EstadoEjecucion.INTERRUMPIDO,
+        estado_del_detalle=EstadoReparacionDetail.DEFINIDO,
+        observacion_200="Interrumpido",
+        motivo_interrupcion=(
+            f"Liberada por {usuario.id} (titular {toma.usuario_id}): {motivo}"
+        ),
+        validar_titular=False,
+    )
+
+
 def _registrar_fin_ejecucion(
     orden: OrdenReparacion,
     *,
@@ -532,13 +582,17 @@ def _registrar_fin_ejecucion(
     condicion_del_detalle: CondicionReparacionDetail | None = None,
     motivo_interrupcion: str | None = None,
     motivo_redefinicion: str | None = None,
+    validar_titular: bool = True,
 ) -> OrdenReparacion:
     """Cierre de una Ejecucion en PROC-REP-200, comun a sus tres resultados.
 
     ``condicion_del_detalle`` en ``None`` deja la condicion como estaba
     (Completado e Interrumpido); "Requiere redefinicion" la fija.
+    ``validar_titular`` en ``False`` solo para la interrupcion por
+    liberacion ajena: quien la hace ya se valido alli.
     """
-    validar_actor(usuario, RolUsuario.TECNICO)
+    if validar_titular:
+        validar_actor(usuario, RolUsuario.TECNICO)
 
     ejecucion = next(
         (e for e in orden.ejecuciones if e.id == ejecucion_id),
@@ -553,7 +607,8 @@ def _registrar_fin_ejecucion(
             f"La Ejecucion {ejecucion_id} ya esta {ejecucion.estado.value}."
         )
 
-    _validar_propiedad_de_la_ejecucion(orden, ejecucion, usuario)
+    if validar_titular:
+        _validar_propiedad_de_la_ejecucion(orden, ejecucion, usuario)
 
     detalle_id = ejecucion.reparacion_detail_id
 

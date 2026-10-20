@@ -23,8 +23,8 @@ from tests.fixtures.api_definicion import (
     definir_desde_revision_y_finalizar,
     definir_y_finalizar,
     finalizar_definicion,
-    registrar_decision,
 )
+from tests.fixtures.api_salidas import generar_ingreso
 from tests.fixtures.custodia import confirmar_recepcion, entregar
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
@@ -622,16 +622,8 @@ def _entregada_con_dos_detalles(cliente: TestClient) -> dict:
             f"/api/orders/{orden_id}/details",
             json={"usuario_id": multi.RECEPCION, "tipo_reparacion_id": tipo},
         )
-    finalizar_definicion(cliente, orden_id, multi.RECEPCION)
-    registrar_decision(
-        cliente,
-        orden_id,
-        {"DET-001": "AUTORIZADO", "DET-002": "AUTORIZADO"},
-    )
-    cliente.post(
-        f"/api/orders/{orden_id}/queue",
-        json={"usuario_id": multi.COORDINADOR, "prioridad": 1},
-    )
+    # Comprobante de ingreso: confirma, autoriza los dos y encola.
+    generar_ingreso(cliente, orden_id)
     cliente.post(
         f"/api/orders/{orden_id}/take",
         json={"usuario_id": multi.TECNICO, "estacion_id": multi.ESTACION},

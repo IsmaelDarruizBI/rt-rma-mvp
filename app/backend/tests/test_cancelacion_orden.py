@@ -24,7 +24,6 @@ from tests.fixtures.api_salidas import (
     TECNICO,
     aprobar,
     archivo,
-    autorizar_todo,
     cancelar_detalle,
     cancelar_orden,
     cliente_http,
@@ -36,6 +35,8 @@ from tests.fixtures.api_salidas import (
     detalle,
     devolver,
     ejecutar,
+    encolar,
+    finalizar,
     ids,
     iniciar,
     notificar_pagar_entregar,
@@ -341,20 +342,10 @@ def test_circuito_ingreso_definicion_cancelacion_devolucion_cierre(
                 json={"usuario_id": RECEPCION, "tipo_reparacion_id": tipo},
             )
         )
-    ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/definition/finalize",
-            json={"usuario_id": RECEPCION},
-        )
-    )
-    habilitada = autorizar_todo(cliente, orden_id)
-    assert habilitada["estado_workflow"] == "HABILITADA"
-    ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/queue",
-            json={"usuario_id": COORDINADOR, "prioridad": 2},
-        )
-    )
+    # Comprobante de ingreso: confirma, autoriza y entra a la cola.
+    en_cola = finalizar(cliente, orden_id)
+    assert en_cola["estado_workflow"] == "EN_COLA"
+    ok(encolar(cliente, orden_id, 2))
 
     cancelada = ok(cancelar_orden(cliente, orden_id, "El cliente desiste."))
     assert cancelada["estado_workflow"] == "CANCELADA"
@@ -367,7 +358,10 @@ def test_circuito_ingreso_definicion_cancelacion_devolucion_cierre(
 
     persistida = repo_ordenes(tmp_path).obtener(orden_id)
     assert persistida.current_process == "EVT-REP-999"
-    assert [p.process_id for p in persistida.historial][-4:] == [
+    # Solo los nodos del proceso (el cambio de prioridad es transversal).
+    assert [p.process_id for p in persistida.historial if p.process_id][
+        -4:
+    ] == [
         "PROC-REP-170",
         "PROC-REP-305",
         "PROC-REP-211",

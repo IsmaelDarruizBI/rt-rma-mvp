@@ -26,14 +26,18 @@ encadenan sin volver a preguntar.
 
 from collections.abc import Sequence
 from datetime import datetime
+from decimal import Decimal
 
 from app.domain.models import (
+    TIPO_REPARACION_OTROS,
     Cliente,
     DatosRecepcion,
     Equipo,
     OrdenReparacion,
+    TipoReparacion,
 )
 from app.services import (
+    PrecondicionInvalidaError,
     ResultadoEvaluacionOrden,
     cargar_reservas_externas,
     crear_orden_cliente_externo,
@@ -44,15 +48,18 @@ from app.services import (
     detalles_pendientes_de_autorizacion,
     evaluar_situacion_orden,
     exigir_definicion_finalizable,
+    exigir_fuera_del_ingreso_inicial,
     generar_comprobante_recepcion,
     habilitar_o_reevaluar,
     hay_detalles_para_factibilidad,
     marcar_orden_en_revision,
     marcar_pendiente_autorizacion,
     registrar_finalizacion_sin_reparacion,
+    tipo_reparacion_otros,
     validar_factibilidad_detalles,
 )
 
+from .cola import encolar_si_ingreso_automatico
 from .concurrencia import seccion_critica_inventario
 from .contexto import ApplicationContext
 from .documentos import emitir_comprobante_recepcion_inicial
@@ -129,6 +136,30 @@ def crear_orden_rt(
     return orden
 
 
+def tipo_para_detalle(
+    contexto: ApplicationContext,
+    tipo_reparacion_id: str,
+    precio: Decimal | None,
+) -> TipoReparacion:
+    """El Tipo del catalogo, o el de "Otros" con su precio manual.
+
+    El precio manual es obligatorio en "Otros" y no se admite en un Tipo
+    de catalogo: su precio es el del catalogo (BR-REP-015).
+    """
+    if tipo_reparacion_id == TIPO_REPARACION_OTROS:
+        if precio is None:
+            raise PrecondicionInvalidaError(
+                "Una reparacion «Otros» necesita su precio."
+            )
+        return tipo_reparacion_otros(precio)
+    if precio is not None:
+        raise PrecondicionInvalidaError(
+            "El precio manual es solo para una reparacion «Otros»: los "
+            "demas toman el precio del catalogo."
+        )
+    return contexto.catalogos.obtener_tipo_reparacion(tipo_reparacion_id)
+
+
 def definir_reparacion(
     contexto: ApplicationContext,
     *,
@@ -136,6 +167,8 @@ def definir_reparacion(
     usuario_id: str,
     tipo_reparacion_id: str,
     observaciones: str | None = None,
+    descripcion: str | None = None,
+    precio: Decimal | None = None,
 ) -> OrdenReparacion:
     """Recepcion AGREGA un Detalle de la reparacion (Multi-Detalle).
 
@@ -146,7 +179,7 @@ def definir_reparacion(
     Recepcion finalice la definicion (``finalizar_definicion``).
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    tipo = contexto.catalogos.obtener_tipo_reparacion(tipo_reparacion_id)
+    tipo = tipo_para_detalle(contexto, tipo_reparacion_id, precio)
     fecha = contexto.ahora()
 
     with orden_para_modificar(contexto, orden_id) as orden:
@@ -157,6 +190,7 @@ def definir_reparacion(
             usuario=usuario,
             fecha=fecha,
             observaciones=observaciones,
+            descripcion=descripcion,
         )
         contexto.ordenes.guardar(orden)
     return orden
@@ -186,12 +220,15 @@ def finalizar_definicion(
     En CLIENTE_EXTERNO los Detalles recien definidos esperan la decision
     del cliente (BR-REP-028): no hay factibilidad todavia y la Orden queda
     en PROC-REP-129 hasta que Recepcion la registre
-    (``application.autorizacion_cliente``).
+    (``application.autorizacion_cliente``). Eso vale para el camino de
+    revision: el ingreso inicial se cierra con el comprobante de ingreso
+    y autorizacion (``application.ingreso_inicial``), nunca aca.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
     with orden_para_modificar(contexto, orden_id) as orden:
+        exigir_fuera_del_ingreso_inicial(orden, "finalizar la definicion")
         exigir_definicion_finalizable(orden, usuario=usuario)
 
         if not any(
@@ -254,7 +291,8 @@ def _validar_y_habilitar(
     if not factible:
         return orden
 
-    return habilitar_o_reevaluar(orden, fecha=fecha)
+    orden = habilitar_o_reevaluar(orden, fecha=fecha)
+    return encolar_si_ingreso_automatico(orden, fecha=fecha)
 
 
 def enviar_a_revision(
@@ -337,6 +375,8 @@ def definir_reparacion_desde_revision(
     tipo_reparacion_id: str,
     observaciones: str | None = None,
     detalle_origen_id: str | None = None,
+    descripcion: str | None = None,
+    precio: Decimal | None = None,
 ) -> OrdenReparacion:
     """Recepcion AGREGA un Detalle luego de la revision (075).
 
@@ -350,7 +390,7 @@ def definir_reparacion_desde_revision(
     si hay mas de uno).
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    tipo = contexto.catalogos.obtener_tipo_reparacion(tipo_reparacion_id)
+    tipo = tipo_para_detalle(contexto, tipo_reparacion_id, precio)
     fecha = contexto.ahora()
 
     with orden_para_modificar(contexto, orden_id) as orden:
@@ -362,6 +402,7 @@ def definir_reparacion_desde_revision(
             fecha=fecha,
             observaciones=observaciones,
             detalle_origen_id=detalle_origen_id,
+            descripcion=descripcion,
         )
         contexto.ordenes.guardar(orden)
     return orden

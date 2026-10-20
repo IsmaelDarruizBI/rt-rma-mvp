@@ -40,7 +40,9 @@ from app.services import (
     detalles_bloqueados_por_recursos,
     detalles_pendientes_de_autorizacion,
     ejecucion_activa,
+    es_ingreso_inicial,
     estado_custodia,
+    faltantes_para_ingreso,
     finalizada_sin_reparacion,
     lista_para_cierre,
     pendiente_de_retrabajo,
@@ -775,6 +777,7 @@ def _definicion(datos: _Datos) -> _Principal | None:
     definir = datos.flujo(
         "AGREGAR_DETALLE",
         "FINALIZAR_DEFINICION",
+        "GENERAR_COMPROBANTE_INGRESO",
         "ENVIAR_A_REVISION",
         "AGREGAR_DETALLE_DESDE_REVISION",
         "FINALIZAR_SIN_REPARACION",
@@ -783,6 +786,8 @@ def _definicion(datos: _Datos) -> _Principal | None:
         return None
     orden = datos.orden
     con_trabajos = bool(orden.reparaciones_detail)
+    if es_ingreso_inicial(orden):
+        return _ingreso_inicial(datos, definir, con_trabajos)
     tarea = (
         _tarea(
             "Finalizar la definición",
@@ -825,6 +830,57 @@ def _definicion(datos: _Datos) -> _Principal | None:
         titulo="Pendiente de definición",
         descripcion="Falta definir qué trabajos se van a hacer.",
         desde=_ultimo_paso(orden, "PROC-REP-065") or orden.created_at,
+        tareas=(tarea,),
+    )
+
+
+def _ingreso_inicial(
+    datos: _Datos, definir: Sequence[AccionDisponible], con_trabajos: bool
+) -> _Principal:
+    """Ingreso de CLIENTE_EXTERNO: crear, cargar los trabajos y generar el
+    comprobante de ingreso y autorizacion (MVP v2). La confirmacion fisica
+    y la autorizacion inicial son parte de ese comprobante."""
+    orden = datos.orden
+    faltan = faltantes_para_ingreso(orden)
+    if con_trabajos:
+        tarea = _tarea(
+            "Generar el comprobante de ingreso y autorización",
+            (
+                "Antes falta " + _unir(faltan, "y") + "."
+                if faltan
+                else "Confirma que el equipo quedó en el local, registra que "
+                "el cliente autorizó los trabajos cargados y genera el "
+                "comprobante para compartirle."
+            ),
+            definir,
+        )
+    else:
+        tarea = _tarea(
+            "Cargar los trabajos",
+            "Cargar los trabajos que el cliente autoriza (con su precio) o "
+            "enviar el equipo a revisión técnica.",
+            definir,
+        )
+    # El comprobante confirma la recepcion; si ya estaba confirmada (por
+    # el circuito explicito) solo falta la definicion.
+    recibido = estado_custodia(orden) is EstadoCustodia.EN_CUSTODIA
+    return _Principal(
+        codigo=(
+            CodigoSituacion.PENDIENTE_DEFINICION
+            if recibido
+            else CodigoSituacion.PENDIENTE_RECEPCION
+        ),
+        titulo=(
+            "Pendiente de definición" if recibido else "Pendiente de recepción"
+        ),
+        descripcion=(
+            "Orden recién ingresada: falta generar el comprobante de ingreso "
+            "y autorización."
+            if con_trabajos
+            else "Orden recién ingresada: falta cargar los trabajos y "
+            "generar el comprobante de ingreso y autorización."
+        ),
+        desde=orden.created_at,
         tareas=(tarea,),
     )
 
@@ -1043,7 +1099,9 @@ def _etapa_ingreso(datos: _Datos) -> EtapaOperativa:
         "Ingreso",
         EstadoEtapa.EN_CURSO,
         (
-            "Falta confirmar la recepción"
+            "Falta generar el comprobante de ingreso"
+            if es_ingreso_inicial(orden)
+            else "Falta confirmar la recepción"
             if not recibido
             else "Falta definir los trabajos"
         ),

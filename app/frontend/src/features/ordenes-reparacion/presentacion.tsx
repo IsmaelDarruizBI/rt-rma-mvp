@@ -42,6 +42,7 @@ export const CODIGOS_ESPECIALES = new Set([
   "REQUIERE_REDEFINICION",
   "OVERRIDE_RECURSOS",
   "LIBERAR_ORDEN",
+  "LIBERAR_ORDEN_AJENA",
   "CANCELAR_DETALLE",
   "CANCELAR_ORDEN",
   "DESISTIR_DETALLE",
@@ -80,6 +81,7 @@ export function accionesDeLaOrden(orden: Orden): Accion[] {
     ...orden.acciones_autorizacion,
     ...orden.acciones_financieras,
     ...orden.acciones_custodia,
+    ...(orden.acciones_complementarias ?? []),
   ];
 }
 

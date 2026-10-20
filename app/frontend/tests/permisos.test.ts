@@ -25,8 +25,12 @@ const INACTIVO = usuario("RECEP-009", "RECEPCION", false);
 
 const accion = (
   roles: RolUsuario[],
-  { requiere_actor = true, usuario_id = null as string | null } = {},
-) => ({ roles, requiere_actor, usuario_id });
+  {
+    requiere_actor = true,
+    usuario_id = null as string | null,
+    usuario_excluido_id = null as string | null,
+  } = {},
+) => ({ roles, requiere_actor, usuario_id, usuario_excluido_id });
 
 type Caso = [
   string,
@@ -60,6 +64,18 @@ const CASOS: Caso[] = [
   ],
   ["usuario inactivo", accion(["RECEPCION"]), INACTIVO, false],
   ["inactivo sin rol definido", accion([]), INACTIVO, false],
+  [
+    "liberar la de otro: no el titular",
+    accion(["TECNICO"], { usuario_excluido_id: "TECH-001" }),
+    TECNICO,
+    false,
+  ],
+  [
+    "liberar la de otro: otro técnico",
+    accion(["TECNICO"], { usuario_excluido_id: "TECH-001" }),
+    OTRO_TECNICO,
+    true,
+  ],
 ];
 
 test("la misma regla que el servidor", () => {

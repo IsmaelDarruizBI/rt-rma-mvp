@@ -31,25 +31,36 @@ from app.domain.models import (
     EstadoWorkflow,
     OrdenReparacion,
     RolUsuario,
+    TipoDocumento,
     Usuario,
 )
 from app.domain.politicas import CondicionComercial, politica_de
 from app.services import (
+    ROLES_AJUSTE_GARANTIA,
+    ROLES_CAMBIO_PRIORIDAD,
     ROLES_CANCELACION,
     ROLES_COMPROBANTE_AUTORIZACION,
+    ROLES_DESCUENTO,
+    ROLES_LIBERACION_AJENA,
     ROLES_RECEPCION_EQUIPO,
     comprobante_autorizacion_emitible,
     custodia_por_definir,
+    descuento_editable,
     devolucion_pendiente,
     ejecucion_activa,
+    es_ingreso_inicial,
     es_trabajable,
     estado_custodia,
     evidencias_de_equipo,
+    faltantes_para_ingreso,
+    fue_priorizada,
+    garantia_ajustable,
     motivo_bloqueo_ejecucion,
     pendiente_de_autorizacion,
     requiere_definicion,
     revision_vigente,
     toma_activa,
+    ultimo_documento,
 )
 from app.services.ordenes import ROLES_ENTREGA, ROLES_PRIORIZACION
 from app.services.pagos import (
@@ -117,6 +128,12 @@ ACCION_EQUIPO_NO_RECIBIDO = "REGISTRAR_EQUIPO_NO_RECIBIDO"
 ACCION_AGREGAR_OBSERVACION_RECEPCION = "AGREGAR_OBSERVACION_RECEPCION"
 ACCION_EMITIR_COMPROBANTE_RECEPCION = "EMITIR_COMPROBANTE_RECEPCION"
 ACCION_EMITIR_COMPROBANTE_AUTORIZACION = "EMITIR_COMPROBANTE_AUTORIZACION"
+# MVP v2 (iteracion 1 del UAT).
+ACCION_GENERAR_COMPROBANTE_INGRESO = "GENERAR_COMPROBANTE_INGRESO"
+ACCION_APLICAR_DESCUENTO = "APLICAR_DESCUENTO"
+ACCION_CAMBIAR_PRIORIDAD = "CAMBIAR_PRIORIDAD"
+ACCION_LIBERAR_ORDEN_AJENA = "LIBERAR_ORDEN_AJENA"
+ACCION_AJUSTAR_GARANTIA = "AJUSTAR_GARANTIA"
 
 # Terminales de un Detalle: lo realizado y lo cancelado (BR-REP-012).
 _TERMINALES = (
@@ -155,6 +172,9 @@ class AccionDisponible:
     ``usuario_id`` restringe la accion a UNA persona dentro del rol: el
     titular de la toma activa para las acciones tecnicas sobre ella
     (E2). ``None`` significa que cualquier usuario con el rol puede.
+    ``usuario_excluido_id`` es lo opuesto: cualquiera con el rol SALVO
+    esa persona (liberar una Orden de otro tecnico: el titular libera la
+    suya con su propia accion).
     ``pago_id``: el Pago sobre el que actua un movimiento financiero.
     ``bloqueo``: la accion corresponde pero hoy no puede ejecutarse (por
     ejemplo, iniciar un Detalle sin la custodia del equipo confirmada); el
@@ -170,6 +190,7 @@ class AccionDisponible:
     usuario_id: str | None = None
     pago_id: str | None = None
     bloqueo: str | None = None
+    usuario_excluido_id: str | None = None
 
 
 def puede_ejecutar(accion: AccionDisponible, usuario: Usuario) -> bool:
@@ -186,6 +207,8 @@ def puede_ejecutar(accion: AccionDisponible, usuario: Usuario) -> bool:
     if not usuario.activo:
         return False
     if accion.roles and usuario.rol not in accion.roles:
+        return False
+    if accion.usuario_excluido_id == usuario.id:
         return False
     return accion.usuario_id is None or accion.usuario_id == usuario.id
 
@@ -409,22 +432,41 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
         )
         # PROC-REP-045 tiene dos ramas: Detalles conocidos o revision. Con
         # al menos un Detalle cargado la revision ya no corresponde y se
-        # puede cerrar la carga.
-        acciones.append(
-            AccionDisponible(
-                codigo=(
-                    ACCION_FINALIZAR_DEFINICION
-                    if orden.reparaciones_detail
-                    else ACCION_ENVIAR_A_REVISION
-                ),
-                etiqueta=(
-                    "Finalizar la definicion"
-                    if orden.reparaciones_detail
-                    else "Enviar a revision tecnica (sin diagnostico)"
-                ),
-                roles=(RolUsuario.RECEPCION,),
+        # puede cerrar la carga. En el ingreso inicial de CLIENTE_EXTERNO
+        # (MVP v2) cerrarla es generar el comprobante de ingreso, que
+        # confirma, finaliza y autoriza en un solo paso.
+        if not orden.reparaciones_detail:
+            acciones.append(
+                AccionDisponible(
+                    codigo=ACCION_ENVIAR_A_REVISION,
+                    etiqueta="Enviar a revision tecnica (sin diagnostico)",
+                    roles=(RolUsuario.RECEPCION,),
+                )
             )
-        )
+        elif es_ingreso_inicial(orden):
+            faltan = faltantes_para_ingreso(orden)
+            acciones.append(
+                AccionDisponible(
+                    codigo=ACCION_GENERAR_COMPROBANTE_INGRESO,
+                    etiqueta=(
+                        "Generar el comprobante de ingreso y autorizacion"
+                    ),
+                    roles=(RolUsuario.RECEPCION,),
+                    bloqueo=(
+                        "Para generarlo falta " + "; ".join(faltan)
+                        if faltan
+                        else None
+                    ),
+                )
+            )
+        else:
+            acciones.append(
+                AccionDisponible(
+                    codigo=ACCION_FINALIZAR_DEFINICION,
+                    etiqueta="Finalizar la definicion",
+                    roles=(RolUsuario.RECEPCION,),
+                )
+            )
 
     if (
         estado is EstadoWorkflow.EN_REVISION
@@ -782,6 +824,18 @@ def acciones_financieras(orden: OrdenReparacion) -> list[AccionDisponible]:
                 roles=ROLES_DEVOLUCION_DINERO,
             )
         )
+    if descuento_editable(orden):
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_APLICAR_DESCUENTO,
+                etiqueta=(
+                    "Cambiar o quitar el descuento"
+                    if orden.descuento_vigente
+                    else "Aplicar un descuento"
+                ),
+                roles=ROLES_DESCUENTO,
+            )
+        )
     acciones.extend(
         AccionDisponible(
             codigo=ACCION_ANULAR_PAGO,
@@ -792,6 +846,58 @@ def acciones_financieras(orden: OrdenReparacion) -> list[AccionDisponible]:
         for pago in orden.resumen_pago.pagos
         if anulable(orden, pago)
     )
+    return acciones
+
+
+def acciones_complementarias(
+    orden: OrdenReparacion,
+) -> list[AccionDisponible]:
+    """Capacidades transversales de la iteracion 1 del UAT (MVP v2).
+
+    Ninguna avanza el proceso por si misma; van aparte del flujo:
+
+    - Cambiar la prioridad de una Orden que ya esta en el taller (en cola
+      o en reparacion): tecnicos, Coordinacion o Recepcion (ACC-REP-007).
+    - Liberar una Orden tomada por OTRO tecnico: cualquier tecnico o
+      Coordinacion, salvo el titular (que libera con su propia accion).
+    - Ajustar el plazo de garantia de cada Detalle no cancelado, antes de
+      la entrega: Recepcion o Coordinacion.
+    """
+    if orden.esta_cerrada:
+        return []
+    acciones: list[AccionDisponible] = []
+    if fue_priorizada(orden) and orden.estado_workflow in (
+        EstadoWorkflow.EN_COLA,
+        EstadoWorkflow.EN_REPARACION,
+    ):
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_CAMBIAR_PRIORIDAD,
+                etiqueta="Cambiar la prioridad",
+                roles=ROLES_CAMBIO_PRIORIDAD,
+            )
+        )
+    toma = toma_activa(orden)
+    if toma is not None:
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_LIBERAR_ORDEN_AJENA,
+                etiqueta=f"Liberar la Orden tomada por {toma.usuario_id}",
+                roles=ROLES_LIBERACION_AJENA,
+                usuario_excluido_id=toma.usuario_id,
+            )
+        )
+    if orden.cliente is not None and garantia_ajustable(orden):
+        acciones.extend(
+            AccionDisponible(
+                codigo=ACCION_AJUSTAR_GARANTIA,
+                etiqueta="Ajustar el plazo de garantia",
+                roles=ROLES_AJUSTE_GARANTIA,
+                detalle_id=detalle.id,
+            )
+            for detalle in orden.reparaciones_detail
+            if detalle.estado is not EstadoReparacionDetail.CANCELADO
+        )
     return acciones
 
 
@@ -835,11 +941,14 @@ def acciones_de_custodia(orden: OrdenReparacion) -> list[AccionDisponible]:
                 roles=ROLES_RECEPCION_EQUIPO,
             )
         )
+    # En el ingreso inicial de CLIENTE_EXTERNO la confirmacion fisica es
+    # parte del comprobante de ingreso: no se ofrece como paso suelto.
     if (
         politica.requiere_confirmacion_recepcion
         and recepcion is not None
         and not recepcion.decidida
         and sin_salida
+        and not es_ingreso_inicial(orden)
     ):
         acciones.append(
             AccionDisponible(
@@ -869,9 +978,12 @@ def acciones_de_custodia(orden: OrdenReparacion) -> list[AccionDisponible]:
                 roles=ROLES_RECEPCION_EQUIPO,
             )
         )
+    # Con el comprobante de ingreso (que incluye la recepcion) no se emite
+    # otro comprobante de recepcion aparte.
     if (
         politica.requiere_comprobante_recepcion
         and orden.documentos.comprobante_recepcion.generado
+        and ultimo_documento(orden, TipoDocumento.COMPROBANTE_INGRESO) is None
     ):
         acciones.append(
             AccionDisponible(

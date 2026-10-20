@@ -4,7 +4,7 @@
  * y los códigos siguen visibles en «Historial y datos técnicos».
  */
 
-import type { Accion, Orden, RolUsuario } from "../../types/api";
+import type { Accion, Detalle, Orden, RolUsuario } from "../../types/api";
 
 export const ESTADO_WORKFLOW: Record<string, string> = {
   REQUERIMIENTO: "Ingresada",
@@ -161,6 +161,11 @@ export const NOMBRE_ACCION: Record<string, string> = {
   REGISTRAR_EQUIPO_NO_RECIBIDO: "Registrar que el equipo no se recibió",
   AGREGAR_OBSERVACION_RECEPCION: "Agregar una observación",
   EMITIR_COMPROBANTE_RECEPCION: "Emitir otra versión del comprobante",
+  GENERAR_COMPROBANTE_INGRESO: "Generar el comprobante de ingreso y autorización",
+  APLICAR_DESCUENTO: "Aplicar un descuento",
+  CAMBIAR_PRIORIDAD: "Cambiar la prioridad",
+  LIBERAR_ORDEN_AJENA: "Liberar la Orden de otro técnico",
+  AJUSTAR_GARANTIA: "Ajustar el plazo de garantía",
 };
 
 /** El valor legible, o el original si no hay etiqueta. */
@@ -173,6 +178,26 @@ export function nombreTrabajo(orden: Orden, detalleId: string | null): string {
   if (!detalleId) return "";
   const detalle = orden.reparaciones_detail.find((d) => d.id === detalleId);
   return detalle?.tipo_reparacion_nombre ?? detalleId;
+}
+
+/** Antes del comprobante de ingreso: la autorización llega con él. */
+export const PENDIENTE_COMPROBANTE_INGRESO = "Pendiente de comprobante de ingreso";
+
+/**
+ * Cómo se muestra la autorización de un trabajo. En el ingreso inicial,
+ * «Pendiente de comprobante de ingreso» y, una vez generado, «Autorizado».
+ * Las autorizaciones posteriores (revisión, redefinición) conservan su
+ * etiqueta de siempre.
+ */
+export function etiquetaAutorizacion(
+  detalle: Pick<
+    Detalle,
+    "estado_autorizacion" | "pendiente_comprobante_ingreso" | "autorizado_en_ingreso"
+  >,
+): string {
+  if (detalle.pendiente_comprobante_ingreso) return PENDIENTE_COMPROBANTE_INGRESO;
+  if (detalle.autorizado_en_ingreso) return "Autorizado";
+  return etiqueta(AUTORIZACION, detalle.estado_autorizacion);
 }
 
 /** «Iniciar el trabajo · Cambio de batería»: el nombre de la acción. */

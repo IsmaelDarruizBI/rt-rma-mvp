@@ -11,7 +11,11 @@
 
 import { type ReactNode, useEffect, useState } from "react";
 
-import type { DatosRetiro } from "../../api/ordenes";
+import {
+  type DatosRetiro,
+  TIPO_REPARACION_OTROS,
+  type TrabajoOtros,
+} from "../../api/ordenes";
 import {
   Boton,
   Campo,
@@ -31,6 +35,7 @@ import type {
   TipoReparacion,
   Usuario,
 } from "../../types/api";
+import { nombreDeUsuario } from "./DetalleOrden";
 import { NOMBRE_ACCION, nombreAccion, nombreTrabajo } from "./etiquetas";
 import { Confirmacion } from "./PagosOrden";
 import {
@@ -41,7 +46,8 @@ import {
 import { opcionDePrioridad, prioridadPropuesta } from "./prioridad";
 
 export interface EjecutorAcciones {
-  agregarDetalle: (tipoReparacionId: string) => void;
+  /** `otros`: descripción y precio de un trabajo «Otros». */
+  agregarDetalle: (tipoReparacionId: string, otros: TrabajoOtros | null) => void;
   finalizarDefinicion: () => void;
   encolar: (prioridad: number) => void;
   tomar: (estacionId: string) => void;
@@ -84,6 +90,7 @@ export interface EjecutorAcciones {
   agregarDetalleDesdeRevision: (
     tipoReparacionId: string,
     detalleOrigenId: string | null,
+    otros: TrabajoOtros | null,
   ) => void;
   finalizarSinReparacion: (motivo: string, observaciones: string) => void;
   /** PROC-REP-235: reabre el Detalle para retrabajo. */
@@ -94,6 +101,11 @@ export interface EjecutorAcciones {
   cancelarDetalle: (detalleId: string, motivo: string) => void;
   /** PROC-REP-305 / 306 (pide confirmación antes). */
   cancelarOrden: (motivo: string) => void;
+  /** En cola o en reparación: no vuelve a encolar. */
+  cambiarPrioridad: (prioridad: number, motivo: string | null) => void;
+  /** La Orden de OTRO técnico: con motivo; ya confirmado en el formulario. */
+  liberarOrdenAjena: (motivo: string, insumosUtilizados: InsumoUtilizado[]) => void;
+  ajustarGarantia: (detalleId: string, dias: number, motivo: string) => void;
 }
 
 interface Props {
@@ -116,8 +128,12 @@ interface Props {
  * y los medios de pago.
  */
 export function AccionesOrden(props: Props) {
+  // Registrar un pago vive en «Cobros»; generar el comprobante de ingreso,
+  // en «Documentos» (con su visor, el PDF y WhatsApp).
   const acciones = props.orden.acciones_disponibles.filter(
-    (accion) => accion.codigo !== "REGISTRAR_PAGO",
+    (accion) =>
+      accion.codigo !== "REGISTRAR_PAGO" &&
+      accion.codigo !== "GENERAR_COMPROBANTE_INGRESO",
   );
   return (
     <>
@@ -153,6 +169,26 @@ export function CancelacionesOrden(props: Props) {
 }
 
 /**
+ * Capacidades que no avanzan el proceso (`acciones_complementarias`):
+ * cambiar la prioridad, liberar la Orden de otro técnico y ajustar el plazo
+ * de garantía de un trabajo. Van a «Otras acciones» o, la liberación, a
+ * «Situaciones especiales».
+ */
+export function ComplementariasOrden(props: Props) {
+  return (
+    <>
+      {props.orden.acciones_complementarias.map((accion) => (
+        <AccionUnica
+          key={accion.codigo + (accion.detalle_id ?? "")}
+          accion={accion}
+          {...props}
+        />
+      ))}
+    </>
+  );
+}
+
+/**
  * Una acción con su formulario. Si el usuario actual no puede ejecutarla
  * (rol o titular de la toma) no se dibuja: «Próximo paso» dice a quién le
  * toca. Ocultarla es comodidad, no seguridad: el backend valida igual.
@@ -160,6 +196,7 @@ export function CancelacionesOrden(props: Props) {
 function AccionUnica({
   accion,
   orden,
+  usuarios,
   tipos,
   estaciones,
   prioridades,
@@ -170,6 +207,7 @@ function AccionUnica({
     <FormularioAccion
       accion={accion}
       orden={orden}
+      usuarios={usuarios}
       tipos={tipos}
       estaciones={estaciones}
       prioridades={prioridades}
@@ -267,6 +305,7 @@ function OpcionSecundaria({
 function FormularioAccion({
   accion,
   orden,
+  usuarios,
   tipos,
   estaciones,
   prioridades,
@@ -275,6 +314,7 @@ function FormularioAccion({
 }: {
   accion: Accion;
   orden: Orden;
+  usuarios: Usuario[];
   tipos: TipoReparacion[];
   estaciones: Estacion[];
   prioridades: Prioridad[];
@@ -289,7 +329,9 @@ function FormularioAccion({
           cantidadDetallesActual={orden.reparaciones_detail.length}
           detallesOrigen={[]}
           deshabilitado={deshabilitado}
-          onConfirmar={(tipoId) => ejecutar.agregarDetalle(tipoId)}
+          onConfirmar={(tipoId, _origen, otros) =>
+            ejecutar.agregarDetalle(tipoId, otros)
+          }
         />
       );
 
@@ -607,6 +649,37 @@ function FormularioAccion({
         />
       );
 
+    case "CAMBIAR_PRIORIDAD":
+      return (
+        <FormularioCambioPrioridad
+          actual={orden.prioridad}
+          prioridades={prioridades}
+          deshabilitado={deshabilitado}
+          onConfirmar={ejecutar.cambiarPrioridad}
+        />
+      );
+
+    case "LIBERAR_ORDEN_AJENA":
+      return (
+        <FormularioLiberacionAjena
+          orden={orden}
+          usuarios={usuarios}
+          estaciones={estaciones}
+          deshabilitado={deshabilitado}
+          onConfirmar={ejecutar.liberarOrdenAjena}
+        />
+      );
+
+    case "AJUSTAR_GARANTIA":
+      return (
+        <FormularioGarantia
+          orden={orden}
+          detalleId={accion.detalle_id}
+          deshabilitado={deshabilitado}
+          onConfirmar={ejecutar.ajustarGarantia}
+        />
+      );
+
     default:
       return (
         <p style={{ margin: 0, fontSize: "0.85rem", color: colores.suave }}>
@@ -879,11 +952,21 @@ function FormularioAgregarDetalle({
   cantidadDetallesActual: number;
   detallesOrigen: DetalleOrigen[];
   deshabilitado: boolean;
-  onConfirmar: (tipoReparacionId: string, detalleOrigenId: string | null) => void;
+  onConfirmar: (
+    tipoReparacionId: string,
+    detalleOrigenId: string | null,
+    otros: TrabajoOtros | null,
+  ) => void;
 }) {
   const [tipoId, setTipoId] = useState(tipos[0]?.id ?? "");
   const [origenId, setOrigenId] = useState(detallesOrigen[0]?.id ?? "");
+  const [descripcion, setDescripcion] = useState("");
+  const [precio, setPrecio] = useState("");
   const pideOrigen = detallesOrigen.length > 0;
+  // «Otros»: una reparación no tipificada, con descripción y precio manual.
+  const esOtros = tipoId === TIPO_REPARACION_OTROS;
+  const precioValido = /^\d+(?:[.,]\d{1,2})?$/.test(precio.trim());
+  const otrosCompleto = !esOtros || (descripcion.trim() !== "" && precioValido);
 
   return (
     <div>
@@ -923,18 +1006,59 @@ function FormularioAgregarDetalle({
                   {tipo.nombre} — {tipo.precio}
                 </option>
               ))}
+              <option value={TIPO_REPARACION_OTROS}>
+                Otros — Reparación no tipificada (precio manual)
+              </option>
             </select>
           </Campo>
         </div>
-        <div style={{ marginBottom: "0.6rem" }}>
-          <Boton
-            disabled={deshabilitado || !tipoId || (pideOrigen && !origenId)}
-            onClick={() => onConfirmar(tipoId, pideOrigen ? origenId : null)}
-          >
-            Agregar trabajo
-          </Boton>
-        </div>
+        {!esOtros && (
+          <div style={{ marginBottom: "0.6rem" }}>
+            <Boton
+              disabled={deshabilitado || !tipoId || (pideOrigen && !origenId)}
+              onClick={() => onConfirmar(tipoId, pideOrigen ? origenId : null, null)}
+            >
+              Agregar trabajo
+            </Boton>
+          </div>
+        )}
       </div>
+      {esOtros && (
+        <>
+          <Campo etiqueta="Descripción del trabajo (obligatoria)">
+            <input
+              value={descripcion}
+              onChange={(evento) => setDescripcion(evento.target.value)}
+              disabled={deshabilitado}
+              style={estiloInput}
+            />
+          </Campo>
+          <Campo etiqueta="Precio (obligatorio)">
+            <input
+              value={precio}
+              onChange={(evento) => setPrecio(evento.target.value)}
+              disabled={deshabilitado}
+              inputMode="decimal"
+              placeholder="15000"
+              style={estiloInput}
+            />
+          </Campo>
+          <Boton
+            disabled={deshabilitado || !otrosCompleto || (pideOrigen && !origenId)}
+            onClick={() => {
+              onConfirmar(tipoId, pideOrigen ? origenId : null, {
+                descripcion: descripcion.trim(),
+                precio: precio.trim().replace(",", "."),
+              });
+              setDescripcion("");
+              setPrecio("");
+              setTipoId(tipos[0]?.id ?? "");
+            }}
+          >
+            Agregar trabajo «Otros»
+          </Boton>
+        </>
+      )}
     </div>
   );
 }
@@ -1177,6 +1301,254 @@ function FormularioPrioridad({
           Ingresar a la cola
         </Boton>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Cambiar la prioridad de una Orden que ya está en el taller. No es
+ * ingresarla a la cola (eso ya pasó): la cola se reordena sola.
+ */
+function FormularioCambioPrioridad({
+  actual,
+  prioridades,
+  deshabilitado,
+  onConfirmar,
+}: {
+  actual: number;
+  prioridades: Prioridad[];
+  deshabilitado: boolean;
+  onConfirmar: (prioridad: number, motivo: string | null) => void;
+}) {
+  const opciones = prioridades.filter((opcion) => opcion.valor !== actual);
+  const [elegida, setElegida] = useState<number | null>(null);
+  const [motivo, setMotivo] = useState("");
+  const prioridad = elegida ?? opciones[0]?.valor ?? null;
+  return (
+    <div>
+      <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", color: colores.suave }}>
+        Hoy: prioridad {actual}. Queda registrado quién la cambió y cuándo.
+      </p>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <div style={{ width: 200, maxWidth: "100%" }}>
+          <Campo etiqueta="Nueva prioridad">
+            <select
+              value={prioridad ?? ""}
+              onChange={(evento) => setElegida(Number(evento.target.value))}
+              disabled={deshabilitado || prioridad === null}
+              style={estiloInput}
+            >
+              {opciones.map((opcion) => (
+                <option key={opcion.valor} value={opcion.valor}>
+                  {opcionDePrioridad(opcion)}
+                </option>
+              ))}
+            </select>
+          </Campo>
+        </div>
+        <div style={{ flex: "1 1 12rem" }}>
+          <Campo etiqueta="Motivo (opcional)">
+            <input
+              value={motivo}
+              onChange={(evento) => setMotivo(evento.target.value)}
+              disabled={deshabilitado}
+              style={estiloInput}
+            />
+          </Campo>
+        </div>
+      </div>
+      <Boton
+        disabled={deshabilitado || prioridad === null}
+        onClick={() =>
+          prioridad !== null && onConfirmar(prioridad, motivo.trim() || null)
+        }
+      >
+        Cambiar la prioridad
+      </Boton>
+    </div>
+  );
+}
+
+/**
+ * Liberar la Orden que tiene OTRO técnico. Avisa quién la tiene, pide el
+ * motivo y una confirmación explícita. Si hay una reparación en curso, se
+ * interrumpe: se registra lo usado hasta ahí (se consume) y lo reservado
+ * vuelve al stock. La Orden vuelve a la cola.
+ */
+function FormularioLiberacionAjena({
+  orden,
+  usuarios,
+  estaciones,
+  deshabilitado,
+  onConfirmar,
+}: {
+  orden: Orden;
+  usuarios: Usuario[];
+  estaciones: Estacion[];
+  deshabilitado: boolean;
+  onConfirmar: (motivo: string, insumosUtilizados: InsumoUtilizado[]) => void;
+}) {
+  const toma = orden.toma_activa;
+  const enCurso = orden.ejecuciones.find(
+    (ejecucion) => ejecucion.estado === "EN_PROGRESO",
+  );
+  const previstos = insumosPrevistosDe(orden, enCurso?.id ?? null);
+  const [motivo, setMotivo] = useState("");
+  const [confirmado, setConfirmado] = useState(false);
+  const [cantidades, setCantidades] = useState<Record<string, string>>({});
+  if (!toma) return null;
+  const titular = nombreDeUsuario(usuarios, toma.usuario_id);
+  const estacion =
+    estaciones.find((candidata) => candidata.id === toma.estacion_id)?.nombre ??
+    toma.estacion_id;
+  const utilizados = previstos
+    .map((previsto) => ({
+      insumo_id: previsto.insumo_id,
+      cantidad: cantidades[previsto.insumo_id] ?? "0",
+    }))
+    .filter((insumo) => Number(insumo.cantidad) > 0);
+  return (
+    <div>
+      <p
+        role="alert"
+        style={{
+          margin: "0 0 0.6rem",
+          padding: "0.5rem 0.7rem",
+          borderRadius: 6,
+          border: `1px solid ${colores.alerta}`,
+          background: "#fffaf0",
+          fontSize: "0.85rem",
+        }}
+      >
+        La Orden la tiene <strong>{titular}</strong> ({estacion}).
+        Liberarla la devuelve a la cola
+        {enCurso ? " e interrumpe la reparación en curso" : ""}. Queda
+        registrado quién la liberó y por qué.
+        {enCurso && (
+          <span style={{ display: "block", marginTop: "0.3rem" }}>
+            Los insumos que indiques como ya usados se consumen; los
+            reservados que no se usaron se liberan y vuelven al stock.
+          </span>
+        )}
+      </p>
+      {enCurso &&
+        previstos.map((previsto) => (
+          <Campo
+            key={previsto.insumo_id}
+            etiqueta={`${previsto.nombre} ya usado (previsto: ${previsto.cantidad_prevista})`}
+          >
+            <input
+              value={cantidades[previsto.insumo_id] ?? "0"}
+              onChange={(evento) =>
+                setCantidades((actual) => ({
+                  ...actual,
+                  [previsto.insumo_id]: evento.target.value,
+                }))
+              }
+              disabled={deshabilitado}
+              inputMode="decimal"
+              style={estiloInput}
+            />
+          </Campo>
+        ))}
+      <Campo etiqueta="Motivo (obligatorio)">
+        <input
+          value={motivo}
+          onChange={(evento) => setMotivo(evento.target.value)}
+          disabled={deshabilitado}
+          style={estiloInput}
+        />
+      </Campo>
+      <label
+        style={{
+          display: "flex",
+          gap: "0.4rem",
+          alignItems: "flex-start",
+          margin: "0 0 0.6rem",
+          fontSize: "0.85rem",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={confirmado}
+          onChange={(evento) => setConfirmado(evento.target.checked)}
+          disabled={deshabilitado}
+        />
+        Confirmo que libero la Orden que tiene {titular}.
+      </label>
+      <Boton
+        disabled={deshabilitado || !confirmado || motivo.trim() === ""}
+        onClick={() => onConfirmar(motivo.trim(), utilizados)}
+      >
+        Liberar la Orden de {titular}
+      </Boton>
+    </div>
+  );
+}
+
+/**
+ * Plazo definitivo de garantía de un trabajo (antes de la entrega). La
+ * sugerida (90 días con check-in, 30 sin) se conserva; el plazo corre
+ * desde la entrega.
+ */
+function FormularioGarantia({
+  orden,
+  detalleId,
+  deshabilitado,
+  onConfirmar,
+}: {
+  orden: Orden;
+  detalleId: string | null;
+  deshabilitado: boolean;
+  onConfirmar: (detalleId: string, dias: number, motivo: string) => void;
+}) {
+  const detalle = orden.reparaciones_detail.find((d) => d.id === detalleId);
+  const [dias, setDias] = useState(String(detalle?.garantia_dias ?? ""));
+  const [motivo, setMotivo] = useState("");
+  if (!detalle) return null;
+  const valor = Number(dias);
+  const valido =
+    /^\d+$/.test(dias.trim()) && valor <= 730 && valor !== detalle.garantia_dias;
+  return (
+    <div>
+      <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", color: colores.suave }}>
+        Hoy: {detalle.garantia_dias} días
+        {detalle.garantia_dias_sugerida !== null &&
+        detalle.garantia_dias_sugerida !== undefined &&
+        detalle.garantia_dias_sugerida !== detalle.garantia_dias
+          ? ` (sugerida: ${detalle.garantia_dias_sugerida})`
+          : ""}
+        . Corre desde la entrega del equipo.
+      </p>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <div style={{ width: 140 }}>
+          <Campo etiqueta="Días de garantía">
+            <input
+              value={dias}
+              onChange={(evento) => setDias(evento.target.value)}
+              disabled={deshabilitado}
+              inputMode="numeric"
+              style={estiloInput}
+            />
+          </Campo>
+        </div>
+        <div style={{ flex: "1 1 12rem" }}>
+          <Campo etiqueta="Motivo (obligatorio)">
+            <input
+              value={motivo}
+              onChange={(evento) => setMotivo(evento.target.value)}
+              disabled={deshabilitado}
+              style={estiloInput}
+            />
+          </Campo>
+        </div>
+      </div>
+      <Boton
+        disabled={deshabilitado || !valido || motivo.trim() === ""}
+        onClick={() => onConfirmar(detalle.id, valor, motivo.trim())}
+      >
+        Ajustar la garantía
+      </Boton>
     </div>
   );
 }

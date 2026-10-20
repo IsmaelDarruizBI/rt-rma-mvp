@@ -50,6 +50,7 @@ from tests.fixtures.api_salidas import (
     ids,
     iniciar,
     ok,
+    por_revision,
     repo_ordenes,
     tomada,
 )
@@ -174,18 +175,12 @@ def _resumen(orden: dict) -> tuple[Decimal, Decimal, Decimal, Decimal]:
 
 
 def _autorizada(cliente, *tipos) -> str:
-    """CLIENTE_EXTERNO definida, con todos los Detalles autorizados."""
+    """CLIENTE_EXTERNO definida, con todos los Detalles autorizados (el
+    comprobante de ingreso los autoriza)."""
     orden_id = crear(cliente)
     for tipo in tipos:
         agregar(cliente, orden_id, tipo)
     finalizar(cliente, orden_id)
-    ok(
-        decidir(
-            cliente,
-            orden_id,
-            {f"DET-{i:03d}": "AUTORIZADO" for i in range(1, len(tipos) + 1)},
-        )
-    )
     return orden_id
 
 
@@ -868,7 +863,6 @@ def test_circuito_b_seña_desistimiento_devoluciones_y_cierre(cliente):
     pago_id = _ultimo_pago(ok(pagar(cliente, orden_id, "40000")))["id"]
     agregar(cliente, orden_id, T100)
     finalizar(cliente, orden_id)
-    ok(decidir(cliente, orden_id, {"DET-001": "AUTORIZADO"}))
     assert _resumen(_orden(cliente, orden_id))[3] == Decimal("60000")
 
     orden = ok(
@@ -901,10 +895,9 @@ def test_circuito_b_seña_desistimiento_devoluciones_y_cierre(cliente):
 
 
 def test_circuito_c_autorizacion_parcial_credito_y_entrega(cliente):
-    orden_id = crear(cliente)
-    agregar(cliente, orden_id, T070)
-    agregar(cliente, orden_id, T080)
-    finalizar(cliente, orden_id)
+    # Autorizacion parcial: la decision explicita por Detalle es del camino
+    # de revision (el ingreso inicial autoriza todo lo cargado).
+    orden_id = por_revision(cliente, T070, T080)
     ok(
         decidir(cliente, orden_id, {"DET-001": "AUTORIZADO"})
     )  # DET-002 pendiente

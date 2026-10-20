@@ -10,6 +10,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
+from .catalogos import TIPO_REPARACION_OTROS
 from .enums import (
     CanalComunicacion,
     CondicionReparacionDetail,
@@ -88,6 +89,16 @@ class DefinicionAnteriorDetalle(BaseModel):
     usuario_id: str
 
 
+class AjusteGarantia(BaseModel):
+    """Cambio manual del plazo de garantia de un Detalle (append-only)."""
+
+    dias_anteriores: int = Field(ge=0)
+    dias_nuevos: int = Field(ge=0)
+    motivo: str
+    usuario_id: str
+    fecha: datetime
+
+
 class ReparacionDetail(BaseModel):
     """Trabajo tecnico requerido dentro de una Orden.
 
@@ -104,10 +115,20 @@ class ReparacionDetail(BaseModel):
 
     id: str
     tipo_reparacion_id: str
+    # Solo en una reparacion "Otros" (TIPO_REPARACION_OTROS): que se
+    # repara, cargado por Recepcion junto con su precio manual.
+    descripcion: str | None = None
 
     precio: Decimal = Field(ge=0)
     puntaje: int = Field(ge=0)
+    # Plazo DEFINITIVO de garantia del Detalle (el que va al documento).
     garantia_dias: int = Field(ge=0)
+    # Plazo SUGERIDO al definirlo (por el check-in del ingreso, o el del
+    # catalogo si no hay check-in). ``None`` en un JSON anterior: el
+    # sugerido fue el mismo ``garantia_dias``.
+    garantia_dias_sugerida: int | None = Field(default=None, ge=0)
+    # Cambios manuales del plazo, del mas antiguo al mas reciente.
+    ajustes_garantia: list[AjusteGarantia] = Field(default_factory=list)
 
     estado: EstadoReparacionDetail = EstadoReparacionDetail.DEFINIDO
     condicion: CondicionReparacionDetail = (
@@ -149,6 +170,11 @@ class ReparacionDetail(BaseModel):
     )
 
     @property
+    def es_otros(self) -> bool:
+        """Reparacion no tipificada ("Otros"), con precio manual."""
+        return self.tipo_reparacion_id == TIPO_REPARACION_OTROS
+
+    @property
     def version_definicion(self) -> int:
         """Version de la definicion vigente: 1 + las reemplazadas (127).
 
@@ -173,6 +199,10 @@ class TomaOrden(BaseModel):
     estado: EstadoTomaOrden = EstadoTomaOrden.ACTIVA
     inicio: datetime
     fin: datetime | None = None
+    # Liberacion por OTRO tecnico (o Coordinacion): quien la libero y por
+    # que. ``None`` si la libero su titular o si cerro por el flujo.
+    liberada_por: str | None = None
+    motivo_liberacion: str | None = None
 
 
 class EjecucionReparacion(BaseModel):

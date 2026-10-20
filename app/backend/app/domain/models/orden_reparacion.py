@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, computed_field
 
+from .descuentos import RegistroDescuento, importe_de_descuento
 from .documentos import DocumentosOrden
 from .enums import (
     EstadoControl,
@@ -30,10 +31,11 @@ class OrdenReparacion(BaseModel):
     catalogos -TipoReparacion, Insumo, EstacionTrabajo, Usuario- solo por
     ID: nunca los copia.
 
-    La situacion comercial (``total``, ``saldo``, ``estado_pago``) es
-    siempre derivada: nada que deba sincronizarse a mano. El alcance del
-    MVP cubre HP-REP-001 (CLIENTE_EXTERNO) y HP-REP-002 (RT_INTERNO), sin
-    descuentos, cortesias, cancelaciones, impuestos ni ajustes.
+    La situacion comercial (``subtotal``, ``descuento_aplicado``,
+    ``total``, ``saldo``, ``estado_pago``) es siempre derivada: nada que
+    deba sincronizarse a mano. Lo unico persistido es el precio snapshot
+    de cada Detalle, los pagos y los registros de descuento. Sin impuestos
+    ni cortesias por Detalle.
 
     ``cliente`` es ``None`` para RT_INTERNO (BR-REP-016): el equipo es de
     Rosario Tecno, no hay un Cliente externo que lo deje. ``referencia_rt``
@@ -85,6 +87,10 @@ class OrdenReparacion(BaseModel):
     # Datos del ingreso fisico y confirmacion de custodia. ``None`` solo en
     # una Orden anterior a este registro: no se presume su custodia.
     recepcion: RecepcionEquipo | None = None
+    # Descuento comercial sobre los trabajos (MVP v2): todos los cambios,
+    # del mas antiguo al mas reciente; el vigente es el ultimo (si no lo
+    # quito). Default vacio: un JSON anterior sigue cargando sin descuento.
+    descuentos: list[RegistroDescuento] = Field(default_factory=list)
 
     # PROC-REP-270 tras una cancelacion: devolucion fisica del equipo sin
     # reparar. Default None: un JSON anterior sigue cargando.
@@ -116,10 +122,16 @@ class OrdenReparacion(BaseModel):
             or self.current_process == "EVT-REP-999"
         )
 
+    @property
+    def descuento_vigente(self) -> RegistroDescuento | None:
+        """El descuento en vigor: el ultimo registro, si no lo quita."""
+        ultimo = self.descuentos[-1] if self.descuentos else None
+        return ultimo if ultimo is not None and ultimo.tipo else None
+
     @computed_field
     @property
-    def total(self) -> Decimal:
-        """Total cobrable: suma de los precios snapshot de los Detalles.
+    def subtotal(self) -> Decimal:
+        """Suma de los precios snapshot de los Detalles no cancelados.
 
         Un Detalle CANCELADO conserva su precio snapshot (historia), pero
         no se cobra (BR-REP-014).
@@ -132,6 +144,18 @@ class OrdenReparacion(BaseModel):
             ),
             Decimal("0"),
         )
+
+    @computed_field
+    @property
+    def descuento_aplicado(self) -> Decimal:
+        """Lo que descuenta el descuento vigente sobre el subtotal."""
+        return importe_de_descuento(self.subtotal, self.descuento_vigente)
+
+    @computed_field
+    @property
+    def total(self) -> Decimal:
+        """Total cobrable: subtotal de los trabajos menos el descuento."""
+        return self.subtotal - self.descuento_aplicado
 
     @computed_field
     @property

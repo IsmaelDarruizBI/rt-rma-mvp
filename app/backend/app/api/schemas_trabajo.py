@@ -39,6 +39,8 @@ class TrabajoBandejaOut(BaseModel):
     en_curso: bool
     # Insumos que hoy no alcanzan, si esta bloqueado por recursos.
     faltantes: list[str]
+    # Ingreso inicial: se autoriza con el comprobante de ingreso.
+    pendiente_comprobante_ingreso: bool = False
 
     @classmethod
     def desde_aplicacion(
@@ -53,6 +55,9 @@ class TrabajoBandejaOut(BaseModel):
             condicion=trabajo.condicion,
             en_curso=trabajo.en_curso,
             faltantes=list(trabajo.faltantes),
+            pendiente_comprobante_ingreso=(
+                trabajo.pendiente_comprobante_ingreso
+            ),
         )
 
 

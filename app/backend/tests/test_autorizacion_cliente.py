@@ -46,6 +46,7 @@ from tests.fixtures.api_salidas import (
     detalle,
     devolver,
     ejecutar,
+    encolar,
     ids,
     iniciar,
     notificar_pagar_entregar,
@@ -66,7 +67,12 @@ def cliente(tmp_path):
 
 
 def _finalizada(cliente, *tipos) -> str:
-    """Definicion finalizada: los Detalles esperan la decision (129)."""
+    """Definicion finalizada: los Detalles esperan la decision (129).
+
+    En CLIENTE_EXTERNO la decision explicita llega por el camino de
+    revision (EN_REVISION): el ingreso inicial autoriza con el comprobante
+    de ingreso.
+    """
     return definida(cliente, *tipos, autorizar=False)
 
 
@@ -138,7 +144,7 @@ def test_1_autorizar_todo_pasa_a_factibilidad_y_habilita(cliente):
     orden_id = _finalizada(cliente, BATERIA, PANTALLA)
     orden = _orden(cliente, orden_id)
     assert orden["current_process"] == "PROC-REP-129"
-    assert orden["estado_workflow"] == "REQUERIMIENTO"
+    assert orden["estado_workflow"] == "EN_REVISION"
     assert "PROC-REP-080" not in ids(orden)
     assert {
         d["estado_autorizacion"] for d in orden["reparaciones_detail"]
@@ -424,7 +430,7 @@ def test_8_un_unico_autorizado_sin_stock_queda_en_100(cliente, tmp_path):
         "PROC-REP-090",
         "PROC-REP-100",
     ]
-    assert orden["estado_workflow"] == "REQUERIMIENTO"
+    assert orden["estado_workflow"] == "EN_REVISION"
     assert "ESPERAR_RECURSOS" in codigos(orden)
 
 
@@ -818,12 +824,7 @@ def test_19_una_orden_json_anterior_queda_pendiente_y_no_se_ejecuta(
     Recepcion registre la decision.
     """
     orden_id = definida(cliente, BATERIA, PANTALLA)
-    ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/queue",
-            json={"usuario_id": COORDINADOR, "prioridad": 2},
-        )
-    )
+    ok(encolar(cliente, orden_id, 2))
     ok(cancelar_detalle(cliente, orden_id, "DET-002"))
     ruta = tmp_path / "ordenes" / f"{orden_id}.json"
     crudo = json.loads(ruta.read_text(encoding="utf-8"))

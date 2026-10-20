@@ -22,6 +22,7 @@ porque es una decision funcional, no una configuracion.
 
 from .acciones import (
     AccionDisponible,
+    acciones_complementarias,
     acciones_de_autorizacion,
     acciones_de_cancelacion,
     acciones_de_custodia,
@@ -61,7 +62,7 @@ from .cierre import (
     rechazar_control,
     registrar_pago_de_orden,
 )
-from .cola import encolar_orden
+from .cola import cambiar_prioridad_de_orden, encolar_orden
 from .concurrencia import (
     LOCK_INVENTARIO,
     seccion_critica_inventario,
@@ -100,11 +101,13 @@ from .finanzas import (
     MovimientoFinanciero,
     SituacionFinanciera,
     anular_pago_de_orden,
+    aplicar_descuento_de_orden,
     listar_medios_pago,
     movimientos_financieros,
     registrar_devolucion_de_dinero,
     situacion_financiera,
 )
+from .garantias import ajustar_garantia
 from .identificadores import siguiente_detalle_id, siguiente_orden_id
 from .ingreso import (
     crear_orden,
@@ -116,6 +119,7 @@ from .ingreso import (
     finalizar_sin_reparacion,
     iniciar_garantia_rma,
 )
+from .ingreso_inicial import generar_comprobante_ingreso
 from .inventario import (
     DetalleInsumo,
     ResultadoMovimientoStock,
@@ -281,4 +285,10 @@ __all__ = [
     "bandejas_de_inicio",
     "bandejas_de_taller",
     "puede_ejecutar",
+    # MVP v2: iteracion 1 del UAT
+    "acciones_complementarias",
+    "ajustar_garantia",
+    "aplicar_descuento_de_orden",
+    "cambiar_prioridad_de_orden",
+    "generar_comprobante_ingreso",
 ]

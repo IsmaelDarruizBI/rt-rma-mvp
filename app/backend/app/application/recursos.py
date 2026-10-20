@@ -37,6 +37,7 @@ from app.services import (
     validar_override_recursos,
 )
 
+from .cola import encolar_si_ingreso_automatico
 from .concurrencia import seccion_critica_inventario
 from .contexto import ApplicationContext
 from .ingreso import _validar_y_habilitar
@@ -217,6 +218,7 @@ def forzar_detalle_por_recursos(
                 orden, detalle_id=detalle_id, usuario=usuario, fecha=fecha
             )
             orden = habilitar_o_reevaluar(orden, fecha=fecha)
+            orden = encolar_si_ingreso_automatico(orden, fecha=fecha)
 
         contexto.ordenes.guardar(orden)
     return orden
