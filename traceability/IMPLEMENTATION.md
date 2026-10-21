@@ -509,6 +509,129 @@ leen sin migracion (sin check-in, sin registros de check-in, sin
 descuento, sin notas internas; un comprobante final anterior, sin la
 garantia por trabajo).
 
+## UAT-010: busqueda de clientes por DNI y fotos del equipo (mvp-v2)
+
+Sin IDs nuevos ni nodos de proceso: capacidades de la Recepcion y del
+taller, **pendientes de formalizacion** en `business/`.
+
+### Entidad Cliente: id, DNI y nombre y apellido
+
+- `Cliente`: `id` interno (la identidad; nunca el DNI), `dni` (opcional,
+  solo digitos, 7 u 8, normalizado), `nombre_apellido`, `telefono` y
+  `email`. `nombre_apellido` es el nombre completo exactamente como lo
+  carga Recepcion o lo devuelve una fuente autorizada: no se separa en
+  nombre y apellido. Es lo que muestran la pantalla, el listado, los PDF,
+  los documentos y el mensaje de WhatsApp.
+- Compatibilidad de lectura: las Ordenes y los documentos anteriores
+  guardaron el nombre completo en `nombre`; se leen tal cual en
+  `nombre_apellido` (`Cliente._desde_estructura_anterior`), sin migrar los
+  archivos. Al volver a guardar una Orden se escribe con la clave nueva:
+  el texto no cambia (los documentos emitidos conservan su dato). Una
+  version anterior del backend no leeria esos archivos: en el UAT los
+  datos se pierden con cada despliegue, asi que no afecta; antes de tener
+  datos persistentes conviene decidir si se necesita volver atras.
+- Compatibilidad de escritura: la API acepta tambien la clave anterior
+  `nombre` al crear (alias de entrada de `ClienteIn`; si vienen las dos,
+  manda `nombre_apellido`). La salida solo tiene `nombre_apellido`.
+- Sin duplicados: un DNI que ya es de un cliente no crea otro (409
+  `CLIENTE_EXISTENTE`, `services/clientes.py::cliente_para_orden`); se
+  reutiliza enviando su `id` (los datos pueden traer correcciones, que
+  quedan en la Orden nueva; las anteriores conservan lo que se registro).
+  Reutilizado con un DNI que nadie mas tiene, es una correccion del DNI.
+  La comprobacion corre en la seccion critica del alta: dos altas
+  simultaneas no duplican. El formulario busca el DNI en nuestra base
+  (`externa=false`) antes de crear; si esa busqueda falla, crea igual. Sin
+  DNI no hay como reconocerlo (no se compara por nombre). No hay
+  vinculacion silenciosa por DNI.
+- Hacia PostgreSQL: tabla `clientes` (`id` PK de texto, `dni` varchar(8)
+  NULL, `nombre_apellido` varchar(200) NOT NULL, `telefono`, `email`,
+  fechas) con indice unico parcial sobre `dni` (WHERE dni IS NOT NULL).
+  **Pendiente**: antes de crear ese indice hay que resolver los DNI
+  duplicados historicos (hoy la busqueda los muestra como AMBIGUO y se
+  puede reutilizar cualquiera). Las Ordenes referencian `cliente_id` y los
+  documentos conservan su copia del cliente. Una fuente autorizada por DNI
+  (`FuentePersonas`) devuelve `nombre_apellido` tal cual.
+
+### Busqueda por DNI
+
+- La carga manual sigue valiendo; un DNI invalido se rechaza (409). La
+  busqueda nunca bloquea el alta: sin datos, con la fuente caida o sin
+  fuente habilitada, se carga a mano.
+- `GET /api/clients/lookup?dni=&usuario_id=&externa=` (RECEPCION o
+  ADMINISTRADOR): primero nuestras Ordenes
+  (`services/clientes.py::clientes_con_dni`: un cliente ya conocido, o
+  AMBIGUO si hay mas de uno); solo si no esta, `externa` no es `false` y
+  hay una fuente externa AUTORIZADA configurada, esa fuente
+  (`app/integraciones/personas.py::FuentePersonas`), con limite de
+  consultas (`LimitadorConsultas`: intervalo minimo y maximo por minuto) y
+  sin guardar nada. La busqueda nunca completa el formulario sola:
+  Recepcion revisa, corrige y elige; al reutilizar un cliente conocido la
+  Orden nueva queda con su mismo ID.
+- **Fuente externa: ninguna habilitada.** CUIT Online
+  (`/search/{dni}`): no publica una API ni condiciones para consultas
+  automatizadas (busqueda del 21/10/2026: solo herramientas de terceros
+  que extraen su pagina, que no son una autorizacion del sitio).
+  `robots.txt` no excluye `/search/` (pide `Crawl-delay: 2`), pero el
+  nombre de cada resultado llega codificado en el HTML (`div.hit
+  h2.denominacion`, dentro de `paywalled-content`) detras de un muro de
+  pago medido (Pigeon, con huella del navegador y creditos). Obtener el
+  nombre en claro exigiria eludir ese control (decodificarlo, emular el
+  navegador o leerlo de un metadato de un enlace a `/constancia/`, ruta
+  excluida por `robots.txt`), asi que **no se implementa**. Para
+  habilitar una fuente hace falta: una autorizacion escrita o un acceso
+  por API contratado con CUIT Online, o el padron de ARCA por web service
+  (`ws_sr_padron_a13`: `getIdPersonaListByDocumento` da el CUIT a partir
+  del DNI y `getPersona` sus datos; requiere certificado digital, el
+  servicio autorizado para la CUIT de la empresa en ARCA y su
+  autenticacion WSAA). Alternativa sin terceros: leer el codigo PDF417 del
+  DNI que presenta el cliente.
+
+### Fotos del equipo (UAT-010/011)
+
+- `OrdenReparacion.fotos`: solo los datos de cada foto (`FotoOrden`: clave
+  del objeto, tipo, tamano, usuario y fecha); la imagen nunca va al JSON ni
+  al disco efimero de Cloud Run. Opcionales y solo con la Orden ya creada
+  (el alta no las pide); las suben RECEPCION, TECNICO, COORDINADOR_RMA o
+  ADMINISTRADOR en una Orden abierta y todos las ven (tambien cerrada).
+- Hasta **10 por Orden** (`MAX_FOTOS_POR_ORDEN`; la pantalla aplica el
+  mismo tope y muestra "X de 10"). "Tomar foto" abre la camara del
+  celular; "Elegir fotos" permite varias. Antes de subir, cada foto se ve
+  en una vista previa y se acepta o se descarta: solo se suben las
+  aceptadas. Las guardadas se ven en miniatura, se abren ampliadas y
+  muestran quien y cuando.
+- `POST /api/orders/{id}/photos?usuario_id=` (cuerpo: la imagen; JPEG, PNG
+  o WebP verificados por contenido; hasta 8 MB) y
+  `GET /api/orders/{id}/photos/{foto_id}` (una foto solo se sirve desde su
+  Orden). El navegador reduce cada foto a 1600 px de lado mayor en JPEG
+  antes de subirla.
+- Almacenamiento (`app/storage/fotos.py`): `RMA_FOTOS_BUCKET` -> bucket
+  PRIVADO de Cloud Storage via API JSON con el token de la cuenta de
+  servicio de Cloud Run (sin dependencias nuevas; probado contra HTTP
+  simulado, **pendiente** la validacion contra el bucket real);
+  `RMA_FOTOS_DIR` -> directorio local, solo desarrollo; sin ninguno, las
+  fotos quedan deshabilitadas y la UI lo indica. La imagen se sube fuera
+  de la seccion critica de Ordenes: si el registro posterior fallara queda
+  un objeto huerfano en el bucket, nunca una referencia rota.
+- Imagenes huerfanas: `POST /api/maintenance/photos/cleanup?usuario_id=&aplicar=`
+  (ADMINISTRADOR; sin `aplicar=true` solo informa). Lista el bucket,
+  despues lee las Ordenes y borra solo lo que ninguna Orden usa y tiene mas
+  de una hora (una subida en curso nunca se toca). Permisos necesarios en
+  el bucket: crear, leer, listar y borrar objetos.
+- **Limitacion del UAT**: las Ordenes siguen en JSON efimero. Un
+  redespliegue de Cloud Run borra las Ordenes pero no las fotos del
+  bucket: la relacion Orden-foto **no se conserva** entre despliegues (las
+  fotos anteriores quedan huerfanas y se limpian con el endpoint). No usar
+  fotos de clientes reales en el UAT. Se resuelve con la persistencia de
+  Ordenes (PostgreSQL), fuera de esta iteracion.
+
+### Numero de serie en el alta de Cliente Externo (UAT-011)
+
+- El formulario de alta de CLIENTE_EXTERNO ya no muestra "N.º de serie".
+  El dato sigue en `Equipo.numero_serie` (opcional; el backend nunca lo
+  exigio), RT_INTERNO lo sigue cargando y los datos anteriores no cambian.
+  La correccion de los datos del ingreso lo mantiene para todos los
+  Origenes.
+
 ## Gaps de cobertura de test conocidos
 
 Requerimientos declarados sin un Internal Test que los verifique

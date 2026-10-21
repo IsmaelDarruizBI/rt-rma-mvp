@@ -67,7 +67,7 @@ const CONTENIDO: ContenidoAutorizacion = {
   orden_id: "OR-000007",
   origen: "CLIENTE_EXTERNO",
   fecha_ingreso: "2026-10-15T12:00:00Z",
-  cliente: { id: "CLI-1", nombre: "Ana Pérez", telefono: "341 5551234", email: null },
+  cliente: { id: "CLI-1", nombre_apellido: "Ana Pérez", telefono: "341 5551234", email: null },
   referencia_rt: null,
   equipo: {
     id: "EQ-1",
@@ -99,7 +99,7 @@ const CONTENIDO: ContenidoAutorizacion = {
 test("el mensaje nombra la orden, lo autorizado y que no es un pago", () => {
   const mensaje = mensajeComprobante(CONTENIDO);
 
-  assert.match(mensaje, /^Hola Ana! /);
+  assert.match(mensaje, /^Hola Ana Pérez! /);
   assert.match(mensaje, /orden OR-000007 \(Apple iPhone 14\)/);
   assert.match(mensaje, /• Cambio de batería: \$\s?85\.000/);
   assert.match(mensaje, /Total autorizado: \$\s?85\.000/);

@@ -96,6 +96,20 @@ export function post<T>(ruta: string, cuerpo: unknown): Promise<T> {
   });
 }
 
+/** URL absoluta de un recurso de la API (por ejemplo, una foto). */
+export function urlApi(ruta: string): string {
+  return `${API_BASE_URL}${ruta}`;
+}
+
+/** Un archivo como cuerpo (por ejemplo, una foto), con respuesta JSON. */
+export function postArchivo<T>(ruta: string, archivo: Blob): Promise<T> {
+  return pedir<T>(ruta, {
+    method: "POST",
+    body: archivo,
+    headers: { "Content-Type": archivo.type || "application/octet-stream" },
+  });
+}
+
 export function put<T>(ruta: string, cuerpo: unknown): Promise<T> {
   return pedir<T>(ruta, {
     method: "PUT",

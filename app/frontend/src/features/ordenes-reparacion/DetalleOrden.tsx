@@ -142,7 +142,7 @@ export function CabeceraOrden({
       </div>
       <p style={{ margin: "0.35rem 0 0", fontSize: "0.95rem" }}>
         {orden.cliente
-          ? `${orden.cliente.nombre} · ${orden.cliente.telefono}`
+          ? `${orden.cliente.nombre_apellido} · ${orden.cliente.telefono}`
           : `Equipo interno RT · ${orden.referencia_rt ?? "sin referencia"}`}
       </p>
       <p style={{ margin: "0.15rem 0 0", color: colores.suave }}>

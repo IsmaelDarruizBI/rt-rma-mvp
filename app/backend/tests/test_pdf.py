@@ -48,7 +48,9 @@ def _documento(cantidad: int) -> DocumentoEmitido:
             orden_id="OR-000001",
             origen=OrigenOrden.CLIENTE_EXTERNO,
             fecha_ingreso=FECHA,
-            cliente=Cliente(id="CLI-1", nombre="Ana (prueba)", telefono="1"),
+            cliente=Cliente(
+                id="CLI-1", nombre_apellido="Ana (prueba)", telefono="1"
+            ),
             equipo=Equipo(
                 id="EQ-1",
                 marca="Apple",

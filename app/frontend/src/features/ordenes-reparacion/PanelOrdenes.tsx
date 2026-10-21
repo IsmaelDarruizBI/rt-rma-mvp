@@ -63,6 +63,7 @@ import {
   TrabajosOrden,
 } from "./DetalleOrden";
 import { DocumentosOrden } from "./DocumentosOrden";
+import { FotosOrden, resumenFotos } from "./FotosOrden";
 import {
   CUSTODIA,
   ESTADO_PAGO,
@@ -865,6 +866,43 @@ export function PanelOrdenes() {
               </SeccionPlegable>
 
               <SeccionPlegable
+                key={`${orden.id}-${actorId}-fotos`}
+                titulo="Fotos del equipo"
+                resumen={resumenFotos(orden)}
+              >
+                <FotosOrden
+                  orden={orden}
+                  actor={actor}
+                  usuarios={usuarios}
+                  ocupado={ocupado}
+                  onSubir={async (fotos) => {
+                    // Una por una: si falla una, las anteriores ya quedaron
+                    // y la pantalla las muestra.
+                    let subidas = 0;
+                    await ejecutarComando(async () => {
+                      let actualizada = orden;
+                      for (const foto of fotos) {
+                        try {
+                          actualizada = await api.subirFoto(
+                            idOrden,
+                            idActor,
+                            foto.archivo,
+                            foto.nombre,
+                          );
+                          subidas += 1;
+                        } catch (fallo) {
+                          if (actualizada !== orden) setOrden(actualizada);
+                          throw fallo;
+                        }
+                      }
+                      return actualizada;
+                    });
+                    return subidas;
+                  }}
+                />
+              </SeccionPlegable>
+
+              <SeccionPlegable
                 key={`${orden.id}-trabajos`}
                 titulo="Trabajos"
                 resumen={resumenTrabajos(orden)}
@@ -1141,7 +1179,7 @@ function resumenEjecuciones(orden: Orden): string {
 function resumenCliente(orden: Orden): string {
   return [
     orden.cliente
-      ? `${orden.cliente.nombre} · ${orden.cliente.telefono}`
+      ? `${orden.cliente.nombre_apellido} · ${orden.cliente.telefono}`
       : `Equipo interno RT · ${orden.referencia_rt ?? "—"}`,
     `Equipo: ${etiqueta(CUSTODIA, orden.custodia.estado).toLowerCase()}`,
     orden.recepcion?.datos.estado_fisico,

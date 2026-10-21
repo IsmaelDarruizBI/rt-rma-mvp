@@ -73,7 +73,7 @@ export function mensajeComprobante(
   contenido: ContenidoAutorizacion | ContenidoIngreso,
 ): string {
   const saludo = contenido.cliente
-    ? `Hola ${contenido.cliente.nombre.split(" ")[0]}!`
+    ? `Hola ${contenido.cliente.nombre_apellido}!`
     : "Hola!";
   const equipo = `${contenido.equipo.marca} ${contenido.equipo.modelo}`;
   const ingreso = contenido.tipo === "COMPROBANTE_INGRESO";

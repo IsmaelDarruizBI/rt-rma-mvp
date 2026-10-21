@@ -326,7 +326,7 @@ def construir_orden_hp_rep_001() -> OrdenReparacion:
         current_process="EVT-REP-999",
         cliente=Cliente(
             id="CLI-001",
-            nombre="Cliente de Prueba",
+            nombre_apellido="Cliente de Prueba",
             telefono="341-0000000",
             email="cliente.prueba@example.com",
         ),

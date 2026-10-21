@@ -11,7 +11,15 @@ solo tiene que llamar a ``create_app(Settings(data_dir=tmp_path))``.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import catalogos, health, inventario, ordenes, trabajo
+from app.api import (
+    catalogos,
+    clientes,
+    health,
+    inventario,
+    mantenimiento,
+    ordenes,
+    trabajo,
+)
 from app.api.errores import registrar_manejadores_de_error
 from app.application import construir_contexto
 from app.core.config import Settings, get_settings
@@ -41,9 +49,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application.include_router(health.router)
     application.include_router(catalogos.router)
+    application.include_router(clientes.router)
     application.include_router(ordenes.router)
     application.include_router(inventario.router)
     application.include_router(trabajo.router)
+    application.include_router(mantenimiento.router)
 
     return application
 

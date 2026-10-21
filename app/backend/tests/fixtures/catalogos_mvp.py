@@ -102,7 +102,7 @@ ADMINISTRADOR = Usuario(
 
 CLIENTE = Cliente(
     id="CLI-001",
-    nombre="Cliente de Prueba",
+    nombre_apellido="Cliente de Prueba",
     telefono="341-0000000",
     email="cliente.prueba@example.com",
 )

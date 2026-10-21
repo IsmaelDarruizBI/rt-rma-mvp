@@ -40,6 +40,14 @@ from .cancelaciones import (
     registrar_devolucion_equipo,
     validar_cancelacion_detalle,
 )
+from .clientes import (
+    ClienteConocido,
+    ClienteExistenteError,
+    cliente_para_orden,
+    clientes_con_dni,
+    dni_opcional,
+    normalizar_dni,
+)
 from .custodia import (
     ROLES_RECEPCION_EQUIPO,
     agregar_nota_recepcion,
@@ -117,6 +125,18 @@ from .exceptions import (
     PrecondicionInvalidaError,
     RecursoNoDisponibleError,
     TomaDeOtroTecnicoError,
+)
+from .fotos import (
+    MAX_BYTES_FOTO,
+    MAX_FOTOS_POR_ORDEN,
+    ROLES_FOTOS,
+    buscar_foto,
+    clave_de_foto,
+    exigir_foto_agregable,
+    fotos_referenciadas,
+    registrar_foto,
+    tipo_de_imagen,
+    validar_imagen,
 )
 from .garantias import (
     ROLES_AJUSTE_GARANTIA,
@@ -274,6 +294,24 @@ from .tomas import (
 from .workflow import registrar_accion_funcional, registrar_paso
 
 __all__ = [
+    # Clientes por DNI (UAT-010)
+    "ClienteConocido",
+    "ClienteExistenteError",
+    "cliente_para_orden",
+    "clientes_con_dni",
+    "dni_opcional",
+    "normalizar_dni",
+    # Fotos del equipo (UAT-010)
+    "MAX_BYTES_FOTO",
+    "MAX_FOTOS_POR_ORDEN",
+    "ROLES_FOTOS",
+    "buscar_foto",
+    "clave_de_foto",
+    "exigir_foto_agregable",
+    "fotos_referenciadas",
+    "registrar_foto",
+    "tipo_de_imagen",
+    "validar_imagen",
     # Autorizacion funcional
     "actor_valido",
     "validar_actor",

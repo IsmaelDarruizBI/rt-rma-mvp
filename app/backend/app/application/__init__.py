@@ -63,6 +63,11 @@ from .cierre import (
     registrar_checkin,
     registrar_pago_de_orden,
 )
+from .clientes import (
+    BusquedaCliente,
+    EstadoBusqueda,
+    buscar_cliente_por_dni,
+)
 from .cola import cambiar_prioridad_de_orden, encolar_orden
 from .concurrencia import (
     LOCK_INVENTARIO,
@@ -107,6 +112,12 @@ from .finanzas import (
     movimientos_financieros,
     registrar_devolucion_de_dinero,
     situacion_financiera,
+)
+from .fotos import (
+    LimpiezaFotos,
+    agregar_foto,
+    foto_de_orden,
+    limpiar_fotos_huerfanas,
 )
 from .garantias import ajustar_garantia
 from .identificadores import siguiente_detalle_id, siguiente_orden_id
@@ -290,6 +301,13 @@ __all__ = [
     # MVP v2: iteracion 1 del UAT
     "acciones_complementarias",
     "ajustar_garantia",
+    "BusquedaCliente",
+    "EstadoBusqueda",
+    "buscar_cliente_por_dni",
+    "agregar_foto",
+    "foto_de_orden",
+    "LimpiezaFotos",
+    "limpiar_fotos_huerfanas",
     "aplicar_descuento_de_orden",
     "cambiar_prioridad_de_orden",
     "generar_comprobante_ingreso",

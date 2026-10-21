@@ -64,7 +64,7 @@ def _orden_minima(
         current_process="PROC-REP-040",
         cliente=Cliente(
             id="CLI-001",
-            nombre="Cliente",
+            nombre_apellido="Cliente",
             telefono="341-0000000",
         ),
         equipo=Equipo(
@@ -83,16 +83,18 @@ def _orden_minima(
 # 1) Cliente requiere nombre y telefono.
 
 
-def test_cliente_requiere_nombre_y_telefono():
+def test_cliente_requiere_nombre_apellido_y_telefono():
     with pytest.raises(ValidationError) as error:
         Cliente(id="CLI-001")
 
     campos_faltantes = {e["loc"][0] for e in error.value.errors()}
-    assert campos_faltantes == {"nombre", "telefono"}
+    assert campos_faltantes == {"nombre_apellido", "telefono"}
 
 
 def test_cliente_email_es_opcional():
-    cliente = Cliente(id="CLI-001", nombre="Cliente", telefono="341-0000000")
+    cliente = Cliente(
+        id="CLI-001", nombre_apellido="Cliente", telefono="341-0000000"
+    )
 
     assert cliente.email is None
 

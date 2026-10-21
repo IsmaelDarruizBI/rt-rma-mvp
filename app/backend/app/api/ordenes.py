@@ -10,7 +10,8 @@ El router es fino a proposito: valida la forma del request, delega en
 atrapa excepciones -de eso se ocupa ``errores.py``-.
 """
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Request, Response, status
+from starlette.concurrency import run_in_threadpool
 
 from app.application import (
     ApplicationContext,
@@ -20,6 +21,7 @@ from app.application import (
     acciones_de_custodia,
     acciones_disponibles,
     acciones_financieras,
+    agregar_foto,
     agregar_observacion_recepcion,
     ajustar_garantia,
     anular_pago_de_orden,
@@ -48,6 +50,7 @@ from app.application import (
     finalizar_definicion,
     finalizar_sin_reparacion,
     forzar_detalle_por_recursos,
+    foto_de_orden,
     generar_comprobante_ingreso,
     impacto_override,
     informar_rt,
@@ -84,7 +87,11 @@ from app.application import (
 )
 from app.domain.models import OrdenReparacion, TipoDocumento
 from app.domain.prioridad import clave_de_prioridad
-from app.services import DecisionDetalle
+from app.services import (
+    MAX_BYTES_FOTO,
+    DecisionDetalle,
+    PrecondicionInvalidaError,
+)
 
 from .dependencias import ContextoDep
 from .schemas import (
@@ -182,6 +189,7 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
             acciones_custodia=custodia,
             nombres_de_detalle=nombres,
         ),
+        fotos_habilitadas=contexto.fotos is not None,
     )
 
 
@@ -408,6 +416,7 @@ def post_crear_orden(
         contexto,
         usuario_id=cuerpo.usuario_id,
         cliente=cuerpo.cliente.a_dominio(),
+        cliente_reutilizado=cuerpo.cliente.reutilizado,
         equipo=cuerpo.equipo.a_dominio(),
         datos_recepcion=(
             cuerpo.recepcion.a_dominio() if cuerpo.recepcion else None
@@ -1343,6 +1352,54 @@ def post_devolver_dinero(
         operacion_id=cuerpo.operacion_id,
     )
     return _salida_con_entrega(orden, contexto, puede_entregar)
+
+
+@router.post("/{orden_id}/photos")
+async def post_agregar_foto(
+    orden_id: str,
+    usuario_id: str,
+    request: Request,
+    contexto: ContextoDep,
+    nombre: str | None = None,
+) -> OrdenOut:
+    """Agregar UNA foto del equipo (cualquier usuario operativo).
+
+    El cuerpo es la imagen (JPEG, PNG o WebP; el tipo se verifica por su
+    contenido), hasta 8 MB. Se registra quien la subio y cuando; la imagen
+    va al almacenamiento privado, nunca al JSON de la Orden.
+    """
+    declarado = request.headers.get("content-length")
+    if declarado and declarado.isdigit() and int(declarado) > MAX_BYTES_FOTO:
+        raise PrecondicionInvalidaError(
+            "La foto supera los 8 MB: reducila o elegi otra."
+        )
+    contenido = await request.body()
+    orden = await run_in_threadpool(
+        agregar_foto,
+        contexto,
+        orden_id=orden_id,
+        usuario_id=usuario_id,
+        contenido=contenido,
+        nombre_original=nombre,
+    )
+    return _salida(orden, contexto)
+
+
+@router.get("/{orden_id}/photos/{foto_id}")
+def get_foto(
+    orden_id: str,
+    foto_id: str,
+    contexto: ContextoDep,
+) -> Response:
+    """La imagen de una foto de la Orden (tambien con la Orden cerrada)."""
+    contenido, tipo = foto_de_orden(
+        contexto, orden_id=orden_id, foto_id=foto_id
+    )
+    return Response(
+        content=contenido,
+        media_type=tipo,
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
 
 
 @router.post("/{orden_id}/checkin")

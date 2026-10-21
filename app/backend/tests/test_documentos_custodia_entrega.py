@@ -105,7 +105,7 @@ def _ingresar(
             json={
                 "usuario_id": RECEPCION,
                 "cliente": {
-                    "nombre": "Maria Gomez",
+                    "nombre_apellido": "Maria Gomez",
                     "telefono": "341-555-0101",
                     "email": "maria@example.com",
                 },
@@ -401,7 +401,7 @@ def test_3_comprobante_de_recepcion_emitido(cliente):
     assert contenido["empresa"]["nombre"] == "Rosario Tecno"
     assert contenido["orden_id"] == orden_id
     assert contenido["fecha_ingreso"].startswith("2026-10-01T13:00")
-    assert contenido["cliente"]["nombre"] == "Maria Gomez"
+    assert contenido["cliente"]["nombre_apellido"] == "Maria Gomez"
     assert contenido["equipo"]["imei"] == IMEI
     assert contenido["equipo"]["falla_reportada"] == "La bateria dura poco."
     assert contenido["estado_fisico"] == ESTADO
@@ -845,7 +845,7 @@ def test_16_comprobante_final(cliente, reloj):
     assert (
         contenido["resultado"] == "Reparacion terminada y aprobada en control"
     )
-    assert contenido["cliente"]["nombre"] == "Maria Gomez"
+    assert contenido["cliente"]["nombre_apellido"] == "Maria Gomez"
     assert contenido["equipo"]["imei"] == IMEI
 
 

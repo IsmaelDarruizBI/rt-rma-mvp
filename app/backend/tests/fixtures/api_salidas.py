@@ -176,7 +176,7 @@ def crear(cliente: TestClient) -> str:
             "/api/orders",
             json={
                 "usuario_id": RECEPCION,
-                "cliente": {"nombre": "Cliente", "telefono": "341-1"},
+                "cliente": {"nombre_apellido": "Cliente", "telefono": "341-1"},
                 "equipo": {
                     "marca": "Apple",
                     "modelo": "iPhone 14",

@@ -162,7 +162,7 @@ def test_autorizacion_parcial_lista_solo_lo_autorizado(tmp_path):
         assert documento["usuario_id"] == RECEPCION
         contenido = documento["contenido"]
         assert contenido["orden_id"] == orden_id
-        assert contenido["cliente"]["nombre"] == "Cliente"
+        assert contenido["cliente"]["nombre_apellido"] == "Cliente"
         assert contenido["equipo"]["modelo"] == "iPhone 14"
         (trabajo,) = contenido["trabajos"]
         assert trabajo["detalle_id"] == "DET-001"

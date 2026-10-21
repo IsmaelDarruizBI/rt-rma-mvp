@@ -6,9 +6,23 @@ puede reemplazarse -por Cloud Storage, una base de datos u otro backend-
 sin tocar ``domain`` ni ``services``.
 """
 
+from .fotos import (
+    AlmacenFotos,
+    AlmacenFotosDirectorio,
+    AlmacenFotosError,
+    AlmacenFotosGcs,
+    AlmacenFotosMemoria,
+    ObjetoFoto,
+)
 from .json import JsonCatalogosRepository, JsonOrdenReparacionRepository
 
 __all__ = [
+    "AlmacenFotos",
+    "AlmacenFotosDirectorio",
+    "AlmacenFotosError",
+    "AlmacenFotosGcs",
+    "AlmacenFotosMemoria",
+    "ObjetoFoto",
     "JsonCatalogosRepository",
     "JsonOrdenReparacionRepository",
 ]

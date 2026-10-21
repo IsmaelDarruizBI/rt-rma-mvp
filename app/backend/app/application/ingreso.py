@@ -40,6 +40,7 @@ from app.services import (
     PrecondicionInvalidaError,
     ResultadoEvaluacionOrden,
     cargar_reservas_externas,
+    cliente_para_orden,
     crear_orden_cliente_externo,
     crear_orden_garantia_rma,
     crear_orden_rt_interno,
@@ -74,6 +75,7 @@ def crear_orden(
     cliente: Cliente,
     equipo: Equipo,
     datos_recepcion: DatosRecepcion | None = None,
+    cliente_reutilizado: bool = False,
 ) -> OrdenReparacion:
     """Ingreso de un equipo de CLIENTE_EXTERNO (PROC-REP-010/030/040).
 
@@ -84,12 +86,20 @@ def crear_orden(
 
     La numeracion se calcula sobre lo persistido, asi que se asigna
     dentro de la seccion critica: dos altas simultaneas no pueden
-    quedarse con el mismo ``OR-XXXXXX``.
+    quedarse con el mismo ``OR-XXXXXX``. Por la misma razon ahi se
+    comprueba el DNI del cliente (UAT-010): dos altas simultaneas no
+    pueden crear dos clientes con el mismo DNI. ``cliente_reutilizado``:
+    viene el ID de un cliente conocido (con sus datos, quiza corregidos).
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
     with seccion_critica_inventario():
+        cliente = cliente_para_orden(
+            contexto.ordenes.listar(),
+            cliente=cliente,
+            reutilizado=cliente_reutilizado,
+        )
         orden = crear_orden_cliente_externo(
             orden_id=siguiente_orden_id(contexto.ordenes),
             cliente=cliente,

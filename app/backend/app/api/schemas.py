@@ -19,7 +19,7 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from app.application import (
     AccionDisponible,
@@ -92,11 +92,13 @@ from app.domain.prioridad import (
 from app.services import (
     AnalisisDesistimiento,
     EstadoAutorizacion,
+    PrecondicionInvalidaError,
     analizar_desistimiento,
     autorizados_en_el_ingreso,
     descripcion_de_descuento,
     devolucion_pendiente,
     devolvible_de,
+    dni_opcional,
     es_ingreso_inicial,
     estado_autorizacion,
     estado_custodia,
@@ -187,21 +189,50 @@ class UsuarioOut(BaseModel):
 # --- Entrada de comandos -----------------------------------------------------
 
 
-class ClienteIn(BaseModel):
-    """Datos minimos del cliente que deja el equipo."""
+def _texto_o_none(texto: str | None) -> str | None:
+    return (texto or "").strip() or None
 
-    nombre: str = Field(min_length=1)
-    telefono: str = Field(min_length=1)
-    email: str | None = None
+
+class ClienteIn(BaseModel):
+    """Datos del cliente que deja el equipo.
+
+    ``nombre_apellido``: el nombre completo tal como lo carga Recepcion (no
+    se separa). Compatibilidad de escritura: se acepta tambien la clave
+    anterior ``nombre`` con el mismo significado; ``nombre_apellido``
+    tiene prioridad si vienen las dos. ``dni`` es opcional (se valida y
+    normaliza si viene). ``id``: el de un cliente conocido que se reutiliza
+    (lo devuelve la busqueda por DNI); sin ``id`` se crea uno, salvo que
+    ese DNI ya sea de otro cliente (409 ``CLIENTE_EXISTENTE``: no se
+    duplica).
+    """
+
+    nombre_apellido: str = Field(
+        min_length=1,
+        max_length=200,
+        validation_alias=AliasChoices("nombre_apellido", "nombre"),
+    )
+    telefono: str = Field(min_length=1, max_length=40)
+    email: str | None = Field(default=None, max_length=200)
+    dni: str | None = Field(default=None, max_length=20)
     id: str | None = None
+
+    @property
+    def reutilizado(self) -> bool:
+        return bool(self.id)
 
     def a_dominio(self) -> Cliente:
         """El MVP no tiene padron de clientes: si no viene ID, se crea."""
+        nombre_apellido = self.nombre_apellido.strip()
+        if not nombre_apellido:
+            raise PrecondicionInvalidaError(
+                "Falta el nombre y apellido del cliente."
+            )
         return Cliente(
             id=self.id or nuevo_id("CLI"),
-            nombre=self.nombre,
-            telefono=self.telefono,
-            email=self.email,
+            dni=dni_opcional(self.dni),
+            nombre_apellido=nombre_apellido,
+            telefono=self.telefono.strip(),
+            email=_texto_o_none(self.email),
         )
 
 
@@ -782,10 +813,80 @@ class DesistimientoIn(BaseModel):
 
 
 class ClienteOut(BaseModel):
+    """El cliente; ``nombre_apellido`` es su nombre completo (en una Orden
+    anterior, el que se guardo como ``nombre``)."""
+
     id: str
-    nombre: str
+    dni: str | None = None
+    nombre_apellido: str
     telefono: str
     email: str | None = None
+
+
+class FotoOut(BaseModel):
+    """Una foto del equipo: sus datos (la imagen se pide aparte)."""
+
+    id: str
+    tipo_contenido: str
+    tamano_bytes: int
+    usuario_id: str
+    fecha: datetime
+    nombre_original: str | None = None
+
+
+class ClienteConocidoOut(BaseModel):
+    """Un cliente que ya tiene Ordenes con ese DNI (sus datos mas
+    recientes)."""
+
+    cliente_id: str
+    nombre_apellido: str
+    telefono: str
+    email: str | None = None
+    ultima_orden_id: str
+    ultima_fecha: datetime
+    ordenes: int
+
+
+class PersonaExternaOut(BaseModel):
+    """Lo que devuelve una fuente externa: solo el nombre completo, tal
+    cual (no se separa)."""
+
+    nombre_apellido: str
+
+
+class BusquedaClienteOut(BaseModel):
+    """``GET /api/clients/lookup``: para revisar, nunca se guarda solo.
+
+    ``estado``: ENCONTRADO, AMBIGUO, SIN_RESULTADOS, NO_DISPONIBLE, LIMITE
+    o NO_HABILITADA (sin fuente externa autorizada). ``origen``: BASE (ya
+    es cliente) o EXTERNO.
+    """
+
+    dni: str
+    estado: str
+    mensaje: str
+    origen: str | None = None
+    fuente: str | None = None
+    conocidos: list[ClienteConocidoOut] = Field(default_factory=list)
+    externos: list[PersonaExternaOut] = Field(default_factory=list)
+
+    @classmethod
+    def desde_aplicacion(cls, busqueda) -> "BusquedaClienteOut":
+        return cls(
+            dni=busqueda.dni,
+            estado=busqueda.estado,
+            mensaje=busqueda.mensaje,
+            origen=busqueda.origen,
+            fuente=busqueda.fuente,
+            conocidos=[
+                ClienteConocidoOut(**conocido.__dict__)
+                for conocido in busqueda.conocidos
+            ],
+            externos=[
+                PersonaExternaOut(**persona.__dict__)
+                for persona in busqueda.externos
+            ],
+        )
 
 
 class EquipoOut(BaseModel):
@@ -1457,7 +1558,7 @@ def _nombre_para_listado(orden: OrdenReparacion) -> str:
     identifica por su referencia de Gestion RT en su lugar.
     """
     if orden.cliente is not None:
-        return orden.cliente.nombre
+        return orden.cliente.nombre_apellido
     return f"RT Interno · {orden.referencia_rt or orden.id}"
 
 
@@ -1791,6 +1892,9 @@ class OrdenOut(BaseModel):
     # Ingreso inicial de Cliente Externo: falta el comprobante de ingreso y
     # autorizacion (presentacion derivada).
     ingreso_inicial: bool = False
+    # Fotos del equipo (UAT-010) y si el entorno tiene donde guardarlas.
+    fotos: list[FotoOut] = Field(default_factory=list)
+    fotos_habilitadas: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -1811,6 +1915,7 @@ class OrdenOut(BaseModel):
         acciones_custodia: Sequence[AccionDisponible] = (),
         acciones_complementarias: Sequence[AccionDisponible] = (),
         situacion: SituacionOperativa | None = None,
+        fotos_habilitadas: bool = False,
     ) -> "OrdenOut":
         vigentes = _vigentes(orden)
         en_ingreso = es_ingreso_inicial(orden)
@@ -1949,6 +2054,11 @@ class OrdenOut(BaseModel):
                 else None
             ),
             ingreso_inicial=en_ingreso,
+            fotos=[
+                FotoOut(**foto.model_dump(exclude={"objeto"}))
+                for foto in orden.fotos
+            ],
+            fotos_habilitadas=fotos_habilitadas,
             created_at=orden.created_at,
             updated_at=orden.updated_at,
         )

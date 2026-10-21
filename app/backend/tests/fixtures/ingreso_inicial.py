@@ -28,7 +28,10 @@ def crear_con_recepcion(
             "/api/orders",
             json={
                 "usuario_id": RECEPCION,
-                "cliente": {"nombre": "Ana Gomez", "telefono": "341-555"},
+                "cliente": {
+                    "nombre_apellido": "Ana Gomez",
+                    "telefono": "341-555",
+                },
                 "equipo": {
                     "marca": "Apple",
                     "modelo": "iPhone 14",

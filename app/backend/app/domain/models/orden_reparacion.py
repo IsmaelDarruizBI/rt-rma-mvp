@@ -15,6 +15,7 @@ from .enums import (
     OrigenOrden,
 )
 from .equipos import EntregaEquipo, Equipo
+from .fotos import FotoOrden
 from .inventario import MovimientoInsumo
 from .pagos import ResumenPago
 from .personas import Cliente
@@ -91,6 +92,9 @@ class OrdenReparacion(BaseModel):
     # del mas antiguo al mas reciente; el vigente es el ultimo (si no lo
     # quito). Default vacio: un JSON anterior sigue cargando sin descuento.
     descuentos: list[RegistroDescuento] = Field(default_factory=list)
+    # Fotos del equipo (UAT-010): solo sus datos; la imagen esta en el
+    # almacenamiento de objetos. Default vacio: un JSON anterior carga.
+    fotos: list[FotoOrden] = Field(default_factory=list)
 
     # PROC-REP-270 tras una cancelacion: devolucion fisica del equipo sin
     # reparar. Default None: un JSON anterior sigue cargando.

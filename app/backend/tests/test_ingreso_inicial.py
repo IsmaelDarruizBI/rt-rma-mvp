@@ -187,7 +187,7 @@ def test_el_comprobante_de_ingreso_tiene_lo_del_cliente_y_nada_interno(
 
     contenido = documento["contenido"]
     assert documento["version"] == 1
-    assert contenido["cliente"]["nombre"] == "Ana Gomez"
+    assert contenido["cliente"]["nombre_apellido"] == "Ana Gomez"
     assert contenido["equipo"]["modelo"] == "iPhone 14"
     assert contenido["estado_fisico"] == ESTADO_FISICO
     assert contenido["accesorios"] == ["Cargador"]

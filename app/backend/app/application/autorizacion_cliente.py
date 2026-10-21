@@ -282,7 +282,9 @@ def pendientes_de_autorizacion(
                 PendienteAutorizacion(
                     orden_id=orden.id,
                     cliente_nombre=(
-                        orden.cliente.nombre if orden.cliente else orden.id
+                        orden.cliente.nombre_apellido
+                        if orden.cliente
+                        else orden.id
                     ),
                     equipo=f"{orden.equipo.marca} {orden.equipo.modelo}",
                     detalle_id=detalle.id,

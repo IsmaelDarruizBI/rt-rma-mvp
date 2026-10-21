@@ -22,8 +22,16 @@ import {
   fechaCorta,
   importe,
 } from "../../components/ui";
-import type { OrdenResumen, Usuario } from "../../types/api";
+import type {
+  BusquedaCliente,
+  OrdenResumen,
+  PersonaExterna,
+  Usuario,
+} from "../../types/api";
 import type { DatosNuevaOrden, DatosNuevaOrdenRt } from "../../api/ordenes";
+import { buscarClientePorDni } from "../../api/clientes";
+import { ApiError } from "../../api/client";
+import { normalizarDni } from "./clientes";
 import {
   ESTADO_WORKFLOW,
   ORIGEN,
@@ -618,13 +626,17 @@ function CamposIngreso({
             inputMode="numeric"
           />
         </Campo>
-        <Campo etiqueta="N.º de serie (si tiene)">
-          <input
-            value={ingreso.numeroSerie}
-            onChange={cambiar("numeroSerie")}
-            style={estiloInput}
-          />
-        </Campo>
+        {/* UAT-011: el alta de Cliente Externo no pide el número de serie
+            (el dato sigue existiendo y otros orígenes lo cargan). */}
+        {!clienteExterno && (
+          <Campo etiqueta="N.º de serie (si tiene)">
+            <input
+              value={ingreso.numeroSerie}
+              onChange={cambiar("numeroSerie")}
+              style={estiloInput}
+            />
+          </Campo>
+        )}
       </div>
       <Campo etiqueta="Estado físico al recibirlo">
         <textarea
@@ -673,6 +685,196 @@ function CamposIngreso({
   );
 }
 
+interface DatosElegidos {
+  nombreApellido: string;
+  telefono: string | null;
+  clienteId: string | null;
+}
+
+/**
+ * DNI y «Buscar datos» (UAT-010): primero nuestras Órdenes (un cliente que
+ * ya vino) y, si hay una fuente externa autorizada, esa fuente. Nada se
+ * completa solo: Recepción revisa, corrige y elige «Usar estos datos». La
+ * carga manual sigue disponible siempre. El estado vive en el formulario:
+ * «Crear Orden» también busca el DNI en nuestra base antes de crear.
+ */
+function BusquedaPorDni({
+  dni,
+  dniInvalido,
+  puedeBuscar,
+  buscando,
+  resultado,
+  error,
+  clienteId,
+  onDni,
+  onBuscar,
+  onUsar,
+  onDescartar,
+  onDesvincular,
+}: {
+  dni: string;
+  dniInvalido: boolean;
+  puedeBuscar: boolean;
+  buscando: boolean;
+  resultado: BusquedaCliente | null;
+  error: string | null;
+  clienteId: string | null;
+  onDni: (dni: string) => void;
+  onBuscar: () => void;
+  onUsar: (datos: DatosElegidos) => void;
+  onDescartar: () => void;
+  onDesvincular: () => void;
+}) {
+  return (
+    <div style={{ marginBottom: "0.6rem" }}>
+      <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 10rem" }}>
+          <Campo etiqueta="DNI (opcional)">
+            <input
+              value={dni}
+              inputMode="numeric"
+              autoComplete="off"
+              onChange={(evento) => onDni(evento.target.value)}
+              style={estiloInput}
+            />
+          </Campo>
+        </div>
+        <div style={{ marginBottom: "0.6rem" }}>
+          <Boton variante="secundario" disabled={!puedeBuscar} onClick={onBuscar}>
+            {buscando ? "Buscando…" : "Buscar datos"}
+          </Boton>
+        </div>
+      </div>
+      {dniInvalido && (
+        <p role="alert" style={{ margin: "-0.3rem 0 0.5rem", fontSize: "0.8rem", color: colores.alerta }}>
+          El DNI debe tener 7 u 8 dígitos (sin letras).
+        </p>
+      )}
+      {clienteId && (
+        <p style={{ margin: "-0.3rem 0 0.5rem", fontSize: "0.8rem", color: colores.ok }}>
+          Cliente existente: la Orden queda vinculada a sus Órdenes anteriores.{" "}
+          <button
+            type="button"
+            onClick={onDesvincular}
+            style={{ border: 0, background: "none", padding: 0, color: colores.acento, cursor: "pointer", fontSize: "0.8rem", textDecoration: "underline" }}
+          >
+            Desvincular
+          </button>
+        </p>
+      )}
+      {error && (
+        <p role="alert" style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.alerta }}>
+          {error}
+        </p>
+      )}
+      {resultado && (
+        <RevisionDeDatos resultado={resultado} onUsar={onUsar} onDescartar={onDescartar} />
+      )}
+    </div>
+  );
+}
+
+/** El resultado para revisar: nada se usa sin que Recepción lo elija. */
+function RevisionDeDatos({
+  resultado,
+  onUsar,
+  onDescartar,
+}: {
+  resultado: BusquedaCliente;
+  onUsar: (datos: DatosElegidos) => void;
+  onDescartar: () => void;
+}) {
+  return (
+    <div
+      role="region"
+      aria-label="Datos encontrados"
+      style={{
+        border: `1px solid ${colores.borde}`,
+        borderRadius: 6,
+        padding: "0.5rem 0.7rem",
+        margin: "0 0 0.6rem",
+        background: colores.fondo,
+        fontSize: "0.85rem",
+      }}
+    >
+      <p style={{ margin: "0 0 0.4rem" }}>{resultado.mensaje}</p>
+      {resultado.conocidos.map((conocido) => (
+        <div key={conocido.cliente_id} style={{ margin: "0 0 0.5rem" }}>
+          <strong>{conocido.nombre_apellido}</strong> · {conocido.telefono}
+          {conocido.email ? ` · ${conocido.email}` : ""}
+          <span style={{ color: colores.suave }}>
+            {" "}
+            · {conocido.ordenes === 1 ? "1 Orden" : `${conocido.ordenes} Órdenes`},
+            la última {conocido.ultima_orden_id} ({fechaCorta(conocido.ultima_fecha)})
+          </span>
+          <div style={{ marginTop: "0.3rem" }}>
+            <Boton
+              variante="secundario"
+              onClick={() =>
+                onUsar({
+                  nombreApellido: conocido.nombre_apellido,
+                  telefono: conocido.telefono,
+                  clienteId: conocido.cliente_id,
+                })
+              }
+            >
+              Usar estos datos
+            </Boton>
+          </div>
+        </div>
+      ))}
+      {resultado.externos.map((persona, indice) => (
+        <PersonaParaRevisar
+          key={`${persona.nombre_apellido}-${indice}`}
+          persona={persona}
+          onUsar={onUsar}
+        />
+      ))}
+      <Boton variante="secundario" onClick={onDescartar}>
+        {resultado.conocidos.length || resultado.externos.length ? "Descartar" : "Cerrar"}
+      </Boton>
+    </div>
+  );
+}
+
+/**
+ * El nombre completo que devuelve una fuente externa, tal cual (no se
+ * separa), editable antes de confirmarlo.
+ */
+function PersonaParaRevisar({
+  persona,
+  onUsar,
+}: {
+  persona: PersonaExterna;
+  onUsar: (datos: DatosElegidos) => void;
+}) {
+  const [nombreApellido, setNombreApellido] = useState(persona.nombre_apellido);
+  return (
+    <div style={{ margin: "0 0 0.5rem" }}>
+      <Campo etiqueta="Nombre y apellido según la fuente (revisalo)">
+        <input
+          value={nombreApellido}
+          onChange={(evento) => setNombreApellido(evento.target.value)}
+          style={estiloInput}
+        />
+      </Campo>
+      <Boton
+        variante="secundario"
+        disabled={nombreApellido.trim() === ""}
+        onClick={() =>
+          onUsar({
+            nombreApellido: nombreApellido.trim(),
+            telefono: null,
+            clienteId: null,
+          })
+        }
+      >
+        Usar estos datos
+      </Boton>
+    </div>
+  );
+}
+
 /** Campos del alta de cliente externo (dentro de "Nueva Orden"). */
 export function FormularioNuevaOrden({
   actor,
@@ -683,15 +885,86 @@ export function FormularioNuevaOrden({
   ocupado: boolean;
   onCrear: (datos: DatosNuevaOrden) => void;
 }) {
-  const [nombre, setNombre] = useState("Cliente de Prueba");
+  const [nombreApellido, setNombreApellido] = useState("Cliente de Prueba");
   const [telefono, setTelefono] = useState("341-0000000");
+  const [dni, setDni] = useState("");
+  // Cliente que ya tiene Órdenes y cuyos datos eligió usar Recepción.
+  const [clienteId, setClienteId] = useState<string | null>(null);
+  const [buscando, setBuscando] = useState(false);
+  const [resultado, setResultado] = useState<BusquedaCliente | null>(null);
+  const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null);
+  // Para qué DNI ya se buscó (crear con un DNI nuevo lo busca antes).
+  const [buscadoPara, setBuscadoPara] = useState<string | null>(null);
   const [marca, setMarca] = useState("Apple");
   const [modelo, setModelo] = useState("iPhone 14");
   const [falla, setFalla] = useState("La batería dura poco.");
   const [ingreso, setIngreso] = useState<Ingreso>(ingresoInicial);
 
   const esRecepcion = actor?.rol === "RECEPCION";
-  const completo = nombre && telefono && marca && modelo && falla;
+  const dniNormalizado = normalizarDni(dni);
+  const dniInvalido = dni.trim() !== "" && dniNormalizado === null;
+  const completo =
+    nombreApellido.trim() && telefono.trim() && marca && modelo && falla && !dniInvalido;
+  const puedeBuscar =
+    actor !== null &&
+    (actor.rol === "RECEPCION" || actor.rol === "ADMINISTRADOR") &&
+    dniNormalizado !== null &&
+    !buscando;
+
+  async function buscar(externa: boolean): Promise<BusquedaCliente | null> {
+    if (!actor || !dniNormalizado) return null;
+    setBuscando(true);
+    setErrorBusqueda(null);
+    setResultado(null);
+    try {
+      const encontrado = await buscarClientePorDni(dniNormalizado, actor.id, externa);
+      setBuscadoPara(dniNormalizado);
+      // La comprobación previa al alta solo se muestra si ya es cliente.
+      if (externa || encontrado.origen === "BASE") setResultado(encontrado);
+      return encontrado;
+    } catch (fallo) {
+      // Una búsqueda fallida nunca impide crear la Orden.
+      if (externa) {
+        setErrorBusqueda(
+          fallo instanceof ApiError
+            ? fallo.message
+            : "No se pudo buscar. Cargá los datos a mano.",
+        );
+      }
+      return null;
+    } finally {
+      setBuscando(false);
+    }
+  }
+
+  async function crear() {
+    if (!actor) return;
+    // Un DNI que ya es de un cliente se reutiliza: antes de crear se busca
+    // en nuestra base (si no se buscó) y, si ya existe, se muestra para
+    // elegirlo. Si la búsqueda falla, se crea igual (el backend tampoco
+    // deja duplicar).
+    if (dniNormalizado && !clienteId && buscadoPara !== dniNormalizado) {
+      const encontrado = await buscar(false);
+      if (encontrado?.origen === "BASE") return;
+    }
+    const { identificadores, recepcion } = datosDeIngreso(ingreso);
+    onCrear({
+      usuario_id: actor.id,
+      cliente: {
+        nombre_apellido: nombreApellido.trim(),
+        telefono: telefono.trim(),
+        dni: dniNormalizado,
+        ...(clienteId ? { id: clienteId } : {}),
+      },
+      equipo: {
+        marca,
+        modelo,
+        falla_reportada: falla,
+        ...identificadores,
+      },
+      recepcion,
+    });
+  }
 
   return (
     <div>
@@ -706,10 +979,36 @@ export function FormularioNuevaOrden({
           La crea Recepción: elegí ese usuario arriba para cargarla.
         </p>
       )}
-      <Campo etiqueta="Cliente">
+      <BusquedaPorDni
+        dni={dni}
+        dniInvalido={dniInvalido}
+        puedeBuscar={puedeBuscar}
+        buscando={buscando}
+        resultado={resultado}
+        error={errorBusqueda}
+        clienteId={clienteId}
+        onDni={(valor) => {
+          setDni(valor);
+          // Otro DNI ya no es el cliente elegido.
+          setClienteId(null);
+          setResultado(null);
+          setErrorBusqueda(null);
+        }}
+        onBuscar={() => void buscar(true)}
+        onUsar={(datos) => {
+          setNombreApellido(datos.nombreApellido);
+          if (datos.telefono) setTelefono(datos.telefono);
+          setClienteId(datos.clienteId);
+          setResultado(null);
+        }}
+        onDescartar={() => setResultado(null)}
+        onDesvincular={() => setClienteId(null)}
+      />
+      <Campo etiqueta="Nombre y apellido">
         <input
-          value={nombre}
-          onChange={(evento) => setNombre(evento.target.value)}
+          value={nombreApellido}
+          autoComplete="off"
+          onChange={(evento) => setNombreApellido(evento.target.value)}
           style={estiloInput}
         />
       </Campo>
@@ -742,23 +1041,14 @@ export function FormularioNuevaOrden({
         />
       </Campo>
       <CamposIngreso ingreso={ingreso} clienteExterno onCambiar={setIngreso} />
+      {!nombreApellido.trim() && (
+        <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.alerta }}>
+          Falta el nombre y apellido del cliente.
+        </p>
+      )}
       <Boton
-        disabled={!esRecepcion || ocupado || !completo || !actor}
-        onClick={() => {
-          if (!actor) return;
-          const { identificadores, recepcion } = datosDeIngreso(ingreso);
-          onCrear({
-            usuario_id: actor.id,
-            cliente: { nombre, telefono },
-            equipo: {
-              marca,
-              modelo,
-              falla_reportada: falla,
-              ...identificadores,
-            },
-            recepcion,
-          });
-        }}
+        disabled={!esRecepcion || ocupado || buscando || !completo || !actor}
+        onClick={() => void crear()}
       >
         Crear Orden
       </Boton>

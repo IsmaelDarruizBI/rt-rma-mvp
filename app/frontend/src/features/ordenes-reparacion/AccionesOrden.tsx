@@ -783,7 +783,7 @@ function FormularioDevolucion({
   onConfirmar: (retiro: DatosRetiro) => void;
 }) {
   const [recibidoPor, setRecibidoPor] = useState(
-    orden.cliente?.nombre ?? "Gestión RT",
+    orden.cliente?.nombre_apellido ?? "Gestión RT",
   );
   const [identificacion, setIdentificacion] = useState("");
   const [observaciones, setObservaciones] = useState("");
@@ -859,7 +859,7 @@ function FormularioEntrega({
   const [confirmando, setConfirmando] = useState(false);
   const enCustodia = orden.custodia.estado === "EN_CUSTODIA";
   const bloqueado = deshabilitado || !enCustodia || bloqueo !== null;
-  const titular = orden.cliente?.nombre ?? null;
+  const titular = orden.cliente?.nombre_apellido ?? null;
   const devolucion = orden.finalizada_sin_reparacion;
 
   useEffect(

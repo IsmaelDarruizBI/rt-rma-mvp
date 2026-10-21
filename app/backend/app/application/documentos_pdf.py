@@ -171,7 +171,7 @@ def _cliente_y_equipo(hoja: _Hoja, contenido, zona: tzinfo) -> None:
     cliente = contenido.cliente
     equipo = contenido.equipo
     izquierda = [
-        ("Cliente", cliente.nombre if cliente else "—"),
+        ("Cliente", cliente.nombre_apellido if cliente else "—"),
         ("Teléfono", cliente.telefono if cliente else "—"),
     ]
     if cliente and cliente.email:

@@ -65,6 +65,7 @@ from .enums import (
     TipoReferenciaHistorial,
 )
 from .equipos import DevolucionEquipo, EntregaEquipo, Equipo
+from .fotos import FotoOrden
 from .inventario import InsumoUtilizado, MovimientoInsumo, MovimientoStock
 from .orden_reparacion import OrdenReparacion
 from .pagos import AnulacionPago, DevolucionDinero, Pago, ResumenPago
@@ -120,6 +121,7 @@ __all__ = [
     "Equipo",
     "Usuario",
     # Recepcion y custodia
+    "FotoOrden",
     "ConfirmacionRecepcion",
     "DatosRecepcion",
     "NoRecepcion",

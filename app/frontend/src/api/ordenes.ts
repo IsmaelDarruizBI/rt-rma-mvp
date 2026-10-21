@@ -25,7 +25,7 @@ import type {
   Usuario,
   VistaPreviaDocumento,
 } from "../types/api";
-import { get, getArchivo, post, put } from "./client";
+import { get, getArchivo, post, postArchivo, put, urlApi } from "./client";
 
 // --- Catalogos ---------------------------------------------------------
 
@@ -72,7 +72,19 @@ export interface DatosEquipo {
 
 export interface DatosNuevaOrden {
   usuario_id: string;
-  cliente: { nombre: string; telefono: string; email?: string | null };
+  /**
+   * `nombre_apellido`: el nombre completo tal como se carga. `dni`:
+   * opcional (solo dígitos). `id`: el de un cliente que ya tiene Órdenes,
+   * si Recepción eligió usar sus datos; sin `id`, un DNI que ya es de otro
+   * cliente se rechaza (409 CLIENTE_EXISTENTE) para no duplicarlo.
+   */
+  cliente: {
+    nombre_apellido: string;
+    telefono: string;
+    email?: string | null;
+    dni?: string | null;
+    id?: string;
+  };
   equipo: DatosEquipo;
   /** Condiciones del ingreso; la recepción física se confirma aparte. */
   recepcion?: DatosRecepcion;
@@ -442,6 +454,26 @@ export interface DatosRetiro {
   recibido_por: string;
   identificacion_receptor: string | null;
   observaciones: string | null;
+}
+
+/**
+ * Sube UNA foto del equipo (cualquier usuario operativo). La imagen va al
+ * almacenamiento privado; la Orden registra quién la subió y cuándo.
+ */
+export function subirFoto(
+  ordenId: string,
+  usuarioId: string,
+  foto: Blob,
+  nombre: string | null,
+): Promise<Orden> {
+  const consulta = new URLSearchParams({ usuario_id: usuarioId });
+  if (nombre) consulta.set("nombre", nombre);
+  return postArchivo<Orden>(`/api/orders/${ordenId}/photos?${consulta}`, foto);
+}
+
+/** Dirección de la imagen de una foto (la sirve el backend). */
+export function urlFoto(ordenId: string, fotoId: string): string {
+  return urlApi(`/api/orders/${ordenId}/photos/${fotoId}`);
 }
 
 /**

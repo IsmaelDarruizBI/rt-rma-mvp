@@ -293,7 +293,7 @@ def test_cliente_externo_sigue_funcionando_igual_junto_a_rt_interno(cliente):
     orden = respuesta.json()
 
     assert orden["origen"] == "CLIENTE_EXTERNO"
-    assert orden["cliente"]["nombre"] == "Cliente de Prueba"
+    assert orden["cliente"]["nombre_apellido"] == "Cliente de Prueba"
     assert orden["resumen"]["condicion_comercial"] == "COBRABLE"
 
     orden = definir_y_finalizar(

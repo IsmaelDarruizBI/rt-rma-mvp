@@ -150,7 +150,8 @@ export function CustodiaOrden(props: Props) {
     <div>
       {orden.cliente ? (
         <>
-          <Fila etiqueta="Cliente" valor={orden.cliente.nombre} />
+          <Fila etiqueta="Cliente" valor={orden.cliente.nombre_apellido} />
+          {orden.cliente.dni && <Fila etiqueta="DNI" valor={orden.cliente.dni} />}
           <Fila etiqueta="Teléfono" valor={orden.cliente.telefono} />
         </>
       ) : (

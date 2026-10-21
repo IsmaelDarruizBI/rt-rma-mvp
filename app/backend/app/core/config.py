@@ -46,6 +46,18 @@ class Settings(BaseSettings):
     # del sistema operativo.
     utc_offset_horas: int = -3
 
+    # Fotos del equipo (UAT-010). En Cloud Run: un bucket PRIVADO de
+    # Cloud Storage (``RMA_FOTOS_BUCKET``). ``RMA_FOTOS_DIR`` es solo para
+    # desarrollo local. Sin ninguno de los dos, las fotos estan
+    # deshabilitadas: nunca se guardan en el disco efimero del servidor.
+    fotos_bucket: str | None = None
+    fotos_dir: Path | None = None
+
+    # Consulta externa de datos por DNI: limites (solo si hay una fuente
+    # autorizada configurada; hoy ninguna).
+    consulta_dni_intervalo_s: float = 2.0
+    consulta_dni_max_por_minuto: int = 10
+
     @property
     def ordenes_dir(self) -> Path:
         """Directorio de las Ordenes persistidas."""

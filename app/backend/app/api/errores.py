@@ -15,6 +15,7 @@ Correspondencia:
     RequestValidationError             -> 422  (el request esta mal formado)
     ConflictoDeEscrituraError          -> 409  (la Orden cambio: recargar)
     PersistenciaError / RepositoryError-> 500  (fallo de infraestructura)
+    AlmacenFotosError                  -> 503  (almacenamiento de fotos)
 
 Las especializaciones de ``PrecondicionInvalidaError`` (Orden cerrada,
 toma de otro tecnico, confirmacion requerida) siguen siendo 409, pero
@@ -46,6 +47,7 @@ from app.services import (
     PrecondicionInvalidaError,
     RecursoNoDisponibleError,
 )
+from app.storage import AlmacenFotosError
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +123,19 @@ def registrar_manejadores_de_error(application: FastAPI) -> None:
             "REQUEST_INVALIDO",
             f"Los datos enviados no son validos. {detalles}".strip(),
             status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+    @application.exception_handler(AlmacenFotosError)
+    async def _almacen_fotos(
+        _: Request,
+        error: AlmacenFotosError,
+    ) -> JSONResponse:
+        """El almacenamiento de fotos fallo: se reintenta, no es un 500."""
+        logger.warning("Almacenamiento de fotos: %s", error)
+        return _respuesta(
+            "ALMACENAMIENTO_NO_DISPONIBLE",
+            "No se pudo acceder al almacenamiento de fotos. Probá de nuevo.",
+            status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
     @application.exception_handler(ConflictoDeEscrituraError)

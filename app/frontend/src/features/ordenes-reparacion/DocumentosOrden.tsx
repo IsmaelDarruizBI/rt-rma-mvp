@@ -938,7 +938,7 @@ function Partes({ contenido }: { contenido: ContenidoDocumento }) {
       {cliente ? (
         <Dato
           etiqueta="Cliente"
-          valor={[cliente.nombre, cliente.telefono, cliente.email]
+          valor={[cliente.nombre_apellido, cliente.telefono, cliente.email]
             .filter(Boolean)
             .join(" · ")}
         />

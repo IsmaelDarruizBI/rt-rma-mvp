@@ -521,9 +521,58 @@ export interface Estacion {
 
 export interface Cliente {
   id: string;
-  nombre: string;
+  /** Solo dígitos; opcional (UAT-010). */
+  dni?: string | null;
+  /** El nombre completo tal como se cargó (no se separa). */
+  nombre_apellido: string;
   telefono: string;
   email: string | null;
+}
+
+/** Una foto del equipo: sus datos; la imagen se pide aparte (UAT-010). */
+export interface FotoOrden {
+  id: string;
+  tipo_contenido: string;
+  tamano_bytes: number;
+  usuario_id: string;
+  fecha: string;
+  nombre_original: string | null;
+}
+
+/** Un cliente que ya tiene Órdenes con ese DNI. */
+export interface ClienteConocido {
+  cliente_id: string;
+  nombre_apellido: string;
+  telefono: string;
+  email: string | null;
+  ultima_orden_id: string;
+  ultima_fecha: string;
+  ordenes: number;
+}
+
+/** Lo que devuelve una fuente externa autorizada (solo lo del formulario). */
+export interface PersonaExterna {
+  /** El nombre completo tal como lo da la fuente (no se separa). */
+  nombre_apellido: string;
+}
+
+export type EstadoBusquedaCliente =
+  | "ENCONTRADO"
+  | "AMBIGUO"
+  | "SIN_RESULTADOS"
+  | "NO_DISPONIBLE"
+  | "LIMITE"
+  | "NO_HABILITADA";
+
+/** `GET /api/clients/lookup`: para revisar; la búsqueda no guarda nada. */
+export interface BusquedaCliente {
+  dni: string;
+  estado: EstadoBusquedaCliente;
+  mensaje: string;
+  origen: "BASE" | "EXTERNO" | null;
+  fuente: string | null;
+  conocidos: ClienteConocido[];
+  externos: PersonaExterna[];
 }
 
 export interface Equipo {
@@ -934,6 +983,9 @@ export interface Orden {
   situacion: Situacion | null;
   /** Ingreso inicial de Cliente Externo: falta el comprobante de ingreso. */
   ingreso_inicial?: boolean;
+  /** Fotos del equipo y si el entorno tiene dónde guardarlas (UAT-010). */
+  fotos?: FotoOrden[];
+  fotos_habilitadas?: boolean;
   created_at: string;
   updated_at: string;
   /** Solo lo devuelven notificar y registrar pago (PROC-REP-265). */
