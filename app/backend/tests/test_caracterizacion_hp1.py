@@ -28,11 +28,17 @@ ahi) y la deja esperando en PROC-REP-129; Recepcion registra la
 autorizacion (PROC-REP-046 -> 047). Las acciones de cada estado no
 cambian: registrar la decision se ofrece aparte
 (``acciones_de_autorizacion``).
+
+Cuarta excepcion deliberada (check-in al cierre, UAT-009): con la
+reparacion lista y antes de la entrega, CLIENTE_EXTERNO ofrece
+``REGISTRAR_CHECKIN`` (ADMINISTRADOR o RECEPCION). No es un nodo: no
+cambia el recorrido.
 """
 
 from app.application import acciones_disponibles, progreso
 from app.domain.models import RolUsuario
 from app.services import (
+    ROLES_CHECKIN,
     habilitar_orden,
     marcar_reparacion_lista,
     validar_factibilidad_detalles,
@@ -315,6 +321,7 @@ def test_reparacion_lista_sin_notificar():
     assert _codigos_y_roles(orden) == [
         ("NOTIFICAR", (RolUsuario.RECEPCION,), None),
         ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None),
+        ("REGISTRAR_CHECKIN", ROLES_CHECKIN, None),
     ]
     assert _alcanzados(orden) == [
         "PROC-REP-010",
@@ -354,6 +361,7 @@ def test_reparacion_lista_con_saldo():
 
     assert _codigos_y_roles(orden) == [
         ("REGISTRAR_PAGO", ROLES_PAGO_ANTES_DEL_FIX, None),
+        ("REGISTRAR_CHECKIN", ROLES_CHECKIN, None),
     ]
     assert _alcanzados(orden) == [
         "PROC-REP-010",
@@ -394,6 +402,7 @@ def test_reparacion_lista_sin_saldo():
     orden = flujo_mvp.orden_pagada()
 
     assert _codigos_y_roles(orden) == [
+        ("REGISTRAR_CHECKIN", ROLES_CHECKIN, None),
         (
             "ENTREGAR",
             (RolUsuario.ADMINISTRADOR, RolUsuario.RECEPCION),

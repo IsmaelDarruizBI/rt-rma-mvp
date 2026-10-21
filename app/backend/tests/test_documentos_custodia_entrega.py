@@ -47,6 +47,7 @@ from tests.fixtures.api_salidas import (
     sembrar,
     tomada,
 )
+from tests.fixtures.custodia import checkin_si_falta, registrar_checkin
 
 ARGENTINA = timezone(timedelta(hours=-3))
 INICIO = datetime(2026, 10, 1, 13, 0, tzinfo=timezone.utc)
@@ -97,7 +98,6 @@ def _ingresar(
     estado_fisico=ESTADO,
     accesorios=("Cargador", "Funda"),
     observaciones="El cliente pide conservar los datos.",
-    checkin=True,
 ) -> str:
     return ok(
         cliente.post(
@@ -120,7 +120,6 @@ def _ingresar(
                     "estado_fisico": estado_fisico,
                     "accesorios": list(accesorios),
                     "observaciones": observaciones,
-                    "checkin": checkin,
                 },
             },
         )
@@ -171,7 +170,8 @@ def _definida(cliente, *tipos) -> str:
 
 
 def _reparada(cliente, orden_id, *detalles) -> dict:
-    """Toma, ejecuta y aprueba cada Detalle: REPARACION_LISTA."""
+    """Toma, ejecuta y aprueba cada Detalle: REPARACION_LISTA, con el
+    check-in (realizado) si la Orden lo ofrece (UAT-009)."""
     tomada(cliente, orden_id)
     tipos = {"DET-001": BATERIA, "DET-002": PANTALLA}
     for detalle_id in detalles or ("DET-001",):
@@ -180,7 +180,7 @@ def _reparada(cliente, orden_id, *detalles) -> dict:
     for detalle_id in detalles or ("DET-001",):
         orden = ok(aprobar(cliente, orden_id, detalle_id))
     assert orden["estado_workflow"] == "REPARACION_LISTA"
-    return orden
+    return checkin_si_falta(cliente, orden_id)
 
 
 def _notificar(cliente, orden_id) -> dict:
@@ -227,6 +227,10 @@ def _devolver_equipo(cliente, orden_id, **extra):
         f"/api/orders/{orden_id}/return-equipment",
         json={"usuario_id": RECEPCION, "recibido_por": "Maria Gomez", **extra},
     )
+
+
+def _codigos_de(orden) -> list[str]:
+    return [accion["codigo"] for accion in orden["acciones_disponibles"]]
 
 
 def _orden(cliente, orden_id) -> dict:
@@ -278,12 +282,13 @@ def test_1_datos_fisicos_de_recepcion(cliente):
     assert orden["equipo"]["numero_serie"] == "SN-C02XK1"
     recepcion = orden["recepcion"]
     assert recepcion["registro"] == "INGRESO"
+    # El check-in no es del ingreso: se registra antes de la entrega.
     assert recepcion["datos"] == {
         "estado_fisico": ESTADO,
         "accesorios": ["Cargador", "Funda"],
         "observaciones": "El cliente pide conservar los datos.",
         "notas_internas": None,
-        "checkin": True,
+        "checkin": None,
     }
     assert recepcion["registrado_por"] == RECEPCION
     assert recepcion["registrado_en"].startswith("2026-10-01T13:00")
@@ -516,6 +521,9 @@ def test_6_orden_anterior_se_regulariza_antes_de_entregar(cliente, tmp_path):
     )
     assert orden["custodia"]["estado"] == "EN_CUSTODIA"
     assert "Regularizacion" in orden["historial"][-1]["observacion"]
+    # Regularizada, tambien exige el check-in.
+    assert "check-in" in conflicto(_entregar(cliente, orden_id, **RETIRA))
+    ok(registrar_checkin(cliente, orden_id))
 
     entregada = ok(_entregar(cliente, orden_id, **RETIRA))
     assert entregada["estado_workflow"] == "ENTREGADA"
@@ -819,6 +827,8 @@ def test_16_comprobante_final(cliente, reloj):
         "id": ADMINISTRADOR,
         "nombre": "Administracion",
     }
+    # Con la garantia definitiva del trabajo, desde la entrega (UAT-009).
+    assert contenido["checkin"] is True
     assert contenido["trabajos_realizados"] == [
         {
             "detalle_id": "DET-001",
@@ -826,6 +836,8 @@ def test_16_comprobante_final(cliente, reloj):
             "nombre": "Cambio de bateria",
             "precio": "80000",
             "detalle_origen_id": None,
+            "garantia_dias": 90,
+            "garantia_vence": "2027-01-01",
         }
     ]
     assert contenido["cobrable"] is True
@@ -943,12 +955,15 @@ def test_21_garantia_rma_vinculada_a_la_orden_original(cliente, tmp_path):
     assert recepcion["estado_fisico"] == "Bateria hinchada; sin golpes."
 
     ok(_confirmar(cliente, rma_id))
-    _reparada(cliente, rma_id)
+    lista = _reparada(cliente, rma_id)
+    # La garantia RMA no pide el check-in para entregar (UAT-009).
+    assert "REGISTRAR_CHECKIN" not in _codigos_de(lista)
     _notificar(cliente, rma_id)
     orden = ok(_entregar(cliente, rma_id, **RETIRA))
 
     assert orden["estado_workflow"] == "ENTREGADA"
     final = _vigente(cliente, rma_id, "COMPROBANTE_ENTREGA")["contenido"]
+    assert final["checkin"] is None
     assert final["cobrable"] is False
     assert final["total"] is None and final["pagos"] == []
     assert final["trabajos_realizados"][0]["precio"] is None

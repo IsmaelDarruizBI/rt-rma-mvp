@@ -60,6 +60,7 @@ from .cierre import (
     informar_rt,
     notificar,
     rechazar_control,
+    registrar_checkin,
     registrar_pago_de_orden,
 )
 from .cola import cambiar_prioridad_de_orden, encolar_orden
@@ -247,6 +248,7 @@ __all__ = [
     "rechazar_control",
     "notificar",
     "registrar_pago_de_orden",
+    "registrar_checkin",
     "entregar",
     "informar_rt",
     "devolver_rt",

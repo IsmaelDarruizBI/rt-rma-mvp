@@ -76,6 +76,9 @@ class CodigoSituacion:
     CONTROL_TECNICO = "CONTROL_TECNICO"
     PENDIENTE_NOTIFICACION = "PENDIENTE_NOTIFICACION"
     PENDIENTE_COBRO = "PENDIENTE_COBRO"
+    # Avisada y saldada, pero sin el check-in que exige la entrega (UAT-009).
+    # Solo presentacion: el workflow sigue en REPARACION_LISTA.
+    PENDIENTE_CHECKIN = "PENDIENTE_CHECKIN"
     LISTA_PARA_ENTREGAR = "LISTA_PARA_ENTREGAR"
     CANCELADA_PENDIENTE_DEVOLUCION = "CANCELADA_PENDIENTE_DEVOLUCION"
     CERRADA = "CERRADA"
@@ -542,20 +545,38 @@ def _cierre(datos: _Datos) -> _Principal | None:
         )
     entregar = datos.flujo("ENTREGAR")
     if entregar:
+        tarea_entrega = _tarea(
+            "Entregar el equipo",
+            "Registrar quién lo retira; se emiten el comprobante y la "
+            "garantía.",
+            entregar,
+        )
+        checkin = datos.flujo("REGISTRAR_CHECKIN")
+        if checkin and any(accion.bloqueo for accion in entregar):
+            return _Principal(
+                codigo=CodigoSituacion.PENDIENTE_CHECKIN,
+                titulo="Pendiente de verificación de funciones básicas",
+                descripcion="El cliente fue avisado y la cuenta está "
+                "saldada: antes de entregar falta registrar si se pudieron "
+                "verificar las funciones básicas del equipo.",
+                desde=avisada_desde,
+                tareas=(
+                    _tarea(
+                        "Registrar el check-in",
+                        "Si se pudieron verificar las funciones básicas: "
+                        "define la garantía de cada trabajo (90 o 30 días).",
+                        checkin,
+                    ),
+                    tarea_entrega,
+                ),
+            )
         return _Principal(
             codigo=CodigoSituacion.LISTA_PARA_ENTREGAR,
             titulo="Lista para entregar",
             descripcion="El cliente fue avisado y la cuenta está saldada: "
             "puede retirar el equipo.",
             desde=avisada_desde,
-            tareas=(
-                _tarea(
-                    "Entregar el equipo",
-                    "Registrar quién lo retira; se emiten el comprobante y "
-                    "la garantía.",
-                    entregar,
-                ),
-            ),
+            tareas=(tarea_entrega,),
         )
     devolver_rt = datos.flujo("DEVOLVER_RT")
     if devolver_rt:

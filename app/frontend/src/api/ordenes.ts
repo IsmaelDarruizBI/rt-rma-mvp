@@ -132,13 +132,10 @@ export function generarComprobanteIngreso(
   ordenId: string,
   usuarioId: string,
   canal: CanalComunicacion = "PRESENCIAL",
-  /** Solo si el ingreso todavía no registra el check-in. */
-  checkin: boolean | null = null,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/documents/intake-receipt`, {
     usuario_id: usuarioId,
     canal,
-    checkin,
   });
 }
 
@@ -448,9 +445,26 @@ export interface DatosRetiro {
 }
 
 /**
+ * Check-in antes de la entrega (Recepción o Administración), con la
+ * reparación lista: si se pudieron verificar las funciones básicas del
+ * equipo. Define la garantía de cada trabajo (90 o 30 días) sin pisar los
+ * plazos ajustados a mano. Se puede volver a registrar hasta entregar.
+ */
+export function registrarCheckin(
+  ordenId: string,
+  usuarioId: string,
+  realizado: boolean,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/checkin`, {
+    usuario_id: usuarioId,
+    realizado,
+  });
+}
+
+/**
  * PROC-REP-280 -> 270 -> EVT-REP-999 (Administración o Recepción). Exige
- * la custodia confirmada y quién retira; emite el comprobante final y la
- * garantía.
+ * la custodia confirmada, el check-in (Cliente Externo con trabajos
+ * realizados) y quién retira; emite el comprobante final y la garantía.
  */
 export function entregar(
   ordenId: string,

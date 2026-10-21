@@ -253,35 +253,8 @@ def normalizar_datos_recepcion(datos: DatosRecepcion | None) -> DatosRecepcion:
 
 
 def checkin_de(orden: OrdenReparacion) -> bool | None:
-    """El check-in registrado al ingreso, o ``None`` si no se registro."""
+    """El check-in vigente, o ``None`` si todavia no se registro."""
     return orden.recepcion.datos.checkin if orden.recepcion else None
-
-
-def completar_checkin(
-    orden: OrdenReparacion, *, checkin: bool
-) -> OrdenReparacion:
-    """Registra el check-in que el ingreso todavia no tiene.
-
-    No corrige un dato registrado (eso es la correccion del ingreso, antes
-    de confirmarlo): completa uno que falta. Sirve a las Ordenes anteriores
-    a la iteracion 1 que ya tienen la recepcion confirmada y todavia no el
-    comprobante de ingreso, que exige el check-in.
-    """
-    if orden.recepcion is None:
-        raise PrecondicionInvalidaError(
-            "La Orden no tiene datos de ingreso: registralos primero."
-        )
-    registrado = orden.recepcion.datos.checkin
-    if registrado is not None:
-        if registrado == checkin:
-            return orden
-        raise PrecondicionInvalidaError(
-            "El check-in ya esta registrado; se corrige en los datos del "
-            "ingreso, antes de confirmar la recepcion."
-        )
-    nueva_orden = orden.model_copy(deep=True)
-    nueva_orden.recepcion.datos.checkin = checkin
-    return nueva_orden
 
 
 def recepcion_inicial(
@@ -345,7 +318,12 @@ def registrar_datos_recepcion(
     validar_alguno_de(usuario, ROLES_RECEPCION_EQUIPO)
     _exigir_recepcion_modificable(orden)
 
-    datos = normalizar_datos_recepcion(datos)
+    # El check-in no es un dato del ingreso: se registra antes de la
+    # entrega (``services.garantias.registrar_checkin``). La correccion
+    # conserva el que haya (una Orden anterior puede tenerlo del ingreso).
+    datos = normalizar_datos_recepcion(datos).model_copy(
+        update={"checkin": checkin_de(orden)}
+    )
     equipo_nuevo = orden.equipo
     if equipo is not None:
         equipo_nuevo = equipo.model_copy(update={"id": orden.equipo.id})

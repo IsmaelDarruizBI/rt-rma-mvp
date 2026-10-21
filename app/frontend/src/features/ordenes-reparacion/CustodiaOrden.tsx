@@ -24,11 +24,12 @@ import type {
   DatosRecepcion,
   EstadoCustodia,
   Orden,
+  Recepcion,
   Usuario,
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
-import { CUSTODIA, etiqueta } from "./etiquetas";
-import { CampoCheckin, listaDeAccesorios } from "./ListadoOrdenes";
+import { CUSTODIA, descripcionCheckin, etiqueta } from "./etiquetas";
+import { listaDeAccesorios } from "./ListadoOrdenes";
 import { Confirmacion, Seccion, habilitada } from "./PagosOrden";
 import { UbicacionAccion } from "./presentacion";
 
@@ -44,11 +45,22 @@ interface Props {
   onObservar: (texto: string, interna: boolean) => void;
 }
 
-/** «Sí — 90 días» / «No — 30 días» / sin indicar. */
-function textoCheckin(checkin: boolean | null | undefined): string {
-  if (checkin === true) return "Realizado (garantía sugerida: 90 días)";
-  if (checkin === false) return "No realizado (garantía sugerida: 30 días)";
-  return "Sin indicar";
+/**
+ * El check-in vigente (se registra antes de la entrega) y quién lo
+ * registró; en una Orden anterior puede venir del ingreso.
+ */
+function textoDelCheckin(recepcion: Recepcion, usuarios: Usuario[]): string {
+  const { checkin } = recepcion.datos;
+  const texto = descripcionCheckin(checkin);
+  const registros = recepcion.registros_checkin ?? [];
+  const ultimo = registros[registros.length - 1];
+  if (ultimo) {
+    return `${texto} · ${nombreDeUsuario(usuarios, ultimo.usuario_id)} · ${fechaCorta(ultimo.fecha)}`;
+  }
+  if (checkin !== null && checkin !== undefined) {
+    return `${texto} · registrado en el ingreso`;
+  }
+  return texto;
 }
 
 const COLOR_CUSTODIA: Record<EstadoCustodia, string> = {
@@ -204,7 +216,7 @@ export function CustodiaOrden(props: Props) {
             />
           )}
           {orden.origen === "CLIENTE_EXTERNO" && (
-            <Fila etiqueta="Check-in" valor={textoCheckin(recepcion.datos.checkin)} />
+            <Fila etiqueta="Check-in" valor={textoDelCheckin(recepcion, usuarios)} />
           )}
           <Fila
             etiqueta={
@@ -439,11 +451,6 @@ function FormularioDatosIngreso({
   const [notasInternas, setNotasInternas] = useState(
     recepcion?.datos.notas_internas ?? "",
   );
-  const checkinActual = recepcion?.datos.checkin;
-  const [checkin, setCheckin] = useState<"" | "si" | "no">(
-    checkinActual === true ? "si" : checkinActual === false ? "no" : "",
-  );
-  const pideCheckin = orden.origen === "CLIENTE_EXTERNO";
   const deshabilitado = !habilitada(accion, actor) || ocupado;
 
   const titulo =
@@ -509,13 +516,6 @@ function FormularioDatosIngreso({
         notasInternas,
         setNotasInternas,
       )}
-      {pideCheckin && (
-        <CampoCheckin
-          valor={checkin}
-          deshabilitado={deshabilitado}
-          onCambiar={setCheckin}
-        />
-      )}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         <Boton
           disabled={deshabilitado || !marca.trim() || !modelo.trim() || !falla.trim()}
@@ -526,12 +526,6 @@ function FormularioDatosIngreso({
                 accesorios: listaDeAccesorios(accesorios),
                 observaciones: observaciones.trim() || null,
                 notas_internas: notasInternas.trim() || null,
-                // Sin el campo (otros Orígenes) se conserva lo registrado.
-                checkin: pideCheckin
-                  ? checkin === ""
-                    ? null
-                    : checkin === "si"
-                  : (checkinActual ?? null),
               },
               {
                 marca: marca.trim(),

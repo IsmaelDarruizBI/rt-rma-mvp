@@ -45,7 +45,6 @@ from .custodia import (
     agregar_nota_recepcion,
     armar_entrega,
     checkin_de,
-    completar_checkin,
     confirmar_recepcion_fisica,
     custodia_por_definir,
     custodia_resuelta,
@@ -121,8 +120,13 @@ from .exceptions import (
 )
 from .garantias import (
     ROLES_AJUSTE_GARANTIA,
+    ROLES_CHECKIN,
     ajustar_garantia_detalle,
+    checkin_pendiente_para_entrega,
+    checkin_registrable,
+    exigir_checkin_para_entrega,
     garantia_ajustable,
+    registrar_checkin_de_entrega,
 )
 from .identificadores import nuevo_id
 from .inventario import (
@@ -480,7 +484,6 @@ __all__ = [
     "ultimo_documento",
     "vencimiento_garantia",
     "checkin_de",
-    "completar_checkin",
     "contenido_comprobante_ingreso",
     "emitir_comprobante_ingreso",
     "ultimo_con_trabajos_autorizados",
@@ -499,8 +502,13 @@ __all__ = [
     "descripcion_de_descuento",
     "descuento_editable",
     "ROLES_AJUSTE_GARANTIA",
+    "ROLES_CHECKIN",
     "ajustar_garantia_detalle",
+    "checkin_pendiente_para_entrega",
+    "checkin_registrable",
+    "exigir_checkin_para_entrega",
     "garantia_ajustable",
+    "registrar_checkin_de_entrega",
     "es_ingreso_inicial",
     "exigir_fuera_del_ingreso_inicial",
     "faltantes_para_ingreso",

@@ -10,7 +10,7 @@
  * el origen y después se muestra solo el formulario de ese origen.
  */
 
-import { type ReactNode, useId, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
 import {
   Boton,
@@ -543,8 +543,6 @@ interface Ingreso {
   observaciones: string;
   /** Solo para el personal: nunca salen en un documento. */
   notasInternas: string;
-  /** Check-in del equipo (Cliente Externo): "" mientras no se eligió. */
-  checkin: "" | "si" | "no";
 }
 
 function ingresoInicial(): Ingreso {
@@ -555,7 +553,6 @@ function ingresoInicial(): Ingreso {
     accesorios: "Cargador",
     observaciones: "",
     notasInternas: "",
-    checkin: "",
   };
 }
 
@@ -582,72 +579,22 @@ function datosDeIngreso(ingreso: Ingreso) {
       accesorios: listaDeAccesorios(ingreso.accesorios),
       observaciones: textoONulo(ingreso.observaciones),
       notas_internas: textoONulo(ingreso.notasInternas),
-      checkin: ingreso.checkin === "" ? null : ingreso.checkin === "si",
     },
   };
 }
 
 /**
- * ¿Se hizo el check-in del equipo? Define la garantía sugerida de cada
- * trabajo (90 días con check-in, 30 sin). Obligatorio en Cliente Externo.
+ * Datos del ingreso. El check-in no se pide acá: se registra antes de la
+ * entrega, con la reparación lista (UAT-009).
  */
-export function CampoCheckin({
-  valor,
-  deshabilitado = false,
-  onCambiar,
-}: {
-  valor: "" | "si" | "no";
-  deshabilitado?: boolean;
-  onCambiar: (valor: "si" | "no") => void;
-}) {
-  // Un grupo de radios por formulario: puede haber dos en la misma pantalla.
-  const grupo = useId();
-  return (
-    <fieldset
-      style={{
-        border: `1px solid ${colores.borde}`,
-        borderRadius: 6,
-        margin: "0 0 0.6rem",
-        padding: "0.4rem 0.7rem 0.5rem",
-      }}
-    >
-      <legend style={{ fontSize: "0.85rem", padding: "0 0.3rem" }}>
-        ¿Se hizo el check-in del equipo? (obligatorio)
-      </legend>
-      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-        {(
-          [
-            ["si", "Sí — garantía de 90 días"],
-            ["no", "No — garantía de 30 días"],
-          ] as const
-        ).map(([opcion, texto]) => (
-          <label
-            key={opcion}
-            style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}
-          >
-            <input
-              type="radio"
-              name={`checkin-${grupo}`}
-              checked={valor === opcion}
-              disabled={deshabilitado}
-              onChange={() => onCambiar(opcion)}
-            />
-            {texto}
-          </label>
-        ))}
-      </div>
-    </fieldset>
-  );
-}
-
 function CamposIngreso({
   ingreso,
-  conCheckin = false,
+  clienteExterno = false,
   onCambiar,
 }: {
   ingreso: Ingreso;
-  /** Cliente Externo: pide el check-in. */
-  conCheckin?: boolean;
+  /** Cliente Externo: sigue con el comprobante de ingreso. */
+  clienteExterno?: boolean;
   onCambiar: (ingreso: Ingreso) => void;
 }) {
   const cambiar =
@@ -709,12 +656,6 @@ function CamposIngreso({
           style={estiloInput}
         />
       </Campo>
-      {conCheckin && (
-        <CampoCheckin
-          valor={ingreso.checkin}
-          onCambiar={(checkin) => onCambiar({ ...ingreso, checkin })}
-        />
-      )}
       <p
         style={{
           margin: "0 0 0.6rem",
@@ -722,7 +663,7 @@ function CamposIngreso({
           color: colores.suave,
         }}
       >
-        {conCheckin
+        {clienteExterno
           ? "Después de crearla se cargan los trabajos y se genera el " +
             "comprobante de ingreso y autorización, que confirma la " +
             "recepción del equipo."
@@ -750,8 +691,7 @@ export function FormularioNuevaOrden({
   const [ingreso, setIngreso] = useState<Ingreso>(ingresoInicial);
 
   const esRecepcion = actor?.rol === "RECEPCION";
-  const completo =
-    nombre && telefono && marca && modelo && falla && ingreso.checkin !== "";
+  const completo = nombre && telefono && marca && modelo && falla;
 
   return (
     <div>
@@ -801,12 +741,7 @@ export function FormularioNuevaOrden({
           style={estiloInput}
         />
       </Campo>
-      <CamposIngreso ingreso={ingreso} conCheckin onCambiar={setIngreso} />
-      {ingreso.checkin === "" && (
-        <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.alerta }}>
-          Falta indicar si se hizo el check-in.
-        </p>
-      )}
+      <CamposIngreso ingreso={ingreso} clienteExterno onCambiar={setIngreso} />
       <Boton
         disabled={!esRecepcion || ocupado || !completo || !actor}
         onClick={() => {

@@ -57,6 +57,7 @@ from app.domain.models import (
     TrabajoAutorizadoEnDocumento,
     TrabajoCanceladoEnDocumento,
     TrabajoEnDocumento,
+    TrabajoRealizadoEnDocumento,
     Usuario,
     UsuarioEnDocumento,
     importe_de_descuento,
@@ -68,7 +69,12 @@ from .autorizacion_cliente import (
     decision_vigente,
     requiere_autorizacion_cliente,
 )
-from .custodia import ROLES_RECEPCION_EQUIPO, estado_custodia, tipo_de_entrega
+from .custodia import (
+    ROLES_RECEPCION_EQUIPO,
+    checkin_de,
+    estado_custodia,
+    tipo_de_entrega,
+)
 from .descuentos import descripcion_de_descuento
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .pagos import condicion_entrega_cumplida
@@ -387,9 +393,11 @@ def contenido_comprobante_entrega(
 ) -> ContenidoComprobanteEntrega:
     """Comprobante final: lo realizado, lo cancelado, el cobro y la entrega.
 
-    Los Detalles cancelados figuran aparte, como no realizados y no
-    cobrados. Una Orden no cobrable no muestra importes. Si la salida del
-    equipo todavia no se registro (vista previa), sus datos quedan vacios.
+    Cada trabajo realizado lleva su garantia definitiva y su vencimiento
+    (desde la entrega), y el comprobante el resultado del check-in. Los
+    Detalles cancelados figuran aparte, como no realizados y no cobrados.
+    Una Orden no cobrable no muestra importes. Si la salida del equipo
+    todavia no se registro (vista previa), sus datos quedan vacios.
     """
     salida = _salida_registrada(orden)
     tipo_entrega = salida.tipo if salida else tipo_de_entrega(orden)
@@ -419,8 +427,17 @@ def contenido_comprobante_entrega(
             salida.identificacion_receptor if salida else None
         ),
         observaciones_entrega=salida.observaciones if salida else None,
+        checkin=checkin_de(orden),
         trabajos_realizados=[
-            TrabajoEnDocumento(**trabajo(detalle))
+            TrabajoRealizadoEnDocumento(
+                **trabajo(detalle),
+                garantia_dias=detalle.garantia_dias,
+                garantia_vence=vencimiento_garantia(
+                    orden.entrega.fecha if orden.entrega else None,
+                    detalle.garantia_dias,
+                    contexto.zona_horaria,
+                ),
+            )
             for detalle in _realizados(orden)
         ],
         trabajos_cancelados=[
@@ -601,9 +618,10 @@ def contenido_comprobante_ingreso(
     """Ingreso y autorizacion en un solo documento (MVP v2).
 
     La recepcion (estado fisico, accesorios, observaciones del equipo,
-    notas visibles, check-in y la confirmacion fisica) y los trabajos
-    autorizados con su precio, el descuento y el total. Las notas internas
-    nunca figuran.
+    notas visibles y la confirmacion fisica) y los trabajos autorizados con
+    su precio, el descuento y el total. Las notas internas nunca figuran.
+    El check-in no: se registra antes de la entrega y figura en el
+    comprobante final (UAT-009).
     """
     recepcion = orden.recepcion
     datos = recepcion.datos if recepcion else None
@@ -617,7 +635,6 @@ def contenido_comprobante_ingreso(
         accesorios=list(datos.accesorios) if datos else [],
         observaciones=datos.observaciones if datos else None,
         notas=_notas_visibles(recepcion),
-        checkin=datos.checkin if datos else None,
         registrado_por=(
             _usuario(contexto, recepcion.registrado_por) if recepcion else None
         ),

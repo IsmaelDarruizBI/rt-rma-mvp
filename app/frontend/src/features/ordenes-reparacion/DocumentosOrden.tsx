@@ -48,7 +48,6 @@ import type {
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
 import { CANAL, etiqueta } from "./etiquetas";
-import { CampoCheckin } from "./ListadoOrdenes";
 import { Seccion, habilitada } from "./PagosOrden";
 import {
   type ResultadoCompartir,
@@ -129,10 +128,19 @@ function ultimoConPdf(
   return conPdf[conPdf.length - 1];
 }
 
-/** Lo que se muestra en el visor: un emitido o una vista previa. */
+/**
+ * Lo que se muestra en el visor: un emitido o una vista previa.
+ * `garantiaPorConfirmar`: la vista previa es anterior al check-in, así que
+ * los plazos de garantía todavía no son definitivos (UAT-009).
+ */
 type Visible =
   | { clase: "emitido"; documento: DocumentoEmitido }
-  | { clase: "previa"; tipo: TipoDocumento; contenido: ContenidoDocumento };
+  | {
+      clase: "previa";
+      tipo: TipoDocumento;
+      contenido: ContenidoDocumento;
+      garantiaPorConfirmar: boolean;
+    };
 
 interface Props {
   orden: Orden;
@@ -142,7 +150,7 @@ interface Props {
   onEmitirRecepcion: (motivo: string | null) => void;
   onEmitirAutorizacion: () => void;
   /** Ingreso inicial: confirma, autoriza y genera el comprobante. */
-  onGenerarIngreso: (canal: CanalComunicacion, checkin: boolean | null) => void;
+  onGenerarIngreso: (canal: CanalComunicacion) => void;
 }
 
 export function DocumentosOrden({
@@ -183,17 +191,28 @@ export function DocumentosOrden({
     }
   }, [documentos, pedido]);
 
+  // Antes del check-in (Cliente Externo con la reparación lista) los plazos
+  // de garantía no son definitivos: la vista previa no los presenta así.
+  const garantiaPorConfirmar =
+    orden.acciones_disponibles.some(
+      (accion) => accion.codigo === "REGISTRAR_CHECKIN",
+    ) && (orden.recepcion?.datos.checkin ?? null) === null;
   const verPrevia = useCallback(
     async (tipo: TipoDocumento) => {
       setError(null);
       try {
         const previa = await api.vistaPreviaDocumento(orden.id, tipo);
-        setVisible({ clase: "previa", tipo, contenido: previa.contenido });
+        setVisible({
+          clase: "previa",
+          tipo,
+          contenido: previa.contenido,
+          garantiaPorConfirmar,
+        });
       } catch {
         setError("No hay vista previa de ese documento ahora.");
       }
     },
-    [orden.id],
+    [orden.id, garantiaPorConfirmar],
   );
 
   const emitir = orden.acciones_custodia.find(
@@ -317,9 +336,9 @@ export function DocumentosOrden({
           accion={ingreso}
           orden={orden}
           ocupado={ocupado}
-          onGenerar={(canal, checkin) => {
+          onGenerar={(canal) => {
             setPedido(ultimoConPdf(emitidos)?.id ?? "");
-            onGenerarIngreso(canal, checkin);
+            onGenerarIngreso(canal);
           }}
         />
       )}
@@ -434,25 +453,15 @@ function FormularioComprobanteIngreso({
   accion: Accion;
   orden: Orden;
   ocupado: boolean;
-  onGenerar: (canal: CanalComunicacion, checkin: boolean | null) => void;
+  onGenerar: (canal: CanalComunicacion) => void;
 }) {
   const [canal, setCanal] = useState<CanalComunicacion>("PRESENCIAL");
-  const [eleccionCheckin, setEleccionCheckin] = useState<"" | "si" | "no">("");
   const trabajos = orden.reparaciones_detail.filter(
     (detalle) => detalle.estado !== "CANCELADO",
   );
   const { resumen } = orden;
-  const checkin = orden.recepcion?.datos.checkin;
-  // Si el ingreso no registra el check-in (por ejemplo, una Orden anterior
-  // con la recepción ya confirmada), se indica acá y viaja con el
-  // comprobante. Con el estado físico y los trabajos, es lo único que
-  // puede faltar.
-  const pideCheckin = checkin === null || checkin === undefined;
-  const conEstado = Boolean(orden.recepcion?.datos.estado_fisico);
-  const habilitado =
-    !ocupado &&
-    (accion.bloqueo === null ||
-      (pideCheckin && eleccionCheckin !== "" && conEstado));
+  // El check-in no se pide acá: se registra antes de la entrega.
+  const habilitado = !ocupado && accion.bloqueo === null;
   return (
     <Seccion titulo="Generar el comprobante de ingreso y autorización" accion={accion}>
       <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", color: colores.suave }}>
@@ -476,12 +485,6 @@ function FormularioComprobanteIngreso({
       )}
       <p style={{ margin: "0 0 0.4rem", fontSize: "0.85rem" }}>
         Total autorizado: <strong>{importe(resumen.total)}</strong>
-        {checkin !== null && checkin !== undefined && (
-          <span style={{ color: colores.suave }}>
-            {" "}
-            · Check-in {checkin ? "realizado (90 días)" : "no realizado (30 días)"}
-          </span>
-        )}
       </p>
       <Campo etiqueta="El cliente autorizó">
         <select
@@ -497,27 +500,12 @@ function FormularioComprobanteIngreso({
           ))}
         </select>
       </Campo>
-      {pideCheckin && (
-        <CampoCheckin
-          valor={eleccionCheckin}
-          deshabilitado={ocupado}
-          onCambiar={setEleccionCheckin}
-        />
-      )}
-      {accion.bloqueo && !habilitado && (
+      {accion.bloqueo && (
         <p role="alert" style={{ margin: "0 0 0.5rem", fontSize: "0.85rem", color: colores.alerta }}>
           {accion.bloqueo}.
         </p>
       )}
-      <Boton
-        disabled={!habilitado}
-        onClick={() =>
-          onGenerar(
-            canal,
-            pideCheckin && eleccionCheckin !== "" ? eleccionCheckin === "si" : null,
-          )
-        }
-      >
+      <Boton disabled={!habilitado} onClick={() => onGenerar(canal)}>
         Generar comprobante de ingreso y autorización
       </Boton>
     </Seccion>
@@ -737,6 +725,7 @@ function VisorDocumento({
 
 function HojaDocumento({ visible }: { visible: Visible }) {
   const previa = visible.clase === "previa";
+  const porConfirmar = visible.clase === "previa" && visible.garantiaPorConfirmar;
   const contenido =
     visible.clase === "emitido" ? visible.documento.contenido : visible.contenido;
   const { empresa } = contenido;
@@ -825,9 +814,11 @@ function HojaDocumento({ visible }: { visible: Visible }) {
         <CuerpoRecepcion contenido={contenido} />
       )}
       {contenido.tipo === "COMPROBANTE_ENTREGA" && (
-        <CuerpoEntrega contenido={contenido} />
+        <CuerpoEntrega contenido={contenido} porConfirmar={porConfirmar} />
       )}
-      {contenido.tipo === "GARANTIA" && <CuerpoGarantia contenido={contenido} />}
+      {contenido.tipo === "GARANTIA" && (
+        <CuerpoGarantia contenido={contenido} porConfirmar={porConfirmar} />
+      )}
       {contenido.tipo === "COMPROBANTE_INGRESO" && (
         <CuerpoIngreso contenido={contenido} />
       )}
@@ -1063,6 +1054,7 @@ function CuerpoIngreso({ contenido }: { contenido: ContenidoIngreso }) {
         etiqueta="Accesorios recibidos"
         valor={contenido.accesorios.length ? contenido.accesorios.join(", ") : "Ninguno"}
       />
+      {/* Solo en un comprobante anterior a UAT-009: hoy el check-in es del cierre. */}
       {contenido.checkin !== null && (
         <Dato
           etiqueta="Check-in"
@@ -1156,8 +1148,43 @@ function CuerpoAutorizacion({
   );
 }
 
-function CuerpoEntrega({ contenido }: { contenido: ContenidoEntrega }) {
+/** «90 días · vence 01/01/2027»; sin entrega todavía, desde la entrega. */
+function textoGarantia(trabajo: {
+  garantia_dias?: number | null;
+  garantia_vence?: string | null;
+}): string {
+  const dias = trabajo.garantia_dias ?? 0;
+  if (dias <= 0) return "Sin garantía";
+  return trabajo.garantia_vence
+    ? `${dias} días · vence ${fechaDia(trabajo.garantia_vence)}`
+    : `${dias} días desde la entrega`;
+}
+
+const GARANTIA_POR_CONFIRMAR = "A confirmar con el check-in";
+
+/** Aviso de una vista previa anterior al check-in. */
+function AvisoGarantiaPorConfirmar() {
+  return (
+    <p style={{ margin: "0.6rem 0 0", fontSize: "9pt", fontWeight: 700 }}>
+      Garantía a confirmar: se define al verificar las funciones básicas del
+      equipo, antes de entregarlo.
+    </p>
+  );
+}
+
+function CuerpoEntrega({
+  contenido,
+  porConfirmar = false,
+}: {
+  contenido: ContenidoEntrega;
+  /** Vista previa anterior al check-in: los plazos no son definitivos. */
+  porConfirmar?: boolean;
+}) {
   const devolucion = contenido.tipo_entrega === "DEVOLUCION_SIN_REPARACION";
+  // Un comprobante anterior no trae la garantía de cada trabajo.
+  const conGarantia = contenido.trabajos_realizados.some(
+    (trabajo) => trabajo.garantia_dias !== undefined && trabajo.garantia_dias !== null,
+  );
   return (
     <>
       <Titulo>{devolucion ? "Devolución" : "Entrega"}</Titulo>
@@ -1182,19 +1209,40 @@ function CuerpoEntrega({ contenido }: { contenido: ContenidoEntrega }) {
       {contenido.observaciones_entrega && (
         <Dato etiqueta="Observaciones" valor={contenido.observaciones_entrega} />
       )}
+      {contenido.checkin !== null && contenido.checkin !== undefined && (
+        <Dato
+          etiqueta="Check-in"
+          valor={
+            contenido.checkin
+              ? "Funciones básicas verificadas"
+              : "No se pudieron verificar las funciones básicas"
+          }
+        />
+      )}
 
       <Titulo>Trabajos realizados</Titulo>
       {contenido.trabajos_realizados.length ? (
         <Tabla
-          columnas={contenido.cobrable ? ["Detalle", "Trabajo", "Importe"] : ["Detalle", "Trabajo"]}
+          columnas={[
+            "Detalle",
+            "Trabajo",
+            ...(conGarantia ? ["Garantía"] : []),
+            ...(contenido.cobrable ? ["Importe"] : []),
+          ]}
           filas={contenido.trabajos_realizados.map((trabajo) => [
             trabajo.detalle_id,
             trabajo.nombre,
+            ...(conGarantia
+              ? [porConfirmar ? GARANTIA_POR_CONFIRMAR : textoGarantia(trabajo)]
+              : []),
             ...(contenido.cobrable ? [importe(trabajo.precio ?? "0")] : []),
           ])}
         />
       ) : (
         <p style={{ margin: 0 }}>Ninguno: el equipo se devuelve sin reparar.</p>
+      )}
+      {porConfirmar && contenido.trabajos_realizados.length > 0 && (
+        <AvisoGarantiaPorConfirmar />
       )}
       {contenido.trabajos_cancelados.length > 0 && (
         <>
@@ -1258,7 +1306,14 @@ function CuerpoEntrega({ contenido }: { contenido: ContenidoEntrega }) {
   );
 }
 
-function CuerpoGarantia({ contenido }: { contenido: ContenidoGarantia }) {
+function CuerpoGarantia({
+  contenido,
+  porConfirmar = false,
+}: {
+  contenido: ContenidoGarantia;
+  /** Vista previa anterior al check-in: los plazos no son definitivos. */
+  porConfirmar?: boolean;
+}) {
   return (
     <>
       <Titulo>Cobertura</Titulo>
@@ -1272,17 +1327,24 @@ function CuerpoGarantia({ contenido }: { contenido: ContenidoGarantia }) {
       />
       <Tabla
         columnas={["Detalle", "Trabajo cubierto", "Plazo", "Vence"]}
-        filas={contenido.coberturas.map((cobertura) => [
-          cobertura.detalle_id,
-          cobertura.nombre,
-          cobertura.garantia_dias > 0 ? `${cobertura.garantia_dias} días` : "Sin garantía",
-          cobertura.garantia_dias > 0
-            ? cobertura.vence
-              ? fechaDia(cobertura.vence)
-              : "A contar desde la entrega"
-            : "—",
-        ])}
+        filas={contenido.coberturas.map((cobertura) =>
+          porConfirmar
+            ? [cobertura.detalle_id, cobertura.nombre, GARANTIA_POR_CONFIRMAR, "—"]
+            : [
+                cobertura.detalle_id,
+                cobertura.nombre,
+                cobertura.garantia_dias > 0
+                  ? `${cobertura.garantia_dias} días`
+                  : "Sin garantía",
+                cobertura.garantia_dias > 0
+                  ? cobertura.vence
+                    ? fechaDia(cobertura.vence)
+                    : "A contar desde la entrega"
+                  : "—",
+              ],
+        )}
       />
+      {porConfirmar && <AvisoGarantiaPorConfirmar />}
       <p style={{ margin: "0.6rem 0 0", fontSize: "9pt" }}>
         Cubre únicamente los trabajos detallados, cada uno por su plazo,
         contado desde la entrega del equipo. Los trabajos cancelados o no

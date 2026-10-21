@@ -31,7 +31,6 @@ from app.domain.models import (
 from app.services import (
     DecisionDetalle,
     PrecondicionInvalidaError,
-    completar_checkin,
     confirmar_recepcion_fisica,
     contenido_comprobante_ingreso,
     detalles_pendientes_de_autorizacion,
@@ -40,7 +39,6 @@ from app.services import (
     exigir_definicion_finalizable,
     faltantes_para_ingreso,
     generar_comprobante_recepcion,
-    reaplicar_garantia_sugerida,
     ultimo_documento,
     validar_actor,
 )
@@ -76,16 +74,13 @@ def generar_comprobante_ingreso(
     orden_id: str,
     usuario_id: str,
     canal: CanalComunicacion = CanalComunicacion.PRESENCIAL,
-    checkin: bool | None = None,
 ) -> OrdenReparacion:
     """Confirma, finaliza, autoriza, emite el comprobante y encola.
 
     ``canal`` es por donde el cliente autorizo los trabajos (en el
     mostrador, presencial). Autoriza todos los trabajos cargados: los que
-    el cliente no quiera se quitan antes de generar el comprobante.
-    ``checkin`` completa el dato si el ingreso todavia no lo tiene (por
-    ejemplo, una Orden anterior con la recepcion ya confirmada): queda en
-    la misma operacion, con la garantia sugerida que le corresponde.
+    el cliente no quiera se quitan antes de generar el comprobante. No
+    pide el check-in: se registra antes de la entrega (UAT-009).
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
@@ -96,11 +91,6 @@ def generar_comprobante_ingreso(
     ):
         if ultimo_documento(orden, TipoDocumento.COMPROBANTE_INGRESO):
             return orden
-        validar_actor(usuario, RolUsuario.RECEPCION)
-        if checkin is not None and es_ingreso_inicial(orden):
-            orden = reaplicar_garantia_sugerida(
-                completar_checkin(orden, checkin=checkin)
-            )
         _exigir_ingreso_inicial(orden, usuario)
 
         if not orden.recepcion.confirmada:

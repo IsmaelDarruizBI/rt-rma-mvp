@@ -32,9 +32,11 @@ class DatosRecepcion(BaseModel):
     comprobante del cliente. ``notas_internas`` es informacion operativa
     que solo se ve dentro de la aplicacion: nunca sale en un documento.
 
-    ``checkin`` es la verificacion de funciones basicas al ingreso
-    (``True`` realizado, ``False`` no realizado). ``None`` en una Orden
-    anterior o sin el dato: no se presume ninguno de los dos.
+    ``checkin`` es la verificacion de funciones basicas del equipo
+    (``True`` se pudieron verificar, ``False`` no). Desde UAT-009 se
+    registra antes de la entrega (``RecepcionEquipo.registros_checkin``);
+    una Orden anterior puede tenerlo del ingreso. ``None``: todavia no se
+    registro; no se presume ninguno de los dos.
     """
 
     estado_fisico: str | None = None
@@ -42,6 +44,15 @@ class DatosRecepcion(BaseModel):
     observaciones: str | None = None
     checkin: bool | None = None
     notas_internas: str | None = None
+
+
+class RegistroCheckin(BaseModel):
+    """Un registro del check-in antes de la entrega: resultado, quien y
+    cuando. El vigente es el ultimo (``DatosRecepcion.checkin``)."""
+
+    realizado: bool
+    usuario_id: str
+    fecha: datetime
 
 
 class VersionRecepcion(BaseModel):
@@ -101,6 +112,9 @@ class RecepcionEquipo(BaseModel):
     la recepcion (``confirmacion``) o se registra que el equipo nunca
     ingreso (``no_recibido``). Sin ninguna de las dos queda pendiente.
     Decidida, los datos ya no se corrigen: se agregan ``notas``.
+
+    ``registros_checkin``: cada registro del check-in antes de la entrega,
+    en orden (append-only); el resultado vigente es ``datos.checkin``.
     """
 
     registro: RegistroRecepcion = RegistroRecepcion.INGRESO
@@ -112,6 +126,7 @@ class RecepcionEquipo(BaseModel):
     # Default None: un JSON anterior queda pendiente, nunca "no recibido".
     no_recibido: NoRecepcion | None = None
     notas: list[NotaRecepcion] = Field(default_factory=list)
+    registros_checkin: list[RegistroCheckin] = Field(default_factory=list)
 
     @property
     def confirmada(self) -> bool:

@@ -1,10 +1,13 @@
-"""Plazo de garantia por Detalle: ajuste manual (MVP v2).
+"""Plazo de garantia por Detalle: check-in y ajuste manual (MVP v2).
 
-El plazo SUGERIDO lo fija el check-in del ingreso al definir el Detalle
-(``app.domain.garantia``). Un empleado autorizado puede cambiar el plazo
-DEFINITIVO de un Detalle con su motivo: se conservan el sugerido, el
-definitivo y cada ajuste (quien, cuando, de cuanto a cuanto y por que).
-El vencimiento se sigue calculando desde la entrega del equipo.
+El plazo SUGERIDO lo fija el check-in (``app.domain.garantia``): la
+verificacion de funciones basicas que Recepcion registra antes de
+entregar el equipo, con la reparacion terminada y aprobada (UAT-009).
+Hasta entonces rige el plazo del Tipo. Un empleado autorizado puede
+cambiar el plazo DEFINITIVO de un Detalle con su motivo: se conservan el
+sugerido, el definitivo y cada ajuste (quien, cuando, de cuanto a cuanto y
+por que), y el check-in nunca pisa un ajuste. El vencimiento se sigue
+calculando desde la entrega del equipo.
 """
 
 from datetime import datetime
@@ -12,18 +15,111 @@ from datetime import datetime
 from app.domain.garantia import GARANTIA_MAXIMA_DIAS
 from app.domain.models import (
     AjusteGarantia,
+    EstadoControl,
     EstadoReparacionDetail,
     EstadoWorkflow,
     OrdenReparacion,
+    RegistroCheckin,
     RolUsuario,
     Usuario,
 )
+from app.domain.politicas import politica_de
 
 from .autorizacion import validar_alguno_de
+from .custodia import checkin_de
 from .exceptions import PrecondicionInvalidaError
+from .reparaciones import reaplicar_garantia_sugerida
 from .tomas import buscar_detalle
 
 ROLES_AJUSTE_GARANTIA = (RolUsuario.RECEPCION, RolUsuario.COORDINADOR_RMA)
+# Los mismos que entregan el equipo: el check-in es el paso previo.
+ROLES_CHECKIN = (RolUsuario.ADMINISTRADOR, RolUsuario.RECEPCION)
+
+
+def _con_trabajos_realizados(orden: OrdenReparacion) -> bool:
+    """Algun Detalle terminado y aprobado en control: tiene garantia."""
+    return any(
+        detalle.estado is EstadoReparacionDetail.COMPLETO
+        and detalle.control_estado is EstadoControl.APROBADO
+        for detalle in orden.reparaciones_detail
+    )
+
+
+def checkin_registrable(orden: OrdenReparacion) -> bool:
+    """Se puede registrar (o volver a registrar) el check-in ahora.
+
+    En el Origen que lo exige (``requiere_checkin_en_entrega``), con la
+    reparacion lista -los trabajos terminados y aprobados en control- y
+    antes de la entrega. Notificar y cobrar no lo condicionan.
+    """
+    return (
+        politica_de(orden.origen).requiere_checkin_en_entrega
+        and orden.estado_workflow is EstadoWorkflow.REPARACION_LISTA
+        and orden.entrega is None
+        and orden.recepcion is not None
+        and _con_trabajos_realizados(orden)
+    )
+
+
+def checkin_pendiente_para_entrega(orden: OrdenReparacion) -> bool:
+    """Hay trabajos con garantia y todavia no hay check-in: no se entrega.
+
+    Una Orden anterior que ya tiene el check-in del ingreso cumple (se
+    puede volver a registrar antes de entregar). Sin trabajos realizados
+    (sin reparacion) no hay garantia que definir.
+    """
+    return checkin_registrable(orden) and checkin_de(orden) is None
+
+
+def exigir_checkin_para_entrega(orden: OrdenReparacion) -> None:
+    if checkin_pendiente_para_entrega(orden):
+        raise PrecondicionInvalidaError(
+            "Falta registrar el check-in antes de entregar: indica si se "
+            "pudieron verificar las funciones basicas del equipo (define la "
+            "garantia de cada trabajo)."
+        )
+
+
+def registrar_checkin_de_entrega(
+    orden: OrdenReparacion,
+    *,
+    realizado: bool,
+    usuario: Usuario,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """Registra el check-in antes de la entrega y reasigna la garantia.
+
+    ``realizado``: si se pudieron verificar las funciones basicas. Queda
+    en ``DatosRecepcion.checkin`` (el mismo dato de siempre) con quien y
+    cuando en ``registros_checkin``. Cada Detalle no cancelado recibe la
+    garantia sugerida (90 o 30 dias); el definitivo la sigue salvo que
+    tenga un ajuste manual. Se puede volver a registrar antes de entregar;
+    repetir el mismo resultado no agrega nada (reintento).
+    """
+    validar_alguno_de(usuario, ROLES_CHECKIN)
+    if not checkin_registrable(orden):
+        raise PrecondicionInvalidaError(
+            "El check-in se registra en una Orden de Cliente Externo con la "
+            "reparacion lista (trabajos terminados y aprobados en control) y "
+            "antes de entregar el equipo."
+        )
+    registros = orden.recepcion.registros_checkin
+    if (
+        registros
+        and registros[-1].realizado is realizado
+        and checkin_de(orden) is realizado
+    ):
+        return orden
+
+    nueva_orden = orden.model_copy(deep=True)
+    nueva_orden.recepcion.datos.checkin = realizado
+    nueva_orden.recepcion.registros_checkin.append(
+        RegistroCheckin(
+            realizado=realizado, usuario_id=usuario.id, fecha=fecha
+        )
+    )
+    nueva_orden.updated_at = fecha
+    return reaplicar_garantia_sugerida(nueva_orden)
 
 
 def garantia_ajustable(orden: OrdenReparacion) -> bool:

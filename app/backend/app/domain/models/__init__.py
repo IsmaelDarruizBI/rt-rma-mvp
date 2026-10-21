@@ -38,6 +38,7 @@ from .documentos import (
     TrabajoAutorizadoEnDocumento,
     TrabajoCanceladoEnDocumento,
     TrabajoEnDocumento,
+    TrabajoRealizadoEnDocumento,
     UsuarioEnDocumento,
 )
 from .enums import (
@@ -74,6 +75,7 @@ from .recepcion import (
     NoRecepcion,
     NotaRecepcion,
     RecepcionEquipo,
+    RegistroCheckin,
     VersionRecepcion,
 )
 from .reparacion import (
@@ -123,6 +125,7 @@ __all__ = [
     "NoRecepcion",
     "NotaRecepcion",
     "RecepcionEquipo",
+    "RegistroCheckin",
     "VersionRecepcion",
     # Catalogos
     "DATOS_EMPRESA_PREDETERMINADOS",
@@ -173,6 +176,7 @@ __all__ = [
     "TrabajoAutorizadoEnDocumento",
     "TrabajoCanceladoEnDocumento",
     "TrabajoEnDocumento",
+    "TrabajoRealizadoEnDocumento",
     "UsuarioEnDocumento",
     # Workflow
     "HistorialWorkflow",

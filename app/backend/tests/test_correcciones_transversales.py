@@ -23,7 +23,11 @@ from app.domain.models import EstadoWorkflow
 from app.main import create_app
 from app.services import registrar_paso
 from tests.fixtures.catalogos_mvp import t
-from tests.fixtures.custodia import RECEPTOR, confirmar_recepcion
+from tests.fixtures.custodia import (
+    RECEPTOR,
+    checkin_si_falta,
+    confirmar_recepcion,
+)
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     ESTACION,
@@ -221,6 +225,7 @@ def test_entregar_y_aprobar_a_la_vez_no_reabren_la_orden(cliente):
     )
 
     confirmar_recepcion(cliente, orden_id)
+    checkin_si_falta(cliente, orden_id)
     largada = threading.Barrier(2)
     estados: dict[str, int] = {}
 

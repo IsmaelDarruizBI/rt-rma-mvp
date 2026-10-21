@@ -199,11 +199,13 @@ def test_hp_rep_002_end_to_end_por_http(cliente):
     assert orden["estado_workflow"] == "REPARACION_LISTA"
     assert orden["resumen"]["puntaje_total"] == 10
 
-    # No debe ofrecerse Pago, Notificar ni Entregar (cliente).
+    # No debe ofrecerse Pago, Notificar, Entregar (cliente) ni el check-in
+    # previo a la entrega (UAT-009: solo Cliente Externo).
     codigos = {a["codigo"] for a in orden["acciones_disponibles"]}
     assert "REGISTRAR_PAGO" not in codigos
     assert "NOTIFICAR" not in codigos
     assert "ENTREGAR" not in codigos
+    assert "REGISTRAR_CHECKIN" not in codigos
     assert "INFORMAR_RT" in codigos
 
     # PROC-REP-290 es ACT-SYSTEM: se publica sin actor requerido.

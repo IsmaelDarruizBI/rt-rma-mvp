@@ -9,7 +9,7 @@
  * igual (PROC-REP V1.3 define el actor de cada nodo).
  */
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useId, useState } from "react";
 
 import {
   type DatosRetiro,
@@ -36,7 +36,12 @@ import type {
   Usuario,
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
-import { NOMBRE_ACCION, nombreAccion, nombreTrabajo } from "./etiquetas";
+import {
+  NOMBRE_ACCION,
+  descripcionCheckin,
+  nombreAccion,
+  nombreTrabajo,
+} from "./etiquetas";
 import { Confirmacion } from "./PagosOrden";
 import {
   CODIGOS_SECUNDARIOS,
@@ -106,6 +111,8 @@ export interface EjecutorAcciones {
   /** La Orden de OTRO técnico: con motivo; ya confirmado en el formulario. */
   liberarOrdenAjena: (motivo: string, insumosUtilizados: InsumoUtilizado[]) => void;
   ajustarGarantia: (detalleId: string, dias: number, motivo: string) => void;
+  /** Antes de entregar: si se pudieron verificar las funciones básicas. */
+  registrarCheckin: (realizado: boolean) => void;
 }
 
 interface Props {
@@ -575,8 +582,19 @@ function FormularioAccion({
       return (
         <FormularioEntrega
           orden={orden}
+          bloqueo={accion.bloqueo}
           deshabilitado={deshabilitado}
           onConfirmar={ejecutar.entregar}
+        />
+      );
+
+    case "REGISTRAR_CHECKIN":
+      return (
+        <FormularioCheckin
+          orden={orden}
+          usuarios={usuarios}
+          deshabilitado={deshabilitado}
+          onConfirmar={ejecutar.registrarCheckin}
         />
       );
 
@@ -825,10 +843,13 @@ function FormularioDevolucion({
  */
 function FormularioEntrega({
   orden,
+  bloqueo,
   deshabilitado,
   onConfirmar,
 }: {
   orden: Orden;
+  /** Por ejemplo, falta el check-in: el backend la rechaza igual. */
+  bloqueo: string | null;
   deshabilitado: boolean;
   onConfirmar: (retiro: DatosRetiro) => void;
 }) {
@@ -837,7 +858,7 @@ function FormularioEntrega({
   const [observaciones, setObservaciones] = useState("");
   const [confirmando, setConfirmando] = useState(false);
   const enCustodia = orden.custodia.estado === "EN_CUSTODIA";
-  const bloqueado = deshabilitado || !enCustodia;
+  const bloqueado = deshabilitado || !enCustodia || bloqueo !== null;
   const titular = orden.cliente?.nombre ?? null;
   const devolucion = orden.finalizada_sin_reparacion;
 
@@ -867,6 +888,24 @@ function FormularioEntrega({
           La recepción física del equipo no está confirmada. Confirmala (o
           regularizala) en <strong>Recepción y custodia</strong> antes de
           entregar.
+        </p>
+      )}
+      {bloqueo && (
+        <p
+          role="status"
+          style={{
+            margin: "0 0 0.6rem",
+            padding: "0.5rem 0.7rem",
+            borderRadius: 6,
+            border: `1px solid ${colores.alerta}`,
+            background: "#fff8e6",
+            fontSize: "0.85rem",
+          }}
+        >
+          <strong>{bloqueo}.</strong>{" "}
+          {bloqueo.includes("check-in") &&
+            "Indicá en «Registrar el check-in» si se pudieron verificar las " +
+              "funciones básicas del equipo: define la garantía de cada trabajo."}
         </p>
       )}
       <Campo etiqueta="Retira el equipo (obligatorio)">
@@ -929,6 +968,118 @@ function FormularioEntrega({
           }
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * ¿Se pudieron verificar las funciones básicas del equipo? (check-in).
+ * Define la garantía sugerida de cada trabajo: 90 días si sí, 30 si no.
+ */
+function CampoCheckin({
+  valor,
+  deshabilitado = false,
+  onCambiar,
+}: {
+  valor: "" | "si" | "no";
+  deshabilitado?: boolean;
+  onCambiar: (valor: "si" | "no") => void;
+}) {
+  // Un grupo de radios por formulario: puede haber dos en la misma pantalla.
+  const grupo = useId();
+  return (
+    <fieldset
+      style={{
+        border: `1px solid ${colores.borde}`,
+        borderRadius: 6,
+        margin: "0 0 0.6rem",
+        padding: "0.4rem 0.7rem 0.5rem",
+      }}
+    >
+      <legend style={{ fontSize: "0.85rem", padding: "0 0.3rem" }}>
+        ¿Se pudieron verificar las funciones básicas del equipo?
+      </legend>
+      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+        {(
+          [
+            ["si", "Sí — garantía de 90 días"],
+            ["no", "No — garantía de 30 días"],
+          ] as const
+        ).map(([opcion, texto]) => (
+          <label
+            key={opcion}
+            style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}
+          >
+            <input
+              type="radio"
+              name={`checkin-${grupo}`}
+              checked={valor === opcion}
+              disabled={deshabilitado}
+              onChange={() => onCambiar(opcion)}
+            />
+            {texto}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+/**
+ * Check-in antes de la entrega, con la reparación lista (UAT-009). Define
+ * la garantía de cada trabajo sin pisar los plazos ajustados a mano. Se
+ * puede volver a registrar hasta entregar; avisar y cobrar no dependen de
+ * él, pero en Cliente Externo la entrega lo exige.
+ */
+function FormularioCheckin({
+  orden,
+  usuarios,
+  deshabilitado,
+  onConfirmar,
+}: {
+  orden: Orden;
+  usuarios: Usuario[];
+  deshabilitado: boolean;
+  onConfirmar: (realizado: boolean) => void;
+}) {
+  const actual = orden.recepcion?.datos.checkin ?? null;
+  const [valor, setValor] = useState<"" | "si" | "no">(
+    actual === true ? "si" : actual === false ? "no" : "",
+  );
+  const registros = orden.recepcion?.registros_checkin ?? [];
+  const ultimo = registros.length ? registros[registros.length - 1] : null;
+  const ajustados = orden.reparaciones_detail.filter(
+    (detalle) =>
+      detalle.estado !== "CANCELADO" && (detalle.ajustes_garantia ?? []).length > 0,
+  );
+  const sinCambios = valor === "" || (valor === "si") === actual;
+  return (
+    <div>
+      {actual !== null && (
+        <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", color: colores.suave }}>
+          Registrado: {descripcionCheckin(actual)}
+          {ultimo
+            ? ` · ${nombreDeUsuario(usuarios, ultimo.usuario_id)}`
+            : " · en el ingreso"}
+          . Se puede cambiar hasta entregar.
+        </p>
+      )}
+      <CampoCheckin valor={valor} deshabilitado={deshabilitado} onCambiar={setValor} />
+      {ajustados.length > 0 && (
+        <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
+          Conservan su plazo ajustado a mano:{" "}
+          {ajustados
+            .map((detalle) => `${detalle.tipo_reparacion_nombre} (${detalle.garantia_dias} días)`)
+            .join(", ")}
+          .
+        </p>
+      )}
+      <Boton
+        disabled={deshabilitado || sinCambios}
+        onClick={() => onConfirmar(valor === "si")}
+      >
+        Registrar el check-in
+      </Boton>
     </div>
   );
 }
@@ -1488,7 +1639,8 @@ function FormularioLiberacionAjena({
 
 /**
  * Plazo definitivo de garantía de un trabajo (antes de la entrega). La
- * sugerida (90 días con check-in, 30 sin) se conserva; el plazo corre
+ * sugerida (90 días con check-in, 30 sin; el del catálogo hasta
+ * registrarlo) se conserva y el check-in no pisa el ajuste; el plazo corre
  * desde la entrega.
  */
 function FormularioGarantia({

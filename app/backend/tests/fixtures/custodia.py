@@ -8,8 +8,12 @@ verifican no cambia.
 
 Ingreso inicial de CLIENTE_EXTERNO (iteracion 1 del UAT): la recepcion se
 confirma al generar el comprobante de ingreso y autorizacion, nunca por
-separado. Ahi estos atajos solo dejan los datos que el comprobante exige
-(estado fisico y check-in).
+separado. Ahi estos atajos solo dejan el dato que el comprobante exige (el
+estado fisico).
+
+Check-in (UAT-009): se registra antes de la entrega, con la reparacion
+lista. ``entregar`` lo registra (realizado) si la Orden lo ofrece y
+todavia no lo tiene.
 """
 
 RECEPCION = "RECEP-001"
@@ -32,28 +36,54 @@ def en_ingreso_inicial(orden: dict) -> bool:
 
 
 def preparar_ingreso(cliente, orden_id: str, usuario=RECEPCION) -> dict:
-    """Registra el estado fisico y el check-in si faltan; devuelve la Orden.
+    """Registra el estado fisico si falta; devuelve la Orden.
 
-    Son los datos que exige el comprobante de ingreso y autorizacion. Lo
-    que ya este registrado se conserva (sin check-in, se registra hecho).
+    Es el dato que exige el comprobante de ingreso y autorizacion (el
+    check-in ya no: se registra antes de la entrega). Lo que ya este
+    registrado se conserva.
     """
     orden = cliente.get(f"/api/orders/{orden_id}").json()
     datos = (orden["recepcion"] or {}).get("datos") or {}
-    if datos.get("estado_fisico") and datos.get("checkin") is not None:
+    if datos.get("estado_fisico"):
         return orden
     respuesta = cliente.put(
         f"/api/orders/{orden_id}/reception",
         json={
             "usuario_id": usuario,
-            "estado_fisico": datos.get("estado_fisico") or ESTADO_FISICO,
+            "estado_fisico": ESTADO_FISICO,
             "accesorios": datos.get("accesorios") or [],
             "observaciones": datos.get("observaciones"),
             "notas_internas": datos.get("notas_internas"),
-            "checkin": True
-            if datos.get("checkin") is None
-            else datos.get("checkin"),
         },
     )
+    assert respuesta.status_code == 200, respuesta.text
+    return respuesta.json()
+
+
+def registrar_checkin(
+    cliente, orden_id: str, realizado: bool = True, usuario=RECEPCION
+):
+    """``POST .../checkin``: si se pudieron verificar las funciones."""
+    return cliente.post(
+        f"/api/orders/{orden_id}/checkin",
+        json={"usuario_id": usuario, "realizado": realizado},
+    )
+
+
+def checkin_si_falta(cliente, orden_id: str, usuario=RECEPCION) -> dict:
+    """Registra el check-in (realizado) si la Orden lo ofrece y no lo tiene.
+
+    Es el paso previo a la entrega de una Orden de Cliente Externo con
+    trabajos realizados; en las demas no hace nada.
+    """
+    orden = cliente.get(f"/api/orders/{orden_id}").json()
+    ofrecido = any(
+        accion["codigo"] == "REGISTRAR_CHECKIN"
+        for accion in orden["acciones_disponibles"]
+    )
+    if not ofrecido or orden["recepcion"]["datos"]["checkin"] is not None:
+        return orden
+    respuesta = registrar_checkin(cliente, orden_id, usuario=usuario)
     assert respuesta.status_code == 200, respuesta.text
     return respuesta.json()
 
@@ -86,8 +116,10 @@ def confirmar_recepcion(cliente, orden_id: str, usuario=RECEPCION) -> dict:
 
 
 def entregar(cliente, orden_id: str, usuario=ADMINISTRADOR):
-    """``POST .../deliver`` con la custodia confirmada y quien retira."""
+    """``POST .../deliver`` con la custodia confirmada, el check-in (si
+    corresponde) y quien retira."""
     confirmar_recepcion(cliente, orden_id)
+    checkin_si_falta(cliente, orden_id)
     return cliente.post(
         f"/api/orders/{orden_id}/deliver",
         json={"usuario_id": usuario, **RECEPTOR},

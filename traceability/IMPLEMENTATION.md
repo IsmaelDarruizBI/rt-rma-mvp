@@ -375,11 +375,10 @@ quedan **pendientes de formalizacion** (no se modifica `rt-rma-app`).
   el ingreso inicial (`services/reparaciones.py::exigir_fuera_del_ingreso_inicial`).
   Siguen vigentes para RT_INTERNO, garantia RMA, el camino de revision y
   las autorizaciones posteriores.
-- Sin estados sin salida: si el ingreso todavia no registra el check-in
-  (por ejemplo, una Orden anterior con la recepcion ya confirmada, que ya
-  no admite correcciones), el comprobante de ingreso lo recibe y lo
-  completa en la misma operacion (`services/custodia.py::completar_checkin`).
-  Un check-in ya registrado no se cambia desde ahi.
+- El comprobante de ingreso exige al menos un trabajo y el estado fisico.
+  Desde UAT-009 no pide ni lleva el check-in (ver "Check-in antes de la
+  entrega"); una Orden anterior con la recepcion ya confirmada lo genera
+  sin pasos adicionales.
 - Presentacion derivada, sin estados nuevos: `OrdenOut.ingreso_inicial`,
   `DetalleOut.pendiente_comprobante_ingreso` y `autorizado_en_ingreso`
   (la definicion vigente es la que autorizo el comprobante). La UI muestra
@@ -454,6 +453,49 @@ quedan **pendientes de formalizacion** (no se modifica `rt-rma-app`).
 - **Divergencia**: el plazo deja de ser el del catalogo cuando hay
   check-in.
 
+### Check-in antes de la entrega (UAT-009)
+
+- El check-in (si se pudieron verificar las funciones basicas del equipo)
+  sale del ingreso y pasa al cierre. Mismo dato (`DatosRecepcion.checkin`),
+  sin un concepto nuevo: el alta, la correccion del ingreso y el
+  comprobante de ingreso ya no lo reciben (la correccion conserva el que
+  haya) y el comprobante de ingreso no lo lleva.
+- Se registra con la reparacion lista -todos los trabajos terminados y
+  aprobados en control- y antes de entregar
+  (`services/garantias.py::registrar_checkin_de_entrega`,
+  `POST /api/orders/{id}/checkin`, accion `REGISTRAR_CHECKIN`). Roles: los
+  de la entrega (RECEPCION y ADMINISTRADOR). Se puede volver a registrar
+  hasta entregar; repetir el mismo resultado no agrega nada. Quien y cuando
+  quedan en `RecepcionEquipo.registros_checkin` (append-only).
+- Reasigna la garantia de cada Detalle no cancelado (90/30) con
+  `reaplicar_garantia_sugerida`: actualiza la sugerida y la definitiva
+  solo si no hay un ajuste manual (antes o despues del check-in, el
+  ajuste nunca se pisa). Hasta el check-in rige el plazo del Tipo.
+- Politica del Origen `requiere_checkin_en_entrega` (solo CLIENTE_EXTERNO):
+  con trabajos realizados, la entrega lo exige
+  (`exigir_checkin_para_entrega`, 409 sin efectos); `ENTREGAR` se publica
+  con `bloqueo` "Falta registrar el check-in". Avisada y saldada, la
+  situacion operativa es `PENDIENTE_CHECKIN` ("Pendiente de verificacion de
+  funciones basicas", color de advertencia) con las dos tareas: es solo
+  presentacion, el workflow sigue en `REPARACION_LISTA`. Sin trabajos
+  realizados (sin reparacion), RT_INTERNO y la garantia RMA no cambian.
+- Notificar y cobrar no dependen del check-in; el aviso al cliente no
+  menciona la garantia, y la vista previa del comprobante final y de la
+  garantia muestra los plazos "A confirmar con el check-in" hasta
+  registrarlo. No es un nodo del proceso ni entra al historial: no hay un
+  ID de accion con ese significado y `ACC-REP-061` a `066` siguen
+  reservados. Se acepta temporalmente su auditoria en la recepcion
+  (`registros_checkin`), **pendiente** de formalizacion funcional.
+- El comprobante final (`COMPROBANTE_ENTREGA`) lleva el resultado del
+  check-in (`checkin`) y, por trabajo realizado, la garantia definitiva y
+  su vencimiento desde la entrega (`garantia_dias`, `garantia_vence`). La
+  garantia (`GARANTIA`) no cambia.
+- Ordenes anteriores: el check-in registrado al ingresar sigue valiendo
+  (cumple la exigencia de la entrega y se puede volver a registrar); los
+  comprobantes de ingreso ya emitidos conservan su check-in.
+- **Divergencia**: en V1.4 de `rt-rma-app` y en la iteracion 1 el check-in
+  era del ingreso; queda **pendiente de formalizacion**.
+
 ### Observaciones visibles y notas internas
 
 - `DatosRecepcion.observaciones` son visibles y salen en los comprobantes;
@@ -463,7 +505,9 @@ quedan **pendientes de formalizacion** (no se modifica `rt-rma-app`).
 ### Compatibilidad
 
 Los campos nuevos tienen valor por defecto: las Ordenes ya guardadas se
-leen sin migracion (sin check-in, sin descuento, sin notas internas).
+leen sin migracion (sin check-in, sin registros de check-in, sin
+descuento, sin notas internas; un comprobante final anterior, sin la
+garantia por trabajo).
 
 ## Gaps de cobertura de test conocidos
 

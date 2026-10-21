@@ -232,15 +232,14 @@ class DatosRecepcionIn(BaseModel):
     ``accesorios``: lo que se recibe junto con el equipo (vacio: ninguno).
     ``observaciones``: observaciones visibles del equipo (salen en el
     comprobante). ``notas_internas``: solo para el personal, nunca en un
-    documento. ``checkin``: si se hizo el check-in del equipo (define la
-    garantia sugerida de cada trabajo: 90 o 30 dias).
+    documento. El check-in no va aca: se registra antes de la entrega
+    (``POST .../checkin``).
     """
 
     estado_fisico: str | None = None
     accesorios: list[str] = Field(default_factory=list)
     observaciones: str | None = None
     notas_internas: str | None = None
-    checkin: bool | None = None
 
     def a_dominio(self) -> DatosRecepcion:
         return DatosRecepcion(
@@ -248,7 +247,6 @@ class DatosRecepcionIn(BaseModel):
             accesorios=list(self.accesorios),
             observaciones=self.observaciones,
             notas_internas=self.notas_internas,
-            checkin=self.checkin,
         )
 
 
@@ -454,9 +452,6 @@ class GenerarComprobanteIngresoIn(BaseModel):
 
     usuario_id: str = Field(min_length=1)
     canal: CanalComunicacion = CanalComunicacion.PRESENCIAL
-    # Solo si el ingreso todavia no registra el check-in (por ejemplo, una
-    # Orden anterior con la recepcion ya confirmada).
-    checkin: bool | None = None
 
 
 class DescuentoIn(BaseModel):
@@ -483,6 +478,18 @@ class AjustarGarantiaIn(BaseModel):
     usuario_id: str = Field(min_length=1)
     dias: int = Field(ge=0, le=GARANTIA_MAXIMA_DIAS)
     motivo: str = Field(min_length=1)
+
+
+class RegistrarCheckinIn(BaseModel):
+    """``POST /api/orders/{id}/checkin`` (Recepcion o Administracion).
+
+    Antes de entregar, con la reparacion lista: ``realizado`` dice si se
+    pudieron verificar las funciones basicas del equipo. Define la garantia
+    de cada trabajo (90 o 30 dias) sin pisar los ajustes manuales.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    realizado: bool
 
 
 class NotificarIn(BaseModel):
@@ -672,7 +679,6 @@ class RegistrarRecepcionIn(BaseModel):
     accesorios: list[str] = Field(default_factory=list)
     observaciones: str | None = None
     notas_internas: str | None = None
-    checkin: bool | None = None
     equipo: EquipoIn | None = None
 
     def datos(self) -> DatosRecepcion:
@@ -681,7 +687,6 @@ class RegistrarRecepcionIn(BaseModel):
             accesorios=list(self.accesorios),
             observaciones=self.observaciones,
             notas_internas=self.notas_internas,
-            checkin=self.checkin,
         )
 
 
@@ -1098,8 +1103,20 @@ class NotaRecepcionOut(BaseModel):
     interna: bool = False
 
 
+class RegistroCheckinOut(BaseModel):
+    """Un registro del check-in antes de la entrega."""
+
+    realizado: bool
+    usuario_id: str
+    fecha: datetime
+
+
 class RecepcionOut(BaseModel):
-    """Datos del ingreso fisico del equipo, versiones y confirmacion."""
+    """Datos del ingreso fisico del equipo, versiones y confirmacion.
+
+    ``datos.checkin`` es el check-in vigente; ``registros_checkin``, quien
+    lo registro y cuando (antes de la entrega).
+    """
 
     registro: RegistroRecepcion
     datos: DatosRecepcionOut
@@ -1111,6 +1128,7 @@ class RecepcionOut(BaseModel):
     confirmacion: ConfirmacionRecepcionOut | None = None
     no_recibido: NoRecepcionOut | None = None
     notas: list[NotaRecepcionOut] = Field(default_factory=list)
+    registros_checkin: list[RegistroCheckinOut] = Field(default_factory=list)
 
     @classmethod
     def desde_dominio(cls, recepcion: RecepcionEquipo) -> "RecepcionOut":

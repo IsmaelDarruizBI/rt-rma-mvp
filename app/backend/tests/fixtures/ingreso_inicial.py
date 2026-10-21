@@ -16,13 +16,13 @@ NOTA_INTERNA = "Cliente conflictivo: confirmar todo por escrito."
 def crear_con_recepcion(
     cliente,
     *,
-    checkin: bool | None = True,
     estado_fisico: str | None = ESTADO_FISICO,
     observaciones: str | None = OBSERVACIONES,
     notas_internas: str | None = NOTA_INTERNA,
     accesorios: tuple[str, ...] = ("Cargador",),
 ) -> str:
-    """CLIENTE_EXTERNO recien creada, con los datos del ingreso."""
+    """CLIENTE_EXTERNO recien creada, con los datos del ingreso (sin
+    check-in: se registra antes de la entrega)."""
     return ok(
         cliente.post(
             "/api/orders",
@@ -40,7 +40,6 @@ def crear_con_recepcion(
                     "accesorios": list(accesorios),
                     "observaciones": observaciones,
                     "notas_internas": notas_internas,
-                    "checkin": checkin,
                 },
             },
         )
@@ -57,9 +56,9 @@ def generar_ingreso(cliente, orden_id, usuario=RECEPCION, canal=None):
     )
 
 
-def ingresada(cliente, *tipos, checkin: bool | None = True) -> str:
+def ingresada(cliente, *tipos) -> str:
     """Creada, con sus trabajos y el comprobante de ingreso generado."""
-    orden_id = crear_con_recepcion(cliente, checkin=checkin)
+    orden_id = crear_con_recepcion(cliente)
     for tipo in tipos or (BATERIA,):
         agregar(cliente, orden_id, tipo)
     ok(generar_ingreso(cliente, orden_id))

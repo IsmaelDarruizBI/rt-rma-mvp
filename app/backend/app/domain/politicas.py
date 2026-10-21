@@ -60,6 +60,12 @@ class PoliticaOrigen:
     solo si su recepcion fisica fue confirmada (custodia). El comprobante
     de recepcion no la prueba. RT_INTERNO conserva su circuito: el equipo
     llega desde Gestion RT (PROC-REP-020) y vuelve a ella sin confirmacion.
+
+    ``requiere_checkin_en_entrega`` (MVP v2, UAT-009): con trabajos
+    realizados, el equipo no se entrega sin el check-in (si se pudieron
+    verificar sus funciones basicas), que se registra despues del control
+    y define la garantia de cada trabajo. Solo CLIENTE_EXTERNO: RT_INTERNO
+    no se entrega a un cliente y la garantia RMA conserva su circuito.
     """
 
     condicion_comercial: str
@@ -69,6 +75,7 @@ class PoliticaOrigen:
     requiere_informar_rt: bool
     requiere_autorizacion_cliente: bool
     requiere_confirmacion_recepcion: bool
+    requiere_checkin_en_entrega: bool
 
 
 _POLITICAS: dict[OrigenOrden, PoliticaOrigen] = {
@@ -80,6 +87,7 @@ _POLITICAS: dict[OrigenOrden, PoliticaOrigen] = {
         requiere_informar_rt=False,
         requiere_autorizacion_cliente=True,
         requiere_confirmacion_recepcion=True,
+        requiere_checkin_en_entrega=True,
     ),
     OrigenOrden.RT_INTERNO: PoliticaOrigen(
         condicion_comercial=CondicionComercial.NO_COBRABLE_AL_CLIENTE,
@@ -89,6 +97,7 @@ _POLITICAS: dict[OrigenOrden, PoliticaOrigen] = {
         requiere_informar_rt=True,
         requiere_autorizacion_cliente=False,
         requiere_confirmacion_recepcion=False,
+        requiere_checkin_en_entrega=False,
     ),
     OrigenOrden.RMA_GARANTIA_REPARACION: PoliticaOrigen(
         condicion_comercial=CondicionComercial.NO_COBRABLE,
@@ -98,6 +107,7 @@ _POLITICAS: dict[OrigenOrden, PoliticaOrigen] = {
         requiere_informar_rt=False,
         requiere_autorizacion_cliente=False,
         requiere_confirmacion_recepcion=True,
+        requiere_checkin_en_entrega=False,
     ),
 }
 

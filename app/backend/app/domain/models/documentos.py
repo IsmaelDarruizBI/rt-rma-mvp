@@ -67,6 +67,19 @@ class TrabajoEnDocumento(BaseModel):
     detalle_origen_id: str | None = None
 
 
+class TrabajoRealizadoEnDocumento(TrabajoEnDocumento):
+    """Un trabajo realizado en el comprobante final, con su garantia.
+
+    ``garantia_dias`` es el plazo definitivo del Detalle (el del check-in
+    o el ajustado); ``garantia_vence``, la entrega mas ese plazo (``None``
+    sin entrega todavia o con 0 dias). Ambos ``None`` en un comprobante
+    anterior.
+    """
+
+    garantia_dias: int | None = Field(default=None, ge=0)
+    garantia_vence: date | None = None
+
+
 class TrabajoCanceladoEnDocumento(TrabajoEnDocumento):
     """Un Detalle cancelado: figura como no realizado y no cobrado."""
 
@@ -170,7 +183,9 @@ class ContenidoComprobanteEntrega(_ContenidoBase):
     ``tipo_entrega`` distingue una reparacion terminada de una devolucion
     sin reparacion. Los importes solo figuran si la Orden es cobrable.
     Sin entrega registrada (vista previa) los datos de la entrega quedan
-    vacios.
+    vacios. ``checkin``: si se pudieron verificar las funciones basicas
+    antes de entregar (``None`` sin el dato); cada trabajo realizado
+    lleva su garantia definitiva.
     """
 
     tipo: Literal[TipoDocumento.COMPROBANTE_ENTREGA] = (
@@ -184,7 +199,10 @@ class ContenidoComprobanteEntrega(_ContenidoBase):
     recibido_por: str | None = None
     identificacion_receptor: str | None = None
     observaciones_entrega: str | None = None
-    trabajos_realizados: list[TrabajoEnDocumento] = Field(default_factory=list)
+    checkin: bool | None = None
+    trabajos_realizados: list[TrabajoRealizadoEnDocumento] = Field(
+        default_factory=list
+    )
     trabajos_cancelados: list[TrabajoCanceladoEnDocumento] = Field(
         default_factory=list
     )
@@ -258,10 +276,11 @@ class ContenidoComprobanteIngreso(_ContenidoBase):
     """Comprobante de ingreso y autorizacion (ingreso inicial, MVP v2).
 
     Un solo documento para el cliente al ingresar el equipo: acredita la
-    recepcion fisica (estado, accesorios, observaciones del equipo,
-    check-in) y la autorizacion de los trabajos incluidos, con su precio,
-    el descuento y el total. Las notas internas nunca figuran. No es un
-    comprobante de pago ni lleva firma.
+    recepcion fisica (estado, accesorios, observaciones del equipo) y la
+    autorizacion de los trabajos incluidos, con su precio, el descuento y
+    el total. Las notas internas nunca figuran. No es un comprobante de
+    pago ni lleva firma. ``checkin`` solo en un comprobante anterior a
+    UAT-009 (hoy el check-in se registra antes de la entrega).
     """
 
     tipo: Literal[TipoDocumento.COMPROBANTE_INGRESO] = (

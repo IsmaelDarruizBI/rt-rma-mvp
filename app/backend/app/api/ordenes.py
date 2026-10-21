@@ -66,6 +66,7 @@ from app.application import (
     realizar_revision,
     rechazar_control,
     redefinir_detalle,
+    registrar_checkin,
     registrar_decision_cliente,
     registrar_desistimiento,
     registrar_devolucion,
@@ -134,6 +135,7 @@ from .schemas import (
     RecepcionOut,
     RechazarControlIn,
     RedefinirDetalleIn,
+    RegistrarCheckinIn,
     RegistrarDecisionClienteIn,
     RegistrarDevolucionIn,
     RegistrarRecepcionIn,
@@ -1130,7 +1132,6 @@ def post_generar_comprobante_ingreso(
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
         canal=cuerpo.canal,
-        checkin=cuerpo.checkin,
     )
     return _salida(orden, contexto)
 
@@ -1342,6 +1343,28 @@ def post_devolver_dinero(
         operacion_id=cuerpo.operacion_id,
     )
     return _salida_con_entrega(orden, contexto, puede_entregar)
+
+
+@router.post("/{orden_id}/checkin")
+def post_registrar_checkin(
+    orden_id: str,
+    cuerpo: RegistrarCheckinIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Registrar el check-in antes de entregar (Recepcion o Administracion).
+
+    Con la reparacion lista: si se pudieron verificar las funciones basicas
+    del equipo. Define la garantia de cada trabajo (90 o 30 dias), sin
+    pisar los ajustes manuales. En Cliente Externo con trabajos realizados,
+    la entrega lo exige.
+    """
+    orden = registrar_checkin(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        realizado=cuerpo.realizado,
+    )
+    return _salida(orden, contexto)
 
 
 @router.post("/{orden_id}/deliver")

@@ -193,7 +193,8 @@ def test_el_comprobante_de_ingreso_tiene_lo_del_cliente_y_nada_interno(
     assert contenido["accesorios"] == ["Cargador"]
     assert contenido["observaciones"] == OBSERVACIONES
     assert contenido["notas"] == ["Trae la caja original."]
-    assert contenido["checkin"] is True
+    # UAT-009: el check-in se registra antes de la entrega, no aca.
+    assert contenido["checkin"] is None
     assert contenido["recepcion_fisica"] == "EN_CUSTODIA"
     assert contenido["confirmada_por"]["id"] == RECEPCION
     assert contenido["fecha_ingreso"] is not None
@@ -283,10 +284,7 @@ def test_doble_clic_simultaneo_emite_un_solo_comprobante(cliente, tmp_path):
 
 @pytest.mark.parametrize(
     ("datos", "falta"),
-    [
-        ({"checkin": None}, "check-in"),
-        ({"estado_fisico": None}, "estado fisico"),
-    ],
+    [({"estado_fisico": None}, "estado fisico")],
 )
 def test_falta_informacion_obligatoria(cliente, tmp_path, datos, falta):
     orden_id = crear_con_recepcion(cliente, **datos)
@@ -429,27 +427,24 @@ def test_despues_del_comprobante_no_se_duplica_nada(cliente, tmp_path):
     ]
 
 
-def test_sin_check_in_se_completa_el_dato_y_se_genera(cliente):
-    """No hay estado sin salida: el dato que falta se corrige en el
-    ingreso (todavia sin confirmar) y el comprobante se genera."""
-    orden_id = crear_con_recepcion(cliente, checkin=None)
+def test_sin_check_in_se_genera_el_comprobante(cliente):
+    """UAT-009: el ingreso no pide el check-in; hasta registrarlo, antes
+    de la entrega, rige el plazo del Tipo."""
+    orden_id = crear_con_recepcion(cliente)
     agregar(cliente, orden_id)
-    conflicto(generar_ingreso(cliente, orden_id))
+    orden = _orden(cliente, orden_id)
+    (generar,) = [
+        a
+        for a in orden["acciones_disponibles"]
+        if a["codigo"] == "GENERAR_COMPROBANTE_INGRESO"
+    ]
+    assert generar["bloqueo"] is None
 
-    ok(
-        cliente.put(
-            f"/api/orders/{orden_id}/reception",
-            json={
-                "usuario_id": RECEPCION,
-                "estado_fisico": ESTADO_FISICO,
-                "checkin": False,
-            },
-        )
-    )
     orden = ok(generar_ingreso(cliente, orden_id))
 
     assert orden["estado_workflow"] == "EN_COLA"
-    assert orden["reparaciones_detail"][0]["garantia_dias"] == 30
+    assert orden["recepcion"]["datos"]["checkin"] is None
+    assert orden["reparaciones_detail"][0]["garantia_dias"] == 90
 
 
 def test_los_otros_origenes_y_la_revision_siguen_igual(cliente):
@@ -642,7 +637,7 @@ def test_una_autorizacion_posterior_no_es_la_del_ingreso(cliente):
     assert detalle["autorizado_en_ingreso"] is False
 
 
-# --- Check-in que falta: sin estados sin salida ------------------------------
+# --- Ordenes anteriores: sin estados sin salida ------------------------------
 
 
 def _intake(cliente, orden_id, **extra):
@@ -652,12 +647,12 @@ def _intake(cliente, orden_id, **extra):
     )
 
 
-def test_una_orden_anterior_confirmada_completa_el_checkin_al_generar(
+def test_una_orden_anterior_confirmada_sin_checkin_genera_el_comprobante(
     cliente, tmp_path
 ):
     """Anterior a la iteracion 1: recepcion confirmada sin check-in. Ya no
-    se corrige el ingreso, pero el comprobante lo completa."""
-    orden_id = crear_con_recepcion(cliente, checkin=None)
+    se corrige el ingreso ni hace falta: el check-in es del cierre."""
+    orden_id = crear_con_recepcion(cliente)
     agregar(cliente, orden_id)
     ruta = tmp_path / "ordenes" / f"{orden_id}.json"
     datos = json.loads(ruta.read_text(encoding="utf-8"))
@@ -667,52 +662,35 @@ def test_una_orden_anterior_confirmada_completa_el_checkin_al_generar(
         "observaciones": None,
     }
     ruta.write_text(json.dumps(datos), encoding="utf-8")
-    conflicto(
-        cliente.put(
-            f"/api/orders/{orden_id}/reception",
-            json={
-                "usuario_id": RECEPCION,
-                "estado_fisico": ESTADO_FISICO,
-                "checkin": True,
-            },
-        )
-    )
-    assert "check-in" in conflicto(_intake(cliente, orden_id))
 
-    orden = ok(_intake(cliente, orden_id, checkin=True))
+    orden = ok(_intake(cliente, orden_id))
 
     assert orden["estado_workflow"] == "EN_COLA"
-    assert orden["recepcion"]["datos"]["checkin"] is True
-    assert orden["reparaciones_detail"][0]["garantia_dias"] == 90
+    assert orden["recepcion"]["datos"]["checkin"] is None
     (ingreso,) = del_tipo(cliente, orden_id, "COMPROBANTE_INGRESO")
-    assert ingreso["contenido"]["checkin"] is True
+    assert ingreso["contenido"]["checkin"] is None
     # La recepcion ya estaba confirmada: no se vuelve a confirmar.
     assert "ACC-REP-024" not in ids(orden)
 
 
-def test_el_checkin_registrado_no_se_cambia_desde_el_comprobante(
-    cliente, tmp_path
-):
-    orden_id = crear_con_recepcion(cliente, checkin=True)
+def test_el_comprobante_no_registra_un_checkin_enviado(cliente):
+    """Un cliente viejo que todavia lo manda: se ignora."""
+    orden_id = crear_con_recepcion(cliente)
     agregar(cliente, orden_id)
-    antes = archivo(tmp_path, orden_id)
 
-    mensaje = conflicto(_intake(cliente, orden_id, checkin=False))
+    orden = ok(_intake(cliente, orden_id, checkin=False))
 
-    assert "ya esta registrado" in mensaje
-    assert archivo(tmp_path, orden_id) == antes
-    # El mismo valor no molesta.
-    assert ok(_intake(cliente, orden_id, checkin=True))["estado_workflow"] == (
-        "EN_COLA"
-    )
+    assert orden["estado_workflow"] == "EN_COLA"
+    assert orden["recepcion"]["datos"]["checkin"] is None
+    assert orden["reparaciones_detail"][0]["garantia_dias"] == 90
 
 
 def test_si_falta_otro_dato_no_queda_nada_a_medias(cliente, tmp_path):
-    orden_id = crear_con_recepcion(cliente, checkin=None, estado_fisico=None)
+    orden_id = crear_con_recepcion(cliente, estado_fisico=None)
     agregar(cliente, orden_id)
     antes = archivo(tmp_path, orden_id)
 
-    mensaje = conflicto(_intake(cliente, orden_id, checkin=True))
+    mensaje = conflicto(_intake(cliente, orden_id))
 
     assert "estado fisico" in mensaje
     assert archivo(tmp_path, orden_id) == antes

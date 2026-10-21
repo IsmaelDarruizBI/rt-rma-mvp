@@ -39,10 +39,13 @@ from app.services import (
     ROLES_AJUSTE_GARANTIA,
     ROLES_CAMBIO_PRIORIDAD,
     ROLES_CANCELACION,
+    ROLES_CHECKIN,
     ROLES_COMPROBANTE_AUTORIZACION,
     ROLES_DESCUENTO,
     ROLES_LIBERACION_AJENA,
     ROLES_RECEPCION_EQUIPO,
+    checkin_pendiente_para_entrega,
+    checkin_registrable,
     comprobante_autorizacion_emitible,
     custodia_por_definir,
     descuento_editable,
@@ -134,6 +137,8 @@ ACCION_APLICAR_DESCUENTO = "APLICAR_DESCUENTO"
 ACCION_CAMBIAR_PRIORIDAD = "CAMBIAR_PRIORIDAD"
 ACCION_LIBERAR_ORDEN_AJENA = "LIBERAR_ORDEN_AJENA"
 ACCION_AJUSTAR_GARANTIA = "AJUSTAR_GARANTIA"
+# UAT-009: verificacion de funciones basicas antes de entregar.
+ACCION_REGISTRAR_CHECKIN = "REGISTRAR_CHECKIN"
 
 # Terminales de un Detalle: lo realizado y lo cancelado (BR-REP-012).
 _TERMINALES = (
@@ -644,6 +649,18 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             )
         )
 
+    # UAT-009: con la reparacion lista y antes de entregar, el check-in
+    # (si se pudieron verificar las funciones basicas) define la garantia.
+    # No depende del aviso ni del cobro; se puede volver a registrar.
+    if checkin_registrable(orden):
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_REGISTRAR_CHECKIN,
+                etiqueta="Registrar el check-in",
+                roles=ROLES_CHECKIN,
+            )
+        )
+
     entrega_habilitada = (
         lista and notificada and condicion_entrega_cumplida(orden)
     )
@@ -653,6 +670,11 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 codigo=ACCION_ENTREGAR,
                 etiqueta="Entregar el equipo",
                 roles=ROLES_ENTREGA,
+                bloqueo=(
+                    "Falta registrar el check-in"
+                    if checkin_pendiente_para_entrega(orden)
+                    else None
+                ),
             )
         )
 

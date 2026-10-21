@@ -29,7 +29,11 @@ from tests.fixtures.api_salidas import (
     ok,
     tomada,
 )
-from tests.fixtures.custodia import confirmar_recepcion, entregar
+from tests.fixtures.custodia import (
+    confirmar_recepcion,
+    entregar,
+    registrar_checkin,
+)
 from tests.test_api_hp_rep_002 import _crear_orden_rt
 from tests.test_inventario_operativo import _cliente
 
@@ -162,9 +166,10 @@ def test_con_trabajos_cargados_genera_el_comprobante_de_ingreso(tmp_path):
             "AGREGAR_DETALLE",
             "GENERAR_COMPROBANTE_INGRESO",
         ]
-        # Sin estado fisico ni check-in, el motivo dice que falta.
+        # Sin estado fisico, el motivo dice que falta. El check-in ya no
+        # (se registra antes de la entrega, UAT-009).
         assert "estado fisico" in generar["motivo"]
-        assert "check-in" in generar["motivo"]
+        assert "check-in" not in generar["motivo"]
         accion = generar["acciones"][1]
         assert accion["bloqueo"].startswith("Para generarlo falta")
         assert situacion["avisos"] == []
@@ -392,8 +397,25 @@ def test_aviso_cobro_y_entrega(tmp_path):
 
         _pagar(cliente, orden_id, saldo)
         situacion = _situacion(cliente, orden_id)
+        # Avisada y saldada: antes de entregar falta el check-in. Es solo
+        # presentacion: el workflow sigue en REPARACION_LISTA.
+        assert situacion["codigo"] == "PENDIENTE_CHECKIN"
+        assert situacion["titulo"] == (
+            "Pendiente de verificación de funciones básicas"
+        )
+        checkin, entrega = situacion["tareas"]
+        assert _codigos(checkin) == ["REGISTRAR_CHECKIN"]
+        assert _codigos(entrega) == ["ENTREGAR"]
+        assert entrega["acciones"][0]["bloqueo"] == (
+            "Falta registrar el check-in"
+        )
+
+        ok(registrar_checkin(cliente, orden_id))
+        situacion = _situacion(cliente, orden_id)
         assert situacion["codigo"] == "LISTA_PARA_ENTREGAR"
-        assert _codigos(situacion["tareas"][0]) == ["ENTREGAR"]
+        assert situacion["titulo"] == "Lista para entregar"
+        (entrega,) = situacion["tareas"]
+        assert _codigos(entrega) == ["ENTREGAR"]
         assert _etapas(situacion)["ENTREGA"] == "EN_CURSO"
 
         ok(entregar(cliente, orden_id))

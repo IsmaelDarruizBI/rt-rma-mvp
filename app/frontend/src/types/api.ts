@@ -205,8 +205,19 @@ export interface DatosRecepcion {
   observaciones: string | null;
   /** Solo para el personal: nunca salen en un documento. */
   notas_internas?: string | null;
-  /** Check-in del equipo: define la garantía sugerida (90 o 30 días). */
+  /**
+   * Check-in (verificación de funciones básicas): se registra antes de la
+   * entrega y define la garantía sugerida (90 o 30 días). Solo lectura:
+   * el ingreso no lo envía. Una Orden anterior puede tenerlo del ingreso.
+   */
   checkin?: boolean | null;
+}
+
+/** Un registro del check-in antes de la entrega: resultado, quién y cuándo. */
+export interface RegistroCheckin {
+  realizado: boolean;
+  usuario_id: string;
+  fecha: string;
 }
 
 /** Datos del ingreso reemplazados por una corrección (antes de confirmar). */
@@ -240,6 +251,8 @@ export interface Recepcion {
     texto: string;
     interna: boolean;
   }[];
+  /** Cada registro del check-in, en orden; el vigente es `datos.checkin`. */
+  registros_checkin?: RegistroCheckin[];
 }
 
 export interface Custodia {
@@ -342,7 +355,13 @@ export interface ContenidoEntrega extends ContenidoBase {
   recibido_por: string | null;
   identificacion_receptor: string | null;
   observaciones_entrega: string | null;
-  trabajos_realizados: TrabajoEnDocumento[];
+  /** Si se pudieron verificar las funciones básicas antes de entregar. */
+  checkin?: boolean | null;
+  /** Con la garantía definitiva de cada trabajo (ausente en uno anterior). */
+  trabajos_realizados: (TrabajoEnDocumento & {
+    garantia_dias?: number | null;
+    garantia_vence?: string | null;
+  })[];
   trabajos_cancelados: (TrabajoEnDocumento & {
     motivo: string | null;
     origen_cancelacion: string | null;

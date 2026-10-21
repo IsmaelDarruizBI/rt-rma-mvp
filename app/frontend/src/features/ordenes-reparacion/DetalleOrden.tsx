@@ -272,6 +272,13 @@ function Trabajo({
     .find((registro) => registro.version_definicion === detalle.version_definicion);
   const cobrable = orden.resumen.condicion_comercial === "COBRABLE";
   const condicion = CONDICION_TRABAJO[detalle.condicion];
+  // UAT-009: en Cliente Externo el plazo lo define el check-in, antes de
+  // entregar; hasta entonces rige el del catálogo (salvo un ajuste manual).
+  const garantiaProvisoria =
+    orden.origen === "CLIENTE_EXTERNO" &&
+    orden.estado_workflow !== "ENTREGADA" &&
+    (orden.recepcion?.datos.checkin ?? null) === null &&
+    (detalle.ajustes_garantia ?? []).length === 0;
 
   return (
     <li
@@ -429,6 +436,8 @@ function Trabajo({
           detalle.garantia_dias_sugerida !== detalle.garantia_dias
             ? ` (sugerida: ${detalle.garantia_dias_sugerida})`
             : ""}
+          {garantiaProvisoria &&
+            " · provisoria: se define con el check-in, antes de entregar"}
           {(detalle.ajustes_garantia ?? []).map((ajuste) => (
             <span key={ajuste.fecha} style={{ display: "block" }}>
               Ajustada de {ajuste.dias_anteriores} a {ajuste.dias_nuevos} días

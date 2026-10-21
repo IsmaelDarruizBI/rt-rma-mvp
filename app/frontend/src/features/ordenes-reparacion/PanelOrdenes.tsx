@@ -572,6 +572,10 @@ export function PanelOrdenes() {
       void ejecutarComando(() =>
         api.ajustarGarantia(idOrden, detalleId, idActor, dias, motivo),
       ),
+    registrarCheckin: (realizado) =>
+      void ejecutarComando(() =>
+        api.registrarCheckin(idOrden, idActor, realizado),
+      ),
   };
 
   const contexto = {
@@ -980,14 +984,9 @@ export function PanelOrdenes() {
                       api.emitirComprobanteAutorizacion(idOrden, idActor),
                     )
                   }
-                  onGenerarIngreso={(canal, checkin) =>
+                  onGenerarIngreso={(canal) =>
                     void ejecutarComando(() =>
-                      api.generarComprobanteIngreso(
-                        idOrden,
-                        idActor,
-                        canal,
-                        checkin,
-                      ),
+                      api.generarComprobanteIngreso(idOrden, idActor, canal),
                     )
                   }
                 />

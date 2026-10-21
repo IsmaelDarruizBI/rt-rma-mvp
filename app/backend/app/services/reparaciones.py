@@ -139,7 +139,7 @@ def exigir_fuera_del_ingreso_inicial(
     En el ingreso inicial de CLIENTE_EXTERNO, confirmar la recepcion,
     finalizar la definicion y registrar la autorizacion inicial se hacen
     juntos al generar el comprobante de ingreso y autorizacion, con sus
-    validaciones (estado fisico, check-in, al menos un trabajo). Por
+    validaciones (estado fisico, al menos un trabajo). Por
     separado dejarian la Orden fuera de ese recorrido. Los demas Origenes
     y los demas caminos (revision, autorizaciones posteriores) no cambian.
     """
@@ -153,7 +153,8 @@ def exigir_fuera_del_ingreso_inicial(
 
 def faltantes_para_ingreso(orden: OrdenReparacion) -> list[str]:
     """Lo que Recepcion tiene que completar antes de generar el comprobante
-    de ingreso: trabajos, estado fisico y el check-in."""
+    de ingreso: trabajos y estado fisico. El check-in no: se registra antes
+    de la entrega (UAT-009)."""
     faltan = []
     if not any(
         detalle.estado is not EstadoReparacionDetail.CANCELADO
@@ -163,8 +164,6 @@ def faltantes_para_ingreso(orden: OrdenReparacion) -> list[str]:
     datos = orden.recepcion.datos if orden.recepcion else None
     if datos is None or not datos.estado_fisico:
         faltan.append("registrar el estado fisico del equipo")
-    if datos is None or datos.checkin is None:
-        faltan.append("indicar si se hizo el check-in")
     return faltan
 
 
@@ -315,9 +314,10 @@ def _detalle_con_snapshot(
     """Detalle DEFINIDO con el snapshot del Tipo (BR-REP-015).
 
     Compartido por PROC-REP-070 y PROC-REP-075: mismo snapshot, nodos
-    funcionales distintos. La garantia es la sugerida por el check-in del
-    ingreso (o la del Tipo si no hay check-in): sugerida y definitiva
-    nacen iguales.
+    funcionales distintos. La garantia nace con la del Tipo (el check-in
+    se registra antes de la entrega y la reasigna) o, en una Orden
+    anterior con el check-in del ingreso, la que este sugiere: sugerida y
+    definitiva nacen iguales.
     """
     dias = garantia_sugerida(checkin, tipo_reparacion.garantia_dias)
     return ReparacionDetail(
@@ -336,11 +336,12 @@ def _detalle_con_snapshot(
 
 
 def reaplicar_garantia_sugerida(orden: OrdenReparacion) -> OrdenReparacion:
-    """Tras corregir el check-in: actualiza la garantia sugerida.
+    """Tras registrar el check-in: actualiza la garantia sugerida.
 
-    En los Detalles no cancelados. El plazo definitivo la sigue, salvo
-    que tenga un ajuste manual (ese plazo lo decidio una persona). Sin
-    check-in registrado no cambia nada.
+    En los Detalles no cancelados: 90 dias si se pudieron verificar las
+    funciones basicas, 30 si no. El plazo definitivo la sigue, salvo que
+    tenga un ajuste manual (ese plazo lo decidio una persona y nunca se
+    pisa). Sin check-in registrado no cambia nada.
     """
     checkin = checkin_de(orden)
     if checkin is None:

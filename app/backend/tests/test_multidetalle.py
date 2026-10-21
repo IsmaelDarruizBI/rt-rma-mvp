@@ -225,8 +225,8 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
     assert d1["garantia_dias"] == 90
     assert d2["precio"] == "50000"
     assert d2["puntaje"] == 5
-    # Con check-in, 90 dias para todos (el catalogo dice 60).
-    assert d2["garantia_dias"] == 90
+    # Sin check-in todavia (se registra antes de la entrega): el catalogo.
+    assert d2["garantia_dias"] == 60
     assert orden["resumen"]["total"] == "130000"
 
     # Un unico comprobante de recepcion, aunque hubo 2 Detalles agregados.

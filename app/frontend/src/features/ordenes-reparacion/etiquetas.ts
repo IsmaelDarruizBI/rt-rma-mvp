@@ -102,6 +102,7 @@ export const SITUACION: Record<string, string> = {
   CONTROL_TECNICO: "Control de la reparación",
   PENDIENTE_NOTIFICACION: "Pendiente de aviso",
   PENDIENTE_COBRO: "Pendiente de cobro",
+  PENDIENTE_CHECKIN: "Pendiente de verificación de funciones básicas",
   LISTA_PARA_ENTREGAR: "Lista para entregar",
   CANCELADA_PENDIENTE_DEVOLUCION: "Cancelada, pendiente de devolución",
   CERRADA: "Cerrada",
@@ -166,7 +167,22 @@ export const NOMBRE_ACCION: Record<string, string> = {
   CAMBIAR_PRIORIDAD: "Cambiar la prioridad",
   LIBERAR_ORDEN_AJENA: "Liberar la Orden de otro técnico",
   AJUSTAR_GARANTIA: "Ajustar el plazo de garantía",
+  REGISTRAR_CHECKIN: "Registrar el check-in",
 };
+
+/**
+ * El check-in (verificación de funciones básicas antes de la entrega) en
+ * palabras, con la garantía que sugiere. `null`: todavía no se registró.
+ */
+export function descripcionCheckin(checkin: boolean | null | undefined): string {
+  if (checkin === true) {
+    return "Funciones básicas verificadas (garantía sugerida: 90 días)";
+  }
+  if (checkin === false) {
+    return "No se pudieron verificar las funciones básicas (garantía sugerida: 30 días)";
+  }
+  return "Pendiente: se registra antes de entregar el equipo";
+}
 
 /** El valor legible, o el original si no hay etiqueta. */
 export function etiqueta(mapa: Record<string, string>, valor: string): string {

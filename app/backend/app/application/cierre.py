@@ -4,6 +4,8 @@
     rechazar_control   PROC-REP-220 -> 230 (No) -> 235 -> 211 [-> 170]
     notificar          PROC-REP-250 -> 260 -> 265 [-> 266]
     registrar_pago_de_orden   (capacidad transversal) [-> 265 [-> 266]]
+    registrar_checkin  verificacion de funciones basicas antes de entregar
+                       (MVP v2, UAT-009): define la garantia por Detalle
     entregar           PROC-REP-280 -> 270 -> EVT-REP-999 (+ comprobante
                        final y garantia emitidos)
 
@@ -30,6 +32,7 @@ from app.services import (
     devolver_equipo_rt,
     entregar_equipo,
     evaluar_situacion_orden,
+    exigir_checkin_para_entrega,
     exigir_equipo_en_custodia,
     generar_comprobante_final,
     informar_resultado_rt,
@@ -37,6 +40,7 @@ from app.services import (
     marcar_reparacion_lista,
     notificar_cliente,
     rechazar_control_tecnico,
+    registrar_checkin_de_entrega,
     registrar_pago,
     registrar_saldo_pendiente,
     validar_alguno_de,
@@ -215,6 +219,31 @@ def registrar_pago_de_orden(
     return orden, puede_entregar
 
 
+def registrar_checkin(
+    contexto: ApplicationContext,
+    *,
+    orden_id: str,
+    usuario_id: str,
+    realizado: bool,
+) -> OrdenReparacion:
+    """Recepcion (o Administracion) registra el check-in antes de entregar.
+
+    Con la reparacion lista: si se pudieron verificar las funciones
+    basicas del equipo. Reasigna la garantia de cada Detalle (90 o 30
+    dias) sin pisar los ajustes manuales. No mueve el proceso ni toca la
+    notificacion ni el cobro.
+    """
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = registrar_checkin_de_entrega(
+            orden, realizado=realizado, usuario=usuario, fecha=fecha
+        )
+        contexto.ordenes.guardar(orden)
+    return orden
+
+
 def entregar(
     contexto: ApplicationContext,
     *,
@@ -235,8 +264,9 @@ def entregar(
     lo valida, pero para entonces PROC-REP-280 ya habria emitido el
     comprobante final.
 
-    Despues de la condicion comercial exige el equipo en custodia
-    confirmada (el comprobante de recepcion no alcanza) y quien lo retira.
+    Despues de la condicion comercial exige el check-in si hay trabajos
+    con garantia (Cliente Externo), el equipo en custodia confirmada (el
+    comprobante de recepcion no alcanza) y quien lo retira.
     La entrega queda registrada (``orden.entrega``) y, en la misma
     operacion, se emiten el comprobante final y la garantia, que empieza
     con esta entrega.
@@ -263,6 +293,7 @@ def entregar(
                 f"No se puede entregar: {motivo_de_entrega_bloqueada(orden)}. "
                 "Resolve la cuenta (cobro o devolucion) y volve a intentarlo."
             )
+        exigir_checkin_para_entrega(orden)
         exigir_equipo_en_custodia(orden, operacion="entregar el equipo")
         entrega = armar_entrega(
             orden,
