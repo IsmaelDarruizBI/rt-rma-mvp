@@ -60,6 +60,7 @@ from app.services import (
     validar_factibilidad_detalles,
 )
 
+from .catalogo_equipos import equipo_desde_catalogo
 from .cola import encolar_si_ingreso_automatico
 from .concurrencia import seccion_critica_inventario
 from .contexto import ApplicationContext
@@ -90,9 +91,12 @@ def crear_orden(
     comprueba el DNI del cliente (UAT-010): dos altas simultaneas no
     pueden crear dos clientes con el mismo DNI. ``cliente_reutilizado``:
     viene el ID de un cliente conocido (con sus datos, quiza corregidos).
+    Un equipo elegido del catalogo de Ventas (``tipo_producto_id``) toma
+    sus caracteristicas comerciales de la copia local del catalogo.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
+    equipo = equipo_desde_catalogo(contexto, equipo)
 
     with seccion_critica_inventario():
         cliente = cliente_para_orden(
@@ -131,6 +135,7 @@ def crear_orden_rt(
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
+    equipo = equipo_desde_catalogo(contexto, equipo)
 
     with seccion_critica_inventario():
         orden = crear_orden_rt_interno(

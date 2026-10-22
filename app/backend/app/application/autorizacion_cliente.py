@@ -286,7 +286,7 @@ def pendientes_de_autorizacion(
                         if orden.cliente
                         else orden.id
                     ),
-                    equipo=f"{orden.equipo.marca} {orden.equipo.modelo}",
+                    equipo=orden.equipo.descripcion,
                     detalle_id=detalle.id,
                     tipo_reparacion_nombre=nombres.get(
                         detalle.id, detalle.tipo_reparacion_id

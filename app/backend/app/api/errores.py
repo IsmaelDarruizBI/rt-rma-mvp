@@ -16,6 +16,8 @@ Correspondencia:
     ConflictoDeEscrituraError          -> 409  (la Orden cambio: recargar)
     PersistenciaError / RepositoryError-> 500  (fallo de infraestructura)
     AlmacenFotosError                  -> 503  (almacenamiento de fotos)
+    CatalogoOrigenNoDisponibleError    -> 503  (no se pudo leer el origen
+                                                del catalogo de Ventas)
 
 Las especializaciones de ``PrecondicionInvalidaError`` (Orden cerrada,
 toma de otro tecnico, confirmacion requerida) siguen siendo 409, pero
@@ -36,6 +38,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.integraciones.catalogo import CatalogoOrigenNoDisponibleError
 from app.repositories import (
     ConflictoDeEscrituraError,
     EntidadPersistidaNoEncontradaError,
@@ -135,6 +138,20 @@ def registrar_manejadores_de_error(application: FastAPI) -> None:
         return _respuesta(
             "ALMACENAMIENTO_NO_DISPONIBLE",
             "No se pudo acceder al almacenamiento de fotos. Probá de nuevo.",
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    @application.exception_handler(CatalogoOrigenNoDisponibleError)
+    async def _origen_catalogo(
+        _: Request,
+        error: CatalogoOrigenNoDisponibleError,
+    ) -> JSONResponse:
+        """El origen del catalogo no respondio: el intento ya quedo
+        registrado y la copia no cambio. El mensaje no tiene secretos."""
+        logger.warning("Origen del catalogo de equipos: %s", error)
+        return _respuesta(
+            "CATALOGO_ORIGEN_NO_DISPONIBLE",
+            f"{error} Se conserva el catálogo anterior.",
             status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 

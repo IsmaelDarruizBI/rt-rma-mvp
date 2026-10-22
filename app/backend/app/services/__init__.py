@@ -40,6 +40,24 @@ from .cancelaciones import (
     registrar_devolucion_equipo,
     validar_cancelacion_detalle,
 )
+from .catalogo_equipos import (
+    CAMPOS_COMERCIALES,
+    ROLES_SINCRONIZACION_CATALOGO,
+    CatalogoRechazadoError,
+    FusionCatalogo,
+    OpcionCapacidad,
+    OpcionColor,
+    OpcionModelo,
+    OpcionVariante,
+    ProductoNoDisponibleError,
+    SincronizacionEnCursoError,
+    equipo_carga_manual,
+    equipo_con_producto,
+    fusionar_catalogo,
+    opciones_de_seleccion,
+    producto_elegible,
+    validar_informados,
+)
 from .clientes import (
     ClienteConocido,
     ClienteExistenteError,
@@ -294,6 +312,23 @@ from .tomas import (
 from .workflow import registrar_accion_funcional, registrar_paso
 
 __all__ = [
+    # Catalogo de equipos de Ventas
+    "CAMPOS_COMERCIALES",
+    "ROLES_SINCRONIZACION_CATALOGO",
+    "CatalogoRechazadoError",
+    "FusionCatalogo",
+    "OpcionCapacidad",
+    "OpcionColor",
+    "OpcionModelo",
+    "OpcionVariante",
+    "ProductoNoDisponibleError",
+    "SincronizacionEnCursoError",
+    "equipo_carga_manual",
+    "equipo_con_producto",
+    "fusionar_catalogo",
+    "opciones_de_seleccion",
+    "producto_elegible",
+    "validar_informados",
     # Clientes por DNI (UAT-010)
     "ClienteConocido",
     "ClienteExistenteError",

@@ -10,8 +10,23 @@ from .enums import TipoEntrega
 class Equipo(BaseModel):
     """Equipo fisico asociado a una Orden de Reparacion.
 
-    ``imei`` y ``numero_serie`` son opcionales: no todo equipo tiene IMEI
-    (una notebook, un parlante) y el identificador se registra si existe.
+    Identidad FISICA de esta unidad: ``id`` (interno de RMA), ``imei`` y
+    ``numero_serie``. Son opcionales: no todo equipo tiene IMEI (una
+    notebook, un parlante) y el identificador se registra si existe.
+
+    Caracteristicas COMERCIALES (que equipo es): ``marca``, ``modelo``,
+    ``variante``, ``capacidad`` y ``color``. Si se eligio del catalogo de
+    Gestion de Ventas, ``tipo_producto_id`` es el ``tp_id`` de esa
+    combinacion, tal como lo informa Ventas, y los demas campos son una
+    copia de como estaba el producto al elegirlo (un cambio posterior del
+    catalogo no reescribe la Orden). Sin ``tipo_producto_id``, marca y
+    modelo se cargaron a mano: equipos fuera del catalogo y Ordenes
+    anteriores al catalogo, que siguen cargando igual.
+
+    ``tipo_producto_id`` identifica un TIPO de producto, no esta unidad: dos
+    equipos del mismo modelo, capacidad y color comparten ``tp_id`` y se
+    distinguen por su ``id`` y su IMEI.
+
     ``falla_reportada`` es la falla declarada por quien deja el equipo.
     """
 
@@ -21,6 +36,31 @@ class Equipo(BaseModel):
     falla_reportada: str
     imei: str | None = None
     numero_serie: str | None = None
+    tipo_producto_id: str | None = None
+    # ``None``: la version estandar del modelo (o no informada).
+    variante: str | None = None
+    capacidad: str | None = None
+    # ``None``: no especificado (por ejemplo, el producto «cualquier color»
+    # del catalogo) o carga manual.
+    color: str | None = None
+
+    @property
+    def nombre(self) -> str:
+        """Marca, modelo y variante: «Apple iPhone 12 Pro Max»."""
+        return " ".join(
+            parte
+            for parte in (self.marca, self.modelo, self.variante)
+            if parte
+        )
+
+    @property
+    def descripcion(self) -> str:
+        """El nombre con capacidad y color, si se conocen."""
+        return " ".join(
+            parte
+            for parte in (self.nombre, self.capacidad, self.color)
+            if parte
+        )
 
 
 class EntregaEquipo(BaseModel):

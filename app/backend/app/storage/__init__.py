@@ -14,7 +14,11 @@ from .fotos import (
     AlmacenFotosMemoria,
     ObjetoFoto,
 )
-from .json import JsonCatalogosRepository, JsonOrdenReparacionRepository
+from .json import (
+    JsonCatalogoEquiposRepository,
+    JsonCatalogosRepository,
+    JsonOrdenReparacionRepository,
+)
 
 __all__ = [
     "AlmacenFotos",
@@ -23,6 +27,7 @@ __all__ = [
     "AlmacenFotosGcs",
     "AlmacenFotosMemoria",
     "ObjetoFoto",
+    "JsonCatalogoEquiposRepository",
     "JsonCatalogosRepository",
     "JsonOrdenReparacionRepository",
 ]

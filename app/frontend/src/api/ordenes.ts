@@ -61,10 +61,16 @@ export function obtenerOrden(ordenId: string): Promise<Orden> {
 
 // --- Comandos del Happy Path -------------------------------------------
 
-/** Equipo que se recibe. IMEI y número de serie son opcionales. */
+/**
+ * Equipo que se recibe. Del catálogo de Ventas: `tipo_producto_id` (marca,
+ * modelo, variante, capacidad y color los completa el backend desde el
+ * catálogo). A mano: `marca` y `modelo`. IMEI y número de serie son
+ * opcionales.
+ */
 export interface DatosEquipo {
-  marca: string;
-  modelo: string;
+  marca?: string;
+  modelo?: string;
+  tipo_producto_id?: string | null;
   falla_reportada: string;
   imei?: string | null;
   numero_serie?: string | null;

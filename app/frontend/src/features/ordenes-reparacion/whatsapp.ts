@@ -75,7 +75,9 @@ export function mensajeComprobante(
   const saludo = contenido.cliente
     ? `Hola ${contenido.cliente.nombre_apellido}!`
     : "Hola!";
-  const equipo = `${contenido.equipo.marca} ${contenido.equipo.modelo}`;
+  // Marca, modelo y variante (sin importar módulos: se prueba con node).
+  const { marca, modelo, variante } = contenido.equipo;
+  const equipo = [marca, modelo, variante].filter(Boolean).join(" ");
   const ingreso = contenido.tipo === "COMPROBANTE_INGRESO";
   const trabajos = contenido.trabajos
     .map((trabajo) => `• ${trabajo.nombre}: ${pesos(trabajo.precio)}`)

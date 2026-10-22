@@ -10,8 +10,10 @@ solo tiene que llamar a ``create_app(Settings(data_dir=tmp_path))``.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.api import (
+    catalogo_equipos,
     catalogos,
     clientes,
     health,
@@ -41,6 +43,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Respuestas comprimidas si el navegador las acepta: el catalogo de
+    # equipos del alta pesa ~150 KB en JSON y ~7 KB comprimido. Las
+    # imagenes (fotos) ya vienen comprimidas y Starlette no las toca.
+    application.add_middleware(GZipMiddleware, minimum_size=1000)
 
     application.state.settings = settings
     application.state.contexto = construir_contexto(settings)
@@ -49,6 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application.include_router(health.router)
     application.include_router(catalogos.router)
+    application.include_router(catalogo_equipos.router)
     application.include_router(clientes.router)
     application.include_router(ordenes.router)
     application.include_router(inventario.router)

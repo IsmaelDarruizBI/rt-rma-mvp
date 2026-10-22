@@ -31,7 +31,9 @@ import type {
 import type { DatosNuevaOrden, DatosNuevaOrdenRt } from "../../api/ordenes";
 import { buscarClientePorDni } from "../../api/clientes";
 import { ApiError } from "../../api/client";
+import { datosDelEquipo, equipoElegidoInicial } from "./catalogoEquipos";
 import { normalizarDni } from "./clientes";
+import { SelectorEquipo, useCatalogoEquipos } from "./SelectorEquipo";
 import {
   ESTADO_WORKFLOW,
   ORIGEN,
@@ -895,16 +897,21 @@ export function FormularioNuevaOrden({
   const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null);
   // Para qué DNI ya se buscó (crear con un DNI nuevo lo busca antes).
   const [buscadoPara, setBuscadoPara] = useState<string | null>(null);
-  const [marca, setMarca] = useState("Apple");
-  const [modelo, setModelo] = useState("iPhone 14");
+  // Del catálogo de Ventas (Modelo, Variante, Capacidad, Color) o a mano
+  // si no está; sin catálogo sincronizado, a mano.
+  const catalogo = useCatalogoEquipos();
+  const [equipo, setEquipo] = useState(() =>
+    equipoElegidoInicial({ marca: "Apple", modelo: "iPhone 14" }),
+  );
   const [falla, setFalla] = useState("La batería dura poco.");
   const [ingreso, setIngreso] = useState<Ingreso>(ingresoInicial);
 
   const esRecepcion = actor?.rol === "RECEPCION";
   const dniNormalizado = normalizarDni(dni);
   const dniInvalido = dni.trim() !== "" && dniNormalizado === null;
+  const datosEquipo = datosDelEquipo(catalogo.catalogo, equipo);
   const completo =
-    nombreApellido.trim() && telefono.trim() && marca && modelo && falla && !dniInvalido;
+    nombreApellido.trim() && telefono.trim() && datosEquipo && falla && !dniInvalido;
   const puedeBuscar =
     actor !== null &&
     (actor.rol === "RECEPCION" || actor.rol === "ADMINISTRADOR") &&
@@ -948,6 +955,7 @@ export function FormularioNuevaOrden({
       if (encontrado?.origen === "BASE") return;
     }
     const { identificadores, recepcion } = datosDeIngreso(ingreso);
+    if (!datosEquipo) return;
     onCrear({
       usuario_id: actor.id,
       cliente: {
@@ -957,8 +965,7 @@ export function FormularioNuevaOrden({
         ...(clienteId ? { id: clienteId } : {}),
       },
       equipo: {
-        marca,
-        modelo,
+        ...datosEquipo,
         falla_reportada: falla,
         ...identificadores,
       },
@@ -1019,20 +1026,15 @@ export function FormularioNuevaOrden({
           style={estiloInput}
         />
       </Campo>
-      <Campo etiqueta="Marca">
-        <input
-          value={marca}
-          onChange={(evento) => setMarca(evento.target.value)}
-          style={estiloInput}
-        />
-      </Campo>
-      <Campo etiqueta="Modelo">
-        <input
-          value={modelo}
-          onChange={(evento) => setModelo(evento.target.value)}
-          style={estiloInput}
-        />
-      </Campo>
+      <SelectorEquipo
+        catalogo={catalogo.catalogo}
+        cargando={catalogo.cargando}
+        error={catalogo.error}
+        valor={equipo}
+        onCambiar={setEquipo}
+        actor={actor}
+        onSincronizado={() => void catalogo.recargar()}
+      />
       <Campo etiqueta="Falla declarada por el cliente">
         <input
           value={falla}

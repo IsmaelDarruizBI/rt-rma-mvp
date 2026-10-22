@@ -19,3 +19,6 @@ venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Copia local del catalogo de equipos de Ventas (se sincroniza; no se versiona)
+app/backend/data/catalogo_equipos/

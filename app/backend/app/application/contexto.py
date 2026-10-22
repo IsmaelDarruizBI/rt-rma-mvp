@@ -8,6 +8,11 @@ No contiene reglas de negocio: solo los dos repositories, el reloj, la
 zona horaria del negocio (para fechas calendario como un vencimiento) y,
 desde UAT-010, el almacenamiento de fotos y la fuente externa de datos por
 DNI (ambos opcionales: sin ellos, esas funciones quedan deshabilitadas).
+
+Catalogo de equipos de Ventas: ``catalogo_equipos`` es la copia local
+(sin ella, el alta solo admite carga manual); ``proveedor_catalogo`` es el
+origen que se lee al sincronizar, a traves del puerto ``ProveedorCatalogo``
+(sin el, no se sincroniza); ``filtro_catalogo``, que parte se copia.
 """
 
 from collections.abc import Callable
@@ -16,11 +21,22 @@ from datetime import datetime, timedelta, timezone, tzinfo
 
 from app.core.config import Settings
 from app.integraciones import FuentePersonas, LimitadorConsultas
-from app.repositories import CatalogosRepository, OrdenReparacionRepository
+from app.integraciones.catalogo import (
+    FiltroCatalogo,
+    ProveedorCatalogo,
+    construir_proveedor_catalogo,
+    filtro_catalogo,
+)
+from app.repositories import (
+    CatalogoEquiposRepository,
+    CatalogosRepository,
+    OrdenReparacionRepository,
+)
 from app.storage import (
     AlmacenFotos,
     AlmacenFotosDirectorio,
     AlmacenFotosGcs,
+    JsonCatalogoEquiposRepository,
     JsonCatalogosRepository,
     JsonOrdenReparacionRepository,
 )
@@ -48,6 +64,9 @@ class ApplicationContext:
     limitador_personas: LimitadorConsultas = field(
         default_factory=LimitadorConsultas
     )
+    catalogo_equipos: CatalogoEquiposRepository | None = None
+    proveedor_catalogo: ProveedorCatalogo | None = None
+    filtro_catalogo: FiltroCatalogo = FiltroCatalogo(("IPHONE USADOS",))
 
 
 def _almacen_de_fotos(settings: Settings) -> AlmacenFotos | None:
@@ -75,4 +94,9 @@ def construir_contexto(settings: Settings) -> ApplicationContext:
             intervalo_minimo=settings.consulta_dni_intervalo_s,
             maximo_por_minuto=settings.consulta_dni_max_por_minuto,
         ),
+        catalogo_equipos=JsonCatalogoEquiposRepository(
+            settings.catalogo_equipos_dir
+        ),
+        proveedor_catalogo=construir_proveedor_catalogo(settings),
+        filtro_catalogo=filtro_catalogo(settings),
     )

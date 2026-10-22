@@ -15,6 +15,7 @@ import {
   importe,
 } from "../../components/ui";
 import type { Detalle, Estacion, Orden, Usuario } from "../../types/api";
+import { descripcionEquipo } from "./catalogoEquipos";
 import { EtapasNegocio } from "./ProximoPaso";
 import {
   CANAL,
@@ -146,7 +147,7 @@ export function CabeceraOrden({
           : `Equipo interno RT · ${orden.referencia_rt ?? "sin referencia"}`}
       </p>
       <p style={{ margin: "0.15rem 0 0", color: colores.suave }}>
-        {orden.equipo.marca} {orden.equipo.modelo} —{" "}
+        {descripcionEquipo(orden.equipo)} —{" "}
         {orden.equipo.falla_reportada}
       </p>
       {orden.orden_origen_id && (

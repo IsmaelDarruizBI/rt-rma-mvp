@@ -19,7 +19,7 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 
 from app.application import (
     AccionDisponible,
@@ -237,23 +237,41 @@ class ClienteIn(BaseModel):
 
 
 class EquipoIn(BaseModel):
-    """Datos minimos del equipo recibido."""
+    """Datos minimos del equipo recibido.
 
-    marca: str = Field(min_length=1)
-    modelo: str = Field(min_length=1)
+    Elegido del catalogo de Ventas: ``tipo_producto_id`` (el ``tp_id`` de
+    la combinacion elegida). Marca, modelo, variante, capacidad y color
+    salen entonces de la copia local del catalogo, no de este cuerpo. A
+    mano (equipo fuera del catalogo): ``marca`` y ``modelo``.
+    """
+
+    marca: str = ""
+    modelo: str = ""
     falla_reportada: str = Field(min_length=1)
     imei: str | None = None
     numero_serie: str | None = None
     id: str | None = None
+    tipo_producto_id: str | None = None
+
+    @model_validator(mode="after")
+    def _producto_o_marca_y_modelo(self) -> "EquipoIn":
+        if not (self.tipo_producto_id or "").strip() and not (
+            self.marca.strip() and self.modelo.strip()
+        ):
+            raise ValueError(
+                "Falta el equipo: elegilo del catálogo o cargá marca y modelo."
+            )
+        return self
 
     def a_dominio(self) -> Equipo:
         return Equipo(
             id=self.id or nuevo_id("EQP"),
-            marca=self.marca,
-            modelo=self.modelo,
+            marca=self.marca.strip(),
+            modelo=self.modelo.strip(),
             falla_reportada=self.falla_reportada,
             imei=self.imei,
             numero_serie=self.numero_serie,
+            tipo_producto_id=_texto_o_none(self.tipo_producto_id),
         )
 
 
@@ -896,6 +914,11 @@ class EquipoOut(BaseModel):
     falla_reportada: str
     imei: str | None = None
     numero_serie: str | None = None
+    # Catalogo de Ventas: ``None`` en carga manual y Ordenes anteriores.
+    tipo_producto_id: str | None = None
+    variante: str | None = None
+    capacidad: str | None = None
+    color: str | None = None
 
 
 class InsumoPrevistoOut(BaseModel):
@@ -1655,7 +1678,7 @@ class OrdenResumenOut(BaseModel):
             cliente_telefono=(
                 orden.cliente.telefono if orden.cliente is not None else None
             ),
-            equipo=f"{orden.equipo.marca} {orden.equipo.modelo}",
+            equipo=orden.equipo.descripcion,
             equipo_marca=orden.equipo.marca,
             equipo_modelo=orden.equipo.modelo,
             imei=orden.equipo.imei,

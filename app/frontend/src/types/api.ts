@@ -575,6 +575,14 @@ export interface BusquedaCliente {
   externos: PersonaExterna[];
 }
 
+/**
+ * Identidad física de la unidad: `id` (de RMA), `imei`, `numero_serie`.
+ * Características comerciales: marca, modelo, variante, capacidad y color.
+ * `tipo_producto_id` es el `tp_id` del catálogo de Ventas si se eligió de
+ * ahí (los demás datos son una copia de ese momento); `null` en carga
+ * manual y en Órdenes anteriores al catálogo (sin variante, capacidad ni
+ * color).
+ */
 export interface Equipo {
   id: string;
   marca: string;
@@ -582,6 +590,79 @@ export interface Equipo {
   falla_reportada: string;
   imei: string | null;
   numero_serie: string | null;
+  tipo_producto_id?: string | null;
+  /** `null`: la versión estándar del modelo. */
+  variante?: string | null;
+  capacidad?: string | null;
+  /** `null`: no especificado (o carga manual). */
+  color?: string | null;
+}
+
+// --- Catálogo de equipos de Ventas (copia sincronizada) -----------------
+
+export type ResultadoSincronizacion = "EXITOSA" | "FALLIDA" | "RECHAZADA";
+
+export interface SincronizacionCatalogo {
+  id: string;
+  usuario_id: string;
+  origen: string;
+  filtro: string;
+  iniciada_en: string;
+  finalizada_en: string;
+  resultado: ResultadoSincronizacion;
+  mensaje: string | null;
+  leidos: number;
+  filtrados: number;
+  descartados: number;
+  nuevos: number;
+  actualizados: number;
+  sin_cambios: number;
+  reactivados: number;
+  dados_de_baja: number;
+  vigentes: number;
+  elegibles: number;
+}
+
+export interface EstadoCatalogoEquipos {
+  habilitado: boolean;
+  /** Hay un origen configurado: se puede sincronizar. */
+  sincronizable: boolean;
+  origen: string | null;
+  filtro: string;
+  ultima: SincronizacionCatalogo | null;
+  ultima_exitosa: SincronizacionCatalogo | null;
+  vigentes: number;
+  elegibles: number;
+}
+
+export interface ColorCatalogo {
+  /** `null` con `generico`: «Otro / sin especificar». */
+  color: string | null;
+  generico: boolean;
+  tipo_producto_id: string;
+}
+
+export interface CapacidadCatalogo {
+  capacidad: string;
+  colores: ColorCatalogo[];
+}
+
+export interface VarianteCatalogo {
+  /** `null`: la versión estándar. */
+  variante: string | null;
+  capacidades: CapacidadCatalogo[];
+}
+
+export interface ModeloCatalogo {
+  marca: string;
+  modelo: string;
+  variantes: VarianteCatalogo[];
+}
+
+/** Solo combinaciones que existen en el catálogo (y se pueden elegir). */
+export interface CatalogoEquipos {
+  estado: EstadoCatalogoEquipos;
+  modelos: ModeloCatalogo[];
 }
 
 /** Insumo que el Tipo de Reparación del Detalle prevé consumir. */

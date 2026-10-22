@@ -7,6 +7,7 @@ reglas de negocio.
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -58,6 +59,28 @@ class Settings(BaseSettings):
     consulta_dni_intervalo_s: float = 2.0
     consulta_dni_max_por_minuto: int = 10
 
+    # Catalogo de equipos de Gestion de Ventas. RMA guarda una copia y la
+    # actualiza a pedido (sincronizacion manual); el alta de una Orden
+    # nunca consulta el origen. Toda la configuracion del origen esta aca
+    # y la traduce a un adaptador ``integraciones.catalogo.configuracion``.
+    #   ninguno        sin origen: no se sincroniza
+    #   google_sheets  la hoja de Ventas (solo lectura)
+    #   archivo        un CSV con las mismas columnas (desarrollo)
+    catalogo_origen: Literal["ninguno", "google_sheets", "archivo"] = "ninguno"
+    # Que parte del catalogo se copia (``tp_subcat_1``).
+    catalogo_subcategorias: list[str] = ["IPHONE USADOS"]
+    # Marca por ``tp_categoria`` (Ventas no tiene columna de marca). Una
+    # categoria sin marca deja sus productos fuera del selector.
+    catalogo_marcas: dict[str, str] = {"IPHONE": "Apple"}
+    catalogo_sheets_planilla: str | None = None
+    catalogo_sheets_hoja: str = "raw_TipoProducto"
+    # cloud_run: la identidad del servicio (o, con ``cuenta``, la cuenta
+    # que esa identidad impersona). gcloud: solo desarrollo local.
+    catalogo_sheets_credencial: Literal["cloud_run", "gcloud"] = "cloud_run"
+    catalogo_sheets_cuenta: str | None = None
+    catalogo_archivo: Path | None = None
+    catalogo_timeout_s: float = 30.0
+
     @property
     def ordenes_dir(self) -> Path:
         """Directorio de las Ordenes persistidas."""
@@ -67,6 +90,15 @@ class Settings(BaseSettings):
     def catalogos_dir(self) -> Path:
         """Directorio de los catalogos persistidos."""
         return self.data_dir / "catalogs"
+
+    @property
+    def catalogo_equipos_dir(self) -> Path:
+        """Copia del catalogo de equipos de Ventas y sus sincronizaciones.
+
+        Aparte de ``catalogs/`` (los catalogos DEMO versionados): la
+        sincronizacion nunca los toca.
+        """
+        return self.data_dir / "catalogo_equipos"
 
 
 @lru_cache

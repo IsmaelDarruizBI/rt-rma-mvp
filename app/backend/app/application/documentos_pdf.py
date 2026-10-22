@@ -176,10 +176,12 @@ def _cliente_y_equipo(hoja: _Hoja, contenido, zona: tzinfo) -> None:
     ]
     if cliente and cliente.email:
         izquierda.append(("Email", cliente.email))
-    derecha = [
-        ("Equipo", f"{equipo.marca} {equipo.modelo}"),
-        ("Ingreso", fecha_hora(contenido.fecha_ingreso, zona)),
-    ]
+    derecha = [("Equipo", equipo.nombre)]
+    if equipo.capacidad:
+        derecha.append(("Capacidad", equipo.capacidad))
+    if equipo.color:
+        derecha.append(("Color", equipo.color))
+    derecha.append(("Ingreso", fecha_hora(contenido.fecha_ingreso, zona)))
     if equipo.imei:
         derecha.append(("IMEI", equipo.imei))
     if equipo.numero_serie:

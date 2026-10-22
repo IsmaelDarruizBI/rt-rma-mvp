@@ -8,6 +8,7 @@ esa es la frontera que permite reemplazar el almacenamiento JSON del MVP
 por Cloud Storage, PostgreSQL u otro backend sin tocar el dominio.
 """
 
+from .catalogo_equipos import CatalogoEquiposRepository
 from .catalogos import CatalogosRepository
 from .exceptions import (
     ConflictoDeEscrituraError,
@@ -18,6 +19,7 @@ from .exceptions import (
 from .ordenes import OrdenReparacionRepository
 
 __all__ = [
+    "CatalogoEquiposRepository",
     "CatalogosRepository",
     "ConflictoDeEscrituraError",
     "EntidadPersistidaNoEncontradaError",

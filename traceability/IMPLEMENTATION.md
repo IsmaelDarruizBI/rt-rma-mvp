@@ -606,8 +606,13 @@ taller, **pendientes de formalizacion** en `business/`.
   antes de subirla.
 - Almacenamiento (`app/storage/fotos.py`): `RMA_FOTOS_BUCKET` -> bucket
   PRIVADO de Cloud Storage via API JSON con el token de la cuenta de
-  servicio de Cloud Run (sin dependencias nuevas; probado contra HTTP
-  simulado, **pendiente** la validacion contra el bucket real);
+  servicio de Cloud Run (sin dependencias nuevas). En el UAT:
+  `rt-rma-uat-fotos` (southamerica-east1, acceso uniforme, prevencion de
+  acceso publico, sin reglas de borrado automatico); la cuenta del
+  servicio solo tiene `roles/storage.objectUser` sobre ese bucket.
+  Validado contra el bucket real (22/10/2026): carga, lectura con los
+  mismos bytes, tope de 10, archivo invalido, acceso anonimo rechazado y
+  archivos conservados despues de reiniciar Cloud Run;
   `RMA_FOTOS_DIR` -> directorio local, solo desarrollo; sin ninguno, las
   fotos quedan deshabilitadas y la UI lo indica. La imagen se sube fuera
   de la seccion critica de Ordenes: si el registro posterior fallara queda
@@ -631,6 +636,247 @@ taller, **pendientes de formalizacion** en `business/`.
   exigio), RT_INTERNO lo sigue cargando y los datos anteriores no cambian.
   La correccion de los datos del ingreso lo mantiene para todos los
   Origenes.
+
+## Catalogo de equipos de Gestion de Ventas (mvp-v2)
+
+Sin IDs nuevos ni nodos de proceso: capacidad de la Recepcion,
+**pendiente de formalizacion** en `business/`.
+
+### Origen real: hoja `raw_TipoProducto`
+
+Lectura de solo lectura (21/10/2026) con la cuenta de servicio con la que
+Ventas compartio la planilla:
+
+- 33 columnas y 3.792 filas con datos. `tp_id` es texto y unico en toda la
+  hoja (ninguno vacio ni repetido, tampoco ignorando mayusculas).
+- RMA usa `tp_id`, `tp_categoria`, `tp_subcat_1`, `tp_gp`, `tp_generator`,
+  `tp_modelo`, `tp_number`, `tp_promaxness`, `tp_gb`, `tp_color` y
+  `tp_eliminado` (`integraciones/catalogo/ventas.py::COLUMNAS`, ubicadas
+  por nombre, no por posicion). No copia precios, descuentos, monedas,
+  `tp_eliminado_por` (un email), `tp_eliminado_at` ni `tp_prod_devol`.
+- Filtro `tp_subcat_1 = IPHONE USADOS`: 1.489 filas, todas de
+  `tp_categoria = IPHONE` y ninguna eliminada.
+  - 2 **generadores** (`tp_generator = TRUE`), sin modelo, variante,
+    capacidad ni color: `iphone_usados` (raiz del grupo) y `c05e814d`
+    ("iPhone 17 E 256GB", grupo `smartphone_usados_`). No son equipos: se
+    copian pero no se ofrecen.
+  - 1.487 variantes completas y sin combinaciones repetidas. En todas,
+    `tp_id = apple_usados_iPhone_{number}_{promaxness}_{gb}_{color}` y
+    `tp_modelo = "iPhone {number} {variante} {gb} {color}"`, con espacios
+    (`Pro Max`, `black titanium`). RMA no arma ni interpreta el `tp_id`:
+    lo copia tal cual.
+  - Valores especiales: `tp_promaxness = Nada` (427 filas) es la version
+    estandar; `tp_color = cualquier_color` (142) es un producto sin color
+    especifico, que se ofrece como "Otro / sin especificar" (el Equipo
+    queda sin color). Capacidades `64gb` a `2tb`; colores en minuscula con
+    `_` o espacio (`deep_purple`, `black titanium`) y uno capitalizado
+    (`Ultramarine`). RMA los muestra como "128 GB", "Deep Purple".
+  - Modelos: 8, X, Xr, Xs, 11 a 18, SE 2020 y SE 2022; variantes
+    Estandar, Mini, Plus, Pro, Pro Max, Max, E, Air y Duo segun el modelo.
+- Observacion para Ventas: las variantes son combinaciones generadas (todos
+  los colores y capacidades de cada generacion), no solo las que existen
+  comercialmente (por ejemplo, iPhone 11 "black titanium" o iPhone 12 Mini
+  de 512 GB). RMA ofrece lo que tiene el catalogo: no corrige a Ventas.
+
+### Arquitectura: puerto y adaptadores
+
+```
+origen de Ventas --adaptador--> ProveedorCatalogo --> sincronizacion
+(Sheets hoy;                    (el puerto)          (application)
+ Cloud SQL/BigQuery                                       |
+ despues)                                                 v
+                    alta / selector  <--  copia local (CatalogoEquiposRepository)
+```
+
+- `app/integraciones/catalogo/`: `puerto.py` (`ProveedorCatalogo`,
+  `FiltroCatalogo`, `LecturaCatalogo` y errores), `ventas.py` (formato de
+  la tabla TipoProducto de Ventas, compartido por cualquier adaptador),
+  `sheets.py` (Google Sheets API v4, `values.get`, solo lectura),
+  `archivo.py` (CSV con las mismas columnas: desarrollo y pruebas),
+  `credenciales.py` (tokens sin claves JSON) y `configuracion.py` (unico
+  lugar que traduce la configuracion en un adaptador).
+- Dominio: `ProductoInformado` (lo que informa el origen, ya en terminos
+  de RMA), `ProductoCatalogo` (la copia) y `SincronizacionCatalogo`.
+  Reglas sin E/S en `services/catalogo_equipos.py`; caso de uso en
+  `application/catalogo_equipos.py`; persistencia en
+  `repositories/catalogo_equipos.py` (contrato) y
+  `storage/json/catalogo_equipos.py`.
+- Nadie fuera del adaptador conoce Sheets: los services trabajan con el
+  dominio, el alta lee la copia local y el frontend solo usa
+  `GET /api/catalogs/equipment`. El alta de una Orden nunca consulta el
+  origen.
+
+### Configuracion (variables `RMA_`)
+
+| Variable | Valor por defecto | Uso |
+|---|---|---|
+| `RMA_CATALOGO_ORIGEN` | `ninguno` | `google_sheets`, `archivo` o `ninguno` (sin sincronizacion) |
+| `RMA_CATALOGO_SUBCATEGORIAS` | `["IPHONE USADOS"]` | filtro por `tp_subcat_1` (JSON) |
+| `RMA_CATALOGO_MARCAS` | `{"IPHONE": "Apple"}` | marca por `tp_categoria` (Ventas no tiene columna de marca); sin marca, el producto no se ofrece |
+| `RMA_CATALOGO_SHEETS_PLANILLA` | (obligatoria con Sheets) | ID de la planilla |
+| `RMA_CATALOGO_SHEETS_HOJA` | `raw_TipoProducto` | hoja |
+| `RMA_CATALOGO_SHEETS_CREDENCIAL` | `cloud_run` | `cloud_run`: identidad del servicio; `gcloud`: solo desarrollo local |
+| `RMA_CATALOGO_SHEETS_CUENTA` | (vacia) | cuenta de servicio a impersonar (IAM Credentials) |
+| `RMA_CATALOGO_ARCHIVO` | (obligatoria con archivo) | ruta del CSV |
+| `RMA_CATALOGO_TIMEOUT_S` | `30` | espera maxima de la lectura |
+
+Una configuracion incompleta impide arrancar el backend (en Cloud Run la
+revision nueva no recibe trafico y sigue la anterior). Los tokens se piden
+siempre con alcance `spreadsheets.readonly`, nunca se registran y no hay
+claves JSON.
+
+### Sincronizacion
+
+- Manual: "Sincronizar catalogo" debajo del selector (ADMINISTRADOR o
+  COORDINADOR_RMA), o `POST /api/catalogs/equipment/sync?usuario_id=`.
+  No hay sincronizacion automatica.
+- Lee el origen a traves del puerto, aplica el filtro y valida: columnas
+  presentes y sin repetir; al menos un producto; `tp_id` sin repetir (un
+  repetido es ambiguo: se rechaza todo). Una fila del filtro sin `tp_id`
+  se descarta y se cuenta (no se puede referenciar).
+- Fusion por `tp_id` (`fusionar_catalogo`): nuevos, actualizados, sin
+  cambios, reactivados y dados de baja. **Nunca borra**: lo que Ventas deja
+  de informar queda NO vigente (`NO_INFORMADO`) y lo que marca eliminado
+  tambien (`ELIMINADO_EN_ORIGEN`); un eliminado que la copia nunca tuvo no
+  se agrega. Repetir la sincronizacion no duplica nada.
+- Cada intento queda registrado con quien, inicio, fin, origen (sin
+  secretos), filtro, resultado (`EXITOSA`, `FALLIDA` si no se pudo leer,
+  `RECHAZADA` si los datos no son confiables) y conteos. Se conservan los
+  ultimos 100. Fallida o rechazada no cambia la copia: sigue la de la
+  ultima exitosa (503 `CATALOGO_ORIGEN_NO_DISPONIBLE` o 409
+  `CATALOGO_ORIGEN_INVALIDO`). Una sincronizacion por vez (409
+  `SINCRONIZACION_EN_CURSO`).
+- Con los datos reales: 3.792 leidas, 1.489 del filtro, 1.489 copiadas,
+  1.487 para elegir; la segunda vez, 1.489 sin cambios.
+
+### Equipo
+
+- Identidad fisica: `id` (interno de RMA, sin cambios), `imei` y
+  `numero_serie`. Caracteristicas comerciales: `marca`, `modelo`,
+  `variante` (`null` = estandar), `capacidad` y `color` (`null` = no
+  especificado), y `tipo_producto_id` = el `tp_id` de Ventas. El `tp_id`
+  identifica un TIPO de producto, no la unidad: nunca reemplaza al `id`.
+- Del catalogo, la API recibe solo `tipo_producto_id`; marca, modelo,
+  variante, capacidad y color se copian de la copia local
+  (`equipo_desde_catalogo`), no de lo que mande la pantalla. Un `tp_id`
+  inexistente, no vigente o no seleccionable (un generador): 409
+  `PRODUCTO_CATALOGO_NO_DISPONIBLE`. A mano: `marca` y `modelo`, sin
+  `tipo_producto_id`. Sin ninguno de los dos: 422.
+- Copia, no referencia: un cambio posterior del catalogo no reescribe la
+  Orden ni sus documentos (cada documento ya guarda su copia del Equipo).
+  La garantia RMA copia el Equipo de la Orden origen (mismo `tp_id`).
+- Corregir los datos del ingreso: el mismo `tp_id` conserva lo que tenia
+  la Orden sin consultar el catalogo (corregir el IMEI funciona aunque la
+  copia se haya perdido); otro `tp_id` toma el producto de la copia; a
+  mano, el Equipo deja de estar vinculado. La version anterior queda en
+  `versiones_anteriores`.
+- Compatibilidad: los campos nuevos son opcionales. Las Ordenes y los
+  documentos anteriores cargan igual (sin `tp_id`, variante, capacidad ni
+  color) y se muestran como antes ("Marca Modelo").
+- Se muestra como "Apple iPhone 14 Pro Max · 256 GB · Deep Purple"
+  (pantalla y listado) y con "Capacidad" y "Color" aparte en la custodia,
+  el visor de documentos y el PDF.
+- RT_INTERNO tambien acepta `tipo_producto_id` por API; su pantalla sigue
+  con marca y modelo a mano.
+
+### Selector del alta de Cliente Externo
+
+- Modelo -> Variante -> Capacidad -> Color, solo con las combinaciones que
+  existen en la copia (`GET /api/catalogs/equipment` devuelve el arbol, ya
+  ordenado: modelos y variantes en orden natural con la estandar primero,
+  capacidades de menor a mayor, "Otro / sin especificar" al final). Un
+  nivel con una sola opcion se elige solo; al cambiar un nivel, lo de
+  abajo se conserva si existe en la nueva combinacion. Se muestra el
+  equipo elegido con su codigo de Ventas.
+- "No esta en el catalogo: cargar a mano" (Marca y Modelo). Sin copia
+  sincronizada o sin conexion con el backend, se carga a mano y la
+  pantalla lo dice.
+- IMEI sigue en el alta; el numero de serie sigue fuera del alta de
+  Cliente Externo (UAT-011).
+- La respuesta pesa ~150 KB en JSON y ~7 KB comprimida: el backend
+  comprime las respuestas (`GZipMiddleware`; las imagenes no) y el
+  frontend la pide una vez por sesion.
+
+### Persistencia y limitaciones
+
+- **La copia es JSON efimero en Cloud Run** (`RMA_DATA_DIR/catalogo_equipos/
+  catalogo_equipos.json`): un redespliegue o un reinicio de la instancia
+  la borra junto con el registro de sincronizaciones, y hay que volver a
+  sincronizar. Mientras tanto, el alta funciona a mano. Las Ordenes no
+  pierden nada: cada Equipo guarda su `tp_id` y su copia de los datos.
+- Hacia PostgreSQL (mismo contrato `CatalogoEquiposRepository`, cada
+  operacion una transaccion):
+
+```sql
+CREATE TABLE catalogo_producto (
+  tipo_producto_id   text PRIMARY KEY,          -- tp_id de Ventas, tal cual
+  descripcion        text NOT NULL,
+  categoria          text, subcategoria text, grupo text,
+  marca text, modelo text, variante text, capacidad text, color text,
+  color_generico     boolean NOT NULL DEFAULT false,
+  seleccionable      boolean NOT NULL,
+  motivo_no_seleccionable text,
+  vigente            boolean NOT NULL DEFAULT true,
+  motivo_baja        text,
+  valores_origen     jsonb NOT NULL DEFAULT '{}',
+  primera_sincronizacion timestamptz NOT NULL,
+  ultima_sincronizacion  timestamptz NOT NULL
+);
+CREATE TABLE catalogo_sincronizacion (
+  id text PRIMARY KEY, usuario_id text NOT NULL, origen text NOT NULL,
+  filtro text NOT NULL, iniciada_en timestamptz NOT NULL,
+  finalizada_en timestamptz NOT NULL, resultado text NOT NULL,
+  mensaje text, leidos int, filtrados int, descartados int, nuevos int,
+  actualizados int, sin_cambios int, reactivados int, dados_de_baja int,
+  vigentes int, elegibles int
+);
+-- equipos.tipo_producto_id REFERENCES catalogo_producto (sin borrado:
+-- las bajas son vigente = false).
+```
+
+### Reemplazar el origen (cuando Ventas migre su base)
+
+1. Escribir el adaptador nuevo en `app/integraciones/catalogo/` (por
+   ejemplo `cloudsql.py` o `bigquery.py`) que implemente
+   `ProveedorCatalogo.leer(filtro)`: consultar con el filtro aplicado en el
+   origen (`WHERE tp_subcat_1 IN (...)`) y devolver
+   `ventas.lectura_desde_tabla(encabezados, filas, filtro, marcas=...)` si
+   la tabla conserva las columnas `tp_*`, o `ProductoInformado` armados por
+   el adaptador si cambian. El `tp_id` se devuelve tal cual.
+2. Agregar su caso en `configuracion.py` y sus variables en
+   `core/config.py` (credencial sin claves JSON: la identidad del
+   servicio con permiso de lectura).
+3. Probarlo contra respuestas simuladas, igual que `sheets.py`
+   (`tests/test_catalogo_equipos.py`).
+4. Cambiar `RMA_CATALOGO_ORIGEN` y sincronizar. Como los `tp_id` son los
+   mismos, la fusion los reconoce: nada nuevo, nada duplicado, las Ordenes
+   siguen referenciando lo mismo.
+
+No cambian el Equipo, el selector, la sincronizacion, la copia ni la API.
+Si Ventas cambiara los `tp_id` en la migracion, haria falta una tabla de
+equivalencias: la fusion trataria los nuevos como productos nuevos y los
+viejos quedarian no vigentes (sin perder historia).
+
+### Acceso desde Cloud Run (UAT)
+
+- `rt-rma-uat-api` corre con una cuenta de servicio dedicada,
+  `rt-rma-uat-api@<proyecto>.iam.gserviceaccount.com`: sin roles de
+  proyecto, sin claves, con `roles/storage.objectUser` solo sobre el
+  bucket de fotos y la planilla de Ventas compartida con ella como
+  **Lector** (sin permisos de IAM: el acceso a la planilla lo da Drive).
+- Configuracion: `RMA_CATALOGO_ORIGEN=google_sheets`, la planilla, la hoja
+  y `RMA_CATALOGO_SHEETS_CREDENCIAL=cloud_run` (token del servidor de
+  metadatos con alcance `spreadsheets.readonly`). No se usa la cuenta con
+  la que Ventas comparte la planilla con otros sistemas (es Owner del
+  proyecto), ni la impersonacion.
+- Validado con la cuenta del UAT, antes de publicar (revision sin
+  trafico): 3.792 leidas, 1.489 de IPHONE USADOS, 1.487 para elegir,
+  `tp_id` identicos a la lectura de referencia, generadores fuera del
+  selector, la segunda sincronizacion sin cambios, y un error real de
+  Google (hoja inexistente) registrado como FALLIDA, con 503 y sin aplicar
+  nada.
+- Despues de cada despliegue o reinicio, la copia se pierde: hay que
+  sincronizar de nuevo (Administracion o Coordinacion RMA).
 
 ## Gaps de cobertura de test conocidos
 

@@ -53,6 +53,13 @@ from .bandejas import (
     bandejas_de_taller,
 )
 from .cancelacion import cancelar_detalle, cancelar_orden, registrar_devolucion
+from .catalogo_equipos import (
+    EstadoCatalogoEquipos,
+    catalogo_para_seleccion,
+    equipo_desde_catalogo,
+    estado_catalogo_equipos,
+    sincronizar_catalogo_equipos,
+)
 from .cierre import (
     aprobar_control,
     devolver_rt,
@@ -181,6 +188,12 @@ __all__ = [
     "LOCK_INVENTARIO",
     "seccion_critica_inventario",
     "seccion_critica_ordenes",
+    # Catalogo de equipos de Ventas
+    "EstadoCatalogoEquipos",
+    "catalogo_para_seleccion",
+    "equipo_desde_catalogo",
+    "estado_catalogo_equipos",
+    "sincronizar_catalogo_equipos",
     "siguiente_detalle_id",
     "siguiente_orden_id",
     # Lecturas

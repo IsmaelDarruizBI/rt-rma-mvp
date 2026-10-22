@@ -27,11 +27,13 @@ import type {
   Recepcion,
   Usuario,
 } from "../../types/api";
+import { datosDelEquipo, equipoElegidoDe, nombreEquipo } from "./catalogoEquipos";
 import { nombreDeUsuario } from "./DetalleOrden";
 import { CUSTODIA, descripcionCheckin, etiqueta } from "./etiquetas";
 import { listaDeAccesorios } from "./ListadoOrdenes";
 import { Confirmacion, Seccion, habilitada } from "./PagosOrden";
 import { UbicacionAccion } from "./presentacion";
+import { SelectorEquipo, useCatalogoEquipos } from "./SelectorEquipo";
 
 interface Props {
   orden: Orden;
@@ -188,7 +190,9 @@ export function CustodiaOrden(props: Props) {
         .
       </p>
 
-      <Fila etiqueta="Equipo" valor={`${equipo.marca} ${equipo.modelo}`} />
+      <Fila etiqueta="Equipo" valor={nombreEquipo(equipo)} />
+      {equipo.capacidad && <Fila etiqueta="Capacidad" valor={equipo.capacidad} />}
+      {equipo.color && <Fila etiqueta="Color" valor={equipo.color} />}
       <Fila etiqueta="IMEI" valor={equipo.imei ?? "—"} />
       <Fila etiqueta="N.º de serie" valor={equipo.numero_serie ?? "—"} />
       <Fila etiqueta="Falla declarada" valor={equipo.falla_reportada} />
@@ -236,7 +240,9 @@ export function CustodiaOrden(props: Props) {
               <ul style={{ margin: "0.3rem 0 0", paddingLeft: "1.1rem" }}>
                 {recepcion.versiones_anteriores.map((version) => (
                   <li key={version.reemplazado_en} style={{ marginBottom: "0.3rem" }}>
-                    {version.equipo.marca} {version.equipo.modelo}
+                    {nombreEquipo(version.equipo)}
+                    {version.equipo.capacidad ? ` ${version.equipo.capacidad}` : ""}
+                    {version.equipo.color ? ` ${version.equipo.color}` : ""}
                     {version.equipo.imei ? ` · IMEI ${version.equipo.imei}` : ""} ·{" "}
                     {version.datos.estado_fisico ?? "sin estado físico"} ·
                     accesorios:{" "}
@@ -418,7 +424,7 @@ function FormularioConfirmacion({
         </Boton>
       ) : (
         <Confirmacion
-          texto={`¿Confirmás que el equipo ${orden.equipo.marca} ${orden.equipo.modelo} de ${orden.id} está físicamente en el local?`}
+          texto={`¿Confirmás que el equipo ${nombreEquipo(orden.equipo)} de ${orden.id} está físicamente en el local?`}
           ocupado={ocupado}
           onVolver={() => setConfirmando(false)}
           onConfirmar={() => onConfirmar(observaciones.trim() || null)}
@@ -437,8 +443,9 @@ function FormularioDatosIngreso({
 }: Props & { accion: Accion }) {
   const { equipo, recepcion } = orden;
   const [abierto, setAbierto] = useState(recepcion === null);
-  const [marca, setMarca] = useState(equipo.marca);
-  const [modelo, setModelo] = useState(equipo.modelo);
+  // Otro producto del catálogo, a mano, o el mismo que ya tenía.
+  const catalogo = useCatalogoEquipos();
+  const [elegido, setElegido] = useState(() => equipoElegidoDe(equipo));
   const [falla, setFalla] = useState(equipo.falla_reportada);
   const [imei, setImei] = useState(equipo.imei ?? "");
   const [serie, setSerie] = useState(equipo.numero_serie ?? "");
@@ -453,6 +460,7 @@ function FormularioDatosIngreso({
     recepcion?.datos.notas_internas ?? "",
   );
   const deshabilitado = !habilitada(accion, actor) || ocupado;
+  const datosEquipo = datosDelEquipo(catalogo.catalogo, elegido);
 
   const titulo =
     recepcion === null
@@ -492,6 +500,16 @@ function FormularioDatosIngreso({
         Solo antes de confirmar la recepción. La versión anterior queda
         registrada.
       </p>
+      <SelectorEquipo
+        catalogo={catalogo.catalogo}
+        cargando={catalogo.cargando}
+        error={catalogo.error}
+        valor={elegido}
+        onCambiar={setElegido}
+        actor={actor}
+        onSincronizado={() => void catalogo.recargar()}
+        deshabilitado={deshabilitado}
+      />
       <div
         style={{
           display: "grid",
@@ -499,8 +517,6 @@ function FormularioDatosIngreso({
           gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
         }}
       >
-        {campo("Marca", marca, setMarca)}
-        {campo("Modelo", modelo, setModelo)}
         {campo("IMEI (si tiene)", imei, setImei)}
         {campo("N.º de serie (si tiene)", serie, setSerie)}
       </div>
@@ -519,8 +535,9 @@ function FormularioDatosIngreso({
       )}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         <Boton
-          disabled={deshabilitado || !marca.trim() || !modelo.trim() || !falla.trim()}
+          disabled={deshabilitado || !datosEquipo || !falla.trim()}
           onClick={() =>
+            datosEquipo &&
             onRegistrar(
               {
                 estado_fisico: estado.trim() || null,
@@ -529,8 +546,7 @@ function FormularioDatosIngreso({
                 notas_internas: notasInternas.trim() || null,
               },
               {
-                marca: marca.trim(),
-                modelo: modelo.trim(),
+                ...datosEquipo,
                 falla_reportada: falla.trim(),
                 imei: imei.trim() || null,
                 numero_serie: serie.trim() || null,

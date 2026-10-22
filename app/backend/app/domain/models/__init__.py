@@ -7,6 +7,14 @@ fuente de verdad funcional, y aqui solo se conservan sus IDs
 (``HistorialWorkflow.referencia_id``).
 """
 
+from .catalogo_equipos import (
+    MotivoBaja,
+    MotivoNoSeleccionable,
+    ProductoCatalogo,
+    ProductoInformado,
+    ResultadoSincronizacion,
+    SincronizacionCatalogo,
+)
 from .catalogos import (
     DATOS_EMPRESA_PREDETERMINADOS,
     MEDIOS_PAGO_PREDETERMINADOS,
@@ -120,6 +128,13 @@ __all__ = [
     "EntregaEquipo",
     "Equipo",
     "Usuario",
+    # Catalogo de equipos de Ventas (copia sincronizada)
+    "MotivoBaja",
+    "MotivoNoSeleccionable",
+    "ProductoCatalogo",
+    "ProductoInformado",
+    "ResultadoSincronizacion",
+    "SincronizacionCatalogo",
     # Recepcion y custodia
     "FotoOrden",
     "ConfirmacionRecepcion",

@@ -22,6 +22,7 @@ from app.services import (
     registrar_equipo_no_recibido,
 )
 
+from .catalogo_equipos import equipo_desde_catalogo
 from .contexto import ApplicationContext
 from .modificacion import orden_para_modificar
 
@@ -38,11 +39,17 @@ def registrar_recepcion(
 
     El check-in no es parte del ingreso: se registra antes de la entrega
     (``cierre.registrar_checkin``) y la correccion conserva el que haya.
+    ``equipo`` puede cambiar a otro producto del catalogo, a carga manual o
+    mantener el producto que tenia (sin volver a consultarlo).
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
     with orden_para_modificar(contexto, orden_id) as orden:
+        if equipo is not None:
+            equipo = equipo_desde_catalogo(
+                contexto, equipo, actual=orden.equipo
+            )
         orden = registrar_datos_recepcion(
             orden, usuario=usuario, fecha=fecha, datos=datos, equipo=equipo
         )

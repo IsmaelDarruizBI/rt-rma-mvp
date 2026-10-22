@@ -46,6 +46,7 @@ import type {
   TipoDocumento,
   Usuario,
 } from "../../types/api";
+import { nombreEquipo } from "./catalogoEquipos";
 import { nombreDeUsuario } from "./DetalleOrden";
 import { CANAL, etiqueta } from "./etiquetas";
 import { Seccion, habilitada } from "./PagosOrden";
@@ -945,7 +946,9 @@ function Partes({ contenido }: { contenido: ContenidoDocumento }) {
       ) : (
         <Dato etiqueta="Equipo interno" valor={`Gestión RT ${contenido.referencia_rt ?? ""}`} />
       )}
-      <Dato etiqueta="Equipo" valor={`${equipo.marca} ${equipo.modelo}`} />
+      <Dato etiqueta="Equipo" valor={nombreEquipo(equipo)} />
+      {equipo.capacidad && <Dato etiqueta="Capacidad" valor={equipo.capacidad} />}
+      {equipo.color && <Dato etiqueta="Color" valor={equipo.color} />}
       <Dato etiqueta="IMEI" valor={equipo.imei ?? "—"} />
       <Dato etiqueta="N.º de serie" valor={equipo.numero_serie ?? "—"} />
       <Dato etiqueta="Fecha de ingreso" valor={fechaHora(contenido.fecha_ingreso)} />
