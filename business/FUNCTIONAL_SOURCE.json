@@ -1,0 +1,90 @@
+{
+  "notice": "Copia GENERADA de la definicion funcional. No editar a mano: los cambios se hacen en el repositorio de origen y se vuelve a generar la copia (DC02).",
+  "generated_by": "rt-rma-app/scripts/export-functional-copy.ts",
+  "source_repository": "https://github.com/IsmaelDarruizBI/rt-rma-app.git",
+  "source_commit": "e99b28386695df537aabd02d7068c0102de09eae",
+  "source_ref": "v1.4-baseline",
+  "generated_at": "2026-10-24T20:29:26.715Z",
+  "files": [
+    {
+      "path": "actors/actors.yaml",
+      "bytes": 400,
+      "sha256": "08ec2581609db04d813ada122e8ec0d92c7360d470c873f33ed522a5cf1617cc"
+    },
+    {
+      "path": "decisions/decision-log-v1.4.yaml",
+      "bytes": 50486,
+      "sha256": "c391cd6c47b4ac2b6e5ad27bc4d49626208c4c30e5b931812e83e0f316027c7b"
+    },
+    {
+      "path": "features/repair-management-features-v1.3.yaml",
+      "bytes": 33992,
+      "sha256": "b029b8d0d9b6fa71ff19b2890839ba31640470513dcb41acec60758db34e109e"
+    },
+    {
+      "path": "features/repair-management-features-v1.4.yaml",
+      "bytes": 73907,
+      "sha256": "4ef0fbc1a443506044c30754a2e643e016f7a5b9d7b1db29d040ecf97497a50e"
+    },
+    {
+      "path": "features/repair-management-features.yaml",
+      "bytes": 14992,
+      "sha256": "1a9f6c1c4f37fc6cae8d797d94b26b27199ba3a318ad4e281e1ecae303ea6533"
+    },
+    {
+      "path": "processes/repair-management-v1.3.yaml",
+      "bytes": 62823,
+      "sha256": "a4e61ad05ba4e338c769c6fe35a5627eb8022f8065b72e585395d04d40ed326b"
+    },
+    {
+      "path": "processes/repair-management-v1.4.yaml",
+      "bytes": 150624,
+      "sha256": "f1d37d154838084e6bef9d506d533cbee2f3c577a5dc1d2067607b7ea89231fb"
+    },
+    {
+      "path": "processes/repair-management.yaml",
+      "bytes": 25036,
+      "sha256": "93870c8f1f4986f71dfd50f9e8ea0f74e3ee3fffecd2c98bffdc264c374be174"
+    },
+    {
+      "path": "rules/business-rules-v1.3.yaml",
+      "bytes": 28699,
+      "sha256": "a7a9d2c2e72a85ad1b9faca0179155f40c2356daef1fcbc168c88e31f0d39a67"
+    },
+    {
+      "path": "rules/business-rules-v1.4.yaml",
+      "bytes": 119212,
+      "sha256": "83154cc24d4f90ea4c486e951554f5be641b74975a6588c99311c450d131b692"
+    },
+    {
+      "path": "rules/business-rules.yaml",
+      "bytes": 5008,
+      "sha256": "c828bfad16de1969700b28c208895b61db2c1eda8335ade6d1acd21771141379"
+    },
+    {
+      "path": "scenarios/repair-management-scenarios-v1.3.yaml",
+      "bytes": 51101,
+      "sha256": "36801eea9fc2aced5c0673185641d1121033910b95e135072a1ed92a28d8a39d"
+    },
+    {
+      "path": "scenarios/repair-management-scenarios-v1.4.yaml",
+      "bytes": 222861,
+      "sha256": "e30be7cea10d9f5344e7b80910f2d576a10fd59685242d7a96b715987a511b63"
+    },
+    {
+      "path": "schemas/feature.schema.json",
+      "bytes": 6236,
+      "sha256": "7d8c67ae26cd3f8f72ec47fa01089e7b027d228c98e7620fd525c76f012a4194"
+    },
+    {
+      "path": "schemas/process.schema.json",
+      "bytes": 2779,
+      "sha256": "4aac2f542959783fd6c9ea5fc04d06c83c13206a2c55422e691f6ed2ba07c25f"
+    },
+    {
+      "path": "schemas/scenario.schema.json",
+      "bytes": 6645,
+      "sha256": "d976c4623c21c52890b4f130c8acbc17750a00593d6fdb903e959d3231b45b45"
+    }
+  ]
+}

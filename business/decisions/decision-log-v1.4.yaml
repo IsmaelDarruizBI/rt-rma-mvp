@@ -1,0 +1,1202 @@
+# Registro de decisiones de la consolidacion V1.4 de PROC-REP.
+#
+# Fuente de verdad de la trazabilidad decision -> regla -> Feature -> nodo ->
+# Scenario -> estado de implementacion de la baseline V1.4, VIGENTE desde la
+# aprobacion de DC01 (consolidation.approval). Lo valida
+# scripts/validate-decisions.ts (npm run validate:decisions:v1.4): IDs unicos,
+# referencias existentes en los YAML V1.4, cobertura de todo lo nuevo de la
+# consolidacion y matriz generada al dia (docs/consolidation/matriz-trazabilidad-v1.4.md).
+#
+# Tres listas:
+#   decisions   decisiones confirmadas por el responsable de producto (DCxx de
+#               la devolucion del 23/10/2026, DP-xx para los permisos
+#               predeterminados confirmados el mismo dia, GLO-01 para el glosario).
+#   uat_items   incorporaciones de UAT (DC16): cada comportamiento con la
+#               evidencia de su aprobacion, lo que es solo implementacion tecnica
+#               y lo que sigue pendiente. Un comportamiento sin evidencia de
+#               aprobacion se registra con status PENDIENTE y no se incorpora como
+#               regla definitiva.
+#   open_items  decisiones que siguen abiertas. No se completan con reglas
+#               inventadas. impact: BLOQUEA_APROBACION (impide declarar vigente la
+#               baseline), BLOQUEA_IMPLEMENTACION (impide implementar la
+#               funcionalidad afectada), BLOQUEA_MIGRACION (debe resolverse antes
+#               del esquema PostgreSQL) o POSTERIOR (puede resolverse despues).
+#               Pueden citar las reglas, nodos, Features y Scenarios afectados.
+#               status ABIERTO (por omision) o CERRADO; uno cerrado conserva su
+#               texto y registra la decision que lo cerro, la fecha y la
+#               resolucion. Una baseline VIGENTE no tiene pendientes abiertos que
+#               bloqueen la aprobacion.
+#   improvements mejoras documentales o de pruebas que se postergan, con la
+#               referencia de la auditoria que las identifico.
+#
+# Evidencia de las incorporaciones de UAT. status CONFIRMADO significa decision
+# de negocio confirmada por el responsable funcional; NO equivale a aceptacion
+# UAT formal, que sigue pendiente (consolidation.formal_uat_acceptance). Cada
+# item distingue tres fuentes:
+#   approval_evidence  pedidos o decisiones del responsable funcional, por titulo
+#                      y fecha del registro de trabajo; no estan versionados en
+#                      los repositorios.
+#   confirmed_by       decisiones de este registro que lo confirman (versionadas).
+#   implemented_in     commits de rt-rma-mvp que lo implementaron: prueban la
+#                      implementacion, no la aprobacion. Las fechas de los
+#                      commits son locales (-03:00).
+#
+# implementation.status describe el codigo del producto (rt-rma-mvp, mvp-v2,
+# f270a84) frente a la decision: IMPLEMENTADO, PARCIAL, NO_IMPLEMENTADO,
+# CONTRARIO (el codigo hace lo opuesto) o NO_APLICA (decision de plan o de
+# gobierno). Las rutas de evidencia son relativas a app/backend/app salvo que
+# digan otra cosa. Esta consolidacion no modifica el codigo.
+
+consolidation:
+  id: CONS-V1.4
+  process: PROC-REP
+  version: "1.4"
+  status: VIGENTE
+  decided_on: "2026-10-23"
+  base_tag: v1.4-pre-consolidacion
+  approval:
+    decision: DC01
+    approved_commit: b6cc3a53587376213cb3bbdaea66e13b5488e5c3
+    approved_on: "2026-10-24"
+    approved_by: Ismael Darruiz, responsable de producto
+    tag: v1.4-baseline
+    scope: >
+      La V1.4 consolidada de PROC-REP (proceso, reglas, Features, Scenarios y
+      este registro) tal como esta en el commit aprobado de consolidacion/v1.4.
+      El cierre agrega solo gobierno (estado de aprobacion, pendientes cerrados
+      y ABI-37) sin cambiar el contenido funcional. No aprueba los casos de UAT
+      pendientes ni la aceptacion UAT formal.
+  sources:
+    - "Rosario Tecno RMA - Devolucion de decisiones funcionales para V1.4 (23/10/2026)"
+    - "Rosario Tecno RMA - Ejecutar consolidacion documental V1.4 (23/10/2026)"
+    - "Propuesta de consolidacion V1.4 (23/10/2026), revisada"
+    - "Auditoria funcional focalizada de la baseline candidata (23/10/2026, commit f70d4f5): B1 a B4 y M1 a M9"
+    - "Rosario Tecno RMA - Correccion final de baseline candidata V1.4 (23/10/2026)"
+    - "Rosario Tecno RMA - Cierre de DC01 y publicacion de baseline V1.4 (24/10/2026)"
+  formal_uat_acceptance:
+    status: PENDIENTE
+    evidence: "rt-rma-mvp traceability/IMPLEMENTATION.md, seccion \"UAT: ninguno aprobado\": 0 de 16 UAT-REP-XXX aprobados"
+
+decisions:
+
+  # ------------------------------------------------------------------ Bloque 1
+  - id: DC03
+    block: 1
+    title: Priorizan Coordinacion o Recepcion; entregan Administracion o Recepcion; permisos modificables
+    status: CONFIRMADA
+    rules: [BR-REP-034, BR-REP-039]
+    nodes: [PROC-REP-150, PROC-REP-270]
+    features: [FEAT-REP-004, FEAT-REP-008, FEAT-REP-011]
+    scenarios: [HP-REP-001]
+    notes: Incorpora el cambio propio del MVP actores_alternativos (commit 8c0d072 de rt-rma-mvp).
+    implementation:
+      status: PARCIAL
+      evidence: services/ordenes.py:74 (ROLES_PRIORIZACION COORD y RECEP), services/ordenes.py:79 (ROLES_ENTREGA ADMIN y RECEP)
+      gap: los roles son constantes; no son configurables desde Administracion.
+
+  - id: DP-01
+    block: 1
+    title: Cambio de prioridad por Tecnico, Recepcion y Coordinacion por defecto, configurable y trazado
+    status: CONFIRMADA
+    rules: [BR-REP-034, BR-REP-039]
+    nodes: [PROC-REP-150]
+    features: [FEAT-REP-004]
+    implementation:
+      status: PARCIAL
+      evidence: services/ordenes.py:694 (ROLES_CAMBIO_PRIORIDAD TECNICO, COORDINADOR_RMA, RECEPCION) y observacion "anterior -> nueva" en el historial
+      gap: rol fijo; sin configuracion.
+
+  - id: DP-02
+    block: 1
+    title: Liberacion de una Orden tomada por otro tecnico por Tecnico y Coordinacion, con advertencia, motivo y auditoria
+    status: CONFIRMADA
+    rules: [BR-REP-018, BR-REP-039]
+    nodes: [PROC-REP-213]
+    features: [FEAT-REP-004]
+    scenarios: [VAR-REP-037]
+    implementation:
+      status: PARCIAL
+      evidence: services/tomas.py:373 (ROLES_LIBERACION_AJENA), confirmacion explicita y motivo (409 CONFIRMACION_REQUERIDA), TomaOrden.liberada_por y motivo_liberacion; services/ejecuciones.py:523 (registrar_interrupcion_por_liberacion, solo dentro de la liberacion ajena)
+      gap: rol fijo; sin configuracion.
+    open: [ABI-36]
+
+  - id: DC04
+    block: 1
+    title: Liberar antes del primer Detalle; liberar la Orden de otro tecnico con advertencia, motivo y auditoria
+    status: CONFIRMADA
+    rules: [BR-REP-018]
+    nodes: [PROC-REP-180, PROC-REP-212, PROC-REP-213]
+    features: [FEAT-REP-004]
+    scenarios: [HP-REP-001, HP-REP-002, HP-REP-003, VAR-REP-037]
+    notes: Incorpora los cambios propios del MVP 180 -> 212, nombre de 212 y textos de 213 y BR-REP-018 (commits 23a3299 y 5812945 de rt-rma-mvp).
+    implementation:
+      status: IMPLEMENTADO
+      evidence: services/tomas.py:373-476
+      gap: la configuracion del permiso depende de DC08.
+    open: [ABI-36]
+
+  - id: DC06
+    block: 1
+    title: El tecnico define y redefine; Recepcion gestiona las autorizaciones del cliente
+    status: CONFIRMADA
+    rules: [BR-REP-003, BR-REP-028, BR-REP-035]
+    nodes: [PROC-REP-075, PROC-REP-127, PROC-REP-128, PROC-REP-046]
+    features: [FEAT-REP-002]
+    scenarios: [VAR-REP-019]
+    implementation:
+      status: CONTRARIO
+      evidence: services/reparaciones.py:389 y services/redefinicion.py:207 exigen RECEPCION para definir despues de la revision y para redefinir
+      gap: cambiar el actor de 075 y 127 al tecnico (iteracion 1 del plan).
+
+  - id: DC08
+    block: 1
+    title: Permisos dinamicos por accion y contexto; responsabilidades actuales como predeterminadas; tres tipos de cancelacion
+    status: CONFIRMADA
+    rules: [BR-REP-039, BR-REP-014, BR-REP-036, BR-REP-011]
+    nodes: [PROC-REP-300, PROC-REP-305, PROC-REP-306, PROC-REP-179]
+    features: [FEAT-REP-009, FEAT-REP-011]
+    scenarios: [VAR-REP-042]
+    implementation:
+      status: PARCIAL
+      evidence: roles fijos por constante (por ejemplo services/cancelaciones.py:66 ROLES_CANCELACION RECEP y COORD); domain/models/enums.py:164-176 OrigenCancelacion sin descarte tecnico
+      gap: permisos configurables (hito M) y tipo descarte tecnico.
+    open: [ABI-06, ABI-23]
+
+  # ------------------------------------------------------------------ Bloque 2
+  - id: DC05
+    block: 2
+    title: Puntaje total derivado; reparto entre tecnicos pendiente; Ejecuciones por tecnico conservadas
+    status: CONFIRMADA
+    rules: [BR-REP-009]
+    nodes: [PROC-REP-245]
+    features: [FEAT-REP-006]
+    notes: Incorpora el cambio propio del MVP de PROC-REP-245 y BR-REP-009.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: domain/models/orden_reparacion.py:166 (puntaje_total calculado)
+    open: [ABI-11]
+
+  - id: DC17
+    block: 2
+    title: Estados del Detalle DEFINIDO, EN_PROGRESO, COMPLETO, CANCELADO; EN_REPARACION al iniciar; transiciones y cierre
+    status: CONFIRMADA
+    rules: [BR-REP-012, BR-REP-004, BR-REP-006, BR-REP-008, BR-REP-014]
+    nodes: [PROC-REP-185, PROC-REP-200, EVT-REP-999]
+    features: [FEAT-REP-005, FEAT-REP-006]
+    scenarios: [VAR-REP-003, EXC-REP-003]
+    implementation:
+      status: IMPLEMENTADO
+      evidence: domain/models/enums.py:70-96 (estados del Detalle), services/ejecuciones.py:168 (EN_REPARACION al iniciar)
+
+  - id: DC18
+    block: 2
+    title: Cuatro situaciones de custodia de V1.4 con eventos y responsables
+    status: CONFIRMADA
+    rules: [BR-REP-033]
+    nodes: [PROC-REP-060, PROC-REP-185, PROC-REP-270, PROC-REP-271]
+    features: [FEAT-REP-005, FEAT-REP-008, FEAT-REP-009]
+    scenarios: [VAR-REP-015, VAR-REP-043]
+    implementation:
+      status: PARCIAL
+      evidence: domain/models/enums.py:303-327 (EstadoCustodia calculado con seis valores, que se corresponden con las cuatro situaciones mas SIN_REGISTRO para Ordenes anteriores)
+      gap: unificar el modelo y registrar cada evento con responsable.
+
+  - id: DC18B
+    block: 2
+    title: Permisos configurables por evento de custodia
+    status: CONFIRMADA
+    rules: [BR-REP-033, BR-REP-039]
+    nodes: [PROC-REP-271]
+    features: [FEAT-REP-011]
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: services/custodia.py:68 (ROLES_RECEPCION_EQUIPO fijo)
+    open: [ABI-06]
+
+  - id: DC21
+    block: 2
+    title: Implementacion por etapas del nucleo (evaluacion tecnica y altas del tecnico; despues 056 y 032)
+    status: CONFIRMADA
+    rules: [BR-REP-035, BR-REP-036]
+    nodes: [PROC-REP-182, PROC-REP-183, PROC-REP-184, PROC-REP-056, PROC-REP-032]
+    features: [FEAT-REP-005, FEAT-REP-001]
+    notes: Decision de plan; no cambia el contenido funcional.
+    implementation:
+      status: NO_APLICA
+      evidence: plan de consolidacion del 23/10/2026, iteracion 1 (etapas 1a y 1b)
+
+  # ------------------------------------------------------------------ Bloque 3
+  - id: DC19
+    block: 3
+    title: Registrar Minorista/Mayorista sin cambios automaticos de precio
+    status: CONFIRMADA
+    rules: [BR-REP-020]
+    nodes: [PROC-REP-030]
+    features: [FEAT-REP-001]
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: domain/models/personas.py (Cliente sin clasificacion)
+
+  - id: DC20
+    block: 3
+    title: Identidad fisica propia del Equipo; reutilizacion por IMEI confirmada por Recepcion; tp_id como referencia comercial
+    status: CONFIRMADA
+    rules: [BR-REP-022, BR-REP-048]
+    nodes: [PROC-REP-030]
+    features: [FEAT-REP-001]
+    implementation:
+      status: PARCIAL
+      evidence: domain/models/equipos.py:10-63 (tp_id separado del identificador fisico; el Equipo se copia en cada Orden con un identificador nuevo)
+      gap: entidad Equipo con historia propia, busqueda y confirmacion de reutilizacion.
+    open: [ABI-05]
+
+  - id: DC15A
+    block: 3
+    title: Politica de garantia configurable por tipo de reparacion y check-in, con trazabilidad de lo aplicado
+    status: CONFIRMADA
+    rules: [BR-REP-041]
+    nodes: [PROC-REP-269, PROC-REP-280]
+    features: [FEAT-REP-008, FEAT-REP-010]
+    implementation:
+      status: PARCIAL
+      evidence: domain/garantia.py:15-18 (90/30 fijo, maximo de ajuste 730 dias); garantia sugerida y definitiva por Detalle
+      gap: politica configurable y precedencias.
+    open: [ABI-03, ABI-37]
+
+  - id: DC15B
+    block: 3
+    title: Validar la vigencia de la garantia de origen; vencida bloquea salvo excepcion autorizada y auditada
+    status: CONFIRMADA
+    rules: [BR-REP-019, BR-REP-041]
+    nodes: [PROC-REP-035, PROC-REP-036, PROC-REP-040, EVT-REP-998]
+    features: [FEAT-REP-001]
+    scenarios: [HP-REP-003, VAR-REP-038, VAR-REP-039]
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: services/ordenes.py:400-401 (la garantia RMA no valida vigencia)
+    open: [ABI-03, ABI-04, ABI-33, ABI-34, ABI-35]
+
+  - id: DC14
+    block: 3
+    title: Consulta externa de identidad opcional, solo con proveedor autorizado y configurable; carga manual siempre
+    status: CONFIRMADA
+    rules: [BR-REP-021]
+    nodes: [PROC-REP-030]
+    features: [FEAT-REP-001]
+    implementation:
+      status: IMPLEMENTADO
+      evidence: integraciones/personas.py (FuentePersonas sin fuente habilitada), carga manual siempre disponible
+    open: [ABI-30]
+
+  # ------------------------------------------------------------------ Bloque 4
+  - id: DC12
+    block: 4
+    title: Checklist configurable por tipo de equipo, todas las verificaciones opcionales, advertencia por informacion faltante
+    status: CONFIRMADA
+    rules: [BR-REP-024, BR-REP-025, BR-REP-040]
+    nodes: [PROC-REP-032]
+    features: [FEAT-REP-001, FEAT-REP-010]
+    notes: La advertencia incluye las verificaciones del checklist sin registrar (interpretacion de "advertir cuando falte informacion"; ver ABI-02).
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: no existe checklist en el producto
+
+  - id: DC23
+    block: 4
+    title: Administracion gestiona catalogos y valores predeterminados; permisos delegables
+    status: CONFIRMADA
+    rules: [BR-REP-040]
+    features: [FEAT-REP-010]
+    notes: La administracion de configuraciones nuevas se implementa sobre la persistencia definitiva (DC28), no sobre los archivos JSON del MVP. Se retiro de BR-REP-040 por ser un detalle de almacenamiento (correccion final, M9).
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: catalogos en archivos JSON sin administracion
+
+  - id: DC23AUD
+    block: 4
+    title: Auditoria de todo cambio de configuracion; historial de precios; lo historico no cambia
+    status: CONFIRMADA
+    rules: [BR-REP-040, BR-REP-015]
+    features: [FEAT-REP-010]
+    implementation:
+      status: PARCIAL
+      evidence: snapshots en Detalles y documentos protegen lo historico; el catalogo guarda solo el precio vigente
+      gap: auditoria e historial de precios.
+
+  - id: GLO-01
+    block: 4
+    title: Estacion = Mesa de trabajo (una sola entidad; Mesa de trabajo es el nombre visible)
+    status: CONFIRMADA
+    rules: [BR-REP-011]
+    nodes: [PROC-REP-172, PROC-REP-174, PROC-REP-179]
+    features: [FEAT-REP-010]
+    implementation:
+      status: PARCIAL
+      evidence: una sola entidad; la interfaz dice "Estacion de trabajo"
+      gap: texto visible "Mesa de trabajo".
+
+  # ------------------------------------------------------------------ Bloque 5
+  - id: DC09
+    block: 5
+    title: Ajuste Comercial unificado (CORTESIA o DESCUENTO) por Orden o por Detalle, con permisos por tipo
+    status: CONFIRMADA
+    rules: [BR-REP-016]
+    nodes: [PROC-REP-265, PROC-REP-280]
+    features: [FEAT-REP-007]
+    scenarios: [VAR-REP-041]
+    implementation:
+      status: PARCIAL
+      evidence: services/descuentos.py:54-123 (un descuento por Orden, porcentaje o importe, RECEP o ADMIN; sin cortesia ni ajuste por Detalle)
+    open: [ABI-09, ABI-10, ABI-26]
+
+  - id: DC10
+    block: 5
+    title: Anulacion de Pagos por Administracion por defecto, delegable, con motivo y auditoria, sin borrar el Pago
+    status: CONFIRMADA
+    rules: [BR-REP-017, BR-REP-039]
+    nodes: [PROC-REP-266]
+    features: [FEAT-REP-007]
+    scenarios: [VAR-REP-040]
+    implementation:
+      status: PARCIAL
+      evidence: services/pagos.py:386-416 (ADMIN, motivo obligatorio, registro en el historial, el Pago se conserva)
+      gap: la delegacion configurable depende de DC08.
+
+  - id: DC11
+    block: 5
+    title: Cortesia total con Pagos previos deja saldo a favor y exige devolucion antes del cierre
+    status: CONFIRMADA
+    rules: [BR-REP-017, BR-REP-038, BR-REP-016]
+    nodes: [PROC-REP-265, PROC-REP-267]
+    features: [FEAT-REP-007]
+    scenarios: [VAR-REP-041]
+    implementation:
+      status: CONTRARIO
+      evidence: services/descuentos.py:112 (rechaza un total por debajo de lo ya cobrado)
+      gap: admitir el saldo a favor por cortesia total y exigir la devolucion.
+    open: [ABI-10]
+
+  - id: DC12C
+    block: 5
+    title: Devoluciones por Administracion o Recepcion por defecto, configurable; sin cierre con saldo a favor
+    status: CONFIRMADA
+    rules: [BR-REP-038, BR-REP-039]
+    nodes: [PROC-REP-267, PROC-REP-268]
+    features: [FEAT-REP-007]
+    scenarios: [VAR-REP-030, VAR-REP-041]
+    implementation:
+      status: IMPLEMENTADO
+      evidence: services/pagos.py:79-84 y 491 (ROLES_DEVOLUCION_DINERO ADMIN y RECEP), domain/models/pagos.py:68-83
+    open: [ABI-07, ABI-29]
+
+  - id: DC13
+    block: 5
+    title: Un documento vigente por tipo y contexto; las correcciones crean versiones con motivo y referencia; nada se borra
+    status: CONFIRMADA
+    rules: [BR-REP-031]
+    nodes: [PROC-REP-046, PROC-REP-060, PROC-REP-280]
+    features: [FEAT-REP-002, FEAT-REP-008]
+    implementation:
+      status: IMPLEMENTADO
+      evidence: services/documentos.py:911-952 (versiones, motivo y "reemplaza a")
+
+  - id: DC26
+    block: 5
+    title: Firma manuscrita en pantalla o archivo firmado, ligados al documento y su version
+    status: CONFIRMADA
+    rules: [BR-REP-042, BR-REP-028]
+    nodes: [PROC-REP-046, PROC-REP-270, PROC-REP-280]
+    features: [FEAT-REP-002, FEAT-REP-008]
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: los documentos no tienen firma ni identificacion digital
+    open: [ABI-08]
+
+  # ------------------------------------------------------------------ Bloque 6
+  - id: DC24
+    block: 6
+    title: Compras de punta a punta en un proceso propio; definir primero e implementar despues de PostgreSQL
+    status: CONFIRMADA
+    rules: [BR-REP-049]
+    features: [FEAT-REP-003]
+    notes: No se agregan nodos de Compras a PROC-REP; BR-REP-049 y FEAT-REP-003 solo marcan el limite.
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: no existe modulo de Compras
+    open: [ABI-12]
+
+  - id: DC24LOT
+    block: 6
+    title: Movimientos por lote, unidad identificada cuando aplique, trazabilidad hasta el Detalle
+    status: CONFIRMADA
+    rules: [BR-REP-005, BR-REP-049]
+    features: [FEAT-REP-005]
+    notes: Se define con el proceso de Compras; BR-REP-005 no cambia ahora.
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: movimientos sin lote
+    open: [ABI-12]
+
+  - id: DC25
+    block: 6
+    title: WhatsApp asistido (etapa 1 plantillas e historial) y automatico (etapa 2 proveedor, cola, estados, reintentos)
+    status: CONFIRMADA
+    rules: [BR-REP-044]
+    nodes: [PROC-REP-260]
+    features: [FEAT-REP-008, FEAT-REP-010]
+    notes: La etapa 2 se implementa despues de la migracion a PostgreSQL, con una cola persistente. Se retiro de BR-REP-044 por ser un detalle tecnico (correccion final, M9).
+    implementation:
+      status: PARCIAL
+      evidence: "app/frontend/src/features/ordenes-reparacion/whatsapp.ts (comparte sin plantillas ni historial)"
+    open: [ABI-13]
+
+  - id: DC30
+    block: 6
+    title: Consentimiento y preferencias por finalidad, con canal, fecha, origen y revocacion
+    status: CONFIRMADA
+    rules: [BR-REP-043]
+    nodes: [PROC-REP-260]
+    features: [FEAT-REP-008]
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: no existe registro de consentimiento
+    open: [ABI-31]
+
+  - id: DC29
+    block: 6
+    title: Reporting e indicadores postergados; se conserva el historial; cada funcionalidad define sus eventos
+    status: CONFIRMADA
+    features: [FEAT-REP-004]
+    notes: Principio de gobierno; no agrega indicadores. Los eventos de cada funcionalidad estan en docs/consolidation/diseno-logico-v1.4.md.
+    implementation:
+      status: NO_APLICA
+      evidence: historial de la Orden existente
+    open: [ABI-15]
+
+  # ------------------------------------------------------------------ Bloque 7
+  - id: DC27A
+    block: 7
+    title: Varios roles por usuario; permisos como union, sujeta al contexto
+    status: CONFIRMADA
+    rules: [BR-REP-039]
+    features: [FEAT-REP-011]
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: domain/models/personas.py:45-51 (Usuario.rol unico)
+
+  - id: DC27B
+    block: 7
+    title: Permisos de consulta configurables (Ordenes, Clientes, fotografias, documentos, pagos, reportes)
+    status: CONFIRMADA
+    rules: [BR-REP-039]
+    features: [FEAT-REP-011]
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: las consultas GET no estan protegidas
+
+  - id: DC27C
+    block: 7
+    title: Supabase Auth; usuarios, roles y permisos en PostgreSQL; FastAPI centraliza la autorizacion
+    status: CONFIRMADA
+    rules: [BR-REP-039]
+    features: [FEAT-REP-011]
+    notes: Decision de arquitectura (docs/consolidation/diseno-logico-v1.4.md, seccion Arquitectura); no es una regla funcional.
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: sin autenticacion en el MVP
+
+  - id: DC28
+    block: 7
+    title: Nucleo, configuracion y documentos sobre JSON; migrar a Supabase PostgreSQL antes de Compras y automatizaciones
+    status: CONFIRMADA
+    rules: [BR-REP-040, BR-REP-044]
+    notes: Decision de plan; los limites de transaccion de cada funcionalidad estan en el diseno logico.
+    implementation:
+      status: NO_APLICA
+      evidence: plan de consolidacion del 23/10/2026
+    open: [ABI-16, ABI-22, ABI-24]
+
+  # ------------------------------------------------------------------ DC07
+  - id: DC07A
+    block: DC07
+    title: Un Detalle pendiente se cancela aunque otro se ejecute; se liberan solo sus recursos
+    status: CONFIRMADA
+    rules: [BR-REP-014]
+    nodes: [PROC-REP-300]
+    features: [FEAT-REP-009]
+    scenarios: [VAR-REP-011, VAR-REP-036]
+    implementation:
+      status: IMPLEMENTADO
+      evidence: services/cancelaciones.py:96-108 y 181 (bloquea solo el Detalle en ejecucion)
+
+  - id: DC07B
+    block: DC07
+    title: Un Detalle en ejecucion primero se interrumpe registrando estado, materiales y reversibilidad; despues se cancela
+    status: CONFIRMADA
+    rules: [BR-REP-004, BR-REP-014]
+    nodes: [PROC-REP-200, PROC-REP-211, PROC-REP-300]
+    features: [FEAT-REP-005, FEAT-REP-009]
+    scenarios: [VAR-REP-042]
+    implementation:
+      status: PARCIAL
+      evidence: exige interrumpir y registra insumos y motivo; no registra estado del trabajo ni reversibilidad
+    open: [ABI-18]
+
+  - id: DC07C
+    block: DC07
+    title: Desistimiento total como proceso guiado de interrupcion y desistimiento
+    status: CONFIRMADA
+    rules: [BR-REP-030, BR-REP-014]
+    nodes: [PROC-REP-047, PROC-REP-211, PROC-REP-305]
+    features: [FEAT-REP-002, FEAT-REP-009]
+    scenarios: [VAR-REP-043]
+    implementation:
+      status: PARCIAL
+      evidence: services/decision_cliente.py:337-376 (analisis previo que senala lo que bloquea; sin circuito guiado)
+
+  - id: DC07D
+    block: DC07
+    title: Un Detalle COMPLETO nunca se cancela retroactivamente; se resuelve con ajustes o devoluciones
+    status: CONFIRMADA
+    rules: [BR-REP-014]
+    nodes: [PROC-REP-200, PROC-REP-305]
+    features: [FEAT-REP-009]
+    scenarios: [VAR-REP-009]
+    implementation:
+      status: IMPLEMENTADO
+      evidence: services/cancelaciones.py (solo cancela Detalles no terminales)
+
+  - id: DC07
+    block: DC07
+    title: Solicitud de desistimiento y cancelacion efectiva registradas por separado, con usuario y fecha
+    status: CONFIRMADA
+    rules: [BR-REP-030]
+    nodes: [PROC-REP-211]
+    features: [FEAT-REP-002, FEAT-REP-009]
+    scenarios: [VAR-REP-042, VAR-REP-043]
+    implementation:
+      status: CONTRARIO
+      evidence: la decision del cliente cancela en el mismo acto (services/decision_cliente.py)
+
+  # ------------------------------------------------------------------ Baseline y sincronizacion
+  - id: DC01
+    block: BASELINE
+    title: Baseline V1.4 consolidada, aprobada como baseline funcional vigente
+    status: APROBADA
+    documented_in: [docs/consolidation/README.md]
+    notes: >
+      Preparada como candidata el 23/10/2026 y aprobada el 24/10/2026 sobre el
+      commit b6cc3a5 de consolidacion/v1.4 (consolidation.approval). Cierra
+      ABI-01 y ABI-02; antes de cerrar ABI-02 se separo el criterio de garantia
+      aplicable en ABI-37. No aprueba los casos de UAT pendientes ni la
+      aceptacion UAT formal.
+    implementation:
+      status: NO_APLICA
+      evidence: rama consolidacion/v1.4 de rt-rma-app, etiqueta v1.4-baseline
+
+  - id: DC02
+    block: BASELINE
+    title: rt-rma-app es la fuente unica; rt-rma-mvp/business es una copia generada con el commit de origen y verificacion automatica
+    status: CONFIRMADA
+    documented_in: [docs/consolidation/sincronizacion-dc02.md]
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: mecanismo preparado en rt-rma-app (scripts/export-functional-copy.ts y scripts/verify-functional-copy.mjs); rt-rma-mvp no se modifico
+
+  - id: DC16
+    block: BASELINE
+    title: Formalizar en la baseline las funcionalidades aprobadas e implementadas durante UAT
+    status: CONFIRMADA
+    documented_in: [business/decisions/decision-log-v1.4.yaml]
+    notes: El detalle por comportamiento esta en uat_items.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: ver uat_items
+
+uat_items:
+
+  - id: UAT-I01
+    title: Check-in de entrega y garantia por Detalle (90/30, ajustable, desde la entrega)
+    status: CONFIRMADO
+    approval_evidence:
+      - "Iteracion 1: mejoras del primer UAT (19/10/2026), cambio 7"
+      - "UAT-009: mover check-in al cierre (20/10/2026)"
+      - "Cierre UAT-009 (20/10/2026), Decisiones aprobadas 1 a 7"
+    confirmed_by: [DC15A]
+    implemented_in: [rt-rma-mvp@884bf3e, rt-rma-mvp@547e64c]
+    rules: [BR-REP-041, BR-REP-045]
+    nodes: [PROC-REP-265, PROC-REP-269, PROC-REP-280]
+    features: [FEAT-REP-008]
+    scenarios: [HP-REP-001, VAR-REP-031, VAR-REP-034]
+    technical_only:
+      - Registro auditado temporalmente en RecepcionEquipo.registros_checkin (aceptado como temporal, decision 7)
+      - Situacion visible PENDIENTE_CHECKIN (solo presentacion)
+      - Ajuste manual por RECEPCION o COORDINADOR_RMA (roles de la implementacion; predeterminado provisional en BR-REP-039)
+      - "Volver a registrar el check-in hasta la entrega (repetir el mismo resultado no agrega un registro): comportamiento tecnico implementado en 547e64c, sin aprobacion funcional demostrada; no es regla de negocio (ABI-32)"
+      - "Interpretacion provisional de garantia aplicable: la politica del origen requiere_checkin_en_entrega lo exige en CLIENTE_EXTERNO con al menos un trabajo realizado, sin evaluar la garantia de cada Detalle; no es regla aprobada (ABI-37)"
+      - "Hasta registrar el check-in rige como provisorio el plazo del tipo de reparacion: comportamiento tecnico sin aprobacion funcional, dentro de las precedencias pendientes (ABI-03)"
+    pending: [ABI-03, ABI-23, ABI-32, ABI-37]
+
+  - id: UAT-I02
+    title: Fotografias del equipo
+    status: CONFIRMADO
+    approval_evidence:
+      - "UAT-010: Busqueda por DNI y fotografias (21/10/2026), seccion 2"
+      - "Cierre UAT-010/011 y publicacion en UAT (21/10/2026), Fase 1 punto 2"
+    implemented_in: [rt-rma-mvp@3b31d35]
+    rules: [BR-REP-024]
+    nodes: [PROC-REP-032]
+    features: [FEAT-REP-001]
+    technical_only:
+      - Bucket privado de Cloud Storage, formatos JPEG, PNG o WebP hasta 8 MB, reduccion a 1600 px
+      - Limpieza manual de imagenes huerfanas por ADMINISTRADOR
+      - "Interfaz aprobada en UAT-010 y retirada de BR-REP-024 por no ser regla de negocio (correccion final, M9): contador visible, captura con la camara del celular o seleccion multiple desde la galeria o los archivos, vista previa, miniaturas y vista ampliada"
+    pending: [ABI-23]
+
+  - id: UAT-I03
+    title: Busqueda y reutilizacion de Clientes por DNI
+    status: CONFIRMADO
+    approval_evidence:
+      - "UAT-010 (21/10/2026), seccion 1"
+      - "UAT-010 - Ajuste de entidad Cliente (21/10/2026)"
+      - "UAT-010: Consolidacion de Cliente y busqueda por DNI (21/10/2026)"
+      - "Cierre UAT-010/011 (21/10/2026), Fase 1 punto 1"
+    implemented_in: [rt-rma-mvp@3b31d35]
+    rules: [BR-REP-020, BR-REP-021]
+    nodes: [PROC-REP-030]
+    features: [FEAT-REP-001]
+    technical_only:
+      - 409 CLIENTE_EXISTENTE, comprobacion en la seccion critica del alta, limitador de consultas
+    pending: [ABI-24, ABI-30]
+
+  - id: UAT-I04
+    title: Integracion con el catalogo de equipos de Ventas y preservacion del tp_id
+    status: CONFIRMADO
+    approval_evidence:
+      - "Integracion del catalogo de equipos de Ventas (22/10/2026)"
+      - "DC20 (23/10/2026): tp_id como referencia comercial"
+    confirmed_by: [DC20]
+    implemented_in: [rt-rma-mvp@f270a84]
+    rules: [BR-REP-048, BR-REP-022]
+    nodes: [PROC-REP-030]
+    features: [FEAT-REP-001, FEAT-REP-010]
+    technical_only:
+      - Adaptador de Google Sheets, variables RMA_CATALOGO_*, copia JSON efimera, compresion de respuestas
+      - Sincronizacion por ADMINISTRADOR o COORDINADOR_RMA (predeterminado provisional)
+    pending: [ABI-23]
+
+  - id: UAT-I05
+    title: Reparacion "Otros - Reparacion no tipificada"
+    status: CONFIRMADO
+    approval_evidence:
+      - "Iteracion 1: mejoras del primer UAT (19/10/2026), cambio 3"
+    implemented_in: [rt-rma-mvp@884bf3e]
+    rules: [BR-REP-047, BR-REP-015]
+    nodes: [PROC-REP-070]
+    features: [FEAT-REP-002, FEAT-REP-007]
+    technical_only:
+      - Tipo reservado del sistema TR-OTROS (no es una fila del catalogo; retirado de BR-REP-047 por ser un detalle tecnico, M9)
+    pending: [ABI-20]
+
+  - id: UAT-I06
+    title: Observaciones visibles y notas internas
+    status: CONFIRMADO
+    approval_evidence:
+      - "Iteracion 1: mejoras del primer UAT (19/10/2026), cambio 2"
+    implemented_in: [rt-rma-mvp@884bf3e]
+    rules: [BR-REP-023]
+    nodes: [PROC-REP-032, PROC-REP-060]
+    features: [FEAT-REP-001]
+
+  - id: UAT-I07
+    title: Prioridad predeterminada 4 - Normal y entrada automatica a la cola del ingreso inicial
+    status: CONFIRMADO
+    approval_evidence:
+      - "Iteracion 1: mejoras del primer UAT (19/10/2026), cambio 5"
+      - "Mejoras UAT: recepcion, documentos e interfaz (16/10/2026), punto 3.1"
+    confirmed_by: [DC03, DP-01]
+    implemented_in: [rt-rma-mvp@86155fe, rt-rma-mvp@25551ab, rt-rma-mvp@884bf3e]
+    rules: [BR-REP-034]
+    nodes: [PROC-REP-150]
+    features: [FEAT-REP-004]
+    pending: [ABI-21]
+
+  - id: UAT-I08
+    title: Ingresos, ajustes de stock y revalidacion de Ordenes que esperan recursos
+    status: CONFIRMADO
+    approval_evidence:
+      - "MVP v2: gestion operativa de inventario y validacion de custodia (14/10/2026)"
+      - "Ajustes finales de inventario y checkpoint (14/10/2026)"
+    implemented_in: [rt-rma-mvp@685b14c]
+    rules: [BR-REP-049]
+    nodes: [PROC-REP-120]
+    features: [FEAT-REP-003]
+    technical_only:
+      - Pantalla Inventario y endpoints de ingreso, ajuste y revalidacion
+    pending: [ABI-22, ABI-23]
+
+  - id: UAT-I09
+    title: Comprobantes de ingreso y autorizacion (ING) y de autorizacion de reparacion (AUT)
+    status: CONFIRMADO
+    approval_evidence:
+      - "Mejoras UAT: recepcion, documentos e interfaz (16/10/2026), bloque 1"
+      - "Cierre de trazabilidad y checkpoint UAT (16/10/2026): ACC-REP-060 aprobado"
+      - "Iteracion 1 (19/10/2026), cambio 1 (UAT-008)"
+    confirmed_by: [DC13]
+    implemented_in: [rt-rma-mvp@25551ab, rt-rma-mvp@884bf3e]
+    rules: [BR-REP-031, BR-REP-046]
+    nodes: [PROC-REP-046, PROC-REP-060]
+    features: [FEAT-REP-002]
+    technical_only:
+      - Numeracion OR-xxxxxx-ING-01, PDF, Web Share API
+    pending: [ABI-08]
+
+  - id: UAT-I10
+    title: Ingreso inicial simplificado (UAT-008)
+    status: CONFIRMADO
+    approval_evidence:
+      - "Iteracion 1: mejoras del primer UAT (19/10/2026), cambio 1"
+      - "Mejoras UAT (16/10/2026), punto 1.1 (orden recomendado de la recepcion)"
+    implemented_in: [rt-rma-mvp@25551ab, rt-rma-mvp@884bf3e]
+    rules: [BR-REP-046]
+    nodes: [PROC-REP-046, PROC-REP-060, PROC-REP-070, PROC-REP-150]
+    features: [FEAT-REP-002]
+    technical_only:
+      - Comando unico application/ingreso_inicial.py::generar_comprobante_ingreso con un solo guardado
+      - 409 a las acciones separadas durante el ingreso inicial
+    pending: [ABI-19]
+
+  - id: UAT-I11
+    title: Numero de serie fuera del formulario inicial de Cliente Externo
+    status: CONFIRMADO
+    approval_evidence:
+      - "Cierre UAT-010/011 (21/10/2026), Fase 1 punto 3"
+    implemented_in: [rt-rma-mvp@3b31d35]
+    rules: [BR-REP-022]
+    nodes: [PROC-REP-030]
+    features: [FEAT-REP-001]
+
+  - id: UAT-I12
+    title: Liberacion de una Orden tomada por otro tecnico
+    status: CONFIRMADO
+    approval_evidence:
+      - "Iteracion 1 (19/10/2026), cambio 6"
+      - "Permisos predeterminados (23/10/2026)"
+    confirmed_by: [DC04, DP-02]
+    implemented_in: [rt-rma-mvp@884bf3e]
+    rules: [BR-REP-018, BR-REP-039]
+    nodes: [PROC-REP-212, PROC-REP-213]
+    features: [FEAT-REP-004]
+    scenarios: [VAR-REP-037]
+    technical_only:
+      - "La interrupcion incluida en la liberacion registra como motivo \"Liberada por <usuario> (titular <titular>): <motivo>\" (services/ejecuciones.py, registrar_interrupcion_por_liberacion): interpretacion provisional, no regla aprobada (ABI-36)"
+    pending: [ABI-36]
+
+  - id: UAT-I13
+    title: Descuento comercial (porcentaje o importe, motivo, historial)
+    status: CONFIRMADO
+    approval_evidence:
+      - "Iteracion 1 (19/10/2026), cambio 4; reemplazado en el modelo por DC09"
+    confirmed_by: [DC09]
+    implemented_in: [rt-rma-mvp@884bf3e]
+    rules: [BR-REP-016]
+    features: [FEAT-REP-007]
+    notes: La aprobacion de aplicar descuentos desde Recepcion (cambio 4) se conserva en ABI-09; no se fija como predeterminado mientras los permisos por tipo de Ajuste Comercial sigan pendientes.
+    pending: [ABI-09, ABI-10]
+
+  - id: UAT-I14
+    title: Motivo obligatorio para interrumpir una reparacion
+    status: CONFIRMADO
+    approval_evidence:
+      - "Revision final de mejoras UAT (16/10/2026), punto 1"
+    implemented_in: [rt-rma-mvp@25551ab]
+    rules: [BR-REP-004]
+    nodes: [PROC-REP-200]
+    features: [FEAT-REP-005]
+
+  - id: UAT-I15
+    title: Recepcion fisica confirmada antes de iniciar una Ejecucion
+    status: CONFIRMADO
+    approval_evidence:
+      - "MVP v2: gestion operativa de inventario y validacion de custodia (14/10/2026): regla funcional aprobada"
+    implemented_in: [rt-rma-mvp@685b14c]
+    rules: [BR-REP-033]
+    nodes: [PROC-REP-185]
+    features: [FEAT-REP-005]
+
+  - id: UAT-I16
+    title: Compartir documentos por WhatsApp sin dar por enviado
+    status: CONFIRMADO
+    approval_evidence:
+      - "Mejoras UAT (16/10/2026), punto 1.3"
+    implemented_in: [rt-rma-mvp@25551ab]
+    rules: [BR-REP-044]
+    nodes: [PROC-REP-260]
+    features: [FEAT-REP-008]
+    pending: [ABI-13]
+
+  - id: UAT-I17
+    title: Tipo de Pago ANTICIPO o PAGO derivado del estado de la Orden
+    status: CONFIRMADO
+    approval_evidence:
+      - "Iteracion mvp-reconcile, prueba manual del MVP (24/09/2026), punto 4 (previa al UAT)"
+    implemented_in: [rt-rma-mvp@8c0d072]
+    rules: [BR-REP-017]
+    features: [FEAT-REP-007]
+
+  - id: UAT-I18
+    title: Correccion de los datos del ingreso con versiones anteriores
+    status: PENDIENTE
+    approval_evidence:
+      - "Diseno de experiencia operativa previa al UAT (14/10/2026), seccion D: solo pedia proponer que se puede corregir, hasta cuando y quien"
+    implemented_in: [rt-rma-mvp@2c5e0de]
+    notes: Implementado (versiones_anteriores de la recepcion) sin una aprobacion documentada; no se incorpora como regla definitiva.
+    pending: [ABI-25]
+
+  - id: UAT-I19
+    title: Bandejas por rol, cola de taller, busqueda y navegacion
+    status: NO_FUNCIONAL
+    approval_evidence:
+      - "Diseno de experiencia operativa previa al UAT (14/10/2026)"
+    implemented_in: [rt-rma-mvp@ce475fa, rt-rma-mvp@86155fe, rt-rma-mvp@3e718ff]
+    notes: Presentacion y experiencia de uso; no cambia reglas de negocio y no se formaliza en business/.
+
+open_items:
+
+  - id: ABI-01
+    title: Aprobacion final de la baseline consolidada (DC01)
+    impact: BLOQUEA_APROBACION
+    status: CERRADO
+    closed_by: DC01
+    closed_on: "2026-10-24"
+    resolution: Aprobada por el responsable de producto sobre el commit b6cc3a5 de consolidacion/v1.4 (consolidation.approval).
+    decisions: [DC01]
+    needed: Revision de los cambios y de las validaciones por el responsable de producto.
+
+  - id: ABI-02
+    title: Revision de las elecciones de modelado de la consolidacion
+    impact: BLOQUEA_APROBACION
+    status: CERRADO
+    closed_by: DC01
+    closed_on: "2026-10-24"
+    resolution: >
+      Las elecciones listadas quedan aprobadas con la baseline (DC01). Antes del
+      cierre se separo el criterio de garantia aplicable del check-in de entrega
+      en ABI-37, que sigue abierto.
+    decisions: [DC01, DC12, DC15B, DC07B, DC07C, DC16]
+    needed: >
+      Confirmar PROC-REP-269 como entrega bloqueada hasta el check-in; EVT-REP-998
+      como fin del ingreso en garantia no admitido; las salidas 211 -> 300/305 del
+      desistimiento solicitado; la advertencia por verificaciones faltantes del
+      checklist; las Features TRANSVERSALES; y catalogar como casos funcionales,
+      no como Scenarios, los que se resuelven dentro de un nodo.
+
+  - id: ABI-03
+    title: Precedencias concretas entre politicas de garantia
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC15A, DC15B]
+    needed: Orden entre plazo del tipo de reparacion, resultado del check-in y excepciones.
+
+  - id: ABI-04
+    title: Quien autoriza por defecto la excepcion de garantia vencida
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC15B]
+    needed: Responsable predeterminado del permiso de PROC-REP-036.
+
+  - id: ABI-05
+    title: Equipos sin IMEI y coincidencias ambiguas por IMEI
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC20]
+    needed: Criterio de identificacion alternativa y como se resuelve una coincidencia ambigua.
+
+  - id: ABI-06
+    title: Responsables predeterminados por evento de custodia
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC18B, DC08]
+    needed: Predeterminado de cada evento; hasta definirlo, el producto conserva sus roles actuales.
+
+  - id: ABI-07
+    title: Tratamiento de devoluciones que el cliente no retira
+    impact: POSTERIOR
+    decisions: [DC12C]
+    needed: Plazo, abandono y devoluciones posteriores a ENTREGADA.
+
+  - id: ABI-08
+    title: Obligatoriedad de firmas segun el documento
+    impact: POSTERIOR
+    decisions: [DC26]
+    needed: Que documentos exigen firma y en que momento.
+
+  - id: ABI-09
+    title: Permisos iniciales por tipo de Ajuste Comercial
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC09]
+    rules: [BR-REP-016]
+    needed: >
+      Quien registra CORTESIA y quien DESCUENTO por defecto. Evidencia
+      disponible: la iteracion 1 del UAT (19/10/2026, cambio 4) aprobo aplicar
+      descuentos desde Recepcion (porcentaje o importe, con motivo e
+      historial), y la implementacion lo habilita a Recepcion y Administracion.
+      Se conserva como antecedente; no se fija como predeterminado mientras los
+      permisos por tipo de Ajuste Comercial sigan pendientes.
+
+  - id: ABI-10
+    title: DESCUENTO que deja el total por debajo de lo ya cobrado
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC09, DC11]
+    needed: Si se bloquea (comportamiento actual) o genera saldo a favor como la cortesia total.
+
+  - id: ABI-11
+    title: Reparto de puntaje entre tecnicos
+    impact: POSTERIOR
+    decisions: [DC05]
+    needed: Criterio de acreditacion entre Ejecuciones de distintos tecnicos.
+
+  - id: ABI-12
+    title: Definicion completa del circuito de Compras, lotes y costos
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC24, DC24LOT]
+    needed: Proceso de Compras propio (necesidad, solicitud, OC, proveedor, recepcion, ingreso).
+
+  - id: ABI-13
+    title: Plantillas, disparadores y proveedor de WhatsApp
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC25]
+    needed: Plantillas y disparadores para la etapa 1; proveedor oficial para la etapa 2.
+
+  - id: ABI-14
+    title: Capacidades de tecnicos y recursos distintos de insumos
+    impact: POSTERIOR
+    decisions: [GLO-01]
+    needed: Modelo de capacidades y recursos.
+
+  - id: ABI-15
+    title: Diseno futuro de Reporting
+    impact: POSTERIOR
+    decisions: [DC29]
+    needed: Alcance de indicadores y gemelo digital.
+
+  - id: ABI-16
+    title: AUD-V14-005 - solicitud de autorizacion ligada a la version de la definicion
+    impact: BLOQUEA_MIGRACION
+    decisions: [DC28]
+    needed: Modelo tecnico de versiones de la definicion antes del esquema PostgreSQL.
+
+  - id: ABI-17
+    title: AUD-V14-011 - orden de revision de un Detalle que requiere revision cuando hay otros trabajables
+    impact: POSTERIOR
+    decisions: [DC17]
+    needed: Decision de prioridad entre revisar y continuar.
+
+  - id: ABI-18
+    title: Opciones de reversibilidad al interrumpir para cancelar y su uso
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC07B]
+    needed: Valores posibles y consecuencias.
+
+  - id: ABI-19
+    title: Obligatoriedad del estado fisico para emitir el comprobante de ingreso
+    impact: POSTERIOR
+    decisions: [DC16]
+    needed: Confirmar la decision de la implementacion.
+
+  - id: ABI-20
+    title: Puntaje y compatibilidad de Mesa de trabajo de la reparacion "Otros"
+    impact: POSTERIOR
+    decisions: [DC16]
+    needed: Confirmar puntaje 0 y cualquier Mesa de trabajo.
+
+  - id: ABI-21
+    title: Entrada automatica a la cola para RT_INTERNO y garantia RMA
+    impact: POSTERIOR
+    decisions: [DC16]
+    needed: Si se extiende el automatismo del ingreso inicial.
+
+  - id: ABI-22
+    title: Catalogo de tipos de movimiento de insumo (DESPERDICIO de BR-REP-005 frente a DEVOLUCION de la implementacion)
+    impact: BLOQUEA_MIGRACION
+    decisions: [DC24LOT, DC16]
+    needed: Catalogo definitivo antes del esquema de movimientos.
+
+  - id: ABI-23
+    title: Validar los permisos predeterminados provisionales tomados de la implementacion
+    impact: POSTERIOR
+    decisions: [DC08, DC16]
+    needed: Inventario, catalogo de equipos, ajuste de garantia y fotografias.
+
+  - id: ABI-24
+    title: DNI duplicados historicos antes del indice unico
+    impact: BLOQUEA_MIGRACION
+    decisions: [DC16, DC28]
+    needed: Resolver los duplicados antes de crear el indice unico parcial sobre DNI.
+
+  - id: ABI-25
+    title: Correccion de los datos del ingreso (implementada sin aprobacion documentada)
+    impact: POSTERIOR
+    decisions: [DC16]
+    needed: Confirmar si se formaliza, que se corrige, hasta cuando y quien.
+
+  - id: ABI-26
+    title: Si una CORTESIA puede ser parcial
+    impact: POSTERIOR
+    decisions: [DC09]
+    needed: Definir si la cortesia admite porcentaje o importe parcial.
+
+  - id: ABI-27
+    title: Estado terminal de RT_INTERNO y custodia de los origenes distintos de CLIENTE_EXTERNO
+    impact: POSTERIOR
+    decisions: [DC17, DC18]
+    needed: Pendiente heredado de V1.3 y V1.4.
+
+  - id: ABI-28
+    title: Conciliacion de los IDs ACC-REP-021 a 028 entre rt-rma-mvp y rt-rma-app
+    impact: POSTERIOR
+    decisions: [DC02]
+    needed: Asignar IDs sin reutilizar significados.
+
+  - id: ABI-29
+    title: Catalogos de motivos de cancelacion e interrupcion y de medios de devolucion
+    impact: POSTERIOR
+    decisions: [DC08, DC12C]
+    needed: Catalogos definitivos.
+
+  - id: ABI-30
+    title: Proveedor autorizado de consulta externa por DNI
+    impact: POSTERIOR
+    decisions: [DC14]
+    needed: Elegir y autorizar un proveedor (por ejemplo el padron de ARCA por web service).
+
+  - id: ABI-31
+    title: Como se obtiene el consentimiento y que exige cada finalidad
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC30, DC25]
+    needed: Definir junto con plantillas y disparadores.
+
+  # ---------------------------------------- correccion final previa a DC01 (B1, B3, B4)
+  - id: ABI-32
+    title: Correccion o nuevo registro del check-in antes de la entrega y su efecto sobre el comprobante final
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC16, DC15A, DC13]
+    rules: [BR-REP-045, BR-REP-041]
+    nodes: [PROC-REP-269, PROC-REP-280, PROC-REP-270]
+    needed: >
+      Si el check-in puede corregirse o registrarse otra vez, hasta cuando (por
+      ejemplo, hasta aprobar la condicion de entrega o hasta entregar), quien lo
+      hace, si exige motivo, cual registro rige y como afecta al comprobante
+      final ya generado (version nueva, DC13). La implementacion permite hoy
+      volver a registrarlo hasta la entrega: es un comportamiento tecnico sin
+      aprobacion funcional demostrada (UAT-I01).
+
+  - id: ABI-33
+    title: Garantia parcialmente vigente - Detalles origen con situaciones distintas
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC15B]
+    rules: [BR-REP-019, BR-REP-041]
+    nodes: [PROC-REP-036, EVT-REP-998]
+    features: [FEAT-REP-001]
+    needed: >
+      Que resulta cuando un reclamo cita varios Detalles origen y unos estan
+      vigentes, otros vencidos con excepcion y otros vencidos sin excepcion (por
+      ejemplo, si se crea la Orden de garantia solo con los admitidos). Las
+      salidas de PROC-REP-036 no cubren ese caso y no se agregan transiciones ni
+      estados hasta decidirlo.
+
+  - id: ABI-34
+    title: Continuacion como reparacion paga despues de una garantia vencida sin excepcion
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC15B]
+    nodes: [PROC-REP-036, EVT-REP-998]
+    features: [FEAT-REP-001]
+    needed: >
+      Si el cliente puede continuar como una reparacion paga de CLIENTE_EXTERNO
+      que conserve la relacion con el reclamo rechazado, que datos se trasladan
+      (Cliente, Equipo, Orden y Detalles origen, falla declarada) y como se
+      vincula la Orden nueva al reclamo. Hoy el modelo termina en EVT-REP-998
+      sin asumir ninguna ruta.
+
+  - id: ABI-35
+    title: Persistencia y auditoria del intento de reclamo de garantia rechazado
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC15B]
+    nodes: [PROC-REP-036, EVT-REP-998]
+    features: [FEAT-REP-001]
+    needed: >
+      Que se registra cuando el ingreso en garantia no se admite (quien, cuando,
+      Orden y Detalles origen, vencimiento y resultado de la validacion), donde
+      se conserva si no se crea ninguna Orden y quien puede consultarlo.
+
+  - id: ABI-36
+    title: Motivo de la interrupcion que deriva de liberar una Orden tomada por otro tecnico
+    impact: POSTERIOR
+    decisions: [DC04, DP-02]
+    rules: [BR-REP-018, BR-REP-004]
+    nodes: [PROC-REP-213, PROC-REP-200]
+    scenarios: [VAR-REP-037]
+    needed: >
+      Que motivo registra la Ejecucion interrumpida dentro de una liberacion
+      ajena (BR-REP-004 exige motivo para Interrumpido). La implementacion usa
+      provisionalmente el de la liberacion, con quien libera y el titular; no
+      es una regla aprobada.
+
+  # ---------------------------------------- cierre de DC01 (24/10/2026)
+  - id: ABI-37
+    title: Criterio de garantia aplicable para exigir el check-in de entrega
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DC15A, DC16]
+    rules: [BR-REP-041, BR-REP-045]
+    nodes: [PROC-REP-265, PROC-REP-269]
+    features: [FEAT-REP-008, FEAT-REP-010]
+    needed: >
+      Separado de ABI-02 antes de su cierre. Definir el criterio exacto para
+      determinar cuando la garantia es aplicable a efectos del check-in de
+      entrega (BR-REP-045, PROC-REP-265 y 269); la condicion funcional se
+      conserva como "trabajos realizados y garantia aplicable" (UAT-009).
+      Bloquea implementar la politica de garantia (BR-REP-041), no la
+      aprobacion de DC01. Interpretacion provisional de la implementacion, no
+      aprobada como regla: la politica del origen requiere_checkin_en_entrega lo
+      exige en CLIENTE_EXTERNO con al menos un trabajo realizado, sin evaluar la
+      garantia de cada Detalle.
+
+improvements:
+
+  - id: MEJ-01
+    audit_ref: M1
+    title: Prueba que exija salir de PROC-REP-269 solo despues de registrar el check-in
+    nodes: [PROC-REP-269]
+    files: [scripts/test-commercial-closure.ts]
+    needed: >
+      La arista 269 -> 265 [Revalidar] no tiene guarda en el grafo, igual que
+      266. El replay comercial ya deriva 265 segun el check-in, pero no exige
+      que 269 se abandone solo despues de "Registrar check-in", como lo hace con
+      las devoluciones de 267.
+
+  - id: MEJ-02
+    audit_ref: M3
+    title: Cobertura del check-in registrado como no realizado (30 dias)
+    rules: [BR-REP-041, BR-REP-045]
+    nodes: [PROC-REP-269]
+    scenarios: [VAR-REP-040, VAR-REP-041]
+    files: [docs/consolidation/README.md]
+    needed: >
+      Agregar un Scenario con el check-in registrado como no realizado, o
+      confirmar que alcanza con el caso funcional del README. UAT-I01 tampoco
+      cita VAR-REP-040 ni VAR-REP-041, que recorren 269.
+
+  - id: MEJ-03
+    audit_ref: M4
+    title: Momento del comprobante final respecto de la entrega si se admite corregir el check-in
+    nodes: [PROC-REP-280, PROC-REP-270]
+    open: [ABI-32]
+    needed: >
+      PROC-REP-280 se genera antes de PROC-REP-270. Si ABI-32 admite corregir el
+      check-in despues de 280, precisar si el comprobante final se genera en la
+      operacion de entrega o se emite una version nueva (DC13).
+
+  - id: MEJ-04
+    audit_ref: M6
+    title: Renombrar la salida PROC-REP-212 [No] a "Liberar la Orden"
+    nodes: [PROC-REP-212, PROC-REP-213]
+    scenarios: [VAR-REP-037]
+    needed: >
+      En la proxima version. Cambia la identidad de la arista
+      (from::condition::to), por lo que afecta Scenarios, pruebas y visores.

@@ -22,8 +22,11 @@ import type { FeatureModel } from "./lib/feature-model";
 import { deriveScenarioFeatures, findSharedNodes, summarizeSharedNodeBindings } from "./lib/feature-scenario-mapping";
 import type { Scenario, ScenarioStep } from "./lib/scenario-model";
 
-const PROCESS_FILE = "business/processes/repair-management-v1.3.yaml";
-const FEATURES_FILE = "business/features/repair-management-features-v1.3.yaml";
+// Revision under test: `tsx scripts/test-feature-scenario-mapping.ts v1.4`
+// (defaults to v1.3, so the existing command is unchanged).
+const REVISION = process.argv[2] ?? "v1.3";
+const PROCESS_FILE = `business/processes/repair-management-${REVISION}.yaml`;
+const FEATURES_FILE = `business/features/repair-management-features-${REVISION}.yaml`;
 
 function edgeStep(from: string, to: string, condition?: string): ScenarioStep {
   return condition ? { kind: "PROCESS_EDGE", from, to, condition } : { kind: "PROCESS_EDGE", from, to };

@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://rosariotecno.local/schemas/feature.schema.json",
   "title": "Feature",
-  "description": "Contrato de validacion ESTRUCTURAL para la definicion de Features de un Business Process (Etapa 2: Feature Definition). Valida unicamente la forma del YAML: no confirma que process_nodes o business_rules existan realmente, ni que source_process coincida con el Business Process real. Esa validacion de integridad REFERENCIAL entre archivos vive en scripts/validate-references.ts (npm run validate:references), que corre despues de este schema, no dentro de el. `shared_node_bindings` (opcional, retrocompatible con Features que no lo usan) declara, para un process_node compartido por mas de una Feature, si esa Feature participa siempre que se atraviesa el nodo (mode: ALWAYS) o solo cuando el nodo se alcanza por una transicion concreta (mode: CONTEXTUAL, identificada por from+condition+to en `when.incoming_edges`). Su validacion referencial (que el node exista, que realmente este compartido, que cada edge referenciado exista en el Business Process) tambien vive en validate-references.ts, no aqui; este schema solo exige, estructuralmente, que CONTEXTUAL traiga `when` y ALWAYS no lo traiga.",
+  "description": "Contrato de validacion ESTRUCTURAL para la definicion de Features de un Business Process (Etapa 2: Feature Definition). Valida unicamente la forma del YAML: no confirma que process_nodes o business_rules existan realmente, ni que source_process coincida con el Business Process real. Esa validacion de integridad REFERENCIAL entre archivos vive en scripts/validate-references.ts (npm run validate:references), que corre despues de este schema, no dentro de el. `shared_node_bindings` (opcional, retrocompatible con Features que no lo usan) declara, para un process_node compartido por mas de una Feature, si esa Feature participa siempre que se atraviesa el nodo (mode: ALWAYS) o solo cuando el nodo se alcanza por una transicion concreta (mode: CONTEXTUAL, identificada por from+condition+to en `when.incoming_edges`). Su validacion referencial (que el node exista, que realmente este compartido, que cada edge referenciado exista en el Business Process) tambien vive en validate-references.ts, no aqui; este schema solo exige, estructuralmente, que CONTEXTUAL traiga `when` y ALWAYS no lo traiga. `kind` (opcional, retrocompatible): PROCESS (por defecto) es una capacidad que POSEE nodos del Business Process (al menos uno); TRANSVERSAL es una capacidad que no posee nodos (process_nodes vacio) y declara en `governed_nodes` los nodos cuyos responsables o configuracion gobierna, por ejemplo permisos o administracion de catalogos. Que esos nodos existan lo valida validate-references.ts.",
   "type": "object",
   "required": ["process", "features"],
   "additionalProperties": true,
@@ -55,7 +55,13 @@
           "items": { "type": "string" },
           "uniqueItems": true
         },
+        "kind": { "type": "string", "enum": ["PROCESS", "TRANSVERSAL"] },
         "process_nodes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "governed_nodes": {
           "type": "array",
           "minItems": 1,
           "items": { "type": "string" },
@@ -76,7 +82,14 @@
           "items": { "type": "string" },
           "uniqueItems": true
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "TRANSVERSAL" } }, "required": ["kind"] },
+          "then": { "required": ["governed_nodes"], "properties": { "process_nodes": { "maxItems": 0 } } },
+          "else": { "properties": { "process_nodes": { "minItems": 1 } }, "not": { "required": ["governed_nodes"] } }
+        }
+      ]
     },
     "sourceProcess": {
       "type": "object",

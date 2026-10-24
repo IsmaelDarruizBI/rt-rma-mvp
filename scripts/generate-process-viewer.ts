@@ -48,6 +48,15 @@
  * below precomputes that same rank server-side so the client can build
  * the exact id for a given step and select that one path, never its
  * parallel sibling.
+ *
+ * Optional per-origin view: "--origin=CLIENTE_EXTERNO" (a flag, not a
+ * positional arg) renders the SAME viewer over a read-only SUBSET of the real
+ * nodes/edges/Scenarios that applies to that origin (scripts/lib/origin-filter.ts),
+ * writing a sibling file with the origin slug before the version (e.g.
+ * repair-management-cliente-externo-v1.4.html). The view adds the actor to each
+ * node label, draws the independent Reception lane dotted, and lists in the
+ * "Proceso" panel what was excluded and why. Without the flag the generated
+ * page is byte-identical to previous releases.
  */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -57,6 +66,7 @@ import {
   loadYaml,
   type Actor,
   type BusinessRule,
+  type FlowchartOptions,
   type ProcessEdge,
   type ProcessModel,
   type ProcessNode,
@@ -64,6 +74,7 @@ import {
 import type { FeatureDefinition, FeatureModel, FeatureScope } from "./lib/feature-model";
 import { deriveScenarioFeatures } from "./lib/feature-scenario-mapping";
 import type { Scenario, ScenarioModel } from "./lib/scenario-model";
+import { buildOriginView, isOrigin, originFlowchartOptions, originLabel, originStem, type Origin, type OriginView } from "./lib/origin-filter";
 
 const DEFAULT_PROCESS_FILE = join("business", "processes", "repair-management.yaml");
 const DEFAULT_ACTORS_FILE = join("business", "actors", "actors.yaml");
@@ -71,8 +82,24 @@ const DEFAULT_RULES_FILE = join("business", "rules", "business-rules.yaml");
 const DEFAULT_FEATURES_FILE = join("business", "features", "repair-management-features.yaml");
 const MERMAID_LIB_FILE = join("node_modules", "mermaid", "dist", "mermaid.min.js");
 
-const cliArgs = process.argv.slice(2);
-const isDefaultRun = cliArgs.length === 0;
+const rawArgs = process.argv.slice(2);
+// `--flag=value` options (today only `--origin=<ORIGIN>`) are not positional.
+const flags = new Map<string, string>(
+  rawArgs
+    .filter((arg) => arg.startsWith("--"))
+    .map((arg): [string, string] => {
+      const [key, ...value] = arg.slice(2).split("=");
+      return [key, value.join("=")];
+    })
+);
+const cliArgs = rawArgs.filter((arg) => !arg.startsWith("--"));
+const isDefaultRun = rawArgs.length === 0;
+const ORIGIN_FLAG = flags.get("origin");
+if (ORIGIN_FLAG !== undefined && !isOrigin(ORIGIN_FLAG)) {
+  console.error(`Origen invalido: ${ORIGIN_FLAG}`);
+  process.exit(1);
+}
+const ORIGIN = ORIGIN_FLAG as Origin | undefined;
 
 const PROCESS_FILE = cliArgs[0] ?? DEFAULT_PROCESS_FILE;
 const RULES_FILE = cliArgs[1] ?? DEFAULT_RULES_FILE;
@@ -82,7 +109,8 @@ const ACTORS_FILE = cliArgs[2] ?? DEFAULT_ACTORS_FILE;
 // Features/Scenarios for this revision yet", not "fall back to V1.2's".
 const FEATURES_FILE: string | null = isDefaultRun ? DEFAULT_FEATURES_FILE : cliArgs[3] || null;
 const SCENARIOS_FILE: string | null = isDefaultRun ? null : cliArgs[4] || null;
-const OUTPUT_FILE = join("generated", "viewer", `${basename(PROCESS_FILE, ".yaml")}.html`);
+const PROCESS_STEM = basename(PROCESS_FILE, ".yaml");
+const OUTPUT_FILE = join("generated", "viewer", `${ORIGIN ? originStem(PROCESS_STEM, ORIGIN) : PROCESS_STEM}.html`);
 
 const CLICK_CALLBACK = "selectNode";
 
@@ -134,9 +162,7 @@ function resolveNode(
     name: node.name,
     description: node.description,
     actor: node.actor ? resolveActor(node.actor, actorsById) : undefined,
-    actoresAlternativos: node.actores_alternativos?.map((actorId) =>
-      resolveActor(actorId, actorsById)
-    ),
+    actoresAlternativos: node.actores_alternativos?.map((actorId) => resolveActor(actorId, actorsById)),
     inputs: node.inputs,
     outputs: node.outputs,
     rules: node.rules ? resolveRules(node.rules, rulesById) : undefined,
@@ -220,13 +246,124 @@ function escapeHtmlStatic(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function buildDiagramSource(model: ProcessModel): string {
+function buildDiagramSource(model: ProcessModel, options?: FlowchartOptions): string {
   return [
     "flowchart TD",
-    ...buildFlowchartBody(model),
+    ...buildFlowchartBody(model, options),
     "",
     ...buildClickDirectives(model.nodes, CLICK_CALLBACK),
   ].join("\n");
+}
+
+/**
+ * Extra presentation data for a per-origin view. Absent for the general
+ * viewers, whose output must stay byte-identical.
+ */
+interface ViewExtras {
+  diagramOptions: FlowchartOptions;
+  badge: string;
+  sourceNote: string;
+  /** Client script appended after CLIENT_SCRIPT (overrides renderProcessSummary). */
+  script: string;
+}
+
+const VIEW_LIMITATIONS = [
+  "El grafo es de un solo token. La autorizacion diferida del cliente (entrada EVT-REP-003, aristas punteadas) se dibuja como un carril propio de Recepcion que vuelve al resolver: NO es un paso obligatorio del hilo tecnico, pero el diagrama no puede mostrar la concurrencia real.",
+  "Las capacidades transversales sin nodo (Registrar pago, override de factibilidad o de estacion) no se dibujan como aristas: aparecen solo en los pasos de los Scenarios.",
+  "El mecanismo continuar/liberar (PROC-REP-211 -> 212 -> 181 / 213 -> 170) existe en el diagrama pero ningun Scenario lo recorre.",
+  "Las bifurcaciones por origen que el modelo NO codifica en la condicion de la arista (por ejemplo PROC-REP-050 y PROC-REP-250) se resolvieron con evidencia de Scenarios; la lista esta en el panel Proceso para que negocio la confirme.",
+  "Los nodos compartidos con otros origenes (PROC-REP-010, 040, 070, 075, 127, 128, 184, ...) se conservan con las salidas aplicables al origen; las salidas de otros origenes no se dibujan.",
+  "Una consulta al cliente con resultados mixtos (autoriza unos Detalles y rechaza otros) no tiene arista propia en PROC-REP-047.",
+];
+
+function buildViewExtras(view: OriginView, actors: Actor[]): ViewExtras {
+  const { report } = view;
+  const viewInfo = {
+    origin: report.origin,
+    label: originLabel(report.origin),
+    nodes: view.model.nodes.length,
+    edges: view.model.edges.length,
+    startEvents: report.startEvents,
+    primaryStart: report.primaryStart,
+    scenarios: report.keptScenarios.length,
+    excludedEdges: report.excludedEdges.map((x) => ({
+      from: x.edge.from,
+      to: x.edge.to,
+      condition: x.edge.condition ?? "",
+      reason: x.reason,
+      detail: x.detail,
+    })),
+    excludedNodes: report.excludedNodes,
+    excludedScenarios: report.excludedScenarios,
+    limitations: VIEW_LIMITATIONS,
+  };
+  const script = `
+  var VIEW_INFO = ${embedJson(viewInfo)};
+  function renderProcessSummary() {
+    var p = PROCESS_INFO, v = VIEW_INFO;
+    function list(items) { return "<ul>" + items.map(function (t) { return "<li>" + escapeHtml(t) + "</li>"; }).join("") + "</ul>"; }
+    function edgeText(e) { return e.from + " -> " + e.to + (e.condition ? " [" + e.condition + "]" : "") + " (" + e.detail + ")"; }
+    var explicit = v.excludedEdges.filter(function (e) { return e.reason === "EXPLICIT_OTHER_ORIGIN"; });
+    var evidence = v.excludedEdges.filter(function (e) { return e.reason === "SCENARIO_EVIDENCE"; });
+    var unreachable = v.excludedEdges.filter(function (e) { return e.reason === "UNREACHABLE"; });
+    var html = '<h2>Proceso</h2>' +
+      '<div class="field"><div class="field-value big">' + escapeHtml(p.name) + "</div></div>" +
+      '<div class="field"><div class="field-label">ID</div><div class="field-value">' + escapeHtml(p.id) + " v" + escapeHtml(p.version) + (p.status ? " (" + escapeHtml(p.status) + ")" : "") + "</div></div>" +
+      '<div class="field"><div class="field-label">Vista por origen</div><div class="field-value">' + escapeHtml(v.origin) + " - " + v.nodes + " nodos, " + v.edges + " aristas, " + v.scenarios + " Scenarios</div></div>" +
+      '<div class="field"><div class="field-label">Entradas</div><div class="field-value">' + escapeHtml(v.startEvents.join(", ")) + " (" + escapeHtml(v.primaryStart) + " = flujo principal; las demas, carriles independientes en linea punteada)</div></div>" +
+      '<hr class="divider">' +
+      '<p class="hint">Subconjunto de nodos y aristas REALES de la V1.4: no se agregaron nodos ni aristas. Seleccione un nodo, o use el buscador, para ver su detalle, actor y reglas.</p>' +
+      '<details><summary>Criterio de filtrado</summary>' + list([
+        "Se quitan las aristas cuya condicion nombra otro origen o niega este origen (" + explicit.length + ").",
+        "Se quitan las aristas neutras que SOLO recorren Scenarios de otro origen (" + evidence.length + "); no se usa la mera alcanzabilidad topologica.",
+        "Se quitan los nodos que quedan inalcanzables desde los eventos de inicio que conservan salidas (" + v.excludedNodes.length + " nodos)."
+      ]) + '</details>' +
+      '<details><summary>Aristas excluidas por condicion de origen (' + explicit.length + ')</summary>' + list(explicit.map(edgeText)) + '</details>' +
+      '<details><summary>Aristas excluidas por evidencia de Scenarios (' + evidence.length + ')</summary>' + list(evidence.map(edgeText)) + '</details>' +
+      (unreachable.length ? '<details><summary>Aristas que quedan inalcanzables (' + unreachable.length + ')</summary>' + list(unreachable.map(edgeText)) + '</details>' : "") +
+      '<details><summary>Nodos excluidos (' + v.excludedNodes.length + ')</summary>' + list(v.excludedNodes.map(function (n) { return n.id + " " + n.name + " - " + n.reason; })) + '</details>' +
+      '<details><summary>Scenarios excluidos (' + v.excludedScenarios.length + ')</summary>' + list(v.excludedScenarios.map(function (x) { return x.id + " - " + x.reason; })) + '</details>' +
+      '<details open><summary>Limites de la representacion</summary>' + list(v.limitations) + '</details>';
+    panelBody().innerHTML = html;
+  }
+
+  // Fit the whole diagram to the pane (the per-origin diagram is much larger than the pane at 100%).
+  function fitDiagram() {
+    var pane = document.getElementById("diagram-pane");
+    var svg = document.querySelector("#diagram-inner svg");
+    if (!pane || !svg || !svg.viewBox || !svg.viewBox.baseVal) return;
+    var vb = svg.viewBox.baseVal;
+    var scale = Math.min((pane.clientWidth - 16) / (vb.width + 64), (pane.clientHeight - 16) / (vb.height + 64));
+    setScale(scale, 0, 0);
+    pane.scrollLeft = 0;
+    pane.scrollTop = 0;
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    var anchor = document.getElementById("center-btn");
+    if (anchor) {
+      var btn = document.createElement("button");
+      btn.id = "fit-btn";
+      btn.type = "button";
+      btn.textContent = "Ajustar a pantalla";
+      btn.title = "Ajustar el diagrama completo a la pantalla";
+      anchor.parentNode.insertBefore(btn, anchor);
+      btn.addEventListener("click", fitDiagram);
+    }
+    var tries = 0;
+    var timer = setInterval(function () {
+      tries++;
+      var svg = document.querySelector("#diagram-inner svg");
+      if (svg && svg.style.width) { clearInterval(timer); fitDiagram(); }
+      if (tries > 150) clearInterval(timer);
+    }, 100);
+  });
+`;
+  return {
+    diagramOptions: originFlowchartOptions(view, new Map(actors.map((a) => [a.id, a.name]))),
+    badge: report.origin,
+    sourceNote: `VIEW: origen ${report.origin} (subconjunto de nodos, aristas y Scenarios reales; scripts/lib/origin-filter.ts)`,
+    script,
+  };
 }
 
 const STYLES = `
@@ -701,14 +838,12 @@ const CLIENT_SCRIPT = `
     if (!actores || actores.length === 0) return "";
     var items = actores.map(function (actor) {
       if (actor.missing) {
-        return '<div class="warning">Actor no encontrado: ' +
-          escapeHtml(actor.id) + "</div>";
+        return '<div class="warning">Actor no encontrado: ' + escapeHtml(actor.id) + "</div>";
       }
       return '<div class="field-value">' + escapeHtml(actor.name) + "</div>" +
         '<div class="field-sub">' + escapeHtml(actor.id) + "</div>";
     }).join("");
-    return '<div class="field"><div class="field-label">' +
-      "Tambien autorizado</div>" + items + "</div>";
+    return '<div class="field"><div class="field-label">Tambien autorizado</div>' + items + "</div>";
   }
 
   function renderRules(rules) {
@@ -1625,7 +1760,8 @@ function buildHtml(
   resolvedNodes: ResolvedNode[],
   resolvedFeatures: ResolvedFeature[],
   scenarios: ResolvedScenario[],
-  mermaidLib: string
+  mermaidLib: string,
+  extras?: ViewExtras
 ): string {
   const nodesById: Record<string, ResolvedNode> = {};
   for (const node of resolvedNodes) {
@@ -1642,7 +1778,7 @@ function buildHtml(
     scenariosById[scenario.id] = scenario;
   }
 
-  const diagramSource = buildDiagramSource(model);
+  const diagramSource = buildDiagramSource(model, extras?.diagramOptions);
   // Passed through with one derived field added (mermaidIndex - see the
   // module doc comment) so the viewer's "Llega desde" / "Continua hacia"
   // navigation and the Scenario edge-highlighting layer can both work
@@ -1695,7 +1831,7 @@ function buildHtml(
   const sourceLines = [PROCESS_FILE, ACTORS_FILE, RULES_FILE, FEATURES_FILE, SCENARIOS_FILE]
     .filter((file): file is string => Boolean(file))
     .map((file) => `  - ${file.replace(/\\/g, "/")}`)
-    .join("\n");
+    .join("\n") + (extras ? `\n  - ${extras.sourceNote}` : "");
 
   return `<!--
   AUTO-GENERATED FILE.
@@ -1724,7 +1860,7 @@ ${sourceLines}
     <div class="badges">
       <span class="badge neutral">${escapeHtmlStatic(model.process.id)}</span>
       <span class="badge neutral">v${escapeHtmlStatic(model.process.version)}</span>
-      ${model.process.status ? `<span class="badge status-${escapeHtmlStatic(model.process.status)}">${escapeHtmlStatic(model.process.status)}</span>` : ""}
+      ${model.process.status ? `<span class="badge status-${escapeHtmlStatic(model.process.status)}">${escapeHtmlStatic(model.process.status)}</span>` : ""}${extras ? `<span class="badge">${escapeHtmlStatic(extras.badge)}</span>` : ""}
     </div>
   </header>
   <div id="layout">
@@ -1757,7 +1893,7 @@ ${sourceLines}
     var FEATURES_BY_ID = ${embedJson(featuresById)};
     var SCENARIOS_BY_ID = ${embedJson(scenariosById)};
     var DIAGRAM_SOURCE = ${embedJson(diagramSource)};
-    ${CLIENT_SCRIPT}
+    ${CLIENT_SCRIPT}${extras ? "\n" + extras.script : ""}
   </script>
 </body>
 </html>
@@ -1765,24 +1901,46 @@ ${sourceLines}
 }
 
 function main(): void {
-  const model = loadYaml<ProcessModel>(PROCESS_FILE);
+  const fullModel = loadYaml<ProcessModel>(PROCESS_FILE);
   const actors = loadYaml<{ actors: Actor[] }>(ACTORS_FILE).actors;
   const rules = loadYaml<{ rules: BusinessRule[] }>(RULES_FILE).rules;
-  const featuresModel: FeatureModel = FEATURES_FILE ? loadYaml<FeatureModel>(FEATURES_FILE) : { process: model.process, features: [] };
-  const scenarios = SCENARIOS_FILE ? loadYaml<ScenarioModel>(SCENARIOS_FILE).scenarios : [];
+  const featuresModel: FeatureModel = FEATURES_FILE ? loadYaml<FeatureModel>(FEATURES_FILE) : { process: fullModel.process, features: [] };
+  const allScenarios = SCENARIOS_FILE ? loadYaml<ScenarioModel>(SCENARIOS_FILE).scenarios : [];
+
+  let model = fullModel;
+  let scenarios = allScenarios;
+  let extras: ViewExtras | undefined;
+  let viewFeatures = featuresModel.features;
+  if (ORIGIN) {
+    if (!SCENARIOS_FILE) {
+      console.error("--origin requiere el 5to argumento posicional (archivo de Scenarios), usado como evidencia de origen.");
+      process.exit(1);
+    }
+    const view = buildOriginView(fullModel, allScenarios, ORIGIN);
+    model = {
+      ...view.model,
+      process: { ...view.model.process, name: `Rosario Tecno — Flujo de Reparaciones | ${originLabel(ORIGIN)} V${fullModel.process.version}` },
+    };
+    scenarios = view.scenarios;
+    extras = buildViewExtras(view, actors);
+    const kept = new Set(model.nodes.map((n) => n.id));
+    viewFeatures = featuresModel.features
+      .map((feature) => ({ ...feature, process_nodes: feature.process_nodes.filter((id) => kept.has(id)) }))
+      .filter((feature) => feature.process_nodes.length > 0);
+  }
 
   const actorsById = new Map(actors.map((actor) => [actor.id, actor]));
   const rulesById = new Map(rules.map((rule) => [rule.id, rule]));
 
   const resolvedNodes = model.nodes.map((node) => resolveNode(node, actorsById, rulesById));
-  const resolvedFeatures = featuresModel.features.map((feature) => resolveFeature(feature, rulesById));
+  const resolvedFeatures = viewFeatures.map((feature) => resolveFeature(feature, rulesById));
   // active_features/touched_features (section 7) computed once here, using
   // the SAME helper validate-references.ts and validate-scenarios.ts use,
   // so this never drifts into a second, viewer-only implementation.
   const resolvedScenarios = scenarios.map((scenario) => resolveScenario(scenario, featuresModel));
   const mermaidLib = readFileSync(MERMAID_LIB_FILE, "utf8");
 
-  const html = buildHtml(model, resolvedNodes, resolvedFeatures, resolvedScenarios, mermaidLib);
+  const html = buildHtml(model, resolvedNodes, resolvedFeatures, resolvedScenarios, mermaidLib, extras);
 
   mkdirSync(dirname(OUTPUT_FILE), { recursive: true });
   writeFileSync(OUTPUT_FILE, html, "utf8");

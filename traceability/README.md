@@ -252,7 +252,9 @@ Unidad de implementacion independiente
 ```
 
 Sea cual sea el agrupamiento, los IDs de implementacion son globalmente
-unicos y la capa de negocio coincide con `business/`:
+unicos y la capa de negocio coincide con `business/` (la baseline vigente
+V1.4, copia generada desde `rt-rma-app`; los nombres se comparan contra los
+archivos V1.4):
 `npm run validate:traceability` lo comprueba sobre todos los archivos.
 
 ## Objetivo futuro

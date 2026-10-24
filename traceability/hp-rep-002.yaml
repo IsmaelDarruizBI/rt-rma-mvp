@@ -72,10 +72,10 @@ meta:
   related_trace_files:
     - traceability/hp-rep-001.yaml (Scenario HP-REP-001, CLIENTE_EXTERNO; no se modifica)
   sources:
-    process: business/processes/repair-management-v1.3.yaml
-    rules: business/rules/business-rules-v1.3.yaml
-    features: business/features/repair-management-features-v1.3.yaml
-    scenarios: business/scenarios/repair-management-scenarios-v1.3.yaml
+    process: business/processes/repair-management-v1.4.yaml
+    rules: business/rules/business-rules-v1.4.yaml
+    features: business/features/repair-management-features-v1.4.yaml
+    scenarios: business/scenarios/repair-management-scenarios-v1.4.yaml
     convention: traceability/README.md
     constitution: .specify/memory/constitution.md
     backend: app/backend/
@@ -102,10 +102,10 @@ items:
   # ================================================================== #
 
   - {id: DOM-RMA, type: business_domain, name: Area funcional RMA, status: active, source: traceability/README.md}
-  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: draft, version: "1.3", source: business/processes/repair-management-v1.3.yaml}
-  - {id: HP-REP-002, type: scenario, name: Reparacion estandar de equipo RT, status: draft, scenario_type: HAPPY_PATH, scope: E2E, source: business/scenarios/repair-management-scenarios-v1.3.yaml}
+  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: approved, version: "1.4", source: business/processes/repair-management-v1.4.yaml}
+  - {id: HP-REP-002, type: scenario, name: Reparacion estandar de equipo RT, status: draft, scenario_type: HAPPY_PATH, scope: E2E, source: business/scenarios/repair-management-scenarios-v1.4.yaml}
 
-  # Features V1.3, reutilizadas de HP-REP-001. `implemented_scenario` es
+  # Features de la baseline vigente, reutilizadas de HP-REP-001. `implemented_scenario` es
   # una LISTA en este archivo (ver nota de cabecera): ambos Scenarios
   # implementan el mismo conjunto de 8 Features.
   - {id: FEAT-REP-001, type: feature, name: Ingreso y creacion de Orden de Reparacion, status: draft, feature_status: draft, implemented_scenario: [HP-REP-001, HP-REP-002], implemented_slice_status: IMPLEMENTED, nodes_total: 8, nodes_in_slice: 6, spec: specs/001-feat-rep-001-hp-slice/}
@@ -154,7 +154,7 @@ items:
   - {id: PROC-REP-270, type: process_node, name: Entregar equipo, node_type: activity, actor: ACT-ADMIN, actores_alternativos: [ACT-RECEP], status: draft, in_scenario: true, implemented: true, note: "Reutilizado por HP-REP-002 como devolucion a Gestion RT (no es entrega comercial): NO pasa por 265/266/280 ni fija ENTREGADA."}
 
   # Nodos que el Scenario declara explicitamente como `skipped_nodes`
-  # (business/scenarios/repair-management-scenarios-v1.3.yaml,
+  # (business/scenarios/repair-management-scenarios-v1.4.yaml,
   # HP-REP-002.skipped_nodes) y que por eso NO se recorren en este
   # slice, aunque el codigo que los implementa ya exista (via
   # HP-REP-001). Se declaran con in_scenario:false para que el gap de
@@ -167,7 +167,7 @@ items:
   - {id: PROC-REP-266, type: process_node, name: Orden con saldo pendiente (entrega bloqueada), node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: true, skipped_reason: "No existe saldo pendiente ni registro de pago de cliente."}
   - {id: PROC-REP-280, type: process_node, name: Generar comprobante final, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: true, skipped_reason: "No se genera el comprobante final comercial ni la garantia de reparacion al cliente."}
 
-  # Business Rules V1.3 relevantes para HP-REP-002. BR-REP-016 es la
+  # Business Rules relevantes para HP-REP-002. BR-REP-016 es la
   # central (gobierna origen -> politica de proceso/comercial); las
   # demas gobiernan el tramo tecnico compartido con HP-REP-001, sin
   # cambios de comportamiento propios de este Scenario.

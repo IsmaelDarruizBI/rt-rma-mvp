@@ -57,7 +57,11 @@ React Flow      = Futuro renderer avanzado
 ```
 
 El proceso de negocio se define en YAML bajo `business/`. Ese YAML es la
-unica fuente de verdad. A partir de el se generan automaticamente un diagrama
+unica fuente de verdad. Desde DC02 (24/10/2026), `business/` es una **copia
+generada** desde `rt-rma-app`, con el commit de origen y los hashes en
+`business/FUNCTIONAL_SOURCE.json`: no se edita a mano, se regenera (ver
+[docs/sincronizacion-funcional.md](docs/sincronizacion-funcional.md)). A
+partir de ese YAML se generan automaticamente un diagrama
 Mermaid y un viewer HTML interactivo para visualizacion humana; ninguno de
 los dos se edita a mano ni introduce informacion nueva. El modelo de datos
 (`nodes[]` / `edges[]`) esta pensado desde el inicio para poder alimentar
@@ -70,13 +74,15 @@ YAML → JSON Schema → Renderer → Mermaid / HTML Viewer (hoy) → React Flow
 ## Estructura
 
 ```text
-business/        FUENTE DE VERDAD FUNCIONAL
+business/        FUENTE DE VERDAD FUNCIONAL (copia generada desde rt-rma-app, DC02)
   processes/     Procesos de negocio en YAML
   actors/        Actores que participan en los procesos
   rules/         Reglas de negocio
   features/      Definiciones funcionales de Features
-  scenarios/     Scenarios sobre el proceso (hoy: HP-REP-001)
+  scenarios/     Scenarios sobre el proceso
+  decisions/     Registro de decisiones de la consolidacion V1.4
   schemas/       JSON Schema de validacion
+  FUNCTIONAL_SOURCE.json  Procedencia: commit de origen y SHA-256 de cada archivo
 
 app/             MVP EJECUTABLE
   backend/       FastAPI · Pydantic v2 · persistencia JSON
@@ -165,15 +171,25 @@ npm run generate
 
 ```text
 PROC-REP  Gestion de Ordenes de Reparacion  V1.2 — approved  (baseline historica)
-PROC-REP  Gestion de Ordenes de Reparacion  V1.3 — draft     (baseline vigente)
+PROC-REP  Gestion de Ordenes de Reparacion  V1.3 — draft     (historica)
+PROC-REP  Gestion de Ordenes de Reparacion  V1.4 — approved  (baseline vigente, DC01)
 ```
 
-V1.3 convive con V1.2 sin reemplazarla. Sobre V1.3 hay **9 Features en
-estado `draft`**, **18 Business Rules** y un Scenario formal:
+La baseline vigente es la V1.4 consolidada, aprobada en DC01 el 24/10/2026 y
+sincronizada desde `rt-rma-app` (etiqueta `v1.4-baseline`, commit
+`e99b283`). Tiene 49 Business Rules aprobadas, 11 Features en `draft` (2
+TRANSVERSALES) y 51 Scenarios, entre ellos los tres Happy Paths:
 
 ```text
 HP-REP-001  Reparacion estandar de cliente externo  (HAPPY_PATH / E2E)
+HP-REP-002  Reparacion estandar de equipo RT        (HAPPY_PATH / E2E)
+HP-REP-003  Garantia de reparacion RMA              (HAPPY_PATH / E2E)
 ```
+
+V1.3 queda como historico: es el V1.3 original de `rt-rma-app`, sin los
+cambios que el MVP le habia hecho, porque esos cambios estan en V1.4. Lo
+que el producto todavia no hace como dice V1.4 esta en
+[traceability/discrepancias-baseline-v1.4.md](traceability/discrepancias-baseline-v1.4.md).
 
 `PROC-VTA` (Ventas de Repuestos) y `PROC-COM` (Compras de Repuestos)
 siguen siendo procesos futuros identificados dentro de `DOM-RMA`: todavia
@@ -217,7 +233,7 @@ links, validable con `npm run validate:traceability`. Ver
 
 Esta es la distincion mas importante del estado actual:
 
-- las Features V1.3 siguen en estado **`draft`**;
+- las Features siguen en estado **`draft`**;
 - lo implementado es el **slice que recorre `HP-REP-001`**, no la
   cobertura completa de ninguna Feature;
 - **ninguna Feature esta implementada por completo**;
@@ -245,10 +261,14 @@ avanzada.
 ### Comandos principales
 
 ```bash
-npm run validate:v1.3          # valida el modelado funcional V1.3
-npm run validate:traceability  # valida el grafo de trazabilidad
-npm run validate:all           # ambos
-npm run generate:v1.3          # regenera Mermaid + viewer de V1.3
+npm run verify:functional-copy         # business/ coincide con su manifiesto (DC02)
+npm run verify:functional-copy:source  # ademas, con el commit de origen en ../rt-rma-app
+npm run validate:v1.4                  # valida la baseline vigente V1.4
+npm run validate:v1.3                  # regresion del historico V1.3
+npm run validate:traceability          # valida los grafos de trazabilidad
+npm run validate:discrepancies         # la lista baseline/producto esta completa
+npm run validate:all                   # todo lo anterior salvo :source
+npm run generate:v1.4                  # regenera Mermaid + viewers de V1.4
 ```
 
 Backend y frontend tienen sus propios comandos: ver sus README.

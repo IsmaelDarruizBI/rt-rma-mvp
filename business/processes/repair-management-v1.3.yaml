@@ -605,19 +605,11 @@ nodes:
     type: activity
     name: Definir prioridad
     actor: ACT-COORD
-    actores_alternativos:
-      - ACT-RECEP
     description: >
-      Se establece inicialmente la prioridad de ejecucion de la Orden. El
-      catalogo definitivo de prioridades queda pendiente. La prioridad
-      sigue siendo de la Orden, no de cada Detalle (sin cambios respecto
-      de V1.2).
-      Ampliacion posterior a V1.2: la accion admite dos actores
-      equivalentes, ACT-COORD y ACT-RECEP. En la operacion real Recepcion
-      necesita poder priorizar e ingresar la Orden a la cola sin esperar
-      al Coordinador; ninguno de los dos tiene precedencia sobre el otro.
-      ACT-COORD se conserva como actor principal por continuidad
-      historica y porque es el que recorre HP-REP-001.
+      El coordinador establece inicialmente la prioridad de ejecucion
+      de la Orden. El catalogo definitivo de prioridades queda pendiente.
+      Sin cambios respecto de V1.2 (prioridad sigue siendo de la Orden,
+      no de cada Detalle).
 
   - id: PROC-REP-170
     type: activity
@@ -885,17 +877,14 @@ nodes:
 
   - id: PROC-REP-212
     type: decision
-    name: "¿Iniciar un Detalle de reparacion?"
+    name: Tecnico desea continuar trabajando esta Orden
     description: >
-      Nodo nuevo en V1.3. Se alcanza cuando la Orden tiene una
-      toma/participacion activa del tecnico actual (PROC-REP-180,
-      BR-REP-018) y no hay una Ejecucion en curso: tanto inmediatamente
-      despues de tomar la Orden, antes de seleccionar o iniciar un
-      Detalle, como despues de que PROC-REP-211 determina que sigue
-      existiendo al menos un Detalle trabajable tras completar uno. No
-      se libera automaticamente una Orden trabajable solo porque termino
-      un Detalle: la decision de continuar con otro Detalle o liberar la
-      Orden es una accion explicita del tecnico.
+      Nodo nuevo en V1.3. Solo se alcanza cuando PROC-REP-211 determina
+      que existe al menos un Detalle trabajable Y la Orden todavia tiene
+      una toma/participacion activa del tecnico actual (PROC-REP-180,
+      BR-REP-018). No se libera automaticamente una Orden trabajable solo
+      porque termino un Detalle: la decision de continuar con otro
+      Detalle o liberar la Orden es una accion explicita del tecnico.
     rules:
       - BR-REP-018
 
@@ -907,12 +896,9 @@ nodes:
       Nodo nuevo en V1.3. El tecnico decide no continuar trabajando la
       Orden (PROC-REP-212 = No): se cierra la participacion/toma activa
       registrada en PROC-REP-180, registrando fecha/hora de fin
-      (BR-REP-018). Se puede liberar en cualquier momento con la toma
-      activa y sin una Ejecucion en curso -incluso antes de seleccionar
-      o iniciar el primer Detalle-, no solo despues de completar uno. La
-      Orden vuelve a EN_COLA (PROC-REP-170), disponible para que el mismo
-      u otro tecnico la tome nuevamente pasando otra vez por
-      PROC-REP-172/PROC-REP-180. Nunca se sobrescribe el historial de
+      (BR-REP-018). La Orden vuelve a EN_COLA (PROC-REP-170), disponible
+      para que el mismo u otro tecnico la tome nuevamente pasando otra vez
+      por PROC-REP-172/PROC-REP-180. Nunca se sobrescribe el historial de
       participaciones anteriores.
     outputs:
       - Fecha/hora de fin de participacion
@@ -966,23 +952,19 @@ nodes:
 
   - id: PROC-REP-245
     type: activity
-    name: Consolidar puntaje de la reparacion
+    name: Calcular puntaje de la reparacion
     actor: ACT-SYSTEM
     description: >
-      NO calcula el puntaje de cada Detalle por primera vez: ese puntaje
-      ya existe desde el momento en que ESE Detalle fue aprobado en el
-      control tecnico (PROC-REP-220, BR-REP-009), y el puntaje_total de
-      la Orden ya lo refleja -como suma derivada de los Detalles
-      aprobados- incluso antes de que la Orden entera termine su
-      control. Este nodo registra/consolida el puntaje total de la
-      Orden cuando el control tecnico completo termina
-      satisfactoriamente (todos los Detalles aprobados, PROC-REP-230
-      "Si"), inmediatamente antes de PROC-REP-240. Todavia no esta
-      definida la distribucion o acreditacion de ese puntaje entre los
-      distintos tecnicos que participaron de un mismo Detalle: no debe
-      asumirse que se asigna automaticamente a un unico tecnico.
+      Cada Detalle aprobado tiene una ponderacion configurable segun su
+      Tipo de Reparacion. El puntaje se calcula por Detalle en el momento
+      de su aprobacion (no se espera a que el resto de los Detalles de la
+      Orden tambien esten aprobados). El puntaje total de la Orden es la
+      suma de los puntajes de sus Detalles. Todavia no esta definida la
+      distribucion o acreditacion de ese puntaje entre los distintos
+      tecnicos que participaron de un mismo Detalle: no debe asumirse que
+      se asigna automaticamente a un unico tecnico.
     outputs:
-      - Puntaje consolidado de la Orden (suma de los Detalles aprobados)
+      - Puntaje de la reparacion (por Detalle y total de Orden)
     rules:
       - BR-REP-009
 
@@ -1100,8 +1082,6 @@ nodes:
     type: activity
     name: Entregar equipo
     actor: ACT-ADMIN
-    actores_alternativos:
-      - ACT-RECEP
     description: >
       Entrega del equipo. Para origenes con entrega a cliente
       (CLIENTE_EXTERNO, RT_GARANTIA_VENTA, RMA_GARANTIA_REPARACION) se
@@ -1351,7 +1331,7 @@ edges:
     condition: Sin Detalle compatible
 
   - from: PROC-REP-180
-    to: PROC-REP-212
+    to: PROC-REP-181
 
   - from: PROC-REP-181
     to: PROC-REP-174

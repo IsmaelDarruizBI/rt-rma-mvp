@@ -1,0 +1,10 @@
+# business/ es una copia GENERADA desde rt-rma-app (DC02): se versiona y se
+# extrae con LF para que coincida byte a byte con el commit de origen y con
+# los hashes de business/FUNCTIONAL_SOURCE.json, aunque core.autocrlf este
+# activo. No editar a mano: ver docs/sincronizacion-funcional.md.
+business/** text eol=lf
+
+# Las vistas HTML generadas embeben tal cual la libreria mermaid, que trae
+# espacios al final de linea: no son ediciones y no se revisan con
+# git diff --check. Se regeneran con npm run generate:v1.4.
+generated/viewer/*.html -whitespace

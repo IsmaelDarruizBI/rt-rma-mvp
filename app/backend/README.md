@@ -2,7 +2,11 @@
 
 Backend FastAPI del MVP. Convive con el tooling de modelado funcional de
 la raiz del repositorio (`business/`, `scripts/`, `generated/`) sin
-reemplazarlo: la fuente de verdad funcional sigue siendo `business/`.
+reemplazarlo: la fuente de verdad funcional sigue siendo `business/`. Desde
+DC02 (24/10/2026) es la copia generada de la baseline V1.4; lo que el
+backend todavia no hace como dice V1.4 esta en
+`traceability/discrepancias-baseline-v1.4.md`. El backend no lee
+`business/` en ejecucion.
 
 Implementa el escenario `HP-REP-001` ("Reparacion estandar de cliente
 externo") de `PROC-REP` V1.3, de punta a punta. Los caminos alternativos

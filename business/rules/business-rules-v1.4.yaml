@@ -1,0 +1,1784 @@
+# CONSOLIDACION V1.4 - BASELINE FUNCIONAL VIGENTE, aprobada el 24/10/2026 (DC01)
+# sobre el commit b6cc3a5 de consolidacion/v1.4 (etiqueta v1.4-baseline). Aplica las decisiones confirmadas de los siete bloques, DC07, los
+# permisos predeterminados del 23/10/2026, DC14 y las incorporaciones de UAT
+# (DC16). Cada cambio cita su decision (DCxx o UAT-xxx) y el registro completo
+# esta en business/decisions/decision-log-v1.4.yaml; la matriz de trazabilidad y
+# el diseno logico estan en docs/consolidation/. En este archivo: BR-REP-003, 004,
+# 009, 011, 012, 014 a 019 cambian respecto de V1.3 por decisiones declaradas
+# (los tests listan cada una con su motivo); BR-REP-020 a 038 se amplian o
+# reemplazan en parte; BR-REP-039 a 049 son nuevas. Los estados del Detalle se
+# llaman DEFINIDO, EN_PROGRESO, COMPLETO y CANCELADO (DC17).
+# Correccion final previa a DC01 (23/10/2026, solo documental): BR-REP-045 ya no
+# da por aprobado volver a registrar el check-in y conserva la condicion "con
+# trabajos realizados y garantia aplicable"; BR-REP-018 y 039 tratan la
+# interrupcion incluida en una liberacion ajena como excepcion especifica;
+# BR-REP-041 precisa "registrado como no realizado"; BR-REP-024, 040, 044 y 047
+# dejan de describir detalles de almacenamiento o de interfaz.
+# El texto que sigue describe las iteraciones V1.4 previas a la consolidacion;
+# donde contradiga lo anterior, rige la consolidacion.
+#
+# Reglas de negocio V1.4 (draft) del proceso de Gestion de Ordenes de
+# Reparacion. V1.4 parte de business/rules/business-rules-v1.3.yaml (que
+# permanece intacto) y SOLO agrega BR-REP-020 a BR-REP-034: ingreso de
+# CLIENTE_EXTERNO (FEAT-REP-001: BR-REP-020 a 026), decision del cliente por
+# Detalle y comprobante (FEAT-REP-002: BR-REP-028, 029, 031), desistimiento
+# individual, masivo y sin Detalles (BR-REP-027 y 030, con FEAT-REP-009).
+# BR-REP-001 a BR-REP-019 son identicas a V1.3 (en particular BR-REP-012,
+# BR-REP-013, BR-REP-014 y BR-REP-015 NO se modifican). Excepcion: BR-REP-012
+# conserva su texto V1.3 integro y agrega al final un parrafo V1.4 (propiedad
+# pendiente_autorizacion, nueva prioridad y conjunto de bloqueos). La
+# iteracion de autorizacion agrega BR-REP-032 (alta de Detalles por tecnico),
+# BR-REP-033 (custodia y devolucion) y BR-REP-034 (enrutamiento del workflow
+# separado del resolver). Lo que sigue es el encabezado heredado de V1.3.
+#
+# Reglas de negocio V1.3 (draft) del proceso de Gestion de Ordenes de
+# Reparacion. Convive con business/rules/business-rules.yaml (BR-REP-001
+# a BR-REP-011, V1.2 approved), que permanece intacta y NO se modifica.
+#
+# BR-REP-001 a BR-REP-011 aqui son revisiones funcionales de las reglas
+# homonimas de V1.2 (mismo ID, wording actualizado para el modelo
+# Orden/Detalle/Ejecucion/Insumo); BR-REP-012 en adelante son reglas
+# nuevas que V1.3 necesita y que V1.2 no tenia. Son afirmaciones
+# funcionales en estado draft, pendientes de validacion final con el
+# negocio. Todavia no se transforman en Functional Requirements.
+
+rules:
+
+  - id: BR-REP-001
+    name: Definicion del requerimiento
+    description: >
+      Toda Orden de Reparacion debe tener definido al menos un Detalle de
+      Reparacion con Tipo de Reparacion asignado antes de continuar con
+      el proceso, excepto mientras se encuentra en estado EN_REVISION (sin
+      ningun Detalle con Tipo definido todavia). Reemplaza el enfoque
+      singular de V1.2 ("una reparacion requerida") por uno plural.
+    status: approved
+
+  - id: BR-REP-002
+    name: Validacion previa de recursos
+    description: >
+      La factibilidad se evalua por Detalle: para cada uno se consulta
+      -sin reservar- la disponibilidad de los insumos previstos segun su
+      Tipo de Reparacion. La Orden puede habilitarse mientras exista al
+      menos un Detalle trabajable, sin exigir que todos los Detalles sean
+      factibles. Un Detalle no factible no bloquea a los demas.
+    status: approved
+
+  - id: BR-REP-003
+    name: Override justificado
+    description: >
+      Si un usuario autorizado fuerza un Detalle de Reparacion que no supero
+      la validacion de factibilidad, debe registrarse usuario, fecha, el
+      Detalle especifico, la validacion ignorada y el motivo. El override se
+      aplica puntualmente sobre ese Detalle, no sobre la Orden en abstracto.
+      Override de factibilidad por falta de recursos (decision de negocio
+      confirmada): autoriza que ESE Detalle continue aunque la disponibilidad
+      sea insuficiente. La autorizacion tiene como consecuencia posterior que
+      la reserva real de sus insumos (PROC-REP-185, BR-REP-006) pueda exceder
+      el stock disponible, y que el consumo efectivo (PROC-REP-210,
+      BR-REP-005) pueda dejar el stock fisico negativo. La autorizacion:
+      aplica unicamente al Detalle overrideado y no se extiende a otros
+      Detalles de la Orden; no reserva ni consume nada por si misma (la
+      autorizacion solo queda registrada; reservar es PROC-REP-185 y consumir
+      es PROC-REP-210); y habilita el comportamiento posterior de
+      reserva/consumo de ese Detalle. Sin override, una falta de stock
+      detectada al reservar sigue siendo una reserva fallida (BR-REP-006).
+      Vigencia: un override de factibilidad es valido solamente mientras siga
+      vigente la definicion tecnica sobre la que fue autorizado. Es valido el
+      override cuya autorizacion ocurrio DESPUES del ultimo PROC-REP-127 del
+      mismo Detalle; cualquier PROC-REP-127 invalida los overrides anteriores,
+      incluso si el tecnico vuelve a elegir el mismo Tipo de Reparacion (es una
+      nueva confirmacion de la definicion y una nueva factibilidad en
+      PROC-REP-080: si hace falta forzar de nuevo, debe existir una nueva
+      autorizacion consciente). Alcance (MVP v2): la autorizacion de override
+      es una capacidad TRANSVERSAL por Detalle, como Registrar Pago
+      (BR-REP-017-A): esta disponible para cualquier Detalle DEFINIDO con
+      condicion BLOQUEADO_POR_RECURSOS, sin exigir que toda la
+      Orden este bloqueada. Puede ocurrir en el circuito 'ningun Detalle
+      trabajable' (PROC-REP-100 -> 110 Si -> 130 -> 140) o con factibilidad
+      parcial, cuando otros Detalles ya son trabajables y la Orden esta
+      habilitada, en cola, tomada o en reparacion. Fuera del circuito de
+      PROC-REP-100 no reinicia el proceso: no vuelve a PROC-REP-140, no cierra
+      una toma activa, no altera una Ejecucion en curso ni cambia el estado de
+      workflow; el Detalle autorizado queda SIN_BLOQUEO, disponible para
+      iniciarse segun las reglas vigentes (BR-REP-007). Solo el Coordinador
+      RMA (ACT-COORD) puede autorizarla y el motivo es obligatorio. Es una
+      unica capacidad con una unica validacion y una unica forma de determinar
+      su vigencia, cualquiera sea el momento en que ocurre.
+    status: approved
+
+  - id: BR-REP-004
+    name: Registro de ejecucion real
+    description: >
+      Una Ejecucion finaliza con uno de tres resultados (PROC-REP-200),
+      todos conservados historicamente sin sobrescribirse: Completado
+      (Ejecucion COMPLETADA, Detalle COMPLETO); Interrumpido (Ejecucion
+      INTERRUMPIDA, Detalle vuelve a DEFINIDO y su definicion vigente
+      sigue siendo valida); Requiere redefinicion (Ejecucion INTERRUMPIDA,
+      Detalle DEFINIDO + REQUIERE_DEFINICION, motivo obligatorio: la
+      definicion actual dejo de ser valida o suficiente). Los tres
+      continuan a PROC-REP-210. Detalle del registro:
+      El tecnico debe registrar, por cada Ejecucion de un Detalle, lo
+      efectivamente realizado, los repuestos realmente utilizados, y si
+      su resultado. Una Ejecucion interrumpida (con o sin redefinicion) no
+      completa el Detalle -que vuelve a DEFINIDO-, pero
+      queda conservada integramente en el historial: nunca se sobrescribe
+      una Ejecucion anterior. Consolidacion V1.4: el resultado Interrumpido
+      tambien exige motivo (mejoras UAT del 16/10/2026). Cuando la interrupcion
+      resuelve una cancelacion solicitada sobre ese Detalle (DC07B), el tecnico
+      registra ademas el estado en que queda el trabajo, los materiales
+      utilizados y si el trabajo puede revertirse, antes de que se resuelva la
+      cancelacion (BR-REP-014). Que opciones admite la reversibilidad y como
+      se usa despues siguen pendientes de definicion.
+    status: approved
+
+  - id: BR-REP-005
+    name: Inventario consecuencia de ejecucion
+    description: >
+      Los movimientos de inventario asociados a una Ejecucion (consumo de
+      lo utilizado, liberacion de reservas no utilizadas, desperdicio
+      cuando corresponda) deben originarse a partir de los repuestos y
+      cantidades registrados en ella, y deben quedar trazados hasta el
+      Detalle que la origino (Orden -> Detalle -> Insumo -> Movimiento).
+    status: approved
+
+  - id: BR-REP-006
+    name: Reserva de insumos al iniciar Ejecucion del Detalle
+    description: >
+      Al intentar iniciar la Ejecucion de un Detalle debe realizarse la
+      reserva real de sus insumos previstos (la factibilidad previa solo
+      habia consultado disponibilidad, sin reservar). Si la reserva es
+      exitosa, se generan las reservas trazadas al Detalle y la Ejecucion
+      se inicia; el Detalle pasa a EN_PROGRESO. Si la reserva falla, la
+      Ejecucion NO se inicia, el Detalle permanece DEFINIDO con
+      condicion BLOQUEADO_POR_RECURSOS, y el estado de la Orden se
+      recalcula. Reemplaza a la version V1.2, que reservaba una unica vez
+      "al tomar la Orden". Excepcion: si el Detalle tiene un override de
+      recursos autorizado (BR-REP-003), la reserva puede exceder el stock
+      disponible y no cuenta como falla por falta de stock.
+    status: approved
+
+  - id: BR-REP-007
+    name: Concurrencia de Ejecucion en la Orden
+    description: >
+      Una Orden admite como maximo UNA Ejecucion activa simultaneamente,
+      sin importar a que Detalle pertenezca: no pueden iniciarse dos
+      Ejecuciones al mismo tiempo sobre la misma Orden, porque una Orden
+      representa un unico equipo fisico. Distintos tecnicos pueden
+      participar historicamente de la misma Orden y del mismo Detalle, en
+      distintos momentos, sin sobrescribir el historial de Ejecuciones
+      anteriores. Reemplaza por completo al modo EXCLUSIVA/ABIERTA de
+      V1.2.
+    status: approved
+
+  - id: BR-REP-008
+    name: Control tecnico por Recepcion y retrabajo por Detalle
+    description: >
+      Una Orden puede pasar a control tecnico cuando todos sus Detalles
+      son terminales (COMPLETO o CANCELADO) y existe al menos uno
+      COMPLETO. Recepcion evalua la Orden completa pero aprueba o rechaza
+      Detalle por Detalle. Un Detalle rechazado debe identificarse
+      explicitamente, vuelve a DEFINIDO conservando el historial de sus
+      Ejecuciones anteriores y del propio rechazo (fecha, usuario,
+      observacion, resultado), y el estado de la Orden se recalcula
+      mediante el resolver de estado de Orden (BR-REP-012): no se asume
+      automaticamente que la Orden vuelve a EN_COLA.
+    status: approved
+
+  - id: BR-REP-009
+    name: Puntaje por Detalle
+    description: >
+      Cada Detalle aprobado aporta su puntaje desde el momento de su
+      propia aprobacion durante el control tecnico (PROC-REP-220), segun
+      la ponderacion configurada de su Tipo de Reparacion: no se espera
+      a que el resto de los Detalles de la Orden tambien esten
+      aprobados. El puntaje_total de la Orden es siempre derivable como
+      la suma de los puntajes de sus Detalles aprobados -es un valor
+      calculado, no algo que un paso del proceso "cree" en un momento
+      puntual-. PROC-REP-230 se evalua a nivel Orden una vez finalizado
+      el control de todos los Detalles; PROC-REP-245 no calcula el
+      puntaje de cada Detalle por primera vez: consolida/registra el
+      puntaje total de la Orden recien cuando ese control completo
+      termina satisfactoriamente (todos los Detalles aprobados). La
+      distribucion/acreditacion entre distintos tecnicos que
+      participaron de un mismo Detalle sigue pendiente de definicion
+      funcional. Consolidacion V1.4 (DC05): texto del MVP confirmado; cada
+      Ejecucion conserva su tecnico, base de cualquier reparto futuro.
+    status: approved
+
+  - id: BR-REP-010
+    name: Finalizacion sin reparacion trazable
+    description: >
+      Toda Orden que finalice sin reparacion debe registrar como minimo
+      el motivo, las observaciones, el usuario y la fecha de la decision.
+      En V1.3 no existe Diagnostico cobrable: la revision tecnica puede
+      realizarse para determinar que reparacion necesita el equipo, pero
+      no es por si misma un Detalle de Reparacion cobrable, no genera
+      precio ni Subtotal. Por lo tanto el resultado SIN_REPARACION implica
+      Subtotal = 0 -no existe reparacion realizada ni importe cobrable
+      asociado-. Debe quedar distinguido de una Orden cancelada
+      (CANCELADA): SIN_REPARACION es una conclusion legitima del proceso
+      (la Orden fue recibida/revisada/procesada, pero finalmente no se
+      definio ni se realizo una reparacion), mientras que CANCELADA
+      implica que el trabajo o el proceso fue cancelado. Si en el futuro
+      Rosario Tecno decide cobrar el diagnostico, sera una nueva regla o
+      capacidad a diseñar, fuera de alcance de V1.3.
+    status: approved
+
+  - id: BR-REP-011
+    name: Compatibilidad de estacion de trabajo
+    description: >
+      (A) Para tomar una Orden: el tecnico debe tener sesion activa
+      asociada a una Estacion de Trabajo confirmada, configurada y
+      OPERATIVA; no debe existir ya una Ejecucion activa sobre esa Orden;
+      y debe existir al menos un Detalle trabajable cuyo Tipo de
+      Reparacion este habilitado para esa Estacion (no se exige
+      compatibilidad con todos los Detalles de la Orden). Ninguna de
+      estas condiciones admite override: si no se cumplen, la Orden no
+      puede tomarse desde esa Estacion y permanece disponible para otra;
+      no existe override generico a nivel Orden.
+      (B) Al seleccionar un Detalle especifico para iniciar su Ejecucion:
+      se revalida la compatibilidad entre la Estacion actual y el Tipo de
+      Reparacion de ESE Detalle. Si la Estacion esta operativa pero no
+      habilitada para ese Tipo, el sistema advierte la incompatibilidad y
+      permite que un usuario autorizado fuerce la continuidad,
+      registrando usuario, fecha/hora, estacion, Detalle, Tipo y motivo;
+      sin ese override, ese Detalle en particular no puede iniciarse
+      desde esa Estacion, pero la Orden puede continuar con otros
+      Detalles.
+      Consolidacion V1.4. Estacion de Trabajo y Mesa de trabajo son la misma
+      entidad: "Estacion" es el nombre tecnico y "Mesa de trabajo" el nombre
+      visible para los usuarios. Sus tipos de reparacion habilitados se
+      administran como configuracion auditada (BR-REP-040). El "usuario
+      autorizado" a forzar la continuidad es quien tenga ese permiso,
+      configurable desde Administracion; por defecto, Coordinacion
+      (PROC-REP-179, BR-REP-039). Las capacidades de los tecnicos y los
+      recursos distintos de los insumos siguen pendientes de definicion.
+    status: approved
+
+  - id: BR-REP-012
+    name: Estado agregado de la Orden como calculo derivado
+    description: >
+      El estado tecnico agregado de la Orden (SIN_DETALLES, EN_EJECUCION,
+      ABIERTA_TRABAJABLE, REQUIERE_REVISION, PENDIENTE_RECURSOS, COMPLETA,
+      TODO_CANCELADO) se calcula siempre a partir de las propiedades
+      derivadas de sus Detalles (es_terminal, es_trabajable,
+      esta_en_ejecucion, requiere_revision, bloqueado_por_recursos,
+      esta_completo, esta_cancelado), mediante una politica de reglas
+      centralizada y ordenada por prioridad (ver docs/discovery/README.md
+      - "PROC-REP V1.3 - Resolver de estado de Orden"). Ningun proceso ni
+      nodo fija manualmente ese agregado: los hitos de workflow
+      (REQUERIMIENTO, HABILITADA, EN_COLA, EN_REPARACION,
+      REPARACION_LISTA, ENTREGADA, CANCELADA) son eventos explicitos, no
+      una segunda fuente de verdad independiente del estado de los
+      Detalles -en particular, REQUERIMIENTO y la entrada a EN_REVISION
+      son fijados por los eventos de workflow PROC-REP-040 y PROC-REP-055
+      respectivamente, nunca decididos por este resolver (ver
+      BR-REP-013)-. La politica debe poder ampliarse con nuevas reglas
+      (condicion + prioridad + resultado + referencia a Business Rule)
+      sin reescribir los nodos del proceso. Si, con cantidad_detalles > 0,
+      ninguna regla de la politica aplica, el resultado NO debe
+      inventarse ni continuar silenciosamente: debe tratarse como
+      CONTEXTO_INCONSISTENTE / invariante violada (fail-safe; ver
+      docs/discovery/README.md - "Fail-safe del resolver"), a reportar
+      para diagnostico, no como un estado de negocio mas. PENDIENTE_RECURSOS
+      y REQUIERE_REVISION nunca hacen que la Orden vuelva directamente a
+      EN_COLA: cada uno tiene su propio circuito de espera/revalidacion
+      (PROC-REP-120 y PROC-REP-125 respectivamente, ver PROC-REP-211), y
+      no se mezclan entre si ni con el estado de workflow EN_REVISION.
+      REQUIERE_REVISION se alcanza cuando ningun Detalle es trabajable y
+      existe al menos un Detalle pendiente con REQUIERE_DEFINICION (asignada
+      por PROC-REP-200, resultado Requiere redefinicion); si otro Detalle
+      sigue trabajable, el resultado es ABIERTA_TRABAJABLE. No es un
+      estado de workflow: normalmente estado_workflow sigue en
+      EN_REPARACION mientras la situacion tecnica derivada es
+      REQUIERE_REVISION.
+      PENDIENTE_RECURSOS revalida directamente via PROC-REP-080 (el
+      bloqueo es de disponibilidad de insumos); REQUIERE_REVISION no
+      puede resolverse con PROC-REP-080 solo, porque la condicion
+      REQUIERE_DEFINICION del Detalle requiere primero una accion tecnica
+      que la quite (PROC-REP-126 -> PROC-REP-127) antes de validar
+      factibilidad.
+      V1.4 (autorizacion del cliente, BR-REP-028). La politica admite la
+      extension sin reescribirse: se agrega la propiedad derivada
+      pendiente_autorizacion = DEFINIDO AND autorizacion PENDIENTE_AUTORIZACION
+      (solo CLIENTE_EXTERNO), es_trabajable pasa a exigir ademas que no este
+      pendiente de autorizacion, y se inserta una regla de prioridad 6 entre
+      REQUIERE_REVISION y PENDIENTE_RECURSOS. Matriz V1.4 (primera regla que
+      coincide gana, las demas filas sin cambios de condicion): 0 SIN_DETALLES;
+      1 TODO_CANCELADO; 2 COMPLETA; 3 EN_EJECUCION; 4 ABIERTA_TRABAJABLE; 5
+      REQUIERE_REVISION; 6 PENDIENTE_AUTORIZACION (ninguno trabajable y existe
+      >=1 pendiente de autorizacion); 7 PENDIENTE_RECURSOS (antes prioridad
+      6); fail-safe CONTEXTO_INCONSISTENTE, que sigue sin ser un estado de
+      negocio. Un Detalle pendiente de autorizacion no es terminal, por eso
+      un COMPLETO mas uno pendiente NO es COMPLETA. El resolver devuelve
+      ademas el conjunto de BLOQUEOS, independiente de la prioridad: las
+      causas presentes entre los Detalles no terminales y no en ejecucion
+      {REQUIERE_REVISION, PENDIENTE_AUTORIZACION, PENDIENTE_RECURSOS}. Se
+      evitan estados combinados; formato ilustrativo, no contrato de datos:
+      situacion principal + bloqueos. Casos A a H. A) autorizado y ejecutable
+      + pendiente -> ABIERTA_TRABAJABLE, bloqueos [PENDIENTE_AUTORIZACION]. B)
+      todos los no terminales pendientes -> PENDIENTE_AUTORIZACION. C) COMPLETO
+      + pendiente -> PENDIENTE_AUTORIZACION (sin control final mientras siga
+      abierta la decision). D) COMPLETO + el resto CANCELADO -> COMPLETA. E)
+      todos CANCELADO -> TODO_CANCELADO. F) autorizado bloqueado por recursos +
+      pendiente -> PENDIENTE_AUTORIZACION, bloqueos [PENDIENTE_AUTORIZACION,
+      PENDIENTE_RECURSOS]. G) requiere revision + pendiente -> REQUIERE_REVISION,
+      bloqueos [REQUIERE_REVISION, PENDIENTE_AUTORIZACION]. H) uno en
+      ejecucion + otro pendiente -> EN_EJECUCION, bloqueos
+      [PENDIENTE_AUTORIZACION] (la Ejecucion vigente se conserva y solo el
+      nuevo queda bloqueado). La prioridad entre las tres causas es una decision de negocio
+      aprobada: REQUIERE_REVISION > PENDIENTE_AUTORIZACION >
+      PENDIENTE_RECURSOS. Aplica unicamente cuando ningun Detalle es
+      ejecutable y define SOLO la situacion principal y la ruta de espera
+      inicial (PROC-REP-125, PROC-REP-129 o PROC-REP-120); NO descarta las
+      demas causas: todas las presentes permanecen en los bloqueos. I) Caso
+      mixto: DET-001 requiere revision, DET-002 esta pendiente de autorizacion
+      y DET-003 no tiene stock -> situacion principal REQUIERE_REVISION,
+      bloqueos [REQUIERE_REVISION, PENDIENTE_AUTORIZACION, PENDIENTE_RECURSOS].
+      Las causas se resuelven de forma independiente, por actores distintos
+      (tecnico, Recepcion con el cliente, abastecimiento), y no existen
+      estados combinados: el resolver se vuelve a evaluar luego de cualquier
+      cambio relevante de un Detalle (redefinicion, autorizacion, rechazo,
+      cancelacion o cambio de disponibilidad) y recalcula situacion principal y
+      bloqueos, de modo que ninguna causa se pierde al resolverse otra. Si
+      existe un Detalle ejecutable (autorizado, factible y sin revision
+      pendiente) la Orden puede continuar con el (ABIERTA_TRABAJABLE o
+      EN_EJECUCION) aunque otros sigan bloqueados; un Detalle pendiente de
+      autorizacion nunca es ejecutable. El resolver no decide la estacion
+      siguiente (BR-REP-034). Precision V1.4 (confirmacion tecnica,
+      BR-REP-035): "trabajable" significa ELEGIBLE para ser seleccionado y
+      evaluado por un tecnico (autorizado, factible, sin revision pendiente);
+      no implica estar habilitado para iniciar la Ejecucion. Un Detalle de
+      origen RECEPCION sin confirmacion tecnica vigente sigue siendo
+      trabajable, por lo que no genera REQUIERE_REVISION ni bloquea la toma de
+      la Orden; la politica y sus prioridades no cambian. Refinamiento de la
+      regla derivada es_trabajable (sin nuevos estados): un Detalle tampoco es
+      trabajable para ejecutar desde que se registra un resultado tecnico que
+      lo impide, es decir un DESCARTADO (que se cancela de inmediato con
+      PROC-REP-300) o una definicion invalidada por REQUIERE_REDEFINICION (cuya
+      nueva definicion queda pendiente de autorizacion y de factibilidad,
+      PROC-REP-127). Como ese efecto se aplica en el mismo recorrido del
+      resultado principal, nunca hay una ventana en la que el resolver trate
+      como trabajable un Detalle que el resultado tecnico ya impide. Mientras
+      se registran las reparaciones adicionales (PROC-REP-184 / PROC-REP-128) la
+      Orden no se evalua con el resolver, por lo que no se cancela
+      prematuramente (por ejemplo, si el Detalle descartado era el unico).
+      Independencia por Detalle (BR-REP-037). J) Un Detalle trabajable mas
+      otros Detalles pendientes de autorizacion, de recursos y/o de revision ->
+      ABIERTA_TRABAJABLE (o EN_EJECUCION si ya hay una Ejecucion activa), con
+      bloqueos [las causas presentes]: el tecnico puede iniciar o continuar el
+      Detalle trabajable sin esperar la resolucion de los otros, que conservan
+      sus bloqueos individuales y no se desbloquean automaticamente. K) Sin
+      ningun Detalle trabajable rige la precedencia 5 > 6 > 7 y se conservan
+      todas las causas (caso I). L) COMPLETO + otros Detalles pendientes de
+      autorizacion, de revision o de recursos -> la situacion principal sigue
+      esa precedencia (no COMPLETA) y no corresponde control final, cobro ni
+      entrega hasta que todos los Detalles sean terminales. Se distinguen tres
+      conceptos: Detalle elegible para ser seleccionado y evaluado, Detalle
+      autorizado y habilitado para iniciar ejecucion, y Detalle terminal.
+      Consolidacion V1.4 (DC17, 23/10/2026). Estados operativos del Detalle:
+      DEFINIDO, EN_PROGRESO, COMPLETO y CANCELADO (los mismos de la
+      implementacion; V1.3 llamaba PENDIENTE y EN_PROCESO a los dos primeros,
+      sin cambio de significado). BLOQUEADO_POR_RECURSOS y REQUIERE_DEFINICION
+      son condiciones de un Detalle DEFINIDO, no estados, y la autorizacion del
+      cliente es una dimension aparte (BR-REP-028). Transiciones: alta ->
+      DEFINIDO (PROC-REP-070, 075, 128); DEFINIDO -> EN_PROGRESO al reservar e
+      iniciar la Ejecucion (PROC-REP-185); EN_PROGRESO -> COMPLETO (PROC-REP-200,
+      Completado); EN_PROGRESO -> DEFINIDO al interrumpir o requerir redefinicion
+      (PROC-REP-200); COMPLETO -> DEFINIDO por rechazo en el control tecnico
+      (PROC-REP-235); DEFINIDO -> CANCELADO (PROC-REP-300/305). No hay
+      transiciones desde CANCELADO, un Detalle EN_PROGRESO no se cancela sin
+      interrumpirse antes y un COMPLETO nunca pasa a CANCELADO (BR-REP-014). La
+      Orden pasa al hito de workflow EN_REPARACION cuando se inicia una
+      Ejecucion (PROC-REP-185). Cierre: la Orden termina operativamente solo en
+      EVT-REP-999, siempre despues de PROC-REP-268 (BR-REP-038), con la custodia
+      determinada (BR-REP-033); el estado terminal de RT_INTERNO sigue pendiente.
+    status: approved
+
+  - id: BR-REP-013
+    name: Orden sin Detalles (caso inicial)
+    description: >
+      Mientras una Orden tenga cero Detalles definidos (cantidad_detalles
+      = 0), el resolver tecnico de estado de Orden devuelve, de forma
+      deterministica, el agregado SIN_DETALLES -nunca evalua vaciamente
+      las reglas de "todos terminales" ni "todos cancelados", que serian
+      verdaderas por vacuidad sobre un conjunto vacio, y nunca intenta
+      decidir por si mismo entre REQUERIMIENTO o EN_REVISION-. Esa
+      decision (REQUERIMIENTO vs. EN_REVISION) no es responsabilidad del
+      resolver tecnico de Detalles: la fijan los eventos explicitos de
+      workflow PROC-REP-040 (crea la Orden en REQUERIMIENTO) y
+      PROC-REP-045/PROC-REP-055 (pasan la Orden a EN_REVISION si al
+      momento del ingreso no se conoce ningun Detalle). En la topologia
+      actual del proceso, el resolver nunca llega a invocarse mientras
+      cantidad_detalles = 0 -PROC-REP-090 y PROC-REP-211 solo son
+      alcanzables una vez que existe al menos un Detalle-, por lo que
+      SIN_DETALLES es, en la practica, una salida defensiva/de
+      consistencia mas que un caso que el flujo actual ejercite; se deja
+      definida igual, como regla explicita de maxima prioridad dentro de
+      la misma politica extensible de BR-REP-012, para que cualquier
+      invocacion futura del resolver (por ejemplo desde una UI o
+      herramienta que no respete esa precondicion) tenga un resultado
+      deterministico y nunca ambiguo.
+    status: approved
+
+  - id: BR-REP-014
+    name: Cancelacion de Detalle y de Orden
+    description: >
+      Un Detalle no terminal (DEFINIDO, sin Ejecucion activa) puede
+      pasar a CANCELADO, conservando su Tipo, precio snapshot y todo su
+      historial previo. Cancelar una Orden completa NO implica
+      necesariamente que su resultado final sea CANCELADA: la accion
+      cancela los Detalles NO TERMINALES (DEFINIDO -> CANCELADO,
+      preservando los ya COMPLETO) y a continuacion se recalcula el
+      estado agregado mediante el resolver (BR-REP-012), cuyo resultado
+      determina el desenlace: (A) si, tras la cascada, TODOS los Detalles
+      quedan CANCELADO, la Orden pasa a CANCELADA, sin pasar por control
+      tecnico ni por REPARACION_LISTA; (B) si existe al menos un Detalle
+      COMPLETO y todos los restantes quedaron CANCELADO, la Orden queda
+      tecnicamente COMPLETA y continua el flujo normal (Control Tecnico
+      -> REPARACION_LISTA -> cierre comercial -> entrega cuando
+      corresponda), porque ese Detalle representa trabajo efectivamente
+      realizado que debe poder controlarse, cobrarse y cerrarse.
+      Consolidacion V1.4 (DC07A a DC07D, reemplaza la restriccion a nivel
+      Orden de la version anterior). Un Detalle DEFINIDO puede cancelarse
+      aunque otro Detalle de la Orden se este ejecutando: se liberan solo los
+      recursos de ese Detalle y la Ejecucion del otro continua (DC07A). Un
+      Detalle EN_PROGRESO no se cancela directamente: primero se interrumpe su
+      Ejecucion y el tecnico registra el estado del trabajo, los materiales
+      utilizados y si puede revertirse; despues se resuelve la cancelacion
+      (DC07B, BR-REP-004). El desistimiento total con una Ejecucion activa es un
+      proceso guiado de interrupcion y desistimiento que registra los Detalles
+      afectados, el motivo y la resolucion de cada uno, y resuelve las
+      Ejecuciones antes del cierre (DC07C, BR-REP-030). Un Detalle COMPLETO nunca
+      se cancela retroactivamente: lo que corresponda se resuelve con Ajustes
+      Comerciales o devoluciones (DC07D, BR-REP-016, BR-REP-038). La solicitud de
+      desistimiento y la cancelacion efectiva se registran por separado, cada
+      una con usuario y fecha/hora. Invariante: un Detalle
+      CANCELADO no puede conservar reservas activas de inventario. Esto
+      no requiere un mecanismo nuevo: se garantiza reutilizando el
+      mecanismo de generacion de movimientos ya existente (PROC-REP-210,
+      BR-REP-005), que en cada finalizacion de Ejecucion -Completada o
+      Interrumpida-
+      consume lo efectivamente utilizado y libera toda reserva no
+      utilizada de ese Detalle. Como un Detalle solo puede cancelarse
+      estando DEFINIDO y sin Ejecucion activa (nunca EN_PROGRESO), para
+      llegar a ese estado ya paso, si tuvo alguna Ejecucion, por
+      PROC-REP-210 -que ya dejo sus insumos en CONSUMIDO, LIBERADO o
+      DESPERDICIO, nunca en RESERVADO-; por lo tanto al momento de
+      cancelar no quedan reservas pendientes de reconciliar. Todos los
+      movimientos, incluyendo los de un Detalle luego cancelado,
+      conservan su trazabilidad historica al Detalle que los origino.
+      Nunca se reescribe historia tecnica real (Ejecuciones, insumos,
+      movimientos, precios, pagos, auditoria). Los reembolsos de pagos ya
+      realizados cuando la Orden termina CANCELADA son saldo a favor del
+      cliente y se devuelven antes del cierre (BR-REP-038); otras
+      consecuencias comerciales (por ejemplo penalidades) siguen pendientes.
+      Tipos y permisos (DC08): cancelacion administrativa (por defecto
+      Recepcion y Coordinacion), descarte tecnico (el Tecnico, PROC-REP-183,
+      BR-REP-036) y desistimiento solicitado por el cliente (lo registra
+      Recepcion), cada uno con permiso configurable (BR-REP-039); por eso
+      PROC-REP-300/305/306 no declaran un unico actor. El catalogo de motivos de
+      cancelacion sigue pendiente.
+    status: approved
+
+  - id: BR-REP-015
+    name: Precio snapshot y Subtotal
+    description: >
+      Cada Tipo de Reparacion tiene un Precio configurable con historico.
+      Cada Detalle registra, al confirmarse, el precio vigente de su Tipo
+      de Reparacion como snapshot historico inmutable: cambios
+      posteriores en el precio del Tipo de Reparacion no afectan
+      Detalles ya confirmados. "Inmutable" significa que un snapshot
+      confirmado no cambia por cambios posteriores del catalogo; NO que el
+      Detalle no pueda redefinirse. Si PROC-REP-127 redefine el Detalle, se
+      genera una nueva definicion/snapshot vigente (Tipo de Reparacion,
+      precio, puntaje y garantia segun la confirmacion actual) y la
+      definicion anterior se conserva historicamente, sin sobrescribirse:
+      como minimo Tipo de Reparacion, precio, puntaje y garantia
+      anteriores, fecha de reemplazo y usuario responsable. Conceptualmente
+      el Detalle tiene una definicion vigente y 0..N definiciones
+      historicas, de modo que se pueda reconstruir la definicion previa a
+      cada PROC-REP-127. Aplica tambien si se confirma el mismo Tipo de
+      Reparacion (es igualmente una nueva confirmacion). El Subtotal
+      usa el snapshot vigente. PROC-REP-127 no modifica el vinculo de
+      garantia (BR-REP-019). El efecto de un cambio de precio sobre pagos y
+      saldo queda pendiente (ver docs/discovery/README.md). El Subtotal de la Orden es la suma de los
+      precios snapshot de los Detalles NO CANCELADOS; un Detalle
+      CANCELADO conserva su Tipo, precio historico y trazabilidad, pero
+      no participa del Subtotal. No existe costo configurable del Tipo de
+      Reparacion: el costo de una reparacion (mano de obra + costo real
+      de insumos) se resolvera en una etapa posterior, fuera de V1.3.
+      Consolidacion V1.4 (DC23AUD): el historial de precios de cada Tipo de
+      Reparacion registra usuario, fecha/hora y valores anterior y nuevo, como
+      todo cambio de configuracion (BR-REP-040); un cambio posterior no altera
+      las condiciones ya registradas en los Detalles. La reparacion no
+      tipificada "Otros" toma un precio manual por Detalle (BR-REP-047).
+    status: approved
+
+  - id: BR-REP-016
+    name: Ajustes Comerciales y Cortesia
+    description: >
+      El calculo comercial de la Orden sigue el esquema extensible
+      Subtotal + Ajustes Comerciales Previos = Base Comercial (y, fuera
+      de alcance de V1.3, Base Comercial + impuestos/recargos/otros
+      conceptos = Total Cobrable). Consolidacion V1.4 (DC09, reemplaza el
+      modelo de cortesias de V1.3): CORTESIA y DESCUENTO se unifican en un
+      unico Ajuste Comercial con tipo (CORTESIA o DESCUENTO), aplicable a la
+      Orden o a un Detalle, expresado como porcentaje o importe fijo, con motivo
+      obligatorio, usuario y fecha/hora, y con historial de cada alta, cambio o
+      retiro. Un ajuste no modifica ni elimina el precio original del Detalle
+      ni el precio de catalogo (que permanecen como dato historico dentro del
+      Subtotal): se resta como concepto independiente y se refleja en los
+      comprobantes, y no puede superar el importe al que se aplica (UAT,
+      iteracion 1). Cada tipo de ajuste tiene su propio permiso (BR-REP-039).
+      Los permisos iniciales por tipo siguen pendientes de decision: hasta
+      decidirlos se documentan, sin convertirlos en regla, la cortesia
+      autorizada por ACT-ADMIN de V1.3 y el descuento de Recepcion o
+      Administracion de la implementacion del UAT. Una cortesia total con Pagos
+      ya recibidos deja saldo a favor del cliente, que se devuelve antes del
+      cierre (DC11, BR-REP-038). Pendientes: si una CORTESIA puede ser parcial, y
+      como se trata un DESCUENTO que deja el total por debajo de lo ya cobrado
+      (la implementacion lo rechaza; DC11 solo define la cortesia total).
+      Condicion comercial distinta de cortesia: el origen de la Orden
+      determina si es COBRABLE (CLIENTE_EXTERNO, salvo cortesia),
+      NO_COBRABLE (RT_GARANTIA_VENTA, RMA_GARANTIA_REPARACION) o
+      NO_COBRABLE_AL_CLIENTE (RT_INTERNO); esta condicion de origen nunca
+      se trata como una cortesia. RMA_GARANTIA_REPARACION (garantia de una
+      reparacion RMA anterior) es NO_COBRABLE como consecuencia de su
+      origen, no por un override ni una cortesia comercial: no registra
+      pago, anticipo ni pago posterior, no requiere Saldo = 0 mediante
+      pagos ni bloquea la entrega por deuda, y sigue existiendo entrega (y
+      notificacion) al cliente. Igual que todo origen con entrega a cliente
+      recorre PROC-REP-265 (validacion de condicion de entrega), pero la
+      aprueba directamente por su condicion NO_COBRABLE, sin entrar en
+      PROC-REP-266. El precio snapshot de sus Detalles
+      existe igual (dato historico, de costo y de valoracion del trabajo):
+      precio registrado no implica pago requerido.
+    status: approved
+
+  - id: BR-REP-017
+    name: Registrar Pago (transversal) y Completar Cobro (secuencial)
+    description: >
+      Son dos conceptos distintos, que no deben confundirse. (A)
+      Registrar Pago es una capacidad TRANSVERSAL de la Orden: una Orden
+      puede tener 0..N Pagos -seña, anticipo, parciales, con distintos
+      medios de pago- registrados en cualquier momento desde que la Orden
+      existe, no solo al final. Cada Pago registra importe, medio de
+      pago, fecha/hora, usuario y referencia/comprobante cuando
+      corresponda; todos quedan asociados a la misma Orden. Autorizacion
+      para Registrar Pago (corrige un bug funcional detectado en el MVP
+      actual, donde cualquier usuario activo podia registrarlo sin
+      restriccion): puede registrar un Pago todo usuario OPERATIVO ACTIVO
+      EXCEPTO Tecnico (ACT_TECH) -es decir, ACT_ADMIN, ACT_RECEP y
+      ACT_COORD, mientras esten activos-; un Tecnico nunca puede registrar
+      un Pago. No es una decision de frontend: el backend debe hacer
+      cumplir esta autorizacion (usuario activo AND rol != TECNICO), del
+      mismo modo que ya hace cumplir la autorizacion de otros overrides de
+      esta capa (BR-REP-003, BR-REP-011). (B) Completar
+      Cobro es una FASE SECUENCIAL del cierre: una vez aprobado el
+      control tecnico (REPARACION_LISTA), se determina el Total Cobrable
+      (Base Comercial de los Detalles finales, ver BR-REP-015/BR-REP-016)
+      y se calcula el Saldo con la formula unica de BR-REP-038
+      (PROC-REP-265). Si Saldo > 0, la Orden queda pendiente de completar
+      cobro: pueden registrarse uno o mas Pagos adicionales -mediante el
+      mismo mecanismo transversal (A)- y el Saldo se recalcula despues de
+      cada uno (PROC-REP-266 -> PROC-REP-265, "Revalidar"). Todo origen con
+      entrega a cliente pasa por el mismo gate de condicion de entrega
+      (PROC-REP-265) antes de PROC-REP-280 y PROC-REP-270; lo que cambia es
+      como se aprueba: CLIENTE_EXTERNO (COBRABLE) solo puede pasar a
+      ENTREGADA cuando Saldo = 0 (una cortesia total sin Pagos recibidos deja
+      Saldo = 0); RT_GARANTIA_VENTA y RMA_GARANTIA_REPARACION la aprueban por su
+      condicion NO_COBRABLE de origen (no por cortesia), sin registrar pagos
+      ni entrar en PROC-REP-266. No existe override para entregar con deuda
+      en V1.3 ni un bypass nuevo alrededor de PROC-REP-265. No modelar los pagos como si ocurrieran
+      unicamente al final (A es transversal), ni la entrega a cliente sin el
+      gate final de condicion de entrega (B es secuencial y obligatorio
+      antes de PROC-REP-270 para los origenes con entrega a cliente). RT_INTERNO
+      (NO_COBRABLE_AL_CLIENTE) no pasa por (B): tras informar el resultado
+      a Gestion RT (PROC-REP-290) llega a PROC-REP-270 solo como
+      entrega/devolucion del equipo a Gestion RT, sin Saldo ni Pagos. El comprobante final (PROC-REP-280) se genera
+      recien despues de que PROC-REP-265 aprueba la condicion de entrega,
+      nunca antes: asi refleja siempre el Saldo definitivo al momento de
+      la entrega, y no queda desactualizado si luego se registra un pago
+      final.
+      V1.4 (saldo a favor, BR-REP-038). Formula funcional del Saldo: Saldo =
+      Total final de la OR - Pagos recibidos + Devoluciones realizadas (Total
+      final = Total Cobrable definitivo, BR-REP-015/016; Pagos recibidos = los
+      Pagos de (A); Devoluciones realizadas = las devoluciones de dinero
+      efectivamente realizadas, un movimiento financiero distinto del Pago).
+      Tres resultados en PROC-REP-265: Saldo > 0 -> circuito de cobro
+      (PROC-REP-266, con pagos adicionales como en (A) y (B)); Saldo = 0
+      (incluida una cortesia total sin Pagos recibidos, y NO_COBRABLE por
+      origen) -> condicion de entrega aprobada; Saldo < 0 (saldo a favor del cliente) -> registro de la
+      devolucion de dinero (PROC-REP-267), nunca por el circuito de cobro ni
+      con un Pago de importe negativo. La entrega y el comprobante final solo se
+      habilitan con Saldo = 0. Los Pagos originales no se modifican ni se
+      borran.
+      Consolidacion V1.4. Formula unica: Saldo = Total final de la OR - Pagos
+      recibidos vigentes + Devoluciones realizadas (BR-REP-038); un Pago anulado
+      no cuenta. Anulacion de Pagos (DC10): corresponde por defecto a
+      Administracion, es delegable mediante permiso (BR-REP-039), exige motivo y
+      queda auditada con usuario y fecha/hora; el Pago nunca se borra, queda
+      registrado como anulado, y la anulacion puede volver a dejar Saldo > 0.
+      Cortesia total (DC11): si no hay Pagos recibidos deja Saldo = 0; si los
+      hay, deja saldo a favor del cliente, que debe devolverse antes del cierre
+      (BR-REP-038), conservando los Pagos y los Ajustes originales. Tipo de Pago
+      (reconciliacion del 24/09/2026): cada Pago es ANTICIPO o PAGO segun el
+      estado de la Orden al registrarlo; es un dato derivado, distinto del medio
+      de pago, y un anticipo no dispara PROC-REP-265. Check-in: en
+      CLIENTE_EXTERNO con trabajos realizados y garantia aplicable la entrega
+      exige ademas el check-in registrado (BR-REP-045), sin que condicione el
+      cobro.
+    status: approved
+
+  - id: BR-REP-018
+    name: Toma y liberacion de Orden (participacion activa)
+    description: >
+      Una toma activa representa la participacion actual del tecnico
+      sobre la Orden. Se abre completa, no sobre un Detalle (PROC-REP-180:
+      Orden + tecnico + estacion + fecha/hora de inicio). Como maximo
+      puede existir UNA toma/participacion activa por Orden en simultaneo
+      -distinto pero complementario de BR-REP-007 (maximo una Ejecucion
+      activa por Orden)-.
+      Mientras exista una toma activa y NO exista una Ejecucion activa,
+      el tecnico debe decidir si desea iniciar un Detalle de reparacion
+      o liberar la Orden (PROC-REP-212). Esta decision aplica tanto
+      inmediatamente despues de tomar la Orden como despues de finalizar
+      una Ejecucion cuando el resolver determina que todavia existe al
+      menos un Detalle trabajable (PROC-REP-211 -> PROC-REP-212): no se
+      libera automaticamente una Orden trabajable solo porque termino un
+      Detalle.
+      Si el tecnico decide iniciar un Detalle (PROC-REP-212 = Si),
+      continua con la misma toma sin volver a tomarla (PROC-REP-181 ->
+      ... -> PROC-REP-211 -> PROC-REP-212, tantas veces como Detalles
+      trabajables queden). Si decide liberar (PROC-REP-212 = No ->
+      PROC-REP-213), o si el resolver determina que ya no queda ningun
+      Detalle trabajable (la Orden paso a COMPLETA, PENDIENTE_RECURSOS,
+      REQUIERE_REVISION, PENDIENTE_AUTORIZACION o TODO_CANCELADO), la
+      participacion activa se cierra -explicitamente o automaticamente segun
+      corresponda- registrando fecha/hora de cierre, y la Orden vuelve a
+      EN_COLA cuando corresponde (si sigue habiendo algun Detalle trabajable
+      disponible para otro tecnico). El historial completo de
+      participaciones (quien tomo, cuando, desde que estacion, cuando la
+      libero) se conserva siempre; nunca se sobrescribe.
+      Consolidacion V1.4. El texto anterior proviene del MVP (liberar antes del
+      primer Detalle y PROC-REP-180 -> PROC-REP-212), confirmado por DC04;
+      PENDIENTE_AUTORIZACION se agrega a las causas de cierre automatico por
+      coherencia con BR-REP-034 y BR-REP-037. Liberacion de una Orden tomada
+      por otro tecnico (DC04, decision del 23/10/2026 y UAT, iteracion 1):
+      permitida por defecto a Tecnico y Coordinacion, con permiso configurable
+      desde Administracion (BR-REP-039); requiere una advertencia que indique
+      quien tiene la Orden, confirmacion explicita, motivo obligatorio y
+      auditoria, y conserva la trazabilidad de la toma original y de su
+      liberacion. En PROC-REP-212 decide el titular de la toma o, en una
+      liberacion ajena, quien libera con ese permiso. Si hay una Ejecucion en
+      curso, la operacion de liberacion incluye su interrupcion con la logica
+      existente (PROC-REP-200 Interrumpido y PROC-REP-210: lo utilizado se
+      consume y lo reservado sin usar se libera) y recien entonces cierra la
+      toma (PROC-REP-213). Esa interrupcion es una excepcion especifica al
+      permiso habitual de interrumpir, que corresponde al tecnico de la
+      Ejecucion: solo existe dentro de la liberacion confirmada y no concede
+      un permiso general para interrumpir Ejecuciones ajenas. La auditoria
+      registra quien realiza la operacion, el titular, la Orden, la Ejecucion
+      afectada cuando la hay, el motivo, la fecha/hora, la estacion y el
+      resultado (estado de la Orden y de sus Detalles). La definicion exacta
+      del motivo de interrupcion que deriva de la liberacion (BR-REP-004)
+      sigue pendiente. No se libera una Orden cerrada o entregada ni se
+      admiten dos tomas simultaneas.
+    status: approved
+
+  - id: BR-REP-019
+    name: Garantia RMA - Orden nueva vinculada y Detalle origen
+    description: >
+      Una Orden de garantia RMA (origen RMA_GARANTIA_REPARACION) debe crearse
+      como una NUEVA Orden vinculada a una Orden origen ya finalizada
+      (ENTREGADA). La Orden origen NO se reabre ni se reutiliza
+      transaccionalmente: permanece historicamente inmutable y conserva su
+      estado; la relacion entre ambas Ordenes resuelve la trazabilidad sin
+      modificarla (no se crean estados como REABIERTA_POR_GARANTIA). Cada
+      Detalle de garantia debe poder identificar el Detalle original que
+      origina el reproceso: la trazabilidad es en ambos niveles (Orden nueva
+      -> Orden origen; Detalle nuevo -> Detalle origen), y resuelve el
+      pendiente de vinculacion Orden vs. Detalle. Cliente y equipo se
+      recuperan de la Orden origen (no es un alta nueva). La condicion
+      comercial de la Orden es NO_COBRABLE (BR-REP-016). Vigencia
+      (consolidacion V1.4, DC15B): antes de crear la Orden de garantia se valida
+      automaticamente la garantia de cada Detalle origen, con su plazo
+      definitivo contado desde la entrega (BR-REP-041); si esta vencida, se
+      advierte y se bloquea el ingreso en garantia, salvo una excepcion
+      autorizada, con motivo obligatorio y auditada (PROC-REP-036). La politica
+      configurable de garantia es BR-REP-041; sus precedencias concretas siguen
+      pendientes.
+      Revision obligatoria y multi-Detalle (MVP v2): toda garantia RMA pasa
+      por revision tecnica antes de definir que reparacion se realiza
+      (PROC-REP-045 = No -> 055 -> 065 -> 068). La nueva Orden nace
+      EN_REVISION y sin Detalles propios; tras la revision, el tecnico define
+      y registra uno o mas Detalles nuevos (PROC-REP-075) o finaliza SIN_REPARACION
+      (PROC-REP-069). Una unica Orden de garantia puede originarse en uno o
+      mas Detalles de la misma Orden origen (no se crea una Orden de garantia
+      por Detalle). Cada Detalle nuevo referencia uno de los Detalles origen
+      identificados; no se impone una relacion 1:1 (un Detalle origen puede
+      originar mas de un Detalle nuevo).
+    status: approved
+
+  - id: BR-REP-020
+    name: Identificacion y reutilizacion de Cliente existente
+    description: >
+      Al ingresar un equipo de CLIENTE_EXTERNO (PROC-REP-030), Recepcion
+      busca primero un Cliente existente antes de crear uno nuevo. La
+      busqueda se hace por DNI y, cuando corresponda, tambien por telefono.
+      Si el Cliente existe, se recuperan sus datos y Recepcion los confirma
+      (puede corregirlos); si no existe, se crea un Cliente nuevo. Se
+      reutiliza siempre la misma entidad conceptual Cliente (sin entidades
+      paralelas) y se conserva su clasificacion Minorista/Mayorista.
+      Consolidacion V1.4 (UAT-010 y DC19). El Cliente tiene un identificador
+      interno propio (nunca el DNI), DNI opcional validado y normalizado,
+      nombre y apellido en un unico campo tal como lo carga Recepcion o lo
+      devuelve una fuente autorizada (no se separa automaticamente), telefono y
+      email. Recepcion ingresa el DNI y la busqueda corre primero en la base
+      propia; si existe un cliente, Recepcion decide explicitamente
+      reutilizarlo ("Usar estos datos"). Un DNI que ya pertenece a un cliente
+      no crea otro y no hay vinculacion silenciosa por DNI ni comparacion por
+      nombre; sin DNI no se reconoce al cliente. Las correcciones de datos
+      quedan en la Orden nueva y las Ordenes y documentos anteriores conservan
+      lo registrado. La clasificacion Minorista/Mayorista se registra sin
+      cambiar precios automaticamente; reglas comerciales por clasificacion
+      podran definirse en el futuro. La busqueda nunca bloquea la creacion de
+      la Orden. La busqueda por telefono no esta implementada.
+    status: approved
+
+  - id: BR-REP-021
+    name: Consulta externa opcional por DNI y carga manual alternativa
+    description: >
+      Consolidacion V1.4 (DC14, reemplaza la referencia al scraping de una
+      pagina web). Para un Cliente que no esta en la base propia se contempla,
+      de forma OPCIONAL, una consulta externa por DNI, unicamente a traves de un
+      proveedor autorizado y configurable. Los datos recuperados son
+      verificables y editables por Recepcion antes de confirmarlos y nunca
+      completan el formulario por si solos. Si la consulta falla, no encuentra
+      datos, el servicio no esta disponible o no hay ningun proveedor
+      habilitado, Recepcion carga los datos manualmente: la carga manual esta
+      siempre disponible y la consulta externa nunca es obligatoria ni bloquea
+      la creacion del Cliente ni de la Orden. Se valida el DNI antes de
+      consultar, se respetan limites de consultas y no se guardan respuestas
+      completas con datos personales (UAT-010). No hay hoy ninguna fuente
+      externa habilitada y esta consolidacion no implementa integraciones.
+    status: approved
+
+  - id: BR-REP-022
+    name: Identidad fisica del Equipo y reutilizacion confirmada por IMEI
+    description: >
+      Consolidacion V1.4 (DC20, reemplaza en parte la version anterior). El
+      Equipo tiene identidad fisica propia: identificador interno, IMEI y
+      numero de serie. Sus caracteristicas comerciales (marca, modelo,
+      variante, capacidad y color) provienen del catalogo de equipos de Ventas,
+      cuyo tp_id se conserva como referencia comercial y nunca reemplaza la
+      identidad fisica (BR-REP-048), o se cargan a mano cuando el equipo no
+      esta en el catalogo. Recepcion busca un Equipo existente por IMEI
+      (PROC-REP-030): la busqueda devuelve las coincidencias y Recepcion debe
+      confirmar expresamente la reutilizacion antes de vincular el historial
+      de ordenes de ese Equipo; si no la confirma, se registra un Equipo nuevo.
+      No se crea una entidad duplicada cuando se reutiliza. El formulario
+      inicial de CLIENTE_EXTERNO no pide numero de serie (UAT-011), que sigue
+      siendo un dato del Equipo, opcional, para todos los origenes. Pendiente
+      de definicion: como se identifica un equipo sin IMEI disponible o legible
+      y como se resuelven las coincidencias ambiguas.
+    status: approved
+
+  - id: BR-REP-023
+    name: Diagnostico inicial y observaciones sobre la Orden ya creada
+    description: >
+      Despues de crear la Orden (PROC-REP-040), Recepcion registra en
+      PROC-REP-032 un diagnostico inicial y observaciones generales, ambos
+      como texto libre asociado a la OrdenReparacion (no se crea una entidad
+      DiagnosticoInicial independiente). El diagnostico inicial describe
+      problemas (por ejemplo "no carga" o "bateria dura poco") y es un
+      concepto distinto de las reparaciones diagnosticadas (trabajos como
+      "cambio de bateria", que son ReparacionDetail de FEAT-REP-002, ver
+      BR-REP-026). A futuro puede estandarizarse mediante una configuracion
+      administrable; esa estandarizacion complementa al texto libre y no lo
+      reemplaza. Las observaciones registran danos existentes, condiciones
+      generales y cualquier informacion relevante del estado del equipo al
+      recibirlo. La carga puede guardarse parcialmente y retomarse sin
+      perder lo ingresado: guardar NO avanza el workflow ni crea un estado de
+      negocio nuevo (la Orden sigue en REQUERIMIENTO). Ningun campo es
+      obligatorio para crear la Orden ni para continuar (BR-REP-025).
+      Consolidacion V1.4 (UAT, iteracion 1): se distinguen las observaciones
+      del equipo, visibles para Recepcion y Taller e incluidas en el
+      comprobante inicial, de las notas internas, que solo se ven dentro de la
+      aplicacion y nunca salen en documentos, PDF ni mensajes al cliente.
+    status: approved
+
+  - id: BR-REP-024
+    name: Fotografias y checklist de recepcion opcionales
+    description: >
+      Las fotografias del equipo y el checklist de recepcion (PROC-REP-032)
+      son OPCIONALES y se registran sobre la Orden ya creada. Las
+      fotografias se asocian a la Orden como parte de su evidencia de
+      recepcion y deben preservar la trazabilidad de los archivos (quien las
+      incorporo y cuando). Consolidacion V1.4 (UAT-010/011): se agregan solo
+      con la Orden ya creada y nunca son obligatorias; como maximo 10 por
+      Orden; antes de guardarlas se revisan y se aceptan o descartan una por
+      una (las descartadas no se guardan); cada fotografia guardada conserva
+      quien y cuando la cargo y se consulta desde Recepcion y Taller. Quien
+      puede cargarlas y consultarlas es configurable (BR-REP-039).
+      El checklist (DC12) permite registrar verificaciones del equipo y
+      distinguir las no realizadas: sus preguntas y opciones dependen del tipo
+      de equipo y las configura Administracion (BR-REP-040); todas las
+      verificaciones son opcionales y un checklist incompleto no bloquea la
+      recepcion. Lo cargado se puede guardar y recuperar posteriormente.
+    status: approved
+
+  - id: BR-REP-025
+    name: Advertencia no bloqueante por evidencias faltantes al avanzar desde la carga inicial
+    description: >
+      Cuando Recepcion intenta AVANZAR desde la carga de informacion inicial
+      (PROC-REP-032, hacia PROC-REP-045) se evalua si existen fotografias y
+      observaciones registradas. Si faltan fotografias, observaciones o
+      ambas, se muestra una advertencia que indica exactamente que falta y
+      ofrece dos acciones: volver a completar la informacion (permanece en
+      PROC-REP-032) o continuar igualmente. Consolidacion V1.4 (DC12): tambien
+      se advierte cuando faltan verificaciones del checklist, que siguen siendo
+      opcionales; por ahora la falta de diagnostico inicial no genera una
+      advertencia obligatoria. La advertencia nunca
+      bloquea el proceso ni impide haber creado la Orden. Cuando Recepcion
+      elige continuar igualmente, se registra la confirmacion de la
+      advertencia para trazabilidad (usuario, fecha/hora y que faltaba:
+      fotografias, observaciones o verificaciones del checklist). Es una
+      advertencia sobre
+      INFORMACION INCOMPLETA de Recepcion y es un evento distinto de la
+      decision del cliente sobre los trabajos (BR-REP-028): no comparten
+      semantica ni nodo. Se aplica como regla de PROC-REP-032; no existe un
+      nodo propio para la advertencia ni un estado de negocio para un
+      formulario incompleto.
+    status: approved
+
+  - id: BR-REP-026
+    name: Orden creada con cero Detalles y reparaciones diagnosticadas por Recepcion
+    description: >
+      Preserva BR-REP-013 en el nuevo ingreso: la Orden se crea siempre en
+      REQUERIMIENTO y con cantidad_detalles = 0, inmediatamente despues de
+      identificar Cliente y Equipo y SIN depender de diagnostico,
+      observaciones, fotografias, checklist ni Detalles, con Cliente y Equipo
+      asociados, usuario responsable y fecha/hora. Durante la carga inicial
+      (PROC-REP-032) Recepcion puede seleccionar cero, uno o varios tipos de
+      reparacion diagnosticados (listas desplegables basadas en el catalogo
+      TipoReparacion). Esa seleccion NO crea Detalles en FEAT-REP-001: la
+      secuencia existente se respeta (primero se crea la Orden con cero
+      Detalles; luego FEAT-REP-002, en PROC-REP-045/070/075, determina o
+      registra los Detalles). El diagnostico inicial (texto libre que describe
+      problemas) es un concepto distinto de las reparaciones diagnosticadas
+      (trabajos). ReparacionDetail es la entidad que representa cada trabajo
+      diagnosticado (no se crea una entidad ReparacionDiagnosticada) y
+      registra el origen de su diagnostico: RECEPCION para los definidos en
+      PROC-REP-070 a partir de lo diagnosticado en el ingreso, y
+      REVISION_TECNICA para los definidos en PROC-REP-075 tras la revision
+      tecnica. La validacion tecnica de las reparaciones diagnosticadas
+      (confirmacion, descarte) y el registro de nuevas reparaciones halladas
+      por tecnicos durante la ejecucion se definen en una iteracion
+      posterior de FEAT-REP-002; esta regla no define estados
+      PENDIENTE, CONFIRMADA ni DESCARTADA en el Detalle: la evaluacion tecnica
+      de los Detalles de origen RECEPCION se define en BR-REP-035 y BR-REP-036
+      como un registro de evaluacion, no como estados operativos.
+    status: approved
+
+  - id: BR-REP-027
+    name: Cancelacion temprana por desistimiento del cliente (Orden sin Detalles)
+    description: >
+      Una Orden de CLIENTE_EXTERNO sin Detalles (REQUERIMIENTO o EN_REVISION,
+      cantidad_detalles = 0) se cancela cuando el cliente desiste, es decir,
+      no continua con la revision tecnica, en la decision propia de esa etapa
+      (PROC-REP-056, "Desiste sin Detalles", PROC-REP-306), separada de la
+      autorizacion por Detalle (PROC-REP-046/047). Es una transicion EXPLICITA a
+      CANCELADA: no se crean Detalles ficticios, no se ejecuta la cascada de
+      BR-REP-014 sobre una coleccion vacia y no se usa el resolver de
+      BR-REP-012 para inferir CANCELADA (con cantidad_detalles = 0 el
+      resolver no interviene, BR-REP-013). Debe registrarse el motivo de
+      desistimiento (obligatorio), observaciones opcionales, usuario
+      responsable y fecha/hora. No se registra reparacion, puntaje tecnico ni
+      consumo de insumos, ni se genera cobro, comprobante final ni garantia; no
+      se genera el comprobante de recepcion si el cliente desiste antes de
+      aceptar el ingreso (BR-REP-031); se preserva el historial de Cliente,
+      Equipo y Orden. La devolucion fisica depende de la custodia (BR-REP-033):
+      solo si el comprobante de recepcion fue generado y entregado el equipo
+      esta recibido y su devolucion se registra en PROC-REP-270 (arista
+      "Equipo bajo custodia"), sin entrega comercial y sin pasar la Orden a
+      ENTREGADA; si no fue recibido, el proceso finaliza directamente. Es una
+      CANCELACION del proceso, distinta de la finalizacion tecnica
+      SIN_REPARACION (PROC-REP-069, BR-REP-010). No altera la cancelacion de
+      Ordenes que ya poseen Detalles ni de trabajos completados (BR-REP-014).
+      Es un desistimiento solicitado por el cliente: lo registra Recepcion y el
+      permiso de la cancelacion es configurable (BR-REP-014, BR-REP-039).
+    status: approved
+
+  - id: BR-REP-028
+    name: Autorizacion del cliente por Detalle y definicion vigente (CLIENTE_EXTERNO)
+    description: >
+      En CLIENTE_EXTERNO el cliente decide sobre los trabajos antes de que
+      avancen: la unidad de decision es ReparacionDetail, asociada a su
+      DEFINICION VIGENTE. Se mantienen tres dimensiones independientes entre
+      si: el estado operativo del Detalle, la autorizacion del cliente y la
+      factibilidad tecnica/recursos. La autorizacion (PROC-REP-046/047) es una
+      dimension propia con valores PENDIENTE_AUTORIZACION, AUTORIZADO y
+      RECHAZADO; PENDIENTE_AUTORIZACION es una condicion derivada de la
+      autorizacion y NO un estado operativo del Detalle (no se agregan estados
+      al ciclo operativo). Un Detalle pendiente de autorizacion no puede
+      ejecutarse, no es trabajable, no se evalua su factibilidad hasta que se
+      autorice, y no reserva ni consume insumos, pero NO bloquea a los demas
+      Detalles de la Orden: AUTORIZADO y tecnicamente factible puede continuar.
+      No existe una autorizacion general de la Orden que sustituya las
+      decisiones individuales. Un rechazo se ejecuta cancelando el Detalle
+      (BR-REP-014, PROC-REP-300, FEAT-REP-009). Si el Detalle se redefine, la
+      autorizacion se evalua de nuevo sobre su nueva definicion vigente; si no
+      cambia, conserva la suya. El cliente no esta obligado a aceptar todos los
+      Detalles. Debe registrarse fecha/hora, usuario responsable, alcance
+      (Detalles afectados) y resultado de cada decision, y contemplarse
+      evidencia de consentimiento: el canal elegido y, cuando corresponda, la
+      firma manuscrita en pantalla o la foto o archivo del documento firmado,
+      ligada al documento y su version (DC26, BR-REP-042); cuando cada firma es
+      obligatoria sigue pendiente de decision. En el ingreso inicial simplificado
+      la autorizacion inicial se registra al generar el comprobante de ingreso y
+      autorizacion (UAT-008, BR-REP-046); las autorizaciones posteriores conservan
+      el circuito explicito y Recepcion las gestiona (DC06). Si todavia no hay Detalles, el cliente puede aceptar continuar
+      unicamente para obtener un diagnostico tecnico: esa aceptacion NO
+      autoriza reparaciones que se identifiquen despues. Para efectos de
+      es_trabajable (BR-REP-012), en CLIENTE_EXTERNO un Detalle requiere ademas
+      autorizacion vigente (BR-REP-012 V1.4). Aplica solo a CLIENTE_EXTERNO en
+      esta iteracion: RT_INTERNO, RT_GARANTIA_VENTA y RMA_GARANTIA_REPARACION
+      conservan su comportamiento anterior y no reciben decisiones comerciales
+      de cliente externo.
+      Iteracion 10 (simplificacion de la decision del cliente). La consulta al
+      cliente por Detalle (PROC-REP-046/047) solo existe cuando YA hay Detalles: si
+      todavia no existe ninguno la Orden queda EN_REVISION, se registra la recepcion
+      (PROC-REP-050/060) y se espera la revision y el diagnostico de RT; el tecnico
+      define y registra los Detalles (PROC-REP-075) y recien entonces Recepcion
+      consulta al cliente por ellos. Antes de eso Recepcion solo registra si el
+      cliente continua con la revision tecnica (PROC-REP-056, "Acepta la revision
+      tecnica" o "Desiste sin Detalles"): esa aceptacion no autoriza reparaciones.
+      PROC-REP-047 ofrece exactamente tres decisiones del cliente: "Acepta trabajos"
+      (se registra la autorizacion de cada Detalle sobre su definicion vigente, sin
+      generar una definicion nueva ni ejecutar nada), "Rechaza algunos Detalles" (se
+      registra cuales acepta y cuales rechaza y se cancelan unicamente los
+      rechazados) y "Rechaza todos los trabajos" (se cancelan los Detalles pendientes
+      elegibles). El comprobante, el hito de habilitacion, la factibilidad pendiente y
+      el estado de la Orden no son elecciones del cliente: los resuelve el sistema
+      despues, en PROC-REP-211 (BR-REP-034). Si el cliente no responde no se registra
+      ninguna decision: la solicitud queda sin resolver (PROC-REP-046 -> 211) y los
+      Detalles siguen PENDIENTE_AUTORIZACION.
+    status: approved
+
+  - id: BR-REP-029
+    name: Revalidacion de la autorizacion ante Detalles nuevos o modificados
+    description: >
+      La autorizacion del cliente se solicita nuevamente, por Detalle y por
+      definicion vigente, cuando (1) la Orden ingreso sin trabajos definidos y
+      la revision tecnica identifica los necesarios (PROC-REP-075), (2) se
+      redefine un Detalle (PROC-REP-127, registrada por el tecnico), (3) un tecnico agrega un Detalle
+      nuevo durante la ejecucion o la evaluacion tecnica (PROC-REP-128,
+      BR-REP-032) y (4) queda
+      pendiente de autorizacion algun Detalle cuando ninguno es trabajable
+      (PROC-REP-129). Se reutiliza una unica capacidad (PROC-REP-046/047) desde
+      todos esos puntos. La autorizacion anterior NO se extiende
+      automaticamente a trabajos nuevos ni a una nueva definicion vigente: toda
+      PROC-REP-127 genera una nueva definicion (aunque se confirme el mismo
+      Tipo, consistente con BR-REP-003 y BR-REP-015) y requiere decision nueva.
+      Un Detalle que no cambia conserva su autorizacion vigente, que no se
+      invalida innecesariamente. Los Detalles nuevos o modificados no pasan a
+      ejecucion hasta contar con su decision; si se autorizan, pasan por
+      factibilidad (PROC-REP-080) antes de ser ejecutables, sin regenerar el
+      comprobante de recepcion. Pendiente de negocio: si una redefinicion que
+      confirma exactamente el mismo Tipo y precio debe volver a requerir
+      autorizacion (por ahora se exige, por coherencia con el override), y que
+      ocurre si el cliente posterga su decision. Tambien se solicita una nueva
+      autorizacion cuando la evaluacion tecnica previa a la ejecucion redefine
+      el Detalle (PROC-REP-182 -> PROC-REP-127, registrada por el tecnico,
+      BR-REP-036); una simple confirmacion tecnica de una definicion que no
+      cambio NO la solicita. Cada Detalle tiene su propia decision: agregar un
+      Detalle nuevo (PROC-REP-128) no invalida la autorizacion del Detalle
+      original, y cada Detalle adicional requiere la suya. Recepcion
+      consulta al cliente y registra autorizacion o desistimiento
+      (PROC-REP-046/047); no registra la definicion tecnica. La solicitud de
+      autorizacion se CREA al registrar el alta o la redefinicion y se RESUELVE
+      de forma diferida e independiente por Recepcion, sin exigir una respuesta
+      inmediata del cliente y sin detener al tecnico: mientras la decision este
+      pendiente, o si el cliente no responde, el Detalle permanece
+      PENDIENTE_AUTORIZACION (la ausencia de respuesta no equivale a
+      autorizacion ni a rechazo) y los demas Detalles habilitados siguen su
+      ejecucion (BR-REP-037).
+    status: approved
+
+  - id: BR-REP-030
+    name: Desistimiento por Detalle, masivo y sin Detalles
+    description: >
+      El desistimiento es granular. DESISTIR DE UN DETALLE: se selecciona un
+      Detalle cancelable, se registra el motivo y la decision del cliente, se
+      cancela unicamente ese Detalle (PROC-REP-300) conservando los demas, su
+      historial, precio snapshot y referencias, y se recalcula el estado
+      agregado con el resolver (PROC-REP-211). DESISTIR DE TODO: es una opcion
+      de UI/UX -no un estado ni una entidad- que cancela en una sola
+      operacion todos los Detalles pendientes y cancelables (PROC-REP-305);
+      internamente se aplican las reglas de cada Detalle: los Detalles COMPLETO
+      no pasan a CANCELADO, no se eliminan trabajos ni movimientos historicos,
+      se respetan las restricciones de ejecucion activa y conciliacion de
+      insumos (BR-REP-014), y el resolver determina el estado resultante de la
+      Orden; la trazabilidad se conserva por cada Detalle. SIN DETALLES:
+      cantidad_detalles = 0 se cancela con la transicion explicita de
+      BR-REP-027 (PROC-REP-306) y no se invoca el resolver. FEAT-REP-002
+      administra la DECISION y FEAT-REP-009 ejecuta las CANCELACIONES. El
+      destino tras cancelar lo elige el enrutamiento del workflow segun la
+      situacion y los hitos (BR-REP-034). Cuando TODOS los Detalles quedan
+      CANCELADO la Orden queda CANCELADA y, si el equipo fue recibido, la
+      devolucion fisica es obligatoria (BR-REP-033); si algun Detalle esta
+      COMPLETO la Orden NO se cancela: el resolver da COMPLETA y siguen control
+      tecnico, cierre comercial y entrega, sin omitir las obligaciones por
+      trabajos realizados. Requerimiento funcional de UI: ver PROC-REP-046.
+      Desistir de los trabajos pendientes NO cancela ni borra trabajos ya
+      completados.
+      Iteracion 10: el desistimiento SIN Detalles se registra en PROC-REP-056
+      ("Desiste sin Detalles", propio de la etapa en que todavia no hay trabajos) y
+      no en PROC-REP-047; la decision por Detalle (PROC-REP-047) ofrece solo tres
+      resultados: acepta trabajos, rechaza algunos Detalles y rechaza todos los
+      trabajos. Rechazar todos cancela los Detalles pendientes elegibles mediante
+      PROC-REP-305 sin tocar los COMPLETO ni las Ejecuciones activas, y el desenlace
+      (custodia, saldo y devolucion) lo determina PROC-REP-211.
+      Consolidacion V1.4 (DC07 y DC07C). La SOLICITUD de desistimiento (lo que
+      pide el cliente, registrada por Recepcion) y la CANCELACION EFECTIVA son
+      registros distintos, cada uno con usuario y fecha/hora. Cuando un Detalle
+      solicitado esta en ejecucion, o cuando se pide desistir de todo con una
+      Ejecucion activa, la solicitud queda pendiente, el tecnico interrumpe la
+      Ejecucion (PROC-REP-200) y despues PROC-REP-211 deriva a la cancelacion
+      efectiva ("Desistimiento solicitado de un Detalle ya interrumpido" ->
+      PROC-REP-300; "Desistimiento total solicitado, sin Ejecucion activa" ->
+      PROC-REP-305). El desistimiento total es un proceso guiado: registra los
+      Detalles afectados, el motivo y la resolucion de cada uno, y no se cierra
+      la Orden con Ejecuciones sin resolver. Los Detalles completos conservan su
+      resultado.
+    status: approved
+
+  - id: BR-REP-031
+    name: Comprobante de recepcion despues de la decision inicial del cliente
+    description: >
+      En CLIENTE_EXTERNO el comprobante de recepcion (PROC-REP-050/060),
+      funcionalmente parte de FEAT-REP-002, se genera cuando el cliente decide
+      continuar, DESPUES de la decision inicial (PROC-REP-047 con Detalles
+      conocidos, enrutada por PROC-REP-211; PROC-REP-056 sin Detalles) y no antes. Si
+      se conocen Detalles, refleja los trabajos aplicables (autorizados) y su
+      definicion vigente; si no se conocen, indica reparacion pendiente de
+      diagnostico. Si el cliente desiste antes de aceptar el ingreso, no se
+      genera comprobante de recepcion. No se genera un comprobante nuevo
+      automaticamente por cada cambio posterior de Detalles (PROC-REP-075,
+      PROC-REP-127, PROC-REP-128). Ademas de documentar los trabajos, es el
+      documento que se intercambia por el equipo fisico; su generacion no confirma
+      por si sola el intercambio fisico (BR-REP-033).
+      RT_INTERNO (no requiere comprobante), RT_GARANTIA_VENTA y
+      RMA_GARANTIA_REPARACION conservan su comportamiento original: su
+      comprobante, cuando corresponde, no depende de ninguna decision de
+      cliente externo.
+      Consolidacion V1.4 (DC13 y UAT). Existe un unico documento VIGENTE por
+      tipo y contexto: una correccion genera una version nueva con motivo y
+      referencia a la version que reemplaza, ninguna version se borra y cada
+      documento emitido conserva su copia de los datos (snapshot). En el ingreso
+      inicial simplificado de CLIENTE_EXTERNO el comprobante de recepcion es el
+      comprobante unico de ingreso y autorizacion (ING, UAT-008, BR-REP-046),
+      que incluye las observaciones visibles y nunca las notas internas.
+      Despues, con al menos un Detalle autorizado, Recepcion puede generar a
+      pedido el comprobante de autorizacion de reparacion (AUT, mejoras UAT del
+      16/10/2026): solo los Detalles autorizados con descripcion, precio y
+      total, fecha y canal de la autorizacion, aclara que no es un comprobante
+      de pago, no se genera automaticamente, admite versiones nuevas cuando se
+      autoriza otro trabajo y evita duplicados involuntarios. Generar un
+      documento no equivale a enviarlo ni registra que el cliente lo recibio o
+      firmo (BR-REP-042, BR-REP-044).
+    status: approved
+
+  - id: BR-REP-032
+    name: Alta de Detalles por el tecnico durante la ejecucion
+    description: >
+      Un tecnico (ACT-TECH) puede agregar un nuevo ReparacionDetail a una Orden
+      que ya tiene otros Detalles cuando detecta una reparacion adicional
+      necesaria (PROC-REP-128). El Detalle nuevo registra Tipo de Reparacion,
+      precio snapshot (BR-REP-015), usuario, fecha y trazabilidad, con origen
+      del diagnostico REVISION_TECNICA. En CLIENTE_EXTERNO su autorizacion
+      inicial queda PENDIENTE_AUTORIZACION (BR-REP-028): el tecnico NO puede
+      comenzarlo, Recepcion consulta al cliente y registra AUTORIZADO o
+      RECHAZADO sobre la definicion vigente. Si se autoriza, pasa por
+      factibilidad (PROC-REP-080) antes de ser ejecutable, sin reiniciar el
+      ingreso ni invalidar los hitos previos (BR-REP-034); si se rechaza, se
+      cancela (PROC-REP-300) conservando el historial. Los demas Detalles
+      autorizados continuan normalmente: agregar un Detalle no interrumpe las
+      Ejecuciones activas (BR-REP-007), no cierra la toma/participacion del
+      tecnico (BR-REP-018) y no afecta el compromiso de insumos de otros
+      Detalles. Un Detalle pendiente de autorizacion no reserva ni consume
+      insumos (BR-REP-006: la reserva real es de PROC-REP-185 y exige un
+      Detalle trabajable) ni es candidato de estacion (BR-REP-011: la
+      compatibilidad agregada de PROC-REP-172 y la de PROC-REP-174 consideran
+      solo Detalles trabajables). Los demas origenes no tienen decision de
+      cliente: el Detalle agregado va directo a factibilidad. El tecnico es el
+      responsable de definir y registrar el Detalle nuevo (no Recepcion), con
+      su Tipo, precio snapshot, fecha/hora y, si surgio de una evaluacion
+      tecnica, la referencia a ella. Tambien se puede agregar durante la
+      evaluacion tecnica previa a la ejecucion (PROC-REP-184, BR-REP-036),
+      sin Ejecucion activa, como accion complementaria (cero, una o varias
+      altas) al resultado principal de esa evaluacion, que no se modifica ni
+      se sustituye. Un alta durante
+      la ejecucion no reutiliza PROC-REP-075 (definicion posterior a una
+      revision inicial). La consulta al cliente por el Detalle nuevo es
+      concurrente con la ejecucion de otro Detalle: el Detalle en ejecucion
+      sigue EN_PROGRESO, el nuevo espera su decision, autorizar o rechazarlo no
+      interrumpe la ejecucion y, si se autoriza, necesita factibilidad antes de
+      iniciarse (BR-REP-034). La solicitud de autorizacion se CREA al registrar
+      el alta y se RESUELVE de forma diferida por Recepcion (PROC-REP-046/047,
+      EVT-REP-003): el tecnico no espera la respuesta del cliente ni se bloquea
+      por ella (BR-REP-037).
+    status: approved
+
+  - id: BR-REP-033
+    name: Custodia fisica del equipo y devolucion obligatoria en la cancelacion
+    description: >
+      El comprobante de recepcion es el documento que se intercambia por el
+      equipo fisico, pero su GENERACION (PROC-REP-060) no equivale al
+      intercambio fisico: la custodia comienza cuando se CONFIRMA el
+      intercambio, es decir, cuando el comprobante se entrega al cliente y el
+      equipo se recibe en el taller. La confirmacion registra fecha/hora,
+      usuario responsable y referencia del comprobante de recepcion, junto con
+      la condicion de custodia; no se crean estados operativos del Detalle
+      para la custodia. La Orden puede existir sin equipo recibido: la simple
+      creacion de la Orden NO implica que el equipo este en el taller, y un
+      comprobante generado pero no entregado no activa la custodia.
+      Conceptualmente hay cuatro situaciones de custodia que ningun nodo debe
+      confundir: (1) SIN CUSTODIA, el equipo nunca fue recibido; (2) EQUIPO
+      BAJO CUSTODIA, recepcion fisica confirmada y equipo aun en el taller; (3)
+      EQUIPO YA DEVUELTO, recibido y con devolucion registrada; (4) RECEPCION
+      FISICA SIN CONFIRMAR, comprobante generado sin intercambio confirmado ni
+      descartado. Regla aprobada: una Orden puede quedar CANCELADA, pero no
+      puede finalizar operativamente mientras no este determinada la situacion
+      de custodia del equipo. Equipo nunca recibido (1): no requiere
+      devolucion. Equipo bajo custodia (2): exige registrar la devolucion
+      mediante PROC-REP-270. Equipo ya devuelto (3): no se duplica la
+      devolucion. Recepcion fisica sin confirmar (4): impide el fin operativo
+      hasta determinar que ocurrio, y NO se envia automaticamente a devolucion
+      un equipo cuya recepcion no esta confirmada. Las condiciones "equipo bajo
+      custodia" y "sin equipo bajo custodia" de PROC-REP-211 y PROC-REP-306
+      cubren (2) y (1)/(3) respectivamente; la condicion "custodia sin
+      confirmar" deriva a PROC-REP-271, donde Recepcion resuelve la situacion
+      dejando usuario, fecha/hora y evidencia o referencia (por ejemplo, el
+      comprobante de recepcion), y recien entonces el proceso continua a
+      PROC-REP-270 o finaliza. Las tres condiciones son mutuamente excluyentes
+      y completas para una Orden CLIENTE_EXTERNO cancelada. Si el cliente
+      desiste antes de recibir el comprobante no se requiere devolucion
+      fisica. Una Orden CANCELADA no finaliza operativamente mientras un
+      equipo recibido permanezca sin devolucion registrada ni mientras la
+      recepcion este sin confirmar. La devolucion registra fecha/hora, usuario
+      que entrega y persona que recibe, no convierte CANCELADA en ENTREGADA (la
+      Orden permanece CANCELADA) y no pasa por control tecnico, cobro ni
+      entrega comercial. La devolucion FISICA del equipo es independiente de la
+      devolucion de DINERO (BR-REP-038): una no sustituye a la otra, y la Orden
+      no finaliza operativamente con saldo a favor del cliente pendiente
+      (PROC-REP-268). Aplica a la cancelacion sin Detalles (BR-REP-027,
+      PROC-REP-306) y a la cancelacion con todos los Detalles CANCELADO
+      (PROC-REP-211); con algun Detalle COMPLETO no hay cancelacion de la
+      Orden sino control tecnico, cierre y entrega. Pendiente: la custodia de
+      RT_INTERNO (no emite comprobante de recepcion) y la devolucion de una
+      Orden cancelada con origen distinto de CLIENTE_EXTERNO no estan definidas
+      todavia y se conservan sin cambios.
+      Consolidacion V1.4 (DC18 y DC18B). Se adoptan estas cuatro situaciones de
+      custodia. Cada evento que las determina (recepcion fisica confirmada,
+      equipo no recibido, regularizacion en PROC-REP-271, devolucion fisica y
+      entrega en PROC-REP-270) registra responsable, fecha/hora y evidencia o
+      referencia, y requiere un permiso configurable por evento (BR-REP-039);
+      los responsables predeterminados de cada evento siguen pendientes de
+      decision. Custodia previa a la ejecucion (regla aprobada el 14/10/2026):
+      cuando la politica del origen exige recepcion fisica (CLIENTE_EXTERNO y
+      garantia RMA), un tecnico no puede iniciar una Ejecucion sobre un equipo
+      cuya recepcion no esta confirmada o que se registro como no recibido; el
+      rechazo no genera Ejecucion, reservas ni movimientos (PROC-REP-185).
+      RT_INTERNO conserva su politica de recepcion.
+    status: approved
+
+  - id: BR-REP-034
+    name: Enrutamiento del workflow separado del resolver
+    description: >
+      El resolver (BR-REP-012) determina la situacion agregada de los Detalles
+      y sus bloqueos; el workflow determina la estacion siguiente segun esa
+      situacion Y los hitos ya completados, y las dos reglas se mantienen
+      separadas. Hitos considerados: comprobante de recepcion emitido (BR-REP-031), factibilidad realizada (PROC-REP-080), Orden habilitada (PROC-REP-140) y toma/participacion activa (BR-REP-018). Destinos desde PROC-REP-211
+      (V1.4): EN_EJECUCION -> continuar la Ejecucion vigente (PROC-REP-190);
+      ABIERTA_TRABAJABLE con toma activa -> continuar o liberar (PROC-REP-212);
+      ABIERTA_TRABAJABLE sin toma y Orden habilitada -> cola (PROC-REP-170);
+      ABIERTA_TRABAJABLE con la Orden sin habilitar -> PROC-REP-050 si el
+      comprobante no se emitio ("Antes del comprobante de recepcion") o
+      PROC-REP-080 si ya se emitio ("Comprobante emitido, factibilidad
+      pendiente"); PENDIENTE_AUTORIZACION -> espera especifica de la decision del
+      cliente (PROC-REP-129); REQUIERE_REVISION -> PROC-REP-125;
+      PENDIENTE_RECURSOS -> PROC-REP-120; COMPLETA -> control tecnico
+      (PROC-REP-220); TODO_CANCELADO -> devolucion (PROC-REP-270) si el equipo
+      fue recibido o fin si no (BR-REP-033); en ambos casos el fin pasa antes por la
+      verificacion de saldo a favor (PROC-REP-268, BR-REP-038). PROC-REP-090 es el gate de
+      habilitacion inicial: si la Orden ya fue habilitada no vuelve a
+      habilitarla, pedir prioridad ni encolarla (podria estar tomada o en
+      reparacion) y enruta por el resolver (arista "Orden ya habilitada"); eso
+      permite evaluar la factibilidad de un Detalle nuevo autorizado sin
+      reiniciar el ingreso ni invalidar hitos previos, y evita reenviar toda la
+      Orden a Recepcion cuando otros trabajos autorizados estan en ejecucion.
+      Un Detalle pendiente de autorizacion nunca se considera trabajable solo
+      porque haya stock. Cuando no queda ningun Detalle trabajable, el sistema
+      cierra la toma activa (BR-REP-018). Conservacion de hitos
+      (V1.4, iteracion 5). "Orden ya habilitada" se determina por el HITO
+      historico de habilitacion (PROC-REP-140 cumplido alguna vez), NO por el
+      estado agregado actual: una Orden que ya fue habilitada lo sigue estando
+      aunque hoy este en PENDIENTE_RECURSOS, REQUIERE_REVISION o
+      PENDIENTE_AUTORIZACION. El circuito de primera habilitacion (factibilidad
+      PROC-REP-080, gate PROC-REP-090, habilitacion PROC-REP-140, prioridad
+      inicial PROC-REP-150 y cola PROC-REP-170) se ejecuta una unica vez.
+      Cuando a una Orden ya habilitada se le agrega, modifica o autoriza un
+      Detalle (PROC-REP-075/127/128 y 046/047) solo se evalua la factibilidad
+      del Detalle afectado (PROC-REP-080), se conserva el hito de habilitacion,
+      no se crea otra entrada en la cola, no se solicita prioridad
+      automaticamente, no se eliminan ni reinician las participaciones de
+      tecnicos y se vuelve a ejecutar el resolver (PROC-REP-090 ->
+      PROC-REP-211) para elegir la estacion siguiente. En PROC-REP-090 las tres salidas
+      son mutuamente excluyentes y completas, sin depender del orden de las
+      aristas: "Orden ya habilitada" (hito historico de PROC-REP-140 cumplido)
+      -> PROC-REP-211; "Primera habilitacion, existe Detalle trabajable" (hito
+      no cumplido) -> PROC-REP-140; "Primera habilitacion, ninguno trabajable"
+      (hito no cumplido) -> PROC-REP-100 y el circuito de espera de recursos o
+      revision. Las dos ultimas conservan el recorrido de V1.3.
+      Prioridad en cola: la prioridad existente se mantiene al agregar o
+      modificar un Detalle y solo cambia por una accion explicita y autorizada,
+      con trazabilidad (usuario, fecha/hora y valores anterior y nuevo), que
+      reutiliza la capacidad de PROC-REP-150 sin crear un nuevo proceso de
+      priorizacion; ninguna reevaluacion reenvia la Orden a PROC-REP-150.
+      Consolidacion V1.4: la prioridad inicial la definen Coordinacion o
+      Recepcion (DC03) y cambiarla despues corresponde por defecto a Tecnico,
+      Recepcion y Coordinacion (decision del 23/10/2026), en ambos casos con
+      permiso configurable desde Administracion (BR-REP-039). Toda Orden toma
+      la prioridad 4 - Normal si nadie elige otra, y en el ingreso inicial
+      simplificado de CLIENTE_EXTERNO PROC-REP-150 se registra automaticamente
+      con esa prioridad y la Orden entra a la cola sin una accion adicional de
+      Recepcion (UAT, iteracion 1; BR-REP-046), sin duplicar la entrada a la
+      cola. Extender ese ingreso automatico a RT_INTERNO y a la garantia RMA
+      queda pendiente de decision.
+      Toma activa: agregar un Detalle (PROC-REP-128) o volver a evaluar (080 ->
+      090 -> 211) no libera la toma activa del tecnico, no sobrescribe su
+      historial, no interrumpe la Ejecucion de otro Detalle (BR-REP-007) ni
+      duplica la toma; el Detalle nuevo no puede iniciarse hasta estar
+      autorizado y ser factible. La toma solo se cierra automaticamente cuando
+      el resolver determina que no queda ningun Detalle trabajable
+      (BR-REP-018). Concurrencia: la consulta al cliente por un Detalle nuevo
+      (PROC-REP-046/047, a cargo de Recepcion) es una actividad independiente de
+      la ejecucion de otro Detalle (a cargo del tecnico) y no es una espera del
+      hilo tecnico (BR-REP-037): mientras DET-001 sigue EN_PROGRESO, DET-002 espera
+      su decision; autorizar o rechazar DET-002 no interrumpe DET-001, no inicia
+      una segunda ejecucion simultanea y DET-002 necesita factibilidad antes de
+      iniciarse. El grafo es secuencial (un unico token): dibuja la resolucion de
+      Recepcion como una entrada propia (EVT-REP-003 -> PROC-REP-046) que vuelve
+      al resolver (PROC-REP-211, EN_EJECUCION -> PROC-REP-190), y ninguna arista
+      del hilo tecnico exige pasar por PROC-REP-046/047; es una limitacion de
+      representacion, no una dependencia funcional. Efecto sobre V1.3: el
+      recorrido 090 -> 140 -> 150 -> 170 se conserva para la habilitacion
+      inicial; solo se evita repetirlo cuando la Orden ya estaba habilitada
+      (por ejemplo tras una revalidacion de recursos o una redefinicion).
+      Iteracion 10 (enrutamiento interno tras la decision del cliente). PROC-REP-047
+      ofrece solo tres decisiones comerciales y las tres vuelven a PROC-REP-211 (la
+      primera directamente; "Rechaza algunos Detalles" tras PROC-REP-300 y "Rechaza
+      todos los trabajos" tras PROC-REP-305), igual que la solicitud sin resolver
+      (PROC-REP-046 -> 211). El SISTEMA, no el cliente, evalua despues los hitos:
+      "Antes del comprobante de recepcion" (Orden sin habilitar y comprobante no
+      emitido) -> PROC-REP-050; "Comprobante emitido, factibilidad pendiente"
+      (comprobante emitido y Detalles AUTORIZADOS cuya factibilidad aun no se
+      evaluo: recien autorizados, redefinidos o agregados) -> PROC-REP-080, con la
+      Orden sin habilitar O ya habilitada; el resto de las salidas por estado no
+      cambia. La salida hacia PROC-REP-080 se evalua antes que las salidas por estado
+      porque PROC-REP-080 solo consulta disponibilidad (no reserva, no interrumpe la
+      Ejecucion vigente ni libera la toma) y vuelve a PROC-REP-211 por PROC-REP-090
+      ("Orden ya habilitada"). Asi una autorizacion parcial en una Orden ya
+      habilitada no omite la factibilidad de los Detalles autorizados y los demas
+      Detalles ejecutables no se bloquean (BR-REP-037). La factibilidad sigue siendo
+      del sistema por Detalle: no la decide ni la evalua Recepcion.
+    status: approved
+
+  - id: BR-REP-035
+    name: Evaluacion tecnica obligatoria de Detalles diagnosticados por Recepcion
+    description: >
+      Todo ReparacionDetail con origen del diagnostico RECEPCION
+      (BR-REP-026) requiere una evaluacion tecnica, cuyo resultado principal
+      puede ser la confirmacion, antes de iniciar su primera Ejecucion. La
+      evaluacion es individual por Detalle, la realiza un tecnico (ACT-TECH)
+      con la Orden ya tomada, ocurre despues de seleccionar el Detalle
+      (PROC-REP-181) y antes de las validaciones de estacion y de la reserva
+      real de insumos (PROC-REP-182/183 antes de PROC-REP-174 y PROC-REP-185),
+      y se registra sobre la DEFINICION VIGENTE del Detalle con tecnico,
+      fecha/hora, version evaluada, resultado y observaciones. Los Detalles de
+      origen REVISION_TECNICA no requieren una segunda confirmacion
+      independiente, porque el trabajo fue diagnosticado por el propio
+      tecnico; igualmente exigen autorizacion del cliente cuando corresponda
+      (BR-REP-028) y factibilidad antes de ejecutarse. La confirmacion es una
+      dimension propia, distinta de la autorizacion del cliente y de la
+      ejecucion: no sustituye la autorizacion, no la solicita de nuevo cuando
+      la definicion no cambio, y no garantiza stock. No se reserva ni consume
+      ningun insumo durante la evaluacion. Vigencia: si la definicion
+      permanece igual la confirmacion sigue vigente (no se vuelve a pedir, por
+      ejemplo al reseleccionar el Detalle ni al retomar la evaluacion tras
+      atender reparaciones adicionales); si el Detalle se redefine
+      (PROC-REP-127), la confirmacion anterior queda en el historial pero no
+      habilita la nueva definicion. Una definicion nueva registrada por el
+      tecnico a partir de una evaluacion o revision tecnica (PROC-REP-183 o
+      PROC-REP-126, luego PROC-REP-127) queda tecnicamente validada por ese
+      mismo acto y no exige una confirmacion redundante. Sin evaluacion
+      vigente, cuando el origen la requiere, la Ejecucion no puede iniciarse ni
+      reservarse insumos: todo camino a PROC-REP-185 pasa por PROC-REP-182. La
+      toma de la Orden (BR-REP-018) no exige evaluaciones previas y no se crea
+      una toma nueva para evaluar. Responsabilidades: el tecnico (ACT-TECH)
+      confirma, descarta y redefine tecnicamente, define los Detalles que
+      surgen de la revision tecnica inicial (PROC-REP-075) y los que detecta
+      durante la ejecucion o la evaluacion (PROC-REP-128); Recepcion
+      (ACT-RECEP) mantiene la definicion preliminar inicial (PROC-REP-070),
+      consulta al cliente y registra su autorizacion o desistimiento
+      (PROC-REP-046/047). No se agregan estados a la Orden ni
+      se modifica el ciclo operativo del Detalle; el modelo tecnico de
+      versiones de la definicion se resolvera mas adelante. Aplica a todos los
+      origenes de Orden cuando Recepcion diagnostica el Detalle.
+    status: approved
+
+  - id: BR-REP-036
+    name: Resultado principal de la evaluacion tecnica y reparaciones adicionales
+    description: >
+      La evaluacion tecnica de un Detalle diagnosticado por Recepcion
+      (PROC-REP-183) registra EXACTAMENTE UN resultado principal: CONFIRMADO,
+      DESCARTADO o REQUIERE_REDEFINICION. Son un registro de la evaluacion, no
+      estados operativos del Detalle, y se trazan aparte de las altas (Detalle,
+      version evaluada, tecnico, fecha/hora, resultado, motivo, observaciones y
+      efecto aplicado). El resultado principal se APLICA DE INMEDIATO sobre el
+      Detalle original, en el momento en que se registra, sin esperar a que se
+      registren, consulten o evaluen las reparaciones adicionales: el efecto no
+      se difiere detras de la consulta al cliente de los Detalles nuevos ni
+      detras de ninguna otra espera. Independientemente del resultado principal,
+      el tecnico puede detectar cero, una o varias reparaciones adicionales
+      (PROC-REP-184 -> PROC-REP-128): detectarlas es una accion complementaria,
+      no un cuarto resultado ni una alternativa a los anteriores, y no modifica
+      automaticamente el Detalle original (CONFIRMADO + adicional, DESCARTADO +
+      adicional y REQUIERE_REDEFINICION + otro trabajo independiente son
+      combinaciones validas). El orden es: primero el resultado principal y su
+      efecto sobre el Detalle original, luego las altas (0..N), que solo CREAN las
+      solicitudes de autorizacion de los Detalles nuevos, y despues el hilo
+      tecnico continua sin esperar su resolucion (BR-REP-037): el Detalle original
+      CONFIRMADO sigue a estacion, reserva e inicio; la factibilidad de los
+      pendientes de un origen distinto de CLIENTE_EXTERNO la evalua el sistema; y
+      la consulta al cliente la gestiona Recepcion por su carril propio. CONFIRMADO: la definicion es correcta; se
+      registra la confirmacion, se conserva la autorizacion vigente del cliente
+      y no se genera nueva definicion; el Detalle sigue elegible y habilitado
+      para estacion, reserva e inicio, y la existencia de Detalles adicionales
+      pendientes no lo bloquea ni invalida su confirmacion. DESCARTADO: la
+      reparacion diagnosticada no corresponde; motivo obligatorio; desde el
+      registro el Detalle no puede seleccionarse, ejecutarse ni reservar
+      insumos, y se cancela en el mismo recorrido con la capacidad de
+      FEAT-REP-009 (PROC-REP-300) con motivo tecnico DIAGNOSTICO_DESCARTADO, que
+      se diferencia del rechazo o desistimiento del cliente; conserva el
+      Detalle y su definicion historica, no inicia Ejecucion ni reserva
+      insumos, y no cancela los demas Detalles ni la Orden. No se invoca el
+      resolver hasta registrar las altas pendientes (PROC-REP-300 -> PROC-REP-184):
+      si el Detalle descartado era el unico y se identifica otra reparacion, la
+      Orden no finaliza ni pasa a TODO_CANCELADO antes de registrar y encaminar
+      el Detalle nuevo; si no hay mas Detalles, el resolver (PROC-REP-211) aplica
+      el circuito de custodia y devolucion de BR-REP-033. No se crea un estado
+      terminal DESCARTADO: CANCELADO con motivo tecnico lo representa. Es el
+      tipo de cancelacion "descarte tecnico" de DC08, con permiso propio
+      (BR-REP-039), distinto de la cancelacion administrativa y del
+      desistimiento solicitado por el cliente.
+      REQUIERE_REDEFINICION: el tecnico determina que el trabajo necesita otra
+      definicion; se registran motivo y observaciones; desde el registro la
+      definicion anterior queda invalidada y no puede ejecutarse; se mantiene el
+      mismo Detalle con su identidad e historial, se conserva la definicion
+      anterior y el TECNICO registra de inmediato una nueva definicion vigente
+      con sus snapshots mediante PROC-REP-127; la autorizacion anterior se
+      invalida para la definicion modificada y se solicita una nueva
+      (PROC-REP-046/047, BR-REP-029); se reevalua la factibilidad (PROC-REP-080)
+      antes de ejecutar y no se reservan insumos ni se inicia ejecucion sobre
+      una definicion invalidada. Se reutiliza PROC-REP-127 pero no el circuito de
+      espera PROC-REP-125/126, cuyas precondiciones (Detalle REQUIERE_DEFINICION
+      tras una Ejecucion interrumpida, Orden sin Detalle trabajable) no se
+      cumplen aqui. Reparaciones adicionales: cada una es un Detalle nuevo que
+      el tecnico define y registra con PROC-REP-128 (origen REVISION_TECNICA,
+      Tipo y precio snapshot, tecnico que lo detecto, fecha/hora, referencia a
+      la evaluacion durante la cual se detecto y autorizacion propia
+      PENDIENTE_AUTORIZACION, BR-REP-032); su historial es independiente del de
+      la evaluacion del Detalle original. Cada una requiere su propia decision
+      del cliente cuando corresponda y su propia factibilidad antes de
+      ejecutarse, sin invalidar la autorizacion del Detalle original y sin
+      bloquear a los demas Detalles autorizados. Idempotencia: el efecto
+      (cancelacion, redefinicion, alta) se aplica una sola vez; al volver por el
+      resolver y reseleccionar el Detalle original, PROC-REP-182 no lo evalua de
+      nuevo ni se duplican cancelaciones, definiciones ni altas. En todos los
+      casos se respeta la toma activa, la prioridad de la Orden y las Ejecuciones
+      de otros Detalles, y no se repiten PROC-REP-140/150 en una Orden ya
+      habilitada. Pendiente: el catalogo de motivos tecnicos.
+    status: approved
+
+  - id: BR-REP-037
+    name: Independencia operativa entre Detalles y autorizacion diferida
+    description: >
+      La trabajabilidad y la posibilidad de ejecutar se evaluan POR DETALLE. Un
+      Detalle puede iniciar o continuar una Ejecucion cuando cumple sus
+      condiciones particulares: (1) definicion vigente valida; (2) autorizacion
+      vigente del cliente, cuando corresponda (BR-REP-028); (3) confirmacion
+      tecnica vigente, si es exigible para su origen y definicion (BR-REP-035);
+      (4) compatibilidad con la estacion de trabajo (BR-REP-011); (5)
+      factibilidad y posibilidad de reservar los insumos (BR-REP-006); y (6)
+      ausencia de una restriccion operativa de la Orden que impida iniciar esa
+      ejecucion, como otra Ejecucion activa (BR-REP-007). El estado de los demas
+      Detalles (pendientes de autorizacion, de revision tecnica, de recursos o de
+      resolucion comercial) no constituye por si mismo una restriccion: mientras
+      exista un Detalle que pueda ejecutarse, el tecnico puede iniciarlo o
+      continuarlo sin esperar la resolucion de los otros, que conservan sus
+      bloqueos individuales y no se desbloquean automaticamente. Autorizacion
+      diferida: cuando un tecnico agrega una reparacion adicional (PROC-REP-128)
+      se CREA la solicitud de autorizacion (el Detalle nace PENDIENTE_AUTORIZACION
+      y queda visible para Recepcion) y su RESOLUCION efectiva (PROC-REP-046/047,
+      entrada EVT-REP-003, o espera PROC-REP-129 cuando ningun Detalle es
+      trabajable) es una actividad independiente de Recepcion que puede
+      gestionarse despues, sin exigir una respuesta inmediata del cliente y sin
+      detener la ejecucion de los Detalles habilitados. La ausencia de respuesta
+      no equivale a autorizacion ni a rechazo (PROC-REP-046, "Solicitud sin
+      resolver": no se registra ninguna decision ni se pasa por PROC-REP-047): el
+      Detalle permanece PENDIENTE_AUTORIZACION y no puede
+      ejecutarse hasta completar autorizacion y factibilidad. Una consulta
+      pendiente no bloquea el hilo operativo del tecnico: el flujo tecnico no
+      exige que PROC-REP-046/047 finalicen antes de que el tecnico retome un
+      Detalle independiente y ejecutable. Se conservan la toma activa (un unico
+      tecnico, historial de participaciones; ninguna consulta pendiente la cierra
+      o libera: solo se cierra cuando el resolver determina que no queda ningun
+      Detalle trabajable, BR-REP-018), la prioridad de cola, el hito historico de
+      habilitacion (sin repetir PROC-REP-140/150) y el maximo de una Ejecucion
+      activa por Orden (si hay una Ejecucion activa, la autorizacion o la
+      factibilidad aprobada de otro Detalle no inicia una segunda ejecucion
+      simultanea). Se pueden seleccionar distintos Detalles sin volver a tomar la
+      Orden. Control final: una Orden no pasa al control tecnico final
+      (PROC-REP-220), ni al cobro o a la entrega, mientras tenga Detalles
+      pendientes de autorizacion, de revision, de recursos o en ejecucion;
+      corresponde cuando todos los Detalles son terminales (BR-REP-012). Cuando
+      ningun Detalle es trabajable se mantiene la precedencia REQUIERE_REVISION >
+      PENDIENTE_AUTORIZACION > PENDIENTE_RECURSOS y se conservan todas las
+      causas. Un solo token: el grafo es secuencial y dibuja la resolucion de
+      Recepcion como una entrada propia (EVT-REP-003) que vuelve al resolver;
+      ninguna arista del hilo tecnico pasa obligatoriamente por PROC-REP-046/047.
+      La autorizacion comercial sigue siendo de Recepcion y la definicion
+      tecnica del tecnico (PROC-REP-075, 127 y 128).
+    status: approved
+
+  - id: BR-REP-038
+    name: Devolucion de dinero y saldo a favor del cliente
+    description: >
+      Cuando el Saldo de una Orden con circuito comercial (CLIENTE_EXTERNO) es
+      negativo -el cliente pago mas que el Total final-, es OBLIGATORIO
+      registrar la devolucion de dinero correspondiente antes de permitir la
+      entrega o el cierre comercial; haber identificado el saldo a favor no
+      habilita por si solo ninguna de las dos cosas. Formula: Saldo = Total final
+      de la OR - Pagos recibidos + Devoluciones realizadas. Total final, Pagos
+      recibidos y Devoluciones realizadas se mantienen separados: no se borran ni
+      modifican retroactivamente los Pagos originales y una devolucion NO se
+      representa como un Pago de importe negativo, sino como un movimiento
+      financiero distinto, para preservar la trazabilidad y los reportes.
+      Tratamiento: Saldo > 0, cobro pendiente (BR-REP-017, PROC-REP-266); Saldo =
+      0, se puede continuar si se cumplen las demas condiciones; Saldo < 0, se
+      registra una devolucion (PROC-REP-267); una devolucion parcial mantiene el
+      saldo a favor remanente pendiente y la Orden no se entrega; una devolucion
+      total deja Saldo = 0 y se revalida la condicion de entrega. Ejemplo: Total
+      $0, anticipo $5.000, devolucion $0 -> Saldo -5.000; tras devolver $3.000 ->
+      -2.000 (no entregable); tras otros $2.000 -> 0 (puede continuar). Registro
+      minimo de cada devolucion: identificador unico del movimiento, OR
+      relacionada, importe positivo devuelto, medio de devolucion, usuario
+      responsable, fecha/hora, referencia de la operacion y motivo; se conserva
+      el historial completo de devoluciones parciales y totales. Solo una
+      devolucion registrada y efectivamente realizada modifica el Saldo; una
+      intencion o solicitud pendiente no. No se admite una devolucion superior
+      al saldo a favor pendiente (salvo una regla adicional expresamente
+      aprobada) y una devolucion no se computa dos veces por reintentos o
+      reingresos al circuito (la referencia de la operacion identifica el
+      movimiento). No hay ciclos sin accion financiera: PROC-REP-265 y
+      PROC-REP-268 solo vuelven a evaluarse tras un movimiento real (Pago o
+      devolucion). Verificacion antes del fin: ninguna Orden finaliza
+      operativamente (EVT-REP-999) con saldo a favor pendiente; todos los cierres
+      (entrega, devolucion a Gestion RT, SIN_REPARACION, cancelaciones y
+      desistimientos) pasan por PROC-REP-268, y la verificacion previa a la
+      entrega esta en PROC-REP-265. Cortesia total (BR-REP-016): reduce el Total
+      final; si ya hay Pagos recibidos deja un saldo a favor que se devuelve
+      como cualquier otro, no habilita la entrega por si sola. Casos: revision
+      sin reparacion con anticipo
+      (Total $0, PROC-REP-069 -> 250 -> 260 -> 265 -> 267); cancelacion de
+      trabajos con anticipos (Total final menor que lo pagado, 211/305/306 ->
+      268 -> 267); varios Detalles con algunos completos y otros cancelados (se
+      devuelve unicamente el excedente, 265 -> 267). Independencia: la devolucion
+      de dinero no es la devolucion fisica del equipo ni la custodia
+      (BR-REP-033, PROC-REP-270/271); son dimensiones distintas y una no
+      sustituye a la otra. Responsabilidad (consolidacion V1.4, DC12C): registran
+      devoluciones por defecto Administracion o Recepcion, con permiso
+      configurable (PROC-REP-267, BR-REP-039); el catalogo de medios de
+      devolucion sigue pendiente. Origenes sin circuito comercial
+      (RT_INTERNO, RMA_GARANTIA_REPARACION, RT_GARANTIA_VENTA): no registran
+      pagos ni devoluciones; un saldo a favor en ellos no esta definido y se
+      documenta como pendiente funcional (la respuesta de PROC-REP-268 es siempre
+      "sin saldo a favor"). Relacion con BR-REP-014: los reembolsos de pagos ya
+      realizados cuando la Orden termina CANCELADA se tratan como saldo a favor
+      del cliente con esta regla; las demas consecuencias comerciales de una
+      cancelacion (por ejemplo penalidades) siguen pendientes. Una cortesia
+      total con Pagos recibidos tambien genera saldo a favor (DC11). Pendientes:
+      plazo o abandono si el cliente no retira el dinero y devoluciones
+      posteriores a ENTREGADA.
+    status: approved
+
+  - id: BR-REP-039
+    name: Permisos configurables por accion y contexto
+    description: >
+      Consolidacion V1.4 (DC08, DC27A y DC27B). Cada accion del proceso -un
+      nodo con actor o una capacidad transversal- se habilita mediante un
+      permiso. Los responsables declarados en el proceso (actor y
+      actores_alternativos de cada nodo, y los de cada capacidad transversal)
+      son los responsables PREDETERMINADOS; Administracion puede modificarlos,
+      delegarlos o restringirlos, y todo cambio queda auditado (BR-REP-040).
+      Un permiso es necesario pero no suficiente: se conservan las
+      restricciones de contexto de cada regla (por ejemplo, el titular de la
+      toma, el tecnico de la Ejecucion en curso, el estado de la Orden o su
+      origen) y ningun permiso habilita a saltear una regla de negocio (por
+      ejemplo, entregar con saldo distinto de cero). Excepcion especifica: la
+      liberacion de una Orden tomada por otro tecnico incluye la interrupcion
+      de su Ejecucion en curso (BR-REP-018); el permiso de liberar no concede
+      un permiso general para interrumpir Ejecuciones ajenas. Un usuario puede
+      tener varios roles: sus permisos efectivos son la union de los permisos de
+      sus roles, siempre sujeta a esas restricciones de contexto (DC27A). Tambien
+      son configurables los permisos de consulta de Ordenes, Clientes,
+      fotografias, documentos, pagos y reportes (DC27B). La cancelacion se
+      distingue en tres tipos con permiso propio (DC08): cancelacion
+      administrativa (predeterminado: Recepcion y Coordinacion, los
+      responsables vigentes), descarte tecnico (Tecnico, PROC-REP-183) y
+      desistimiento solicitado por el cliente, que registra Recepcion
+      (PROC-REP-046/047 y 056). Predeterminados confirmados: definir prioridad
+      (PROC-REP-150) Coordinacion o Recepcion (DC03); cambiar la prioridad
+      Tecnico, Recepcion y Coordinacion; liberar la Orden tomada por otro
+      tecnico, incluida la interrupcion de una Ejecucion en curso dentro de esa
+      operacion, Tecnico y Coordinacion (BR-REP-018); entregar (PROC-REP-270)
+      Administracion o Recepcion (DC03); anular pagos Administracion, delegable (DC10, BR-REP-017);
+      registrar devoluciones de dinero Administracion o Recepcion (DC12C,
+      BR-REP-038); definir y redefinir Detalles el Tecnico y gestionar las
+      autorizaciones del cliente Recepcion (DC06); registrar el check-in
+      Recepcion o Administracion (UAT-009, BR-REP-045); registrar pagos todo
+      usuario activo salvo Tecnico (BR-REP-017); override de recursos y de
+      estacion Coordinacion (BR-REP-003, PROC-REP-179). Predeterminados
+      provisionales, tomados de la implementacion y a validar con Rosario
+      Tecno: consultar el inventario todos los roles operativos; ingresos,
+      ajustes de stock y revalidacion masiva Administracion y Coordinacion
+      (BR-REP-049); sincronizar el catalogo de equipos Administracion y
+      Coordinacion (BR-REP-048); ajustar la garantia de un Detalle Recepcion y
+      Coordinacion (BR-REP-041); cargar fotografias Recepcion, Tecnico,
+      Coordinacion y Administracion (BR-REP-024). Pendientes, sin
+      predeterminado definido: los responsables de cada evento de custodia
+      (BR-REP-033) y los permisos iniciales por tipo de Ajuste Comercial
+      (BR-REP-016). La autenticacion y el almacenamiento de usuarios, roles y
+      permisos son una decision de arquitectura (DC27C), no de esta regla.
+    status: approved
+
+  - id: BR-REP-040
+    name: Administracion de configuracion y auditoria de cambios
+    description: >
+      Consolidacion V1.4 (DC23 y DC23AUD). Administracion administra los
+      catalogos y parametros del proceso y sus valores predeterminados: entre
+      otros, tipos de reparacion con su precio, puntaje y garantia, insumos,
+      Mesas de trabajo (Estaciones) y sus tipos habilitados, checklist de
+      recepcion por tipo de equipo, politicas de garantia, plantillas de
+      mensajes y permisos. Esa administracion es delegable mediante permisos
+      (BR-REP-039). Todo cambio de configuracion queda auditado con usuario,
+      fecha/hora, valor anterior y valor nuevo, y se conserva el historial de
+      precios. Los cambios posteriores nunca alteran las condiciones ya
+      registradas en una reparacion: cada Detalle, Ejecucion y documento
+      conserva su copia de lo que se aplico (precio, puntaje, garantia,
+      checklist, datos del equipo). El catalogo de equipos lo mantiene Ventas
+      y RMA solo lo sincroniza (BR-REP-048).
+    status: approved
+
+  - id: BR-REP-041
+    name: Politica de garantia configurable y garantia por Detalle
+    description: >
+      Consolidacion V1.4 (DC15A, con lo confirmado en UAT, iteracion 1 y
+      UAT-009). La garantia se asigna a cada Detalle de reparacion, no solo a
+      la Orden. Su plazo surge de una politica configurable por tipo de
+      reparacion y por el resultado del check-in, administrada desde
+      Administracion (BR-REP-040); las precedencias entre politicas y sus
+      excepciones se definen desde Administracion y su contenido concreto sigue
+      pendiente de decision. Politica vigente confirmada en UAT: con el
+      check-in registrado como realizado se sugieren 90 dias y con el check-in
+      registrado como no realizado, 30 dias, por cada Detalle no cancelado
+      (BR-REP-045). Que plazo rige mientras no hay un check-in registrado, o en
+      las Ordenes que no lo exigen, forma parte de las precedencias pendientes.
+      Se conservan el plazo sugerido y el
+      definitivo; un usuario autorizado puede ajustar el plazo manualmente con
+      motivo antes de la entrega, el ajuste queda registrado y una nueva
+      sugerencia nunca lo pisa. La vigencia se cuenta desde la entrega del
+      equipo al cliente, nunca desde la creacion de la Orden ni desde la
+      finalizacion tecnica. Cada Detalle conserva la condicion de garantia que
+      se le aplico (politica, sugerido, ajustes y definitivo) para su
+      trazabilidad, y esa condicion es la que valida PROC-REP-036 en un
+      reclamo de garantia RMA (BR-REP-019). El comprobante final informa el
+      plazo definitivo y el vencimiento de cada Detalle.
+    status: approved
+
+  - id: BR-REP-042
+    name: Firma y evidencia de los documentos
+    description: >
+      Consolidacion V1.4 (DC26). Un documento puede firmarse con una firma
+      manuscrita en pantalla o con una foto o archivo del documento firmado. La
+      evidencia queda ligada al documento y a la version firmada, con usuario y
+      fecha/hora de registro, y nunca se borra. Una version nueva del documento
+      (BR-REP-031) no hereda la firma de la anterior. Cuando es obligatoria cada
+      firma, segun el documento, sigue pendiente de decision; el comprobante de
+      autorizacion (AUT) se definio en UAT sin firma obligatoria. Registrar la
+      evidencia nunca se infiere de haber generado o compartido el documento.
+    status: approved
+
+  - id: BR-REP-043
+    name: Consentimiento y preferencias de comunicacion
+    description: >
+      Consolidacion V1.4 (DC30). El cliente tiene consentimientos y preferencias
+      de comunicacion por finalidad, que distinguen los mensajes operativos
+      (avisos sobre su Orden) de los comerciales. Cada consentimiento registra
+      la finalidad, el canal, la fecha/hora, el origen (como se obtuvo) y, si
+      ocurre, su revocacion, que se conserva en el historial. El envio de un
+      mensaje respeta el consentimiento y las preferencias vigentes para su
+      finalidad y canal. Como se obtiene el consentimiento en el ingreso y que
+      mensajes concretos requiere cada finalidad se definen con las plantillas
+      y disparadores (pendientes, DC25).
+    status: approved
+
+  - id: BR-REP-044
+    name: Comunicaciones asistidas con plantillas e historial
+    description: >
+      Consolidacion V1.4 (DC25, etapa 1). Los mensajes al cliente se preparan
+      desde plantillas configurables (BR-REP-040) y se envian de forma asistida:
+      el sistema prepara el texto y, cuando el dispositivo lo permite, el
+      documento a compartir, y abre WhatsApp con el telefono del cliente
+      normalizado. Abrir WhatsApp no equivale a enviar: nada se marca como
+      enviado ni entregado automaticamente (mejoras UAT del 16/10/2026). Cada
+      envio asistido queda en el historial de comunicaciones de la Orden, con la
+      plantilla, el destinatario, el canal, el documento compartido, el usuario
+      y la fecha/hora. Se respeta el consentimiento por finalidad (BR-REP-043).
+      Etapa 2 (DC25): proveedor oficial, con estados de envio y reintentos.
+      Pendientes: plantillas, disparadores y proveedor.
+    status: approved
+
+  - id: BR-REP-045
+    name: Check-in de entrega
+    description: >
+      Consolidacion V1.4 (UAT-009 y sus decisiones aprobadas del 20/10/2026).
+      El check-in registra si se pudieron verificar las funciones basicas del
+      equipo: realizado o no realizado. Se registra con la reparacion lista
+      (todos los trabajos terminados y aprobados en control) y antes de
+      entregar. Lo registran Recepcion o Administracion (predeterminado,
+      BR-REP-039), con usuario y fecha/hora, y el registro queda auditado. Si
+      el check-in puede corregirse o registrarse otra vez antes de la entrega,
+      hasta cuando y como afecta eso al comprobante final siguen pendientes de
+      decision. En CLIENTE_EXTERNO, con trabajos realizados y garantia
+      aplicable, la entrega exige el check-in registrado (PROC-REP-265 ->
+      PROC-REP-269); el criterio exacto para determinar cuando la garantia es
+      aplicable sigue pendiente de definicion; sin trabajos realizados,
+      RT_INTERNO y la garantia RMA no lo exigen. El ingreso y su comprobante no
+      lo piden. Al registrarlo se reasigna la garantia sugerida de cada Detalle
+      no cancelado (BR-REP-041) sin pisar los ajustes manuales. La notificacion y
+      el cobro no dependen del check-in, y el aviso al cliente no comunica una
+      garantia definitiva no confirmada. El comprobante final lleva el
+      resultado del check-in. Las Ordenes anteriores con check-in registrado al
+      ingresar conservan su validez.
+    status: approved
+
+  - id: BR-REP-046
+    name: Ingreso inicial simplificado y comprobante de ingreso y autorizacion
+    description: >
+      Consolidacion V1.4 (UAT-008, decidido tras la primera reunion de UAT con
+      Recepcion y Taller). En el ingreso inicial de CLIENTE_EXTERNO, Recepcion
+      crea la Orden (cliente, equipo, falla declarada, estado fisico,
+      accesorios y observaciones), carga uno o varios Detalles con su precio y
+      genera el comprobante de ingreso y autorizacion (ING). Esa unica accion
+      ejecuta en una sola operacion consistente, sin estados parcialmente
+      confirmados si algo falla: la confirmacion de la recepcion fisica
+      (BR-REP-033), la finalizacion de la definicion inicial, el registro de la
+      autorizacion inicial de los Detalles incluidos con el canal elegido
+      (BR-REP-028), la emision del comprobante (PROC-REP-050/060, BR-REP-031),
+      la factibilidad y, cuando corresponde, la primera habilitacion
+      (PROC-REP-080/090/140) y el ingreso a la cola con prioridad 4 - Normal
+      (PROC-REP-150/170, BR-REP-034); si un Detalle espera recursos, el ingreso a
+      la cola ocurre cuando vuelve a ser factible. Los eventos de cada nodo se
+      conservan para la trazabilidad. En ese camino no se ofrecen acciones
+      separadas de confirmacion fisica, finalizacion ni primera autorizacion, y
+      un reintento o doble clic no duplica documentos ni registros. Si falta
+      informacion obligatoria se indica que completar: el comprobante exige al
+      menos un trabajo; que el estado fisico sea obligatorio es una decision de
+      la implementacion pendiente de confirmar. Generar el comprobante no
+      equivale a enviarlo ni registra que el cliente lo recibio o firmo. Aplica
+      solo al ingreso inicial de CLIENTE_EXTERNO: RT_INTERNO, la garantia RMA,
+      el camino de revision tecnica y las autorizaciones posteriores conservan
+      su circuito explicito. El check-in no forma parte del ingreso (UAT-009,
+      BR-REP-045).
+    status: approved
+
+  - id: BR-REP-047
+    name: Reparacion no tipificada "Otros"
+    description: >
+      Consolidacion V1.4 (UAT, iteracion 1). Ademas de los tipos del catalogo,
+      Recepcion puede registrar un Detalle "Otros - Reparacion no tipificada"
+      con una descripcion y un precio manual, sin crear un tipo de catalogo por
+      cada reparacion manual. El Detalle sigue el mismo circuito que cualquier
+      otro (autorizacion, ejecucion, control, cobro y garantia), su precio
+      manual es su snapshot (BR-REP-015) y debe poder distinguirse de un tipo
+      parametrizado en los reportes. No se inventan insumos previstos: no
+      reserva ni consume insumos que no se registren. Decisiones de la
+      implementacion pendientes de confirmar: puntaje 0 y compatibilidad con
+      cualquier Mesa de trabajo. La futura administracion de tipos de
+      reparacion (BR-REP-040) podra administrar esta opcion sin cambiar este
+      comportamiento.
+    status: approved
+
+  - id: BR-REP-048
+    name: Catalogo de equipos de Ventas
+    description: >
+      Consolidacion V1.4 (integracion confirmada el 22/10/2026 y DC20). RMA
+      usa una copia local del catalogo de productos de Ventas para elegir las
+      caracteristicas comerciales del Equipo en el alta de CLIENTE_EXTERNO:
+      Modelo, Variante, Capacidad y Color, solo con las combinaciones que
+      existen. El Equipo guarda el tp_id del producto como referencia comercial
+      y una copia de esas caracteristicas: el tp_id identifica un tipo de
+      producto, nunca la unidad, y no reemplaza la identidad fisica del Equipo
+      (BR-REP-022). Si el equipo no esta en el catalogo, o no hay copia
+      disponible, se carga a mano. La copia se actualiza por sincronizacion
+      manual (permiso configurable, BR-REP-039): conserva los tp_id originales,
+      valida estructura y unicidad, nunca borra (lo que Ventas deja de informar
+      o elimina queda no vigente), conserva la ultima copia valida si la lectura
+      falla y registra fecha, usuario y resultado de cada intento. El alta de
+      una Orden nunca consulta el origen de Ventas en linea, y un cambio
+      posterior del catalogo no reescribe Ordenes ni documentos.
+    status: approved
+
+  - id: BR-REP-049
+    name: Gestion operativa del stock
+    description: >
+      Consolidacion V1.4 (gestion de inventario aprobada el 14/10/2026,
+      formalizada por DC16). Por insumo se distinguen stock fisico, reservado y
+      disponible = fisico - reservado; el disponible puede ser negativo por un
+      override (BR-REP-003) o un faltante. Un ingreso de stock registra una
+      cantidad positiva, motivo u origen, usuario, fecha/hora y referencia
+      opcional, y aumenta el stock fisico. Un ajuste manual se expresa como
+      diferencia positiva o negativa, con motivo obligatorio; todo ajuste
+      negativo exige confirmacion explicita, y si deja disponible negativo por
+      reservas existentes se advierte antes de confirmar. Ningun ingreso o
+      ajuste modifica reservas, Detalles ni Ejecuciones, ningun ajuste deja
+      stock fisico negativo y no se duplican movimientos. Los movimientos son
+      inmutables y trazados (insumo, tipo, cantidad, fecha/hora, responsable,
+      Orden y Detalle cuando corresponde, motivo y referencia); un faltante se
+      corrige con un movimiento nuevo, sin borrar la evidencia. La revalidacion
+      de Ordenes que esperan recursos evalua solo los Detalles bloqueados por
+      recursos, sin reservar stock, sin repetir PROC-REP-140, sin cambiar la
+      prioridad ni interrumpir tomas o Ejecuciones, y respetando autorizaciones
+      y revisiones pendientes (PROC-REP-080/120, BR-REP-034). Los permisos de
+      consulta, ingresos, ajustes y revalidacion son provisionales (BR-REP-039).
+      Fuera de alcance: compras, lotes y costos (proceso de Compras, DC24 y
+      DC24LOT) e inventarios fisicos periodicos. Pendiente de decision: el
+      catalogo de tipos de movimiento (DESPERDICIO de BR-REP-005 frente a
+      DEVOLUCION de la implementacion).
+    status: approved

@@ -38,10 +38,10 @@ meta:
     - traceability/hp-rep-001.yaml (TASK-REP-030 y la nota de TASK-REP-088 se actualizan)
     - traceability/exc-rep-002.yaml (no se modifica; BR-REP-003 suma la vigencia del override)
   sources:
-    process: business/processes/repair-management-v1.3.yaml
-    rules: business/rules/business-rules-v1.3.yaml
-    features: business/features/repair-management-features-v1.3.yaml
-    scenarios: business/scenarios/repair-management-scenarios-v1.3.yaml
+    process: business/processes/repair-management-v1.4.yaml
+    rules: business/rules/business-rules-v1.4.yaml
+    features: business/features/repair-management-features-v1.4.yaml
+    scenarios: business/scenarios/repair-management-scenarios-v1.4.yaml
     convention: traceability/README.md
     constitution: .specify/memory/constitution.md
     backend: app/backend/
@@ -64,8 +64,8 @@ meta:
 items:
 
   - {id: DOM-RMA, type: business_domain, name: Area funcional RMA, status: active, source: traceability/README.md}
-  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: draft, version: "1.3", source: business/processes/repair-management-v1.3.yaml}
-  - {id: EXC-REP-004, type: scenario, name: "Detalle requiere revision tecnica posterior (REQUIERE_REVISION)", status: draft, scenario_type: EXCEPTION, scope: FEATURE, source: business/scenarios/repair-management-scenarios-v1.3.yaml}
+  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: approved, version: "1.4", source: business/processes/repair-management-v1.4.yaml}
+  - {id: EXC-REP-004, type: scenario, name: "Detalle requiere revision tecnica posterior (REQUIERE_REVISION)", status: draft, scenario_type: EXCEPTION, scope: FEATURE, source: business/scenarios/repair-management-scenarios-v1.4.yaml}
 
   - {id: FEAT-REP-002, type: feature, name: "Diagnostico y gestion de Detalles de Reparacion", status: draft, feature_status: draft, implemented_scenario: [EXC-REP-004], implemented_slice_status: IMPLEMENTED, nodes_total: 10, nodes_in_slice: 3, spec: specs/002-feat-rep-002-hp-slice/}
   - {id: FEAT-REP-005, type: feature, name: "Ejecucion de Detalles y gestion de insumos", status: draft, feature_status: draft, implemented_scenario: [EXC-REP-004], implemented_slice_status: IMPLEMENTED, nodes_total: 11, nodes_in_slice: 3, spec: specs/005-feat-rep-005-hp-slice/}

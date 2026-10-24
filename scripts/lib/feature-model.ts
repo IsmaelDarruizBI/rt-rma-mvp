@@ -61,7 +61,16 @@ export interface FeatureDefinition {
   purpose: string;
   inputs: string[];
   outputs: string[];
+  /**
+   * Optional, PROCESS by default. A TRANSVERSAL Feature (permissions,
+   * configuration administration) owns no process node: process_nodes is
+   * empty and governed_nodes lists the nodes whose responsibles or
+   * configuration it governs. Ownership-based logic (scenario activation,
+   * node coverage) never treats governed_nodes as ownership.
+   */
+  kind?: "PROCESS" | "TRANSVERSAL";
   process_nodes: string[];
+  governed_nodes?: string[];
   /** Optional (V1.2 Features predate this field and never declare it). */
   shared_node_bindings?: SharedNodeBinding[];
   business_rules: string[];

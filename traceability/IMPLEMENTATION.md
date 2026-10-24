@@ -12,6 +12,25 @@ habia ninguna implementacion.
 > sigue vigente, y lleva al principio un aviso de que sus afirmaciones
 > sobre "no hay implementacion todavia" quedaron desactualizadas.
 
+## Sincronizacion con la baseline V1.4 (DC02, 24/10/2026)
+
+`business/` es desde esta fecha la copia generada de la baseline vigente
+V1.4 de `rt-rma-app` (etiqueta `v1.4-baseline`, commit `e99b283`), con su
+manifiesto `business/FUNCTIONAL_SOURCE.json`. Ver
+[`../docs/sincronizacion-funcional.md`](../docs/sincronizacion-funcional.md).
+
+- Los grafos `traceability/*.yaml` citan V1.4 como fuente y sus identidades
+  de negocio validan contra V1.4. Sus campos de contexto (`in_scenario`,
+  `implemented`, `coverage`) siguen describiendo los slices construidos
+  sobre V1.3; su revision contra los Scenarios V1.4 queda pendiente.
+- Lo que el producto todavia no hace como dice V1.4 esta en
+  [`discrepancias-baseline-v1.4.md`](./discrepancias-baseline-v1.4.md).
+- Las secciones que siguen describen el estado anterior a esta fecha: sus
+  menciones a V1.3 y sus "pendientes de formalizacion" son historicas. Lo
+  que V1.4 formalizo figura en las incorporaciones de UAT del registro de
+  decisiones (DC16).
+- El codigo del producto no cambio con la sincronizacion.
+
 ## Que se agrego
 
 | Artefacto | Ruta |
@@ -120,7 +139,7 @@ Emisiones de documentos a pedido (MVP v2), tambien sin nodo propio:
 
 ```bash
 npm run validate:traceability    # solo el grafo de trazabilidad
-npm run validate:all             # validate:v1.3 + validate:traceability
+npm run validate:all             # copia funcional, discrepancias, V1.4, V1.3 y trazabilidad
 ```
 
 El validador esta escrito en TypeScript sobre `tsx`, igual que

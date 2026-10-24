@@ -50,7 +50,7 @@
           "items": { "type": "string" },
           "minItems": 1,
           "uniqueItems": true,
-          "description": "Otros actores igualmente autorizados a ejecutar este nodo, ademas del declarado en 'actor'. Opcional y retrocompatible: un nodo sin este campo admite unicamente su 'actor'. No establece jerarquia: 'actor' es el actor historico/principal y estos son alternativas equivalentes."
+          "description": "Otros actores igualmente autorizados a ejecutar este nodo, ademas del declarado en 'actor'. Opcional y retrocompatible: un nodo sin este campo admite unicamente su 'actor'. No establece jerarquia: 'actor' es el actor historico/principal y estos son alternativas equivalentes. Son los responsables PREDETERMINADOS: el permiso efectivo es configurable desde Administracion (BR-REP-039)."
         },
         "inputs": {
           "type": "array",

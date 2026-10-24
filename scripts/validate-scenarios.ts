@@ -16,7 +16,8 @@
  *      step[n+1].from;
  *    - a HAPPY_PATH/E2E scenario must start at one of the process's entry
  *      points (a start/event node with no incoming edge, e.g. EVT-REP-001 or
- *      EVT-REP-002) and end at its end node;
+ *      EVT-REP-002) and end at one of its end nodes (V1.4 has EVT-REP-999,
+ *      the end of an Order, and EVT-REP-998, a warranty intake not admitted);
  *    - every FUNCTIONAL_ACTION step's `feature` must exist in the
  *      Features file;
  *    - skipped_nodes (optional) must exist, be unique and never overlap
@@ -189,7 +190,7 @@ export function validateScenario(
     const startNodes = processModel.nodes.filter(
       (node) => (node.type === "start" || node.type === "event") && !hasIncoming.has(node.id)
     );
-    const endNode = processModel.nodes.find((node) => node.type === "end");
+    const endNodes = processModel.nodes.filter((node) => node.type === "end");
     if (edgeSteps.length === 0) {
       errors.push("HAPPY_PATH/E2E sin ningun step PROCESS_EDGE");
     } else {
@@ -199,8 +200,9 @@ export function validateScenario(
             `comienza en "${edgeSteps[0].from}"`
         );
       }
-      if (endNode && edgeSteps[edgeSteps.length - 1].to !== endNode.id) {
-        errors.push(`HAPPY_PATH/E2E debe terminar en "${endNode.id}", termina en "${edgeSteps[edgeSteps.length - 1].to}"`);
+      const last = edgeSteps[edgeSteps.length - 1].to;
+      if (endNodes.length > 0 && !endNodes.some((node) => node.id === last)) {
+        errors.push(`HAPPY_PATH/E2E debe terminar en "${endNodes.map((node) => node.id).join("\", \"")}", termina en "${last}"`);
       }
     }
   }

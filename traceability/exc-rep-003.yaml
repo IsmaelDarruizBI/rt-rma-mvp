@@ -47,10 +47,10 @@ meta:
     - traceability/exc-rep-001.yaml (no se modifica)
     - traceability/exc-rep-002.yaml (se ajustan FR-REP-117 y TEST-REP-422)
   sources:
-    process: business/processes/repair-management-v1.3.yaml
-    rules: business/rules/business-rules-v1.3.yaml
-    features: business/features/repair-management-features-v1.3.yaml
-    scenarios: business/scenarios/repair-management-scenarios-v1.3.yaml
+    process: business/processes/repair-management-v1.4.yaml
+    rules: business/rules/business-rules-v1.4.yaml
+    features: business/features/repair-management-features-v1.4.yaml
+    scenarios: business/scenarios/repair-management-scenarios-v1.4.yaml
     convention: traceability/README.md
     constitution: .specify/memory/constitution.md
     backend: app/backend/
@@ -73,8 +73,8 @@ meta:
 items:
 
   - {id: DOM-RMA, type: business_domain, name: Area funcional RMA, status: active, source: traceability/README.md}
-  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: draft, version: "1.3", source: business/processes/repair-management-v1.3.yaml}
-  - {id: EXC-REP-003, type: scenario, name: "Reserva de insumos fallida al iniciar la Ejecucion", status: draft, scenario_type: EXCEPTION, scope: FEATURE, source: business/scenarios/repair-management-scenarios-v1.3.yaml}
+  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: approved, version: "1.4", source: business/processes/repair-management-v1.4.yaml}
+  - {id: EXC-REP-003, type: scenario, name: "Reserva de insumos fallida al iniciar la Ejecucion", status: draft, scenario_type: EXCEPTION, scope: FEATURE, source: business/scenarios/repair-management-scenarios-v1.4.yaml}
 
   - {id: FEAT-REP-005, type: feature, name: "Ejecucion de Detalles y gestion de insumos", status: draft, feature_status: draft, implemented_scenario: [EXC-REP-003], implemented_slice_status: IMPLEMENTED, nodes_total: 11, nodes_in_slice: 3, spec: specs/005-feat-rep-005-hp-slice/}
 

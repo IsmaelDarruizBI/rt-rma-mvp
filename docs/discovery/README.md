@@ -1,5 +1,12 @@
 # Business Process Discovery
 
+> **Copia historica.** Este documento es la copia del descubrimiento de
+> `rt-rma-app` tal como estaba el 02/10/2026 y describe V1.2 y V1.3. La
+> version vigente, con la consolidacion V1.4 aprobada en DC01, esta en
+> `rt-rma-app`, `docs/discovery/README.md`, etiqueta `v1.4-baseline`. La
+> definicion funcional vigente de este repositorio es la copia generada de
+> `business/` (`docs/sincronizacion-funcional.md`).
+
 Esta carpeta documenta el proceso de descubrimiento y modelado de negocio,
 la primera etapa de la trazabilidad E2E descrita en el
 [README principal](../../README.md).

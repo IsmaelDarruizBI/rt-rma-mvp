@@ -282,11 +282,11 @@ features:
           sea trabajable por recursos
         - Revalidar factibilidad ante un evento de cambio de
           disponibilidad
-        - Permitir un override autorizado sobre un Detalle especifico
+        - Permitir un override autorizado sobre un Detalle especifico (que
+          habilita continuar con disponibilidad insuficiente y el posterior
+          uso del insumo aun con stock negativo, BR-REP-003)
         - Registrar usuario, fecha, Detalle, motivo y validacion ignorada
-          del override (solo registra la autorizacion; la reserva y el
-          consumo posteriores, de FEAT-REP-005, quedan habilitados para ese
-          Detalle segun BR-REP-003 y BR-REP-006)
+          del override
         - Ofrecer el override como capacidad transversal por Detalle
           bloqueado por recursos, tambien con factibilidad parcial y con la
           Orden ya habilitada, en cola, tomada o en reparacion, sin
@@ -354,8 +354,7 @@ features:
 
     scope:
       includes:
-        - Definir prioridad de ejecucion (ACT-COORD o ACT-RECEP, ver
-          PROC-REP-150 actores_alternativos)
+        - Definir prioridad de ejecucion
         - Ingresar la Orden a EN_COLA
         - Validar sesion activa del tecnico
         - Validar Estacion de Trabajo asociada, configurada y OPERATIVA
@@ -389,13 +388,6 @@ features:
         aqui se registra es la base conceptual para ese reporting futuro,
         sin agregar nodos nuevos al Business Process (ver
         docs/discovery/README.md, Pendientes de V1.3).
-      - >
-        Auto-ingreso a cola: cuando una Orden queda HABILITADA podria
-        ingresar automaticamente a EN_COLA con una prioridad por defecto,
-        que Recepcion o Coordinacion ajustarian despues. Alteraria el
-        recorrido de HP-REP-001 (PROC-REP-150 dejaria de ser una accion
-        humana obligatoria), por lo que queda fuera de alcance hasta que
-        se modele como variante del Scenario. No implementado.
 
   - id: FEAT-REP-005
     name: Ejecucion de Detalles y gestion de insumos
@@ -737,9 +729,7 @@ features:
         - Incluir garantia de reparacion cuando corresponda
         - Evitar generar garantia cuando el resultado sea SIN_REPARACION
         - Entregar el equipo, una vez superada la validacion de
-          condicion de entrega (ACT-ADMIN o ACT-RECEP, ver PROC-REP-270
-          actores_alternativos; la condicion comercial no cambia por el
-          actor)
+          condicion de entrega
         - Registrar estado ENTREGADA para los flujos correspondientes
         - Informar el resultado a Gestion RT para equipos internos
 

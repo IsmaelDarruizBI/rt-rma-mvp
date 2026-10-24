@@ -76,14 +76,16 @@ export function checkGlobalConsistency(inputs: TraceFileItems[]): GlobalResult {
 /**
  * Business-layer identity: items of these types are references/cache of
  * the business Source of Truth, never new definitions. Keyed by the
- * traceability `type`.
+ * traceability `type`. The Source of Truth is the baseline in force,
+ * PROC-REP V1.4 (DC01), synchronized from rt-rma-app (DC02); V1.3 stays in
+ * business/ only as history.
  */
 export const BUSINESS_SOURCES: Record<string, { file: string; listKey: string; idPrefix?: string }> = {
-  feature: { file: "business/features/repair-management-features-v1.3.yaml", listKey: "features" },
-  business_rule: { file: "business/rules/business-rules-v1.3.yaml", listKey: "rules" },
-  process_node: { file: "business/processes/repair-management-v1.3.yaml", listKey: "nodes", idPrefix: "PROC-" },
-  business_event: { file: "business/processes/repair-management-v1.3.yaml", listKey: "nodes", idPrefix: "EVT-" },
-  scenario: { file: "business/scenarios/repair-management-scenarios-v1.3.yaml", listKey: "scenarios" },
+  feature: { file: "business/features/repair-management-features-v1.4.yaml", listKey: "features" },
+  business_rule: { file: "business/rules/business-rules-v1.4.yaml", listKey: "rules" },
+  process_node: { file: "business/processes/repair-management-v1.4.yaml", listKey: "nodes", idPrefix: "PROC-" },
+  business_event: { file: "business/processes/repair-management-v1.4.yaml", listKey: "nodes", idPrefix: "EVT-" },
+  scenario: { file: "business/scenarios/repair-management-scenarios-v1.4.yaml", listKey: "scenarios" },
 };
 
 /** type -> (id -> name) as declared by the Source of Truth. */

@@ -215,12 +215,7 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-180
-        to: PROC-REP-212
-
-      - kind: PROCESS_EDGE
-        from: PROC-REP-212
         to: PROC-REP-181
-        condition: Si
 
       - kind: PROCESS_EDGE
         from: PROC-REP-181
@@ -497,12 +492,7 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-180
-        to: PROC-REP-212
-
-      - kind: PROCESS_EDGE
-        from: PROC-REP-212
         to: PROC-REP-181
-        condition: Si
 
       - kind: PROCESS_EDGE
         from: PROC-REP-181
@@ -795,12 +785,7 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-180
-        to: PROC-REP-212
-
-      - kind: PROCESS_EDGE
-        from: PROC-REP-212
         to: PROC-REP-181
-        condition: Si
 
       - kind: PROCESS_EDGE
         from: PROC-REP-181
@@ -1292,12 +1277,17 @@ scenarios:
       falta de recursos), pero un usuario autorizado decide forzar igualmente
       como trabajable el Detalle bloqueado (PROC-REP-110 = Si, BR-REP-003): el
       override se registra sobre ese Detalle especifico (PROC-REP-130) y la
-      Orden continua el flujo normal hacia PROC-REP-140, igual que si el
-      recurso hubiera estado disponible. Consecuencia posterior (BR-REP-003,
-      aclaracion confirmada): al iniciar y consumir ese Detalle,
-      PROC-REP-185/210 -que no son nodos de este Scenario- pueden dejar la
-      disponibilidad y el stock fisico negativos. Origen: analisis estructural
-      CAND-REP-019, confirmado como Scenario real en
+      Orden continua el flujo normal hacia PROC-REP-140. La falta de stock es
+      conocida durante la factibilidad y Coordinacion la acepta
+      conscientemente: el Detalle overrideado queda habilitado para continuar
+      y, como consecuencia posterior de esa autorizacion (BR-REP-003), su
+      reserva real (PROC-REP-185) puede exceder el stock disponible y su
+      consumo (PROC-REP-210) puede dejar el stock fisico negativo.
+      PROC-REP-130 solo registra la autorizacion: no reserva ni consume, y
+      185/210 no forman parte de la trayectoria de esta excepcion. A
+      diferencia de EXC-REP-003 (falta no autorizada detectada recien al
+      reservar), aqui la falta es conocida y autorizada. Origen: analisis
+      estructural CAND-REP-019, confirmado como Scenario real en
       generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
       Override como capacidad transversal por Detalle (MVP v2, BR-REP-003): la
       misma autorizacion tambien cubre la factibilidad parcial en
@@ -1366,8 +1356,14 @@ scenarios:
         to: PROC-REP-140
 
     expected:
+      - key: override_scope
+        label: Alcance de la autorizacion
+        value: DETALLE_ESPECIFICO
       - key: detail_workable_after_override
         label: Detalle trabajable tras el override
+        value: true
+      - key: later_reservation_may_exceed_stock
+        label: La reserva/consumo posterior del Detalle puede dejar stock negativo
         value: true
       - key: override_available_with_partial_feasibility
         label: El override se ofrece por Detalle aunque otros Detalles sean trabajables

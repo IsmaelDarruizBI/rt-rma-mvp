@@ -51,10 +51,10 @@ meta:
     - traceability/hp-rep-002.yaml (HP-REP-002; no se modifica)
     - traceability/hp-rep-003.yaml (HP-REP-003; no se modifica)
   sources:
-    process: business/processes/repair-management-v1.3.yaml
-    rules: business/rules/business-rules-v1.3.yaml
-    features: business/features/repair-management-features-v1.3.yaml
-    scenarios: business/scenarios/repair-management-scenarios-v1.3.yaml
+    process: business/processes/repair-management-v1.4.yaml
+    rules: business/rules/business-rules-v1.4.yaml
+    features: business/features/repair-management-features-v1.4.yaml
+    scenarios: business/scenarios/repair-management-scenarios-v1.4.yaml
     convention: traceability/README.md
     constitution: .specify/memory/constitution.md
     backend: app/backend/
@@ -79,9 +79,9 @@ items:
   # Capa de negocio (referenciada, NO redefinida)
 
   - {id: DOM-RMA, type: business_domain, name: Area funcional RMA, status: active, source: traceability/README.md}
-  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: draft, version: "1.3", source: business/processes/repair-management-v1.3.yaml}
-  - {id: VAR-REP-001, type: scenario, name: "Ingreso sin diagnostico conocido, con comprobante de recepcion", status: draft, scenario_type: VARIANT, scope: FEATURE, source: business/scenarios/repair-management-scenarios-v1.3.yaml}
-  - {id: VAR-REP-002, type: scenario, name: "Ingreso sin diagnostico conocido, sin comprobante (equipo RT)", status: draft, scenario_type: VARIANT, scope: FEATURE, source: business/scenarios/repair-management-scenarios-v1.3.yaml}
+  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: approved, version: "1.4", source: business/processes/repair-management-v1.4.yaml}
+  - {id: VAR-REP-001, type: scenario, name: "Ingreso sin diagnostico conocido, con comprobante de recepcion", status: draft, scenario_type: VARIANT, scope: FEATURE, source: business/scenarios/repair-management-scenarios-v1.4.yaml}
+  - {id: VAR-REP-002, type: scenario, name: "Ingreso sin diagnostico conocido, sin comprobante (equipo RT)", status: draft, scenario_type: VARIANT, scope: FEATURE, source: business/scenarios/repair-management-scenarios-v1.4.yaml}
 
   - {id: FEAT-REP-002, type: feature, name: "Diagnostico y gestion de Detalles de Reparacion", status: draft, feature_status: draft, implemented_scenario: [VAR-REP-001, VAR-REP-002], implemented_slice_status: IMPLEMENTED, nodes_total: 10, nodes_in_slice: 5, spec: specs/002-feat-rep-002-hp-slice/}
 

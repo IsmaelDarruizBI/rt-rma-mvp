@@ -1,8 +1,9 @@
 # Rosario Tecno RMA App Constitution
 
 Alcance de esta constitution: el trabajo de especificacion y trazabilidad
-del MVP ya implementado de Gestion de Ordenes de Reparacion (PROC-REP
-V1.3, Scenario `HP-REP-001`). Recoge unicamente principios que ya estan
+del MVP ya implementado de Gestion de Ordenes de Reparacion (PROC-REP; la
+baseline vigente es V1.4, aprobada en DC01; el trabajo inicial se hizo
+sobre V1.3 y el Scenario `HP-REP-001`). Recoge unicamente principios que ya estan
 vigentes en el repositorio o que fueron acordados explicitamente durante
 el descubrimiento. No introduce principios aspiracionales nuevos.
 
@@ -11,10 +12,17 @@ el descubrimiento. No introduce principios aspiracionales nuevos.
 ### I. Business YAML es la fuente funcional de verdad
 
 El comportamiento funcional del sistema se define en `business/`:
-`business/processes/repair-management-v1.3.yaml`,
-`business/rules/business-rules-v1.3.yaml`,
-`business/features/repair-management-features-v1.3.yaml` y
-`business/scenarios/repair-management-scenarios-v1.3.yaml`.
+`business/processes/repair-management-v1.4.yaml`,
+`business/rules/business-rules-v1.4.yaml`,
+`business/features/repair-management-features-v1.4.yaml` y
+`business/scenarios/repair-management-scenarios-v1.4.yaml`, la baseline
+vigente (DC01). Los archivos V1.3 y V1.2 se conservan como historico.
+
+`business/` es una copia generada desde `rt-rma-app`, la fuente unica
+(DC02): `business/FUNCTIONAL_SOURCE.json` identifica el commit de origen
+y el SHA-256 de cada archivo. No se edita a mano; un cambio funcional se
+hace en `rt-rma-app` y se vuelve a generar la copia
+(`docs/sincronizacion-funcional.md`).
 
 Ningun artefacto posterior (spec, plan, task, codigo o test) puede
 redefinir, ampliar ni contradecir ese contenido. Cuando una spec necesita
@@ -23,10 +31,10 @@ reportar al negocio, no una licencia para inventarlo.
 
 Orden de precedencia cuando dos fuentes discrepan:
 
-1. Business Process (`repair-management-v1.3.yaml`)
-2. Business Rules (`business-rules-v1.3.yaml`)
-3. Business Features (`repair-management-features-v1.3.yaml`)
-4. Scenarios (`repair-management-scenarios-v1.3.yaml`)
+1. Business Process (`repair-management-v1.4.yaml`)
+2. Business Rules (`business-rules-v1.4.yaml`)
+3. Business Features (`repair-management-features-v1.4.yaml`)
+4. Scenarios (`repair-management-scenarios-v1.4.yaml`)
 5. `traceability/README.md` (convencion de IDs y jerarquia)
 6. Codigo implementado
 7. Tests existentes
@@ -128,29 +136,34 @@ Scenario que la baseline actual implementa. Las Features
 `FEAT-REP-009` (Cancelacion) NO lo esta.
 
 Consecuencia obligatoria para todo artefacto: hay que distinguir siempre
-"Feature V1.3 completa" de "slice de Feature implementado por
+"Feature completa" de "slice de Feature implementado por
 HP-REP-001". Ninguna Feature puede declararse IMPLEMENTADA porque exista
 su Happy Path. La forma de declararlo es:
 
 ```text
-feature_status           = draft        (estado de la Feature V1.3)
+feature_status           = draft        (estado de la Feature en la baseline vigente)
 implemented_scenario     = HP-REP-001
 implemented_slice_status = IMPLEMENTED  (estado del slice, no de la Feature)
 ```
 
 ## Alcance y restricciones vigentes
 
-- Business Process activo: `PROC-REP` V1.3, estado `draft`. `PROC-REP`
-  V1.2 (`approved`) permanece intacta como baseline historica y no se
-  modifica.
-- Las 9 Features V1.3 estan en estado `draft`. Este trabajo no las
+- Business Process activo: `PROC-REP` V1.4, estado `approved` (DC01,
+  24/10/2026), sincronizado desde `rt-rma-app` (etiqueta `v1.4-baseline`).
+  `PROC-REP` V1.3 (`draft`) y V1.2 (`approved`) permanecen como historico y
+  no se modifican.
+- Las 11 Features V1.4 estan en estado `draft`. Este trabajo no las
   aprueba ni las modifica.
-- Las 18 Business Rules V1.3 estan en estado `draft`.
+- Las 49 Business Rules V1.4 estan en estado `approved`.
+- Lo que el producto todavia no hace como dice V1.4 se registra en
+  `traceability/discrepancias-baseline-v1.4.md` (Principio V): son
+  divergencias a resolver, no fallas de la copia funcional.
 - `PROC-VTA` (Ventas de Repuestos) y `PROC-COM` (Compras de Repuestos)
   estan identificados pero no modelados: fuera de alcance.
 - Persistencia del MVP: archivos JSON locales bajo `app/backend/data/`,
   sin datos reales ni credenciales.
-- Los pendientes funcionales declarados en `docs/discovery/README.md`
+- Los pendientes funcionales declarados en `docs/discovery/README.md` y en
+  `open_items` de `business/decisions/decision-log-v1.4.yaml`
   (presupuestacion, costos, impuestos, cortesias parciales, actor
   autorizado a cancelar, reproceso RMA, reporting por tecnico, entre
   otros) siguen fuera de alcance y no deben especificarse como si
@@ -170,10 +183,14 @@ implemented_slice_status = IMPLEMENTED  (estado del slice, no de la Feature)
    `[x]` cuando existe evidencia real de codigo **y** de test. Nunca se
    marca por inferencia.
 5. Gates ejecutables del repositorio:
-   - `npm run validate:v1.3` (proceso, features, referencias, scenarios,
-     mapping Feature<->Scenario) debe seguir pasando.
-   - `npm run validate:traceability` (integridad de items + links) debe
-     pasar.
+   - `npm run verify:functional-copy` (la copia funcional coincide con su
+     manifiesto) debe pasar.
+   - `npm run validate:v1.4` (proceso, features, referencias, scenarios,
+     mapping Feature<->Scenario y fines de cada recorrido) debe pasar, y
+     `npm run validate:v1.3` sigue como regresion del historico.
+   - `npm run validate:traceability` (integridad de items + links) y
+     `npm run validate:discrepancies` deben pasar.
+   - `npm run validate:all` corre todos los anteriores.
    - `pytest` desde `app/backend/` debe seguir en verde.
 6. Ningun artefacto de especificacion o trazabilidad justifica modificar
    codigo productivo para que el artefacto "pase". Si un artefacto no
@@ -196,4 +213,15 @@ trazabilidad verifica el cumplimiento de estos principios. Toda
 desviacion se documenta explicitamente en `Complexity Tracking` del
 `plan.md` correspondiente o se reporta como gap; no se deja implicita.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-24 | **Last Amended**: 2026-09-24
+Enmienda 1.1.0 (24/10/2026, DC02, MINOR): la fuente funcional pasa a ser la
+baseline V1.4 aprobada en DC01, como copia generada y verificada desde
+`rt-rma-app`; V1.3 queda como historico. Se agregan los gates de la copia
+funcional, de V1.4 y de la lista de discrepancias. Los principios no
+cambian de alcance. Artefactos afectados: `business/` (copia generada),
+`traceability/*.yaml` (fuente V1.4), `scripts/` y `package.json` (validacion
+V1.4), `traceability/discrepancias-baseline-v1.4.md`,
+`docs/sincronizacion-funcional.md`, `README.md` y
+`traceability/IMPLEMENTATION.md`. Los `specs/001` a `019` se conservan como
+registro historico de slices sobre V1.3.
+
+**Version**: 1.1.0 | **Ratified**: 2026-09-24 | **Last Amended**: 2026-10-24

@@ -2,7 +2,7 @@
 # reparacion (ACC-REP-060).
 #
 # Archivo propio (ver traceability/README.md, "Cuando crear un archivo
-# distinto"): no implementa un Scenario de PROC-REP V1.3 sino una capacidad
+# distinto"): no implementa un Scenario de PROC-REP sino una capacidad
 # transversal agregada durante las pruebas UAT del MVP v2, sin nodo de
 # proceso. Recepcion la ejecuta a pedido despues de registrar la autorizacion
 # del cliente.
@@ -51,7 +51,7 @@ meta:
 items:
 
   - {id: DOM-RMA, type: business_domain, name: Area funcional RMA, status: active, source: traceability/README.md}
-  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: draft, version: "1.3", source: business/processes/repair-management-v1.3.yaml}
+  - {id: PROC-REP, type: business_process, name: Gestion de Ordenes de Reparacion, status: approved, version: "1.4", source: business/processes/repair-management-v1.4.yaml}
 
   - id: ACC-REP-060
     type: system_action

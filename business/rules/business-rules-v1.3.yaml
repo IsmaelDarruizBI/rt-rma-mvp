@@ -38,36 +38,40 @@ rules:
       la validacion de factibilidad, debe registrarse usuario, fecha, el
       Detalle especifico, la validacion ignorada y el motivo. El override se
       aplica puntualmente sobre ese Detalle, no sobre la Orden en abstracto.
-      Aclaracion confirmada con negocio: el override autoriza explicitamente
-      que ese Detalle continue aunque no haya stock suficiente, y habilita la
-      reserva (PROC-REP-185) y el consumo (PROC-REP-210) posteriores de ESE
-      Detalle aunque la disponibilidad o el stock fisico resultantes sean
-      negativos. El override solo registra la autorizacion: no reserva ni
-      descuenta stock; la reserva y el consumo ocurren en sus nodos
-      habituales. El override de un Detalle nunca habilita stock negativo para
-      otro. Vigencia: un override de factibilidad es valido solamente mientras
-      siga vigente la definicion tecnica sobre la que fue autorizado. Es
-      valido el override cuya autorizacion ocurrio DESPUES del ultimo
-      PROC-REP-127 del mismo Detalle; cualquier PROC-REP-127 invalida los
-      overrides anteriores, incluso si Recepcion vuelve a elegir el mismo Tipo
-      de Reparacion (es una nueva confirmacion de la definicion y una nueva
-      factibilidad en PROC-REP-080: si hace falta forzar de nuevo, debe
-      existir una nueva autorizacion consciente). Alcance (MVP v2): la
-      autorizacion de override es una capacidad TRANSVERSAL por Detalle, como
-      Registrar Pago (BR-REP-017-A): esta disponible para cualquier Detalle
-      PENDIENTE (DEFINIDO) con condicion BLOQUEADO_POR_RECURSOS, sin exigir
-      que toda la Orden este bloqueada. Puede ocurrir en el circuito 'ningun
-      Detalle trabajable' (PROC-REP-100 -> 110 Si -> 130 -> 140) o con
-      factibilidad parcial, cuando otros Detalles ya son trabajables y la
-      Orden esta habilitada, en cola, tomada o en reparacion. Fuera del
-      circuito de PROC-REP-100 no reinicia el proceso: no vuelve a
-      PROC-REP-140, no cierra una toma activa, no altera una Ejecucion en
-      curso ni cambia el estado de workflow; el Detalle autorizado queda
-      SIN_BLOQUEO, disponible para iniciarse segun las reglas vigentes
-      (BR-REP-007). Solo el Coordinador RMA (ACT-COORD) puede autorizarla y el
-      motivo es obligatorio. Es una unica capacidad con una unica validacion y
-      una unica forma de determinar su vigencia, cualquiera sea el momento en
-      que ocurre.
+      Override de factibilidad por falta de recursos (decision de negocio
+      confirmada): autoriza que ESE Detalle continue aunque la disponibilidad
+      sea insuficiente. La autorizacion tiene como consecuencia posterior que
+      la reserva real de sus insumos (PROC-REP-185, BR-REP-006) pueda exceder
+      el stock disponible, y que el consumo efectivo (PROC-REP-210,
+      BR-REP-005) pueda dejar el stock fisico negativo. La autorizacion:
+      aplica unicamente al Detalle overrideado y no se extiende a otros
+      Detalles de la Orden; no reserva ni consume nada por si misma (la
+      autorizacion solo queda registrada; reservar es PROC-REP-185 y consumir
+      es PROC-REP-210); y habilita el comportamiento posterior de
+      reserva/consumo de ese Detalle. Sin override, una falta de stock
+      detectada al reservar sigue siendo una reserva fallida (BR-REP-006).
+      Vigencia: un override de factibilidad es valido solamente mientras siga
+      vigente la definicion tecnica sobre la que fue autorizado. Es valido el
+      override cuya autorizacion ocurrio DESPUES del ultimo PROC-REP-127 del
+      mismo Detalle; cualquier PROC-REP-127 invalida los overrides anteriores,
+      incluso si Recepcion vuelve a elegir el mismo Tipo de Reparacion (es una
+      nueva confirmacion de la definicion y una nueva factibilidad en
+      PROC-REP-080: si hace falta forzar de nuevo, debe existir una nueva
+      autorizacion consciente). Alcance (MVP v2): la autorizacion de override
+      es una capacidad TRANSVERSAL por Detalle, como Registrar Pago
+      (BR-REP-017-A): esta disponible para cualquier Detalle PENDIENTE
+      (DEFINIDO) con condicion BLOQUEADO_POR_RECURSOS, sin exigir que toda la
+      Orden este bloqueada. Puede ocurrir en el circuito 'ningun Detalle
+      trabajable' (PROC-REP-100 -> 110 Si -> 130 -> 140) o con factibilidad
+      parcial, cuando otros Detalles ya son trabajables y la Orden esta
+      habilitada, en cola, tomada o en reparacion. Fuera del circuito de
+      PROC-REP-100 no reinicia el proceso: no vuelve a PROC-REP-140, no cierra
+      una toma activa, no altera una Ejecucion en curso ni cambia el estado de
+      workflow; el Detalle autorizado queda SIN_BLOQUEO, disponible para
+      iniciarse segun las reglas vigentes (BR-REP-007). Solo el Coordinador
+      RMA (ACT-COORD) puede autorizarla y el motivo es obligatorio. Es una
+      unica capacidad con una unica validacion y una unica forma de determinar
+      su vigencia, cualquiera sea el momento en que ocurre.
     status: draft
 
   - id: BR-REP-004
@@ -106,15 +110,13 @@ rules:
       reserva real de sus insumos previstos (la factibilidad previa solo
       habia consultado disponibilidad, sin reservar). Si la reserva es
       exitosa, se generan las reservas trazadas al Detalle y la Ejecucion
-      se inicia; el Detalle pasa a EN_PROCESO. Normalmente la reserva
-      falla cuando no existe disponibilidad suficiente: en ese caso la
+      se inicia; el Detalle pasa a EN_PROCESO. Si la reserva falla, la
       Ejecucion NO se inicia, el Detalle permanece PENDIENTE con
       condicion BLOQUEADO_POR_RECURSOS, y el estado de la Orden se
-      recalcula. Excepcion: si el Detalle tiene un override de
-      factibilidad por recursos valido (BR-REP-003), la reserva puede
-      continuar aun excediendo la disponibilidad (la fuente normativa de
-      la autorizacion es BR-REP-003). Reemplaza a la version V1.2, que
-      reservaba una unica vez "al tomar la Orden".
+      recalcula. Reemplaza a la version V1.2, que reservaba una unica vez
+      "al tomar la Orden". Excepcion: si el Detalle tiene un override de
+      recursos autorizado (BR-REP-003), la reserva puede exceder el stock
+      disponible y no cuenta como falla por falta de stock.
     status: draft
 
   - id: BR-REP-007
@@ -147,21 +149,13 @@ rules:
   - id: BR-REP-009
     name: Puntaje por Detalle
     description: >
-      Cada Detalle aprobado aporta su puntaje desde el momento de su
-      propia aprobacion durante el control tecnico (PROC-REP-220), segun
-      la ponderacion configurada de su Tipo de Reparacion: no se espera
-      a que el resto de los Detalles de la Orden tambien esten
-      aprobados. El puntaje_total de la Orden es siempre derivable como
-      la suma de los puntajes de sus Detalles aprobados -es un valor
-      calculado, no algo que un paso del proceso "cree" en un momento
-      puntual-. PROC-REP-230 se evalua a nivel Orden una vez finalizado
-      el control de todos los Detalles; PROC-REP-245 no calcula el
-      puntaje de cada Detalle por primera vez: consolida/registra el
-      puntaje total de la Orden recien cuando ese control completo
-      termina satisfactoriamente (todos los Detalles aprobados). La
-      distribucion/acreditacion entre distintos tecnicos que
-      participaron de un mismo Detalle sigue pendiente de definicion
-      funcional.
+      El puntaje se calcula por Detalle aprobado, segun la ponderacion
+      configurada de su Tipo de Reparacion, en el momento de su propia
+      aprobacion (no se espera a que el resto de los Detalles de la Orden
+      tambien esten aprobados). El puntaje total de la Orden es la suma
+      de los puntajes de sus Detalles. La distribucion/acreditacion entre
+      distintos tecnicos que participaron de un mismo Detalle sigue
+      pendiente de definicion funcional.
     status: draft
 
   - id: BR-REP-010
@@ -433,35 +427,29 @@ rules:
   - id: BR-REP-018
     name: Toma y liberacion de Orden (participacion activa)
     description: >
-      Una toma activa representa la participacion actual del tecnico
-      sobre la Orden. Se abre completa, no sobre un Detalle (PROC-REP-180:
-      Orden + tecnico + estacion + fecha/hora de inicio). Como maximo
-      puede existir UNA toma/participacion activa por Orden en simultaneo
-      -distinto pero complementario de BR-REP-007 (maximo una Ejecucion
-      activa por Orden)-.
-
-      Mientras exista una toma activa y NO exista una Ejecucion activa,
-      el tecnico debe decidir si desea iniciar un Detalle de reparacion
-      o liberar la Orden (PROC-REP-212). Esta decision aplica tanto
-      inmediatamente despues de tomar la Orden como despues de finalizar
-      una Ejecucion cuando el resolver determina que todavia existe al
-      menos un Detalle trabajable (PROC-REP-211 -> PROC-REP-212): no se
+      Cuando un tecnico toma una Orden de Reparacion (PROC-REP-180), toma
+      la Orden completa, no solo un Detalle: queda registrada una
+      toma/participacion activa (Orden + tecnico + estacion + fecha/hora
+      de inicio). Como maximo puede existir UNA toma/participacion activa
+      por Orden en simultaneo -distinto pero complementario de BR-REP-007
+      (maximo una Ejecucion activa por Orden)-. Mientras la toma este
+      activa, el tecnico puede seleccionar y trabajar distintos Detalles
+      trabajables de la misma Orden sin volver a tomarla (PROC-REP-181 ->
+      ... -> PROC-REP-211 -> PROC-REP-212). Terminado o interrumpido un
+      Detalle, si el resolver determina que sigue existiendo al menos un
+      Detalle trabajable, la decision de continuar trabajando esa Orden o
+      liberarla es una accion explicita del tecnico (PROC-REP-212): no se
       libera automaticamente una Orden trabajable solo porque termino un
-      Detalle.
-
-      Si el tecnico decide iniciar un Detalle (PROC-REP-212 = Si),
-      continua con la misma toma sin volver a tomarla (PROC-REP-181 ->
-      ... -> PROC-REP-211 -> PROC-REP-212, tantas veces como Detalles
-      trabajables queden). Si decide liberar (PROC-REP-212 = No ->
+      Detalle. Si el tecnico decide liberar (PROC-REP-212 = No ->
       PROC-REP-213), o si el resolver determina que ya no queda ningun
       Detalle trabajable (la Orden paso a COMPLETA, PENDIENTE_RECURSOS,
       REQUIERE_REVISION o TODO_CANCELADO), la participacion activa se
       cierra -explicitamente o automaticamente segun corresponda-
-      registrando fecha/hora de cierre, y la Orden vuelve a EN_COLA
-      cuando corresponde (si sigue habiendo algun Detalle trabajable
-      disponible para otro tecnico). El historial completo de
-      participaciones (quien tomo, cuando, desde que estacion, cuando la
-      libero) se conserva siempre; nunca se sobrescribe.
+      registrando fecha/hora de cierre, y la Orden vuelve a EN_COLA cuando
+      corresponde (si sigue habiendo algun Detalle trabajable disponible
+      para otro tecnico). El historial completo de participaciones
+      (quien tomo, cuando, desde que estacion, cuando la libero) se
+      conserva siempre; nunca se sobrescribe.
     status: draft
 
   - id: BR-REP-019

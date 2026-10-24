@@ -5,6 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
+import { edgeKey, escapeLabel, renderEdgeLine, renderNodeShape } from "./process-core";
 
 export type NodeType = "start" | "end" | "activity" | "decision" | "event";
 
@@ -50,49 +51,23 @@ export interface BusinessRule {
   status?: string;
 }
 
-/**
- * Identifies a process edge by from + condition + to, never by from/to alone
- * (several transitions can exist between the same two nodes, and an edge
- * without a condition never matches one that has one). The single
- * definition shared by the validators, the Feature mapping and the
- * scenario-candidate discovery.
- */
-export function edgeKey(from: string, condition: string | undefined, to: string): string {
-  return `${from}::${condition ?? ""}::${to}`;
-}
+// edgeKey, escapeLabel, renderNodeShape and renderEdgeLine are pure (browser-safe) and live in
+// process-core.ts, shared with the interactive explorer; they are re-exported here unchanged.
+export { edgeKey, escapeLabel, renderEdgeLine, renderNodeShape };
 
 export function loadYaml<T>(filePath: string): T {
   return parse(readFileSync(filePath, "utf8")) as T;
 }
 
-/** Escapes text so it is safe to place inside a quoted Mermaid node label. */
-export function escapeLabel(text: string): string {
-  return text.replace(/"/g, "'");
-}
-
-/** Wraps a node id in the Mermaid shape that corresponds to its process node type. */
-export function renderNodeShape(node: ProcessNode): string {
-  const label = escapeLabel(node.name);
-  switch (node.type) {
-    case "start":
-      return `${node.id}(["${label}"])`;
-    case "end":
-      return `${node.id}((("${label}")))`;
-    case "decision":
-      return `${node.id}{"${label}"}`;
-    case "event":
-      return `${node.id}{{"${label}"}}`;
-    case "activity":
-    default:
-      return `${node.id}["${label}"]`;
-  }
-}
-
-export function renderEdgeLine(edge: ProcessEdge): string {
-  if (edge.condition) {
-    return `${edge.from} -->|${escapeLabel(edge.condition)}| ${edge.to}`;
-  }
-  return `${edge.from} --> ${edge.to}`;
+/**
+ * Optional presentation hooks for filtered/derived views (e.g. the
+ * per-origin viewer). Defaults reproduce the general diagram exactly.
+ */
+export interface FlowchartOptions {
+  /** Replaces the text of a node label (default: node.name). */
+  nodeLabel?: (node: ProcessNode) => string;
+  /** Arrow used to draw an edge (default "-->"; "-.->" draws it dotted). */
+  edgeArrow?: (edge: ProcessEdge) => "-->" | "-.->";
 }
 
 /**
@@ -100,17 +75,17 @@ export function renderEdgeLine(edge: ProcessEdge): string {
  * by every renderer. Callers prepend their own header/comments and the
  * "flowchart TD" line.
  */
-export function buildFlowchartBody(model: ProcessModel): string[] {
+export function buildFlowchartBody(model: ProcessModel, options: FlowchartOptions = {}): string[] {
   const lines: string[] = [];
 
   for (const node of model.nodes) {
-    lines.push(`    ${renderNodeShape(node)}`);
+    lines.push(`    ${renderNodeShape(node, options.nodeLabel ? options.nodeLabel(node) : node.name)}`);
   }
 
   lines.push("");
 
   for (const edge of model.edges) {
-    lines.push(`    ${renderEdgeLine(edge)}`);
+    lines.push(`    ${renderEdgeLine(edge, options.edgeArrow ? options.edgeArrow(edge) : "-->")}`);
   }
 
   return lines;
