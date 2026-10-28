@@ -57,6 +57,12 @@ import {
   mensajeComprobante,
   telefonoParaWhatsapp,
 } from "./whatsapp";
+import {
+  APARTADOS_TERMINOS,
+  ENCABEZADO_TERMINOS,
+  PIE_TERMINOS,
+  llevaTerminos,
+} from "./terminosCondiciones";
 
 const NOMBRE_TIPO: Record<TipoDocumento, string> = {
   COMPROBANTE_RECEPCION: "Comprobante de recepción",
@@ -661,6 +667,11 @@ const ESTILO_IMPRESION = `
   }
   .hoja-documento table { page-break-inside: auto; }
   .hoja-documento tr { page-break-inside: avoid; }
+  .terminos-entrega {
+    border-top: none !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
 }
 `;
 
@@ -1305,7 +1316,144 @@ function CuerpoEntrega({
         izquierda="Entregó por la empresa"
         derecha="Recibí conforme (firma y aclaración)"
       />
+      {llevaTerminos(contenido) && <PaginaTerminos ordenId={contenido.orden_id} />}
     </>
+  );
+}
+
+/**
+ * Términos y Condiciones: segunda página A4 del comprobante de entrega de
+ * un equipo reparado. El texto vive en `terminosCondiciones.ts`; aquí
+ * solo la forma. Los espacios de firma, aclaración y fecha quedan en
+ * blanco: se completan a mano al retirar el equipo.
+ */
+function PaginaTerminos({ ordenId }: { ordenId: string }) {
+  return (
+    <section
+      className="terminos-entrega"
+      aria-label="Términos y condiciones"
+      style={{
+        breakBefore: "page",
+        pageBreakBefore: "always",
+        breakInside: "avoid",
+        pageBreakInside: "avoid",
+        // En pantalla, el corte de página se ve como una línea.
+        borderTop: "1px dashed #999",
+        marginTop: "2rem",
+        paddingTop: "1.5rem",
+        fontSize: "8.5pt",
+        lineHeight: 1.2,
+        WebkitPrintColorAdjust: "exact",
+        printColorAdjust: "exact",
+      }}
+    >
+      <div
+        style={{
+          background: "#111",
+          color: "#fff",
+          textAlign: "center",
+          fontSize: "15pt",
+          fontWeight: 800,
+          letterSpacing: "0.06em",
+          padding: "0.1rem 0",
+        }}
+      >
+        {ENCABEZADO_TERMINOS.marca}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+          gap: "1rem",
+          flexWrap: "wrap",
+          margin: "0.3rem 0 0.25rem",
+        }}
+      >
+        <div>
+          <div style={{ fontSize: "13pt", fontWeight: 800, letterSpacing: "0.03em" }}>
+            {ENCABEZADO_TERMINOS.titulo}
+          </div>
+          <span
+            style={{
+              display: "inline-block",
+              background: "#111",
+              color: "#fff",
+              fontSize: "9pt",
+              fontWeight: 700,
+              padding: "0.05rem 0.5rem",
+              borderRadius: 3,
+            }}
+          >
+            {ENCABEZADO_TERMINOS.subtitulo}
+          </span>
+        </div>
+        <div style={{ fontSize: "9pt" }}>Orden {ordenId}</div>
+      </div>
+
+      <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
+        {APARTADOS_TERMINOS.map((apartado, indice) => (
+          <li
+            key={indice}
+            style={{
+              display: "flex",
+              gap: "0.45rem",
+              padding: "0.14rem 0.4rem",
+              borderBottom: apartado.destacado ? undefined : "1px solid #ccc",
+              ...(apartado.destacado && {
+                background: "#fff3a6",
+                border: "1.5px solid #222",
+                borderRadius: 4,
+                fontWeight: 700,
+                margin: "0.1rem 0",
+              }),
+            }}
+          >
+            <span style={{ minWidth: "1.3rem", fontWeight: 700 }}>{indice + 1}.</span>
+            <div>
+              {apartado.lineas.map((linea) => (
+                <div key={linea}>{linea}</div>
+              ))}
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      <div
+        style={{
+          display: "flex",
+          gap: "1.5rem",
+          marginTop: "0.4rem",
+          padding: "0.3rem 0.8rem 0.45rem",
+          border: "1.5px solid #111",
+          borderRadius: 8,
+          fontSize: "8.5pt",
+          fontWeight: 700,
+        }}
+      >
+        <div style={{ flex: 2 }}>
+          {PIE_TERMINOS.slice(0, 2).map((texto) => (
+            <div key={texto} style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+              <span>{texto}</span>
+              <span style={{ flex: 1, borderBottom: "1px dotted #111" }} />
+            </div>
+          ))}
+        </div>
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            gap: "0.5rem",
+            alignItems: "flex-end",
+            borderLeft: "1.5px solid #111",
+            paddingLeft: "1rem",
+          }}
+        >
+          <span>{PIE_TERMINOS[2]}</span>
+          <span style={{ flex: 1, borderBottom: "1px dotted #111" }} />
+        </div>
+      </div>
+    </section>
   );
 }
 
