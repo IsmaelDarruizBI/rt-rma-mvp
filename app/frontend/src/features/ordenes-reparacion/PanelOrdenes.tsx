@@ -17,6 +17,9 @@
  * `#/ordenes/nueva`, `#/ordenes/OR-000001`, `#/taller`, `#/inventario`):
  * navegar solo lee, nunca envía comandos. La búsqueda, los filtros y el
  * usuario de demostración sobreviven a la navegación.
+ *
+ * Sin sesión de demostración se muestra el acceso (``LoginDemo``, UAT): es
+ * solo look & feel y navegación por rol, no autenticación.
  */
 
 import {
@@ -69,18 +72,17 @@ import {
   ESTADO_PAGO,
   ESTADO_TRABAJO,
   NOMBRE_ACCION,
+  ROL,
   etiqueta,
   mensajeLegible,
 } from "./etiquetas";
 import { PagosYMovimientos } from "./PagosOrden";
-import {
-  FormularioAltaOrden,
-  PantallaOrdenes,
-  SelectorActor,
-} from "./ListadoOrdenes";
+import { FormularioAltaOrden, PantallaOrdenes } from "./ListadoOrdenes";
+import { LoginDemo } from "./LoginDemo";
 import { type FiltrosListado, filtrosValidos } from "./listado";
 import { type Ruta } from "./rutas";
 import {
+  borrarUsuarioDemo,
   elegirUsuarioDemo,
   guardarUsuarioDemo,
   leerUsuarioDemo,
@@ -243,6 +245,16 @@ export function PanelOrdenes() {
     guardarUsuarioDemo(usuarioId);
   }, []);
 
+  // Cerrar sesión: olvida el usuario y vuelve al acceso. Se cierra la Orden
+  // abierta para que el próximo usuario no herede la pantalla anterior.
+  const cerrarSesion = useCallback(() => {
+    borrarUsuarioDemo();
+    setActorId("");
+    setOrden(null);
+    setError(null);
+    navegar({ pantalla: "inicio" });
+  }, [navegar]);
+
   useEffect(() => {
     async function cargar() {
       try {
@@ -264,7 +276,8 @@ export function PanelOrdenes() {
         setEstaciones(listaEstaciones);
         setMedios(listaMedios);
         setPrioridades(listaPrioridades);
-        // El usuario de demostración recordado, si sigue en el catálogo.
+        // La sesión de demostración recordada, si su usuario sigue en el
+        // catálogo; si no, se muestra el acceso.
         setActorId(elegirUsuarioDemo(listaUsuarios, leerUsuarioDemo()));
       } catch (fallo) {
         setError(errorDe(fallo, null));
@@ -605,6 +618,20 @@ export function PanelOrdenes() {
       ? "ordenes"
       : ruta.pantalla;
 
+  // Sin sesión de demostración: pantalla de acceso (UAT).
+  if (actor === null) {
+    return (
+      <>
+        <LoginDemo usuarios={usuarios} onIngresar={elegirActor} />
+        {error && (
+          <div style={{ maxWidth: 880, margin: "-1rem auto 1.5rem", padding: "0 1rem" }}>
+            <MensajeDeComando error={error} />
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <div
       style={{
@@ -630,11 +657,24 @@ export function PanelOrdenes() {
             Gestión de reparaciones
           </p>
         </div>
-        <SelectorActor
-          usuarios={usuarios}
-          actorId={actorId}
-          onCambiar={elegirActor}
-        />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ textAlign: "right", lineHeight: 1.25 }}>
+            <div style={{ fontWeight: 600 }}>{actor.nombre}</div>
+            <div style={{ fontSize: "0.8rem", color: colores.suave }}>
+              {ROL[actor.rol] ?? actor.rol}
+            </div>
+          </div>
+          <Boton variante="secundario" onClick={cerrarSesion}>
+            Cerrar sesión
+          </Boton>
+        </div>
       </header>
 
       <nav
@@ -1053,11 +1093,6 @@ export function PanelOrdenes() {
         </ProveedorPresentacion>
       )}
 
-      {usuarios.length === 0 && !error && (
-        <Panel>
-          <p style={{ margin: 0, color: colores.suave }}>Cargando…</p>
-        </Panel>
-      )}
     </div>
   );
 }

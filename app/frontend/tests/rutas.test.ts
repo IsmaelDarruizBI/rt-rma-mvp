@@ -67,9 +67,9 @@ describe("usuario de demostración", () => {
     assert.equal(elegirUsuarioDemo(usuarios, "USR-TEC-01"), "USR-TEC-01");
   });
 
-  test("si no existe o no hay nada guardado, el primero", () => {
-    assert.equal(elegirUsuarioDemo(usuarios, "USR-BORRADO"), "USR-REC-01");
-    assert.equal(elegirUsuarioDemo(usuarios, null), "USR-REC-01");
+  test("si no existe o no hay nada guardado, sin sesion (login)", () => {
+    assert.equal(elegirUsuarioDemo(usuarios, "USR-BORRADO"), "");
+    assert.equal(elegirUsuarioDemo(usuarios, null), "");
     assert.equal(elegirUsuarioDemo([], "USR-TEC-01"), "");
   });
 });
