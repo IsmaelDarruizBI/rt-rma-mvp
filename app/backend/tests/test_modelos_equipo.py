@@ -77,7 +77,7 @@ def _equipo(cliente, orden_id: str) -> dict:
     return ok(cliente.get(f"/api/orders/{orden_id}"))["equipo"]
 
 
-# --- Lectura -------------------------------------------------------------------
+# --- Lectura ---------------------------------------------------------------
 
 
 def test_solo_se_ofrecen_los_modelos_activos(entorno):
@@ -118,7 +118,7 @@ def test_el_catalogo_versionado_es_valido():
     assert len(claves) == len(modelos)
 
 
-# --- Alta ------------------------------------------------------------------------
+# --- Alta ------------------------------------------------------------------
 
 
 def test_alta_con_un_modelo_copia_marca_modelo_y_variante(entorno):

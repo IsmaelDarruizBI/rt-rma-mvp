@@ -24,6 +24,10 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["app*"]
 
+[tool.setuptools.package-data]
+# El catalogo tecnico de modelos de equipo viaja con el codigo.
+app = ["datos/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

@@ -1,0 +1,290 @@
+[
+  {
+    "id": "MOD-0001",
+    "marca": "Apple",
+    "modelo": "iPhone 8",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0002",
+    "marca": "Apple",
+    "modelo": "iPhone 8",
+    "variante": "Plus",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0003",
+    "marca": "Apple",
+    "modelo": "iPhone 11",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0004",
+    "marca": "Apple",
+    "modelo": "iPhone 11",
+    "variante": "Pro",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0005",
+    "marca": "Apple",
+    "modelo": "iPhone 11",
+    "variante": "Pro Max",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0006",
+    "marca": "Apple",
+    "modelo": "iPhone 12",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0007",
+    "marca": "Apple",
+    "modelo": "iPhone 12",
+    "variante": "Mini",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0008",
+    "marca": "Apple",
+    "modelo": "iPhone 12",
+    "variante": "Pro",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0009",
+    "marca": "Apple",
+    "modelo": "iPhone 12",
+    "variante": "Pro Max",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0010",
+    "marca": "Apple",
+    "modelo": "iPhone 13",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0011",
+    "marca": "Apple",
+    "modelo": "iPhone 13",
+    "variante": "Mini",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0012",
+    "marca": "Apple",
+    "modelo": "iPhone 13",
+    "variante": "Pro",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0013",
+    "marca": "Apple",
+    "modelo": "iPhone 13",
+    "variante": "Pro Max",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0014",
+    "marca": "Apple",
+    "modelo": "iPhone 14",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0015",
+    "marca": "Apple",
+    "modelo": "iPhone 14",
+    "variante": "Plus",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0016",
+    "marca": "Apple",
+    "modelo": "iPhone 14",
+    "variante": "Pro",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0017",
+    "marca": "Apple",
+    "modelo": "iPhone 14",
+    "variante": "Pro Max",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0018",
+    "marca": "Apple",
+    "modelo": "iPhone 15",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0019",
+    "marca": "Apple",
+    "modelo": "iPhone 15",
+    "variante": "Plus",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0020",
+    "marca": "Apple",
+    "modelo": "iPhone 15",
+    "variante": "Pro",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0021",
+    "marca": "Apple",
+    "modelo": "iPhone 15",
+    "variante": "Pro Max",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0022",
+    "marca": "Apple",
+    "modelo": "iPhone 16",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0023",
+    "marca": "Apple",
+    "modelo": "iPhone 16e",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0024",
+    "marca": "Apple",
+    "modelo": "iPhone 16",
+    "variante": "Pro",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0025",
+    "marca": "Apple",
+    "modelo": "iPhone 16",
+    "variante": "Pro Max",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0026",
+    "marca": "Apple",
+    "modelo": "iPhone 17",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0027",
+    "marca": "Apple",
+    "modelo": "iPhone 17e",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0028",
+    "marca": "Apple",
+    "modelo": "iPhone 17",
+    "variante": "Air",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0029",
+    "marca": "Apple",
+    "modelo": "iPhone 17",
+    "variante": "Pro",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0030",
+    "marca": "Apple",
+    "modelo": "iPhone 17",
+    "variante": "Pro Max",
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0031",
+    "marca": "Apple",
+    "modelo": "iPhone SE 2020",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0032",
+    "marca": "Apple",
+    "modelo": "iPhone SE 2022",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0033",
+    "marca": "Apple",
+    "modelo": "iPhone X",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0034",
+    "marca": "Apple",
+    "modelo": "iPhone Xr",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0035",
+    "marca": "Apple",
+    "modelo": "iPhone Xs",
+    "variante": null,
+    "numeros_modelo": [],
+    "activo": true
+  },
+  {
+    "id": "MOD-0036",
+    "marca": "Apple",
+    "modelo": "iPhone Xs",
+    "variante": "Max",
+    "numeros_modelo": [],
+    "activo": true
+  }
+]
