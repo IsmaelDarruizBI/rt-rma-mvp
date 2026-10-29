@@ -11,6 +11,7 @@ Registrado el 28/10/2026, con `mvp-v2` en `a8dd74b`.
 | P-03 | Modelos de la línea iPhone 18 | Catálogo técnico | Excluidos hasta validar |
 | P-04 | Garantía de 180 días en los Términos y Condiciones | Comprobante de entrega | Decisión pendiente |
 | P-05 | Cláusulas sobre el retiro por terceros | Comprobante de entrega | Revisión pendiente |
+| P-06 | Override por falta de stock: cualquier usuario y sin stock negativo | Inventario | Implementado en el MVP; falta actualizar BR-REP-003 |
 
 ## P-01. Buscador técnico para RT_INTERNO
 
@@ -70,6 +71,36 @@ Los pasos 2 y 3 tienen que entrar juntos: si la validación llega antes, el alta
 **Hoy.** La entrega registra quién retira y su identificación, pero no compara a esa persona con el titular ni cambia la garantía si es otra.
 
 **Falta.** Revisar la redacción de los dos apartados y decidir si el sistema debe reflejarlos, por ejemplo con un aviso al registrar la entrega.
+
+## P-06. Override por falta de stock
+
+Registrado el 29/10/2026. En el UAT el stock inicial de baterías es chico y las reparaciones quedaban bloqueadas.
+
+**Decidido.** Cualquier usuario puede forzar un Detalle bloqueado por falta de stock, sin que el inventario quede en negativo:
+
+1. Lo autorizan Recepción, Técnico, Coordinación RMA y Administración, siempre con motivo y confirmando el impacto en el stock. Nunca es automático.
+2. Con override se reserva solo lo realmente disponible, sin usar reservas de otras Órdenes.
+3. El Detalle se puede ejecutar y terminar aunque no haya stock suficiente.
+4. Se descuenta a lo sumo lo reservado y existente. Lo que se usó de más no genera movimiento ni queda pendiente: no se descuenta cuando ingresa mercadería.
+5. Una redefinición del Detalle sigue anulando el override.
+
+**Cómo queda registrado**, todo en el historial de la Orden y asociado al Detalle:
+
+| Momento | Paso | Qué dice |
+|---|---|---|
+| Autorización | ACC-REP-049 | Usuario, fecha, motivo y, por insumo: requerido, disponible, se reserva y faltante |
+| Inicio de la reparación | PROC-REP-185 | Si falta stock: «Reserva parcial por override, sin stock para el resto: INS-x reservado 1 de 3» |
+| Fin de la reparación | PROC-REP-210 | Si se usó más de lo reservado: «Utilizado sin respaldo de stock (override): INS-x utilizado 3, descontado 1, sin respaldo 2» |
+
+La Ejecución conserva lo que el técnico informó como utilizado; los movimientos de inventario, solo lo que se descontó.
+
+**Diferencia con la especificación.** BR-REP-003 de la V1.4 limita el override al Coordinador RMA y acepta que la reserva exceda el disponible y que el consumo deje el stock físico en negativo. El MVP ya no hace ninguna de las dos cosas.
+
+**Falta.**
+
+1. Actualizar BR-REP-003 (y lo que la referencie en `rt-rma-app`) con esta regla.
+2. Si en la realidad se usó una pieza que no estaba cargada en el sistema, el conteo físico va a diferir del sistema. Se corrige con un ajuste de inventario; definir si hace falta un procedimiento.
+3. Sigue existiendo, fuera del override, un caso de stock negativo: el consumo de una reserva propia después de un ajuste manual que dejó el físico por debajo de lo reservado. No se cambió.
 
 ## Nota técnica: `capacidad` como texto
 
