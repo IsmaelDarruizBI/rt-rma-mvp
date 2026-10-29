@@ -606,7 +606,9 @@ def post_override_recursos(
     cuerpo: OverrideRecursosIn,
     contexto: ContextoDep,
 ) -> OrdenOut:
-    """Override de recursos de un Detalle bloqueado (ACT-COORD, BR-REP-003).
+    """Override de recursos de un Detalle bloqueado (BR-REP-003, P-06).
+
+    Lo autoriza cualquier usuario activo (``ROLES_OVERRIDE_RECURSOS``).
 
     Capacidad transversal (ACC-REP-049): registra la autorizacion sobre
     ESE Detalle sin reservar ni tocar el stock, tambien con factibilidad

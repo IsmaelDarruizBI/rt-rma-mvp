@@ -257,6 +257,7 @@ from .pagos import (
 )
 from .recursos import (
     ACCION_REVALIDAR_RECURSOS,
+    ROLES_OVERRIDE_RECURSOS,
     autorizar_override_recursos,
     continuar_por_override,
     desbloquear_detalles_con_recursos,
@@ -449,6 +450,7 @@ __all__ = [
     "validar_override_recursos",
     "registrar_espera_recursos",
     "ACCION_REVALIDAR_RECURSOS",
+    "ROLES_OVERRIDE_RECURSOS",
     "detalles_bloqueados_por_recursos",
     "desbloquear_detalles_con_recursos",
     # Revision tecnica (PROC-REP-065)

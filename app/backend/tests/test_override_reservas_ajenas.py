@@ -409,18 +409,21 @@ def test_override_con_stock_insuficiente_exige_confirmacion(tmp_path):
 
 
 @pytest.mark.parametrize("usuario", [TECNICO_A, RECEPCION])
-def test_override_sin_permisos_es_rechazado(tmp_path, usuario):
+def test_override_de_otros_roles_tambien_exige_confirmacion(tmp_path, usuario):
+    """P-06 (UAT): cualquier rol puede forzar, siempre confirmando."""
     with _cliente(tmp_path, stock="0") as cliente:
         orden_id = _definida(cliente, TIPO_UNA)["id"]
         antes = _archivo(tmp_path, orden_id)
 
+        sin_confirmar = _override(cliente, orden_id, usuario=usuario)
+        assert sin_confirmar.status_code == 409, sin_confirmar.text
+        assert sin_confirmar.json()["error"]["codigo"] == CODIGO_CONFIRMACION
+        assert _archivo(tmp_path, orden_id) == antes
+
         respuesta = _override(
             cliente, orden_id, usuario=usuario, confirmado=True
         )
-
-        assert respuesta.status_code == 409, respuesta.text
-        assert respuesta.json()["error"]["codigo"] == "PRECONDICION_INVALIDA"
-        assert _archivo(tmp_path, orden_id) == antes
+        assert respuesta.status_code == 200, respuesta.text
 
 
 def test_la_vista_previa_de_un_detalle_inexistente_es_404(tmp_path):

@@ -1,6 +1,7 @@
 """EXC-REP-002 (recursos insuficientes, resuelto por override) en services.
 
-Un Coordinador RMA autoriza UN Detalle bloqueado (BR-REP-003): capacidad
+Un usuario autoriza UN Detalle bloqueado (BR-REP-003; cualquier rol desde
+P-06, decision del UAT): capacidad
 transversal (ACC-REP-049), con la Orden detenida en PROC-REP-100 o con
 factibilidad parcial. Solo en el circuito de 100 el proceso continua
 090 "Ninguno trabajable" -> 100 -> 110 "Si" -> 130 -> 140. El override solo
@@ -158,25 +159,37 @@ def test_el_override_queda_trazado_con_usuario_fecha_detalle_y_motivo():
     assert tiene_override_factibilidad(orden, "DET-002") is False
 
 
+COORDINADOR_INACTIVO = Usuario(
+    id="COORD-OFF",
+    nombre="Coordinador inactivo",
+    rol=RolUsuario.COORDINADOR_RMA,
+    activo=False,
+)
+
+
 @pytest.mark.parametrize(
     "usuario",
-    [
-        RECEPCION,
-        TECNICO,
-        ADMINISTRADOR,
-        Usuario(
-            id="COORD-OFF",
-            nombre="Coordinador inactivo",
-            rol=RolUsuario.COORDINADOR_RMA,
-            activo=False,
-        ),
-    ],
-    ids=["recepcion", "tecnico", "administrador", "coordinador_inactivo"],
+    [RECEPCION, TECNICO, COORDINADOR, ADMINISTRADOR],
+    ids=["recepcion", "tecnico", "coordinador", "administrador"],
 )
-def test_solo_un_coordinador_activo_puede_hacer_el_override(usuario):
+def test_cualquier_usuario_activo_puede_hacer_el_override(usuario):
+    """P-06 (UAT): los cuatro roles, con su usuario en cada paso."""
+    orden = _forzar(_bloqueada(), usuario=usuario)
+
+    autorizacion, paso_110, paso_130 = orden.historial[-3:]
+    assert autorizacion.referencia_id == "ACC-REP-049"
+    assert {
+        autorizacion.usuario_id,
+        paso_110.usuario_id,
+        paso_130.usuario_id,
+    } == {usuario.id}
+    assert tiene_override_factibilidad(orden, "DET-001") is True
+
+
+def test_un_usuario_inactivo_no_puede_hacer_el_override():
     orden = _bloqueada()
-    with pytest.raises(PrecondicionInvalidaError):
-        _forzar(orden, usuario=usuario)
+    with pytest.raises(PrecondicionInvalidaError, match="no esta activo"):
+        _forzar(orden, usuario=COORDINADOR_INACTIVO)
     assert tiene_override_factibilidad(orden, "DET-001") is False
 
 
@@ -229,11 +242,11 @@ def test_el_override_vale_sobre_un_detalle_bloqueado_y_continua_desde_100():
             usuario=COORDINADOR,
             fecha=t(21),
         )
-    with pytest.raises(PrecondicionInvalidaError):
+    with pytest.raises(PrecondicionInvalidaError, match="no esta activo"):
         continuar_por_override(
             _autorizar(_bloqueada()),
             detalle_id="DET-001",
-            usuario=TECNICO,
+            usuario=COORDINADOR_INACTIVO,
             fecha=t(21),
         )
 
@@ -651,9 +664,15 @@ def test_en_100_se_publican_esperar_y_un_override_por_detalle_bloqueado():
         False,
     )
     overrides = [a for a in acciones if a.codigo == "OVERRIDE_RECURSOS"]
+    todos = (
+        RolUsuario.RECEPCION,
+        RolUsuario.TECNICO,
+        RolUsuario.COORDINADOR_RMA,
+        RolUsuario.ADMINISTRADOR,
+    )
     assert [(a.detalle_id, a.roles) for a in overrides] == [
-        ("DET-001", (RolUsuario.COORDINADOR_RMA,)),
-        ("DET-002", (RolUsuario.COORDINADOR_RMA,)),
+        ("DET-001", todos),
+        ("DET-002", todos),
     ]
     for ausente in (
         "AGREGAR_DETALLE",

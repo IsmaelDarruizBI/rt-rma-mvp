@@ -8,8 +8,9 @@
                          [en PROC-REP-100: 110 (Si) -> 130 -> 140 | -> 211]
 
 Esperar y revalidar son eventos de sistema, sin actor humano: PROC-REP-120
-es ACT-SYSTEM y la rama No de PROC-REP-110 no declara actor. El override es
-de ACT-COORD. En el MVP un boton dispara
+es ACT-SYSTEM y la rama No de PROC-REP-110 no declara actor. El override lo
+autoriza cualquier usuario (P-06; ACT-COORD en BR-REP-003 V1.4). En el MVP
+un boton dispara
 manualmente el evento de revalidacion ("cambio de disponibilidad de
 insumos") que V1.3 describe.
 
@@ -162,7 +163,7 @@ def forzar_detalle_por_recursos(
     motivo: str,
     confirmado: bool,
 ) -> OrdenReparacion:
-    """Un Coordinador autoriza el override de UN Detalle bloqueado.
+    """Un usuario autoriza el override de UN Detalle bloqueado (P-06).
 
     BR-REP-003 / EXC-REP-002: capacidad transversal por Detalle. Siempre
     registra la misma autorizacion (``autorizar_override_recursos``) y deja

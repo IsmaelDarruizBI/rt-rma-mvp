@@ -42,6 +42,8 @@ from tests.test_api_hp_rep_003 import _garantia_definida, _orden_entregada
 from tests.test_api_var_rep_001_002 import _crear_orden as _crear_orden_cliente
 
 MOTIVO = "Cliente urgente; el repuesto llega manana."
+# P-06 (UAT): cualquier usuario puede autorizar el override.
+TODOS_LOS_ROLES = ["RECEPCION", "TECNICO", "COORDINADOR_RMA", "ADMINISTRADOR"]
 
 
 def _override(
@@ -101,7 +103,7 @@ def test_cliente_externo_override_090_ninguno_100_110_si_130_140(tmp_path):
             if a["codigo"] == "OVERRIDE_RECURSOS"
         )
         assert accion["detalle_id"] == "DET-001"
-        assert accion["roles"] == ["COORDINADOR_RMA"]
+        assert accion["roles"] == TODOS_LOS_ROLES
         assert accion["requiere_actor"] is True
 
         respuesta = _override(cliente, orden_id)
@@ -147,14 +149,23 @@ def test_cliente_externo_override_090_ninguno_100_110_si_130_140(tmp_path):
         assert _stock(tmp_path, INSUMO) == Decimal("0")
 
 
-@pytest.mark.parametrize("usuario", [RECEPCION, TECNICO, ADMINISTRADOR])
-def test_solo_el_coordinador_rma_puede_hacer_el_override(tmp_path, usuario):
+@pytest.mark.parametrize(
+    "usuario", [RECEPCION, TECNICO, COORDINADOR, ADMINISTRADOR]
+)
+def test_cualquier_rol_puede_hacer_el_override(tmp_path, usuario):
+    """P-06 (UAT): la autorizacion queda a nombre de quien la hizo."""
     with _cliente(tmp_path, stock="0") as cliente:
         orden_id = _hasta_100(cliente)
-        assert _override(cliente, orden_id, usuario=usuario).status_code == 409
-        orden = cliente.get(f"/api/orders/{orden_id}").json()
-        assert orden["current_process"] == "PROC-REP-100"
-        assert "PROC-REP-130" not in _ids(orden)
+        respuesta = _override(cliente, orden_id, usuario=usuario)
+        assert respuesta.status_code == 200, respuesta.text
+        orden = respuesta.json()
+        (autorizacion,) = [
+            p
+            for p in orden["historial"]
+            if p["referencia_id"] == "ACC-REP-049"
+        ]
+        assert autorizacion["usuario_id"] == usuario
+        assert orden["estado_workflow"] == "EN_COLA"
 
 
 def test_el_motivo_es_obligatorio(tmp_path):
@@ -434,7 +445,7 @@ def test_override_con_factibilidad_parcial_y_orden_tomada_no_reinicia(
             if a["codigo"] == "OVERRIDE_RECURSOS"
         ]
         assert accion["detalle_id"] == "DET-001"
-        assert accion["roles"] == ["COORDINADOR_RMA"]
+        assert accion["roles"] == TODOS_LOS_ROLES
 
         respuesta = _override(cliente, orden_id, "DET-001")
         assert respuesta.status_code == 200, respuesta.text
@@ -496,13 +507,11 @@ def test_override_con_factibilidad_parcial_y_orden_tomada_no_reinicia(
         assert _ids(orden).count("PROC-REP-140") == 1
 
 
-@pytest.mark.parametrize("usuario", [RECEPCION, TECNICO, ADMINISTRADOR])
-def test_override_parcial_valida_y_no_deja_efectos(tmp_path, usuario):
+def test_override_parcial_valida_y_no_deja_efectos(tmp_path):
     with _cliente_multi(tmp_path, a="0", b="1") as cliente:
         orden_id = _parcial_tomada_con_ejecucion(cliente)
         antes = cliente.get(f"/api/orders/{orden_id}").json()
 
-        assert _override(cliente, orden_id, usuario=usuario).status_code == 409
         assert _override(cliente, orden_id, motivo="  ").status_code == 409
         # DET-002 esta en curso, no bloqueado por recursos.
         assert _override(cliente, orden_id, "DET-002").status_code == 409

@@ -9,6 +9,9 @@ PROC-REP-100 la Orden continua 110 "Si" -> 130 -> 140
 reserva ni descuenta stock (eso es PROC-REP-185 / 210). Su fuente de verdad
 es el historial (``tiene_override_factibilidad``).
 
+Decision del UAT (P-06, se aparta de BR-REP-003 V1.4): lo autoriza
+cualquier usuario (``ROLES_OVERRIDE_RECURSOS``).
+
 Dos caminos llevan a PROC-REP-120 (V1.3): desde el ingreso
 (100 -> 110 "No" -> 120) y, directo, desde PROC-REP-211 con resultado
 ``PENDIENTE_RECURSOS`` (sin 100 ni 110). Ambos usan
@@ -35,7 +38,7 @@ from app.domain.models import (
     Usuario,
 )
 
-from .autorizacion import validar_actor
+from .autorizacion import validar_alguno_de
 from .autorizacion_cliente import (
     pendiente_de_autorizacion,
     situacion_de_la_orden,
@@ -51,6 +54,14 @@ NODO_REDEFINICION = "PROC-REP-127"
 # Capacidad transversal de autorizacion de override (BR-REP-003): ID real
 # de la trazabilidad, como ACC-REP-020 para Registrar Pago.
 ACCION_AUTORIZAR_OVERRIDE = "ACC-REP-049"
+# Quien puede autorizar el override (decision del UAT, P-06): cualquier
+# usuario de la aplicacion, no solo el Coordinador RMA de BR-REP-003 V1.4.
+ROLES_OVERRIDE_RECURSOS = (
+    RolUsuario.RECEPCION,
+    RolUsuario.TECNICO,
+    RolUsuario.COORDINADOR_RMA,
+    RolUsuario.ADMINISTRADOR,
+)
 # Revalidacion de recursos disparada por una persona (ID del MVP).
 ACCION_REVALIDAR_RECURSOS = "ACC-REP-028"
 _NODOS_QUE_LLEVAN_A_120 = ("PROC-REP-110", "PROC-REP-211")
@@ -156,13 +167,14 @@ def validar_override_recursos(
 ) -> None:
     """Precondiciones del override (BR-REP-003), sin registrar nada.
 
-    Coordinador RMA activo, Detalle DEFINIDO + BLOQUEADO_POR_RECURSOS y
-    motivo no vacio. La comparte ``autorizar_override_recursos`` y la capa
-    de aplicacion, que la evalua antes de pedir la confirmacion del
-    impacto en el stock (E3): un usuario sin permiso no llega a ver una
-    advertencia que igual no podria confirmar.
+    Usuario activo con uno de ``ROLES_OVERRIDE_RECURSOS``, Detalle
+    DEFINIDO + BLOQUEADO_POR_RECURSOS y motivo no vacio. La comparte
+    ``autorizar_override_recursos`` y la capa de aplicacion, que la evalua
+    antes de pedir la confirmacion del impacto en el stock (E3): un usuario
+    sin permiso no llega a ver una advertencia que igual no podria
+    confirmar.
     """
-    validar_actor(usuario, RolUsuario.COORDINADOR_RMA)
+    validar_alguno_de(usuario, ROLES_OVERRIDE_RECURSOS)
 
     detalle = next(
         (d for d in orden.reparaciones_detail if d.id == detalle_id), None
@@ -204,9 +216,10 @@ def autorizar_override_recursos(
 ) -> OrdenReparacion:
     """Capacidad transversal: autorizar UN Detalle bloqueado por recursos.
 
-    BR-REP-003: un Coordinador RMA autoriza un Detalle PENDIENTE (DEFINIDO)
-    con condicion BLOQUEADO_POR_RECURSOS y deja usuario, fecha, Detalle,
-    validacion ignorada y motivo. Es la UNICA forma de registrar un
+    BR-REP-003: un usuario autorizado (``ROLES_OVERRIDE_RECURSOS``)
+    autoriza un Detalle PENDIENTE (DEFINIDO) con condicion
+    BLOQUEADO_POR_RECURSOS y deja usuario, fecha, Detalle, validacion
+    ignorada y motivo. Es la UNICA forma de registrar un
     override, cualquiera sea el momento: con la Orden detenida en
     PROC-REP-100 o con factibilidad parcial (otros Detalles trabajables,
     Orden habilitada, en cola, tomada o en reparacion).
@@ -218,8 +231,9 @@ def autorizar_override_recursos(
     PROC-REP-185 / 210), y jamas toca reservas de otras Ordenes (E3).
     Continuar el circuito de PROC-REP-100 es ``continuar_por_override``.
 
-    ``impacto`` es la situacion de stock que el Coordinador confirmo
-    (E3): queda en la misma entrada del historial, junto al motivo.
+    ``impacto`` es la situacion de stock que el usuario confirmo (E3): por
+    insumo, requerido, disponible, lo que se reservara y el faltante.
+    Queda en la misma entrada del historial, junto al motivo.
     """
     validar_override_recursos(
         orden, detalle_id=detalle_id, usuario=usuario, motivo=motivo
@@ -262,7 +276,7 @@ def continuar_por_override(
     la habilitacion (140, ``habilitar_orden``). La autorizacion en si ya
     quedo registrada por ``autorizar_override_recursos``.
     """
-    validar_actor(usuario, RolUsuario.COORDINADOR_RMA)
+    validar_alguno_de(usuario, ROLES_OVERRIDE_RECURSOS)
 
     if orden.current_process != NODO_ADVERTENCIA:
         raise PrecondicionInvalidaError(

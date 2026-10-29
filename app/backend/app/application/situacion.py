@@ -749,8 +749,8 @@ def _recursos(datos: _Datos) -> _Principal | None:
         tareas.append(
             _tarea(
                 "Forzar el trabajo sin stock",
-                "Decisión de Coordinación: el impacto en el inventario se "
-                "confirma antes de registrarlo.",
+                "Con motivo: el impacto en el inventario se confirma antes "
+                "de registrarlo.",
                 forzar,
             )
         )

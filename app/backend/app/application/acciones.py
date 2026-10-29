@@ -43,6 +43,7 @@ from app.services import (
     ROLES_COMPROBANTE_AUTORIZACION,
     ROLES_DESCUENTO,
     ROLES_LIBERACION_AJENA,
+    ROLES_OVERRIDE_RECURSOS,
     ROLES_RECEPCION_EQUIPO,
     checkin_pendiente_para_entrega,
     checkin_registrable,
@@ -282,16 +283,17 @@ def _overrides_de_recursos(
 ) -> list[AccionDisponible]:
     """EXC-REP-002 / BR-REP-003: override, capacidad transversal por Detalle.
 
-    Una accion de Coordinador RMA por cada Detalle PENDIENTE (DEFINIDO)
-    bloqueado por recursos, este la Orden detenida en PROC-REP-100/120 o
-    con factibilidad parcial (habilitada, en cola, tomada o en reparacion).
-    Nunca para uno pendiente de autorizacion del cliente.
+    Una accion para cualquier usuario (``ROLES_OVERRIDE_RECURSOS``) por
+    cada Detalle PENDIENTE (DEFINIDO) bloqueado por recursos, este la Orden
+    detenida en PROC-REP-100/120 o con factibilidad parcial (habilitada, en
+    cola, tomada o en reparacion). Nunca para uno pendiente de
+    autorizacion del cliente.
     """
     return [
         AccionDisponible(
             codigo=ACCION_OVERRIDE_RECURSOS,
             etiqueta="Forzar el Detalle bloqueado (override)",
-            roles=(RolUsuario.COORDINADOR_RMA,),
+            roles=ROLES_OVERRIDE_RECURSOS,
             detalle_id=detalle.id,
         )
         for detalle in orden.reparaciones_detail

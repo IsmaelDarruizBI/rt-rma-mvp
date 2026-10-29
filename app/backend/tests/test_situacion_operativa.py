@@ -238,7 +238,10 @@ def test_esperando_repuestos_en_100_y_en_120(tmp_path):
         assert _codigos(esperar) == ["ESPERAR_RECURSOS"]
         assert esperar["responsable"] == "Cualquier usuario"
         assert _codigos(forzar) == ["OVERRIDE_RECURSOS"]
-        assert forzar["responsable"] == "Coordinación RMA"
+        # P-06 (UAT): cualquier rol puede forzar.
+        assert forzar["responsable"] == (
+            "Recepción, Técnico, Coordinación RMA o Administración"
+        )
         assert _etapas(situacion)["REPUESTOS"] == "EN_CURSO"
 
         ok(cliente.post(f"/api/orders/{orden_id}/resources/wait"))
