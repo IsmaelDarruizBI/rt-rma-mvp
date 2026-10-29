@@ -1874,7 +1874,8 @@ function insumosPrevistosDe(
 
 /**
  * E3: antes de forzar el Detalle se muestra el impacto en el stock -físico,
- * reservado, disponible, requerido y resultante- y se exige confirmarlo
+ * reservado, disponible, requerido, lo que se reserva y el faltante (P-06:
+ * el faltante no se reserva ni se descuenta)- y se exige confirmarlo
  * explícitamente. El backend también exige la confirmación: esto no es la
  * única protección, y las reservas de otras Órdenes nunca se tocan.
  */
@@ -1959,8 +1960,8 @@ function FormularioMotivoOverride({
         />
         <span>
           Confirmo el override con este impacto en el stock
-          {impacto?.deja_disponible_negativo
-            ? ", aunque el disponible quede en negativo."
+          {impacto?.hay_faltante
+            ? ": el faltante no se reserva ni se descuenta."
             : "."}
         </span>
       </label>
@@ -2020,7 +2021,8 @@ function ImpactoEnStock({
                 <th style={celda}>Reservado esta OR</th>
                 <th style={celda}>Disponible</th>
                 <th style={celda}>Requerido</th>
-                <th style={celda}>Disponible resultante</th>
+                <th style={celda}>Se reserva</th>
+                <th style={celda}>Faltante</th>
               </tr>
             </thead>
             <tbody>
@@ -2037,17 +2039,18 @@ function ImpactoEnStock({
                   <td style={celda}>{insumo.reservado_esta_orden}</td>
                   <td style={celda}>{insumo.disponible}</td>
                   <td style={celda}>{insumo.requerido}</td>
+                  <td style={celda}>{insumo.a_reservar}</td>
                   <td
                     style={{
                       ...celda,
                       fontWeight: 600,
                       color:
-                        Number(insumo.disponible_resultante) < 0
+                        Number(insumo.faltante) > 0
                           ? colores.error
                           : colores.ok,
                     }}
                   >
-                    {insumo.disponible_resultante}
+                    {insumo.faltante}
                   </td>
                 </tr>
               ))}
@@ -2059,9 +2062,7 @@ function ImpactoEnStock({
         style={{
           margin: "0.4rem 0 0",
           fontSize: "0.8rem",
-          color: impacto.deja_disponible_negativo
-            ? colores.error
-            : colores.suave,
+          color: impacto.hay_faltante ? colores.error : colores.suave,
         }}
       >
         {impacto.advertencia}

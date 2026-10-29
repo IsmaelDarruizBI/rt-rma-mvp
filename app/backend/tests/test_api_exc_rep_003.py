@@ -356,15 +356,19 @@ def test_i1_003_120_revalidar_100_override_130_211_con_en_cola(tmp_path):
         assert _ids(orden).count("PROC-REP-140") == 1
         assert "ENCOLAR" not in _codigos(orden)
 
-        # Con override, el mismo Detalle reserva aunque falte stock: no hay
-        # 186 y la Ejecucion inicia.
+        # Con override, el mismo Detalle inicia aunque falte stock: no hay
+        # 186 y la Ejecucion inicia, sin reservar lo que otra Orden tiene
+        # reservado (P-06).
         cliente.post(
             f"/api/orders/{orden_id}/take",
             json={"usuario_id": TECNICO, "estacion_id": ESTACION},
         )
         orden = _iniciar(cliente, orden_id).json()
         assert orden["historial"][-1]["referencia_id"] == "PROC-REP-185"
-        assert orden["historial"][-1]["observacion"] is None
+        assert orden["historial"][-1]["observacion"] == (
+            "Reserva parcial por override, sin stock para el resto: "
+            f"{INSUMO} reservado 0 de 1"
+        )
         assert len(orden["ejecuciones"]) == 1
         assert _stock(tmp_path, INSUMO) == Decimal("0")
 

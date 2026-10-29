@@ -6,8 +6,10 @@ transversal (ACC-REP-049), con la Orden detenida en PROC-REP-100 o con
 factibilidad parcial. Solo en el circuito de 100 el proceso continua
 090 "Ninguno trabajable" -> 100 -> 110 "Si" -> 130 -> 140. El override solo
 REGISTRA la autorizacion en el historial: no reserva ni descuenta stock. Con
-override vigente de ESE Detalle, PROC-REP-185 reserva aunque no alcance y
-PROC-REP-210 puede dejar el stock fisico negativo. Sin override, 185 sigue
+override vigente de ESE Detalle (P-06), PROC-REP-185 inicia aunque no
+alcance, reservando solo lo disponible, y PROC-REP-210 descuenta solo lo
+reservado: lo utilizado de mas queda "sin respaldo de stock" en el paso 210,
+sin movimiento ni stock negativo. Sin override, 185 sigue
 sin reservar lo que no hay; pero desde la decision E3 (MVP v2) un consumo
 de 210 respaldado por la reserva propia tampoco se bloquea si el stock
 fisico ya no alcanza: se registra y deja trazado el faltante.
@@ -436,21 +438,25 @@ def _reservar(orden, insumos, previstos=PREVISTOS, detalle_id="DET-001"):
     )
 
 
-def test_con_override_185_reserva_y_deja_el_disponible_negativo():
+def test_con_override_y_stock_cero_185_inicia_sin_reservar():
+    """P-06: se inicia la Ejecucion, pero no se reserva lo que no hay."""
     insumos = _insumos(a="0")
     orden = _seleccionar(_en_toma(_habilitada_por_override()), "DET-001")
 
     orden = _reservar(orden, insumos)
 
-    (reserva,) = orden.movimientos_insumo
-    assert reserva.tipo is TipoMovimientoInsumo.RESERVA
-    assert reserva.cantidad == Decimal("1")
+    assert orden.movimientos_insumo == []
     (ejecucion,) = orden.ejecuciones
     assert ejecucion.estado is EstadoEjecucion.EN_PROGRESO
-    # La RESERVA no toca el stock fisico: solo el disponible queda negativo.
     assert insumos[0].stock_fisico == Decimal("0")
     assert stock_disponible(insumos[0], orden.movimientos_insumo) == Decimal(
-        "-1"
+        "0"
+    )
+    paso_185 = orden.historial[-1]
+    assert paso_185.process_id == "PROC-REP-185"
+    assert paso_185.observacion == (
+        "Reserva parcial por override, sin stock para el resto: "
+        "INS-001 reservado 0 de 1"
     )
 
 
@@ -467,8 +473,8 @@ def test_sin_override_185_con_stock_insuficiente_sigue_fallando():
     assert orden.movimientos_insumo == [] and orden.ejecuciones == []
 
 
-def test_185_con_override_es_atomico_reserva_todo_o_nada():
-    """Con override se generan TODAS las reservas previstas (nunca parcial)."""
+def test_185_con_override_reserva_solo_lo_disponible_por_insumo():
+    """Con override cada insumo reserva lo que hay, hasta lo previsto."""
     previstos = [
         TipoReparacionInsumos(
             tipo_reparacion_id="TREP-001",
@@ -478,19 +484,40 @@ def test_185_con_override_es_atomico_reserva_todo_o_nada():
         TipoReparacionInsumos(
             tipo_reparacion_id="TREP-001",
             insumo_id="INS-002",
-            cantidad=Decimal("2"),
+            cantidad=Decimal("3"),
         ),
     ]
     orden = _seleccionar(_en_toma(_habilitada_por_override()), "DET-001")
 
-    orden = _reservar(orden, _insumos(a="0", b="0"), previstos=previstos)
+    orden = _reservar(orden, _insumos(a="5", b="2"), previstos=previstos)
 
     assert sorted(
         (m.insumo_id, m.cantidad) for m in orden.movimientos_insumo
     ) == [
-        ("INS-001", Decimal("1")),
-        ("INS-002", Decimal("2")),
+        ("INS-001", Decimal("1")),  # suficiente: todo lo previsto
+        ("INS-002", Decimal("2")),  # parcial: solo lo disponible
     ]
+    assert orden.historial[-1].observacion == (
+        "Reserva parcial por override, sin stock para el resto: "
+        "INS-002 reservado 2 de 3"
+    )
+
+
+def test_185_con_override_no_usa_las_reservas_de_otras_ordenes():
+    orden = _seleccionar(_en_toma(_habilitada_por_override()), "DET-001")
+
+    orden = reservar_insumos_e_iniciar_ejecucion(
+        orden,
+        detalle_id="DET-001",
+        usuario=TECNICO,
+        insumos=_insumos(a="1"),
+        insumos_previstos=PREVISTOS,
+        fecha=t(65),
+        reservas_externas={"INS-001": Decimal("1")},  # otra Orden la tiene
+    )
+
+    assert orden.movimientos_insumo == []
+    assert orden.ejecuciones[0].estado is EstadoEjecucion.EN_PROGRESO
 
 
 def _con_repos(tmp_path, insumos):
@@ -528,14 +555,47 @@ def _consumir(orden, repos, utilizado, previstos=PREVISTOS, insumos=None):
     )
 
 
-def test_al_consumir_con_override_el_stock_fisico_pasa_a_negativo(tmp_path):
+def test_al_consumir_con_override_sin_stock_no_hay_negativo(tmp_path):
+    """P-06: termina, sin CONSUMO ficticio, y queda la excepcion en 210."""
     insumos = _insumos(a="0")
     repos = _con_repos(tmp_path, insumos)
     orden = _seleccionar(_en_toma(_habilitada_por_override()), "DET-001")
 
-    _consumir(orden, repos, "1", insumos=insumos)
+    orden = _consumir(orden, repos, "1", insumos=insumos)
 
-    assert repos[1].obtener_insumo("INS-001").stock_fisico == Decimal("-1")
+    assert repos[1].obtener_insumo("INS-001").stock_fisico == Decimal("0")
+    assert orden.movimientos_insumo == []
+    assert orden.ejecuciones[0].estado is EstadoEjecucion.COMPLETADO
+    paso_210 = orden.historial[-1]
+    assert paso_210.process_id == "PROC-REP-210"
+    assert paso_210.reparacion_detail_id == "DET-001"
+    assert paso_210.observacion == (
+        "Utilizado sin respaldo de stock (override): INS-001 utilizado 1, "
+        "descontado 0, sin respaldo 1"
+    )
+    assert repos[0].obtener(orden.id) == orden
+
+
+def test_con_override_parcial_se_descuenta_solo_lo_reservado(tmp_path):
+    previstos = [
+        TipoReparacionInsumos(
+            tipo_reparacion_id="TREP-001",
+            insumo_id="INS-001",
+            cantidad=Decimal("3"),
+        )
+    ]
+    insumos = _insumos(a="2")
+    repos = _con_repos(tmp_path, insumos)
+    orden = _seleccionar(_en_toma(_habilitada_por_override()), "DET-001")
+
+    orden = _consumir(orden, repos, "3", previstos=previstos, insumos=insumos)
+
+    # Reservadas 2 de 3: se consumen 2, la tercera queda sin respaldo.
+    assert sorted(
+        (m.tipo.value, m.cantidad) for m in orden.movimientos_insumo
+    ) == [("CONSUMO", Decimal("2")), ("RESERVA", Decimal("2"))]
+    assert repos[1].obtener_insumo("INS-001").stock_fisico == Decimal("0")
+    assert "sin respaldo 1" in orden.historial[-1].observacion
 
 
 def test_la_liberacion_de_reserva_no_descuenta_stock(tmp_path):
@@ -546,7 +606,7 @@ def test_la_liberacion_de_reserva_no_descuenta_stock(tmp_path):
             cantidad=Decimal("2"),
         )
     ]
-    insumos = _insumos(a="0")
+    insumos = _insumos(a="2")
     repos = _con_repos(tmp_path, insumos)
     orden = _seleccionar(_en_toma(_habilitada_por_override()), "DET-001")
 
@@ -561,8 +621,9 @@ def test_la_liberacion_de_reserva_no_descuenta_stock(tmp_path):
         ("CONSUMO", Decimal("1")),
         ("LIBERACION_RESERVA", Decimal("1")),
     ]
-    # Reservado 2, usado 1: solo el CONSUMO baja el stock fisico (-1, no -2).
-    assert repos[1].obtener_insumo("INS-001").stock_fisico == Decimal("-1")
+    # Reservado 2, usado 1: solo el CONSUMO baja el stock fisico (1, no 0).
+    assert repos[1].obtener_insumo("INS-001").stock_fisico == Decimal("1")
+    assert orden.historial[-1].observacion is None  # nada sin respaldo
 
 
 def test_sin_override_el_consumo_reservado_se_registra_con_faltante(tmp_path):

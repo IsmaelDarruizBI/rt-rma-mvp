@@ -116,7 +116,9 @@ def test_el_override_no_habilita_a_otro_tecnico_sobre_la_toma(tmp_path):
             json={"usuario_id": TECNICO},
         )
         assert titular.status_code == 200, titular.text
-        assert _disponible(tmp_path) == Decimal("-1")
+        # P-06: con override y sin stock no se reserva nada.
+        assert _disponible(tmp_path) == Decimal("0")
+        assert _movimientos(tmp_path, orden_id) == []
 
 
 # --- E3 + E4 -----------------------------------------------------------------
@@ -153,9 +155,11 @@ def test_consumos_simultaneos_con_override_quedan_consistentes(tmp_path):
             hilo.join(timeout=60)
 
         assert estados == {orden_a: 200, orden_b: 200}
-        assert _stock_fisico(tmp_path) == Decimal("-2")  # 5 - 4 - 3
-        assert _disponible(tmp_path) == Decimal("-2")  # sin reservas abiertas
-        for orden_id, cantidad in ((orden_a, "4"), (orden_b, "3")):
+        # P-06: OR-B solo pudo reservar la unidad disponible (de 3), y solo
+        # esa se descuenta: 5 - 4 - 1, nunca negativo.
+        assert _stock_fisico(tmp_path) == Decimal("0")
+        assert _disponible(tmp_path) == Decimal("0")  # sin reservas abiertas
+        for orden_id, cantidad in ((orden_a, "4"), (orden_b, "1")):
             tipos = sorted(
                 (m["tipo"], m["cantidad"])
                 for m in _movimientos(tmp_path, orden_id)

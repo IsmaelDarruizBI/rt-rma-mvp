@@ -938,7 +938,10 @@ export interface ImpactoStockInsumo {
   reservado_esta_orden: string;
   disponible: string;
   requerido: string;
-  disponible_resultante: string;
+  /** Lo que se reserva: nunca más que el disponible. */
+  a_reservar: string;
+  /** Requerido sin stock: no se reserva ni se descuenta nunca. */
+  faltante: string;
 }
 
 /** `GET .../resources/override-preview`: impacto de forzar un Detalle. */
@@ -946,7 +949,7 @@ export interface ImpactoOverride {
   orden_id: string;
   detalle_id: string;
   insumos: ImpactoStockInsumo[];
-  deja_disponible_negativo: boolean;
+  hay_faltante: boolean;
   hay_reservas_de_otras_ordenes: boolean;
   advertencia: string;
 }

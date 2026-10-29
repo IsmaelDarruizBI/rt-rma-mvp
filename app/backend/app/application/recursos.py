@@ -47,11 +47,11 @@ from .modificacion import orden_para_modificar
 
 @dataclass(frozen=True)
 class ImpactoOverride:
-    """Lo que el Coordinador ve y confirma antes de forzar un Detalle (E3).
+    """Lo que el usuario ve y confirma antes de forzar un Detalle (E3).
 
     Por cada insumo previsto: stock fisico, reservado (por otras Ordenes y
-    por esta), disponible, requerido y disponible resultante. Las reservas
-    de otras Ordenes se informan, nunca se tocan.
+    por esta), disponible, requerido, lo que se reservara y el faltante
+    (P-06). Las reservas de otras Ordenes se informan, nunca se tocan.
     """
 
     orden_id: str
@@ -59,8 +59,8 @@ class ImpactoOverride:
     insumos: tuple[ImpactoStockInsumo, ...]
 
     @property
-    def deja_disponible_negativo(self) -> bool:
-        return any(i.disponible_resultante < 0 for i in self.insumos)
+    def hay_faltante(self) -> bool:
+        return any(i.faltante > 0 for i in self.insumos)
 
     @property
     def hay_reservas_de_otras_ordenes(self) -> bool:
@@ -68,12 +68,13 @@ class ImpactoOverride:
 
     @property
     def advertencia(self) -> str:
-        if self.deja_disponible_negativo:
+        if self.hay_faltante:
             return (
-                "El override deja el disponible en negativo. Las reservas "
-                "de otras Ordenes se conservan y esas Ordenes podran "
-                "completar igual sus Ejecuciones; si el stock fisico no "
-                "alcanza, el faltante quedara registrado."
+                "Falta stock: se reserva solo lo disponible y el faltante "
+                "no se descuenta del inventario, ni ahora ni cuando "
+                "ingrese mercaderia. Lo que la reparacion use sin stock "
+                "queda registrado en el historial. Las reservas de otras "
+                "Ordenes no se tocan."
             )
         if self.hay_reservas_de_otras_ordenes:
             return (
@@ -168,8 +169,8 @@ def forzar_detalle_por_recursos(
     BR-REP-003 / EXC-REP-002: capacidad transversal por Detalle. Siempre
     registra la misma autorizacion (``autorizar_override_recursos``) y deja
     ese Detalle SIN_BLOQUEO; no reserva ni descuenta stock (la reserva es
-    PROC-REP-185 y el consumo PROC-REP-210, donde el override habilita un
-    disponible / stock negativo).
+    PROC-REP-185 y el consumo PROC-REP-210, que con override reservan y
+    descuentan solo lo que existe).
 
     E3: antes de aplicar se calcula el impacto en el stock y se exige
     ``confirmado``. Sin confirmacion explicita no se registra nada (409

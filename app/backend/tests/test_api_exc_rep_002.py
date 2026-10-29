@@ -301,22 +301,27 @@ def test_multidetalle_override_de_uno_habilita_y_solo_ese_se_inicia(tmp_path):
 # --- 185 y 210: stock negativo solo con override ---
 
 
-def test_con_override_se_reserva_y_se_consume_dejando_stock_negativo(
+def test_con_override_sin_stock_se_repara_sin_reservar_ni_descontar(
     tmp_path,
 ):
+    """P-06: inicia y termina; el stock queda en 0, nunca en -1."""
     with _cliente(tmp_path, stock="0") as cliente:
         orden_id = _hasta_100(cliente)
         _override(cliente, orden_id)
         _tomar(cliente, orden_id)
 
-        # 185: reserva aunque el stock sea 0; el stock fisico no se toca.
+        # 185: inicia sin reservar lo que no hay.
         iniciada = _iniciar(cliente, orden_id)
         assert iniciada.status_code == 200, iniciada.text
         ejecucion = iniciada.json()["ejecuciones"][0]
         assert ejecucion["estado"] == "EN_PROGRESO"
+        assert iniciada.json()["historial"][-1]["observacion"] == (
+            "Reserva parcial por override, sin stock para el resto: "
+            f"{INSUMO} reservado 0 de 1"
+        )
         assert _stock(tmp_path, INSUMO) == Decimal("0")
 
-        # 210: el CONSUMO baja el stock fisico a -1.
+        # 210: ni CONSUMO ni descuento; queda la excepcion en el historial.
         completada = cliente.post(
             f"/api/orders/{orden_id}/executions/{ejecucion['id']}/complete",
             json={
@@ -325,7 +330,18 @@ def test_con_override_se_reserva_y_se_consume_dejando_stock_negativo(
             },
         )
         assert completada.status_code == 200, completada.text
-        assert _stock(tmp_path, INSUMO) == Decimal("-1")
+        orden = completada.json()
+        assert _stock(tmp_path, INSUMO) == Decimal("0")
+        assert orden["reparaciones_detail"][0]["estado"] == "COMPLETO"
+        paso_210 = [
+            p
+            for p in orden["historial"]
+            if p["referencia_id"] == "PROC-REP-210"
+        ][-1]
+        assert paso_210["reparacion_detail_id"] == "DET-001"
+        assert paso_210["observacion"].startswith(
+            "Utilizado sin respaldo de stock (override)"
+        )
 
 
 def test_interrumpir_con_override_sin_usar_nada_no_toca_el_stock(tmp_path):

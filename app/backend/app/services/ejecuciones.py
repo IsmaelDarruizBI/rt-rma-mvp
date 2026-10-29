@@ -40,9 +40,12 @@ from .exceptions import (
 )
 from .identificadores import nuevo_id
 from .inventario import (
+    buscar_insumo,
+    cantidad_reservable,
     crear_reserva,
     faltantes_del_detalle,
     insumos_previstos_de,
+    stock_disponible,
 )
 from .recursos import tiene_override_factibilidad
 from .tomas import (
@@ -94,8 +97,10 @@ def reservar_insumos_e_iniciar_ejecucion(
     EXC-REP-003) la compone ``intentar_reserva_e_inicio``; aqui, sin
     override, la falta de stock solo se defiende con
     RecursoNoDisponibleError. Con override vigente de ESTE Detalle
-    (ACC-REP-049, ``tiene_override_factibilidad``) reserva igual, dejando
-    el disponible negativo (el stock fisico solo baja en PROC-REP-210).
+    (ACC-REP-049, ``tiene_override_factibilidad``) inicia igual, pero
+    reserva solo lo realmente disponible (``cantidad_reservable``, P-06):
+    nunca deja el disponible negativo ni toma reservas de otras Ordenes.
+    Lo que no alcanza queda anotado en el paso 185; no se reserva despues.
 
     Nodo ACT-SYSTEM. El ``usuario`` recibido tiene que ser el tecnico de
     la toma activa (E2): a el se atribuye la Ejecucion que se abre aqui.
@@ -113,12 +118,13 @@ def reservar_insumos_e_iniciar_ejecucion(
     )
 
     # Comprobar todo antes de modificar nada. Con un override de
-    # factibilidad VALIDO PARA ESTE Detalle (EXC-REP-002) la reserva se
-    # genera completa aunque la disponibilidad no alcance. Sin override,
-    # el camino normal de la aplicacion pasa antes por
+    # factibilidad VALIDO PARA ESTE Detalle (EXC-REP-002) se inicia aunque
+    # la disponibilidad no alcance, reservando solo lo que hay. Sin
+    # override, el camino normal de la aplicacion pasa antes por
     # ``intentar_reserva_e_inicio`` (EXC-REP-003); este error es solo la
     # defensa de bajo nivel. El override de otro Detalle no cuenta.
-    if not tiene_override_factibilidad(orden, detalle_id):
+    con_override = tiene_override_factibilidad(orden, detalle_id)
+    if not con_override:
         faltantes = faltantes_del_detalle(
             detalle.tipo_reparacion_id,
             orden.movimientos_insumo,
@@ -132,15 +138,32 @@ def reservar_insumos_e_iniciar_ejecucion(
                 f"{', '.join(faltantes)}. No se genero ninguna reserva."
             )
 
-    reservas: list[MovimientoInsumo] = [
-        crear_reserva(
-            insumo_id=previsto.insumo_id,
-            reparacion_detail_id=detalle_id,
-            cantidad=previsto.cantidad,
-            fecha=fecha,
-        )
-        for previsto in previstos
-    ]
+    reservas: list[MovimientoInsumo] = []
+    sin_reservar: list[str] = []
+    ajenas = reservas_externas or {}
+    for previsto in previstos:
+        cantidad = previsto.cantidad
+        if con_override:
+            disponible = stock_disponible(
+                buscar_insumo(previsto.insumo_id, insumos),
+                [*orden.movimientos_insumo, *reservas],
+                ajenas.get(previsto.insumo_id, Decimal("0")),
+            )
+            cantidad = cantidad_reservable(previsto.cantidad, disponible)
+            if cantidad < previsto.cantidad:
+                sin_reservar.append(
+                    f"{previsto.insumo_id} reservado {cantidad} de "
+                    f"{previsto.cantidad}"
+                )
+        if cantidad > 0:
+            reservas.append(
+                crear_reserva(
+                    insumo_id=previsto.insumo_id,
+                    reparacion_detail_id=detalle_id,
+                    cantidad=cantidad,
+                    fecha=fecha,
+                )
+            )
 
     ejecucion = EjecucionReparacion(
         id=ejecucion_id or nuevo_id("EJE"),
@@ -159,6 +182,12 @@ def reservar_insumos_e_iniciar_ejecucion(
         usuario_id=usuario.id,
         reparacion_detail_id=detalle_id,
         ejecucion_id=ejecucion.id,
+        observacion=(
+            "Reserva parcial por override, sin stock para el resto: "
+            + "; ".join(sin_reservar)
+            if sin_reservar
+            else None
+        ),
     )
     nueva_orden.movimientos_insumo.extend(reservas)
     nueva_orden.ejecuciones.append(ejecucion)

@@ -28,6 +28,9 @@ from .identificadores import nuevo_id
 from .workflow import registrar_paso
 
 CERO = Decimal("0")
+# Observacion de PROC-REP-210 cuando un override termina con insumos que
+# el stock no respaldaba (P-06): sin movimiento ni descuento posterior.
+PREFIJO_SIN_RESPALDO = "Utilizado sin respaldo de stock"
 
 # Movimientos que cierran (total o parcialmente) una reserva previa.
 _CIERRAN_RESERVA = (
@@ -153,15 +156,26 @@ def stock_disponible(
     return insumo.stock_fisico - propias - reservas_externas
 
 
+def cantidad_reservable(requerido: Decimal, disponible: Decimal) -> Decimal:
+    """Lo que un override puede reservar: solo lo realmente disponible.
+
+    P-06 (UAT): nunca mas que el disponible (que ya descuenta las reservas
+    de otras Ordenes) ni menos que cero. El resto es el faltante, que no
+    se reserva ni se descuenta nunca.
+    """
+    return min(requerido, max(disponible, CERO))
+
+
 @dataclass(frozen=True)
 class ImpactoStockInsumo:
     """Situacion de UN insumo previsto ante un override (E3, BR-REP-003).
 
-    Es lo que el Coordinador ve -y confirma- antes de autorizar:
+    Es lo que el usuario ve -y confirma- antes de autorizar:
 
         reservado  = reservado por otras Ordenes + por esta Orden
         disponible = stock fisico - reservado
-        resultante = disponible - requerido por el Detalle
+        a_reservar = lo que alcanza del requerido (``cantidad_reservable``)
+        faltante   = requerido - a_reservar
 
     No se persiste: se calcula contra el catalogo y las reservas vigentes.
     """
@@ -183,8 +197,12 @@ class ImpactoStockInsumo:
         return self.stock_fisico - self.reservado
 
     @property
-    def disponible_resultante(self) -> Decimal:
-        return self.disponible - self.requerido
+    def a_reservar(self) -> Decimal:
+        return cantidad_reservable(self.requerido, self.disponible)
+
+    @property
+    def faltante(self) -> Decimal:
+        return self.requerido - self.a_reservar
 
     def describir(self) -> str:
         """Una linea legible, para el historial y los mensajes."""
@@ -192,7 +210,7 @@ class ImpactoStockInsumo:
             f"{self.insumo_id}: fisico {self.stock_fisico}, reservado "
             f"{self.reservado} (otras Ordenes {self.reservado_otras_ordenes}"
             f"), disponible {self.disponible}, requerido {self.requerido}, "
-            f"disponible resultante {self.disponible_resultante}"
+            f"se reserva {self.a_reservar}, faltante {self.faltante}"
         )
 
 
@@ -310,6 +328,7 @@ def generar_movimientos_inventario(
     *,
     ejecucion_id: str,
     fecha: datetime,
+    tope_override: Mapping[str, Decimal] | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-210: consume lo utilizado y libera lo que sobro.
 
@@ -320,6 +339,14 @@ def generar_movimientos_inventario(
         utilizado == reservado -> CONSUMO
         utilizado <  reservado -> CONSUMO (si > 0) + LIBERACION_RESERVA
         utilizado >  reservado -> error de dominio (fuera de HP-REP-001)
+
+    Con override vigente del Detalle (P-06) el llamador pasa
+    ``tope_override``: por insumo, las unidades que existen para esta
+    Orden (fisico menos reservas de otras Ordenes). Entonces se descuenta
+    a lo sumo ``min(utilizado, reservado, tope)``; lo reservado que no se
+    descuenta se libera, y lo utilizado de mas no genera movimiento: queda
+    en el paso 210 como "utilizado sin respaldo de stock". Nunca se deja
+    un descuento pendiente para una reposicion futura.
 
     Solo se concilia una Ejecucion terminal (COMPLETADO o INTERRUMPIDO,
     VAR-REP-003): una EN_PROGRESO se rechaza. Para el inventario ambos
@@ -368,6 +395,8 @@ def generar_movimientos_inventario(
         utilizado.insumo_id for utilizado in ejecucion.insumos_utilizados
     )
 
+    a_descontar: dict[str, Decimal] = {}
+    sin_respaldo: list[str] = []
     for insumo_id in sorted(insumos_involucrados):
         reservado = sum(
             (
@@ -380,17 +409,28 @@ def generar_movimientos_inventario(
         utilizado = _cantidad_utilizada(
             insumo_id, ejecucion.insumos_utilizados
         )
-        if utilizado > reservado:
-            raise PrecondicionInvalidaError(
-                f"El insumo {insumo_id} se utilizo por {utilizado} pero solo "
-                f"habia {reservado} reservado: el MVP no modela desperdicio "
-                "ni consumo sin reserva."
+        if tope_override is None:
+            if utilizado > reservado:
+                raise PrecondicionInvalidaError(
+                    f"El insumo {insumo_id} se utilizo por {utilizado} pero "
+                    f"solo habia {reservado} reservado: el MVP no modela "
+                    "desperdicio ni consumo sin reserva."
+                )
+            a_descontar[insumo_id] = utilizado
+            continue
+        tope = max(tope_override.get(insumo_id, CERO), CERO)
+        a_descontar[insumo_id] = min(utilizado, reservado, tope)
+        if utilizado > a_descontar[insumo_id]:
+            sin_respaldo.append(
+                f"{insumo_id} utilizado {utilizado}, descontado "
+                f"{a_descontar[insumo_id]}, sin respaldo "
+                f"{utilizado - a_descontar[insumo_id]}"
             )
 
     nuevos: list[MovimientoInsumo] = []
 
     for insumo_id in sorted(insumos_involucrados):
-        restante = _cantidad_utilizada(insumo_id, ejecucion.insumos_utilizados)
+        restante = a_descontar[insumo_id]
         reservas_del_insumo = [
             reserva for reserva in pendientes if reserva.insumo_id == insumo_id
         ]
@@ -435,6 +475,11 @@ def generar_movimientos_inventario(
         fecha=fecha,
         reparacion_detail_id=detalle_id,
         ejecucion_id=ejecucion.id,
+        observacion=(
+            f"{PREFIJO_SIN_RESPALDO} (override): {'; '.join(sin_respaldo)}"
+            if sin_respaldo
+            else None
+        ),
     )
     nueva_orden.movimientos_insumo.extend(nuevos)
 

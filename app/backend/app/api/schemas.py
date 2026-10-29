@@ -1721,8 +1721,9 @@ class ImpactoStockInsumoOut(BaseModel):
     """Un insumo previsto ante el override: lo que se confirma (E3).
 
     ``disponible = stock_fisico - reservado_otras_ordenes -
-    reservado_esta_orden`` y ``disponible_resultante = disponible -
-    requerido``.
+    reservado_esta_orden``; ``a_reservar`` es lo que alcanza del
+    requerido (nunca mas que el disponible) y ``faltante = requerido -
+    a_reservar`` (P-06).
     """
 
     insumo_id: str
@@ -1733,7 +1734,8 @@ class ImpactoStockInsumoOut(BaseModel):
     reservado_esta_orden: Decimal
     disponible: Decimal
     requerido: Decimal
-    disponible_resultante: Decimal
+    a_reservar: Decimal
+    faltante: Decimal
 
 
 class ImpactoOverrideOut(BaseModel):
@@ -1742,7 +1744,7 @@ class ImpactoOverrideOut(BaseModel):
     orden_id: str
     detalle_id: str
     insumos: list[ImpactoStockInsumoOut]
-    deja_disponible_negativo: bool
+    hay_faltante: bool
     hay_reservas_de_otras_ordenes: bool
     advertencia: str
 
@@ -1763,11 +1765,12 @@ class ImpactoOverrideOut(BaseModel):
                     reservado_esta_orden=insumo.reservado_esta_orden,
                     disponible=insumo.disponible,
                     requerido=insumo.requerido,
-                    disponible_resultante=insumo.disponible_resultante,
+                    a_reservar=insumo.a_reservar,
+                    faltante=insumo.faltante,
                 )
                 for insumo in impacto.insumos
             ],
-            deja_disponible_negativo=impacto.deja_disponible_negativo,
+            hay_faltante=impacto.hay_faltante,
             hay_reservas_de_otras_ordenes=impacto.hay_reservas_de_otras_ordenes,
             advertencia=impacto.advertencia,
         )

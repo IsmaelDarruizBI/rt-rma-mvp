@@ -705,7 +705,8 @@ def test_13_un_detalle_en_revision_no_es_un_bloqueo_por_recursos(tmp_path):
 # --- 18/19. Override, faltante y correccion ----------------------------------
 
 
-def test_18_19_consumo_con_override_y_correccion_del_faltante(tmp_path):
+def test_18_19_consumo_con_override_y_reposicion_posterior(tmp_path):
+    """P-06: el override no deja negativo ni descuentos para la reposicion."""
     with _cliente(tmp_path, stock_bateria="1") as cliente:
         con_reserva = _con_reserva(cliente)
         forzada = definida(cliente)
@@ -725,30 +726,27 @@ def test_18_19_consumo_con_override_y_correccion_del_faltante(tmp_path):
         )
         tomada(cliente, forzada)
         ejecucion = iniciar(cliente, forzada)
-        assert _situacion(cliente)["disponible"] == "-1"
+        # La unica unidad ya la reservo la otra Orden: no se reserva nada.
+        assert _situacion(cliente)["disponible"] == "0"
         ok(cerrar_ejecucion(cliente, forzada, ejecucion))
-        # La Orden con reserva consume igual: el fisico queda negativo.
+        assert _situacion(cliente)["stock_fisico"] == "1"
+        # La Orden con reserva consume su unidad.
         ejecucion = _ultima_ejecucion(cliente, con_reserva)
         ok(cerrar_ejecucion(cliente, con_reserva, ejecucion))
 
         situacion = _situacion(cliente)
-        assert situacion["stock_fisico"] == "-1"
-        assert situacion["fisico_negativo"] is True
-        (faltante,) = _detalle(cliente)["faltantes"]
-        assert faltante["origen"] == "CONSUMO"
-        assert faltante["orden_id"] == con_reserva
-        # Un ajuste manual no lo hunde mas; se corrige con un ingreso.
-        conflicto(_ajuste(cliente, "-1"))
-        ok(_ingreso(cliente, "3", motivo="Reposicion por faltante"))
+        assert situacion["stock_fisico"] == "0"
+        assert situacion["fisico_negativo"] is False
+        assert _detalle(cliente)["faltantes"] == []
+        # La reposicion queda entera: no descuenta lo usado con override.
+        ok(_ingreso(cliente, "3", motivo="Reposicion"))
 
         detalle = _detalle(cliente)
-        assert detalle["insumo"]["stock_fisico"] == "2"
+        assert detalle["insumo"]["stock_fisico"] == "3"
         assert detalle["insumo"]["faltante"] is False
-        # La evidencia del faltante y los movimientos se conservan.
-        assert len(detalle["faltantes"]) == 1
         assert [m["tipo"] for m in detalle["movimientos"]].count(
             "CONSUMO"
-        ) == 2
+        ) == 1
 
 
 def _ultima_ejecucion(cliente, orden_id) -> str:

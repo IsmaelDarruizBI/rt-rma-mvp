@@ -141,10 +141,11 @@ def aplicar_movimientos_inventario(
     RESERVA de la propia Orden -``generar_movimientos_inventario``
     rechaza usar mas de lo reservado-, y esa reserva es un derecho que la
     Orden obtuvo en PROC-REP-185. Por eso el consumo nunca se bloquea
-    porque el stock fisico ya no alcance: si otra Orden consumio con
-    override (o el stock se ajusto a mano), el fisico puede quedar
-    negativo y el faltante queda trazado; no se inventan existencias ni
-    se borran movimientos.
+    porque el stock fisico ya no alcance: si el stock se ajusto a mano, el
+    fisico puede quedar negativo y el faltante queda trazado; no se
+    inventan existencias ni se borran movimientos. Con override vigente
+    del Detalle (P-06) se descuenta solo lo que existe para esta Orden
+    (``_tope_por_override``): el override nunca deja el fisico negativo.
 
     El MVP no tiene transacciones entre archivos (E4): el stock se escribe
     primero -no tiene control de version- y la Orden despues -el
@@ -163,7 +164,12 @@ def aplicar_movimientos_inventario(
         return orden.model_copy(deep=True)
 
     nueva_orden = generar_movimientos_inventario(
-        orden, ejecucion_id=ejecucion_id, fecha=fecha
+        orden,
+        ejecucion_id=ejecucion_id,
+        fecha=fecha,
+        tope_override=_tope_por_override(
+            orden, ejecucion_id, ordenes_repo, catalogos_repo
+        ),
     )
 
     consumos = _consumos_de_la_ejecucion(nueva_orden, ejecucion_id)
@@ -210,6 +216,39 @@ def aplicar_movimientos_inventario(
     return nueva_orden
 
 
+def _tope_por_override(
+    orden: OrdenReparacion,
+    ejecucion_id: str,
+    ordenes_repo: OrdenReparacionRepository,
+    catalogos_repo: CatalogosRepository,
+) -> dict[str, Decimal] | None:
+    """Con override vigente del Detalle, lo que existe para esta Orden.
+
+    P-06: por insumo, stock fisico menos las reservas de las demas Ordenes
+    (nunca se consumen unidades reservadas por otra). Sin override,
+    ``None``: PROC-REP-210 sigue como siempre.
+    """
+    ejecucion = next(
+        (e for e in orden.ejecuciones if e.id == ejecucion_id), None
+    )
+    if ejecucion is None or not tiene_override_factibilidad(
+        orden, ejecucion.reparacion_detail_id
+    ):
+        return None
+    insumo_ids = {
+        movimiento.insumo_id
+        for movimiento in orden.movimientos_insumo
+        if movimiento.reparacion_detail_id == ejecucion.reparacion_detail_id
+    }
+    insumo_ids.update(u.insumo_id for u in ejecucion.insumos_utilizados)
+    ajenas = reservas_externas_a(orden.id, ordenes_repo.listar())
+    return {
+        insumo_id: catalogos_repo.obtener_insumo(insumo_id).stock_fisico
+        - ajenas.get(insumo_id, CERO)
+        for insumo_id in insumo_ids
+    }
+
+
 def _restaurar_stock(
     catalogos_repo: CatalogosRepository,
     escritos: Sequence[tuple[str, Decimal]],
@@ -239,13 +278,16 @@ def _anotar_faltante_fisico(
 
     ``generar_movimientos_inventario`` acaba de agregar ese paso al final
     del historial de esta copia de la Orden, todavia sin persistir: se
-    completa su observacion en lugar de inventar un nodo nuevo.
+    completa su observacion en lugar de inventar un nodo nuevo, sin perder
+    la que ya tuviera (insumos sin respaldo de un override).
     """
     ultimo = orden.historial[-1]
     if ultimo.process_id != "PROC-REP-210":
         raise PrecondicionInvalidaError(
             "El faltante fisico se anota sobre el paso PROC-REP-210."
         )
+    if ultimo.observacion:
+        observacion = f"{ultimo.observacion}. {observacion}"
     orden.historial[-1] = ultimo.model_copy(
         update={"observacion": observacion}
     )
