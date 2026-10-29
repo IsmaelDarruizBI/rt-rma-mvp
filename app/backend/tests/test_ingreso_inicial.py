@@ -235,8 +235,27 @@ def test_el_pdf_del_comprobante_de_ingreso(cliente, tmp_path):
     assert OBSERVACIONES.encode("cp1252") in pdf
     assert b"Cambio de bateria" in pdf
     assert NOTA_INTERNA.encode("cp1252") not in pdf
+    # Los accesorios registrados (una Orden anterior) siguen saliendo.
+    assert b"Accesorios" in pdf and b"Cargador" in pdf
     # Descargarlo no registra nada: no prueba que el cliente lo recibio.
     assert archivo(tmp_path, orden_id) == antes
+
+
+def test_sin_accesorios_el_pdf_no_dice_ninguno(cliente):
+    # El alta ya no pide accesorios: la linea no sale, en vez de afirmar
+    # que no se recibio ninguno.
+    orden_id = crear_con_recepcion(cliente, accesorios=())
+    agregar(cliente, orden_id, BATERIA)
+    ok(generar_ingreso(cliente, orden_id))
+    (documento,) = del_tipo(cliente, orden_id, "COMPROBANTE_INGRESO")
+
+    pdf = cliente.get(
+        f"/api/orders/{orden_id}/documents/{documento['id']}/pdf"
+    ).content
+
+    assert b"Accesorios" not in pdf
+    assert b"Ninguno" not in pdf
+    assert ESTADO_FISICO.encode("cp1252") in pdf
 
 
 # --- Consistencia: reintentos, faltantes y alcance ---------------------------

@@ -30,7 +30,6 @@ import type {
 import { datosDelEquipo, equipoElegidoDe, nombreEquipo } from "./catalogoEquipos";
 import { nombreDeUsuario } from "./DetalleOrden";
 import { CUSTODIA, descripcionCheckin, etiqueta } from "./etiquetas";
-import { listaDeAccesorios } from "./ListadoOrdenes";
 import { Confirmacion, Seccion, habilitada } from "./PagosOrden";
 import { UbicacionAccion } from "./presentacion";
 import { SelectorEquipo, useCatalogoEquipos } from "./SelectorEquipo";
@@ -202,14 +201,13 @@ export function CustodiaOrden(props: Props) {
             etiqueta="Estado físico"
             valor={recepcion.datos.estado_fisico ?? "No registrado"}
           />
-          <Fila
-            etiqueta="Accesorios"
-            valor={
-              recepcion.datos.accesorios.length
-                ? recepcion.datos.accesorios.join(", ")
-                : "Ninguno"
-            }
-          />
+          {/* Solo si se registraron: ya no se piden al ingresar. */}
+          {recepcion.datos.accesorios.length > 0 && (
+            <Fila
+              etiqueta="Accesorios"
+              valor={recepcion.datos.accesorios.join(", ")}
+            />
+          )}
           <Fila
             etiqueta="Observaciones del equipo"
             valor={recepcion.datos.observaciones ?? "—"}
@@ -450,9 +448,6 @@ function FormularioDatosIngreso({
   const [imei, setImei] = useState(equipo.imei ?? "");
   const [serie, setSerie] = useState(equipo.numero_serie ?? "");
   const [estado, setEstado] = useState(recepcion?.datos.estado_fisico ?? "");
-  const [accesorios, setAccesorios] = useState(
-    recepcion?.datos.accesorios.join(", ") ?? "",
-  );
   const [observaciones, setObservaciones] = useState(
     recepcion?.datos.observaciones ?? "",
   );
@@ -522,7 +517,6 @@ function FormularioDatosIngreso({
       </div>
       {campo("Falla declarada", falla, setFalla)}
       {campo("Estado físico", estado, setEstado)}
-      {campo("Accesorios (separados por coma)", accesorios, setAccesorios)}
       {campo(
         "Observaciones del equipo (salen en el comprobante)",
         observaciones,
@@ -541,7 +535,8 @@ function FormularioDatosIngreso({
             onRegistrar(
               {
                 estado_fisico: estado.trim() || null,
-                accesorios: listaDeAccesorios(accesorios),
+                // Ya no se editan: se conservan los registrados.
+                accesorios: recepcion?.datos.accesorios ?? [],
                 observaciones: observaciones.trim() || null,
                 notas_internas: notasInternas.trim() || null,
               },

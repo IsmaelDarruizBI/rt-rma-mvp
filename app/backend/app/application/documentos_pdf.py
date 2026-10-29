@@ -222,11 +222,9 @@ def _recepcion(
     hoja.titulo("Recepción del equipo")
     hoja.bajar(2)
     _dato(hoja, "Estado físico", contenido.estado_fisico or "—")
-    _dato(
-        hoja,
-        "Accesorios",
-        ", ".join(contenido.accesorios) if contenido.accesorios else "Ninguno",
-    )
+    # Ya no se piden al ingresar: solo si la Orden los tiene registrados.
+    if contenido.accesorios:
+        _dato(hoja, "Accesorios", ", ".join(contenido.accesorios))
     if contenido.checkin is not None:
         _dato(
             hoja,

@@ -984,16 +984,22 @@ const ETIQUETA_RECEPCION_FISICA: Record<string, string> = {
   NO_RECIBIDO: "No recibido",
 };
 
+/**
+ * Los accesorios ya no se piden al ingresar: la línea sale solo si la
+ * Orden los tiene registrados (las anteriores), nunca «Ninguno».
+ */
+function Accesorios({ accesorios }: { accesorios: string[] }) {
+  if (!accesorios.length) return null;
+  return <Dato etiqueta="Accesorios recibidos" valor={accesorios.join(", ")} />;
+}
+
 function CuerpoRecepcion({ contenido }: { contenido: ContenidoRecepcion }) {
   return (
     <>
       <Titulo>Recepción</Titulo>
       <Dato etiqueta="Falla declarada" valor={contenido.equipo.falla_reportada} />
       <Dato etiqueta="Estado físico" valor={contenido.estado_fisico ?? "No registrado"} />
-      <Dato
-        etiqueta="Accesorios recibidos"
-        valor={contenido.accesorios.length ? contenido.accesorios.join(", ") : "Ninguno"}
-      />
+      <Accesorios accesorios={contenido.accesorios} />
       <Dato etiqueta="Observaciones" valor={contenido.observaciones ?? "—"} />
       {contenido.notas.length > 0 && (
         <Dato etiqueta="Observaciones posteriores" valor={contenido.notas.join(" · ")} />
@@ -1064,10 +1070,7 @@ function CuerpoIngreso({ contenido }: { contenido: ContenidoIngreso }) {
       <Titulo>Recepción del equipo</Titulo>
       <Dato etiqueta="Falla declarada" valor={contenido.equipo.falla_reportada} />
       <Dato etiqueta="Estado físico" valor={contenido.estado_fisico ?? "No registrado"} />
-      <Dato
-        etiqueta="Accesorios recibidos"
-        valor={contenido.accesorios.length ? contenido.accesorios.join(", ") : "Ninguno"}
-      />
+      <Accesorios accesorios={contenido.accesorios} />
       {/* Solo en un comprobante anterior a UAT-009: hoy el check-in es del cierre. */}
       {contenido.checkin !== null && (
         <Dato

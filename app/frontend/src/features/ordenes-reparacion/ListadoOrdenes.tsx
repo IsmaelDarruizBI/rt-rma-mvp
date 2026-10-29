@@ -542,13 +542,14 @@ export function FormularioAltaOrden({
 /**
  * Datos del ingreso físico, comunes a los dos orígenes: identificadores
  * del equipo (opcionales: no todo equipo tiene IMEI) y condiciones en que
- * se recibe. La recepción física se confirma después, en la Orden.
+ * se recibe. La recepción física se confirma después, en la Orden. Los
+ * accesorios ya no se piden al ingresar (el dato sigue existiendo en las
+ * Órdenes anteriores).
  */
 interface Ingreso {
   imei: string;
   numeroSerie: string;
   estadoFisico: string;
-  accesorios: string;
   /** Visibles: salen en el comprobante. */
   observaciones: string;
   /** Solo para el personal: nunca salen en un documento. */
@@ -560,7 +561,6 @@ function ingresoInicial(): Ingreso {
     imei: "",
     numeroSerie: "",
     estadoFisico: "Sin golpes ni marcas visibles.",
-    accesorios: "Cargador",
     observaciones: "",
     notasInternas: "",
   };
@@ -568,14 +568,6 @@ function ingresoInicial(): Ingreso {
 
 function textoONulo(valor: string): string | null {
   return valor.trim() || null;
-}
-
-/** "Cargador, funda" -> ["Cargador", "funda"]. */
-export function listaDeAccesorios(texto: string): string[] {
-  return texto
-    .split(",")
-    .map((accesorio) => accesorio.trim())
-    .filter(Boolean);
 }
 
 function datosDeIngreso(ingreso: Ingreso) {
@@ -586,7 +578,7 @@ function datosDeIngreso(ingreso: Ingreso) {
     },
     recepcion: {
       estado_fisico: textoONulo(ingreso.estadoFisico),
-      accesorios: listaDeAccesorios(ingreso.accesorios),
+      accesorios: [],
       observaciones: textoONulo(ingreso.observaciones),
       notas_internas: textoONulo(ingreso.notasInternas),
     },
@@ -646,14 +638,6 @@ function CamposIngreso({
           onChange={cambiar("estadoFisico")}
           rows={2}
           style={{ ...estiloInput, resize: "vertical" }}
-        />
-      </Campo>
-      <Campo etiqueta="Accesorios recibidos (separados por coma)">
-        <input
-          value={ingreso.accesorios}
-          onChange={cambiar("accesorios")}
-          placeholder="Cargador, funda, chip"
-          style={estiloInput}
         />
       </Campo>
       <Campo etiqueta="Observaciones del equipo (salen en el comprobante)">
