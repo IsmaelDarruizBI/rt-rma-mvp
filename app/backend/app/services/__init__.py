@@ -203,6 +203,11 @@ from .inventario_operativo import (
     situacion_inventario,
     tipo_de_ajuste,
 )
+from .modelos_equipo import (
+    ModeloNoDisponibleError,
+    equipo_con_modelo,
+    modelo_elegible,
+)
 from .ordenes import (
     ROLES_CAMBIO_PRIORIDAD,
     cambiar_prioridad,
@@ -329,6 +334,10 @@ __all__ = [
     "opciones_de_seleccion",
     "producto_elegible",
     "validar_informados",
+    # Catalogo tecnico de modelos de equipo
+    "ModeloNoDisponibleError",
+    "equipo_con_modelo",
+    "modelo_elegible",
     # Clientes por DNI (UAT-010)
     "ClienteConocido",
     "ClienteExistenteError",

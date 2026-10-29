@@ -30,6 +30,7 @@ from app.integraciones.catalogo import (
 from app.repositories import (
     CatalogoEquiposRepository,
     CatalogosRepository,
+    ModelosEquipoRepository,
     OrdenReparacionRepository,
 )
 from app.storage import (
@@ -38,6 +39,7 @@ from app.storage import (
     AlmacenFotosGcs,
     JsonCatalogoEquiposRepository,
     JsonCatalogosRepository,
+    JsonModelosEquipoRepository,
     JsonOrdenReparacionRepository,
 )
 
@@ -67,6 +69,8 @@ class ApplicationContext:
     catalogo_equipos: CatalogoEquiposRepository | None = None
     proveedor_catalogo: ProveedorCatalogo | None = None
     filtro_catalogo: FiltroCatalogo = FiltroCatalogo(("IPHONE USADOS",))
+    # Catalogo tecnico de modelos (propio de RMA, solo lectura).
+    modelos_equipo: ModelosEquipoRepository | None = None
 
 
 def _almacen_de_fotos(settings: Settings) -> AlmacenFotos | None:
@@ -99,4 +103,7 @@ def construir_contexto(settings: Settings) -> ApplicationContext:
         ),
         proveedor_catalogo=construir_proveedor_catalogo(settings),
         filtro_catalogo=filtro_catalogo(settings),
+        modelos_equipo=JsonModelosEquipoRepository(
+            settings.modelos_equipo_archivo
+        ),
     )

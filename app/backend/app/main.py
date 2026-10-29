@@ -19,6 +19,7 @@ from app.api import (
     health,
     inventario,
     mantenimiento,
+    modelos_equipo,
     ordenes,
     trabajo,
 )
@@ -56,6 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(health.router)
     application.include_router(catalogos.router)
     application.include_router(catalogo_equipos.router)
+    application.include_router(modelos_equipo.router)
     application.include_router(clientes.router)
     application.include_router(ordenes.router)
     application.include_router(inventario.router)

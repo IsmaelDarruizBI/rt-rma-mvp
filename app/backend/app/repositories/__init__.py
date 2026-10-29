@@ -16,6 +16,7 @@ from .exceptions import (
     PersistenciaError,
     RepositoryError,
 )
+from .modelos_equipo import ModelosEquipoRepository
 from .ordenes import OrdenReparacionRepository
 
 __all__ = [
@@ -23,6 +24,7 @@ __all__ = [
     "CatalogosRepository",
     "ConflictoDeEscrituraError",
     "EntidadPersistidaNoEncontradaError",
+    "ModelosEquipoRepository",
     "OrdenReparacionRepository",
     "PersistenciaError",
     "RepositoryError",

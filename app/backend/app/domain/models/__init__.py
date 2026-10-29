@@ -75,6 +75,7 @@ from .enums import (
 from .equipos import DevolucionEquipo, EntregaEquipo, Equipo
 from .fotos import FotoOrden
 from .inventario import InsumoUtilizado, MovimientoInsumo, MovimientoStock
+from .modelos_equipo import ModeloEquipo
 from .orden_reparacion import OrdenReparacion
 from .pagos import AnulacionPago, DevolucionDinero, Pago, ResumenPago
 from .personas import Cliente, Usuario
@@ -127,6 +128,7 @@ __all__ = [
     "DevolucionEquipo",
     "EntregaEquipo",
     "Equipo",
+    "ModeloEquipo",
     "Usuario",
     # Catalogo de equipos de Ventas (copia sincronizada)
     "MotivoBaja",

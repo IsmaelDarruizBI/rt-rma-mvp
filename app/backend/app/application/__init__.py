@@ -152,6 +152,7 @@ from .inventario import (
     registrar_ingreso_stock,
     revalidar_ordenes_pendientes,
 )
+from .modelos_equipo import modelos_para_seleccion
 from .progreso import PasoProgreso, progreso
 from .recursos import (
     ImpactoOverride,
@@ -194,6 +195,8 @@ __all__ = [
     "equipo_desde_catalogo",
     "estado_catalogo_equipos",
     "sincronizar_catalogo_equipos",
+    # Catalogo tecnico de modelos de equipo
+    "modelos_para_seleccion",
     "siguiente_detalle_id",
     "siguiente_orden_id",
     # Lecturas

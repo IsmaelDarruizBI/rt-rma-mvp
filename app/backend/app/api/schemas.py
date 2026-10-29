@@ -239,24 +239,33 @@ class ClienteIn(BaseModel):
 class EquipoIn(BaseModel):
     """Datos minimos del equipo recibido.
 
-    Elegido del catalogo de Ventas: ``tipo_producto_id`` (el ``tp_id`` de
-    la combinacion elegida). Marca, modelo, variante, capacidad y color
-    salen entonces de la copia local del catalogo, no de este cuerpo. A
-    mano (equipo fuera del catalogo): ``marca`` y ``modelo``.
+    Elegido del catalogo tecnico: ``modelo_tecnico_id``; marca, modelo y
+    variante salen entonces del catalogo, no de este cuerpo. A mano
+    (equipo fuera del catalogo): ``marca``, ``modelo`` y, si tiene,
+    ``variante``. ``color`` es opcional en los dos casos: no identifica el
+    tipo de equipo.
+
+    ``tipo_producto_id`` (catalogo de Ventas) solo para Ordenes
+    anteriores: corregir una conservando su producto.
     """
 
     marca: str = ""
     modelo: str = ""
+    variante: str | None = None
+    color: str | None = None
     falla_reportada: str = Field(min_length=1)
     imei: str | None = None
     numero_serie: str | None = None
     id: str | None = None
+    modelo_tecnico_id: str | None = None
     tipo_producto_id: str | None = None
 
     @model_validator(mode="after")
     def _producto_o_marca_y_modelo(self) -> "EquipoIn":
-        if not (self.tipo_producto_id or "").strip() and not (
-            self.marca.strip() and self.modelo.strip()
+        if (
+            not (self.modelo_tecnico_id or "").strip()
+            and not (self.tipo_producto_id or "").strip()
+            and not (self.marca.strip() and self.modelo.strip())
         ):
             raise ValueError(
                 "Falta el equipo: elegilo del catálogo o cargá marca y modelo."
@@ -271,6 +280,9 @@ class EquipoIn(BaseModel):
             falla_reportada=self.falla_reportada,
             imei=self.imei,
             numero_serie=self.numero_serie,
+            variante=_texto_o_none(self.variante),
+            color=_texto_o_none(self.color),
+            modelo_tecnico_id=_texto_o_none(self.modelo_tecnico_id),
             tipo_producto_id=_texto_o_none(self.tipo_producto_id),
         )
 
@@ -914,8 +926,10 @@ class EquipoOut(BaseModel):
     falla_reportada: str
     imei: str | None = None
     numero_serie: str | None = None
-    # Catalogo de Ventas: ``None`` en carga manual y Ordenes anteriores.
+    # Catalogo de Ventas: solo Ordenes anteriores al catalogo tecnico.
     tipo_producto_id: str | None = None
+    # Catalogo tecnico de RMA: ``None`` en carga manual.
+    modelo_tecnico_id: str | None = None
     variante: str | None = None
     capacidad: str | None = None
     color: str | None = None

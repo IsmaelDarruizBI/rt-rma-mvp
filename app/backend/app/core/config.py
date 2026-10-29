@@ -15,6 +15,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # y las Ordenes de desarrollo local.
 DATA_DIR_POR_DEFECTO = Path(__file__).resolve().parents[2] / "data"
 
+# El catalogo tecnico de modelos de equipo, versionado con el codigo.
+MODELOS_EQUIPO_POR_DEFECTO = (
+    Path(__file__).resolve().parents[1] / "datos" / "modelos_equipo.json"
+)
+
 
 class Settings(BaseSettings):
     """Ajustes de la aplicacion, con valores por defecto de desarrollo."""
@@ -80,6 +85,10 @@ class Settings(BaseSettings):
     catalogo_sheets_cuenta: str | None = None
     catalogo_archivo: Path | None = None
     catalogo_timeout_s: float = 30.0
+
+    # Catalogo tecnico de modelos de equipo (propio de RMA). Viaja con el
+    # codigo; los tests pueden apuntar a otro archivo.
+    modelos_equipo_archivo: Path = MODELOS_EQUIPO_POR_DEFECTO
 
     @property
     def ordenes_dir(self) -> Path:

@@ -36,8 +36,10 @@ from app.services import (
     PrecondicionInvalidaError,
     SincronizacionEnCursoError,
     equipo_carga_manual,
+    equipo_con_modelo,
     equipo_con_producto,
     fusionar_catalogo,
+    modelo_elegible,
     nuevo_id,
     opciones_de_seleccion,
     producto_elegible,
@@ -214,14 +216,36 @@ def equipo_desde_catalogo(
     *,
     actual: Equipo | None = None,
 ) -> Equipo:
-    """El Equipo con sus caracteristicas comerciales resueltas.
+    """El Equipo con su marca, modelo y variante resueltos.
 
-    Con ``tipo_producto_id``: las del producto de la copia (marca, modelo,
-    variante, capacidad y color salen del catalogo, no de lo que mando la
-    pantalla). Si es el mismo producto que ya tenia la Orden (``actual``),
-    se conservan los datos que tenia: corregir el IMEI no depende de que el
-    producto siga en el catalogo. Sin ``tipo_producto_id``: carga manual.
+    Con ``modelo_tecnico_id`` (el alta y la correccion de hoy): los del
+    modelo del catalogo tecnico, no los que mando la pantalla; el color es
+    el que se cargo. Si es el mismo modelo que ya tenia la Orden
+    (``actual``), se conserva su copia: corregir el IMEI no depende de que
+    el modelo siga activo.
+
+    Con ``tipo_producto_id`` (Ordenes anteriores): los del producto de la
+    copia del catalogo de Ventas, o los que ya tenia la Orden si es el
+    mismo producto. Sin ninguno de los dos: carga manual.
     """
+    modelo_id = (equipo.modelo_tecnico_id or "").strip()
+    if modelo_id:
+        if actual is not None and actual.modelo_tecnico_id == modelo_id:
+            return equipo.model_copy(
+                update={
+                    "modelo_tecnico_id": modelo_id,
+                    "marca": actual.marca,
+                    "modelo": actual.modelo,
+                    "variante": actual.variante,
+                    "tipo_producto_id": None,
+                    "capacidad": None,
+                }
+            )
+        modelos = contexto.modelos_equipo
+        modelo = modelo_elegible(
+            modelos.obtener_modelo(modelo_id) if modelos else None, modelo_id
+        )
+        return equipo_con_modelo(equipo, modelo)
     tipo_id = (equipo.tipo_producto_id or "").strip()
     if not tipo_id:
         return equipo_carga_manual(equipo)

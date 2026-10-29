@@ -365,6 +365,7 @@ def equipo_con_producto(equipo: Equipo, producto: ProductoCatalogo) -> Equipo:
     """
     return equipo.model_copy(
         update={
+            "modelo_tecnico_id": None,
             "tipo_producto_id": producto.tipo_producto_id,
             "marca": producto.marca or "",
             "modelo": producto.modelo or producto.descripcion,
@@ -376,13 +377,12 @@ def equipo_con_producto(equipo: Equipo, producto: ProductoCatalogo) -> Equipo:
 
 
 def equipo_carga_manual(equipo: Equipo) -> Equipo:
-    """Sin producto del catalogo: marca y modelo a mano, sin los datos que
-    solo vienen del catalogo."""
+    """Sin modelo del catalogo: marca, modelo y variante a mano (y el
+    color, si se cargo); sin los datos que solo vienen de un catalogo."""
     return equipo.model_copy(
         update={
+            "modelo_tecnico_id": None,
             "tipo_producto_id": None,
-            "variante": None,
             "capacidad": None,
-            "color": None,
         }
     )

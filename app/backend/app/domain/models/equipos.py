@@ -14,14 +14,17 @@ class Equipo(BaseModel):
     ``numero_serie``. Son opcionales: no todo equipo tiene IMEI (una
     notebook, un parlante) y el identificador se registra si existe.
 
-    Caracteristicas COMERCIALES (que equipo es): ``marca``, ``modelo``,
-    ``variante``, ``capacidad`` y ``color``. Si se eligio del catalogo de
-    Gestion de Ventas, ``tipo_producto_id`` es el ``tp_id`` de esa
-    combinacion, tal como lo informa Ventas, y los demas campos son una
-    copia de como estaba el producto al elegirlo (un cambio posterior del
-    catalogo no reescribe la Orden). Sin ``tipo_producto_id``, marca y
-    modelo se cargaron a mano: equipos fuera del catalogo y Ordenes
-    anteriores al catalogo, que siguen cargando igual.
+    Que equipo es: ``marca``, ``modelo`` y ``variante``. Si se eligio del
+    catalogo tecnico de RMA, ``modelo_tecnico_id`` es el ID del modelo y
+    marca, modelo y variante son una copia de como estaba al elegirlo (un
+    cambio posterior del catalogo no reescribe la Orden). Sin ID, se
+    cargaron a mano (equipos fuera del catalogo). ``capacidad`` y
+    ``color`` no identifican el tipo de equipo: el color es opcional y se
+    carga aparte.
+
+    Ordenes anteriores: ``tipo_producto_id`` es el ``tp_id`` del producto
+    del catalogo de Ventas que se eligio (con su capacidad y color). Se
+    conserva tal cual; las Ordenes nuevas ya no lo usan.
 
     ``tipo_producto_id`` identifica un TIPO de producto, no esta unidad: dos
     equipos del mismo modelo, capacidad y color comparten ``tp_id`` y se
@@ -37,6 +40,8 @@ class Equipo(BaseModel):
     imei: str | None = None
     numero_serie: str | None = None
     tipo_producto_id: str | None = None
+    # Modelo del catalogo tecnico de RMA (``MOD-0001``).
+    modelo_tecnico_id: str | None = None
     # ``None``: la version estandar del modelo (o no informada).
     variante: str | None = None
     capacidad: str | None = None
