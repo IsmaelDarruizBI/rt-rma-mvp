@@ -111,3 +111,14 @@ Al migrar a PostgreSQL conviene normalizarla, sin eliminar el campo ni el color:
 - Una columna numérica en GB (`capacidad_gb`), con 1 TB = 1024 GB.
 - La conversión de los valores existentes («128 GB», «1 TB»). Lo que no se pueda convertir queda en una columna de texto original para revisarlo, sin inventar valores.
 - La validación de P-01 (obligatoria en RT_INTERNO) sobre la columna normalizada.
+
+## Nota técnica: doble escritura de la Orden al cerrar una reparación
+
+Riesgo anterior a P-06, detectado en la revisión del override (29/10/2026). Al cerrar una Ejecución, la Orden se guarda dos veces dentro de la misma operación:
+
+1. Al aplicar el inventario (PROC-REP-210): primero el stock y después la Orden; si falla la Orden, el stock se restaura.
+2. Después de recalcular la situación (PROC-REP-211).
+
+Si falla solo la segunda escritura, la Orden queda con el inventario aplicado y sin el paso 211. Reintentar el cierre responde 409 porque la Ejecución ya está terminada. No se reprodujo sin forzar un fallo de disco.
+
+**Falta.** Resolverlo con una transacción única (stock y Orden) al migrar a PostgreSQL.
