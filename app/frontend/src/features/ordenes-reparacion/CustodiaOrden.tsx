@@ -27,12 +27,13 @@ import type {
   Recepcion,
   Usuario,
 } from "../../types/api";
-import { datosDelEquipo, equipoElegidoDe, nombreEquipo } from "./catalogoEquipos";
+import { nombreEquipo } from "./catalogoEquipos";
 import { nombreDeUsuario } from "./DetalleOrden";
 import { CUSTODIA, descripcionCheckin, etiqueta } from "./etiquetas";
 import { Confirmacion, Seccion, habilitada } from "./PagosOrden";
 import { UbicacionAccion } from "./presentacion";
-import { SelectorEquipo, useCatalogoEquipos } from "./SelectorEquipo";
+import { datosDelEquipo, equipoElegidoDe } from "./modelosEquipo";
+import { SelectorEquipo, useModelosEquipo } from "./SelectorEquipo";
 
 interface Props {
   orden: Orden;
@@ -441,8 +442,8 @@ function FormularioDatosIngreso({
 }: Props & { accion: Accion }) {
   const { equipo, recepcion } = orden;
   const [abierto, setAbierto] = useState(recepcion === null);
-  // Otro producto del catálogo, a mano, o el mismo que ya tenía.
-  const catalogo = useCatalogoEquipos();
+  // Otro modelo del catálogo, a mano, o el mismo que ya tenía.
+  const catalogo = useModelosEquipo();
   const [elegido, setElegido] = useState(() => equipoElegidoDe(equipo));
   const [falla, setFalla] = useState(equipo.falla_reportada);
   const [imei, setImei] = useState(equipo.imei ?? "");
@@ -455,7 +456,7 @@ function FormularioDatosIngreso({
     recepcion?.datos.notas_internas ?? "",
   );
   const deshabilitado = !habilitada(accion, actor) || ocupado;
-  const datosEquipo = datosDelEquipo(catalogo.catalogo, elegido);
+  const datosEquipo = datosDelEquipo(catalogo.modelos.length > 0, elegido);
 
   const titulo =
     recepcion === null
@@ -496,13 +497,11 @@ function FormularioDatosIngreso({
         registrada.
       </p>
       <SelectorEquipo
-        catalogo={catalogo.catalogo}
+        modelos={catalogo.modelos}
         cargando={catalogo.cargando}
         error={catalogo.error}
         valor={elegido}
         onCambiar={setElegido}
-        actor={actor}
-        onSincronizado={() => void catalogo.recargar()}
         deshabilitado={deshabilitado}
       />
       <div

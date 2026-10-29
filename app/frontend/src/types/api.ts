@@ -590,12 +590,31 @@ export interface Equipo {
   falla_reportada: string;
   imei: string | null;
   numero_serie: string | null;
+  /** Catálogo de Ventas: solo Órdenes anteriores al catálogo técnico. */
   tipo_producto_id?: string | null;
+  /** Modelo del catálogo técnico de RMA; `null` en carga manual. */
+  modelo_tecnico_id?: string | null;
   /** `null`: la versión estándar del modelo. */
   variante?: string | null;
+  /** Solo Órdenes anteriores: ya no identifica el tipo de equipo. */
   capacidad?: string | null;
-  /** `null`: no especificado (o carga manual). */
+  /** Opcional: del equipo físico. */
   color?: string | null;
+}
+
+// --- Catálogo técnico de modelos (propio de RMA) --------------------------
+
+/** `GET /api/catalogs/device-models`: un modelo que se puede elegir. */
+export interface ModeloEquipo {
+  id: string;
+  marca: string;
+  modelo: string;
+  /** `null`: la versión estándar del modelo. */
+  variante: string | null;
+  /** Del fabricante («A2849»); vacío si no se conocen. */
+  numeros_modelo: string[];
+  /** «Apple iPhone 15 Pro Max». */
+  nombre: string;
 }
 
 // --- Catálogo de equipos de Ventas (copia sincronizada) -----------------

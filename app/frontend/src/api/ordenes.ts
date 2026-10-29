@@ -70,6 +70,9 @@ export function obtenerOrden(ordenId: string): Promise<Orden> {
 export interface DatosEquipo {
   marca?: string;
   modelo?: string;
+  variante?: string | null;
+  color?: string | null;
+  modelo_tecnico_id?: string | null;
   tipo_producto_id?: string | null;
   falla_reportada: string;
   imei?: string | null;

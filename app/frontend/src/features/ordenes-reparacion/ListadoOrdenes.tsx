@@ -31,9 +31,9 @@ import type {
 import type { DatosNuevaOrden, DatosNuevaOrdenRt } from "../../api/ordenes";
 import { buscarClientePorDni } from "../../api/clientes";
 import { ApiError } from "../../api/client";
-import { datosDelEquipo, equipoElegidoInicial } from "./catalogoEquipos";
+import { EQUIPO_VACIO, type EquipoElegido, datosDelEquipo } from "./modelosEquipo";
 import { normalizarDni } from "./clientes";
-import { SelectorEquipo, useCatalogoEquipos } from "./SelectorEquipo";
+import { SelectorEquipo, useModelosEquipo } from "./SelectorEquipo";
 import {
   ESTADO_WORKFLOW,
   ORIGEN,
@@ -881,19 +881,16 @@ export function FormularioNuevaOrden({
   const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null);
   // Para qué DNI ya se buscó (crear con un DNI nuevo lo busca antes).
   const [buscadoPara, setBuscadoPara] = useState<string | null>(null);
-  // Del catálogo de Ventas (Modelo, Variante, Capacidad, Color) o a mano
-  // si no está; sin catálogo sincronizado, a mano.
-  const catalogo = useCatalogoEquipos();
-  const [equipo, setEquipo] = useState(() =>
-    equipoElegidoInicial({ marca: "Apple", modelo: "iPhone 14" }),
-  );
+  // Del catálogo técnico de modelos (búsqueda) o a mano si no está.
+  const catalogo = useModelosEquipo();
+  const [equipo, setEquipo] = useState<EquipoElegido>(EQUIPO_VACIO);
   const [falla, setFalla] = useState("La batería dura poco.");
   const [ingreso, setIngreso] = useState<Ingreso>(ingresoInicial);
 
   const esRecepcion = actor?.rol === "RECEPCION";
   const dniNormalizado = normalizarDni(dni);
   const dniInvalido = dni.trim() !== "" && dniNormalizado === null;
-  const datosEquipo = datosDelEquipo(catalogo.catalogo, equipo);
+  const datosEquipo = datosDelEquipo(catalogo.modelos.length > 0, equipo);
   const completo =
     nombreApellido.trim() && telefono.trim() && datosEquipo && falla && !dniInvalido;
   const puedeBuscar =
@@ -1011,13 +1008,11 @@ export function FormularioNuevaOrden({
         />
       </Campo>
       <SelectorEquipo
-        catalogo={catalogo.catalogo}
+        modelos={catalogo.modelos}
         cargando={catalogo.cargando}
         error={catalogo.error}
         valor={equipo}
         onCambiar={setEquipo}
-        actor={actor}
-        onSincronizado={() => void catalogo.recargar()}
       />
       <Campo etiqueta="Falla declarada por el cliente">
         <input
