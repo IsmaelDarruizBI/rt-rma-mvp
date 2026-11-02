@@ -8,3 +8,8 @@ business/** text eol=lf
 # espacios al final de linea: no son ediciones y no se revisan con
 # git diff --check. Se regeneran con npm run generate:v1.4.
 generated/viewer/*.html -whitespace
+
+# supabase/ (migraciones, seeds, pruebas, scripts y el certificado raíz público)
+# se extrae con LF en cualquier sistema, para que las migraciones coincidan con
+# las aplicadas en Supabase y las pruebas no dependan de core.autocrlf.
+supabase/** text eol=lf

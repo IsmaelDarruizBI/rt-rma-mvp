@@ -295,7 +295,7 @@ Proyecto `rt-rma-db` (`okcscsglnujnxtgobjfw`), PostgreSQL 17.11, usado como ento
 ### Pendientes
 
 - **Supabase local** (`supabase start`, `db reset`): requiere Docker.
-- **Usuario `rma_api` y conexión por Supavisor** en modo transacción, con la prueba de concurrencia a través del pooler. Espera el mecanismo seguro de credenciales.
+- **Usuario `rma_api` y conexión por Supavisor:** resueltos el 02/11/2026. `rma_api` está creado con credencial en GCP Secret Manager (`rma-uat-database-url`) y verificado por el Transaction Pooler con TLS validado contra `supabase/certs/supabase-ca.crt`, incluido el nombre del host, con permisos y bloqueos correctos y sin dejar datos.
 - **Volumen real,** en especial `v_orden_saldo` y `verificar_integridad()`.
 - **Importación de copias de UAT** e ida y vuelta con el JSON. Requiere el repositorio PostgreSQL del backend.
 

@@ -92,19 +92,74 @@ Con la CLI vinculada, sin la contraseña de la base:
 
 ## Usuario de conexión de FastAPI
 
-Las migraciones crean `rma_backend`, un rol **sin inicio de sesión** con los permisos del backend. El usuario de conexión se crea por entorno, fuera de Git, con una contraseña del gestor de secretos:
+Las migraciones crean `rma_backend`, un rol **sin inicio de sesión** con los permisos del backend. El usuario de conexión `rma_api` se crea por entorno y hereda esos permisos por ser miembro de `rma_backend`.
 
-```sql
-create role rma_api login password '<desde el gestor de secretos>' in role rma_backend;
+### Crear o rotar la credencial
+
+`scripts/generar_credencial_rma_api.cjs` hace todo sin mostrar ni escribir en disco la contraseña, la cadena de conexión ni el verificador SCRAM:
+
+1. Genera una contraseña aleatoria (32 bytes).
+2. Guarda la cadena completa del Transaction Pooler, con `sslmode=verify-full`, como versión nueva de un secreto de GCP Secret Manager, por la entrada estándar de `gcloud`.
+3. Crea el rol en el proyecto Supabase vinculado, por la entrada estándar de `supabase db query`, con el verificador SCRAM-SHA-256.
+
+Requisitos:
+- `gcloud` autenticado y el secreto ya creado;
+- el proyecto Supabase vinculado.
+
+Funciona igual en PowerShell y en bash:
+
+```bash
+node supabase/scripts/generar_credencial_rma_api.cjs crear --proyecto-gcp <proyecto> --secreto <secreto> --project-ref <ref> --pooler-host <host-del-pooler>
 ```
 
-`rma_api` hereda los permisos por ser miembro de `rma_backend`.
+`crear` se niega si el secreto ya tiene versiones activas. `rotar` aplica un `ALTER ROLE` con un verificador nuevo; después de verificar, se deshabilita la versión anterior del secreto.
 
-**Conexión de FastAPI:** por el pooler de Supabase (Supavisor) en **modo transacción**, con el usuario `rma_api.<ref-del-proyecto>`. La cadena de conexión vive en las variables de entorno de Cloud Run, nunca en el repositorio.
+El rol queda con:
+- 20 conexiones como máximo;
+- sentencias de hasta 30 segundos;
+- transacciones inactivas de hasta 60 segundos;
+- sin atributos de superusuario, creación de roles o bases, ni bypass de RLS.
 
-**Verificar en el proyecto de prueba antes de adaptar el backend:**
-- que `rma_api` se conecta a través del pooler;
-- `RMA_DB_URL=<url del pooler> node supabase/scripts/probar_concurrencia.cjs` (crea datos de prueba; nunca en producción).
+### TLS
+
+Supabase firma sus certificados con su propia autoridad raíz, que los sistemas no reconocen. `certs/supabase-ca.crt` es esa raíz pública, la **Supabase Root 2021 CA**:
+- vigente hasta el 26/04/2031;
+- SHA-256 `80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA`.
+
+Los clientes validan con ella la cadena y el nombre del host:
+- con libpq, `sslmode=verify-full` y `sslrootcert=supabase/certs/supabase-ca.crt`;
+- con node-postgres, `ssl: { rejectUnauthorized: true, ca }`.
+
+Nunca se desactiva la verificación.
+
+### Verificar la conexión
+
+```bash
+node supabase/scripts/verificar_conexion_rma_api.cjs --proyecto-gcp <proyecto> --secreto <secreto> --ca supabase/certs/supabase-ca.crt
+```
+
+Lee la cadena del secreto sin mostrarla y comprueba:
+- TLS con certificado validado;
+- autenticación como `rma_api`;
+- lectura de catálogos;
+- escritura revertida con ROLLBACK;
+- siete operaciones denegadas;
+- bloqueo de fila entre dos conexiones.
+
+No deja datos ni consume la secuencia de Órdenes. Requiere el paquete `pg`.
+
+`probar_concurrencia.cjs` deja datos: solo se corre en bases descartables, nunca en DEV/UAT ni en producción.
+
+### Entorno DEV/UAT
+
+| Dato | Valor |
+|---|---|
+| Proyecto Supabase | `rt-rma-db` (`okcscsglnujnxtgobjfw`) |
+| Proyecto GCP | `rosariotecno-460217` |
+| Secreto | `rma-uat-database-url`. Versión 2 activa, con `sslmode=verify-full`; la versión 1, igual pero con `sslmode=require`, deshabilitada |
+| Pooler | Transaction Pooler, puerto 6543 |
+
+Cloud Run todavía no usa este secreto.
 
 ## Producción
 
