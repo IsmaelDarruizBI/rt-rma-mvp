@@ -1,0 +1,42 @@
+-- Rosario Tecno RMA — Catálogo técnico de modelos de equipo
+-- Generado por supabase/scripts/generar_datos_iniciales.cjs desde app/backend/app/datos/modelos_equipo.json.
+-- No editar a mano: regenerar.
+
+insert into rma.modelo_equipo (codigo, marca, modelo, variante, numeros_modelo, activo) values
+  ('MOD-0001', 'Apple', 'iPhone 8', null, '{}'::text[], true),
+  ('MOD-0002', 'Apple', 'iPhone 8', 'Plus', '{}'::text[], true),
+  ('MOD-0003', 'Apple', 'iPhone 11', null, '{}'::text[], true),
+  ('MOD-0004', 'Apple', 'iPhone 11', 'Pro', '{}'::text[], true),
+  ('MOD-0005', 'Apple', 'iPhone 11', 'Pro Max', '{}'::text[], true),
+  ('MOD-0006', 'Apple', 'iPhone 12', null, '{}'::text[], true),
+  ('MOD-0007', 'Apple', 'iPhone 12', 'Mini', '{}'::text[], true),
+  ('MOD-0008', 'Apple', 'iPhone 12', 'Pro', '{}'::text[], true),
+  ('MOD-0009', 'Apple', 'iPhone 12', 'Pro Max', '{}'::text[], true),
+  ('MOD-0010', 'Apple', 'iPhone 13', null, '{}'::text[], true),
+  ('MOD-0011', 'Apple', 'iPhone 13', 'Mini', '{}'::text[], true),
+  ('MOD-0012', 'Apple', 'iPhone 13', 'Pro', '{}'::text[], true),
+  ('MOD-0013', 'Apple', 'iPhone 13', 'Pro Max', '{}'::text[], true),
+  ('MOD-0014', 'Apple', 'iPhone 14', null, '{}'::text[], true),
+  ('MOD-0015', 'Apple', 'iPhone 14', 'Plus', '{}'::text[], true),
+  ('MOD-0016', 'Apple', 'iPhone 14', 'Pro', '{}'::text[], true),
+  ('MOD-0017', 'Apple', 'iPhone 14', 'Pro Max', '{}'::text[], true),
+  ('MOD-0018', 'Apple', 'iPhone 15', null, '{}'::text[], true),
+  ('MOD-0019', 'Apple', 'iPhone 15', 'Plus', '{}'::text[], true),
+  ('MOD-0020', 'Apple', 'iPhone 15', 'Pro', '{}'::text[], true),
+  ('MOD-0021', 'Apple', 'iPhone 15', 'Pro Max', '{}'::text[], true),
+  ('MOD-0022', 'Apple', 'iPhone 16', null, '{}'::text[], true),
+  ('MOD-0023', 'Apple', 'iPhone 16e', null, '{}'::text[], true),
+  ('MOD-0024', 'Apple', 'iPhone 16', 'Pro', '{}'::text[], true),
+  ('MOD-0025', 'Apple', 'iPhone 16', 'Pro Max', '{}'::text[], true),
+  ('MOD-0026', 'Apple', 'iPhone 17', null, '{}'::text[], true),
+  ('MOD-0027', 'Apple', 'iPhone 17e', null, '{}'::text[], true),
+  ('MOD-0028', 'Apple', 'iPhone 17', 'Air', '{}'::text[], true),
+  ('MOD-0029', 'Apple', 'iPhone 17', 'Pro', '{}'::text[], true),
+  ('MOD-0030', 'Apple', 'iPhone 17', 'Pro Max', '{}'::text[], true),
+  ('MOD-0031', 'Apple', 'iPhone SE 2020', null, '{}'::text[], true),
+  ('MOD-0032', 'Apple', 'iPhone SE 2022', null, '{}'::text[], true),
+  ('MOD-0033', 'Apple', 'iPhone X', null, '{}'::text[], true),
+  ('MOD-0034', 'Apple', 'iPhone Xr', null, '{}'::text[], true),
+  ('MOD-0035', 'Apple', 'iPhone Xs', null, '{}'::text[], true),
+  ('MOD-0036', 'Apple', 'iPhone Xs', 'Max', '{}'::text[], true)
+on conflict (codigo) do nothing;
