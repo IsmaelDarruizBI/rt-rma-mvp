@@ -9,6 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ``app/backend/data``: el directorio versionado con los catalogos DEMO
@@ -18,6 +19,13 @@ DATA_DIR_POR_DEFECTO = Path(__file__).resolve().parents[2] / "data"
 # El catalogo tecnico de modelos de equipo, versionado con el codigo.
 MODELOS_EQUIPO_POR_DEFECTO = (
     Path(__file__).resolve().parents[1] / "datos" / "modelos_equipo.json"
+)
+
+# Raiz publica de Supabase (Supabase Root 2021 CA), copia de
+# ``supabase/certs/supabase-ca.crt``. Viaja con el codigo para validar el
+# TLS contra el pooler sin depender de las CA del sistema.
+CA_POSTGRES_POR_DEFECTO = (
+    Path(__file__).resolve().parents[1] / "datos" / "supabase-ca.crt"
 )
 
 
@@ -89,6 +97,19 @@ class Settings(BaseSettings):
     # Catalogo tecnico de modelos de equipo (propio de RMA). Viaja con el
     # codigo; los tests pueden apuntar a otro archivo.
     modelos_equipo_archivo: Path = MODELOS_EQUIPO_POR_DEFECTO
+
+    # Persistencia de Ordenes, catalogos e inventario. ``json`` (por
+    # defecto) usa ``RMA_DATA_DIR``. ``postgres`` se prepara por etapas
+    # (``app.storage.postgres``): por ahora solo se valida su
+    # configuracion y el arranque se detiene con un error explicito.
+    persistencia: Literal["json", "postgres"] = "json"
+    # Cadena de conexion de PostgreSQL (``postgresql://...``). En Cloud
+    # Run llega desde Secret Manager. Nunca se versiona ni se escribe en
+    # mensajes o logs: ``SecretStr`` la oculta en ``repr``.
+    database_url: SecretStr | None = None
+    # CA con que se valida el certificado (``verify-full``) de un
+    # servidor remoto.
+    db_sslrootcert: Path = CA_POSTGRES_POR_DEFECTO
 
     @property
     def ordenes_dir(self) -> Path:

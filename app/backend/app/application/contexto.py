@@ -18,6 +18,7 @@ origen que se lee al sincronizar, a traves del puerto ``ProveedorCatalogo``
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone, tzinfo
+from typing import NoReturn
 
 from app.core.config import Settings
 from app.integraciones import FuentePersonas, LimitadorConsultas
@@ -41,6 +42,10 @@ from app.storage import (
     JsonCatalogosRepository,
     JsonModelosEquipoRepository,
     JsonOrdenReparacionRepository,
+)
+from app.storage.postgres import (
+    ConfiguracionPersistenciaError,
+    configuracion_postgres,
 )
 
 # Argentina (UTC-3, sin horario de verano). Se puede cambiar por
@@ -83,12 +88,27 @@ def _almacen_de_fotos(settings: Settings) -> AlmacenFotos | None:
     return None
 
 
-def construir_contexto(settings: Settings) -> ApplicationContext:
-    """Arma el contexto con el almacenamiento JSON configurado.
+def _rechazar_postgres(settings: Settings) -> NoReturn:
+    """PostgreSQL esta en preparacion: la app nunca arranca a medias.
 
-    Los directorios salen de ``RMA_DATA_DIR``; los repositories los
-    crean si faltan.
+    Primero valida la configuracion, para que un error de URL o de TLS
+    se vea ya; despues se detiene, porque todavia no hay repositories.
     """
+    configuracion_postgres(settings)
+    raise ConfiguracionPersistenciaError(
+        "RMA_PERSISTENCIA=postgres todavia no esta disponible: la "
+        "integracion esta en preparacion. Usar RMA_PERSISTENCIA=json."
+    )
+
+
+def construir_contexto(settings: Settings) -> ApplicationContext:
+    """Arma el contexto con la persistencia configurada.
+
+    JSON (por defecto): los directorios salen de ``RMA_DATA_DIR``; los
+    repositories los crean si faltan.
+    """
+    if settings.persistencia == "postgres":
+        _rechazar_postgres(settings)
     return ApplicationContext(
         ordenes=JsonOrdenReparacionRepository(settings.ordenes_dir),
         catalogos=JsonCatalogosRepository(settings.catalogos_dir),

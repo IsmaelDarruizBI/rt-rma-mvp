@@ -414,10 +414,50 @@ Variables de entorno con prefijo `RMA_` (ver `app/core/config.py`):
 | `RMA_DATA_DIR` | `app/backend/data` |
 | `RMA_CORS_ALLOW_ORIGINS` | `["http://localhost:5173","http://127.0.0.1:5173"]` |
 | `RMA_UTC_OFFSET_HORAS` | `-3` (dia local de los vencimientos de garantia) |
+| `RMA_PERSISTENCIA` | `json` (`postgres` esta en preparacion) |
+| `RMA_DATABASE_URL` | sin valor; solo con `postgres` |
+| `RMA_DB_SSLROOTCERT` | `app/datos/supabase-ca.crt` |
 
 `RMA_DATA_DIR` decide donde viven `ordenes/` y `catalogs/`. Los tests
 siempre usan `tmp_path`: nunca escriben sobre los catalogos DEMO
 versionados.
+
+## Persistencia
+
+**JSON** es la persistencia por defecto y la unica operativa. Un lock
+de proceso serializa los comandos (por eso un solo worker y una sola
+instancia), pero no hace atomica una operacion que escribe varios
+archivos: el consumo de insumos escribe el stock y despues la Orden, y
+si falla a mitad depende de su compensacion manual.
+
+**PostgreSQL** (esquema en `supabase/`) se integra por etapas. Hoy solo
+existe la configuracion: con `RMA_PERSISTENCIA=postgres` el arranque
+valida la conexion y se detiene con un error explicito, porque todavia
+no hay repositories.
+
+- Dependencias opcionales: `pip install -e ".[postgres]"` (psycopg 3 y
+  psycopg-pool). El modo JSON no las necesita.
+- `RMA_DATABASE_URL`: `postgresql://usuario:contrasena@host:puerto/base`.
+  En Cloud Run llegara desde Secret Manager. Nunca se versiona, ni se
+  muestra en mensajes o logs.
+- TLS: contra un servidor remoto siempre `verify-full`, con la CA de
+  `RMA_DB_SSLROOTCERT` (por defecto la raiz publica de Supabase, copia de
+  `supabase/certs/supabase-ca.crt`). Otro `sslmode`, o un `sslrootcert`
+  dentro de la URL, detiene el arranque. Solo `localhost` admite
+  conexiones sin TLS.
+- Sin sentencias preparadas del lado del servidor: el pooler de
+  Supabase en modo transaccion no las admite.
+
+Pruebas contra un PostgreSQL **local** y descartable (15 o posterior,
+con un usuario que pueda crear bases y roles):
+
+```bash
+RMA_TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres pytest tests/postgres
+```
+
+Cada corrida crea una base `rma_prueba_<hex>` con las migraciones y las
+cargas de `supabase/`, y la borra al terminar. Sin la variable, esas
+pruebas se saltean; una URL que no sea local se rechaza.
 
 ## Catalogos DEMO
 

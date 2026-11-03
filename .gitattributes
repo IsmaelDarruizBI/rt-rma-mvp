@@ -13,3 +13,7 @@ generated/viewer/*.html -whitespace
 # se extrae con LF en cualquier sistema, para que las migraciones coincidan con
 # las aplicadas en Supabase y las pruebas no dependan de core.autocrlf.
 supabase/** text eol=lf
+
+# La CA que viaja con el backend es copia byte a byte de
+# supabase/certs/supabase-ca.crt: tambien se extrae con LF.
+app/backend/app/datos/*.crt text eol=lf
