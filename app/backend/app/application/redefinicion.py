@@ -15,7 +15,6 @@ from app.domain.models import OrdenReparacion
 from app.services import redefinir_detalle as redefinir_detalle_servicio
 from app.services import revisar_detalle_pendiente
 
-from .concurrencia import seccion_critica_inventario
 from .contexto import ApplicationContext
 from .ingreso import _validar_y_habilitar
 from .modificacion import orden_para_modificar
@@ -66,7 +65,7 @@ def redefinir_detalle(
     fecha = contexto.ahora()
 
     with (
-        seccion_critica_inventario(),
+        contexto.transaccion(),
         orden_para_modificar(contexto, orden_id) as orden,
     ):
         orden = redefinir_detalle_servicio(

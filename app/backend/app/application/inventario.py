@@ -53,7 +53,6 @@ from app.services import (
     validar_alguno_de,
 )
 
-from .concurrencia import seccion_critica_inventario
 from .contexto import ApplicationContext
 from .ingreso import _validar_y_habilitar
 from .modificacion import orden_para_modificar
@@ -149,7 +148,7 @@ def _registrar_movimiento(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
-    with seccion_critica_inventario():
+    with contexto.transaccion():
         insumo = contexto.catalogos.obtener_insumo(insumo_id)
         ordenes = contexto.ordenes.listar()
         (situacion,) = situacion_inventario([insumo], ordenes)
@@ -462,7 +461,7 @@ def _revalidar_una(
     fecha: datetime,
 ) -> ResultadoRevalidacionOrden:
     with (
-        seccion_critica_inventario(),
+        contexto.transaccion(),
         orden_para_modificar(contexto, orden_id) as orden,
     ):
         if not _candidata(orden):

@@ -62,7 +62,6 @@ from app.services import (
 
 from .catalogo_equipos import equipo_desde_catalogo
 from .cola import encolar_si_ingreso_automatico
-from .concurrencia import seccion_critica_inventario
 from .contexto import ApplicationContext
 from .documentos import emitir_comprobante_recepcion_inicial
 from .identificadores import siguiente_detalle_id, siguiente_orden_id
@@ -98,7 +97,7 @@ def crear_orden(
     fecha = contexto.ahora()
     equipo = equipo_desde_catalogo(contexto, equipo)
 
-    with seccion_critica_inventario():
+    with contexto.transaccion():
         cliente = cliente_para_orden(
             contexto.ordenes.listar(),
             cliente=cliente,
@@ -137,7 +136,7 @@ def crear_orden_rt(
     fecha = contexto.ahora()
     equipo = equipo_desde_catalogo(contexto, equipo)
 
-    with seccion_critica_inventario():
+    with contexto.transaccion():
         orden = crear_orden_rt_interno(
             orden_id=siguiente_orden_id(contexto.ordenes),
             equipo=equipo,
@@ -363,7 +362,7 @@ def iniciar_garantia_rma(
 
     orden_origen = contexto.ordenes.obtener(orden_origen_id)
 
-    with seccion_critica_inventario():
+    with contexto.transaccion():
         orden = crear_orden_garantia_rma(
             orden_id=siguiente_orden_id(contexto.ordenes),
             orden_origen=orden_origen,

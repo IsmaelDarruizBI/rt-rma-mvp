@@ -78,8 +78,8 @@ from .clientes import (
 from .cola import cambiar_prioridad_de_orden, encolar_orden
 from .concurrencia import (
     LOCK_INVENTARIO,
-    seccion_critica_inventario,
-    seccion_critica_ordenes,
+    UNIDAD_DE_TRABAJO_JSON,
+    UnidadDeTrabajoJson,
 )
 from .consultas import (
     DetalleOrigen,
@@ -187,8 +187,8 @@ __all__ = [
     "ApplicationContext",
     "construir_contexto",
     "LOCK_INVENTARIO",
-    "seccion_critica_inventario",
-    "seccion_critica_ordenes",
+    "UNIDAD_DE_TRABAJO_JSON",
+    "UnidadDeTrabajoJson",
     # Catalogo de equipos de Ventas
     "EstadoCatalogoEquipos",
     "catalogo_para_seleccion",

@@ -110,6 +110,15 @@ class Settings(BaseSettings):
     # CA con que se valida el certificado (``verify-full``) de un
     # servidor remoto.
     db_sslrootcert: Path = CA_POSTGRES_POR_DEFECTO
+    # Pool de conexiones: minimo abierto, maximo y cuanto espera un
+    # comando por una conexion libre antes de responder 503.
+    db_pool_min: int = 1
+    db_pool_max: int = 4
+    db_pool_espera_s: float = 5.0
+    # Limites de cada transaccion (``SET LOCAL``): esperar un bloqueo y
+    # ejecutar una sentencia. No pasan a la transaccion siguiente.
+    db_lock_timeout_ms: int = 5000
+    db_statement_timeout_ms: int = 15000
 
     @property
     def ordenes_dir(self) -> Path:

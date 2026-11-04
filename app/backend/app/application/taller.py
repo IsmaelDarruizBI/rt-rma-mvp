@@ -51,7 +51,6 @@ from app.services import (
     liberar_orden as liberar_orden_servicio,
 )
 
-from .concurrencia import seccion_critica_inventario
 from .contexto import ApplicationContext
 from .modificacion import orden_para_modificar
 
@@ -126,8 +125,9 @@ def iniciar_detalle(
     Toda la secuencia -cargar la Orden, leer el stock fisico del
     catalogo, sumar las reservas activas de las demas Ordenes, revalidar
     la disponibilidad, generar las RESERVA y guardar- ocurre dentro de
-    ``seccion_critica_inventario``, porque entre la lectura y la
-    escritura no puede colarse otro tecnico pidiendo la misma unidad.
+    una sola transaccion (``contexto.transaccion()``), porque entre la
+    lectura y la escritura no puede colarse otro tecnico pidiendo la
+    misma unidad.
 
     La disponibilidad se vuelve a calcular aqui aunque PROC-REP-080 ya
     la haya consultado: entre una cosa y la otra pudieron pasar dias.
@@ -146,7 +146,7 @@ def iniciar_detalle(
     fecha = contexto.ahora()
 
     with (
-        seccion_critica_inventario(),
+        contexto.transaccion(),
         orden_para_modificar(contexto, orden_id) as orden,
     ):
         orden = seleccionar_detalle(
@@ -213,7 +213,7 @@ def liberar_orden(
     fecha = contexto.ahora()
 
     with (
-        seccion_critica_inventario(),
+        contexto.transaccion(),
         orden_para_modificar(contexto, orden_id) as orden,
     ):
         toma = toma_activa(orden)
@@ -404,7 +404,7 @@ def _cerrar_ejecucion(
     fecha: datetime = contexto.ahora()
 
     with (
-        seccion_critica_inventario(),
+        contexto.transaccion(),
         orden_para_modificar(contexto, orden_id) as orden,
     ):
         ejecucion = _buscar_ejecucion(orden, ejecucion_id)

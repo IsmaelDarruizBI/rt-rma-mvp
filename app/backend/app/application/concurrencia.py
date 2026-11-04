@@ -1,8 +1,9 @@
-"""Seccion critica de las Ordenes y del inventario del MVP.
+"""Unidad de trabajo JSON: la seccion critica de Ordenes e inventario.
 
 Un unico lock de proceso serializa TODA operacion que modifica una Orden
-o el stock (E4, MVP v2). Cubre la secuencia completa de cada comando, no
-solo la escritura:
+o el stock (E4, MVP v2). Los casos de uso lo toman con
+``contexto.transaccion()`` (E1), que con JSON es este lock. Cubre la
+secuencia completa de cada comando, no solo la escritura:
 
     cargar la Orden -> validar -> aplicar los services -> guardar
 
@@ -13,8 +14,12 @@ segundo pisaria al primero sin que nadie se entere. Lo usan:
 - ``orden_para_modificar`` (``app.application.modificacion``), por donde
   pasa todo comando que cambia una Orden existente;
 - las altas, que numeran ``OR-XXXXXX`` sobre lo persistido;
-- PROC-REP-185 (reserva real) y PROC-REP-210 (consumo), que leen las
-  reservas de TODAS las Ordenes y reescriben el stock del catalogo.
+- los comandos que leen las reservas de TODAS las Ordenes o reescriben el
+  stock del catalogo: PROC-REP-185 (reserva real), PROC-REP-210
+  (consumo), la autorizacion del cliente, la redefinicion, los recursos,
+  el ingreso inicial, la revalidacion y los movimientos operativos. Abren
+  ``contexto.transaccion()`` antes de ``orden_para_modificar``: con
+  PostgreSQL, esos son los que tendran que bloquear tambien los insumos.
 
 Es reentrante a proposito: un comando que ya esta en la seccion critica
 puede entrar de nuevo (por ejemplo, la reserva dentro de una Orden que se
@@ -24,6 +29,14 @@ capa de aplicacion, no hay orden de adquisicion que pueda trabarse.
 Por debajo, el repository JSON rechaza igual una version obsoleta
 (``ConflictoDeEscrituraError``): es la red por si algun camino se salteara
 esta seccion.
+
+LO QUE NO GARANTIZA
+-------------------
+Exclusion mutua no es atomicidad. Una operacion que escribe varios
+archivos (el consumo escribe el stock y despues la Orden) puede quedar a
+mitad si falla en el medio: nada se revierte solo, y por eso PROC-REP-210
+compensa el stock a mano. La unidad de trabajo PostgreSQL si revierte
+todo; esta no.
 
 ALCANCE Y LIMITACION DELIBERADA
 -------------------------------
@@ -38,11 +51,9 @@ Por eso el MVP se sirve con **un solo worker de uvicorn**:
     uvicorn app.main:app --workers 1
 
 JSON es el almacenamiento de las pruebas funcionales, no la solucion
-definitiva para operar con varias instancias. Cuando el almacenamiento
-deje de ser JSON sobre el filesystem, la exclusion mutua debera
-resolverla el motor de persistencia (una transaccion, un
-``SELECT ... FOR UPDATE``, un control de version en la base), no este
-modulo.
+definitiva para operar con varias instancias. Con PostgreSQL la exclusion
+mutua la resuelve la base (una transaccion, un ``SELECT ... FOR
+UPDATE``), no este modulo.
 """
 
 import threading
@@ -52,24 +63,35 @@ from contextlib import contextmanager
 LOCK_INVENTARIO = threading.RLock()
 
 
-@contextmanager
-def seccion_critica_ordenes() -> Iterator[None]:
-    """Serializa la lectura-validacion-escritura de una Orden (E4)."""
-    with LOCK_INVENTARIO:
-        yield
+class UnidadDeTrabajoJson:
+    """Exclusion mutua de proceso con el contrato de ``UnidadDeTrabajo``.
 
-
-@contextmanager
-def seccion_critica_inventario() -> Iterator[None]:
-    """Serializa la lectura-validacion-escritura de stock reservado.
-
-    Es la misma seccion critica que ``seccion_critica_ordenes``: un solo
-    lock para Ordenes e inventario. Se conserva el nombre en los comandos
-    que, ademas de su Orden, leen las reservas de las demas o reescriben
-    el stock del catalogo, para que eso quede explicito:
-
-        cargar Orden -> cargar reservas globales -> validar
-        disponibilidad -> generar RESERVA -> guardar Orden
+    Todas las instancias que comparten un lock son la misma seccion
+    critica: por defecto, ``LOCK_INVENTARIO``, como antes de E1.
     """
-    with LOCK_INVENTARIO:
-        yield
+
+    def __init__(self, lock: threading.RLock = LOCK_INVENTARIO) -> None:
+        self._lock = lock
+        # Profundidad por hilo: el RLock tambien es por hilo.
+        self._local = threading.local()
+
+    @contextmanager
+    def transaccion(self) -> Iterator[None]:
+        """Toma el lock (reentrante) hasta el final del bloque."""
+        with self._lock:
+            self._local.nivel = self._nivel() + 1
+            try:
+                yield
+            finally:
+                self._local.nivel -= 1
+
+    def en_curso(self) -> bool:
+        """Si este hilo esta dentro de la seccion critica."""
+        return self._nivel() > 0
+
+    def _nivel(self) -> int:
+        return getattr(self._local, "nivel", 0)
+
+
+# La seccion critica unica de la aplicacion con JSON.
+UNIDAD_DE_TRABAJO_JSON = UnidadDeTrabajoJson()

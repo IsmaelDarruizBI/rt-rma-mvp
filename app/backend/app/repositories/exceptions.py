@@ -8,7 +8,15 @@ va a querer tratarlos distinto.
 
 
 class RepositoryError(Exception):
-    """Fallo al acceder a la persistencia."""
+    """Fallo al acceder a la persistencia.
+
+    ``sqlstate`` y ``reintentable`` los completa la traduccion de errores
+    de PostgreSQL (``app.storage.postgres.traducir_error``): informacion
+    interna para decidir un reintento, nunca para el usuario.
+    """
+
+    sqlstate: str | None = None
+    reintentable: bool = False
 
 
 class EntidadPersistidaNoEncontradaError(RepositoryError):
@@ -17,6 +25,26 @@ class EntidadPersistidaNoEncontradaError(RepositoryError):
 
 class PersistenciaError(RepositoryError):
     """No se pudo leer o escribir: contenido invalido o error de E/S."""
+
+
+class PersistenciaNoDisponibleError(PersistenciaError):
+    """No hubo una conexion libre a tiempo: no se hizo nada.
+
+    Es transitorio (el pool esta agotado): la API lo responde 503. No es
+    un conflicto de datos (409) ni un fallo interno (500).
+    """
+
+    codigo = "PERSISTENCIA_NO_DISPONIBLE"
+
+
+class TransaccionInvalidadaError(PersistenciaError):
+    """La transaccion se revirtio porque algo fallo dentro de ella.
+
+    Una excepcion salio de una transaccion anidada, o la base ya habia
+    abortado la transaccion, y aun asi el bloque exterior termino como si
+    nada: se revierte todo en vez de confirmar una parte. Es un error de
+    programacion (atrapar un fallo dentro de la transaccion), no de datos.
+    """
 
 
 class ConflictoDeEscrituraError(RepositoryError):

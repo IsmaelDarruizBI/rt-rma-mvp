@@ -47,22 +47,30 @@ def traducir_error(error: BaseException) -> RepositoryError:
     por ejemplo), y encadenarlo lo llevaria al traceback del log. El
     SQLSTATE y la restriccion del mensaje traducido alcanzan para
     diagnosticar.
+
+    El traducido conserva ``sqlstate`` y ``reintentable``: como el error
+    original no se encadena, es lo que queda para decidir un reintento.
     """
     codigo = sqlstate(error)
     referencia = _referencia(error, codigo)
+    traducido: RepositoryError
     if codigo in SQLSTATE_REINTENTABLES or (
         codigo is not None and codigo.startswith(CLASE_INTEGRIDAD)
     ):
-        return ConflictoDeEscrituraError(
+        traducido = ConflictoDeEscrituraError(
             "Los datos cambiaron mientras se procesaba esta operacion: no "
             "se guardo. Recarga y volve a intentarlo "
             f"({referencia})."
         )
-    if codigo == SQLSTATE_TIMEOUT:
-        return PersistenciaError(
+    elif codigo == SQLSTATE_TIMEOUT:
+        traducido = PersistenciaError(
             f"PostgreSQL no respondio a tiempo ({referencia})."
         )
-    return PersistenciaError(f"Fallo de PostgreSQL ({referencia}).")
+    else:
+        traducido = PersistenciaError(f"Fallo de PostgreSQL ({referencia}).")
+    traducido.sqlstate = codigo
+    traducido.reintentable = es_reintentable(error)
+    return traducido
 
 
 def _referencia(error: BaseException, codigo: str | None) -> str:

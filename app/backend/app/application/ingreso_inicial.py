@@ -45,7 +45,6 @@ from app.services import (
 
 from .autorizacion_cliente import aplicar_decision_cliente
 from .cola import encolar_si_ingreso_automatico
-from .concurrencia import seccion_critica_inventario
 from .contexto import ApplicationContext
 from .documentos import contexto_documentos
 from .ingreso import _validar_y_habilitar
@@ -86,7 +85,7 @@ def generar_comprobante_ingreso(
     fecha = contexto.ahora()
 
     with (
-        seccion_critica_inventario(),
+        contexto.transaccion(),
         orden_para_modificar(contexto, orden_id) as orden,
     ):
         if ultimo_documento(orden, TipoDocumento.COMPROBANTE_INGRESO):

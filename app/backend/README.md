@@ -70,10 +70,11 @@ uvicorn app.main:app --reload --port 8000 --workers 1
 - Docs: http://localhost:8000/docs
 
 **Un solo worker, a proposito.** Toda operacion que modifica una Orden o
-el stock se protege con un unico lock de proceso (`threading.RLock`,
-`app/application/concurrencia.py`) que cubre la seccion critica completa
-de cada comando: leer la Orden, validar, aplicar y guardar (incluida la
-reserva de `PROC-REP-185`, que lee la disponibilidad global). Por debajo,
+el stock corre dentro de `contexto.transaccion()`; con JSON es un unico
+lock de proceso (`threading.RLock`, `app/application/concurrencia.py`)
+que cubre la seccion critica completa de cada comando: leer la Orden,
+validar, aplicar y guardar (incluida la reserva de `PROC-REP-185`, que
+lee la disponibilidad global). Por debajo,
 el repositorio JSON rechaza con 409 `CONFLICTO_CONCURRENTE` cualquier
 version obsoleta de una Orden (su historial persistido tiene que ser un
 prefijo del que se guarda) y no sobrescribe una Orden cerrada; las
@@ -417,6 +418,10 @@ Variables de entorno con prefijo `RMA_` (ver `app/core/config.py`):
 | `RMA_PERSISTENCIA` | `json` (`postgres` esta en preparacion) |
 | `RMA_DATABASE_URL` | sin valor; solo con `postgres` |
 | `RMA_DB_SSLROOTCERT` | `app/datos/supabase-ca.crt` |
+| `RMA_DB_POOL_MIN` / `RMA_DB_POOL_MAX` | `1` / `4` conexiones |
+| `RMA_DB_POOL_ESPERA_S` | `5` (despues, 503) |
+| `RMA_DB_LOCK_TIMEOUT_MS` | `5000` (`SET LOCAL` por transaccion) |
+| `RMA_DB_STATEMENT_TIMEOUT_MS` | `15000` (`SET LOCAL` por transaccion) |
 
 `RMA_DATA_DIR` decide donde viven `ordenes/` y `catalogs/`. Los tests
 siempre usan `tmp_path`: nunca escriben sobre los catalogos DEMO
@@ -430,10 +435,11 @@ instancia), pero no hace atomica una operacion que escribe varios
 archivos: el consumo de insumos escribe el stock y despues la Orden, y
 si falla a mitad depende de su compensacion manual.
 
-**PostgreSQL** (esquema en `supabase/`) se integra por etapas. Hoy solo
-existe la configuracion: con `RMA_PERSISTENCIA=postgres` el arranque
-valida la conexion y se detiene con un error explicito, porque todavia
-no hay repositories.
+**PostgreSQL** (esquema en `supabase/`) se integra por etapas. Hoy
+existen la configuracion y la unidad de trabajo, probadas contra una base
+local, pero la aplicacion todavia no las usa: con
+`RMA_PERSISTENCIA=postgres` el arranque valida la conexion y los ajustes
+del pool y se detiene con un error explicito, porque no hay repositories.
 
 - Dependencias opcionales: `pip install -e ".[postgres]"` (psycopg 3 y
   psycopg-pool). El modo JSON no las necesita.
@@ -448,6 +454,39 @@ no hay repositories.
 - Sin sentencias preparadas del lado del servidor: el pooler de
   Supabase en modo transaccion no las admite.
 
+### Unidad de trabajo
+
+Los casos de uso abren `with contexto.transaccion():` alrededor de
+cargar, validar, aplicar y guardar (`orden_para_modificar` lo hace por
+ellos). El contrato esta en `app/repositories/unidad_de_trabajo.py`:
+
+- Reentrante: una transaccion abierta dentro de otra se une a la
+  exterior; no hay savepoints y solo la exterior termina.
+- Se abre en la capa de aplicacion, nunca en una dependencia de FastAPI.
+- Adentro no se llama a servicios externos (fotos, fuente por DNI,
+  catalogo de Ventas). `tests/test_unidad_de_trabajo.py` lo verifica.
+- Solo la unidad de trabajo envia `BEGIN`, `COMMIT` y `ROLLBACK`: los
+  repositories nunca confirman, revierten ni ejecutan SQL de control
+  transaccional.
+- La transaccion es del hilo y la tarea que la abrieron: una tarea o un
+  hilo creados adentro heredan el contexto, pero no pueden usarla.
+  Mientras sigue abierta tampoco pueden abrir otra; cuando termino,
+  abren la suya.
+
+Con JSON es el lock de proceso: exclusion mutua, **sin** rollback. Con
+PostgreSQL (`app/storage/postgres/transaccion.py`) es una transaccion de
+la base sobre una conexion del pool, guardada en una `ContextVar`:
+`BEGIN` con `SET LOCAL lock_timeout` y `statement_timeout`, `COMMIT` si
+el bloque termina bien y `ROLLBACK` ante cualquier excepcion. Si una
+excepcion sale de una transaccion anidada, o la base aborto la
+transaccion, y el bloque exterior la atrapa, igual se revierte la
+transaccion (`TransaccionInvalidadaError`). Si algo envio un `COMMIT` o
+un `ROLLBACK` por su cuenta, el mismo error avisa que lo ejecutado pudo
+quedar confirmado: eso ya no se puede revertir. Sin reintentos
+automaticos: un conflicto es 409 y conserva `sqlstate` y `reintentable`;
+sin conexion libre a tiempo, 503 `PERSISTENCIA_NO_DISPONIBLE`.
+Pendientes de la revision: `docs/postgresql/integracion-pendientes.md`.
+
 Pruebas contra un PostgreSQL **local** y descartable (15 o posterior,
 con un usuario que pueda crear bases y roles):
 
@@ -457,7 +496,9 @@ RMA_TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres pytest tests
 
 Cada corrida crea una base `rma_prueba_<hex>` con las migraciones y las
 cargas de `supabase/`, y la borra al terminar. Sin la variable, esas
-pruebas se saltean; una URL que no sea local se rechaza.
+pruebas se saltean; una URL que no sea local se rechaza. Incluyen la
+unidad de trabajo y un servidor uvicorn real con pedidos concurrentes,
+para verificar la `ContextVar` bajo el threadpool de FastAPI.
 
 ## Catalogos DEMO
 

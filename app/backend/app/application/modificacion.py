@@ -15,11 +15,13 @@ comando:
   precondicion, asi que el rechazo es siempre el mismo: 409
   ORDEN_CERRADA, sin efectos.
 - E4: la carga, las validaciones, los services y el guardado ocurren
-  dentro de la seccion critica de Ordenes: dos pedidos sobre la misma
-  Orden se atienden uno despues del otro, y el segundo ve lo que guardo
-  el primero (y lo vuelve a validar) en vez de pisarlo. Una solicitud
-  obsoleta -por ejemplo, desde una pantalla que todavia no se enteraba
-  de la entrega- se valida contra la Orden ya entregada y se rechaza.
+  dentro de una sola transaccion (``contexto.transaccion()``; con JSON,
+  la seccion critica de ``app.application.concurrencia``): dos pedidos
+  sobre la misma Orden se atienden uno despues del otro, y el segundo ve
+  lo que guardo el primero (y lo vuelve a validar) en vez de pisarlo.
+  Una solicitud obsoleta -por ejemplo, desde una pantalla que todavia no
+  se enteraba de la entrega- se valida contra la Orden ya entregada y se
+  rechaza.
 
 Las lecturas (``consultas``) y el inicio de una garantia RMA -que solo
 lee la Orden origen- no pasan por aqui.
@@ -31,7 +33,6 @@ from contextlib import contextmanager
 from app.domain.models import OrdenReparacion
 from app.services import exigir_orden_abierta
 
-from .concurrencia import seccion_critica_ordenes
 from .contexto import ApplicationContext
 
 
@@ -42,10 +43,11 @@ def orden_para_modificar(
 ) -> Iterator[OrdenReparacion]:
     """Carga la Orden, garantiza que admite cambios y serializa el comando.
 
-    La seccion critica se mantiene hasta que termina el bloque ``with``
-    del caller, es decir, hasta despues de guardar.
+    La transaccion se mantiene hasta que termina el bloque ``with`` del
+    caller, es decir, hasta despues de guardar. Si el caller ya abrio
+    una, esta se une a ella.
     """
-    with seccion_critica_ordenes():
+    with contexto.transaccion():
         orden = contexto.ordenes.obtener(orden_id)
         exigir_orden_abierta(orden)
         yield orden

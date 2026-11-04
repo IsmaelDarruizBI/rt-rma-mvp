@@ -14,6 +14,7 @@ Correspondencia:
     RecursoNoDisponibleError           -> 409  (no alcanza el stock)
     RequestValidationError             -> 422  (el request esta mal formado)
     ConflictoDeEscrituraError          -> 409  (la Orden cambio: recargar)
+    PersistenciaNoDisponibleError      -> 503  (sin conexion libre a la base)
     PersistenciaError / RepositoryError-> 500  (fallo de infraestructura)
     AlmacenFotosError                  -> 503  (almacenamiento de fotos)
     CatalogoOrigenNoDisponibleError    -> 503  (no se pudo leer el origen
@@ -42,6 +43,7 @@ from app.integraciones.catalogo import CatalogoOrigenNoDisponibleError
 from app.repositories import (
     ConflictoDeEscrituraError,
     EntidadPersistidaNoEncontradaError,
+    PersistenciaNoDisponibleError,
     RepositoryError,
 )
 from app.services import (
@@ -162,6 +164,21 @@ def registrar_manejadores_de_error(application: FastAPI) -> None:
     ) -> JSONResponse:
         """E4: una version obsoleta no se guardo. No es un 500."""
         return _respuesta(error.codigo, str(error), status.HTTP_409_CONFLICT)
+
+    @application.exception_handler(PersistenciaNoDisponibleError)
+    async def _persistencia_no_disponible(
+        _: Request,
+        error: PersistenciaNoDisponibleError,
+    ) -> JSONResponse:
+        """Pool agotado: transitorio, no se hizo nada. No es un conflicto
+        de datos (409) ni un fallo interno (500)."""
+        logger.warning("Persistencia no disponible: %s", error)
+        return _respuesta(
+            error.codigo,
+            "El servicio está ocupado y no se guardó nada. Probá de nuevo "
+            "en unos segundos.",
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
 
     @application.exception_handler(RepositoryError)
     async def _persistencia(

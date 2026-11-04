@@ -65,7 +65,6 @@ from app.services import (
 )
 
 from .cola import encolar_si_ingreso_automatico
-from .concurrencia import seccion_critica_inventario
 from .consultas import nombres_de_tipo_por_detalle
 from .contexto import ApplicationContext
 from .modificacion import orden_para_modificar
@@ -325,7 +324,7 @@ def registrar_decision_cliente(
     fecha = contexto.ahora()
 
     with (
-        seccion_critica_inventario(),
+        contexto.transaccion(),
         orden_para_modificar(contexto, orden_id) as orden,
     ):
         exigir_fuera_del_ingreso_inicial(

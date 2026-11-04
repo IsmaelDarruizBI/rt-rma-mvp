@@ -42,6 +42,27 @@ def test_la_concurrencia_es_un_conflicto_reintentable(codigo):
     assert isinstance(traducir_error(error), ConflictoDeEscrituraError)
 
 
+@pytest.mark.parametrize(
+    ("codigo", "reintentable"),
+    [
+        ("40001", True),
+        ("40P01", True),
+        ("55P03", True),
+        ("23505", False),
+        ("57014", False),
+        ("08006", False),
+        (None, False),
+    ],
+)
+def test_el_traducido_conserva_sqlstate_y_reintentabilidad(
+    codigo, reintentable
+):
+    # El original no se encadena: el traducido es lo que queda.
+    traducido = traducir_error(ErrorSimulado(codigo))
+    assert traducido.sqlstate == codigo
+    assert traducido.reintentable is reintentable
+
+
 def test_un_timeout_es_un_fallo_de_persistencia():
     traducido = traducir_error(ErrorSimulado("57014"))
     assert isinstance(traducido, PersistenciaError)

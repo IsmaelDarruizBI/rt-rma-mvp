@@ -13,9 +13,14 @@ Catalogo de equipos de Ventas: ``catalogo_equipos`` es la copia local
 (sin ella, el alta solo admite carga manual); ``proveedor_catalogo`` es el
 origen que se lee al sincronizar, a traves del puerto ``ProveedorCatalogo``
 (sin el, no se sincroniza); ``filtro_catalogo``, que parte se copia.
+
+Desde E1, ``unidad_de_trabajo`` fija el limite transaccional de los
+comandos (``contexto.transaccion()``). Por defecto es la seccion critica
+JSON de siempre; la de PostgreSQL todavia no se usa.
 """
 
 from collections.abc import Callable
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone, tzinfo
 from typing import NoReturn
@@ -33,6 +38,7 @@ from app.repositories import (
     CatalogosRepository,
     ModelosEquipoRepository,
     OrdenReparacionRepository,
+    UnidadDeTrabajo,
 )
 from app.storage import (
     AlmacenFotos,
@@ -45,8 +51,11 @@ from app.storage import (
 )
 from app.storage.postgres import (
     ConfiguracionPersistenciaError,
+    ajustes_postgres,
     configuracion_postgres,
 )
+
+from .concurrencia import UNIDAD_DE_TRABAJO_JSON
 
 # Argentina (UTC-3, sin horario de verano). Se puede cambiar por
 # configuracion (``RMA_UTC_OFFSET_HORAS``).
@@ -76,6 +85,14 @@ class ApplicationContext:
     filtro_catalogo: FiltroCatalogo = FiltroCatalogo(("IPHONE USADOS",))
     # Catalogo tecnico de modelos (propio de RMA, solo lectura).
     modelos_equipo: ModelosEquipoRepository | None = None
+    # Limite transaccional de los comandos (E1). Por defecto, el lock de
+    # proceso compartido por todos los contextos, como antes.
+    unidad_de_trabajo: UnidadDeTrabajo = UNIDAD_DE_TRABAJO_JSON
+
+    def transaccion(self) -> AbstractContextManager[None]:
+        """Abre la transaccion de un comando (o se une a la que esta en
+        curso). Solo desde la capa de aplicacion."""
+        return self.unidad_de_trabajo.transaccion()
 
 
 def _almacen_de_fotos(settings: Settings) -> AlmacenFotos | None:
@@ -95,6 +112,7 @@ def _rechazar_postgres(settings: Settings) -> NoReturn:
     se vea ya; despues se detiene, porque todavia no hay repositories.
     """
     configuracion_postgres(settings)
+    ajustes_postgres(settings)
     raise ConfiguracionPersistenciaError(
         "RMA_PERSISTENCIA=postgres todavia no esta disponible: la "
         "integracion esta en preparacion. Usar RMA_PERSISTENCIA=json."

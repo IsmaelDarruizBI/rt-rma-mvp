@@ -39,7 +39,6 @@ from app.services import (
 )
 
 from .cola import encolar_si_ingreso_automatico
-from .concurrencia import seccion_critica_inventario
 from .contexto import ApplicationContext
 from .ingreso import _validar_y_habilitar
 from .modificacion import orden_para_modificar
@@ -193,7 +192,7 @@ def forzar_detalle_por_recursos(
     fecha = contexto.ahora()
 
     with (
-        seccion_critica_inventario(),
+        contexto.transaccion(),
         orden_para_modificar(contexto, orden_id) as orden,
     ):
         validar_override_recursos(

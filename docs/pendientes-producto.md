@@ -122,3 +122,11 @@ Riesgo anterior a P-06, detectado en la revisión del override (29/10/2026). Al 
 Si falla solo la segunda escritura, la Orden queda con el inventario aplicado y sin el paso 211. Reintentar el cierre responde 409 porque la Ejecución ya está terminada. No se reprodujo sin forzar un fallo de disco.
 
 **Falta.** Resolverlo con una transacción única (stock y Orden) al migrar a PostgreSQL.
+
+## Nota técnica: foto subida cuya registración falla
+
+Registrado en E1 de la integración con PostgreSQL (03/11/2026). Agregar una foto la sube primero al almacenamiento (GCS) y después la registra en la Orden, a propósito fuera de la transacción: una subida lenta no retiene bloqueos. Si la registración falla (Orden cerrada en el medio, conflicto, error de la base), la imagen queda en el bucket sin Orden.
+
+Hoy la cubre la limpieza de huérfanas (Administración, `POST /api/maintenance/photos/cleanup`), que solo borra imágenes de más de una hora que ninguna Orden usa.
+
+**Falta.** Tarea separada, no incluida en E1: borrar la imagen enseguida cuando la registración falla (compensación de mejor esfuerzo, fuera de la transacción), sin tapar el error original y conservando la limpieza como red.

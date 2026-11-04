@@ -14,10 +14,13 @@ from .exceptions import (
     ConflictoDeEscrituraError,
     EntidadPersistidaNoEncontradaError,
     PersistenciaError,
+    PersistenciaNoDisponibleError,
     RepositoryError,
+    TransaccionInvalidadaError,
 )
 from .modelos_equipo import ModelosEquipoRepository
 from .ordenes import OrdenReparacionRepository
+from .unidad_de_trabajo import UnidadDeTrabajo
 
 __all__ = [
     "CatalogoEquiposRepository",
@@ -27,5 +30,8 @@ __all__ = [
     "ModelosEquipoRepository",
     "OrdenReparacionRepository",
     "PersistenciaError",
+    "PersistenciaNoDisponibleError",
     "RepositoryError",
+    "TransaccionInvalidadaError",
+    "UnidadDeTrabajo",
 ]

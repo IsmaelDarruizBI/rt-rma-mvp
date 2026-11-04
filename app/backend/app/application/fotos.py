@@ -31,7 +31,6 @@ from app.services import (
 )
 from app.storage import AlmacenFotos
 
-from .concurrencia import seccion_critica_ordenes
 from .contexto import ApplicationContext
 from .modificacion import orden_para_modificar
 
@@ -118,7 +117,7 @@ def limpiar_fotos_huerfanas(
     ahora = contexto.ahora()
 
     objetos = almacen.listar(PREFIJO_FOTOS)
-    with seccion_critica_ordenes():
+    with contexto.transaccion():
         usadas = fotos_referenciadas(contexto.ordenes.listar())
     huerfanas = [objeto for objeto in objetos if objeto.clave not in usadas]
     viejas = [
