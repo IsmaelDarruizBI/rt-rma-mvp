@@ -67,12 +67,12 @@ class Servidor:
             with unidad.transaccion():
                 self._contar(+1)
                 try:
-                    conexion = unidad.conexion_actual()
+                    conexion = unidad._conexion_actual()
                     exterior = conexion.execute(CONSULTA).fetchone()
                     time.sleep(0.01)
                     with unidad.transaccion():
                         anidada = (
-                            unidad.conexion_actual()
+                            unidad._conexion_actual()
                             .execute(CONSULTA)
                             .fetchone()
                         )

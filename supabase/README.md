@@ -6,7 +6,7 @@ Esquema físico de la persistencia en Supabase PostgreSQL. Implementa el diseño
 
 | Ruta | Qué es |
 |---|---|
-| `migrations/` | 12 migraciones SQL, en orden de dependencias. Crean el esquema `rma`, sus 45 tablas comentadas, vistas, triggers, permisos y datos de referencia |
+| `migrations/` | 13 migraciones SQL, en orden de dependencias. Crean el esquema `rma`, sus 45 tablas comentadas, vistas, triggers, permisos y datos de referencia. La 13 (E3, aditiva) agrega `insumo.clave` (el id del dominio) y `orden` en usuarios y medios de pago |
 | `seeds/referencia_operativa/` | Datos operativos iniciales válidos para producción: medios de pago, empresa, Términos y Condiciones v1, catálogo técnico de modelos y motivos de ajuste aprobados |
 | `seeds/desarrollo/` | Datos **ficticios** de desarrollo. **Nunca se cargan en producción** |
 | `tests/` | Pruebas SQL. Cada archivo de prueba corre en una transacción que se descarta |
@@ -16,6 +16,17 @@ Esquema físico de la persistencia en Supabase PostgreSQL. Implementa el diseño
 | `config.toml` | Configuración de Supabase CLI. El esquema `rma` no se expone por la API de datos |
 
 Todas las cargas iniciales son reproducibles: aplicarlas otra vez no duplica ni cambia nada.
+
+La carga de desarrollo verifica al final que cada fila de las fuentes quedó en la base con su identidad, y si no, falla con el detalle. El generador se detiene si una referencia no se resuelve. Se aplica entera o nada: con `psql`, `-v ON_ERROR_STOP=1 --single-transaction`.
+
+La migración `20261105000100_e3_catalogos.sql` no se aplica en un entorno remoto sin una estrategia de identidad verificada para `insumo.clave` y `orden` (QA-E3-6, QA-E3-7 y QAF-13 en `docs/postgresql/integracion-pendientes.md`). Tiene una guarda: sobre una base con insumos, usuarios o medios de pago cargados, falla sin cambiar nada salvo que la sesión tenga `rma.migracion_e3 = 'estrategia_identidad_aprobada'`, que solo pone el procedimiento aprobado de E8. Por eso `db push` no la aplica sobre DEV/UAT con datos. Sobre una base vacía, como la local o la de las pruebas, se aplica sin autorización.
+
+Esa guarda es operativa, no un control de autorización:
+- la variable la satisface cualquiera que la configure, también en silencio con `ALTER DATABASE` o `ALTER ROLE … SET`;
+- protege solo si el archivo se ejecuta en una única transacción (`db push`, o `psql -v ON_ERROR_STOP=1 --single-transaction`);
+- no reemplaza la aprobación humana del procedimiento de E8.
+
+Las cargas son inicializadores, no sincronizaciones: crean lo que falta y verifican las identidades, pero no actualizan atributos ni quitan relaciones de una base ya cargada (QAF-5).
 
 ## Requisitos
 

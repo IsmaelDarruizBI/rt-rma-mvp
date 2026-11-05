@@ -15,6 +15,7 @@ from .exceptions import (
     EntidadPersistidaNoEncontradaError,
     PersistenciaError,
     PersistenciaNoDisponibleError,
+    PersistenciaSinConexionError,
     RepositoryError,
     TransaccionInvalidadaError,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "OrdenReparacionRepository",
     "PersistenciaError",
     "PersistenciaNoDisponibleError",
+    "PersistenciaSinConexionError",
     "RepositoryError",
     "TransaccionInvalidadaError",
     "UnidadDeTrabajo",

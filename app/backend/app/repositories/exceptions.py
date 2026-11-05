@@ -37,6 +37,17 @@ class PersistenciaNoDisponibleError(PersistenciaError):
     codigo = "PERSISTENCIA_NO_DISPONIBLE"
 
 
+class PersistenciaSinConexionError(PersistenciaNoDisponibleError):
+    """No se pudo establecer una conexion a la base a tiempo (E3, L2).
+
+    Distinto del pool agotado: habia lugar en el pool, pero la base no
+    respondio o rechazo la conexion. Tampoco se hizo nada. Hereda de
+    ``PersistenciaNoDisponibleError`` (503) y se distingue por su codigo.
+    """
+
+    codigo = "PERSISTENCIA_SIN_CONEXION"
+
+
 class TransaccionInvalidadaError(PersistenciaError):
     """La transaccion se revirtio porque algo fallo dentro de ella.
 

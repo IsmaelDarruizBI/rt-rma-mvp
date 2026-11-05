@@ -120,7 +120,7 @@ def _ids(configuracion) -> list[int]:
 
 
 def _insertar(unidad, id_, valor="x"):
-    unidad.conexion_actual().execute(
+    unidad._conexion_actual().execute(
         "insert into prueba_uow.registro (id, valor) values (%s, %s)",
         (id_, valor),
     )
@@ -131,8 +131,15 @@ def _limpio(unidad, pool):
     assert not unidad.en_curso()
     assert _EN_CURSO.get() is None
     with pytest.raises(PersistenciaError, match="fuera de una transaccion"):
-        unidad.conexion_actual()
-    estadisticas = pool.get_stats()
+        unidad._conexion_actual()
+    # Una conexion descartada (estado dudoso, E3) se repone en segundo
+    # plano: se espera a que el pool se estabilice. Una conexion que no
+    # volvio nunca lo deja estable, asi que una fuga sigue fallando.
+    for _ in range(100):
+        estadisticas = pool.get_stats()
+        if estadisticas["pool_available"] == estadisticas["pool_size"]:
+            break
+        time.sleep(0.05)
     assert estadisticas["pool_available"] == estadisticas["pool_size"]
 
 
@@ -154,7 +161,7 @@ def test_un_bloque_sin_errores_confirma(armar, base):
 def test_begin_y_set_local_valen_solo_dentro_de_la_transaccion(armar):
     unidad, pool = armar()
     with unidad.transaccion():
-        conexion = unidad.conexion_actual()
+        conexion = unidad._conexion_actual()
         assert conexion.info.transaction_status == TransactionStatus.INTRANS
         assert conexion.execute("show lock_timeout").fetchone() == ("5s",)
         assert conexion.execute("show statement_timeout").fetchone() == (
@@ -185,7 +192,7 @@ def test_el_lock_timeout_corta_la_espera_y_es_reintentable(armar, base):
             with pytest.raises(ConflictoDeEscrituraError) as capturado:
                 with unidad.transaccion():
                     pid = (
-                        unidad.conexion_actual()
+                        unidad._conexion_actual()
                         .execute("select pg_backend_pid()")
                         .fetchone()[0]
                     )
@@ -211,7 +218,7 @@ def test_el_statement_timeout_corta_una_sentencia_lenta(armar):
     unidad, pool = armar(statement_timeout_ms=200)
     with pytest.raises(PersistenciaError) as capturado:
         with unidad.transaccion():
-            unidad.conexion_actual().execute("select pg_sleep(2)")
+            unidad._conexion_actual().execute("select pg_sleep(2)")
     assert not isinstance(capturado.value, ConflictoDeEscrituraError)
     assert capturado.value.sqlstate == "57014"
     assert not capturado.value.reintentable
@@ -261,7 +268,7 @@ def test_un_commit_rechazado_por_la_base_se_traduce(armar, base):
     with pytest.raises(ConflictoDeEscrituraError) as capturado:
         with unidad.transaccion():
             _insertar(unidad, 1)
-            conexion = unidad.conexion_actual()
+            conexion = unidad._conexion_actual()
             # Restriccion diferida: falla recien en el COMMIT.
             conexion.execute("insert into prueba_uow.diferida values (7), (7)")
     assert capturado.value.sqlstate == "23505"
@@ -277,10 +284,10 @@ def test_las_anidadas_se_unen_y_solo_la_exterior_confirma(armar, base):
     unidad, pool = armar()
     consulta = "select pg_backend_pid(), pg_current_xact_id()::text"
     with unidad.transaccion():
-        exterior = unidad.conexion_actual().execute(consulta).fetchone()
+        exterior = unidad._conexion_actual().execute(consulta).fetchone()
         _insertar(unidad, 1)
         with unidad.transaccion():
-            interior = unidad.conexion_actual().execute(consulta).fetchone()
+            interior = unidad._conexion_actual().execute(consulta).fetchone()
             _insertar(unidad, 2)
         assert interior == exterior  # misma conexion, misma transaccion
         assert unidad.en_curso()
@@ -388,7 +395,7 @@ def test_fuera_de_una_transaccion_no_hay_conexion(armar):
     unidad, _ = armar()
     assert not unidad.en_curso()
     with pytest.raises(PersistenciaError, match="contexto.transaccion"):
-        unidad.conexion_actual()
+        unidad._conexion_actual()
 
 
 @pytest.mark.postgres
@@ -401,7 +408,7 @@ def test_cada_hilo_tiene_su_propia_transaccion(armar):
     def trabajar():
         with unidad.transaccion():
             pid = (
-                unidad.conexion_actual()
+                unidad._conexion_actual()
                 .execute("select pg_backend_pid()")
                 .fetchone()[0]
             )
@@ -438,7 +445,7 @@ def _intentos(unidad):
     """Lo que un contexto heredado consigue hacer con la transaccion."""
     resultado = {"en_curso": unidad.en_curso()}
     for nombre, accion in (
-        ("conexion", unidad.conexion_actual),
+        ("conexion", unidad._conexion_actual),
         ("unirse", lambda: _unirse_y_salir(unidad)),
     ):
         try:
@@ -488,7 +495,7 @@ def test_un_contexto_viejo_no_escribe_en_la_transaccion_de_otro_pedido(
     unidad, pool = armar(pool_espera_s=1)
     with unidad.transaccion():
         pid_viejo = (
-            unidad.conexion_actual()
+            unidad._conexion_actual()
             .execute("select pg_backend_pid()")
             .fetchone()[0]
         )
@@ -499,7 +506,7 @@ def test_un_contexto_viejo_no_escribe_en_la_transaccion_de_otro_pedido(
 
     def otro_pedido():
         with unidad.transaccion():
-            conexion = unidad.conexion_actual()
+            conexion = unidad._conexion_actual()
             pid_otro.append(
                 conexion.execute("select pg_backend_pid()").fetchone()[0]
             )
@@ -598,7 +605,7 @@ def _abrir_la_suya(unidad, base, heredada):
     assert _EN_CURSO.get() is heredada and not heredada.activa
     assert not unidad.en_curso()
     with pytest.raises(PersistenciaError, match="ya termino"):
-        unidad.conexion_actual()
+        unidad._conexion_actual()
     # Y otra que falla se revierte sola, sin tocar lo confirmado.
     with pytest.raises(ValueError):
         with unidad.transaccion():
@@ -672,12 +679,12 @@ def test_un_contexto_heredado_no_abre_otra_mientras_la_del_padre_sigue(
 
     with unidad.transaccion():
         _insertar(unidad, 1)
-        conexion = unidad.conexion_actual()
+        conexion = unidad._conexion_actual()
         copia = contextvars.copy_context()
         hilo = threading.Thread(target=copia.run, args=(heredero,))
         hilo.start()
         hilo.join(10)
-        assert unidad.conexion_actual() is conexion  # intacta
+        assert unidad._conexion_actual() is conexion  # intacta
         _insertar(unidad, 3)
 
     assert len(vistos) == 1 and "otro hilo o tarea" in vistos[0]
@@ -707,7 +714,7 @@ def test_un_control_transaccional_externo_se_detecta(armar, base, control):
     with pytest.raises(TransaccionInvalidadaError) as capturado:
         with unidad.transaccion():
             _insertar(unidad, 1)
-            CONTROLES_EXTERNOS[control](unidad.conexion_actual())
+            CONTROLES_EXTERNOS[control](unidad._conexion_actual())
             _insertar(unidad, 2)
 
     mensaje = str(capturado.value)
@@ -730,7 +737,7 @@ def test_un_control_externo_seguido_de_un_error_tambien_se_diagnostica(
     with pytest.raises(TransaccionInvalidadaError) as capturado:
         with unidad.transaccion():
             _insertar(unidad, 1)
-            unidad.conexion_actual().commit()
+            unidad._conexion_actual().commit()
             raise error
 
     assert "pudo quedar confirmado" in str(capturado.value)
@@ -747,7 +754,7 @@ def test_un_control_externo_seguido_de_un_error_sql_no_cita_la_fila(
     with pytest.raises(TransaccionInvalidadaError) as capturado:
         with unidad.transaccion():
             _insertar(unidad, 1)
-            unidad.conexion_actual().execute("COMMIT")
+            unidad._conexion_actual().execute("COMMIT")
             _insertar(unidad, 1, DATO_DE_UNA_FILA)
 
     assert "pudo quedar confirmado" in str(capturado.value)
@@ -764,7 +771,7 @@ def test_una_interrupcion_tras_un_control_externo_se_registra(armar, caplog):
     with pytest.raises(KeyboardInterrupt):
         with unidad.transaccion():
             _insertar(unidad, 1)
-            unidad.conexion_actual().commit()
+            unidad._conexion_actual().commit()
             raise KeyboardInterrupt
     assert "pudo quedar confirmado" in caplog.text
     _limpio(unidad, pool)
@@ -799,7 +806,7 @@ def test_una_conexion_perdida_en_el_medio_se_descarta(armar, base):
     unidad, pool = armar()
     with pytest.raises(PersistenciaError):
         with unidad.transaccion():
-            conexion = unidad.conexion_actual()
+            conexion = unidad._conexion_actual()
             pid = conexion.execute("select pg_backend_pid()").fetchone()[0]
             _terminar(base, pid)
             _insertar(unidad, 1)
@@ -819,7 +826,7 @@ def test_una_conexion_perdida_al_confirmar_es_un_resultado_incierto(
         with unidad.transaccion():
             _insertar(unidad, 1)
             pid = (
-                unidad.conexion_actual()
+                unidad._conexion_actual()
                 .execute("select pg_backend_pid()")
                 .fetchone()[0]
             )
@@ -888,7 +895,7 @@ def test_el_pool_agotado_responde_503(armar, ocupar):
     @app.post("/comando")
     def comando():
         with unidad.transaccion():
-            unidad.conexion_actual().execute("select 1")
+            unidad._conexion_actual().execute("select 1")
         return {"ok": True}
 
     with TestClient(app) as cliente:

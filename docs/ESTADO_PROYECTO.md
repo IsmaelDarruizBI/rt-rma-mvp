@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 05/11/2026, al cerrar la etapa E2 de la migración a PostgreSQL.
+**Última actualización:** 05/11/2026, al cerrar la etapa E3 de la migración a PostgreSQL.
 
 ## A. Estado general
 
@@ -22,11 +22,12 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 **Rama de trabajo:** `feat/postgresql-esquema`, que sale de `mvp-v2`.
 
-**Último commit de código:** el de E2, `feat(postgres): implementar consultas dedicadas E2` (ver `git log`).
+**Último commit de código:** el de E3, `feat(postgres): implementar infraestructura SQL y catalogos E3` (ver `git log`).
 
 **Estado de desarrollo:**
 - El MVP funciona sobre JSON y está en UAT.
-- La migración a PostgreSQL avanza por etapas: E0, E1 y E2 están terminadas y la siguiente es E3.
+- La migración a PostgreSQL avanza por etapas: E0 a E3 están terminadas. Lo siguiente es el discovery de E4, que no se implementa sin autorización.
+- PostgreSQL sigue desactivado en la aplicación: `RMA_PERSISTENCIA=postgres` detiene el arranque.
 
 **Funcionalidad:**
 
@@ -104,6 +105,32 @@ El detalle, con el inventario de accesos, los contratos y las pruebas, está en 
   - `ruff check` sin errores y `npm run validate:all` pasa.
 - **Diferencia con el plan:** el contrato agregado `stock_disponible(insumo_ids, bloquear)` pasó a E5 (DE-1).
 
+### E3. Infraestructura SQL y catálogos (05/11/2026)
+
+El detalle (diseño, implementación, QA y correcciones) está en [`postgresql/e3-catalogos-diseno.md`](postgresql/e3-catalogos-diseno.md), secciones 11 a 13. Los pendientes están en [`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md).
+
+- **Infraestructura (E3-A):**
+  - un registro de consultas SQL estáticas, con clasificación `LECTURA` o `ESCRITURA`;
+  - un lector y un ejecutor restringidos, que validan vigencia y dueño en cada operación (QA-2 y QA-3) y usan siempre el protocolo extendido;
+  - `lectura()` con una transacción breve `READ ONLY`;
+  - el pool, con un único reemplazo de una conexión cortada (M2), «sin conexión» distinguido de «pool agotado», topes de configuración, `max_idle` y `cerrar_pool`.
+- **Catálogos (E3-B):**
+  - `PostgresCatalogosRepository` (13 lecturas; el stock queda para E5) y `PostgresModelosEquipoRepository`;
+  - pruebas de contrato iguales para JSON y PostgreSQL.
+- **Migración local** `20261105000100_e3_catalogos.sql`:
+  - `rma.insumo.clave` para el id del dominio, y `orden` en usuarios y medios de pago;
+  - una guarda que impide aplicarla sobre datos existentes sin el procedimiento de E8.
+
+  Las cargas iniciales se regeneraron, con validación de referencias y verificación de identidades.
+- **M3:** validada contra Supavisor DEV/UAT, solo lectura y con 14 de 14 verificaciones. Su alcance real está en la sección 11.2 del diseño.
+- **Auditoría:** una QA independiente, una QA final y una verificación focalizada. Resultado: **APPROVED WITH OBSERVATIONS**, con todos los hallazgos corregidos o registrados con su etapa.
+- **Pruebas al cierre** (PostgreSQL 17 local):
+  - suite JSON completa: 1639 passed y 121 skipped (las de PostgreSQL, sin la base);
+  - conjunto PostgreSQL (E1 a E3, cargas y generador): 460 passed en dos corridas de unos 62 s;
+  - pruebas SQL de Supabase: todas pasan;
+  - `ruff check` y `ruff format --check` sin errores, y `npm run validate:all` pasa.
+- **Sin cambios** en la aplicación, la API, el frontend, Cloud Run, Vercel ni Supabase remoto. PostgreSQL sigue desactivado.
+
 ## C. Estado de la migración
 
 Plan aprobado el 03/11/2026. Las etapas y sus dependencias son las del plan; los criterios de aceptación se resumen debajo.
@@ -113,8 +140,8 @@ Plan aprobado el 03/11/2026. Las etapas y sus dependencias son las del plan; los
 | E0: Preparación | Completada (`e325e86`) | Ninguna |
 | E1: Unidad de trabajo | Completada (`6b5cdb8`) | Ninguna |
 | E2: Consultas dedicadas | Completada (`feat(postgres): implementar consultas dedicadas E2`) | Ninguna |
-| E3: Catálogos (primeros repositories PostgreSQL) | Pendiente | Discovery técnico y diseño (sección F); pedir autorización. Cumplir QA-2, QA-3, M2 y M3 |
-| E4: Orden (guardado por agregado) | Pendiente | Diseñar la persistencia por agregado y el control de versión |
+| E3: Infraestructura SQL y catálogos | Completada (`feat(postgres): implementar infraestructura SQL y catalogos E3`) | Ninguna |
+| E4: Orden (guardado por agregado) | Pendiente | Discovery (sección F). Condiciones de entrada: E4-MP y QAF-14 |
 | E5: Inventario | Pendiente | Reserva, consumo 210 y 211 atómicos, ajustes, override P-06; integridad y concurrencia |
 | E6: Acciones e idempotencia | Pendiente | Repetición por clave y commit incierto (M4) |
 | E7: Equivalencia completa | Pendiente | La misma suite en modo `json` y en modo `postgres` |
@@ -123,7 +150,6 @@ Plan aprobado el 03/11/2026. Las etapas y sus dependencias son las del plan; los
 
 Alcance y criterio de aceptación de cada etapa pendiente:
 
-- **E3.** `PostgresCatalogosRepository` y `modelos_equipo`, sobre el ejecutor SQL restringido diseñado en E2. Los tests de contrato son los mismos para JSON y para PostgreSQL contra la base local.
 - **E4.** Mapeador de carga y guardado por agregado, versiones de Detalle, `salida` y documentos, más la implementación PostgreSQL de los contratos de E2 sobre Órdenes. La fixture `HP-REP-001` y unas 10 Órdenes representativas vuelven idénticas después de guardarlas y cargarlas.
 - **E5.** Incluye el contrato agregado `stock_disponible(insumo_ids, bloquear)`, diferido desde E2 (DE-1). Dos hilos compiten por la última unidad: uno gana y el otro recibe el error funcional. No hay deadlocks y `verificar_integridad()` no devuelve filas.
 - **E6.** Un reintento con la misma clave devuelve el mismo resultado sin duplicar filas, y el rechazo queda registrado.
@@ -162,6 +188,14 @@ Alcance y criterio de aceptación de cada etapa pendiente:
 - `listar_con_reservas` devuelve un conjunto candidato: toda Orden con reservas pendientes y ninguna sin `RESERVA`.
 - Las respuestas que combinan varias consultas leen dentro de una transacción.
 
+**SQL y catálogos (E3):**
+- Los repositories PostgreSQL no reciben la conexión. Piden a la unidad de trabajo un lector (`lectura()`) o un ejecutor (`ejecutor()`).
+- Solo se ejecutan consultas registradas con `consulta(nombre, sql, modo=LECTURA | ESCRITURA)`: SQL estático, revisado y parametrizado. El registro no es un analizador de SQL ni una barrera de seguridad completa.
+- El lector solo ejecuta consultas `LECTURA`. Fuera de un comando, `lectura()` abre una transacción breve `READ ONLY`.
+- El id del dominio del insumo se guarda en `rma.insumo.clave`, distinto del código comercial y del uuid técnico. Usuarios y medios de pago tienen una columna `orden`.
+- Los números se devuelven sin ceros de más, y todo listado tiene un `ORDER BY` explícito.
+- La migración de E3 no se aplica en un entorno remoto sin la estrategia de identidad aprobada (procedimiento de E8). Su guarda es operativa, no un control de autorización.
+
 **Ajustes obligatorios del plan:**
 1. La idempotencia guarda una respuesta estable por operación y detecta una clave reusada con otros parámetros. Mientras el frontend no envíe claves estables (H-4), no protege de verdad.
 2. El guardado por agregado detecta cambios y conflictos de forma robusta, no solo por el largo del historial.
@@ -180,17 +214,20 @@ El detalle, asignado por etapa, está en [`postgresql/integracion-pendientes.md`
 
 | # | Riesgo | Etapa |
 |---|---|---|
-| M2 | Una conexión ociosa cortada por la red o el pooler hace fallar con 500 el primer comando | E3 |
-| M3 | `BEGIN` y `SET LOCAL` en un solo envío solo se probaron contra PostgreSQL local, no contra Supavisor | E3 |
-| QA-2 | El ejecutor restringido debe impedir el control transaccional y los cambios de estado de la sesión | E3 (criterio de aceptación) |
-| QA-3 | Los repositories no retienen la conexión; el ejecutor valida vigencia y dueño en cada operación | E3 (criterio de aceptación) |
-| Límite conocido | Un `COMMIT` seguido de un `BEGIN` dentro del bloque no se detecta. Lo impide la interfaz restringida de E3 | E3 |
+| E4-MP | Los medios de pago predeterminados no tienen fila en la base: un pago no podría referenciarlos por clave foránea | Condición de entrada de E4 |
+| QAF-14 | Después de un `nextval`, `currval` y `lastval` quedan en la sesión del pool | Condición de entrada de E4 |
+| QA-E3-4 | El contador que distingue «sin conexión» de «pool agotado» es por unidad de trabajo: con un pool compartido clasifica mal | Antes de conectar el pool a la aplicación (E7 o E9) |
+| QA-E3-8 | La equivalencia de orden y formato numérico con JSON depende de que las fuentes estén ordenadas y normalizadas | E7 o E8 |
+| QA-E3-6, QA-E3-7, QAF-5, QAF-12, QAF-13 | Identidad de los insumos y `orden` en DEV/UAT: paso de datos verificado, inventario previo y guarda de la migración | E8 |
+| Privilegios | El rol de la aplicación hereda de PUBLIC `TEMP`, `UPDATE` sobre `pg_settings` y funciones de sesión; la defensa hoy es el registro | Política antes de E8 |
+| M2 | El reemplazo único de una conexión cortada está resuelto; falta medir los cortes reales desde Cloud Run | E8 |
+| QAF-6, QAF-7, QAF-9, QAF-11 | Generador de cargas (listas vacías, validación de valores, `TR-OTROS`) y `orden` de filas nuevas | Antes de cargar catálogos reales, E6 o E8 |
 | M4 | Si se pierde la conexión durante el `COMMIT`, el resultado es incierto y la API responde un 500 genérico | E6 |
 | QA-E2-8 | En JSON, las bandejas y el detalle de un insumo retienen el lock global mientras leen (con 1010 Órdenes, 1,2 s y 2,0 s). Riesgo temporal aceptado, con alerta si supera 500 ms de forma sostenida | JSON (hasta PostgreSQL) |
 | F-09 | Snapshot consistente para las respuestas que hacen varias consultas en PostgreSQL (evaluar `REPEATABLE READ`) | E4 |
 | F-05, F-06, QA-E2-5 | Qué DNI cuenta con el Cliente compartido, `cerrada_en` en las Órdenes entregadas y el formato del número de Orden por encima de 999999 | E4 |
 | F-03, QA-E2-10 | Evidencias de faltante por subcadena de texto; criterio de reserva pendiente con `DESPERDICIO` | E5 |
-| L1 a L10 y el resto de E2 | Observaciones menores de E1, F-07, F-08, QA-E2-4, QA-E2-6, QA-E2-7 y QA-E2-9 | Por etapa |
+| L1 a L10 y el resto de E2 y E3 | Observaciones menores de E1, F-07, F-08, QA-E2-4, QA-E2-6, QA-E2-7, QA-E2-9 y QA-E3-L | Por etapa |
 
 Otros riesgos registrados:
 - **Latencia entre regiones:** Cloud Run en São Paulo y Supabase en Oregón; se mide en E8.
@@ -199,19 +236,21 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próxima etapa: E3, Catálogos (los primeros repositories PostgreSQL).** Empieza con un discovery técnico y un diseño, y no se implementa sin autorización.
+**Próximo paso: discovery de E4 (Orden, guardado por agregado).** Conviene hacerlo integrado con E5 a E7, porque comparten el agregado de la Orden, el inventario, la idempotencia y la equivalencia de modos. Empieza con un discovery técnico y un diseño, y no se implementa sin autorización.
 
-Lo que E3 tiene que resolver, según el plan y los pendientes:
-1. `PostgresCatalogosRepository` (tipos de reparación, insumos, estaciones, usuarios, medios de pago, datos de la empresa) y `modelos_equipo` desde `rma.modelo_equipo`.
-2. El ejecutor SQL restringido, ya diseñado en la sección D de [`postgresql/e2-consultas-dedicadas.md`](postgresql/e2-consultas-dedicadas.md), con los criterios de aceptación QA-2 y QA-3 y F-04. `conexion_actual()` deja de ser público.
-3. Las pruebas de contrato de los catálogos, iguales para JSON y PostgreSQL contra la base local.
-4. M2 (conexiones ociosas) y M3 (`BEGIN` y `SET LOCAL` a través de Supavisor).
-5. El contrato de duplicados de movimientos de stock (Q23) y el vínculo de la unidad de trabajo por contexto (QA-E2-4).
+Condiciones de entrada de E4 ([`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md)):
+1. **E4-MP:** antes de persistir pagos en PostgreSQL, todo medio de pago que use el dominio tiene que existir como fila referenciable.
+2. **QAF-14:** las secuencias no deben depender de `currval` ni de `lastval` de una transacción anterior.
+3. Los pendientes ya asignados a E4: F-05, F-06, F-09, QA-E2-5 y el vínculo de la unidad de trabajo por contexto (QA-E2-4).
 
-Decisiones que requieren aprobación antes de implementar E3:
-- el alcance de E3;
-- la autorización para la prueba de solo lectura contra Supavisor (M3), porque es el primer acceso a DEV/UAT;
-- cómo se activa PostgreSQL para los catálogos sin conectar todavía las Órdenes: no hay modo mixto en el plan.
+Lo que E4 recibe de E3:
+- la unidad de trabajo con `lectura()` y `ejecutor()`;
+- el registro de consultas con su clasificación;
+- el mapeo de identificadores (`clave` del insumo) y las reglas numéricas.
+
+El contrato de duplicados de movimientos de stock (Q23) sigue asignado a E5.
+
+Recordatorio: no hay modo mixto. Los repositories de catálogos existen, pero la aplicación no los usa hasta la activación integral.
 
 ## G. Cómo retomar el desarrollo
 

@@ -418,10 +418,11 @@ Variables de entorno con prefijo `RMA_` (ver `app/core/config.py`):
 | `RMA_PERSISTENCIA` | `json` (`postgres` esta en preparacion) |
 | `RMA_DATABASE_URL` | sin valor; solo con `postgres` |
 | `RMA_DB_SSLROOTCERT` | `app/datos/supabase-ca.crt` |
-| `RMA_DB_POOL_MIN` / `RMA_DB_POOL_MAX` | `1` / `4` conexiones |
+| `RMA_DB_POOL_MIN` / `RMA_DB_POOL_MAX` | `1` / `4` conexiones (maximo 20) |
 | `RMA_DB_POOL_ESPERA_S` | `5` (despues, 503) |
-| `RMA_DB_LOCK_TIMEOUT_MS` | `5000` (`SET LOCAL` por transaccion) |
-| `RMA_DB_STATEMENT_TIMEOUT_MS` | `15000` (`SET LOCAL` por transaccion) |
+| `RMA_DB_POOL_MAX_IDLE_S` | `300`: las conexiones que superan `RMA_DB_POOL_MIN` y estan ociosas mas tiempo se cierran (provisorio, E3) |
+| `RMA_DB_LOCK_TIMEOUT_MS` | `5000` (`SET LOCAL` por transaccion; maximo 2147483647) |
+| `RMA_DB_STATEMENT_TIMEOUT_MS` | `15000` (`SET LOCAL` por transaccion; maximo 2147483647) |
 
 `RMA_DATA_DIR` decide donde viven `ordenes/` y `catalogs/`. Los tests
 siempre usan `tmp_path`: nunca escriben sobre los catalogos DEMO
@@ -436,10 +437,12 @@ archivos: el consumo de insumos escribe el stock y despues la Orden, y
 si falla a mitad depende de su compensacion manual.
 
 **PostgreSQL** (esquema en `supabase/`) se integra por etapas. Hoy
-existen la configuracion y la unidad de trabajo, probadas contra una base
-local, pero la aplicacion todavia no las usa: con
+existen la configuracion, la unidad de trabajo, el ejecutor SQL
+restringido y los repositories de catalogos (E3), probados contra una
+base local, pero la aplicacion todavia no los usa: con
 `RMA_PERSISTENCIA=postgres` el arranque valida la conexion y los ajustes
-del pool y se detiene con un error explicito, porque no hay repositories.
+del pool y se detiene con un error explicito, porque faltan los
+repositories de Ordenes e inventario. No hay modo mixto.
 
 - Dependencias opcionales: `pip install -e ".[postgres]"` (psycopg 3 y
   psycopg-pool). El modo JSON no las necesita.
@@ -484,7 +487,20 @@ transaccion (`TransaccionInvalidadaError`). Si algo envio un `COMMIT` o
 un `ROLLBACK` por su cuenta, el mismo error avisa que lo ejecutado pudo
 quedar confirmado: eso ya no se puede revertir. Sin reintentos
 automaticos: un conflicto es 409 y conserva `sqlstate` y `reintentable`;
-sin conexion libre a tiempo, 503 `PERSISTENCIA_NO_DISPONIBLE`.
+sin conexion libre a tiempo, 503 `PERSISTENCIA_NO_DISPONIBLE`; si la
+base no responde, 503 `PERSISTENCIA_SIN_CONEXION`. Una conexion ociosa
+cortada se reemplaza una sola vez antes de ejecutar nada; si el reemplazo
+tambien esta cortado, 503 `PERSISTENCIA_SIN_CONEXION`.
+
+Desde E3 los repositories no reciben la conexion: piden a la unidad
+`lectura()` (la transaccion en curso o una breve `READ ONLY`) o
+`ejecutor()` (la del comando), y solo ejecutan consultas registradas con
+`consulta(..., modo=LECTURA | ESCRITURA)`
+(`app/storage/postgres/consultas.py`): SQL estatico, una sentencia, sin
+control transaccional ni de sesion, con protocolo extendido. El lector
+solo ejecuta consultas `LECTURA`. El registro es una red contra errores
+de programacion, no una barrera de seguridad completa. Diseno:
+`docs/postgresql/e3-catalogos-diseno.md`.
 Pendientes de la revision: `docs/postgresql/integracion-pendientes.md`.
 
 Pruebas contra un PostgreSQL **local** y descartable (15 o posterior,

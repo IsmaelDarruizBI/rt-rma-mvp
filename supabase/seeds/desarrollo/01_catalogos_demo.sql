@@ -3,13 +3,15 @@
 -- No editar a mano: regenerar.
 
 -- Idempotente: volver a cargarlo no duplica ni cambia nada.
+-- Aplicarlo entero o nada (psql: -v ON_ERROR_STOP=1 --single-transaction).
 
-insert into rma.usuario (codigo, nombre, activo) values
-  ('RECEP-001', 'Recepcion Demo', true),
-  ('COORD-001', 'Coordinacion Demo', true),
-  ('TECH-001', 'Tecnico Demo', true),
-  ('ADMIN-001', 'Administracion Demo', true)
-on conflict (codigo) do nothing;
+insert into rma.usuario (codigo, nombre, activo, orden) values
+  ('RECEP-001', 'Recepcion Demo', true, 1),
+  ('COORD-001', 'Coordinacion Demo', true, 2),
+  ('TECH-001', 'Tecnico Demo', true, 3),
+  ('ADMIN-001', 'Administracion Demo', true, 4)
+on conflict (codigo) do update set orden = excluded.orden
+  where rma.usuario.orden is distinct from excluded.orden;
 
 insert into rma.usuario_rol (usuario_id, rol_id)
 select u.id, r.id from (values
@@ -41,32 +43,106 @@ join rma.mesa_trabajo m on m.codigo = v.mesa
 join rma.tipo_reparacion t on t.codigo = v.tipo
 on conflict do nothing;
 
-insert into rma.insumo (codigo, nombre, unidad, activo) values
-  ('BAT-IP14', 'Bateria iPhone 14', null, true)
-on conflict (codigo) do nothing;
+insert into rma.insumo (clave, codigo, nombre, unidad, activo) values
+  ('INS-001', 'BAT-IP14', 'Bateria iPhone 14', null, true)
+on conflict (codigo) do update set clave = excluded.clave
+  where rma.insumo.clave = rma.insumo.codigo
+    and rma.insumo.clave is distinct from excluded.clave;
 
 insert into rma.tipo_reparacion_insumo (tipo_reparacion_id, insumo_id, cantidad)
 select t.id, i.id, v.cantidad from (values
-  ('TR-001', 'BAT-IP14', 1::numeric)
-) as v (tipo, insumo, cantidad)
+  ('TR-001', 'INS-001', 'BAT-IP14', 1::numeric)
+) as v (tipo, insumo, codigo, cantidad)
 join rma.tipo_reparacion t on t.codigo = v.tipo
-join rma.insumo i on i.codigo = v.insumo
+join rma.insumo i on i.clave = v.insumo and i.codigo = v.codigo
 on conflict do nothing;
+
+-- Verificación (QA-E3-5): cada fila de las fuentes quedó en la base, con su identidad.
+do $$
+declare
+  v_faltan text;
+begin
+  select string_agg(concat_ws(' / ', v.usuario, v.rol), ', ') into v_faltan
+  from (values
+    ('RECEP-001', 'RECEPCION'),
+    ('COORD-001', 'COORDINADOR_RMA'),
+    ('TECH-001', 'TECNICO'),
+    ('ADMIN-001', 'ADMINISTRADOR')
+  ) as v (usuario, rol)
+  where not exists (
+    select 1 from rma.usuario u
+    join rma.usuario_rol ur on ur.usuario_id = u.id
+    join rma.rol r on r.id = ur.rol_id
+    where u.codigo = v.usuario and r.codigo = v.rol
+  );
+  if v_faltan is not null then
+    raise exception 'Carga de desarrollo: % sin cargar: %', 'usuarios con su rol', v_faltan;
+  end if;
+  select string_agg(concat_ws(' / ', v.mesa, v.tipo), ', ') into v_faltan
+  from (values
+    ('EST-001', 'TR-001'),
+    ('EST-001', 'TR-002')
+  ) as v (mesa, tipo)
+  where not exists (
+    select 1 from rma.mesa_tipo_reparacion x
+    join rma.mesa_trabajo m on m.id = x.mesa_trabajo_id
+    join rma.tipo_reparacion t on t.id = x.tipo_reparacion_id
+    where m.codigo = v.mesa and t.codigo = v.tipo
+  );
+  if v_faltan is not null then
+    raise exception 'Carga de desarrollo: % sin cargar: %', 'estaciones de los tipos', v_faltan;
+  end if;
+  select string_agg(concat_ws(' / ', v.clave, v.codigo), ', ') into v_faltan
+  from (values
+    ('INS-001', 'BAT-IP14')
+  ) as v (clave, codigo)
+  where not exists (
+    select 1 from rma.insumo i where i.clave = v.clave and i.codigo = v.codigo
+  );
+  if v_faltan is not null then
+    raise exception 'Carga de desarrollo: % sin cargar: %', 'insumos con su clave y su código', v_faltan;
+  end if;
+  select string_agg(concat_ws(' / ', v.tipo, v.insumo, v.codigo, v.cantidad), ', ') into v_faltan
+  from (values
+    ('TR-001', 'INS-001', 'BAT-IP14', 1::numeric)
+  ) as v (tipo, insumo, codigo, cantidad)
+  where not exists (
+    select 1 from rma.tipo_reparacion_insumo x
+    join rma.tipo_reparacion t on t.id = x.tipo_reparacion_id
+    join rma.insumo i on i.id = x.insumo_id
+    where t.codigo = v.tipo and i.clave = v.insumo and i.codigo = v.codigo
+      and x.cantidad = v.cantidad
+  );
+  if v_faltan is not null then
+    raise exception 'Carga de desarrollo: % sin cargar: %', 'insumos previstos', v_faltan;
+  end if;
+end;
+$$;
 
 -- Stock inicial: un INGRESO por insumo, registrado por el proceso de carga inicial.
 -- Sin ON CONFLICT: el libro no lo admite, porque aplica los saldos antes de resolver conflictos.
 -- Solo se registran los ingresos que todavía no existen, y la acción solo si hay alguno.
+-- Antes de tocar el stock se confirma la identidad de cada insumo (clave y código).
 do $$
 declare
   v_accion uuid;
+  v_faltan text;
   r record;
 begin
+  select string_agg(concat_ws(' / ', v.clave, v.insumo), ', ') into v_faltan
+  from (values
+    ('INS-001', 'BAT-IP14')
+  ) as v (clave, insumo)
+  where not exists (select 1 from rma.insumo i where i.clave = v.clave and i.codigo = v.insumo);
+  if v_faltan is not null then
+    raise exception 'Carga de desarrollo: stock inicial sin registrar, insumos sin su clave y su código: %', v_faltan;
+  end if;
   for r in
     select i.id, i.codigo, v.cantidad
     from (values
-      ('BAT-IP14', 2::numeric)
-    ) as v (insumo, cantidad)
-    join rma.insumo i on i.codigo = v.insumo
+      ('INS-001', 'BAT-IP14', 2::numeric)
+    ) as v (clave, insumo, cantidad)
+    join rma.insumo i on i.clave = v.clave and i.codigo = v.insumo
     where v.cantidad > 0
       and not exists (select 1 from rma.movimiento_inventario m where m.codigo = 'MST-INICIAL-' || i.codigo)
   loop

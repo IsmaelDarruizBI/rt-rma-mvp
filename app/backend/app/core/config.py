@@ -115,6 +115,9 @@ class Settings(BaseSettings):
     db_pool_min: int = 1
     db_pool_max: int = 4
     db_pool_espera_s: float = 5.0
+    # Una conexion ociosa mas tiempo que esto se cierra (E3, provisorio:
+    # se ajusta con mediciones desde Cloud Run).
+    db_pool_max_idle_s: float = 300.0
     # Limites de cada transaccion (``SET LOCAL``): esperar un bloqueo y
     # ejecutar una sentencia. No pasan a la transaccion siguiente.
     db_lock_timeout_ms: int = 5000

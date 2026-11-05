@@ -16,6 +16,7 @@ la migracion de acceso crea ``rma_backend``. Son roles sin login.
 """
 
 import uuid
+from collections.abc import Sequence
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -62,8 +63,13 @@ def archivos_sql() -> list[Path]:
     return archivos
 
 
-def crear_base(url_admin: str) -> str:
-    """Crea una base con el esquema ``rma`` cargado; devuelve su URL."""
+def crear_base(url_admin: str, archivos: Sequence[Path] | None = None) -> str:
+    """Crea una base con el esquema ``rma`` cargado; devuelve su URL.
+
+    ``archivos``: los SQL a aplicar, en orden (por defecto, todos los de
+    ``archivos_sql()``). Sirve para probar una migracion sobre datos
+    anteriores o una base sin cargas.
+    """
     import psycopg
     from psycopg import sql
 
@@ -86,7 +92,7 @@ def crear_base(url_admin: str) -> str:
     url = url_de_base(url_admin, nombre)
     try:
         with psycopg.connect(url, autocommit=True) as conexion:
-            for archivo in archivos_sql():
+            for archivo in archivos_sql() if archivos is None else archivos:
                 # Sin parametros: psycopg manda el archivo entero, con
                 # todas sus sentencias, en una sola consulta simple.
                 conexion.execute(archivo.read_text(encoding="utf-8"))
