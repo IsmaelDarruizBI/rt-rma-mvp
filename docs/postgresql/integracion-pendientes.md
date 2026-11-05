@@ -56,6 +56,27 @@ Si se pierde la conexión durante el `COMMIT`, la unidad de trabajo lanza `Persi
 
 **Falta.** Un código específico (por ejemplo, `PERSISTENCIA_RESULTADO_INCIERTO`) y su tratamiento con las claves de idempotencia.
 
+## Consultas dedicadas (E2)
+
+Hallazgos del discovery, la implementación y la QA de E2. El detalle está en [`e2-consultas-dedicadas.md`](e2-consultas-dedicadas.md), secciones F, H e I. Ninguno se corrige en E2, salvo F-09 para JSON (QA-E2-1).
+
+| # | Etapa | Hallazgo |
+|---|---|---|
+| F-03 | E5 o producto | Las evidencias de faltante buscan el id del insumo como subcadena de un texto libre del historial: con ids de cuatro dígitos, `INS-1000` daría evidencias de `INS-100`. Por eso siguen leyendo todas las Órdenes |
+| F-04 | E3 | Con parámetros vacíos, psycopg usa el protocolo simple y acepta varias sentencias; `set_config(…, false)` cambia la sesión. El ejecutor restringido fuerza el protocolo extendido (`binary=True`) y revisa su SQL estáticamente |
+| F-05 | E4 | Con el Cliente compartido, falta decidir qué DNI cuenta en `listar_por_dni_cliente`: el vigente o el de la copia de cada Orden |
+| F-06 | E4 | El CHECK de `rma.orden` permite ENTREGADA con `cerrada_en` nulo; `listar_abiertas` depende de que el mapeador lo fije al cerrar |
+| F-07 | E5 | «Cerrada implica sin reservas pendientes» no es una invariante explícita. Por eso las reservas se leen de `listar_con_reservas`, no de las abiertas |
+| F-08 | Sin etapa | El docstring de `repositories/catalogo_equipos.py` dice que su implementación definitiva es PostgreSQL; el plan aprobado la deja en JSON |
+| F-09 | E4 | Las bandejas y el detalle de un insumo leen el repository más de una vez. **Corregido en JSON** (QA-E2-1): las lecturas van dentro de `contexto.transaccion()`. En PostgreSQL, `READ COMMITTED` da un momento distinto a cada sentencia: evaluar transacciones de solo lectura `REPEATABLE READ` para las respuestas que hacen varias consultas |
+| F-10 / QA-E2-4 | E3 o E4 | Si una misma instancia del repository JSON se usa con dos unidades de trabajo, vale la última vinculada y el otro contexto falla cerrado (`PersistenciaError`). La aplicación usa una sola. Al introducir la unidad PostgreSQL, vincular por contexto en lugar de mutar un repository compartido |
+| QA-E2-5 | E4 | El `default` de `orden.codigo` usa `lpad(…, 6, '0')`, que trunca: 1000000 y 1000001 dan los dos `OR-100000`, mientras JSON genera `OR-1000000`. La restricción única haría fallar el alta. Usar un formato que no trunque |
+| QA-E2-6 | Opcional | El control estático de `listar()` reconoce el receptor por nombre (`ordenes`): un alias (`repo = contexto.ordenes`) lo esquiva |
+| QA-E2-7 | Pruebas | Con la máquina cargada, una prueba de `tests/postgres` (E1) falló una vez por timeout de conexión del helper de verificación. Pasó 5 de 5 al repetirla. Si se repite, subir el `connect_timeout` de las pruebas |
+| QA-E2-8 | Riesgo temporal aceptado (JSON) | Las lecturas coherentes de las bandejas y del detalle de un insumo (QA-E2-1) retienen el lock global de la unidad de trabajo, y la implementación JSON relee todos los archivos en cada consulta. Mientras tanto se bloquean los comandos y las demás lecturas. Referencia medida: con 210 Órdenes, 0,2 s por bandeja y 0,3 s por detalle; con 1010, 1,2 s y 2,0 s. **Alerta provisional:** revisar si el bloqueo supera 500 ms de forma sostenida o los usuarios notan esperas. La mitigación (leer cada archivo una vez por transacción) no se implementa todavía. PostgreSQL lo reemplaza |
+| QA-E2-9 | Pruebas | Las pruebas de `tests/test_e2_consistencia_lecturas.py` le dan 0,5 s a la escritura concurrente. Después de la corrección no dan falsos errores, pero bajo carga podrían no detectar una regresión. Mejora: sincronizar con eventos o con un lock instrumentado que avise cuando un hilo queda esperando, para una reproducción determinista |
+| QA-E2-10 | E5 (diseño) | El trigger de `rma.movimiento_inventario` cierra reservas con `CONSUMO`, `LIBERACION_RESERVA` y `DESPERDICIO`; el dominio Python (`cantidad_pendiente`) no tiene el tipo `DESPERDICIO`. Antes de implementar en PostgreSQL las consultas de reservas (C5 y el agregado de DE-1), verificar que el criterio del libro coincida con el del dominio. No se cambian reglas ni esquema ahora |
+
 ## Observaciones de severidad baja
 
 | # | Etapa | Observación |

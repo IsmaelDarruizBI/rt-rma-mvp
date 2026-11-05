@@ -23,7 +23,6 @@ from app.services import (
     clave_de_foto,
     exigir_foto_agregable,
     exigir_orden_abierta,
-    fotos_referenciadas,
     nuevo_id,
     registrar_foto,
     validar_alguno_de,
@@ -118,7 +117,7 @@ def limpiar_fotos_huerfanas(
 
     objetos = almacen.listar(PREFIJO_FOTOS)
     with contexto.transaccion():
-        usadas = fotos_referenciadas(contexto.ordenes.listar())
+        usadas = contexto.ordenes.claves_de_fotos()
     huerfanas = [objeto for objeto in objetos if objeto.clave not in usadas]
     viejas = [
         objeto

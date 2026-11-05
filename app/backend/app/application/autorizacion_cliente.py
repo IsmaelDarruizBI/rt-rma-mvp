@@ -269,7 +269,10 @@ def pendientes_de_autorizacion(
     definicion todavia abierta no se le presento al cliente.
     """
     pendientes: list[PendienteAutorizacion] = []
-    ordenes = sorted(contexto.ordenes.listar(), key=lambda orden: orden.id)
+    # Una Orden cerrada nunca tiene una decision registrable.
+    ordenes = sorted(
+        contexto.ordenes.listar_abiertas(), key=lambda orden: orden.id
+    )
     for orden in ordenes:
         if not decision_registrable(orden):
             continue

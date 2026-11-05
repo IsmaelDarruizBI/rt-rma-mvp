@@ -88,7 +88,8 @@ def consultar_inventario(
 ) -> list[SituacionInsumo]:
     """Todos los insumos (o los que coinciden), con sus tres cantidades."""
     situaciones = situacion_inventario(
-        contexto.catalogos.listar_insumos(), contexto.ordenes.listar()
+        contexto.catalogos.listar_insumos(),
+        contexto.ordenes.listar_con_reservas(),
     )
     return filtrar_situaciones(
         situaciones, buscar=buscar, solo_faltantes=solo_faltantes
@@ -100,18 +101,25 @@ def detalle_de_insumo(
     insumo_id: str,
 ) -> DetalleInsumo:
     """Situacion, reservas vigentes, historial y evidencia de faltantes."""
-    insumo = contexto.catalogos.obtener_insumo(insumo_id)
-    ordenes = contexto.ordenes.listar()
-    movimientos_stock = contexto.catalogos.listar_movimientos_stock()
-    (situacion,) = situacion_inventario([insumo], ordenes)
+    ordenes = contexto.ordenes
+    # Las lecturas, dentro de una transaccion (QA-E2-1): una escritura no
+    # se mete entre la de reservas y la de movimientos.
+    with contexto.transaccion():
+        insumo = contexto.catalogos.obtener_insumo(insumo_id)
+        movimientos_stock = contexto.catalogos.listar_movimientos_stock()
+        con_reservas = ordenes.listar_con_reservas([insumo_id])
+        con_movimientos = ordenes.listar_con_movimientos(insumo_id)
+        # Todas las Ordenes: la evidencia se busca en el texto del
+        # historial y puede estar en una sin movimientos de este insumo
+        # (F-03, docs/postgresql/e2-consultas-dedicadas.md).
+        todas = ordenes.listar()
+    (situacion,) = situacion_inventario([insumo], con_reservas)
     return DetalleInsumo(
         situacion=situacion,
         movimientos=historial_movimientos(
-            ordenes, movimientos_stock, insumo_id=insumo_id
+            con_movimientos, movimientos_stock, insumo_id=insumo_id
         ),
-        faltantes=evidencias_de_faltante(
-            insumo_id, ordenes, movimientos_stock
-        ),
+        faltantes=evidencias_de_faltante(insumo_id, todas, movimientos_stock),
     )
 
 
@@ -123,7 +131,7 @@ def movimientos_de_inventario(
 ) -> list[MovimientoHistorial]:
     """Historial de movimientos, opcionalmente de un insumo o un tipo."""
     return historial_movimientos(
-        contexto.ordenes.listar(),
+        contexto.ordenes.listar_con_movimientos(insumo_id),
         contexto.catalogos.listar_movimientos_stock(),
         insumo_id=insumo_id,
         tipo=tipo,
@@ -150,7 +158,7 @@ def _registrar_movimiento(
 
     with contexto.transaccion():
         insumo = contexto.catalogos.obtener_insumo(insumo_id)
-        ordenes = contexto.ordenes.listar()
+        ordenes = contexto.ordenes.listar_con_reservas([insumo_id])
         (situacion,) = situacion_inventario([insumo], ordenes)
         movimiento = registrar_movimiento_operativo(
             situacion,
@@ -418,7 +426,11 @@ def revalidar_ordenes_pendientes(
     fecha = contexto.ahora()
 
     candidatas = sorted(
-        (orden for orden in contexto.ordenes.listar() if _candidata(orden)),
+        (
+            orden
+            for orden in contexto.ordenes.listar_abiertas()
+            if _candidata(orden)
+        ),
         key=lambda orden: (orden.created_at, orden.id),
     )
     resultados: list[ResultadoRevalidacionOrden] = []

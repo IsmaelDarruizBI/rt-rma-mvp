@@ -89,6 +89,14 @@ class ApplicationContext:
     # proceso compartido por todos los contextos, como antes.
     unidad_de_trabajo: UnidadDeTrabajo = UNIDAD_DE_TRABAJO_JSON
 
+    def __post_init__(self) -> None:
+        # E2 (DE-2): el repository JSON exige que las lecturas para
+        # modificar y la numeracion ocurran dentro de la transaccion de
+        # ESTA unidad de trabajo.
+        vincular = getattr(self.ordenes, "exigir_transaccion_con", None)
+        if vincular is not None:
+            vincular(self.unidad_de_trabajo.en_curso)
+
     def transaccion(self) -> AbstractContextManager[None]:
         """Abre la transaccion de un comando (o se une a la que esta en
         curso). Solo desde la capa de aplicacion."""

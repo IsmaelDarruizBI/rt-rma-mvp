@@ -99,7 +99,10 @@ def crear_orden(
 
     with contexto.transaccion():
         cliente = cliente_para_orden(
-            contexto.ordenes.listar(),
+            # Sin DNI no hay con quien compararlo (cliente_para_orden).
+            contexto.ordenes.listar_por_dni_cliente(cliente.dni)
+            if cliente.dni is not None
+            else [],
             cliente=cliente,
             reutilizado=cliente_reutilizado,
         )

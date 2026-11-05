@@ -67,7 +67,9 @@ def buscar_cliente_por_dni(
     validar_alguno_de(usuario, ROLES_BUSQUEDA_CLIENTE)
     dni = normalizar_dni(dni)
 
-    conocidos = tuple(clientes_con_dni(contexto.ordenes.listar(), dni))
+    conocidos = tuple(
+        clientes_con_dni(contexto.ordenes.listar_por_dni_cliente(dni), dni)
+    )
     if len(conocidos) == 1:
         return BusquedaCliente(
             dni=dni,

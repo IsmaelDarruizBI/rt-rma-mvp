@@ -20,17 +20,33 @@ la version que llega no conoce, y se rechaza con
 en el almacenamiento (entregada o devuelta a Gestion RT) tampoco se
 sobrescribe con otra cosa. La comprobacion y el reemplazo ocurren dentro
 del mismo ``acceso_exclusivo``.
+
+CONSULTAS DEDICADAS (E2)
+------------------------
+Cada consulta lee todas las Ordenes y filtra por datos persistidos, en el
+orden de ``listar()``: el objetivo es el contrato, no el rendimiento
+(DE-4). ``obtener_para_modificar`` y ``reservar_codigo`` exigen la
+transaccion de la unidad de trabajo que el contexto vincula con
+``exigir_transaccion_con``; sin vinculo, fallan en vez de leer sin
+proteccion. La exclusion la da el lock de proceso que retiene esa
+transaccion.
 """
 
+import re
+from collections.abc import Callable, Collection
 from pathlib import Path
 
 from pydantic import ValidationError
 
-from app.domain.models import OrdenReparacion
+from app.domain.models import OrdenReparacion, TipoMovimientoInsumo
 from app.repositories.exceptions import (
     ConflictoDeEscrituraError,
     EntidadPersistidaNoEncontradaError,
     PersistenciaError,
+)
+from app.repositories.ordenes import (
+    DIGITOS_CODIGO_ORDEN,
+    PREFIJO_CODIGO_ORDEN,
 )
 
 from .base import (
@@ -40,12 +56,26 @@ from .base import (
     leer_json,
 )
 
+_PATRON_CODIGO = re.compile(rf"^{PREFIJO_CODIGO_ORDEN}-(\d+)$")
+
 
 class JsonOrdenReparacionRepository:
     """Implementa ``OrdenReparacionRepository`` sobre el filesystem."""
 
-    def __init__(self, directorio: Path) -> None:
+    def __init__(
+        self,
+        directorio: Path,
+        en_transaccion: Callable[[], bool] | None = None,
+    ) -> None:
         self._directorio = asegurar_directorio(Path(directorio))
+        self._en_transaccion = en_transaccion
+
+    def exigir_transaccion_con(
+        self, en_transaccion: Callable[[], bool]
+    ) -> None:
+        """Vincula la unidad de trabajo cuya transaccion exigen las
+        lecturas para modificar (lo hace el contexto, DE-2)."""
+        self._en_transaccion = en_transaccion
 
     @property
     def directorio(self) -> Path:
@@ -115,6 +145,83 @@ class JsonOrdenReparacionRepository:
             for ruta in sorted(self._directorio.glob("*.json"))
         ]
         return sorted(ordenes, key=lambda orden: orden.id)
+
+    # --- Consultas dedicadas (E2) ---------------------------------------
+
+    def obtener_para_modificar(self, orden_id: str) -> OrdenReparacion:
+        """``obtener`` dentro de la transaccion en curso."""
+        self._exigir_transaccion("Leer una Orden para modificarla")
+        return self.obtener(orden_id)
+
+    def reservar_codigo(self) -> str:
+        """El maximo numero persistido mas uno (sin huecos en JSON)."""
+        self._exigir_transaccion("Reservar un numero de Orden")
+        maximo = 0
+        for orden in self.listar():
+            encontrado = _PATRON_CODIGO.match(orden.id)
+            if encontrado:
+                maximo = max(maximo, int(encontrado.group(1)))
+        numero = f"{maximo + 1:0{DIGITOS_CODIGO_ORDEN}d}"
+        return f"{PREFIJO_CODIGO_ORDEN}-{numero}"
+
+    def listar_abiertas(self) -> list[OrdenReparacion]:
+        return [orden for orden in self.listar() if not orden.esta_cerrada]
+
+    def listar_por_dni_cliente(self, dni: str) -> list[OrdenReparacion]:
+        # Con None coincidirian los clientes sin DNI (en SQL, ninguno).
+        if dni is None:
+            raise ValueError("El DNI a buscar no puede ser None.")
+        return [
+            orden
+            for orden in self.listar()
+            if orden.cliente is not None and orden.cliente.dni == dni
+        ]
+
+    def listar_con_reservas(
+        self, insumo_ids: Collection[str] | None = None
+    ) -> list[OrdenReparacion]:
+        """Toda Orden con alguna RESERVA (de esos insumos): el conjunto
+        candidato mas amplio que admite el contrato."""
+        if isinstance(insumo_ids, str):
+            # Un str tambien es Collection[str]: se tomaria letra por letra.
+            raise ValueError(
+                "insumo_ids es una coleccion de IDs, no un str: "
+                f"usar [{insumo_ids!r}]."
+            )
+        buscados = None if insumo_ids is None else frozenset(insumo_ids)
+        return [
+            orden
+            for orden in self.listar()
+            if any(
+                movimiento.tipo is TipoMovimientoInsumo.RESERVA
+                and (buscados is None or movimiento.insumo_id in buscados)
+                for movimiento in orden.movimientos_insumo
+            )
+        ]
+
+    def listar_con_movimientos(
+        self, insumo_id: str | None = None
+    ) -> list[OrdenReparacion]:
+        return [
+            orden
+            for orden in self.listar()
+            if any(
+                insumo_id is None or movimiento.insumo_id == insumo_id
+                for movimiento in orden.movimientos_insumo
+            )
+        ]
+
+    def claves_de_fotos(self) -> frozenset[str]:
+        return frozenset(
+            foto.objeto for orden in self.listar() for foto in orden.fotos
+        )
+
+    def _exigir_transaccion(self, operacion: str) -> None:
+        if self._en_transaccion is None or not self._en_transaccion():
+            raise PersistenciaError(
+                f"{operacion} exige una transaccion en curso: el caso de "
+                "uso debe abrirla con contexto.transaccion()."
+            )
 
     @staticmethod
     def _validar(datos: object, ruta: Path) -> OrdenReparacion:

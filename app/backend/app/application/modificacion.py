@@ -48,6 +48,6 @@ def orden_para_modificar(
     una, esta se une a ella.
     """
     with contexto.transaccion():
-        orden = contexto.ordenes.obtener(orden_id)
+        orden = contexto.ordenes.obtener_para_modificar(orden_id)
         exigir_orden_abierta(orden)
         yield orden

@@ -111,8 +111,11 @@ def cargar_reservas_externas(
     orden_id: str,
     ordenes_repo: OrdenReparacionRepository,
 ) -> dict[str, Decimal]:
-    """``reservas_externas_a`` leyendo las Ordenes persistidas."""
-    return reservas_externas_a(orden_id, ordenes_repo.listar())
+    """``reservas_externas_a`` leyendo las Ordenes persistidas.
+
+    Solo las que registran alguna RESERVA (E2): las demas no aportan.
+    """
+    return reservas_externas_a(orden_id, ordenes_repo.listar_con_reservas())
 
 
 def aplicar_movimientos_inventario(
@@ -241,7 +244,7 @@ def _tope_por_override(
         if movimiento.reparacion_detail_id == ejecucion.reparacion_detail_id
     }
     insumo_ids.update(u.insumo_id for u in ejecucion.insumos_utilizados)
-    ajenas = reservas_externas_a(orden.id, ordenes_repo.listar())
+    ajenas = reservas_externas_a(orden.id, ordenes_repo.listar_con_reservas())
     return {
         insumo_id: catalogos_repo.obtener_insumo(insumo_id).stock_fisico
         - ajenas.get(insumo_id, CERO)

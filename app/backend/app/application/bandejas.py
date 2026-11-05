@@ -187,15 +187,23 @@ class _Lectura:
     def __init__(self, contexto: ApplicationContext, usuario: Usuario):
         self.usuario = usuario
         catalogos = contexto.catalogos
-        tipos = {
-            tipo.id: tipo.nombre
-            for tipo in catalogos.listar_tipos_reparacion()
-        }
-        self.ordenes = contexto.ordenes.listar()
-        self.insumos = catalogos.listar_insumos()
-        self.previstos = catalogos.listar_tipo_reparacion_insumos()
-        self.estaciones = catalogos.listar_estaciones()
-        self.compatibilidades = catalogos.listar_tipo_reparacion_estaciones()
+        # Todas las lecturas dentro de una transaccion (QA-E2-1): una
+        # escritura no se mete entre ellas, asi que cada Orden se ve en una
+        # sola version. Solo lecturas: lo que sigue se calcula afuera.
+        with contexto.transaccion():
+            tipos_reparacion = catalogos.listar_tipos_reparacion()
+            # Ninguna bandeja lista Ordenes cerradas (E2). Las reservas
+            # salen de las Ordenes que las registran, cerradas o no: no se
+            # presume que una cerrada nunca conserve una.
+            self.ordenes = contexto.ordenes.listar_abiertas()
+            self.con_reservas = contexto.ordenes.listar_con_reservas()
+            self.insumos = catalogos.listar_insumos()
+            self.previstos = catalogos.listar_tipo_reparacion_insumos()
+            self.estaciones = catalogos.listar_estaciones()
+            self.compatibilidades = (
+                catalogos.listar_tipo_reparacion_estaciones()
+            )
+        tipos = {tipo.id: tipo.nombre for tipo in tipos_reparacion}
         self.leidas = [self._leer(orden, tipos) for orden in self.ordenes]
 
     @staticmethod
@@ -232,7 +240,7 @@ class _Lectura:
             orden,
             insumos=self.insumos,
             insumos_previstos=self.previstos,
-            reservas_externas=reservas_externas_a(orden.id, self.ordenes),
+            reservas_externas=reservas_externas_a(orden.id, self.con_reservas),
         )
         return {
             detalle_id: tuple(nombres.get(i, i) for i in insumo_ids)
@@ -507,7 +515,9 @@ class _Lectura:
     def insumos_negativos(self) -> list[SituacionInsumo]:
         return [
             situacion
-            for situacion in situacion_inventario(self.insumos, self.ordenes)
+            for situacion in situacion_inventario(
+                self.insumos, self.con_reservas
+            )
             if situacion.disponible < 0
         ]
 
