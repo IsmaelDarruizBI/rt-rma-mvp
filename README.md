@@ -3,6 +3,9 @@
 Repositorio base para la aplicacion de gestion del area de reparaciones de
 Rosario Tecno.
 
+Para retomar el desarrollo: [docs/ESTADO_PROYECTO.md](docs/ESTADO_PROYECTO.md)
+(estado, etapas y proximo paso) y [AGENTS.md](AGENTS.md) (reglas de trabajo).
+
 ## Objetivo
 
 Este repositorio busca mantener trazabilidad end-to-end. La jerarquia
