@@ -102,8 +102,27 @@ Los identificadores llevan el prefijo `QA-A2-` para no confundirse con M1 a M4 y
 | A4-1 | Antes de E7 | Un texto con el carácter NUL: JSON lo guarda y PostgreSQL lo rechaza con un 500, sin escribir nada. Vale para cualquier texto. Rechazarlo en la API cambiaría un contrato HTTP: requiere decisión |
 | A4-2 | Resuelto en A5 | `generar_comprobante_ingreso` corre sobre PostgreSQL con el mismo resultado que JSON |
 | A4-3 | E8 | Una fila de `salida` de tipo `DEVOLUCION_GESTION_RT` no se puede leer: el dominio no tiene ese valor. Ningún flujo la crea |
-| A4-4 | E8 | `documentos.emitidos` y `fotos` se cargan completos con cada Orden, también `contenido`, y `listar` trae todo. No se midió en A5: medirlo con la latencia real de Supabase |
+| A4-4 | Abierto | `documentos.emitidos` y `fotos` se cargan completos con cada Orden, también `contenido`, y `listar` trae todo. Con la latencia real el costo son los viajes, no el volumen (ver «Rendimiento»); el volumen sigue sin medirse con muchas Órdenes |
 | A4-5 | Aceptado | Filas sin `posicion` con todas sus fechas idénticas: queda el orden del id, estable pero arbitrario. Sin impacto: esas filas no existen y todo lo que escribe A4 lleva posición |
+
+### Rendimiento: viajes a la base (06/11/2026)
+
+**Medición.** En UAT, el tiempo de una lectura es `59 ms + viajes × 177 ms`: 25 viajes el listado, 34 abrir una Orden, 58 las bandejas. En Supabase cada consulta tarda alrededor de 0,1 ms y Python, menos de 20 ms por pedido: el costo es la red.
+
+**Decisiones.**
+
+- Modo pipeline de psycopg (`filas_en_lote`): varias consultas en un envío, dentro de la transacción ya abierta. Probado contra Supavisor en modo transacción: un solo backend y un solo snapshot.
+- `lectura_consistente()`: un caso de uso con varias lecturas abre una sola transacción `REPEATABLE READ READ ONLY`. Reemplaza a `transaccion()` en bandejas y en el detalle de un insumo: garantiza lo mismo (QA-E2-1) sin revalidar versiones.
+- `anticipar` y `precargar`: lecturas que salen en el próximo envío. Viven en la transacción y las descarta la primera escritura: no son un caché.
+- `obtener_para_modificar` manda el bloqueo y la carga en un envío: la base los ejecuta en orden, así que la carga corre después de obtener el bloqueo.
+- Un comando que lee Órdenes sin bloquearlas conserva `cargar_ordenes` con la raíz primero y la validación por versión (QA-A2-M2).
+- `guardar` no cambió de forma: resuelve las referencias en un envío e inserta los eventos en lote. `COMMIT`, idempotencia y controles quedan como estaban.
+
+**Pendientes.**
+
+- Los comandos siguen en 13 a 17 viajes (de 2,4 a 3,1 s en UAT). Bajar de 1 s exige acercar la base a Cloud Run.
+- `GET /api/orders` y el detalle de un insumo cargan todas las Órdenes, y las reservas incluyen las Órdenes cerradas: sin medir con volumen. Falta paginar el listado y limitar `FILTRO_RESERVAS` a las reservas pendientes, como admite su contrato.
+- `RMA_DB_POOL_MIN=1`: la primera ráfaga después de un rato sin uso espera conexiones nuevas (2,2 s contra 0,7 s con 4).
 
 ### Hallazgos de A3
 

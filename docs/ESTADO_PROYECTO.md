@@ -326,13 +326,13 @@ El detalle, asignado por etapa, está en [`postgresql/integracion-pendientes.md`
 | L1 a L10 y el resto de E2 y E3 | Observaciones menores de E1, F-07, F-08, QA-E2-4, QA-E2-6, QA-E2-7, QA-E2-9 y QA-E3-L | Por etapa |
 
 Otros riesgos registrados:
-- **Latencia entre regiones:** Cloud Run en São Paulo y Supabase en Oregón; se mide en E8.
+- **Latencia entre regiones:** Cloud Run en São Paulo y Supabase en Oregón: unos 177 ms por viaje a la base. La optimización local deja las lecturas en 3 o 4 viajes; los comandos siguen en 13 a 17. Medición y alternativas en [`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md).
 - **Doble escritura no atómica de la Orden al cerrar una reparación** (JSON): ver [`pendientes-producto.md`](pendientes-producto.md).
 - **Foto subida cuya registración falla:** ver [`pendientes-producto.md`](pendientes-producto.md). Es una tarea separada, no de una etapa.
 
 ## F. Próximos pasos
 
-**Próximo paso:** autenticación real antes de cargar datos de clientes (hoy el login es demo y la API no tiene autenticación), y reducir la latencia Cloud Run (São Paulo) – Supabase (Oregón): unos 4,5 a 6 s por lectura de Órdenes. No ejecutar `/photos/cleanup` con `aplicar`: el bucket conserva fotos anteriores a PostgreSQL.
+**Próximo paso:** autenticación real antes de cargar datos de clientes (hoy el login es demo y la API no tiene autenticación), y decidir el despliegue de la optimización de rendimiento (hecha localmente, sin commit ni deploy) y la ubicación de la base. No ejecutar `/photos/cleanup` con `aplicar`: el bucket conserva fotos anteriores a PostgreSQL.
 1. Confirmar las migraciones aplicadas y repetir las verificaciones de solo lectura.
 2. Probar localmente y aprobar el script único de E3; aplicarlo y luego las seis migraciones restantes en orden.
 3. `verificar_integridad()` vacío y medición de latencia.
