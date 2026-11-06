@@ -45,13 +45,27 @@ type Destino = "nueva" | "taller" | "inventario";
 /** Bandejas donde importa la cuenta de la Orden. */
 const DE_DINERO = ["COBROS", "CREDITO", "SALDOS"];
 
+/**
+ * Las últimas bandejas leídas, para no mostrar «Cargando» al volver a una
+ * pantalla: se ven enseguida y se reemplazan cuando llega la lectura nueva,
+ * que se hace siempre. Lo que se ejecuta desde ellas lo valida el backend.
+ */
+const ultimas = new Map<string, Bandejas>();
+const claveDe = (vista: string, usuarioId: string) => `${vista}:${usuarioId}`;
+
+export function olvidarBandejas(): void {
+  ultimas.clear();
+}
+
 /** Las bandejas del usuario; se vuelven a pedir si cambia o con `recarga`. */
 function useBandejas(
   vista: "inicio" | "taller",
   usuarioId: string,
   recarga: number,
 ): { datos: Bandejas | null; error: string | null } {
-  const [datos, setDatos] = useState<Bandejas | null>(null);
+  const [datos, setDatos] = useState<Bandejas | null>(
+    () => ultimas.get(claveDe(vista, usuarioId)) ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!usuarioId) return;
@@ -60,7 +74,10 @@ function useBandejas(
     const pedir =
       vista === "inicio" ? trabajo.obtenerBandejas : trabajo.obtenerTaller;
     pedir(usuarioId)
-      .then((respuesta) => vigente && setDatos(respuesta))
+      .then((respuesta) => {
+        ultimas.set(claveDe(vista, usuarioId), respuesta);
+        if (vigente) setDatos(respuesta);
+      })
       .catch(
         (fallo) =>
           vigente &&

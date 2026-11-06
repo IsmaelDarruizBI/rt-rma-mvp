@@ -7,7 +7,7 @@
  * que devuelve y se piden confirmaciones antes de enviar.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import * as api from "../../api/inventario";
 import { ApiError } from "../../api/client";
@@ -35,6 +35,15 @@ import { Confirmacion } from "../ordenes-reparacion/PagosOrden";
 
 /** Provisorio, a validar con Rosario Tecno (el backend lo exige igual). */
 const ROLES_GESTION: RolUsuario[] = ["ADMINISTRADOR", "COORDINADOR_RMA"];
+
+/** Pausa al escribir antes de buscar: una lectura, no una por tecla. */
+const ESPERA_BUSQUEDA_MS = 300;
+
+/**
+ * El último inventario completo leído: se ve enseguida al volver a la
+ * pantalla y se reemplaza cuando llega la lectura nueva, que se hace siempre.
+ */
+let ultimoInventario: SituacionInsumo[] | null = null;
 
 const ETIQUETA_TIPO: Record<string, string> = {
   RESERVA: "Reserva",
@@ -78,8 +87,11 @@ export function InventarioPanel({
   actor: Usuario | null;
   usuarios: Usuario[];
 }) {
-  const [insumos, setInsumos] = useState<SituacionInsumo[]>([]);
+  const [insumos, setInsumos] = useState<SituacionInsumo[] | null>(
+    ultimoInventario,
+  );
   const [buscar, setBuscar] = useState("");
+  const [busqueda, setBusqueda] = useState("");
   const [soloFaltantes, setSoloFaltantes] = useState(false);
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<DetalleInsumo | null>(null);
@@ -90,14 +102,32 @@ export function InventarioPanel({
 
   const puedeGestionar = actor !== null && ROLES_GESTION.includes(actor.rol);
 
+  useEffect(() => {
+    const espera = setTimeout(
+      () => setBusqueda(buscar.trim()),
+      ESPERA_BUSQUEDA_MS,
+    );
+    return () => clearTimeout(espera);
+  }, [buscar]);
+
+  // Solo la lectura más reciente se muestra: una vieja puede llegar después.
+  const ultimaLectura = useRef(0);
   const recargar = useCallback(async () => {
+    ultimaLectura.current += 1;
+    const lectura = ultimaLectura.current;
     try {
-      setInsumos(await api.listarInventario(buscar.trim() || null, soloFaltantes));
-      if (seleccionado) setDetalle(await api.obtenerInsumo(seleccionado));
+      const [lista, elegido] = await Promise.all([
+        api.listarInventario(busqueda || null, soloFaltantes),
+        seleccionado ? api.obtenerInsumo(seleccionado) : null,
+      ]);
+      if (!busqueda && !soloFaltantes) ultimoInventario = lista;
+      if (lectura !== ultimaLectura.current) return;
+      setInsumos(lista);
+      if (elegido) setDetalle(elegido);
     } catch (fallo) {
-      setError(mensajeDe(fallo));
+      if (lectura === ultimaLectura.current) setError(mensajeDe(fallo));
     }
-  }, [buscar, soloFaltantes, seleccionado]);
+  }, [busqueda, soloFaltantes, seleccionado]);
 
   useEffect(() => {
     void recargar();
@@ -110,11 +140,11 @@ export function InventarioPanel({
     setAviso(null);
     try {
       setAviso(await operacion());
-      await recargar();
+      void recargar();
       return true;
     } catch (fallo) {
       setError(mensajeDe(fallo));
-      await recargar();
+      void recargar();
       return false;
     } finally {
       setOcupado(false);
@@ -178,11 +208,19 @@ export function InventarioPanel({
             {aviso}
           </p>
         )}
-        <TablaInsumos
-          insumos={insumos}
-          seleccionado={seleccionado}
-          onSeleccionar={(insumoId) => setSeleccionado(insumoId)}
-        />
+        {insumos === null ? (
+          !error && (
+            <p style={{ margin: 0, fontSize: "0.85rem", color: colores.suave }}>
+              Cargando el inventario…
+            </p>
+          )
+        ) : (
+          <TablaInsumos
+            insumos={insumos}
+            seleccionado={seleccionado}
+            onSeleccionar={(insumoId) => setSeleccionado(insumoId)}
+          />
+        )}
       </Panel>
 
       {revalidacion && (

@@ -6,6 +6,7 @@
  * acciones son posibles lo dice el backend en cada respuesta.
  */
 
+import { ActividadDeRed, LecturasEnCurso } from "./actividad";
 import { ClavesDeEnvio, conClave } from "./idempotencia";
 
 const API_BASE_URL =
@@ -28,7 +29,15 @@ interface CuerpoError {
   error?: { codigo?: string; mensaje?: string };
 }
 
-async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
+/** Lo que la barra de actividad del layout observa. */
+export const actividad = new ActividadDeRed();
+const lecturas = new LecturasEnCurso();
+
+function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
+  return actividad.seguir(() => enviar<T>(ruta, init));
+}
+
+async function enviar<T>(ruta: string, init?: RequestInit): Promise<T> {
   let respuesta: Response;
 
   try {
@@ -61,7 +70,7 @@ async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
 }
 
 export function get<T>(ruta: string): Promise<T> {
-  return pedir<T>(ruta);
+  return lecturas.compartir(ruta, () => pedir<T>(ruta));
 }
 
 /** Un archivo (por ejemplo, un PDF) en vez de JSON. */

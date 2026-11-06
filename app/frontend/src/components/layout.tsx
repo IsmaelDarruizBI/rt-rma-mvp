@@ -6,7 +6,15 @@
  * y en el celular se abre sobre el contenido sin taparlo permanentemente.
  */
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+
+import { actividad } from "../api/client";
 
 import {
   IconoContraer,
@@ -63,6 +71,7 @@ export function Layout({
 }) {
   const [contraida, setContraida] = useState(leerContraida);
   const [movilAbierta, setMovilAbierta] = useState(false);
+  const cargando = useSyncExternalStore(actividad.suscribir, actividad.activa);
 
   useEffect(() => {
     try {
@@ -82,6 +91,7 @@ export function Layout({
 
   return (
     <div className={clases}>
+      {cargando && <div className="rt-actividad" aria-hidden="true" />}
       <aside className="rt-sidebar" aria-label="Navegación principal">
         <div className="rt-sidebar__marca">
           <span className="rt-sidebar__logo">RT</span>

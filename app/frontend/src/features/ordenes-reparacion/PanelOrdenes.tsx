@@ -52,7 +52,11 @@ import {
 } from "./AccionesOrden";
 import { InventarioPanel } from "../inventario/Inventario";
 import { AutorizacionClienteOrden } from "./AutorizacionCliente";
-import { PantallaInicio, PantallaTaller } from "./PantallasTrabajo";
+import {
+  PantallaInicio,
+  PantallaTaller,
+  olvidarBandejas,
+} from "./PantallasTrabajo";
 import { CustodiaOrden } from "./CustodiaOrden";
 import {
   Bloque,
@@ -221,6 +225,7 @@ export function PanelOrdenes() {
   // abierta para que el próximo usuario no herede la pantalla anterior.
   const cerrarSesion = useCallback(() => {
     borrarUsuarioDemo();
+    olvidarBandejas();
     setActorId("");
     setOrden(null);
     setError(null);
@@ -285,12 +290,12 @@ export function PanelOrdenes() {
         // Hecho: la ventana de la acción se cierra; la pantalla ya se
         // actualizó con la Orden devuelta.
         setAbierta(null);
-        // Una Orden nueva (alta o garantía RMA) se abre en su propia URL.
+        // Una Orden nueva (alta o garantía RMA) se abre en su propia URL. El
+        // listado no se pide acá: se vuelve a leer al entrar a esa pantalla.
         const actual = rutaActual.current;
         if (actual.pantalla !== "orden" || actual.ordenId !== actualizada.id) {
           navegar({ pantalla: "orden", ordenId: actualizada.id });
         }
-        await refrescarListado();
       } catch (fallo) {
         const ordenId = ordenEnPantalla.current?.id ?? null;
         const conflicto = fallo instanceof ApiError && fallo.status === 409;
@@ -298,7 +303,6 @@ export function PanelOrdenes() {
         if (conflicto && ordenId) {
           try {
             setOrden(await api.obtenerOrden(ordenId));
-            await refrescarListado();
             recargada = true;
           } catch {
             // Si la recarga tambien falla, queda el mensaje original.
@@ -317,7 +321,7 @@ export function PanelOrdenes() {
         setOcupado(false);
       }
     },
-    [refrescarListado, navegar],
+    [navegar],
   );
 
   const abrirOrden = useCallback(async (ordenId: string) => {
