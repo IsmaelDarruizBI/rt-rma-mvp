@@ -8,6 +8,8 @@ queda en ``app.state``. Un test que quiera otro directorio de datos
 solo tiene que llamar a ``create_app(Settings(data_dir=tmp_path))``.
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -28,6 +30,16 @@ from app.application import construir_contexto
 from app.core.config import Settings, get_settings
 
 
+@asynccontextmanager
+async def _ciclo_de_vida(application: FastAPI):
+    """B4: al apagar, el pool de PostgreSQL se cierra despues de que
+    terminan los pedidos en curso."""
+    yield
+    cerrar = getattr(application.state.contexto, "cerrar", None)
+    if cerrar is not None:
+        cerrar()
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Construye y configura la instancia de FastAPI."""
     settings = settings or get_settings()
@@ -35,6 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
+        lifespan=_ciclo_de_vida,
     )
 
     application.add_middleware(

@@ -55,8 +55,13 @@ def agregar_foto(
     usuario_id: str,
     contenido: bytes,
     nombre_original: str | None = None,
+    foto_id: str | None = None,
 ) -> OrdenReparacion:
-    """Agrega UNA foto del equipo a una Orden abierta."""
+    """Agrega UNA foto del equipo a una Orden abierta.
+
+    ``foto_id``: con clave de idempotencia lo fija la API (E6, B1), asi el
+    objeto del reintento es el mismo; si no, uno nuevo.
+    """
     almacen = _almacen(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     tipo = validar_imagen(contenido)
@@ -64,7 +69,7 @@ def agregar_foto(
     exigir_orden_abierta(previa)
     exigir_foto_agregable(previa, usuario=usuario)
 
-    foto_id = nuevo_id("FOT")
+    foto_id = foto_id or nuevo_id("FOT")
     objeto = clave_de_foto(orden_id, foto_id, tipo)
     almacen.guardar(objeto, contenido, tipo)
 

@@ -420,7 +420,7 @@ def test_un_ajuste_imposible_detiene_el_arranque(tmp_path, valores, motivo):
         create_app(settings)
 
 
-def test_postgres_valido_sigue_deteniendo_el_arranque(tmp_path):
+def test_postgres_remoto_sigue_deteniendo_el_arranque(tmp_path):
     settings = Settings(
         _env_file=None,
         data_dir=tmp_path,
@@ -428,6 +428,7 @@ def test_postgres_valido_sigue_deteniendo_el_arranque(tmp_path):
         database_url=URL_REMOTA,
     )
     with pytest.raises(
-        ConfiguracionPersistenciaError, match="todavia no esta disponible"
+        ConfiguracionPersistenciaError,
+        match="solo arranca contra un servidor local",
     ):
         create_app(settings)

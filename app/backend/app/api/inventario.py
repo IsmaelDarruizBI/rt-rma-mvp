@@ -19,6 +19,7 @@ from app.application import (
 from app.domain.models import TipoMovimientoInsumo
 
 from .dependencias import ContextoDep
+from .idempotencia import idempotente
 from .schemas_inventario import (
     AjusteStockIn,
     DetalleInsumoOut,
@@ -92,6 +93,7 @@ def get_insumo(insumo_id: str, contexto: ContextoDep) -> DetalleInsumoOut:
 
 
 @router.post("/{insumo_id}/receipts")
+@idempotente("REGISTRAR_INGRESO_STOCK")
 def post_ingreso(
     insumo_id: str,
     cuerpo: IngresoStockIn,
@@ -112,6 +114,7 @@ def post_ingreso(
 
 
 @router.post("/{insumo_id}/adjustments")
+@idempotente("REGISTRAR_AJUSTE_STOCK")
 def post_ajuste(
     insumo_id: str,
     cuerpo: AjusteStockIn,

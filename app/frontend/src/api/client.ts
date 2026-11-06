@@ -6,6 +6,8 @@
  * acciones son posibles lo dice el backend en cada respuesta.
  */
 
+import { ClavesDeEnvio, conClave } from "./idempotencia";
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -89,11 +91,22 @@ export async function getArchivo(ruta: string): Promise<Blob> {
   return respuesta.blob();
 }
 
+/** E6 (B3): las claves de las operaciones que crean registros. */
+const claves = new ClavesDeEnvio();
+const ENCABEZADO_CLAVE = "Idempotency-Key";
+
 export function post<T>(ruta: string, cuerpo: unknown): Promise<T> {
-  return pedir<T>(ruta, {
-    method: "POST",
-    body: JSON.stringify(cuerpo),
-  });
+  const texto = JSON.stringify(cuerpo);
+  return conClave(claves, ruta, texto, (clave) =>
+    pedir<T>(ruta, {
+      method: "POST",
+      body: texto,
+      headers: {
+        "Content-Type": "application/json",
+        ...(clave ? { [ENCABEZADO_CLAVE]: clave } : {}),
+      },
+    }),
+  );
 }
 
 /** URL absoluta de un recurso de la API (por ejemplo, una foto). */
@@ -103,11 +116,16 @@ export function urlApi(ruta: string): string {
 
 /** Un archivo como cuerpo (por ejemplo, una foto), con respuesta JSON. */
 export function postArchivo<T>(ruta: string, archivo: Blob): Promise<T> {
-  return pedir<T>(ruta, {
-    method: "POST",
-    body: archivo,
-    headers: { "Content-Type": archivo.type || "application/octet-stream" },
-  });
+  return conClave(claves, ruta, archivo, (clave) =>
+    pedir<T>(ruta, {
+      method: "POST",
+      body: archivo,
+      headers: {
+        "Content-Type": archivo.type || "application/octet-stream",
+        ...(clave ? { [ENCABEZADO_CLAVE]: clave } : {}),
+      },
+    }),
+  );
 }
 
 export function put<T>(ruta: string, cuerpo: unknown): Promise<T> {

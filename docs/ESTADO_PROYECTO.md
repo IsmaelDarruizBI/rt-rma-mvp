@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 05/11/2026, al cerrar el checkpoint A4 del Bloque A de la migración a PostgreSQL. **Para retomar el trabajo: [`postgresql/CHECKPOINT_A4_HANDOFF.md`](postgresql/CHECKPOINT_A4_HANDOFF.md).**
+**Última actualización:** 06/11/2026, al cerrar el Bloque A con A8; A3 y A5 a A8 sin commit. **Para retomar el trabajo: [`postgresql/CHECKPOINT_A4_HANDOFF.md`](postgresql/CHECKPOINT_A4_HANDOFF.md) y las secciones 15 a 19 de [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md).**
 
 ## A. Estado general
 
@@ -17,17 +17,17 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | `app/backend/` | Python 3.11 o posterior, FastAPI y Pydantic v2. Capas `api → application → services → repositories ← storage` ([README](../app/backend/README.md)) |
 | `app/frontend/` | React, TypeScript y Vite ([README](../app/frontend/README.md)) |
 | `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). La aplicación todavía no lo usa |
-| Persistencia en uso | Archivos JSON (`RMA_PERSISTENCIA=json`, el valor por defecto). Un solo worker y una sola instancia |
+| Persistencia en uso | UAT: archivos JSON (`RMA_PERSISTENCIA=json`, el valor por defecto). Local: PostgreSQL activado con `RMA_PERSISTENCIA=postgres` (B6), solo contra un servidor local |
 | UAT publicado | Backend en Cloud Run (`app/backend/Dockerfile`) y frontend en Vercel, sobre JSON |
 
 **Rama de trabajo:** `feat/postgresql-esquema`, que sale de `mvp-v2`.
 
-**Último commit de código:** el del agregado Orden, `feat(postgres): implementar agregado Orden A0 a A4` (ver `git log`).
+**Último commit de código:** el del Bloque B, `feat(postgres): idempotencia y activacion local B1 a B6` (ver `git log`).
 
 **Estado de desarrollo:**
 - El MVP funciona sobre JSON y está en UAT.
-- La migración a PostgreSQL avanza por etapas: E0 a E3 están terminadas. E4 y E5 se implementan juntas como Bloque A, por slices: A0, A1, A2 y A4 están hechos; E4 **no** está completa. Lo siguiente es A3 (finanzas).
-- PostgreSQL sigue desactivado en la aplicación: `RMA_PERSISTENCIA=postgres` detiene el arranque.
+- La migración a PostgreSQL tiene E0 a E7 terminadas: Bloque A (E4 + E5) y Bloque B (E6 + E7, B1 a B6). La app corre localmente sobre PostgreSQL, con los datos persistentes entre reinicios.
+- **Pendiente para la puesta en marcha:** suites completas PostgreSQL y JSON; E8 (esquema Supabase con autorización, rol `rma_backend` en lugar del superusuario, QA-E3-4, latencia); decidir el almacenamiento de fotos y de la copia del catálogo en Cloud Run; E9 (despliegue) con su propia aprobación.
 
 **Funcionalidad:**
 
@@ -141,6 +141,74 @@ El detalle está en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-di
 - **Migraciones:** dos nuevas, aditivas, aplicadas y verificadas **solo en PostgreSQL local**.
 - **Sin cambios** en el dominio, la API, el frontend, Cloud Run, Vercel ni Supabase remoto. PostgreSQL sigue desactivado.
 
+### Bloque A: A3, finanzas (06/11/2026, sin commit)
+
+Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 15.
+
+- Pagos (anticipo, parcial, final), anulación, devoluciones de dinero, descuentos y `pago_id` del historial, con guardado incremental, versión y medios de pago por clave foránea.
+- Migración aditiva `20261106000300_e4_finanzas.sql`, aplicada **solo en PostgreSQL local**.
+- Pruebas: 20 nuevas de A3 pasan. Validación integrada de `tests/postgres`: 295 pasan y 1 falla por una carrera anterior a A3 (A3-3, MINOR).
+- **Sin cambios** en el dominio, la API, el frontend ni Supabase remoto. PostgreSQL sigue desactivado.
+
+### Bloque A: A5, consultas dedicadas (06/11/2026, sin commit)
+
+Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 16.
+
+- Las consultas dedicadas de E2 en PostgreSQL, con la semántica de JSON: abiertas, por DNI, con reservas, con movimientos y claves de fotos.
+- QA-A2-M2 resuelto sin cambiar el aislamiento: dentro de un comando la carga se valida por versión y cada Orden no bloqueada se ve en una sola versión.
+- Bandejas, pendientes de autorización, búsqueda por DNI y comprobante de ingreso dan lo mismo en JSON y en PostgreSQL.
+- Pruebas: contrato E2 con las dos implementaciones (46 pasan, 16 se saltean hasta A6), 10 pruebas nuevas, e integración focalizada (148 pasan, 1 falla por A3-3).
+- **Sin cambios** en el dominio, la API, el frontend ni Supabase remoto. PostgreSQL sigue desactivado.
+
+### Bloque A: A6, reservas (06/11/2026, sin commit)
+
+Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 17.
+
+- Reservas de insumos en el libro de inventario, con el bloqueo de insumos por `clave` después de la Orden (DI-2). Dos técnicos por la última unidad: uno reserva y el otro recibe la reserva fallida funcional.
+- QA-A2-M1 y QA-A2-M4 resueltos. Migración `20261106000400_e5_reservas.sql`, solo local.
+- Pruebas: 14 nuevas, contrato E2 con reservas (61 pasan, 1 se saltea hasta A7), 121 JSON de la reserva y 28 SQL y de migraciones.
+- **Sin cambios** en el dominio, los services, la API, el frontend ni Supabase remoto. PostgreSQL sigue desactivado.
+
+### Bloque A: A7, consumo, ingresos y ajustes (06/11/2026, sin commit)
+
+Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 18.
+
+- Consumo y liberación del 210 en el libro; ingresos y ajustes con el motivo libre (DI-8 aprobada); el libro como fuente de verdad, con verificación del saldo que calcula el service (DI-1).
+- A6-1 y A6-2 resueltos. Migración `20261106000500_e5_movimientos.sql`, solo local.
+- Pruebas: 17 nuevas; contrato E2 completo con las dos implementaciones; corpus con movimientos (171 pasan, falla A3-3).
+- **Pendiente de decisión:** A7-1, H-1 en el service antes de activar PostgreSQL.
+- **Sin cambios** en el dominio, los services, la API, el frontend ni Supabase remoto. PostgreSQL sigue desactivado.
+
+### Bloque B: B4 a B6, activación local (06/11/2026, sin commit)
+
+Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 22. `RMA_PERSISTENCIA=postgres` arranca la app real sobre PostgreSQL **local** (sin fallback a JSON; una URL remota se rechaza hasta E8). Recorrido vivo con pagos, inventario e idempotencia, y los datos sobreviven al reinicio. 277 pruebas focalizadas pasan; las suites completas quedan para el despliegue.
+
+### Bloque B: B2 y B3, COMMIT incierto y claves en la pantalla (06/11/2026, sin commit)
+
+Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 21.
+
+- COMMIT incierto: 503 `PERSISTENCIA_RESULTADO_INCIERTO` sin afirmar nada; con clave, se devuelve lo confirmado. Fotos y catálogo con clave.
+- La pantalla manda la clave en las operaciones que crean registros: la misma al reintentar, otra en una operación distinta. El inventario ya no cambia su `operacion_id` en cada clic.
+- Validación integrada: 20 PostgreSQL, 140 JSON, 87 del frontend, `tsc` y ruff sin errores.
+
+### Bloque B: B1, idempotencia en el servidor (06/11/2026, sin commit)
+
+Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 20.
+
+- Encabezado opcional `Idempotency-Key` en los comandos que crean registros: un reintento devuelve la respuesta ya confirmada; dos solicitudes simultáneas con la misma clave ejecutan una vez; la misma clave con otros datos da 422.
+- Migración `20261107000100_e6_idempotencia.sql`, solo local. Pruebas: 12 nuevas y 167 JSON de los endpoints afectados.
+- **Cambio de API, aditivo:** el encabezado opcional y el 422 (B1-3). Sin clave, nada cambia. PostgreSQL sigue desactivado; JSON ignora la clave.
+
+### Bloque A: A8, cierre e integración (06/11/2026, sin commit)
+
+Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 19.
+
+- DI-3 (H-1) implementada en el service, en los dos modos: un ajuste no deja el disponible negativo. Cambiaron dos pruebas JSON, por esa regla aprobada.
+- A3-3 resuelto; A5-3 aceptado (409 con rollback); A6-3 verificado sin cambio; L-3 reforzada.
+- Los recorridos reales del corpus corren por HTTP sobre PostgreSQL y dan lo mismo que en JSON, con saldos, stock e integridad.
+- Validación integral: PostgreSQL 704 pasan, ninguna falla; JSON 1663 pasan y 341 se saltean (las de PostgreSQL, sin la base); ruff sin errores.
+- **Sin cambios** en el dominio, la API, el frontend ni Supabase remoto. PostgreSQL sigue desactivado.
+
 ## C. Estado de la migración
 
 Plan aprobado el 03/11/2026. Las etapas y sus dependencias son las del plan; los criterios de aceptación se resumen debajo.
@@ -151,10 +219,10 @@ Plan aprobado el 03/11/2026. Las etapas y sus dependencias son las del plan; los
 | E1: Unidad de trabajo | Completada (`6b5cdb8`) | Ninguna |
 | E2: Consultas dedicadas | Completada (`feat(postgres): implementar consultas dedicadas E2`) | Ninguna |
 | E3: Infraestructura SQL y catálogos | Completada (`feat(postgres): implementar infraestructura SQL y catalogos E3`) | Ninguna |
-| E4: Orden (guardado por agregado) | **En curso, no completa** | A0, A1, A2 y A4 hechos. Faltan A3 (finanzas) y A5 (consultas dedicadas) |
-| E5: Inventario | Pendiente | A6 y A7: reserva, consumo 210 y 211 atómicos, ajustes, override P-06. A8: integración y endurecimiento del Bloque A |
-| E6: Acciones e idempotencia | Pendiente | B1 a B3: repetición por clave y commit incierto (M4) |
-| E7: Equivalencia completa | Pendiente | B4 a B6: cableado, la misma suite en modo `json` y en modo `postgres`, activación local |
+| E4: Orden (guardado por agregado) | **Implementada, sin commit** | A0 a A5 hechos (A3 y A5 sin commit) |
+| E5: Inventario | **Implementada, sin commit** | A6, A7 y el cierre A8 hechos |
+| E6: Acciones e idempotencia | **Implementada, sin commit** | B1, B2 y B3 hechos |
+| E7: Equivalencia completa | **Implementada** | B4 a B6: cableado, equivalencia de los recorridos y activación local. Las suites completas en los dos modos quedan para preparar el despliegue |
 | E8: DEV/UAT desde una máquina local | Pendiente | Actualización controlada del esquema Supabase, conexión real con `verify-full` y medición de latencia. Necesita autorización |
 | E9: Cloud Run | Fuera del plan | Despliegue. Requiere una aprobación aparte |
 
@@ -233,18 +301,18 @@ El detalle, asignado por etapa, está en [`postgresql/integracion-pendientes.md`
 |---|---|---|
 | E4-MP | Resuelto en A0: los medios de pago predeterminados tienen fila en la base | Cerrado |
 | QAF-14 | Resuelto en A0: el registro de consultas rechaza `currval` y `lastval` | Cerrado |
-| QA-A2-M1 a M4, QA-A2-L1 a L5, A4-1 a A4-5 | Hallazgos diferidos del Bloque A, con su etapa. A4-1 requiere una decisión antes de E7 | [`postgresql/CHECKPOINT_A4_HANDOFF.md`](postgresql/CHECKPOINT_A4_HANDOFF.md), sección 8 |
-| DI-8 | El esquema exige un motivo de ajuste del catálogo y la API manda texto libre: decisión de producto pendiente | Antes de A7 |
+| Riesgos residuales del Bloque A | A5-3 aceptado, DI-3 en la documentación funcional, A4-1, los de datos históricos (E8) y los de E6 y B4 | [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 19.5 |
+| DI-8 | Resuelto en A7: el motivo del ajuste es el texto libre y el código del catálogo queda opcional | Cerrado |
 | QA-E3-4 | El contador que distingue «sin conexión» de «pool agotado» es por unidad de trabajo: con un pool compartido clasifica mal | Antes de conectar el pool a la aplicación (E7 o E9) |
 | QA-E3-8 | La equivalencia de orden y formato numérico con JSON depende de que las fuentes estén ordenadas y normalizadas | E7 o E8 |
 | QA-E3-6, QA-E3-7, QAF-5, QAF-12, QAF-13 | Identidad de los insumos y `orden` en DEV/UAT: paso de datos verificado, inventario previo y guarda de la migración | E8 |
 | Privilegios | El rol de la aplicación hereda de PUBLIC `TEMP`, `UPDATE` sobre `pg_settings` y funciones de sesión; la defensa hoy es el registro | Política antes de E8 |
 | M2 | El reemplazo único de una conexión cortada está resuelto; falta medir los cortes reales desde Cloud Run | E8 |
 | QAF-6, QAF-7, QAF-9, QAF-11 | Generador de cargas (listas vacías, validación de valores, `TR-OTROS`) y `orden` de filas nuevas | Antes de cargar catálogos reales, E6 o E8 |
-| M4 | Si se pierde la conexión durante el `COMMIT`, el resultado es incierto y la API responde un 500 genérico | E6 |
+| M4 | Resuelto en B2: 503 `PERSISTENCIA_RESULTADO_INCIERTO` y recuperación con la clave | Cerrado |
 | QA-E2-8 | En JSON, las bandejas y el detalle de un insumo retienen el lock global mientras leen (con 1010 Órdenes, 1,2 s y 2,0 s). Riesgo temporal aceptado, con alerta si supera 500 ms de forma sostenida | JSON (hasta PostgreSQL) |
-| F-09 | Resuelto en parte: la lectura breve usa `REPEATABLE READ`. Dentro de un comando sigue pendiente (QA-A2-M2) | A5 |
-| F-05 | Qué DNI cuenta con el Cliente compartido (ver QA-A2-L1). F-06 y QA-E2-5 se resolvieron en A0 y A2 | A5 |
+| F-09 | Resuelto: la lectura breve usa `REPEATABLE READ` y, dentro de un comando, la carga se valida por versión (QA-A2-M2, A5) | Cerrado |
+| F-05 | La búsqueda por DNI usa la copia de la Orden (A5). Sigue abierto qué hacer con el documento de un cliente reutilizado sin DNI (QA-A2-L1) | B4 |
 | F-03, QA-E2-10 | Evidencias de faltante por subcadena de texto; criterio de reserva pendiente con `DESPERDICIO` | E5 |
 | L1 a L10 y el resto de E2 y E3 | Observaciones menores de E1, F-07, F-08, QA-E2-4, QA-E2-6, QA-E2-7, QA-E2-9 y QA-E3-L | Por etapa |
 
@@ -255,15 +323,12 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso: A3 (finanzas), autorizado para la próxima sesión.** Alcance y primeras tareas en [`postgresql/CHECKPOINT_A4_HANDOFF.md`](postgresql/CHECKPOINT_A4_HANDOFF.md), sección 10.
+**Próximo paso: commit del Bloque A y B (cuando se autorice), suites completas y E8 (Supabase) con autorización.**
 
 Después, en orden:
-1. QA integral de recepción, taller y entrega, con A3 y A4 hechos.
-2. **A5:** consultas dedicadas de E2. Antes hay que resolver QA-A2-M2.
-3. **A6 y A7:** inventario, reservas y movimientos. Antes, QA-A2-M1, QA-A2-M4 y la decisión DI-8.
-4. **A8:** integración y endurecimiento del Bloque A.
-5. **B1 a B6:** idempotencia, cableado, equivalencia y activación local.
-6. Actualización controlada del esquema Supabase y despliegue en Cloud Run, con su propia autorización.
+1. QA integral de recepción, taller, finanzas y entrega.
+2. **B1 a B6:** idempotencia, cableado, equivalencia y activación local.
+3. Actualización controlada del esquema Supabase y despliegue en Cloud Run, con su propia autorización.
 
 Recordatorio: no hay modo mixto. Los repositories PostgreSQL existen, pero la aplicación no los usa hasta la activación integral.
 

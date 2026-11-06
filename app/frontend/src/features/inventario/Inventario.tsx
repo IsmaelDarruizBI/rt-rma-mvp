@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import * as api from "../../api/inventario";
 import { ApiError } from "../../api/client";
+import { OperacionesEstables } from "../../api/idempotencia";
 import {
   Boton,
   Campo,
@@ -52,11 +53,12 @@ const COLOR_RESULTADO: Record<string, string> = {
   ERROR: colores.error,
 };
 
-function nuevaOperacion(): string {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `op-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
+/**
+ * E6 (B3): el `operacion_id` de un ingreso o ajuste es el mismo para los
+ * mismos datos hasta que se registra. Así un reintento manda el mismo
+ * cuerpo, conserva su clave de idempotencia y no se aplica dos veces.
+ */
+const operaciones = new OperacionesEstables();
 
 function mensajeDe(fallo: unknown): string {
   return fallo instanceof ApiError ? fallo.message : "Ocurrió un error inesperado.";
@@ -198,23 +200,30 @@ export function InventarioPanel({
           }}
           onIngreso={(valor, motivo, referencia) =>
             void operar(async () => {
+              const alcance = `ingreso:${seleccionado}`;
+              const datos = { valor, motivo, referencia };
               const r = await api.registrarIngreso(seleccionado, actor?.id ?? "", valor, {
                 motivo,
                 referencia,
-                operacion_id: nuevaOperacion(),
+                operacion_id: operaciones.id(alcance, datos),
               });
+              operaciones.olvidar(alcance, datos);
               return `Ingreso registrado (${r.movimiento.id}): físico ${r.insumo.stock_fisico}.`;
             })
           }
           onAjuste={(diferencia, motivo, referencia, confirmado) =>
             void operar(async () => {
+              // Sin `confirmado`: el ajuste que se confirma es el mismo.
+              const alcance = `ajuste:${seleccionado}`;
+              const datos = { diferencia, motivo, referencia };
               const r = await api.registrarAjuste(
                 seleccionado,
                 actor?.id ?? "",
                 diferencia,
-                { motivo, referencia, operacion_id: nuevaOperacion() },
+                { motivo, referencia, operacion_id: operaciones.id(alcance, datos) },
                 confirmado,
               );
+              operaciones.olvidar(alcance, datos);
               return `Ajuste registrado (${r.movimiento.id}): físico ${r.insumo.stock_fisico}, disponible ${r.insumo.disponible}.`;
             })
           }

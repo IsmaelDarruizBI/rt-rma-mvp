@@ -14,6 +14,8 @@ Correspondencia:
     RecursoNoDisponibleError           -> 409  (no alcanza el stock)
     RequestValidationError             -> 422  (el request esta mal formado)
     ConflictoDeEscrituraError          -> 409  (la Orden cambio: recargar)
+    ClaveReutilizadaError              -> 422  (clave de idempotencia de
+                                               otra operacion, E6)
     PersistenciaNoDisponibleError      -> 503  (sin conexion libre a la base)
     PersistenciaError / RepositoryError-> 500  (fallo de infraestructura)
     AlmacenFotosError                  -> 503  (almacenamiento de fotos)
@@ -41,9 +43,11 @@ from fastapi.responses import JSONResponse
 
 from app.integraciones.catalogo import CatalogoOrigenNoDisponibleError
 from app.repositories import (
+    ClaveReutilizadaError,
     ConflictoDeEscrituraError,
     EntidadPersistidaNoEncontradaError,
     PersistenciaNoDisponibleError,
+    PersistenciaResultadoInciertoError,
     RepositoryError,
 )
 from app.services import (
@@ -58,9 +62,7 @@ logger = logging.getLogger(__name__)
 
 CODIGO_PERSISTENCIA = "PERSISTENCIA_ERROR"
 
-MENSAJE_ERROR_INTERNO = (
-    "Ocurrió un error interno al procesar los datos."
-)
+MENSAJE_ERROR_INTERNO = "Ocurrió un error interno al procesar los datos."
 
 
 def _respuesta(codigo: str, mensaje: str, status_code: int) -> JSONResponse:
@@ -155,6 +157,30 @@ def registrar_manejadores_de_error(application: FastAPI) -> None:
             "CATALOGO_ORIGEN_NO_DISPONIBLE",
             f"{error} Se conserva el catálogo anterior.",
             status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    @application.exception_handler(PersistenciaResultadoInciertoError)
+    async def _resultado_incierto(
+        _: Request,
+        error: PersistenciaResultadoInciertoError,
+    ) -> JSONResponse:
+        """M4 (DE6-5): no se sabe si se guardo. No se afirma nada."""
+        logger.warning("Resultado incierto: %s", error)
+        return _respuesta(
+            error.codigo,
+            "No se pudo confirmar si la operación se guardó. Reintentala "
+            "tal cual (no se duplica) o revisá la Orden antes de hacer otra.",
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    @application.exception_handler(ClaveReutilizadaError)
+    async def _clave_reutilizada(
+        _: Request,
+        error: ClaveReutilizadaError,
+    ) -> JSONResponse:
+        """E6 (DE6-3): la clave de idempotencia es de otra operacion."""
+        return _respuesta(
+            error.codigo, str(error), status.HTTP_422_UNPROCESSABLE_ENTITY
         )
 
     @application.exception_handler(ConflictoDeEscrituraError)

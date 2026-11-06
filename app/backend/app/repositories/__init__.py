@@ -8,14 +8,17 @@ esa es la frontera que permite reemplazar el almacenamiento JSON del MVP
 por Cloud Storage, PostgreSQL u otro backend sin tocar el dominio.
 """
 
+from .acciones import RegistroDeAcciones, RespuestaGuardada
 from .catalogo_equipos import CatalogoEquiposRepository
 from .catalogos import CatalogosRepository
 from .exceptions import (
+    ClaveReutilizadaError,
     ConflictoDeEscrituraError,
     DatosInvalidosError,
     EntidadPersistidaNoEncontradaError,
     PersistenciaError,
     PersistenciaNoDisponibleError,
+    PersistenciaResultadoInciertoError,
     PersistenciaSinConexionError,
     RepositoryError,
     RestriccionDeIntegridadError,
@@ -27,6 +30,9 @@ from .unidad_de_trabajo import UnidadDeTrabajo
 
 __all__ = [
     "CatalogoEquiposRepository",
+    "ClaveReutilizadaError",
+    "RegistroDeAcciones",
+    "RespuestaGuardada",
     "CatalogosRepository",
     "ConflictoDeEscrituraError",
     "DatosInvalidosError",
@@ -35,6 +41,7 @@ __all__ = [
     "OrdenReparacionRepository",
     "PersistenciaError",
     "PersistenciaNoDisponibleError",
+    "PersistenciaResultadoInciertoError",
     "PersistenciaSinConexionError",
     "RepositoryError",
     "RestriccionDeIntegridadError",

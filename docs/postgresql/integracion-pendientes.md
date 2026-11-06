@@ -62,16 +62,16 @@ Si el `BEGIN` falla por un error de conexión, la conexión se descarta y se tom
 
 El estado de sesión no se detecta al devolver la conexión. Con Supavisor en modo transacción, además, quedaría en una conexión del servidor que comparten otros clientes. Por eso se previene. Los privilegios de `rma_backend` no lo impiden, porque lo permite PUBLIC (medido en la sección 12.3 del diseño). Las barreras reales son el SQL estático, la revisión y la transacción `READ ONLY` de las lecturas fuera de un comando. Antes de E8 se decide la política mínima de privilegios (misma sección).
 
-## Bloque A (E4 y E5): checkpoints de A2 y A4
+## Bloque A (E4 y E5)
 
-A0, A1, A2 y A4 están implementados y aprobados, con QA-A2-H1 y QA-A2-L3. El detalle está en [`e4-e7-diseno-integrado.md`](e4-e7-diseno-integrado.md), secciones 13 y 14.
+A0, A1, A2 y A4 están implementados y aprobados, con QA-A2-H1 y QA-A2-L3. El Bloque A está cerrado (A8), sin commit desde A3. El detalle está en [`e4-e7-diseno-integrado.md`](e4-e7-diseno-integrado.md), secciones 13 a 19; los riesgos residuales, en la sección 19.5.
 
 | # | Etapa | Pendiente |
 |---|---|---|
 | A2-1 | A4 | Los flujos reales necesitan A4 (recepción y documentos emitidos) antes de llegar al taller. Las pruebas de A1 y A2 usan las Órdenes reales proyectadas. Propuesta: A4 antes que A3 o en paralelo; guardar y releer el flujo completo queda como criterio de A4 |
 | A2-2 | B4 | QA-E2-4 en JSON (vincular la unidad de trabajo por constructor) pasa al cableado, junto con QA-E3-4. El repository PostgreSQL ya la recibe por constructor |
 | A2-3 | Aprobado | Orden → Cliente → Documento → Equipo → insumos por `clave`. Regla completa en [`e4-e7-diseno-integrado.md`](e4-e7-diseno-integrado.md), sección 13.7 |
-| A2-4 | A5 | `test_contrato_ordenes.py` se parametriza con PostgreSQL junto con las consultas dedicadas de E2 |
+| A2-4 | Resuelto en A5 | `test_contrato_ordenes.py` corre con JSON y PostgreSQL. En PostgreSQL se saltean las pruebas que guardan movimientos de insumo (A6) y algunos datos de entrada respetan restricciones del esquema (A5-1) |
 | A2-5 | B1 | Nombres de operación de la acción del comando. Hoy toma la referencia del primer paso nuevo del historial |
 | A2-6 | Aceptado | `cerrada_en` es el `updated_at` del cierre; la versión 1 de una definición registra el alta de la Orden; las versiones históricas creadas de una vez guardan la garantía final |
 | A2-7 | Resuelto en A4 | El corpus cubre una garantía RMA de punta a punta, con Detalles de origen |
@@ -83,13 +83,13 @@ Los identificadores llevan el prefijo `QA-A2-` para no confundirse con M1 a M4 y
 | # | Etapa | Hallazgo |
 |---|---|---|
 | QA-A2-H1 | Corregido | `guardar` de una Orden existente sin instantánea perdía actualizaciones. Ahora se rechaza. Contrato en [`e4-e7-diseno-integrado.md`](e4-e7-diseno-integrado.md), sección 13.6 |
-| QA-A2-H1 (JSON) | A5 y B4 | JSON no exige esa precondición: guarda una Orden existente sin `obtener_para_modificar`. Al parametrizar `test_contrato_ordenes.py` (A2-4) hay que tratar esa diferencia, y alinearla en B4 |
+| QA-A2-H1 (JSON) | B4 | JSON no exige esa precondición: guarda una Orden existente sin `obtener_para_modificar`. El contrato parametrizado (A2-4) no la ejercita; alinearla en B4 |
 | QA-A2-L3 | Corregido | Una restricción violada se presentaba como un 409 por datos modificados. Ahora solo es 409 lo concurrente y la unicidad de negocio. Tabla en la sección 13.6 |
-| QA-A2-M1 | Antes de A6 | Dos líneas del mismo insumo en `insumos_utilizados`: la API JSON las acepta (0,5 + 0,5 → 200) y PostgreSQL viola `ejecucion_insumo_pkey`. Propuesta: clave primaria `(ejecucion_id, posicion)` |
-| QA-A2-M2 | Antes de A5 | Dentro de una transacción de escritura, `obtener` y `listar` corren en READ COMMITTED y pueden mezclar dos instantes de una Orden no bloqueada (reproducido). La garantía QA-E2-1 de `application/bandejas.py` no se cumple en PostgreSQL. Propuesta: una transacción de lectura consistente para las consultas |
+| QA-A2-M1 | Resuelto en A6 | La clave de `ejecucion_insumo` es `(ejecucion_id, posicion)`: dos líneas del mismo insumo se guardan y la vista de consumo las suma. Sección 17.2 del diseño |
+| QA-A2-M2 | Resuelto en A5 | Dentro de un comando, la carga se valida por versión y se repite si otro comando confirmó en el medio; una Orden no bloqueada se ve en una sola versión durante el comando (QA-E2-1). Sin cambiar el aislamiento. Sección 16 del diseño |
 | QA-A2-M3 | Antes de E8 | El alta de una Orden ya cerrada viola `orden_cerrada_con_fecha`, porque el `INSERT` no lleva `cerrada_en`. Ningún comando lo hace, pero una importación sí. Propuesta: incluir `cerrada_en` en el `INSERT` |
-| QA-A2-M4 | Fotos: resuelto en A4. Insumos: antes de A6 | `FOR UPDATE` después de `KEY SHARE` produce un deadlock (`40P01`, reproducido). El trigger de fotos ya usa `FOR NO KEY UPDATE`. Falta el trigger de movimientos y DI-2, que bloquean el insumo con `FOR UPDATE` mientras `guardar` inserta `ejecucion_insumo`: `FOR NO KEY UPDATE`, o bloquear antes de insertar cualquier fila que los referencie |
-| QA-A2-L1 | A5 | Un cliente reutilizado sin DNI cierra su documento vigente compartido, aunque la Orden conserva su copia. Confirmar si es lo buscado. `listar_por_dni_cliente` debe usar la copia de la Orden para coincidir con JSON |
+| QA-A2-M4 | Resuelto en A4 y A6 | Fotos, devoluciones de dinero, el trigger del libro y el bloqueo de insumos usan `FOR NO KEY UPDATE`, que no choca con el `KEY SHARE` de las claves foráneas. Cliente, Documento y Equipo siguen con `FOR UPDATE`, sin riesgo hoy (A6-3) |
+| QA-A2-L1 | En parte en A5 | `listar_por_dni_cliente` usa la copia de la Orden, como JSON. Sigue abierto si un cliente reutilizado sin DNI debe cerrar su documento vigente compartido |
 | QA-A2-L2 | Antes de E7 | Una fecha sin zona horaria se relee con zona y deja de ser igual. No se encontró quién las produzca. Validarlo en el dominio o en `guardar` |
 | QA-A2-L4 | Sin urgencia | Los Detalles se ordenan por código: `DET-1000` quedaría antes de `DET-999` y fallaría la verificación de prefijo. Solo con más de 999 Detalles en una Orden |
 | QA-A2-L5 | E8 | El CHECK `orden_cerrada_con_fecha` se agrega sin `NOT VALID`: en una base con Órdenes cerradas sin fecha, la migración fallaría. DEV y UAT no tienen Órdenes |
@@ -100,18 +100,64 @@ Los identificadores llevan el prefijo `QA-A2-` para no confundirse con M1 a M4 y
 | # | Etapa | Hallazgo |
 |---|---|---|
 | A4-1 | Antes de E7 | Un texto con el carácter NUL: JSON lo guarda y PostgreSQL lo rechaza con un 500, sin escribir nada. Vale para cualquier texto. Rechazarlo en la API cambiaría un contrato HTTP: requiere decisión |
-| A4-2 | A5 | `generar_comprobante_ingreso` necesita `listar_con_reservas`: el ingreso real de un cliente externo no corre todavía como comando sobre PostgreSQL. Sus datos sí se guardan y releen, por el corpus |
+| A4-2 | Resuelto en A5 | `generar_comprobante_ingreso` corre sobre PostgreSQL con el mismo resultado que JSON |
 | A4-3 | E8 | Una fila de `salida` de tipo `DEVOLUCION_GESTION_RT` no se puede leer: el dominio no tiene ese valor. Ningún flujo la crea |
-| A4-4 | A5 | `documentos.emitidos` y `fotos` se cargan completos con cada Orden, también `contenido`, y `listar` trae todo. Medir junto con las consultas dedicadas |
+| A4-4 | E8 | `documentos.emitidos` y `fotos` se cargan completos con cada Orden, también `contenido`, y `listar` trae todo. No se midió en A5: medirlo con la latencia real de Supabase |
 | A4-5 | Aceptado | Filas sin `posicion` con todas sus fechas idénticas: queda el orden del id, estable pero arbitrario. Sin impacto: esas filas no existen y todo lo que escribe A4 lleva posición |
+
+### Hallazgos de A3
+
+Detalle en [`e4-e7-diseno-integrado.md`](e4-e7-diseno-integrado.md), sección 15.4.
+
+| # | Etapa | Pendiente |
+|---|---|---|
+| A3-1 | Aceptado | DE3-3 en importes de finanzas: `100.50` se relee `100.5`. Mismo valor, distinto texto en la API |
+| A3-2 | E6 | `operacion_id` es único por Orden, como en JSON; vincularlo con la clave de idempotencia |
+| A3-3 | Resuelto en A8 | El alta de un cliente o equipo nuevo usa `ON CONFLICT (codigo) DO NOTHING` y relee bloqueado: dos altas simultáneas no chocan |
+
+### Hallazgos de A5
+
+Detalle en [`e4-e7-diseno-integrado.md`](e4-e7-diseno-integrado.md), sección 16.4.
+
+| # | Etapa | Pendiente |
+|---|---|---|
+| A5-1 | Aceptado | El esquema rechaza datos que JSON guarda y la app no produce: una Orden que nace cerrada (QA-A2-M3), un número fuera de `OR-NNNNNN`, dos clientes con el mismo DNI, un cliente externo sin cliente y códigos de toma, ejecución, pago o documento repetidos entre Órdenes. El contrato E2 en PostgreSQL arma sus datos respetándolos |
+| A5-2 | Resuelto en A6 | Las consultas de reservas y movimientos se probaron con reservas reales. El contrato de `listar_con_movimientos` sigue salteado en PostgreSQL hasta A7, porque necesita consumos |
+| A5-3 | Aceptado en A8 | Dos altas simultáneas con el mismo DNI nuevo: una recibe 409 con rollback completo. Nunca dos clientes con el mismo DNI |
+
+### Hallazgos de A6
+
+Detalle en [`e4-e7-diseno-integrado.md`](e4-e7-diseno-integrado.md), sección 17.4.
+
+| # | Etapa | Pendiente |
+|---|---|---|
+| A6-1 | Resuelto en A7 | El corpus guarda y relee sus movimientos de insumo, con el stock inicial del catálogo |
+| A6-2 | Resuelto en A7 | El 210, los ingresos y los ajustes bloquean los insumos antes de decidir. Escenario 2 de §5.2 probado |
+| A6-3 | Verificado en A8, sin cambio | `FOR UPDATE` de Cliente, Documento y Equipo precede siempre a los `KEY SHARE` sobre ellos; sin incompatibilidad reproducible |
+
+### Hallazgos de A7
+
+Detalle en [`e4-e7-diseno-integrado.md`](e4-e7-diseno-integrado.md), sección 18.4.
+
+| # | Etapa | Pendiente |
+|---|---|---|
+| A7-1 | Resuelto en A8 | DI-3 implementada en el service, en los dos modos |
+| A7-2 | Sin cambio | Devolución y desperdicio de insumos: sin operación en el dominio (DI-5) |
+| A7-3 | Aceptado | Una expectativa de stock (DI-1) sin un `guardar` posterior en la transacción no se verifica |
 
 ## Idempotencia (E6)
 
+B1, B2 y B3 implementados, sin commit: clave por encabezado, huella, respuesta guardada, rechazos registrados, COMMIT incierto y claves desde la pantalla. Detalle en [`e4-e7-diseno-integrado.md`](e4-e7-diseno-integrado.md), secciones 20 y 21.
+
+| # | Etapa | Pendiente |
+|---|---|---|
+| B1-1 | Resuelto en B2+B3 | Foto y sincronización del catálogo con clave |
+| B1-2 | B5 | JSON ignora la clave de idempotencia |
+| B1-3 | Aprobado con B2+B3 | Encabezado opcional `Idempotency-Key` y 422 `CLAVE_REUTILIZADA` |
+
 ### M4. Resultado incierto del COMMIT
 
-Si se pierde la conexión durante el `COMMIT`, la unidad de trabajo lanza `PersistenciaError` («no se sabe si se guardó») y la API responde un 500 genérico, igual que cualquier otro fallo interno. El cliente no puede distinguirlo y, sin idempotencia, un reintento puede duplicar la operación.
-
-**Falta.** Un código específico (por ejemplo, `PERSISTENCIA_RESULTADO_INCIERTO`) y su tratamiento con las claves de idempotencia.
+**Resuelto en B2.** 503 `PERSISTENCIA_RESULTADO_INCIERTO`, sin afirmar un resultado. Con clave, se recupera lo confirmado o el reintento ejecuta una vez (sección 21.1 del diseño).
 
 ## Consultas dedicadas (E2)
 

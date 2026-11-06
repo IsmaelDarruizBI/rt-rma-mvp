@@ -23,7 +23,6 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone, tzinfo
-from typing import NoReturn
 
 from app.core.config import Settings
 from app.integraciones import FuentePersonas, LimitadorConsultas
@@ -38,6 +37,7 @@ from app.repositories import (
     CatalogosRepository,
     ModelosEquipoRepository,
     OrdenReparacionRepository,
+    RegistroDeAcciones,
     UnidadDeTrabajo,
 )
 from app.storage import (
@@ -88,6 +88,11 @@ class ApplicationContext:
     # Limite transaccional de los comandos (E1). Por defecto, el lock de
     # proceso compartido por todos los contextos, como antes.
     unidad_de_trabajo: UnidadDeTrabajo = UNIDAD_DE_TRABAJO_JSON
+    # Idempotencia (E6, B1): solo PostgreSQL registra acciones con clave.
+    # En JSON es ``None`` y la clave del encabezado se ignora.
+    acciones: RegistroDeAcciones | None = None
+    # Cierre de los recursos de la persistencia (el pool de PostgreSQL).
+    cerrar: Callable[[], None] | None = None
 
     def __post_init__(self) -> None:
         # E2 (DE-2): el repository JSON exige que las lecturas para
@@ -113,17 +118,65 @@ def _almacen_de_fotos(settings: Settings) -> AlmacenFotos | None:
     return None
 
 
-def _rechazar_postgres(settings: Settings) -> NoReturn:
-    """PostgreSQL esta en preparacion: la app nunca arranca a medias.
+def _contexto_postgres(settings: Settings) -> ApplicationContext:
+    """B4: la app entera sobre PostgreSQL, sin modo mixto ni fallback.
 
-    Primero valida la configuracion, para que un error de URL o de TLS
-    se vea ya; despues se detiene, porque todavia no hay repositories.
+    Solo contra un servidor LOCAL: la conexion a Supabase llega con E8 y su
+    autorizacion. Si la base no responde, la app no arranca (nunca cae a
+    JSON). Los datos de dominio -Ordenes, catalogos, acciones y modelos
+    tecnicos- van a la base; la copia local del catalogo de Ventas y las
+    fotos conservan su almacenamiento propio.
     """
-    configuracion_postgres(settings)
-    ajustes_postgres(settings)
-    raise ConfiguracionPersistenciaError(
-        "RMA_PERSISTENCIA=postgres todavia no esta disponible: la "
-        "integracion esta en preparacion. Usar RMA_PERSISTENCIA=json."
+    from app.storage.postgres.acciones import PostgresRegistroDeAcciones
+    from app.storage.postgres.catalogos import PostgresCatalogosRepository
+    from app.storage.postgres.conexion import HOSTS_LOCALES, servidor_unico
+    from app.storage.postgres.modelos_equipo import (
+        PostgresModelosEquipoRepository,
+    )
+    from app.storage.postgres.ordenes import PostgresOrdenReparacionRepository
+    from app.storage.postgres.transaccion import (
+        UnidadDeTrabajoPostgres,
+        abrir_pool,
+        cerrar_pool,
+    )
+
+    configuracion = configuracion_postgres(settings)
+    ajustes = ajustes_postgres(settings)
+    if servidor_unico(configuracion.conninfo.get_secret_value()) not in (
+        HOSTS_LOCALES
+    ):
+        raise ConfiguracionPersistenciaError(
+            "RMA_PERSISTENCIA=postgres solo arranca contra un servidor "
+            "local: la conexion remota (Supabase) llega con E8."
+        )
+    pool = abrir_pool(configuracion, ajustes)
+    try:
+        pool.wait(timeout=ajustes.pool_espera_s)
+    except Exception:
+        cerrar_pool(pool)
+        raise ConfiguracionPersistenciaError(
+            "No se pudo conectar a PostgreSQL: la app no arranca sin su "
+            "base (no hay fallback a JSON)."
+        ) from None
+    unidad = UnidadDeTrabajoPostgres(pool, ajustes)
+    return ApplicationContext(
+        ordenes=PostgresOrdenReparacionRepository(unidad),
+        catalogos=PostgresCatalogosRepository(unidad),
+        zona_horaria=timezone(timedelta(hours=settings.utc_offset_horas)),
+        fotos=_almacen_de_fotos(settings),
+        limitador_personas=LimitadorConsultas(
+            intervalo_minimo=settings.consulta_dni_intervalo_s,
+            maximo_por_minuto=settings.consulta_dni_max_por_minuto,
+        ),
+        catalogo_equipos=JsonCatalogoEquiposRepository(
+            settings.catalogo_equipos_dir
+        ),
+        proveedor_catalogo=construir_proveedor_catalogo(settings),
+        filtro_catalogo=filtro_catalogo(settings),
+        modelos_equipo=PostgresModelosEquipoRepository(unidad),
+        unidad_de_trabajo=unidad,
+        acciones=PostgresRegistroDeAcciones(unidad),
+        cerrar=lambda: cerrar_pool(pool),
     )
 
 
@@ -134,7 +187,7 @@ def construir_contexto(settings: Settings) -> ApplicationContext:
     repositories los crean si faltan.
     """
     if settings.persistencia == "postgres":
-        _rechazar_postgres(settings)
+        return _contexto_postgres(settings)
     return ApplicationContext(
         ordenes=JsonOrdenReparacionRepository(settings.ordenes_dir),
         catalogos=JsonCatalogosRepository(settings.catalogos_dir),

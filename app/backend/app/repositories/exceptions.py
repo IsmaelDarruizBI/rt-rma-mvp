@@ -77,6 +77,21 @@ class DatosInvalidosError(PersistenciaError):
     """
 
 
+class PersistenciaResultadoInciertoError(PersistenciaError):
+    """Se perdio la conexion durante el COMMIT: no se sabe si se guardo
+    (E6, DE6-5, M4). La API responde 503 y no afirma ningun resultado.
+    Con clave de idempotencia, reintentar es seguro."""
+
+    codigo = "PERSISTENCIA_RESULTADO_INCIERTO"
+
+
+class ClaveReutilizadaError(RepositoryError):
+    """La clave de idempotencia ya se uso para otra operacion o con otros
+    parametros (E6, DE6-3). La API responde 422: no es un reintento."""
+
+    codigo = "CLAVE_REUTILIZADA"
+
+
 class ConflictoDeEscrituraError(RepositoryError):
     """Se intento guardar una version obsoleta de la entidad (E4).
 

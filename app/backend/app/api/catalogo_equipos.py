@@ -26,6 +26,7 @@ from app.domain.models import ResultadoSincronizacion, SincronizacionCatalogo
 from app.services import OpcionModelo
 
 from .dependencias import ContextoDep
+from .idempotencia import idempotente
 
 router = APIRouter(prefix="/api/catalogs/equipment", tags=["catalogos"])
 
@@ -160,6 +161,7 @@ def get_catalogo_equipos(contexto: ContextoDep) -> CatalogoEquiposOut:
 
 
 @router.post("/sync")
+@idempotente("SINCRONIZAR_CATALOGO_EQUIPOS")
 def post_sincronizar(
     usuario_id: str, contexto: ContextoDep
 ) -> SincronizacionOut:

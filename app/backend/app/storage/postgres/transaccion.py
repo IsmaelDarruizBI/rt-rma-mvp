@@ -100,6 +100,7 @@ from psycopg_pool import ConnectionPool, PoolClosed, PoolTimeout
 from app.repositories.exceptions import (
     PersistenciaError,
     PersistenciaNoDisponibleError,
+    PersistenciaResultadoInciertoError,
     PersistenciaSinConexionError,
     TransaccionInvalidadaError,
 )
@@ -390,7 +391,12 @@ class UnidadDeTrabajoPostgres:
             if solo_lectura:
                 self._revertir(conexion)
             else:
-                self._confirmar(conexion)
+                try:
+                    self._confirmar(conexion)
+                except PersistenciaResultadoInciertoError:
+                    # La conexion se perdio: nunca vuelve al pool.
+                    estado.descartar = True
+                    raise
         finally:
             # Antes de devolver la conexion: una copia del contexto que la
             # conserve ya no puede usarla.
@@ -525,11 +531,13 @@ class UnidadDeTrabajoPostgres:
     @staticmethod
     def _confirmar(conexion: psycopg.Connection) -> None:
         try:
-            conexion.commit()
+            _enviar_commit(conexion)
         except psycopg.Error as error:
             codigo = sqlstate(error) or ""
             if conexion.closed or codigo.startswith(CLASE_CONEXION):
-                incierto = PersistenciaError(
+                # M4 (DE6-5): no se afirma nada. Con clave de idempotencia,
+                # el reintento devuelve lo confirmado o ejecuta una vez.
+                incierto = PersistenciaResultadoInciertoError(
                     "Se perdio la conexion a PostgreSQL al confirmar: no se "
                     "sabe si se guardo (SQLSTATE "
                     f"{codigo or 'desconocido'})."
@@ -662,6 +670,11 @@ def _conexion_vigente(estado: _EnCurso) -> psycopg.Connection:
             "ejecuta nada mas en ella."
         )
     return conexion
+
+
+def _enviar_commit(conexion: psycopg.Connection) -> None:
+    """El COMMIT de la transaccion (aparte, para simular su perdida)."""
+    conexion.commit()
 
 
 def _conexion_cortada(

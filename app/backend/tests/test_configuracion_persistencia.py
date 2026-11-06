@@ -86,13 +86,11 @@ def test_postgres_sin_url_detiene_el_arranque(tmp_path):
         create_app(_settings(persistencia="postgres", data_dir=tmp_path))
 
 
-def test_postgres_valido_detiene_el_arranque_hasta_tener_repositories(
-    tmp_path, caplog
-):
+def test_postgres_remoto_no_arranca_hasta_e8(tmp_path, caplog):
     caplog.set_level(logging.DEBUG)
     with pytest.raises(ConfiguracionPersistenciaError) as capturado:
         create_app(_postgres(URL_REMOTA, data_dir=tmp_path))
-    assert "todavia no esta disponible" in str(capturado.value)
+    assert "solo arranca contra un servidor local" in str(capturado.value)
     assert PASSWORD not in str(capturado.value)
     assert PASSWORD not in caplog.text
 

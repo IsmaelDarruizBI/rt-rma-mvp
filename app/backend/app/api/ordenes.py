@@ -10,6 +10,8 @@ El router es fino a proposito: valida la forma del request, delega en
 atrapa excepciones -de eso se ocupa ``errores.py``-.
 """
 
+import hashlib
+
 from fastapi import APIRouter, Request, Response, status
 from starlette.concurrency import run_in_threadpool
 
@@ -94,6 +96,7 @@ from app.services import (
 )
 
 from .dependencias import ContextoDep
+from .idempotencia import ClaveDep, con_clave, id_de_foto, idempotente
 from .schemas import (
     AjustarGarantiaIn,
     AnularPagoIn,
@@ -403,6 +406,7 @@ def get_impacto_override(
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
+@idempotente("CREAR_ORDEN", estado=status.HTTP_201_CREATED)
 def post_crear_orden(
     cuerpo: CrearOrdenIn,
     contexto: ContextoDep,
@@ -426,6 +430,7 @@ def post_crear_orden(
 
 
 @router.post("/rt-interno", status_code=status.HTTP_201_CREATED)
+@idempotente("CREAR_ORDEN_RT", estado=status.HTTP_201_CREATED)
 def post_crear_orden_rt(
     cuerpo: CrearOrdenRtIn,
     contexto: ContextoDep,
@@ -448,6 +453,7 @@ def post_crear_orden_rt(
 
 
 @router.post("/{orden_id}/details")
+@idempotente("DEFINIR_REPARACION")
 def post_definir_reparacion(
     orden_id: str,
     cuerpo: DefinirReparacionIn,
@@ -494,6 +500,7 @@ def post_finalizar_definicion(
     "/{orden_origen_id}/warranty-rma",
     status_code=status.HTTP_201_CREATED,
 )
+@idempotente("INICIAR_GARANTIA_RMA", estado=status.HTTP_201_CREATED)
 def post_iniciar_garantia_rma(
     orden_origen_id: str,
     cuerpo: IniciarGarantiaRmaIn,
@@ -555,6 +562,7 @@ def post_revision_tecnica(
 
 
 @router.post("/{orden_id}/review/details")
+@idempotente("DEFINIR_REPARACION_DESDE_REVISION")
 def post_definir_reparacion_desde_revision(
     orden_id: str,
     cuerpo: DefinirReparacionDesdeRevisionIn,
@@ -1087,6 +1095,7 @@ def post_equipo_no_recibido(
 
 
 @router.post("/{orden_id}/reception/notes")
+@idempotente("AGREGAR_NOTA_RECEPCION")
 def post_observacion_recepcion(
     orden_id: str,
     cuerpo: ObservacionRecepcionIn,
@@ -1265,6 +1274,7 @@ def post_ajustar_garantia(
 
 
 @router.post("/{orden_id}/notify")
+@idempotente("NOTIFICAR")
 def post_notificar(
     orden_id: str,
     cuerpo: NotificarIn,
@@ -1283,6 +1293,7 @@ def post_notificar(
 
 
 @router.post("/{orden_id}/payments")
+@idempotente("REGISTRAR_PAGO")
 def post_registrar_pago(
     orden_id: str,
     cuerpo: PagoIn,
@@ -1331,6 +1342,7 @@ def post_anular_pago(
 
 
 @router.post("/{orden_id}/refunds")
+@idempotente("REGISTRAR_DEVOLUCION_DINERO")
 def post_devolver_dinero(
     orden_id: str,
     cuerpo: DevolucionDineroIn,
@@ -1363,6 +1375,7 @@ async def post_agregar_foto(
     request: Request,
     contexto: ContextoDep,
     nombre: str | None = None,
+    clave_idempotencia: ClaveDep = None,
 ) -> OrdenOut:
     """Agregar UNA foto del equipo (cualquier usuario operativo).
 
@@ -1376,15 +1389,40 @@ async def post_agregar_foto(
             "La foto supera los 8 MB: reducila o elegi otra."
         )
     contenido = await request.body()
-    orden = await run_in_threadpool(
-        agregar_foto,
-        contexto,
-        orden_id=orden_id,
-        usuario_id=usuario_id,
-        contenido=contenido,
-        nombre_original=nombre,
+    # Con clave (E6): el id de la foto sale de ella, y la huella incluye el
+    # contenido. La transaccion es del hilo del threadpool.
+    foto_id = (
+        id_de_foto(usuario_id, clave_idempotencia)
+        if clave_idempotencia and contexto.acciones is not None
+        else None
     )
-    return _salida(orden, contexto)
+
+    def agregar():
+        orden = agregar_foto(
+            contexto,
+            orden_id=orden_id,
+            usuario_id=usuario_id,
+            contenido=contenido,
+            nombre_original=nombre,
+            foto_id=foto_id,
+        )
+        return _salida(orden, contexto)
+
+    return await run_in_threadpool(
+        con_clave,
+        contexto,
+        clave_idempotencia,
+        operacion="AGREGAR_FOTO",
+        usuario_id=usuario_id,
+        parametros={
+            "orden_id": orden_id,
+            "usuario_id": usuario_id,
+            "nombre": nombre,
+            "contenido": hashlib.sha256(contenido).hexdigest(),
+        },
+        ejecutar=agregar,
+        orden_id=orden_id,
+    )
 
 
 @router.get("/{orden_id}/photos/{foto_id}")
