@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 06/11/2026, al cerrar el rediseño del frontend y la preparación de E8, todo con commit y publicado. **Para retomar el trabajo: [`CHECKPOINT_PRE_DEPLOY.md`](CHECKPOINT_PRE_DEPLOY.md).**
+**Última actualización:** 06/11/2026, al publicar en UAT la optimización de rendimiento (`00017-wer`). **Para retomar el trabajo: [`CHECKPOINT_PRE_DEPLOY.md`](CHECKPOINT_PRE_DEPLOY.md).**
 
 ## A. Estado general
 
@@ -49,6 +49,10 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Optimización de rendimiento en UAT (06/11/2026): `c21f289`, `750756c`
+
+Backend en `rt-rma-uat-api-00017-wer` (commit `3249a0a`) y frontend publicado en `rt-rma-uat.vercel.app`. Las lecturas bajaron de 4,5 a 13,6 s a unos 1,0 a 1,2 s, y los comandos de 3,9 a 15,6 s a 2,4 a 4,7 s. Mediciones y riesgos en [`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md).
 
 ### Rediseño del frontend (06/11/2026): `fe655d7`
 
@@ -233,7 +237,7 @@ Plan aprobado el 03/11/2026. Las etapas y sus dependencias son las del plan; los
 | E6: Acciones e idempotencia | Completada (`b84b87a`) | Ninguna local; migración remota en E8 |
 | E7: Equivalencia completa | Completada (`b84b87a`) | B4 a B6: cableado, equivalencia de los recorridos y activación local. Las suites completas en los dos modos quedan para preparar el despliegue |
 | E8: DEV/UAT | **Completada** (06/11/2026, `17bf69a`) | 19 de 19 migraciones en `rt-rma-db`, `verificar_integridad()` vacío. Cargados los catálogos demo (`seeds/desarrollo`): el entorno es UAT, solo para datos de prueba |
-| E9: Cloud Run y Vercel | **Completada** (06/11/2026) | `rt-rma-uat-api` revisión `00012-d4z` sobre PostgreSQL; frontend en `rt-rma-uat.vercel.app`, publicado por CLI. Anterior en JSON: `00010-pgz` |
+| E9: Cloud Run y Vercel | **Completada** (06/11/2026) | `rt-rma-uat-api` revisión `00017-wer` sobre PostgreSQL; frontend en `rt-rma-uat.vercel.app`, publicado por CLI. Anterior: `00012-d4z`; anterior en JSON: `00010-pgz` |
 
 **Infraestructura:**
 - Supabase DEV/UAT tiene las 19 migraciones aplicadas y es la persistencia de UAT. E3 se aplicó en una transacción con `supabase db query --remote` (`supabase/scripts/e8_aplicar_e3.sql`); el trigger `insumo_clave_por_defecto` se conserva.
@@ -326,13 +330,13 @@ El detalle, asignado por etapa, está en [`postgresql/integracion-pendientes.md`
 | L1 a L10 y el resto de E2 y E3 | Observaciones menores de E1, F-07, F-08, QA-E2-4, QA-E2-6, QA-E2-7, QA-E2-9 y QA-E3-L | Por etapa |
 
 Otros riesgos registrados:
-- **Latencia entre regiones:** Cloud Run en São Paulo y Supabase en Oregón: unos 177 ms por viaje a la base. La optimización local deja las lecturas en 3 o 4 viajes; los comandos siguen en 13 a 17. Medición y alternativas en [`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md).
+- **Latencia entre regiones:** Cloud Run en São Paulo y Supabase en Oregón: unos 177 ms por viaje a la base. Con la optimización publicada, las lecturas tardan 1,0 a 1,2 s y los comandos 2,4 a 4,7 s. Medición y alternativa en [`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md).
 - **Doble escritura no atómica de la Orden al cerrar una reparación** (JSON): ver [`pendientes-producto.md`](pendientes-producto.md).
 - **Foto subida cuya registración falla:** ver [`pendientes-producto.md`](pendientes-producto.md). Es una tarea separada, no de una etapa.
 
 ## F. Próximos pasos
 
-**Próximo paso:** autenticación real antes de cargar datos de clientes (hoy el login es demo y la API no tiene autenticación), y decidir el despliegue de la optimización de rendimiento (hecha localmente, sin commit ni deploy) y la ubicación de la base. No ejecutar `/photos/cleanup` con `aplicar`: el bucket conserva fotos anteriores a PostgreSQL.
+**Próximo paso:** autenticación real antes de cargar datos de clientes (hoy el login es demo y la API no tiene autenticación), y decidir si la base se mueve a São Paulo (no ejecutado; plan en [`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md)). No ejecutar `/photos/cleanup` con `aplicar`: el bucket conserva fotos anteriores a PostgreSQL.
 1. Confirmar las migraciones aplicadas y repetir las verificaciones de solo lectura.
 2. Probar localmente y aprobar el script único de E3; aplicarlo y luego las seis migraciones restantes en orden.
 3. `verificar_integridad()` vacío y medición de latencia.

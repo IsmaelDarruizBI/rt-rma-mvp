@@ -120,9 +120,59 @@ Los identificadores llevan el prefijo `QA-A2-` para no confundirse con M1 a M4 y
 
 **Pendientes.**
 
-- Los comandos siguen en 13 a 17 viajes (de 2,4 a 3,1 s en UAT). Bajar de 1 s exige acercar la base a Cloud Run.
+- Los comandos siguen entre 2,4 y 4,7 s en UAT. Bajar de 1 s exige acercar la base a Cloud Run.
 - `GET /api/orders` y el detalle de un insumo cargan todas las Órdenes, y las reservas incluyen las Órdenes cerradas: sin medir con volumen. Falta paginar el listado y limitar `FILTRO_RESERVAS` a las reservas pendientes, como admite su contrato.
 - `RMA_DB_POOL_MIN=1`: la primera ráfaga después de un rato sin uso espera conexiones nuevas (2,2 s contra 0,7 s con 4).
+- Las lecturas en lote tardan 2 viajes más de lo previsto (ver «Resultado en UAT»). Causa sin confirmar.
+
+### Resultado en UAT (06/11/2026)
+
+Revisión `00017-wer` (commit `3249a0a`) contra `00012-d4z`, con datos ficticios. Lecturas: tiempo del cliente con pausas de 3 s, mediana de 3; el «antes» de `documentos` y `detalle de insumo` es la latencia de Cloud Run. Comandos: latencia de Cloud Run, una muestra del primer intento. Los viajes antes y después se deducen dividiendo el tiempo por 177 ms; los del banco se contaron con PostgreSQL local detrás de un proxy.
+
+| Operación | `00012-d4z` | `00017-wer` | Viajes antes | Viajes después | Viajes en banco |
+|---|---|---|---|---|---|
+| Usuarios | 0,59 s | 0,59 s | 3 | 3 | 3 |
+| Listar Órdenes | 4,50 s | 1,14 s | 25 | 6 | 4 |
+| Abrir Orden | 6,05 s | 0,95 s | 34 | 5 | 3 |
+| Documentos | 4,45 s | 0,95 s | 25 | 5 | 3 |
+| Inventario | 5,02 s | 1,15 s | 28 | 6 | 4 |
+| Detalle de insumo | 13,54 s | 1,18 s | 76 | 6 | 4 |
+| Inicio | 10,34 s | 1,16 s | 58 | 6 | 4 |
+| Taller | 10,33 s | 1,17 s | 58 | 6 | 4 |
+| Alta de Orden | 3,94 s | 3,07 s | 22 | 17 | 17 |
+| Agregar trabajo | 8,68 s | 3,26 s | 49 | 18 | 14 |
+| Comprobante de ingreso | 15,61 s | 4,74 s | 88 | 27 | sin medir |
+| Iniciar trabajo | 14,31 s | 4,54 s | 81 | 26 | sin medir |
+| Cerrar ejecución | 11,37 s | 4,71 s | 64 | 27 | sin medir |
+| Registrar pago | 7,71 s | 2,38 s | 44 | 13 | 13 |
+| Entregar | 9,65 s | 3,63 s | 55 | 21 | sin medir |
+| Ingreso de stock | 6,64 s | 3,08 s | 38 | 17 | 17 |
+| Cancelar Orden | 8,34 s | 2,89 s | 47 | 16 | sin medir |
+| Reintento idempotente | 0,89 s | 0,90 s | 5 | 5 | sin medir |
+
+**Lecturas: 2 viajes más que en el banco.** Hasta las 18:04 `abrir Orden` tardó 0,55 s (3 viajes), con el mismo contenedor y el mismo código. Desde las 18:09 tarda 0,90 s, y sigue así con pausas de 3 s. Entre las dos mediciones el pool pasó de una conexión a varias por la prueba de concurrencia. `usuarios`, que no usa lotes, no cambió. Hipótesis sin confirmar: un lote grande deja de caber en un solo envío TCP en una conexión ociosa.
+
+**Verificado sobre `00017-wer`.** Alta, reserva, consumo, pago, entrega e ingreso de stock; reintentos idempotentes de alta, pago e ingreso; dos comandos simultáneos sobre la misma Orden sin actualización perdida; comandos rechazados sin rastro. `verificar_integridad()` vacío, stock 2/0 y ningún error 5xx. Con el mismo commit en local contra la misma base, un alta y un ingreso reales con fallo forzado no dejaron nada: la secuencia de Órdenes salta los números 7 y 8.
+
+**Interfaz, con Edge sin ventana contra la URL pública.** Inicio, Órdenes, abrir Orden, Taller, Inventario, alta y cancelación funcionan, y el listado refleja el comando sin recarga manual. Siete letras en el buscador hacen una sola petición. Volver a Inicio o Inventario muestra datos en unos 30 ms. Único error de consola: `favicon.ico` 404.
+
+### Alternativa: Supabase nuevo en São Paulo (no ejecutada)
+
+Hasta donde se sabe, un proyecto de Supabase no cambia de región: habría que crear otro. Confirmarlo antes de empezar. Cloud Run y el bucket de fotos ya están en `southamerica-east1`.
+
+**Beneficio estimado.** Con unos 5 ms por viaje (supuesto, sin medir), una lectura quedaría en torno a 0,1 s y un comando en torno a 0,15 s. Conviene hacerlo antes de cargar datos reales: hoy la base tiene solo datos ficticios.
+
+**Pasos, cada uno con autorización.**
+
+1. Crear el proyecto en `sa-east-1` y medir el viaje desde Cloud Run antes de seguir.
+2. Aplicar las 19 migraciones y los catálogos con el procedimiento de [`e8-activacion-supabase.md`](e8-activacion-supabase.md), y crear `rma_api` con su clave.
+3. Comprobar `verificar_integridad()` vacío y los permisos de `rma_backend`.
+4. Crear un secreto nuevo y desplegar con él una revisión sin tráfico. No publicar una versión de `rma-uat-database-url`: las revisiones actuales leen `:latest` y también cambiarían de base, y se perdería la vuelta atrás.
+5. Repetir el recorrido de esta sección sobre esa revisión y recién entonces pasar el tráfico.
+
+**Vuelta atrás.** Pasar el tráfico a la revisión anterior, que sigue apuntando a `rt-rma-db`. El proyecto de Oregón se conserva hasta validar el nuevo.
+
+**A decidir.** Las Órdenes de prueba no se migran salvo que haga falta: las fotos del bucket quedarían sin referencia y `/photos/cleanup` con `aplicar` sigue prohibido.
 
 ### Hallazgos de A3
 
