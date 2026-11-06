@@ -10,12 +10,14 @@ va a querer tratarlos distinto.
 class RepositoryError(Exception):
     """Fallo al acceder a la persistencia.
 
-    ``sqlstate`` y ``reintentable`` los completa la traduccion de errores
-    de PostgreSQL (``app.storage.postgres.traducir_error``): informacion
-    interna para decidir un reintento, nunca para el usuario.
+    ``sqlstate``, ``restriccion`` y ``reintentable`` los completa la
+    traduccion de errores de PostgreSQL
+    (``app.storage.postgres.traducir_error``): informacion interna para
+    diagnosticar y decidir un reintento, nunca para el usuario.
     """
 
     sqlstate: str | None = None
+    restriccion: str | None = None
     reintentable: bool = False
 
 
@@ -55,6 +57,23 @@ class TransaccionInvalidadaError(PersistenciaError):
     abortado la transaccion, y aun asi el bloque exterior termino como si
     nada: se revierte todo en vez de confirmar una parte. Es un error de
     programacion (atrapar un fallo dentro de la transaccion), no de datos.
+    """
+
+
+class RestriccionDeIntegridadError(PersistenciaError):
+    """La base rechazo la escritura por una restriccion de integridad.
+
+    Clave primaria, CHECK, clave foranea, NOT NULL o un trigger del esquema.
+    No significa que otro comando haya modificado los datos: los services
+    validan las reglas antes, asi que es un dato que el esquema no admite o
+    una validacion que falta. Por eso no es un conflicto: repetir la
+    operacion daria lo mismo. La API lo responde como un fallo interno.
+    """
+
+
+class DatosInvalidosError(PersistenciaError):
+    """La base rechazo un valor: texto demasiado largo, numero fuera de
+    rango, fecha invalida. Es un error de programacion, no de concurrencia.
     """
 
 

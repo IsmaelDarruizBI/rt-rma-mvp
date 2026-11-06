@@ -28,6 +28,7 @@ from app.repositories.exceptions import (  # noqa: E402
     ConflictoDeEscrituraError,
     PersistenciaError,
     PersistenciaNoDisponibleError,
+    RestriccionDeIntegridadError,
     TransaccionInvalidadaError,
 )
 from app.services import PrecondicionInvalidaError  # noqa: E402
@@ -248,7 +249,7 @@ def test_un_error_de_dominio_revierte_y_sigue_igual(armar, base):
 @pytest.mark.postgres
 def test_un_error_de_postgres_revierte_y_se_traduce(armar, base):
     unidad, pool = armar()
-    with pytest.raises(ConflictoDeEscrituraError) as capturado:
+    with pytest.raises(RestriccionDeIntegridadError) as capturado:
         with unidad.transaccion():
             _insertar(unidad, 1)
             _insertar(unidad, 1, DATO_DE_UNA_FILA)
@@ -329,7 +330,7 @@ def test_un_error_sql_anidado_y_atrapado_no_confirma_nada(armar, base):
             try:
                 with unidad.transaccion():
                     _insertar(unidad, 1)
-            except ConflictoDeEscrituraError:
+            except RestriccionDeIntegridadError:
                 pass
     assert _ids(base) == []
     _limpio(unidad, pool)

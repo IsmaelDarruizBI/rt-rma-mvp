@@ -161,6 +161,8 @@ def test_fuera_de_un_comando_la_lectura_es_breve_y_de_solo_lectura(
         assert unidad.en_curso()
         solo = lector.fila(_AJUSTE, ("transaction_read_only",)).valor
         bloqueo = lector.fila(_AJUSTE, ("lock_timeout",)).valor
+        # Las consultas de un agregado ven el mismo instante (DA-4).
+        aislamiento = lector.fila(_AJUSTE, ("transaction_isolation",)).valor
         assert not hasattr(lector, "ejecutar")
         with pytest.raises(PersistenciaError, match="solo lectura"):
             unidad.ejecutor()
@@ -168,6 +170,7 @@ def test_fuera_de_un_comando_la_lectura_es_breve_y_de_solo_lectura(
             with unidad.transaccion():
                 pass
     assert (solo, bloqueo) == ("on", "5s")
+    assert aislamiento == "repeatable read"
     assert not unidad.en_curso() and _EN_CURSO.get() is None
     assert _estable(pool)
     # Los SET LOCAL no pasan a la conexion.

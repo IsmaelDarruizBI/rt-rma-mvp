@@ -89,7 +89,7 @@ import threading
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import psycopg
@@ -136,6 +136,9 @@ class _EnCurso:
     ``False`` al terminar, antes de devolver la conexion al pool. Una copia
     del contexto conserva este objeto, pero ya no puede usarlo: abre otra.
     ``descartar``: el estado de la conexion es dudoso y no vuelve al pool.
+    ``datos``: lo que los repositories guardan mientras dura la
+    transaccion (instantaneas del agregado, la accion del comando). Se
+    pierde con ella: nada queda viejo para la siguiente.
     """
 
     unidad: "UnidadDeTrabajoPostgres"
@@ -145,6 +148,7 @@ class _EnCurso:
     activa: bool = True
     solo_lectura: bool = False
     descartar: bool = False
+    datos: dict[str, Any] = field(default_factory=dict)
 
     def problema(self) -> str | None:
         """Por que el flujo actual no puede usarla (``None`` si puede)."""
@@ -222,7 +226,11 @@ class UnidadDeTrabajoPostgres:
             f"{int(ajustes.statement_timeout_ms)}"
         )
         self._inicio = f"BEGIN; {limites}"
-        self._inicio_lectura = f"BEGIN READ ONLY; {limites}"
+        # Lectura breve: REPEATABLE READ, asi las consultas de un agregado
+        # o de una respuesta ven el mismo instante (DA-4, F-09).
+        self._inicio_lectura = (
+            f"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; {limites}"
+        )
         # Conexiones entregadas por esta unidad y no devueltas: distingue
         # el pool agotado de la base que no responde (L2).
         self._en_uso = 0
@@ -246,6 +254,16 @@ class UnidadDeTrabajoPostgres:
         escribe por su cuenta.
         """
         return self._vigente().conexion
+
+    def datos_de_transaccion(self) -> dict[str, Any]:
+        """Almacen de la transaccion en curso de este flujo (E4).
+
+        Los repositories guardan aca lo que vale solo mientras dura la
+        transaccion: la instantanea de un agregado cargado para
+        modificarlo y la accion del comando. Fuera de una transaccion
+        propia es un error, como ``ejecutor()``.
+        """
+        return self._vigente().datos
 
     def ejecutor(self) -> EjecutorSql:
         """El ejecutor de la transaccion de escritura en curso."""

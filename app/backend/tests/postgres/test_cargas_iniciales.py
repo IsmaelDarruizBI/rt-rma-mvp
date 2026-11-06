@@ -58,9 +58,10 @@ def base(admin):
 
 
 def _migraciones_previas(archivo):
-    return archivo.parent.name == "migrations" and not archivo.name.endswith(
-        MIGRACION_E3
-    )
+    """Las migraciones anteriores a la de E3 (por nombre: las posteriores,
+    como la de E4, suponen sus columnas)."""
+    e3 = next(a for a in archivos_sql() if a.name.endswith(MIGRACION_E3))
+    return archivo.parent.name == "migrations" and archivo.name < e3.name
 
 
 def _migraciones(archivo):

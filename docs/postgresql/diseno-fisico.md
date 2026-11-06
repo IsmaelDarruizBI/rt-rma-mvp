@@ -217,7 +217,7 @@ Los ingresos de stock no usan motivo de ajuste; llevan su motivo u origen en tex
 ## 5. Reglas que deben implementar los servicios FastAPI
 
 1. **Una transacción por comando,** con acción, cambios, movimientos, documentos y eventos. Resuelve la doble escritura de los pasos 210 y 211.
-2. **Bloqueo previo con `select ... for update`,** en este orden: Cliente (si cambia), Orden, insumos de menor a mayor id.
+2. **Bloqueo previo,** en este orden: Orden, Cliente, Documento y Equipo (si cambian), insumos por `clave` ascendente. La regla completa, las altas y los modos de bloqueo están en [`e4-e7-diseno-integrado.md`](e4-e7-diseno-integrado.md), sección 13.7.
 3. **Idempotencia:**
    - insertar la acción con su clave al comienzo;
    - ante una violación de unicidad, devolver la `respuesta` de la acción confirmada;
@@ -231,7 +231,7 @@ Los ingresos de stock no usan motivo de ajuste; llevan su motivo u origen en tex
    - check-in según el origen;
    - garantía sugerida al registrar el check-in.
 6. **Versiones:** crear la versión 1 junto con el Detalle y la n+1 al redefinir. La vigente sale de `v_detalle_version_vigente`.
-7. **Documentos:** comprobante de entrega con el texto legal vigente y registro de `plantilla_version` (cambios H-2 y H-3).
+7. **Documentos:** comprobante de entrega con el texto legal vigente y registro de `plantilla_version` cuando se conoce (el dominio todavía no la registra) (cambios H-2 y H-3).
 8. **Ajuste negativo:** rechazarlo antes que la base, con un mensaje claro (cambio H-1).
 9. **Cierre:** la actualización que cierra la Orden es la última de la transacción.
 10. **Historial visible:** escribir `historial_*` en los eventos que hoy aparecen y leer `v_historial_visible`.

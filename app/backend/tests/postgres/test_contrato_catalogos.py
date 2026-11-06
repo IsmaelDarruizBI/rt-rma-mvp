@@ -454,7 +454,9 @@ def test_la_migracion_conserva_los_insumos_y_la_carga_fija_la_clave(admin):
         a for a in archivos_sql() if a.name.endswith("_e3_catalogos.sql")
     )
     url, nombre = _base(
-        admin, lambda a: _solo_migraciones(a) and a != migracion_e3
+        # Las anteriores a E3: las posteriores suponen sus columnas.
+        admin,
+        lambda a: _solo_migraciones(a) and a.name < migracion_e3.name,
     )
     try:
         with psycopg.connect(url, autocommit=True) as conexion:

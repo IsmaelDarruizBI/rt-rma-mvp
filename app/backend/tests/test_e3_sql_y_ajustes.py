@@ -184,6 +184,9 @@ def test_un_nombre_no_se_registra_dos_veces():
         "SELECT lowrite(0, 'x')",
         # Fuera de la transaccion o fuera de la base.
         "SELECT setval('rma.secuencia', 1)",
+        # Valor de la sesion, que en el pool es de otro comando (QAF-14).
+        "SELECT currval('rma.orden_numero_seq')",
+        "SELECT lastval()",
         "SELECT net.http_post('x')",
         "SELECT cron.schedule('x', 'y')",
         "SELECT vault.create_secret('x')",
@@ -404,7 +407,13 @@ def test_solo_la_unidad_de_trabajo_toca_la_conexion_y_la_transaccion():
     conexion interna ni controla la transaccion; los repositories no
     importan psycopg."""
     prohibidos = {"_conexion_actual", "commit", "rollback", "conexion"}
-    repositories = {"catalogos.py", "modelos_equipo.py"}
+    repositories = {
+        "catalogos.py",
+        "modelos_equipo.py",
+        "ordenes.py",
+        "ordenes_lectura.py",
+        "acciones.py",
+    }
     hallazgos = []
     for archivo in _modulos_postgres():
         if archivo.name == "transaccion.py":
@@ -430,7 +439,13 @@ def test_solo_la_unidad_de_trabajo_toca_la_conexion_y_la_transaccion():
 def test_los_repositories_solo_ejecutan_consultas_registradas():
     """Cada llamada a filas/fila en un repository recibe una constante de
     modulo creada con consulta(...)."""
-    for nombre in ("catalogos.py", "modelos_equipo.py"):
+    for nombre in (
+        "catalogos.py",
+        "modelos_equipo.py",
+        "ordenes.py",
+        "ordenes_lectura.py",
+        "acciones.py",
+    ):
         arbol = ast.parse((RAIZ_POSTGRES / nombre).read_text(encoding="utf-8"))
         registradas_ = {
             objetivo.id

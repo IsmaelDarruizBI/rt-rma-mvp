@@ -416,7 +416,7 @@ Resultados al cierre, después de las correcciones de las secciones 12 y 13:
 | Conjunto PostgreSQL (E1, E2, E3) | 460 pruebas, 2 corridas sin fallos al cierre, de unos 62 s cada una (319 antes de la QA y 401 antes de la QA final) |
 | Suite JSON completa | 1639 pasan y 121 se saltean (las de PostgreSQL, sin la base) |
 | Pruebas SQL (`supabase/tests`) | todas OK, con la migración de E3 |
-| `ruff check`, `ruff format --check` y `npm run validate:all` | sin errores |
+| `ruff check`, `ruff format --check` de los archivos de E3 y `npm run validate:all` | sin errores |
 
 Las pruebas de E1 solo cambiaron en dos puntos:
 - `conexion_actual` pasó a llamarse `_conexion_actual`;

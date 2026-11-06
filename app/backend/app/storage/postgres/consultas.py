@@ -91,6 +91,11 @@ PREFIJOS_PROHIBIDOS = (
 FUNCIONES_PROHIBIDAS = (
     "set_config",
     "setval",
+    # Leen el ultimo valor de una secuencia en la sesion, que en el pool
+    # puede ser de un comando anterior (QAF-14): se usa el valor devuelto
+    # por la misma sentencia.
+    "currval",
+    "lastval",
     "loread",
     "lowrite",
     "ts_stat",

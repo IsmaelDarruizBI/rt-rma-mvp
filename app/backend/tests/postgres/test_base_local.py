@@ -11,6 +11,7 @@ from app.core.config import Settings
 from app.repositories.exceptions import (
     ConflictoDeEscrituraError,
     PersistenciaError,
+    RestriccionDeIntegridadError,
 )
 from app.storage.postgres import (
     conectar,
@@ -160,7 +161,9 @@ def test_un_bloqueo_vencido_es_reintentable(postgres_descartable):
 
 
 @pytest.mark.postgres
-def test_una_violacion_de_integridad_es_un_conflicto(postgres_descartable):
+def test_una_violacion_de_integridad_no_es_un_conflicto(
+    postgres_descartable,
+):
     import psycopg
 
     with conectar(_configuracion(postgres_descartable)) as conexion:
@@ -172,5 +175,6 @@ def test_una_violacion_de_integridad_es_un_conflicto(postgres_descartable):
                 )
 
     traducido = traducir_error(capturado.value)
-    assert isinstance(traducido, ConflictoDeEscrituraError)
+    assert isinstance(traducido, RestriccionDeIntegridadError)
+    assert not isinstance(traducido, ConflictoDeEscrituraError)
     assert not es_reintentable(capturado.value)

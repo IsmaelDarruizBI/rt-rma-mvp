@@ -102,6 +102,24 @@ def crear_base(url_admin: str, archivos: Sequence[Path] | None = None) -> str:
     return url
 
 
+def clonar_base(url_admin: str, plantilla: str) -> str:
+    """Una base nueva, copia de ``plantilla`` (``CREATE DATABASE ...
+    TEMPLATE``); devuelve su URL. Aisla cada prueba sin volver a aplicar
+    migraciones ni cargas. La plantilla no puede tener conexiones abiertas.
+    """
+    import psycopg
+    from psycopg import sql
+
+    nombre = f"rma_prueba_{uuid.uuid4().hex[:12]}"
+    with psycopg.connect(url_admin, autocommit=True) as admin:
+        admin.execute(
+            sql.SQL("create database {} template {}").format(
+                sql.Identifier(nombre), sql.Identifier(plantilla)
+            )
+        )
+    return url_de_base(url_admin, nombre)
+
+
 def borrar_base(url_admin: str, nombre: str) -> None:
     """Borra la base aunque queden conexiones abiertas."""
     import psycopg

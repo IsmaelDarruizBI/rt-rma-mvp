@@ -6,7 +6,7 @@ Esquema físico de la persistencia en Supabase PostgreSQL. Implementa el diseño
 
 | Ruta | Qué es |
 |---|---|
-| `migrations/` | 13 migraciones SQL, en orden de dependencias. Crean el esquema `rma`, sus 45 tablas comentadas, vistas, triggers, permisos y datos de referencia. La 13 (E3, aditiva) agrega `insumo.clave` (el id del dominio) y `orden` en usuarios y medios de pago |
+| `migrations/` | 15 migraciones SQL, en orden de dependencias. Crean el esquema `rma`, sus 45 tablas comentadas, vistas, triggers, permisos y datos de referencia. La 13 (E3, aditiva) agrega `insumo.clave` (el id del dominio) y `orden` en usuarios y medios de pago. La 14 (E4, aditiva) agrega la numeración sin truncar, las columnas que el guardado del agregado Orden necesita para no perder datos, la restricción de cierre y los medios de pago predeterminados. La 15 (E4, aditiva) agrega `posicion` en recepción, check-in, fotos y documentos, vuelve opcional `plantilla_version` y corrige el bloqueo del trigger de fotos |
 | `seeds/referencia_operativa/` | Datos operativos iniciales válidos para producción: medios de pago, empresa, Términos y Condiciones v1, catálogo técnico de modelos y motivos de ajuste aprobados |
 | `seeds/desarrollo/` | Datos **ficticios** de desarrollo. **Nunca se cargan en producción** |
 | `tests/` | Pruebas SQL. Cada archivo de prueba corre en una transacción que se descarta |
@@ -49,7 +49,7 @@ for f in supabase/tests/*.sql; do psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$f" || b
 RMA_DB_URL="$DB_URL" node supabase/scripts/probar_concurrencia.cjs
 ```
 
-Una prueba que falla aborta con un mensaje que dice qué regla no se cumplió. `select * from rma.verificar_integridad();` debe devolver cero filas.
+Sin Docker ni `psql`, `tests/postgres/test_pruebas_sql_supabase.py` corre los mismos archivos sobre una base local descartable. Una prueba que falla aborta con un mensaje que dice qué regla no se cumplió. `select * from rma.verificar_integridad();` debe devolver cero filas.
 
 ## Proyecto de prueba en Supabase
 
@@ -182,7 +182,7 @@ Cloud Run todavía no usa este secreto.
 
 El esquema no puede garantizarlas solo. El backend las cumple dentro de la transacción de cada operación:
 
-- **Bloqueos:** con `select ... for update`, siempre en el orden Cliente, Orden e insumos de menor a mayor id.
+- **Bloqueos:** siempre en el orden Orden, Cliente, Documento, Equipo e insumos por `clave` ascendente. Una fila que otras referencian se bloquea con `for no key update`: `for update` choca con el `key share` de las claves foráneas y puede terminar en deadlock. Regla completa en `docs/postgresql/e4-e7-diseno-integrado.md`, sección 13.7.
 - **Acción de usuario:** insertarla al comienzo, con su clave de idempotencia; completar `respuesta` y `orden_id` al final (una sola vez).
 - **Rechazos:** si una operación se rechaza, revertirla y registrar la acción `RECHAZADA` en una transacción aparte.
 - **Libro de inventario:** **nunca usar `INSERT ... ON CONFLICT`**. Aplica los saldos antes de resolver el conflicto, así que un código repetido se rechaza.

@@ -62,6 +62,49 @@ Si el `BEGIN` falla por un error de conexión, la conexión se descarta y se tom
 
 El estado de sesión no se detecta al devolver la conexión. Con Supavisor en modo transacción, además, quedaría en una conexión del servidor que comparten otros clientes. Por eso se previene. Los privilegios de `rma_backend` no lo impiden, porque lo permite PUBLIC (medido en la sección 12.3 del diseño). Las barreras reales son el SQL estático, la revisión y la transacción `READ ONLY` de las lecturas fuera de un comando. Antes de E8 se decide la política mínima de privilegios (misma sección).
 
+## Bloque A (E4 y E5): checkpoints de A2 y A4
+
+A0, A1, A2 y A4 están implementados y aprobados, con QA-A2-H1 y QA-A2-L3. El detalle está en [`e4-e7-diseno-integrado.md`](e4-e7-diseno-integrado.md), secciones 13 y 14.
+
+| # | Etapa | Pendiente |
+|---|---|---|
+| A2-1 | A4 | Los flujos reales necesitan A4 (recepción y documentos emitidos) antes de llegar al taller. Las pruebas de A1 y A2 usan las Órdenes reales proyectadas. Propuesta: A4 antes que A3 o en paralelo; guardar y releer el flujo completo queda como criterio de A4 |
+| A2-2 | B4 | QA-E2-4 en JSON (vincular la unidad de trabajo por constructor) pasa al cableado, junto con QA-E3-4. El repository PostgreSQL ya la recibe por constructor |
+| A2-3 | Aprobado | Orden → Cliente → Documento → Equipo → insumos por `clave`. Regla completa en [`e4-e7-diseno-integrado.md`](e4-e7-diseno-integrado.md), sección 13.7 |
+| A2-4 | A5 | `test_contrato_ordenes.py` se parametriza con PostgreSQL junto con las consultas dedicadas de E2 |
+| A2-5 | B1 | Nombres de operación de la acción del comando. Hoy toma la referencia del primer paso nuevo del historial |
+| A2-6 | Aceptado | `cerrada_en` es el `updated_at` del cierre; la versión 1 de una definición registra el alta de la Orden; las versiones históricas creadas de una vez guardan la garantía final |
+| A2-7 | Resuelto en A4 | El corpus cubre una garantía RMA de punta a punta, con Detalles de origen |
+
+### Hallazgos de la QA del checkpoint A2
+
+Los identificadores llevan el prefijo `QA-A2-` para no confundirse con M1 a M4 y L1 a L10 de este documento, ni con **H-1** del diseño lógico, que es la regla aprobada sobre el stock negativo.
+
+| # | Etapa | Hallazgo |
+|---|---|---|
+| QA-A2-H1 | Corregido | `guardar` de una Orden existente sin instantánea perdía actualizaciones. Ahora se rechaza. Contrato en [`e4-e7-diseno-integrado.md`](e4-e7-diseno-integrado.md), sección 13.6 |
+| QA-A2-H1 (JSON) | A5 y B4 | JSON no exige esa precondición: guarda una Orden existente sin `obtener_para_modificar`. Al parametrizar `test_contrato_ordenes.py` (A2-4) hay que tratar esa diferencia, y alinearla en B4 |
+| QA-A2-L3 | Corregido | Una restricción violada se presentaba como un 409 por datos modificados. Ahora solo es 409 lo concurrente y la unicidad de negocio. Tabla en la sección 13.6 |
+| QA-A2-M1 | Antes de A6 | Dos líneas del mismo insumo en `insumos_utilizados`: la API JSON las acepta (0,5 + 0,5 → 200) y PostgreSQL viola `ejecucion_insumo_pkey`. Propuesta: clave primaria `(ejecucion_id, posicion)` |
+| QA-A2-M2 | Antes de A5 | Dentro de una transacción de escritura, `obtener` y `listar` corren en READ COMMITTED y pueden mezclar dos instantes de una Orden no bloqueada (reproducido). La garantía QA-E2-1 de `application/bandejas.py` no se cumple en PostgreSQL. Propuesta: una transacción de lectura consistente para las consultas |
+| QA-A2-M3 | Antes de E8 | El alta de una Orden ya cerrada viola `orden_cerrada_con_fecha`, porque el `INSERT` no lleva `cerrada_en`. Ningún comando lo hace, pero una importación sí. Propuesta: incluir `cerrada_en` en el `INSERT` |
+| QA-A2-M4 | Fotos: resuelto en A4. Insumos: antes de A6 | `FOR UPDATE` después de `KEY SHARE` produce un deadlock (`40P01`, reproducido). El trigger de fotos ya usa `FOR NO KEY UPDATE`. Falta el trigger de movimientos y DI-2, que bloquean el insumo con `FOR UPDATE` mientras `guardar` inserta `ejecucion_insumo`: `FOR NO KEY UPDATE`, o bloquear antes de insertar cualquier fila que los referencie |
+| QA-A2-L1 | A5 | Un cliente reutilizado sin DNI cierra su documento vigente compartido, aunque la Orden conserva su copia. Confirmar si es lo buscado. `listar_por_dni_cliente` debe usar la copia de la Orden para coincidir con JSON |
+| QA-A2-L2 | Antes de E7 | Una fecha sin zona horaria se relee con zona y deja de ser igual. No se encontró quién las produzca. Validarlo en el dominio o en `guardar` |
+| QA-A2-L4 | Sin urgencia | Los Detalles se ordenan por código: `DET-1000` quedaría antes de `DET-999` y fallaría la verificación de prefijo. Solo con más de 999 Detalles en una Orden |
+| QA-A2-L5 | E8 | El CHECK `orden_cerrada_con_fecha` se agrega sin `NOT VALID`: en una base con Órdenes cerradas sin fecha, la migración fallaría. DEV y UAT no tienen Órdenes |
+| QA-A2-L6 | Corregido | Afirmaciones incorrectas: «formato sin errores» en E3 y A2 (solo valía para los archivos de cada etapa) y el orden de bloqueo en `supabase/README.md` y `diseno-fisico.md` |
+
+### Hallazgos de A4
+
+| # | Etapa | Hallazgo |
+|---|---|---|
+| A4-1 | Antes de E7 | Un texto con el carácter NUL: JSON lo guarda y PostgreSQL lo rechaza con un 500, sin escribir nada. Vale para cualquier texto. Rechazarlo en la API cambiaría un contrato HTTP: requiere decisión |
+| A4-2 | A5 | `generar_comprobante_ingreso` necesita `listar_con_reservas`: el ingreso real de un cliente externo no corre todavía como comando sobre PostgreSQL. Sus datos sí se guardan y releen, por el corpus |
+| A4-3 | E8 | Una fila de `salida` de tipo `DEVOLUCION_GESTION_RT` no se puede leer: el dominio no tiene ese valor. Ningún flujo la crea |
+| A4-4 | A5 | `documentos.emitidos` y `fotos` se cargan completos con cada Orden, también `contenido`, y `listar` trae todo. Medir junto con las consultas dedicadas |
+| A4-5 | Aceptado | Filas sin `posicion` con todas sus fechas idénticas: queda el orden del id, estable pero arbitrario. Sin impacto: esas filas no existen y todo lo que escribe A4 lleva posición |
+
 ## Idempotencia (E6)
 
 ### M4. Resultado incierto del COMMIT
@@ -150,7 +193,7 @@ Después, registrar la migración con `supabase migration repair --status applie
 | L3 | E3 | Si la transacción se cierra desde otro contexto (por ejemplo, abierta en una dependencia `yield`, lo que está prohibido), el `ValueError` de la `ContextVar` reemplaza al error original. La conexión vuelve al pool igual. |
 | L4 | E1 (resuelto) | El diagnóstico de una transacción abortada o sin conexión ya no afirma que «se revirtió todo» (corregido junto con M1). |
 | L5 | E3 | Una transacción de otra unidad de trabajo anidada se rechaza antes de entrar y no invalida la exterior. Si la exterior atrapa ese error, confirma lo suyo. Aceptable; falta documentarlo junto con los repositories. |
-| L6 | E3 | El 409 `CONFLICTO_CONCURRENTE` le muestra al cliente el SQLSTATE y el nombre de la restricción (por ejemplo `insumo_stock_valido`), nunca datos de filas. Decidir si el nombre de la restricción queda solo en el log. |
+| L6 | Resuelto (QA-A2-L3) | El 409 `CONFLICTO_CONCURRENTE` ya no le muestra al cliente el SQLSTATE ni el nombre de la restricción, que quedan en el log. Antes los mostraba, nunca datos de filas. Decidir si el nombre de la restricción queda solo en el log. |
 | L7 | E3 | Bajo saturación, con `max_waiting` sin límite y 40 hilos de anyio para 4 conexiones, los pedidos que esperan ocupan el threadpool hasta `RMA_DB_POOL_ESPERA_S` cada uno y demoran también a los endpoints que no usan la base. Medir antes de fijar `max_waiting` o el tamaño del pool. |
 | L8 | E7 o E9 (en parte) | `cerrar_pool()` existe y está probado; falta conectarlo, junto con la apertura, al `lifespan` de la aplicación cuando se active PostgreSQL |
 | L9 | E3 | Pruebas: la de uvicorn demuestra aislamiento y limpieza, pero no distingue `ContextVar` de `threading.local`; el camino del ROLLBACK que falla no tiene prueba en el repo (se verificó a mano en la revisión); `tests/test_unidad_de_trabajo.py` importa funciones auxiliares de `tests/test_fotos_orden.py`. |

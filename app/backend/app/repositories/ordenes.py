@@ -42,6 +42,10 @@ class OrdenReparacionRepository(Protocol):
         Nunca pisa en silencio otra escritura (E4): si la version guardada
         cambio desde que se leyo la que llega -o ya esta cerrada-, lanza
         ``ConflictoDeEscrituraError`` y no escribe nada.
+
+        PostgreSQL es mas estricto (QA-A2-H1): una Orden que ya existe solo
+        se guarda si viene de ``obtener_para_modificar`` en esta misma
+        transaccion; si no, ``PersistenciaError``. JSON lo exigira en B4.
         """
         ...
 

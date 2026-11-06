@@ -12,11 +12,13 @@ from .catalogo_equipos import CatalogoEquiposRepository
 from .catalogos import CatalogosRepository
 from .exceptions import (
     ConflictoDeEscrituraError,
+    DatosInvalidosError,
     EntidadPersistidaNoEncontradaError,
     PersistenciaError,
     PersistenciaNoDisponibleError,
     PersistenciaSinConexionError,
     RepositoryError,
+    RestriccionDeIntegridadError,
     TransaccionInvalidadaError,
 )
 from .modelos_equipo import ModelosEquipoRepository
@@ -27,6 +29,7 @@ __all__ = [
     "CatalogoEquiposRepository",
     "CatalogosRepository",
     "ConflictoDeEscrituraError",
+    "DatosInvalidosError",
     "EntidadPersistidaNoEncontradaError",
     "ModelosEquipoRepository",
     "OrdenReparacionRepository",
@@ -34,6 +37,7 @@ __all__ = [
     "PersistenciaNoDisponibleError",
     "PersistenciaSinConexionError",
     "RepositoryError",
+    "RestriccionDeIntegridadError",
     "TransaccionInvalidadaError",
     "UnidadDeTrabajo",
 ]
