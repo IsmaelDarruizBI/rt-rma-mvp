@@ -110,7 +110,6 @@ export function PantallaOrdenes({
   actor,
   filtros,
   onFiltros,
-  onNueva,
   cargado,
 }: {
   ordenes: OrdenResumen[];
@@ -118,6 +117,7 @@ export function PantallaOrdenes({
   actor: Usuario | null;
   filtros: FiltrosListado;
   onFiltros: (filtros: FiltrosListado) => void;
+  /** Lo usa la barra superior (alta de una Orden). */
   onNueva: () => void;
   cargado: boolean;
 }) {
@@ -160,20 +160,6 @@ export function PantallaOrdenes({
 
   return (
     <Panel>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "0.75rem",
-          flexWrap: "wrap",
-          marginBottom: "0.75rem",
-        }}
-      >
-        <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Órdenes</h2>
-        <Boton onClick={onNueva}>+ Nueva orden</Boton>
-      </div>
-
       <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.6rem" }}>
         <input
           type="search"

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import * as api from "../../api/inventario";
 import { ApiError } from "../../api/client";
 import { OperacionesEstables } from "../../api/idempotencia";
+import { VentanaConservada } from "../../components/Modal";
 import {
   Boton,
   Campo,
@@ -102,16 +103,19 @@ export function InventarioPanel({
     void recargar();
   }, [recargar]);
 
-  const operar = async (operacion: () => Promise<string>) => {
+  /** Ejecuta una operación; `true` si se registró (cierra su ventana). */
+  const operar = async (operacion: () => Promise<string>): Promise<boolean> => {
     setOcupado(true);
     setError(null);
     setAviso(null);
     try {
       setAviso(await operacion());
       await recargar();
+      return true;
     } catch (fallo) {
       setError(mensajeDe(fallo));
       await recargar();
+      return false;
     } finally {
       setOcupado(false);
     }
@@ -198,8 +202,9 @@ export function InventarioPanel({
             setSeleccionado(null);
             setDetalle(null);
           }}
+          error={error}
           onIngreso={(valor, motivo, referencia) =>
-            void operar(async () => {
+            operar(async () => {
               const alcance = `ingreso:${seleccionado}`;
               const datos = { valor, motivo, referencia };
               const r = await api.registrarIngreso(seleccionado, actor?.id ?? "", valor, {
@@ -212,7 +217,7 @@ export function InventarioPanel({
             })
           }
           onAjuste={(diferencia, motivo, referencia, confirmado) =>
-            void operar(async () => {
+            operar(async () => {
               // Sin `confirmado`: el ajuste que se confirma es el mismo.
               const alcance = `ajuste:${seleccionado}`;
               const datos = { diferencia, motivo, referencia };
@@ -375,21 +380,29 @@ function DetalleDeInsumo({
   onCerrar,
   onIngreso,
   onAjuste,
+  error,
 }: {
   detalle: DetalleInsumo;
   usuarios: Usuario[];
   puedeGestionar: boolean;
   ocupado: boolean;
   onCerrar: () => void;
-  onIngreso: (cantidad: string, motivo: string, referencia: string | null) => void;
+  onIngreso: (
+    cantidad: string,
+    motivo: string,
+    referencia: string | null,
+  ) => Promise<boolean>;
   onAjuste: (
     diferencia: string,
     motivo: string,
     referencia: string | null,
     confirmado: boolean,
-  ) => void;
+  ) => Promise<boolean>;
+  /** El error de la última operación: se muestra en su ventana. */
+  error: string | null;
 }) {
   const { insumo } = detalle;
+  const [ventana, setVentana] = useState<"ingreso" | "ajuste" | null>(null);
   return (
     <Panel titulo={`Insumo ${insumo.codigo} · ${insumo.nombre}`}>
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
@@ -450,16 +463,41 @@ function DetalleDeInsumo({
       )}
 
       {puedeGestionar ? (
-        <div
-          style={{
-            display: "grid",
-            gap: "1rem",
-            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
-            margin: "0.4rem 0 0.8rem",
-          }}
-        >
-          <FormularioIngreso insumo={insumo} ocupado={ocupado} onConfirmar={onIngreso} />
-          <FormularioAjuste insumo={insumo} ocupado={ocupado} onConfirmar={onAjuste} />
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", margin: "0.4rem 0 0.8rem" }}>
+          <Boton onClick={() => setVentana("ingreso")} disabled={ocupado}>
+            Registrar ingreso
+          </Boton>
+          <Boton variante="secundario" onClick={() => setVentana("ajuste")} disabled={ocupado}>
+            Ajustar stock
+          </Boton>
+          <VentanaConservada
+            abierta={ventana === "ingreso"}
+            titulo={`Registrar ingreso · ${insumo.codigo}`}
+            onCerrar={() => setVentana(null)}
+          >
+            <FormularioIngreso
+              insumo={insumo}
+              ocupado={ocupado}
+              onConfirmar={async (...datos) => {
+                if (await onIngreso(...datos)) setVentana(null);
+              }}
+            />
+            {ventana === "ingreso" && error && <MensajeError mensaje={error} />}
+          </VentanaConservada>
+          <VentanaConservada
+            abierta={ventana === "ajuste"}
+            titulo={`Ajustar stock · ${insumo.codigo}`}
+            onCerrar={() => setVentana(null)}
+          >
+            <FormularioAjuste
+              insumo={insumo}
+              ocupado={ocupado}
+              onConfirmar={async (...datos) => {
+                if (await onAjuste(...datos)) setVentana(null);
+              }}
+            />
+            {ventana === "ajuste" && error && <MensajeError mensaje={error} />}
+          </VentanaConservada>
         </div>
       ) : (
         <p style={{ margin: "0.4rem 0 0.8rem", fontSize: "0.8rem", color: colores.alerta }}>

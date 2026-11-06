@@ -44,16 +44,5 @@ export default function App() {
     );
   }
 
-  return (
-    <main
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        minHeight: "100vh",
-        background: "#f5f6f8",
-        color: "#1a1a1a",
-      }}
-    >
-      <PanelOrdenes />
-    </main>
-  );
+  return <PanelOrdenes />;
 }

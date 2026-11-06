@@ -6,11 +6,15 @@
  * miniatura, se abren ampliadas y muestran quién las subió y cuándo. Las
  * ven Recepción y Taller. Se reducen en el navegador y se guardan en el
  * almacenamiento privado, nunca en la Orden.
+ *
+ * Elegir, revisar y subir se hace en una ventana («Cargar fotos») que
+ * conserva la revisión si se cierra antes de subir.
  */
 
 import { useEffect, useRef, useState } from "react";
 
 import { urlFoto } from "../../api/ordenes";
+import { VentanaConservada } from "../../components/Modal";
 import { Boton, colores, fechaCorta } from "../../components/ui";
 import type { FotoOrden, Orden, RolUsuario, Usuario } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
@@ -70,6 +74,7 @@ export function FotosOrden({
   const [subiendo, setSubiendo] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const [ampliada, setAmpliada] = useState<Ampliada | null>(null);
+  const [cargando, setCargando] = useState(false);
   const siguienteId = useRef(1);
   const urls = useRef(new Set<string>());
 
@@ -168,6 +173,10 @@ export function FotosOrden({
       hechas.forEach((pendiente) => liberar(pendiente.url));
       const ids = new Set(hechas.map((pendiente) => pendiente.id));
       setPendientes((actuales) => actuales.filter((pendiente) => !ids.has(pendiente.id)));
+      // Todo subido: la ventana se cierra y la galería ya las muestra.
+      if (subidas === lote.length && pendientes.length === lote.length) {
+        setCargando(false);
+      }
     } finally {
       setSubiendo(false);
     }
@@ -212,82 +221,98 @@ export function FotosOrden({
         </ul>
       )}
 
-      {pendientes.length > 0 && (
-        <section
-          aria-label="Fotos para revisar"
-          style={{
-            border: `1px dashed ${colores.borde}`,
-            borderRadius: 6,
-            padding: "0.5rem 0.6rem",
-            margin: "0 0 0.6rem",
-          }}
+      {puedeSubir && (
+        <Boton
+          variante={pendientes.length > 0 ? "primario" : "secundario"}
+          disabled={ocupado}
+          onClick={() => setCargando(true)}
         >
-          <p style={{ margin: "0 0 0.4rem", fontSize: "0.85rem" }}>
-            Revisá cada foto: solo se suben las aceptadas.
-          </p>
-          <ul style={estiloGrilla}>
-            {pendientes.map((pendiente) => (
-              <li key={pendiente.id} data-pendiente={pendiente.aceptada ? "aceptada" : "pendiente"} style={{ fontSize: "0.75rem" }}>
-                <button
-                  type="button"
-                  onClick={() => setAmpliada({ url: pendiente.url, texto: pendiente.nombre })}
-                  style={estiloBotonImagen}
-                  title="Ver ampliada"
-                >
-                  <img
-                    src={pendiente.url}
-                    alt={`Vista previa de ${pendiente.nombre}`}
-                    style={{
-                      ...estiloMiniatura,
-                      outline: pendiente.aceptada ? `3px solid ${colores.ok}` : "none",
-                    }}
-                  />
-                </button>
-                <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginTop: "0.3rem" }}>
-                  {pendiente.aceptada ? (
-                    <span style={{ color: colores.ok, fontWeight: 600 }}>✓ Aceptada</span>
-                  ) : (
-                    <Boton variante="secundario" disabled={ocupada} onClick={() => aceptar(pendiente.id)}>
-                      Aceptar
+          {pendientes.length > 0 ? `Revisar ${pendientes.length} para subir` : "Cargar fotos"}
+        </Boton>
+      )}
+      <VentanaConservada
+        abierta={cargando}
+        titulo="Cargar fotos"
+        amplio
+        onCerrar={() => setCargando(false)}
+      >
+        {pendientes.length > 0 && (
+          <section
+            aria-label="Fotos para revisar"
+            style={{
+              border: `1px dashed ${colores.borde}`,
+              borderRadius: 6,
+              padding: "0.5rem 0.6rem",
+              margin: "0 0 0.6rem",
+            }}
+          >
+            <p style={{ margin: "0 0 0.4rem", fontSize: "0.85rem" }}>
+              Revisá cada foto: solo se suben las aceptadas.
+            </p>
+            <ul style={estiloGrilla}>
+              {pendientes.map((pendiente) => (
+                <li key={pendiente.id} data-pendiente={pendiente.aceptada ? "aceptada" : "pendiente"} style={{ fontSize: "0.75rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setAmpliada({ url: pendiente.url, texto: pendiente.nombre })}
+                    style={estiloBotonImagen}
+                    title="Ver ampliada"
+                  >
+                    <img
+                      src={pendiente.url}
+                      alt={`Vista previa de ${pendiente.nombre}`}
+                      style={{
+                        ...estiloMiniatura,
+                        outline: pendiente.aceptada ? `3px solid ${colores.ok}` : "none",
+                      }}
+                    />
+                  </button>
+                  <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginTop: "0.3rem" }}>
+                    {pendiente.aceptada ? (
+                      <span style={{ color: colores.ok, fontWeight: 600 }}>✓ Aceptada</span>
+                    ) : (
+                      <Boton variante="secundario" disabled={ocupada} onClick={() => aceptar(pendiente.id)}>
+                        Aceptar
+                      </Boton>
+                    )}
+                    <Boton variante="secundario" disabled={ocupada} onClick={() => descartar(pendiente.id)}>
+                      Descartar
                     </Boton>
-                  )}
-                  <Boton variante="secundario" disabled={ocupada} onClick={() => descartar(pendiente.id)}>
-                    Descartar
-                  </Boton>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <Boton disabled={ocupada || aceptadas.length === 0} onClick={() => void subirAceptadas()}>
-            {aceptadas.length === 1
-              ? "Subir 1 foto aceptada"
-              : `Subir ${aceptadas.length} fotos aceptadas`}
-          </Boton>
-        </section>
-      )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <Boton disabled={ocupada || aceptadas.length === 0} onClick={() => void subirAceptadas()}>
+              {aceptadas.length === 1
+                ? "Subir 1 foto aceptada"
+                : `Subir ${aceptadas.length} fotos aceptadas`}
+            </Boton>
+          </section>
+        )}
 
-      {puedeSubir && lugar > 0 && (
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <ElegirFotos texto="Tomar foto" camara deshabilitado={ocupada} onElegir={elegidas} />
-          <ElegirFotos texto="Elegir fotos" deshabilitado={ocupada} onElegir={elegidas} />
-        </div>
-      )}
-      {puedeSubir && lugar <= 0 && (
-        <p style={{ margin: 0, fontSize: "0.85rem", color: colores.suave }}>
-          Ya hay {MAX_FOTOS} fotos entre las guardadas y las que esperan
-          revisión: es el máximo por Orden.
-        </p>
-      )}
-      {(preparando || subiendo) && (
-        <p role="status" style={{ margin: "0.5rem 0 0", fontSize: "0.85rem" }}>
-          {preparando ? "Preparando la vista previa…" : "Subiendo…"}
-        </p>
-      )}
-      {aviso && (
-        <p role="alert" style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: colores.alerta }}>
-          {aviso}
-        </p>
-      )}
+        {puedeSubir && lugar > 0 && (
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <ElegirFotos texto="Tomar foto" camara deshabilitado={ocupada} onElegir={elegidas} />
+            <ElegirFotos texto="Elegir fotos" deshabilitado={ocupada} onElegir={elegidas} />
+          </div>
+        )}
+        {puedeSubir && lugar <= 0 && (
+          <p style={{ margin: 0, fontSize: "0.85rem", color: colores.suave }}>
+            Ya hay {MAX_FOTOS} fotos entre las guardadas y las que esperan
+            revisión: es el máximo por Orden.
+          </p>
+        )}
+        {(preparando || subiendo) && (
+          <p role="status" style={{ margin: "0.5rem 0 0", fontSize: "0.85rem" }}>
+            {preparando ? "Preparando la vista previa…" : "Subiendo…"}
+          </p>
+        )}
+        {aviso && (
+          <p role="alert" style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: colores.alerta }}>
+            {aviso}
+          </p>
+        )}
+      </VentanaConservada>
       {ampliada && <FotoAmpliada foto={ampliada} onCerrar={() => setAmpliada(null)} />}
     </div>
   );
@@ -417,6 +442,7 @@ function FotoAmpliada({ foto, onCerrar }: { foto: Ampliada; onCerrar: () => void
       role="dialog"
       aria-modal="true"
       aria-label="Foto ampliada"
+      data-sobre-modal
       onClick={onCerrar}
       style={{
         position: "fixed",

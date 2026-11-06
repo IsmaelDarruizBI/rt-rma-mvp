@@ -6,12 +6,11 @@
  * vive en el backend: acá solo se llama a la API y se muestra lo que
  * devuelve, incluidas las acciones disponibles y la situación operativa.
  *
- * La pantalla de una Orden separa la información de lo que el empleado
- * hace: a la izquierda la cabecera y la información (cliente y equipo,
- * trabajos, autorización, ejecuciones e insumos, cobros, documentos,
- * historial); a la derecha, fijo, el panel de acciones («Próximo paso»,
- * «Otras acciones» y «Situaciones especiales»). En el celular es una sola
- * columna con el panel de acciones arriba, después de la cabecera.
+ * Todas las pantallas comparten el layout (sidebar + barra superior). En
+ * una Orden, las acciones que el usuario puede ejecutar están en la barra
+ * superior (las excepcionales, en «Más acciones») y cada una abre su
+ * formulario en una ventana superpuesta; a la derecha, «Pendientes» dice
+ * lo que falta resolver. En el celular es una sola columna.
  *
  * Qué pantalla se ve lo decide la URL (`#/inicio`, `#/ordenes`,
  * `#/ordenes/nueva`, `#/ordenes/OR-000001`, `#/taller`, `#/inventario`):
@@ -89,19 +88,25 @@ import {
 } from "./usuarioDemo";
 import { useRuta } from "./useRuta";
 import {
-  CODIGOS_SECUNDARIOS,
+  type AccionRegistrada,
+  AnfitrionAcciones,
+  EVENTO_ABRIR_ACCION,
   type ErrorDeComando,
-  LugarDeFormularios,
   MensajeDeComando,
-  PASOS_RECOMENDADOS,
   ProveedorPresentacion,
   SeccionPlegable,
   accionesDeLaOrden,
-  accionesPorLugar,
   claveDeAccion,
   puedeEjecutar,
 } from "./presentacion";
-import { INDICE_PASO_RECOMENDADO, ProximoPaso } from "./ProximoPaso";
+import { Pendientes } from "./Pendientes";
+import {
+  CODIGOS_ESPECIALES,
+  clavesDeTareas,
+  organizarBarra,
+} from "./acciones";
+import { Layout, MenuAcciones, type Seccion } from "../../components/layout";
+import { Modal } from "../../components/Modal";
 
 type Informativa =
   | "cliente"
@@ -110,43 +115,6 @@ type Informativa =
   | "ejecuciones"
   | "cobros"
   | "documentos";
-
-/**
- * Lo que se oculta en pantallas angostas y la grilla de la Orden: dos
- * columnas en escritorio (información | acciones, fijas al desplazarse),
- * una sola en el celular con las acciones arriba.
- */
-const ESTILOS_RESPONSIVOS = `
-@media (max-width: 520px) {
-  .rt-solo-escritorio { display: none; }
-}
-.rt-orden {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "cabecera" "acciones" "informacion";
-}
-.rt-orden-cabecera { grid-area: cabecera; min-width: 0; }
-.rt-orden-acciones { grid-area: acciones; min-width: 0; display: grid; gap: 0.75rem; align-content: start; }
-.rt-orden-informacion { grid-area: informacion; min-width: 0; display: grid; gap: 0.75rem; align-content: start; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 960px) {
-  .rt-orden {
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
-    grid-template-rows: auto 1fr;
-    grid-template-areas: "cabecera acciones" "informacion acciones";
-    align-items: start;
-  }
-  .rt-orden-acciones {
-    position: sticky;
-    top: 0.75rem;
-    box-sizing: border-box;
-    max-height: calc(100vh - 2.5rem);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding-bottom: 0.25rem;
-  }
-}
-`;
 
 /** Qué sección de información abre cada rol sin que la pida. */
 const ABIERTA_POR_ROL: Partial<Record<RolUsuario, Informativa>> = {
@@ -195,27 +163,31 @@ export function PanelOrdenes() {
   const [filtros, setFiltros] = useState<FiltrosListado>(leerFiltros);
   useEffect(() => guardarFiltros(filtros), [filtros]);
 
-  // Lugares donde los paneles dibujan sus formularios con un portal.
-  const [lugares, setLugares] = useState<Record<number, HTMLElement | null>>(
-    {},
-  );
-  const [especiales, setEspeciales] = useState<HTMLElement | null>(null);
-  const [otras, setOtras] = useState<HTMLElement | null>(null);
-  const registradores = useRef(
-    new Map<number, (elemento: HTMLElement | null) => void>(),
-  );
-  const registrarTarea = useCallback((indice: number) => {
-    let registrar = registradores.current.get(indice);
-    if (!registrar) {
-      registrar = (elemento) =>
-        setLugares((previos) =>
-          previos[indice] === elemento
-            ? previos
-            : { ...previos, [indice]: elemento },
-        );
-      registradores.current.set(indice, registrar);
-    }
-    return registrar;
+  // Acciones registradas por sus formularios y la que está abierta.
+  const [registradas, setRegistradas] = useState<
+    ReadonlyMap<string, AccionRegistrada>
+  >(new Map());
+  const [abierta, setAbierta] = useState<string | null>(null);
+  const registrar = useCallback((registrada: AccionRegistrada) => {
+    setRegistradas((previas) => {
+      const nuevas = new Map(previas);
+      nuevas.set(registrada.clave, registrada);
+      return nuevas;
+    });
+  }, []);
+  const quitar = useCallback((clave: string, contenedor: HTMLElement) => {
+    setRegistradas((previas) => {
+      if (previas.get(clave)?.contenedor !== contenedor) return previas;
+      const nuevas = new Map(previas);
+      nuevas.delete(clave);
+      return nuevas;
+    });
+  }, []);
+  useEffect(() => {
+    const abrir = (evento: Event) =>
+      setAbierta((evento as CustomEvent<string>).detail);
+    window.addEventListener(EVENTO_ABRIR_ACCION, abrir);
+    return () => window.removeEventListener(EVENTO_ABRIR_ACCION, abrir);
   }, []);
 
   const actor = usuarios.find((usuario) => usuario.id === actorId) ?? null;
@@ -310,6 +282,9 @@ export function PanelOrdenes() {
         const actualizada = await comando();
         ordenEnPantalla.current = actualizada;
         setOrden(actualizada);
+        // Hecho: la ventana de la acción se cierra; la pantalla ya se
+        // actualizó con la Orden devuelta.
+        setAbierta(null);
         // Una Orden nueva (alta o garantía RMA) se abre en su propia URL.
         const actual = rutaActual.current;
         if (actual.pantalla !== "orden" || actual.ordenId !== actualizada.id) {
@@ -383,54 +358,6 @@ export function PanelOrdenes() {
       refrescarListado().catch((fallo) => setError(errorDe(fallo, null)));
     }
   }, [ruta, abrirOrden, refrescarListado]);
-
-  // A qué tarea de «Próximo paso» corresponde cada acción que el usuario
-  // puede ejecutar (la lista la manda el backend en la situación).
-  const tareaDeAccion = useMemo(() => {
-    const mapa = new Map<string, { indice: number; unica: boolean }>();
-    orden?.situacion?.tareas.forEach((tarea, indice) => {
-      const propias = tarea.acciones.filter((accion) =>
-        puedeEjecutar(accion, actor),
-      );
-      // Una opción secundaria (interrumpir) no le quita el título a la
-      // principal: va plegada detrás de su propio botón.
-      const principales = propias.filter(
-        (accion) => !CODIGOS_SECUNDARIOS.has(accion.codigo),
-      );
-      propias.forEach((accion) =>
-        mapa.set(claveDeAccion(accion), {
-          indice,
-          unica: principales.length <= 1,
-        }),
-      );
-    });
-    // Pasos recomendados que no son tareas del backend (el comprobante de
-    // autorización): su propio lugar al principio de «Próximo paso».
-    if (orden && !orden.cerrada) {
-      accionesDeLaOrden(orden)
-        .filter(
-          (accion) =>
-            accion.codigo in PASOS_RECOMENDADOS &&
-            puedeEjecutar(accion, actor),
-        )
-        .forEach((accion) =>
-          mapa.set(claveDeAccion(accion), {
-            indice: INDICE_PASO_RECOMENDADO,
-            unica: true,
-          }),
-        );
-    }
-    return mapa;
-  }, [orden, actor]);
-
-  const enProximoPaso = useCallback(
-    (accion: Accion) => {
-      const tarea = tareaDeAccion.get(claveDeAccion(accion));
-      const lugar = tarea ? lugares[tarea.indice] : null;
-      return tarea && lugar ? { lugar, unica: tarea.unica } : null;
-    },
-    [tareaDeAccion, lugares],
-  );
 
   const idActor = actor?.id ?? "";
   const idOrden = orden?.id ?? "";
@@ -592,31 +519,42 @@ export function PanelOrdenes() {
       ),
   };
 
-  const contexto = {
-    actor,
-    enProximoPaso,
-    especiales,
-    otras,
-    error,
-  };
+  const contexto = useMemo(
+    () => ({ actor, error, registrar, quitar }),
+    [actor, error, registrar, quitar],
+  );
 
   // Tomar desde la cola del taller: el mismo comando que en la Orden. Si
   // sale bien, `ejecutarComando` abre la Orden tomada.
   const tomarDesdeCola = (ordenId: string, estacionId: string) =>
     ejecutarComando(() => api.tomarOrden(ordenId, idActor, estacionId));
 
-  // Qué acciones van a «Otras acciones» y a «Situaciones especiales».
-  const porLugar = orden
-    ? accionesPorLugar(orden, actor)
-    : { especiales: [], otras: [] };
   const abiertaPara = (seccion: Informativa) =>
     actor !== null && ABIERTA_POR_ROL[actor.rol] === seccion;
 
   // La sección del menú que corresponde a la pantalla actual.
-  const seccion =
+  const seccion: Seccion =
     ruta.pantalla === "nueva" || ruta.pantalla === "orden"
       ? "ordenes"
       : ruta.pantalla;
+
+  // La barra de acciones de la Orden: solo lo que el usuario puede hacer
+  // (sus formularios se registraron), primero lo que resuelve una tarea.
+  const botonesVisibles = useBotonesVisibles();
+  const barraOrden =
+    orden && enDetalle
+      ? organizarBarra(
+          [...registradas.values()].map(({ clave, accion }) => ({
+            clave,
+            accion,
+          })),
+          clavesDeTareas(orden, actor),
+          botonesVisibles,
+        )
+      : { visibles: [], menu: [] };
+  const accionAbierta = abierta ? (registradas.get(abierta) ?? null) : null;
+  const nombreAccion = (accion: Accion) =>
+    NOMBRE_ACCION[accion.codigo] ?? accion.etiqueta;
 
   // Sin sesión de demostración: pantalla de acceso (UAT).
   if (actor === null) {
@@ -632,92 +570,82 @@ export function PanelOrdenes() {
     );
   }
 
+  const tituloOrdenes = {
+    titulo: "Órdenes",
+    subtitulo: "Órdenes de reparación",
+    acciones: (
+      <Boton onClick={() => navegar({ pantalla: "nueva" })}>+ Nueva orden</Boton>
+    ),
+  };
+  const barra =
+    ruta.pantalla === "inicio"
+      ? { titulo: "Inicio", subtitulo: "Tus tareas de hoy" }
+      : ruta.pantalla === "taller"
+        ? { titulo: "Taller", subtitulo: "Cola de trabajo y órdenes en reparación" }
+        : ruta.pantalla === "inventario"
+          ? { titulo: "Inventario", subtitulo: "Stock, reservas y movimientos" }
+          : ruta.pantalla === "orden"
+            ? {
+                titulo: `Orden ${ruta.ordenId}`,
+                subtitulo: orden && enDetalle ? resumenCliente(orden) : undefined,
+                acciones: (
+                  <>
+                    <button
+                      type="button"
+                      className="rt-btn rt-btn--fantasma rt-solo-escritorio"
+                      onClick={() => navegar({ pantalla: "ordenes" })}
+                    >
+                      ← Órdenes
+                    </button>
+                    {barraOrden.visibles.map(({ clave, accion }, indice) => (
+                      <button
+                        key={clave}
+                        type="button"
+                        className={`rt-btn${indice === 0 ? " rt-btn--primario" : ""}`}
+                        disabled={ocupado}
+                        title={nombreAccion(accion)}
+                        onClick={() => setAbierta(clave)}
+                      >
+                        <span className="rt-btn__texto">{nombreAccion(accion)}</span>
+                      </button>
+                    ))}
+                    <MenuAcciones
+                      items={barraOrden.menu.map(({ clave, accion }, indice) => {
+                        const especial = CODIGOS_ESPECIALES.has(accion.codigo);
+                        const anterior = barraOrden.menu[indice - 1];
+                        const grupo =
+                          indice === 0
+                            ? especial
+                              ? "Situaciones especiales"
+                              : "Otras acciones"
+                            : especial &&
+                                !CODIGOS_ESPECIALES.has(anterior.accion.codigo)
+                              ? "Situaciones especiales"
+                              : undefined;
+                        return {
+                          clave,
+                          etiqueta: nombreAccion(accion),
+                          grupo,
+                          onElegir: () => setAbierta(clave),
+                        };
+                      })}
+                    />
+                  </>
+                ),
+              }
+            : tituloOrdenes;
+
   return (
-    <div
-      style={{
-        maxWidth: enDetalle ? 1360 : 1040,
-        margin: "0 auto",
-        padding: "1rem",
+    <Layout
+      seccion={seccion}
+      onNavegar={(destino) => {
+        setError(null);
+        navegar({ pantalla: destino });
       }}
+      usuario={{ nombre: actor.nombre, rol: ROL[actor.rol] ?? actor.rol }}
+      onCerrarSesion={cerrarSesion}
+      barra={barra}
     >
-      <style>{ESTILOS_RESPONSIVOS}</style>
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "0.75rem",
-          flexWrap: "wrap",
-          marginBottom: "1rem",
-        }}
-      >
-        <div>
-          <h1 style={{ margin: 0, fontSize: "1.4rem" }}>Rosario Tecno</h1>
-          <p style={{ margin: 0, color: colores.suave }}>
-            Gestión de reparaciones
-          </p>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.75rem",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ textAlign: "right", lineHeight: 1.25 }}>
-            <div style={{ fontWeight: 600 }}>{actor.nombre}</div>
-            <div style={{ fontSize: "0.8rem", color: colores.suave }}>
-              {ROL[actor.rol] ?? actor.rol}
-            </div>
-          </div>
-          <Boton variante="secundario" onClick={cerrarSesion}>
-            Cerrar sesión
-          </Boton>
-        </div>
-      </header>
-
-      <nav
-        aria-label="Secciones"
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "0.5rem",
-          marginBottom: "0.75rem",
-        }}
-      >
-        {(
-          [
-            ["inicio", "Inicio"],
-            ["ordenes", "Órdenes"],
-            ["taller", "Taller"],
-            ["inventario", "Inventario"],
-          ] as const
-        ).map(([clave, nombre]) => (
-          <Boton
-            key={clave}
-            variante={seccion === clave ? "primario" : "secundario"}
-            onClick={() => {
-              setError(null);
-              navegar({ pantalla: clave });
-            }}
-          >
-            {nombre}
-          </Boton>
-        ))}
-        {/* En el celular «Órdenes» ya vuelve al listado. */}
-        {(ruta.pantalla === "orden" || ruta.pantalla === "nueva") && (
-          <span className="rt-solo-escritorio">
-            <Boton
-              variante="secundario"
-              onClick={() => navegar({ pantalla: "ordenes" })}
-            >
-              ← Volver al listado
-            </Boton>
-          </span>
-        )}
-      </nav>
-
       {error && !enDetalle && <MensajeDeComando error={error} />}
 
       {ruta.pantalla === "inicio" ? (
@@ -738,28 +666,38 @@ export function PanelOrdenes() {
         />
       ) : ruta.pantalla === "inventario" ? (
         <InventarioPanel actor={actor} usuarios={usuarios} />
-      ) : ruta.pantalla === "nueva" ? (
-        <FormularioAltaOrden
-          actor={actor}
-          ocupado={ocupado}
-          onCrearClienteExterno={(datos) =>
-            void ejecutarComando(() => api.crearOrden(datos))
-          }
-          onCrearRtInterno={(datos) =>
-            void ejecutarComando(() => api.crearOrdenRt(datos))
-          }
-          onCancelar={() => navegar({ pantalla: "ordenes" })}
-        />
-      ) : ruta.pantalla === "ordenes" ? (
-        <PantallaOrdenes
-          ordenes={ordenes}
-          usuarios={usuarios}
-          actor={actor}
-          filtros={filtros}
-          onFiltros={setFiltros}
-          onNueva={() => navegar({ pantalla: "nueva" })}
-          cargado={listadoCargado}
-        />
+      ) : ruta.pantalla === "ordenes" || ruta.pantalla === "nueva" ? (
+        <>
+          <PantallaOrdenes
+            ordenes={ordenes}
+            usuarios={usuarios}
+            actor={actor}
+            filtros={filtros}
+            onFiltros={setFiltros}
+            onNueva={() => navegar({ pantalla: "nueva" })}
+            cargado={listadoCargado}
+          />
+          {ruta.pantalla === "nueva" && (
+            <Modal
+              titulo="Nueva orden"
+              amplio
+              onCerrar={() => navegar({ pantalla: "ordenes" })}
+            >
+              <FormularioAltaOrden
+                actor={actor}
+                ocupado={ocupado}
+                onCrearClienteExterno={(datos) =>
+                  void ejecutarComando(() => api.crearOrden(datos))
+                }
+                onCrearRtInterno={(datos) =>
+                  void ejecutarComando(() => api.crearOrdenRt(datos))
+                }
+                onCancelar={() => navegar({ pantalla: "ordenes" })}
+              />
+              {error && <MensajeDeComando error={error} />}
+            </Modal>
+          )}
+        </>
       ) : noEncontrada === ruta.ordenId ? (
         <Panel>
           <h2 style={{ margin: "0 0 0.4rem", fontSize: "1.1rem" }}>
@@ -782,59 +720,27 @@ export function PanelOrdenes() {
         )
       ) : (
         <ProveedorPresentacion value={contexto}>
-          {/*
-            minmax(0, 1fr): ningún contenido ancho (por ejemplo el
-            historial) ensancha la pantalla en el celular.
-          */}
           <div className="rt-orden">
-            <div className="rt-orden-cabecera">
+            <aside className="rt-orden__lateral" aria-label="Pendientes de la orden">
+              <Pendientes
+                orden={orden}
+                actor={actor}
+                usuarios={usuarios}
+                onResolver={setAbierta}
+                abrible={(clave) => registradas.has(clave)}
+                nombreAccion={nombreAccion}
+                errorGeneral={errorSinLugar(error, orden, actor)}
+              />
+            </aside>
+
+            <div className="rt-orden__principal">
               <CabeceraOrden
                 orden={orden}
                 usuarios={usuarios}
                 estaciones={estaciones}
               />
-            </div>
 
-            <aside className="rt-orden-acciones" aria-label="Acciones de la orden">
-              <ProximoPaso
-                orden={orden}
-                actor={actor}
-                usuarios={usuarios}
-                registrarTarea={registrarTarea}
-                errorGeneral={errorSinLugar(error, orden, actor)}
-              />
-              {porLugar.otras.length > 0 && (
-                <SeccionPlegable
-                  key={`${orden.id}-${actorId}-otras`}
-                  titulo="Otras acciones"
-                  resumen={nombresDe(porLugar.otras).join(" · ")}
-                >
-                  <LugarDeFormularios onElemento={setOtras} />
-                </SeccionPlegable>
-              )}
-              {porLugar.especiales.length > 0 && (
-                <SeccionPlegable
-                  key={`${orden.id}-${actorId}-especiales`}
-                  titulo="Situaciones especiales"
-                  resumen={nombresDe(porLugar.especiales).join(" · ")}
-                >
-                  <p
-                    style={{
-                      margin: "0 0 0.8rem",
-                      fontSize: "0.8rem",
-                      color: colores.suave,
-                    }}
-                  >
-                    Situaciones excepcionales. Cancelar no borra nada: el
-                    trabajo queda cancelado con su motivo y deja de cobrarse.
-                  </p>
-                  <LugarDeFormularios onElemento={setEspeciales} />
-                </SeccionPlegable>
-              )}
-            </aside>
-
-            <div className="rt-orden-informacion">
-              {/* Solo formularios: cada uno va a su lugar del panel. */}
+              {/* Solo formularios: cada uno se abre en su ventana. */}
               <AccionesOrden
                 orden={orden}
                 actor={actor}
@@ -865,6 +771,15 @@ export function PanelOrdenes() {
                 ocupado={ocupado}
                 ejecutar={ejecutor}
               />
+
+              <SeccionPlegable
+                key={`${orden.id}-trabajos`}
+                titulo="Trabajos"
+                resumen={resumenTrabajos(orden)}
+                abierta
+              >
+                <TrabajosOrden orden={orden} usuarios={usuarios} />
+              </SeccionPlegable>
 
               <SeccionPlegable
                 key={`${orden.id}-${actorId}-cliente`}
@@ -940,15 +855,6 @@ export function PanelOrdenes() {
                     return subidas;
                   }}
                 />
-              </SeccionPlegable>
-
-              <SeccionPlegable
-                key={`${orden.id}-trabajos`}
-                titulo="Trabajos"
-                resumen={resumenTrabajos(orden)}
-                abierta
-              >
-                <TrabajosOrden orden={orden} usuarios={usuarios} />
               </SeccionPlegable>
 
               {orden.autorizacion_requerida &&
@@ -1090,11 +996,31 @@ export function PanelOrdenes() {
               </SeccionPlegable>
             </div>
           </div>
+          <AnfitrionAcciones
+                titulo={nombreAccion}
+                abierta={accionAbierta}
+            onCerrar={() => setAbierta(null)}
+          />
         </ProveedorPresentacion>
       )}
-
-    </div>
+    </Layout>
   );
+}
+
+/**
+ * Cuántas acciones entran como botón en la barra según el ancho: el resto
+ * va a «Más acciones». Solo cambia dónde se ven, no cuáles hay.
+ */
+function useBotonesVisibles(): number {
+  const calcular = () =>
+    window.innerWidth >= 1400 ? 3 : window.innerWidth >= 1150 ? 2 : 1;
+  const [cantidad, setCantidad] = useState(calcular);
+  useEffect(() => {
+    const alCambiar = () => setCantidad(calcular());
+    window.addEventListener("resize", alCambiar);
+    return () => window.removeEventListener("resize", alCambiar);
+  }, []);
+  return cantidad;
 }
 
 function errorDe(
@@ -1140,15 +1066,6 @@ function errorSinLugar(
       claveDeAccion(accion) === error.clave && puedeEjecutar(accion, actor),
   );
   return visible ? null : error;
-}
-
-/** Nombres (sin repetir) de un grupo de acciones, para el resumen. */
-function nombresDe(acciones: Accion[]): string[] {
-  return [
-    ...new Set(
-      acciones.map((accion) => NOMBRE_ACCION[accion.codigo] ?? accion.etiqueta),
-    ),
-  ];
 }
 
 function resumenTrabajos(orden: Orden): ReactNode {

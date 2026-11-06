@@ -1,21 +1,19 @@
 /**
- * Piezas visuales mínimas compartidas.
- *
- * Sin librería de componentes: el MVP necesita que se entienda el
- * estado de una Orden, no un design system.
+ * Piezas visuales compartidas. El estilo vive en `styles.css` (tokens,
+ * tarjetas, botones); acá quedan las piezas con su API de siempre.
  */
 
 import type { CSSProperties, ReactNode } from "react";
 
 export const colores = {
-  texto: "#1a1a1a",
-  suave: "#666",
-  borde: "#ddd",
-  fondo: "#fafafa",
-  acento: "#1f6feb",
-  ok: "#1a7f37",
-  alerta: "#9a6700",
-  error: "#b42318",
+  texto: "#111827",
+  suave: "#6b7280",
+  borde: "#e5e7eb",
+  fondo: "#f9fafb",
+  acento: "#2563eb",
+  ok: "#15803d",
+  alerta: "#b45309",
+  error: "#b91c1c",
 } as const;
 
 export function Panel({
@@ -28,28 +26,8 @@ export function Panel({
   style?: CSSProperties;
 }) {
   return (
-    <section
-      style={{
-        border: `1px solid ${colores.borde}`,
-        borderRadius: 8,
-        padding: "1rem",
-        background: "#fff",
-        ...style,
-      }}
-    >
-      {titulo && (
-        <h3
-          style={{
-            margin: "0 0 0.75rem",
-            fontSize: "0.85rem",
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            color: colores.suave,
-          }}
-        >
-          {titulo}
-        </h3>
-      )}
+    <section className="rt-tarjeta" style={style}>
+      {titulo && <h3 className="rt-tarjeta__titulo">{titulo}</h3>}
       {children}
     </section>
   );
@@ -106,9 +84,10 @@ export function Campo({
 export const estiloInput: CSSProperties = {
   width: "100%",
   padding: "0.45rem 0.6rem",
-  border: `1px solid ${colores.borde}`,
+  border: "1px solid #d1d5db",
   borderRadius: 6,
-  fontSize: "0.9rem",
+  fontSize: "0.875rem",
+  background: "#fff",
   fontFamily: "inherit",
   boxSizing: "border-box",
 };
@@ -126,23 +105,12 @@ export function Boton({
   variante?: "primario" | "secundario";
   type?: "button" | "submit";
 }) {
-  const primario = variante === "primario";
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      style={{
-        padding: "0.5rem 0.9rem",
-        borderRadius: 6,
-        border: `1px solid ${primario ? colores.acento : colores.borde}`,
-        background: primario ? colores.acento : "#fff",
-        color: primario ? "#fff" : colores.texto,
-        fontSize: "0.9rem",
-        fontFamily: "inherit",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-      }}
+      className={`rt-btn${variante === "primario" ? " rt-btn--primario" : ""}`}
     >
       {children}
     </button>
