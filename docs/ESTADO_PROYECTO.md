@@ -232,11 +232,11 @@ Plan aprobado el 03/11/2026. Las etapas y sus dependencias son las del plan; los
 | E5: Inventario | Completada (`bd59bd3`) | Ninguna local; migraciones remotas en E8 |
 | E6: Acciones e idempotencia | Completada (`b84b87a`) | Ninguna local; migración remota en E8 |
 | E7: Equivalencia completa | Completada (`b84b87a`) | B4 a B6: cableado, equivalencia de los recorridos y activación local. Las suites completas en los dos modos quedan para preparar el despliegue |
-| E8: DEV/UAT desde una máquina local | **Preparada, sin aplicar** (`2444773`) | Inspección de solo lectura hecha. Siguiente: script único de E3 y las seis migraciones restantes, con autorización ([`postgresql/e8-activacion-supabase.md`](postgresql/e8-activacion-supabase.md), [`CHECKPOINT_PRE_DEPLOY.md`](CHECKPOINT_PRE_DEPLOY.md)) |
-| E9: Cloud Run | Fuera del plan | Despliegue. Requiere una aprobación aparte |
+| E8: DEV/UAT | **Completada** (06/11/2026, `17bf69a`) | 19 de 19 migraciones en `rt-rma-db`, `verificar_integridad()` vacío. Cargados los catálogos demo (`seeds/desarrollo`): el entorno es UAT, solo para datos de prueba |
+| E9: Cloud Run y Vercel | **Completada** (06/11/2026) | `rt-rma-uat-api` revisión `00012-d4z` sobre PostgreSQL; frontend en `rt-rma-uat.vercel.app`, publicado por CLI. Anterior en JSON: `00010-pgz` |
 
 **Infraestructura:**
-- Supabase DEV/UAT tiene el esquema inicial: las 12 primeras migraciones. Faltan siete (E3 a E6), sin aplicar.
+- Supabase DEV/UAT tiene las 19 migraciones aplicadas y es la persistencia de UAT. E3 se aplicó en una transacción con `supabase db query --remote` (`supabase/scripts/e8_aplicar_e3.sql`); el trigger `insumo_clave_por_defecto` se conserva.
 - La migración de E3 y las dos del Bloque A están aplicadas y verificadas únicamente en PostgreSQL local.
 - No hay datos operativos históricos que migrar. Se conservan los catálogos remotos existentes (5 medios de pago y 36 modelos técnicos).
 - El objetivo posterior es actualizar o inicializar el esquema remoto y desplegar. Ninguno de los dos pasos está autorizado.
@@ -332,7 +332,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso: E8 con autorización para cada paso remoto** (detalle en [`CHECKPOINT_PRE_DEPLOY.md`](CHECKPOINT_PRE_DEPLOY.md), sección 8):
+**Próximo paso:** autenticación real antes de cargar datos de clientes (hoy el login es demo y la API no tiene autenticación), y reducir la latencia Cloud Run (São Paulo) – Supabase (Oregón): unos 4,5 a 6 s por lectura de Órdenes. No ejecutar `/photos/cleanup` con `aplicar`: el bucket conserva fotos anteriores a PostgreSQL.
 1. Confirmar las migraciones aplicadas y repetir las verificaciones de solo lectura.
 2. Probar localmente y aprobar el script único de E3; aplicarlo y luego las seis migraciones restantes en orden.
 3. `verificar_integridad()` vacío y medición de latencia.
