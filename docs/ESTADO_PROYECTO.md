@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 06/11/2026, al cerrar el Bloque A con A8; A3 y A5 a A8 sin commit. **Para retomar el trabajo: [`postgresql/CHECKPOINT_A4_HANDOFF.md`](postgresql/CHECKPOINT_A4_HANDOFF.md) y las secciones 15 a 19 de [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md).**
+**Última actualización:** 06/11/2026, al cerrar el rediseño del frontend y la preparación de E8, todo con commit y publicado. **Para retomar el trabajo: [`CHECKPOINT_PRE_DEPLOY.md`](CHECKPOINT_PRE_DEPLOY.md).**
 
 ## A. Estado general
 
@@ -22,12 +22,13 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 **Rama de trabajo:** `feat/postgresql-esquema`, que sale de `mvp-v2`.
 
-**Último commit de código:** el del Bloque B, `feat(postgres): idempotencia y activacion local B1 a B6` (ver `git log`).
+**Últimos commits de código:** `fe655d7` (rediseño del frontend) y `2444773` (preparación de E8), sobre el Bloque B (`b84b87a`). Ver `git log`.
 
 **Estado de desarrollo:**
 - El MVP funciona sobre JSON y está en UAT.
 - La migración a PostgreSQL tiene E0 a E7 terminadas: Bloque A (E4 + E5) y Bloque B (E6 + E7, B1 a B6). La app corre localmente sobre PostgreSQL, con los datos persistentes entre reinicios.
-- **Pendiente para la puesta en marcha:** suites completas PostgreSQL y JSON; E8 (esquema Supabase con autorización, rol `rma_backend` en lugar del superusuario, QA-E3-4, latencia); decidir el almacenamiento de fotos y de la copia del catálogo en Cloud Run; E9 (despliegue) con su propia aprobación.
+- El frontend tiene el rediseño aprobado: sidebar, barra de acciones, modales y «Pendientes» (`fe655d7`).
+- **Pendiente para la puesta en marcha:** suites completas PostgreSQL y JSON; E8 (procedimiento seguro de E3 y siete migraciones en Supabase, con autorización; latencia); sincronización automática de la copia del catálogo de Ventas; E9 (despliegue) con su propia aprobación.
 
 **Funcionalidad:**
 
@@ -48,6 +49,14 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Rediseño del frontend (06/11/2026): `fe655d7`
+
+Layout común con sidebar colapsable y barra superior contextual: las acciones que el usuario puede ejecutar quedan en la barra (las excepcionales en «Más acciones») y cada una abre su formulario en una ventana que conserva lo escrito. Alta de Orden, inventario y fotos también en ventanas. «Pendientes» reemplaza el «Próximo paso» con las tareas y avisos de `orden.situacion`. Sin cambios de reglas, permisos, endpoints ni idempotencia. 95 tests del frontend y TypeScript sin errores; recorrido funcional local verificado.
+
+### E8, preparación (06/11/2026): `2444773`
+
+`RMA_DB_REMOTO_HABILITADO` habilita una URL remota (solo con `verify-full`); permisos de `rma_backend` verificados localmente; inspección de solo lectura de DEV/UAT con `rma_api`. Procedimiento en [`postgresql/e8-activacion-supabase.md`](postgresql/e8-activacion-supabase.md) y resultados en [`CHECKPOINT_PRE_DEPLOY.md`](CHECKPOINT_PRE_DEPLOY.md), sección 3. Ninguna migración remota aplicada.
 
 ### Base del esquema (02/11/2026): `28b9d15` y `44e8da3`
 
@@ -141,7 +150,7 @@ El detalle está en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-di
 - **Migraciones:** dos nuevas, aditivas, aplicadas y verificadas **solo en PostgreSQL local**.
 - **Sin cambios** en el dominio, la API, el frontend, Cloud Run, Vercel ni Supabase remoto. PostgreSQL sigue desactivado.
 
-### Bloque A: A3, finanzas (06/11/2026, sin commit)
+### Bloque A: A3, finanzas (06/11/2026): `bd59bd3`
 
 Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 15.
 
@@ -150,7 +159,7 @@ Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-inte
 - Pruebas: 20 nuevas de A3 pasan. Validación integrada de `tests/postgres`: 295 pasan y 1 falla por una carrera anterior a A3 (A3-3, MINOR).
 - **Sin cambios** en el dominio, la API, el frontend ni Supabase remoto. PostgreSQL sigue desactivado.
 
-### Bloque A: A5, consultas dedicadas (06/11/2026, sin commit)
+### Bloque A: A5, consultas dedicadas (06/11/2026): `bd59bd3`
 
 Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 16.
 
@@ -160,7 +169,7 @@ Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-inte
 - Pruebas: contrato E2 con las dos implementaciones (46 pasan, 16 se saltean hasta A6), 10 pruebas nuevas, e integración focalizada (148 pasan, 1 falla por A3-3).
 - **Sin cambios** en el dominio, la API, el frontend ni Supabase remoto. PostgreSQL sigue desactivado.
 
-### Bloque A: A6, reservas (06/11/2026, sin commit)
+### Bloque A: A6, reservas (06/11/2026): `bd59bd3`
 
 Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 17.
 
@@ -169,7 +178,7 @@ Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-inte
 - Pruebas: 14 nuevas, contrato E2 con reservas (61 pasan, 1 se saltea hasta A7), 121 JSON de la reserva y 28 SQL y de migraciones.
 - **Sin cambios** en el dominio, los services, la API, el frontend ni Supabase remoto. PostgreSQL sigue desactivado.
 
-### Bloque A: A7, consumo, ingresos y ajustes (06/11/2026, sin commit)
+### Bloque A: A7, consumo, ingresos y ajustes (06/11/2026): `bd59bd3`
 
 Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 18.
 
@@ -179,11 +188,11 @@ Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-inte
 - **Pendiente de decisión:** A7-1, H-1 en el service antes de activar PostgreSQL.
 - **Sin cambios** en el dominio, los services, la API, el frontend ni Supabase remoto. PostgreSQL sigue desactivado.
 
-### Bloque B: B4 a B6, activación local (06/11/2026, sin commit)
+### Bloque B: B4 a B6, activación local (06/11/2026): `b84b87a`
 
 Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 22. `RMA_PERSISTENCIA=postgres` arranca la app real sobre PostgreSQL **local** (sin fallback a JSON; una URL remota se rechaza hasta E8). Recorrido vivo con pagos, inventario e idempotencia, y los datos sobreviven al reinicio. 277 pruebas focalizadas pasan; las suites completas quedan para el despliegue.
 
-### Bloque B: B2 y B3, COMMIT incierto y claves en la pantalla (06/11/2026, sin commit)
+### Bloque B: B2 y B3, COMMIT incierto y claves en la pantalla (06/11/2026): `b84b87a`
 
 Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 21.
 
@@ -191,7 +200,7 @@ Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-inte
 - La pantalla manda la clave en las operaciones que crean registros: la misma al reintentar, otra en una operación distinta. El inventario ya no cambia su `operacion_id` en cada clic.
 - Validación integrada: 20 PostgreSQL, 140 JSON, 87 del frontend, `tsc` y ruff sin errores.
 
-### Bloque B: B1, idempotencia en el servidor (06/11/2026, sin commit)
+### Bloque B: B1, idempotencia en el servidor (06/11/2026): `b84b87a`
 
 Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 20.
 
@@ -199,7 +208,7 @@ Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-inte
 - Migración `20261107000100_e6_idempotencia.sql`, solo local. Pruebas: 12 nuevas y 167 JSON de los endpoints afectados.
 - **Cambio de API, aditivo:** el encabezado opcional y el 422 (B1-3). Sin clave, nada cambia. PostgreSQL sigue desactivado; JSON ignora la clave.
 
-### Bloque A: A8, cierre e integración (06/11/2026, sin commit)
+### Bloque A: A8, cierre e integración (06/11/2026): `bd59bd3`
 
 Detalle en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), sección 19.
 
@@ -219,19 +228,19 @@ Plan aprobado el 03/11/2026. Las etapas y sus dependencias son las del plan; los
 | E1: Unidad de trabajo | Completada (`6b5cdb8`) | Ninguna |
 | E2: Consultas dedicadas | Completada (`feat(postgres): implementar consultas dedicadas E2`) | Ninguna |
 | E3: Infraestructura SQL y catálogos | Completada (`feat(postgres): implementar infraestructura SQL y catalogos E3`) | Ninguna |
-| E4: Orden (guardado por agregado) | **Implementada, sin commit** | A0 a A5 hechos (A3 y A5 sin commit) |
-| E5: Inventario | **Implementada, sin commit** | A6, A7 y el cierre A8 hechos |
-| E6: Acciones e idempotencia | **Implementada, sin commit** | B1, B2 y B3 hechos |
-| E7: Equivalencia completa | **Implementada** | B4 a B6: cableado, equivalencia de los recorridos y activación local. Las suites completas en los dos modos quedan para preparar el despliegue |
-| E8: DEV/UAT desde una máquina local | Pendiente | Actualización controlada del esquema Supabase, conexión real con `verify-full` y medición de latencia. Necesita autorización |
+| E4: Orden (guardado por agregado) | Completada (`f8ade83`, `bd59bd3`) | Ninguna local; migraciones remotas en E8 |
+| E5: Inventario | Completada (`bd59bd3`) | Ninguna local; migraciones remotas en E8 |
+| E6: Acciones e idempotencia | Completada (`b84b87a`) | Ninguna local; migración remota en E8 |
+| E7: Equivalencia completa | Completada (`b84b87a`) | B4 a B6: cableado, equivalencia de los recorridos y activación local. Las suites completas en los dos modos quedan para preparar el despliegue |
+| E8: DEV/UAT desde una máquina local | **Preparada, sin aplicar** (`2444773`) | Inspección de solo lectura hecha. Siguiente: script único de E3 y las seis migraciones restantes, con autorización ([`postgresql/e8-activacion-supabase.md`](postgresql/e8-activacion-supabase.md), [`CHECKPOINT_PRE_DEPLOY.md`](CHECKPOINT_PRE_DEPLOY.md)) |
 | E9: Cloud Run | Fuera del plan | Despliegue. Requiere una aprobación aparte |
 
 **Infraestructura:**
-- Supabase DEV/UAT tiene el esquema inicial: las 12 primeras migraciones.
+- Supabase DEV/UAT tiene el esquema inicial: las 12 primeras migraciones. Faltan siete (E3 a E6), sin aplicar.
 - La migración de E3 y las dos del Bloque A están aplicadas y verificadas únicamente en PostgreSQL local.
-- No hay datos operativos históricos que migrar.
+- No hay datos operativos históricos que migrar. Se conservan los catálogos remotos existentes (5 medios de pago y 36 modelos técnicos).
 - El objetivo posterior es actualizar o inicializar el esquema remoto y desplegar. Ninguno de los dos pasos está autorizado.
-- PostgreSQL sigue desactivado como persistencia de la aplicación.
+- PostgreSQL es la persistencia de la app local (`RMA_PERSISTENCIA=postgres`); el UAT publicado sigue en JSON.
 
 Alcance y criterio de aceptación de cada etapa pendiente:
 
@@ -244,7 +253,7 @@ Alcance y criterio de aceptación de cada etapa pendiente:
 ## D. Decisiones arquitectónicas vigentes
 
 **Generales:**
-- JSON sigue siendo el comportamiento por defecto. PostgreSQL no está conectado a la ejecución normal: `RMA_PERSISTENCIA=postgres` detiene el arranque hasta que existan los repositories.
+- JSON sigue siendo el comportamiento por defecto. `RMA_PERSISTENCIA=postgres` activa PostgreSQL entero, sin modo mixto ni fallback: local por defecto; un servidor remoto solo con `RMA_DB_REMOTO_HABILITADO=true` y `verify-full`.
 - La migración no cambia reglas de negocio. Los únicos cambios de comportamiento aprobados son H-1 a H-4 del diseño lógico, y se aplican igual en los dos modos.
 - Se preservan los tests existentes y la compatibilidad funcional: una etapa no cambia expectativas sin aprobación.
 - Ninguna credencial va en el repositorio, el frontend ni los logs. A PostgreSQL se accede solo desde FastAPI, con TLS `verify-full` contra servidores remotos.
@@ -323,18 +332,18 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso: commit del Bloque A y B (cuando se autorice), suites completas y E8 (Supabase) con autorización.**
+**Próximo paso: E8 con autorización para cada paso remoto** (detalle en [`CHECKPOINT_PRE_DEPLOY.md`](CHECKPOINT_PRE_DEPLOY.md), sección 8):
+1. Confirmar las migraciones aplicadas y repetir las verificaciones de solo lectura.
+2. Probar localmente y aprobar el script único de E3; aplicarlo y luego las seis migraciones restantes en orden.
+3. `verificar_integridad()` vacío y medición de latencia.
 
-Después, en orden:
-1. QA integral de recepción, taller, finanzas y entrega.
-2. **B1 a B6:** idempotencia, cableado, equivalencia y activación local.
-3. Actualización controlada del esquema Supabase y despliegue en Cloud Run, con su propia autorización.
+Después: suites completas, QA integral y **E9** (Cloud Run), con su propia aprobación.
 
-Recordatorio: no hay modo mixto. Los repositories PostgreSQL existen, pero la aplicación no los usa hasta la activación integral.
+Recordatorio: no hay modo mixto. El UAT publicado sigue en JSON hasta E9; los datos creados en PostgreSQL no vuelven a JSON.
 
 ## G. Cómo retomar el desarrollo
 
-En una computadora nueva:
+En una computadora nueva (pasos completos, con PostgreSQL local y `rma_dev`: [`CHECKPOINT_PRE_DEPLOY.md`](CHECKPOINT_PRE_DEPLOY.md), sección 7):
 
 ```bash
 git clone https://github.com/IsmaelDarruizBI/rt-rma-mvp.git
