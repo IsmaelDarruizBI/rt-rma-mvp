@@ -121,10 +121,12 @@ def _almacen_de_fotos(settings: Settings) -> AlmacenFotos | None:
 def _contexto_postgres(settings: Settings) -> ApplicationContext:
     """B4: la app entera sobre PostgreSQL, sin modo mixto ni fallback.
 
-    Solo contra un servidor LOCAL: la conexion a Supabase llega con E8 y su
-    autorizacion. Si la base no responde, la app no arranca (nunca cae a
-    JSON). Los datos de dominio -Ordenes, catalogos, acciones y modelos
-    tecnicos- van a la base; la copia local del catalogo de Ventas y las
+    Un servidor remoto (Supabase) solo con ``RMA_DB_REMOTO_HABILITADO``
+    (E8), con TLS ``verify-full``. Una sola unidad de trabajo por pool,
+    compartida por todos los repositories (QA-E3-4). Si la base no
+    responde, la app no arranca (nunca cae a JSON). Los datos de
+    dominio -Ordenes, catalogos, acciones y modelos tecnicos- van a la
+    base; la copia local del catalogo de Ventas y las
     fotos conservan su almacenamiento propio.
     """
     from app.storage.postgres.acciones import PostgresRegistroDeAcciones
@@ -142,12 +144,15 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
 
     configuracion = configuracion_postgres(settings)
     ajustes = ajustes_postgres(settings)
-    if servidor_unico(configuracion.conninfo.get_secret_value()) not in (
-        HOSTS_LOCALES
-    ):
+    remoto = (
+        servidor_unico(configuracion.conninfo.get_secret_value())
+        not in HOSTS_LOCALES
+    )
+    if remoto and not settings.db_remoto_habilitado:
         raise ConfiguracionPersistenciaError(
             "RMA_PERSISTENCIA=postgres solo arranca contra un servidor "
-            "local: la conexion remota (Supabase) llega con E8."
+            "local: la conexion remota (Supabase) exige "
+            "RMA_DB_REMOTO_HABILITADO=true (E8)."
         )
     pool = abrir_pool(configuracion, ajustes)
     try:

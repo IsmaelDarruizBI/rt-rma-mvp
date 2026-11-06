@@ -107,6 +107,9 @@ class Settings(BaseSettings):
     # Run llega desde Secret Manager. Nunca se versiona ni se escribe en
     # mensajes o logs: ``SecretStr`` la oculta en ``repr``.
     database_url: SecretStr | None = None
+    # E8: conectar a un PostgreSQL remoto (Supabase) exige habilitarlo
+    # explicitamente; por defecto solo se acepta un servidor local.
+    db_remoto_habilitado: bool = False
     # CA con que se valida el certificado (``verify-full``) de un
     # servidor remoto.
     db_sslrootcert: Path = CA_POSTGRES_POR_DEFECTO

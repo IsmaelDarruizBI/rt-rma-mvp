@@ -34,6 +34,7 @@ from app.core.config import Settings  # noqa: E402
 from app.domain.models import Cliente, Equipo  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.repositories.exceptions import ConflictoDeEscrituraError  # noqa: E402
+from app.services import ClienteExistenteError  # noqa: E402
 from app.storage.json.catalogos import JsonCatalogosRepository  # noqa: E402
 from app.storage.json.ordenes import (  # noqa: E402
     JsonOrdenReparacionRepository,
@@ -212,8 +213,10 @@ def test_a8_los_recorridos_reales_sobre_postgres(
 
 
 def test_a8_dos_altas_con_el_mismo_dni_nuevo(armar, base, corpus):
-    """Decision A5-3: una se guarda y la otra recibe 409, con rollback
-    completo. Nunca dos clientes con el mismo DNI."""
+    """Decision A5-3: una se guarda y la otra se rechaza con rollback
+    completo. Si se superponen, 409; si la segunda lee despues de que la
+    primera confirmo, el rechazo funcional de UAT-010, como en JSON. Nunca
+    dos clientes con el mismo DNI."""
     repo, unidad = armar(pool_max=4)
     contexto = _contexto(repo, unidad, corpus)
     barrera = threading.Barrier(2)
@@ -249,7 +252,10 @@ def test_a8_dos_altas_con_el_mismo_dni_nuevo(armar, base, corpus):
     for hilo in hilos:
         hilo.join(30)
     assert len(resultados) + len(errores) == 2
-    assert all(isinstance(e, ConflictoDeEscrituraError) for e in errores)
+    assert all(
+        isinstance(e, (ConflictoDeEscrituraError, ClienteExistenteError))
+        for e in errores
+    )
     assert _sql(
         base,
         "select count(*) from rma.documento_cliente "

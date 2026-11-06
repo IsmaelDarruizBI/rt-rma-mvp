@@ -31,6 +31,11 @@ def test_la_app_sirve_desde_postgres_y_cierra_su_pool(base, tmp_path):
     app = create_app(_settings(base, tmp_path))
     contexto = app.state.contexto
     assert contexto.acciones is not None and contexto.cerrar is not None
+    # QA-E3-4: una sola unidad de trabajo por pool, la de todos.
+    unidad = contexto.unidad_de_trabajo
+    assert contexto.ordenes._unidad is unidad
+    assert contexto.catalogos._unidad is unidad
+    assert contexto.acciones._unidad is unidad
     with TestClient(app) as cliente:
         assert cliente.get("/health").json() == {"status": "ok"}
         assert cliente.get("/api/catalogs/repair-types").status_code == 200
@@ -47,3 +52,15 @@ def test_sin_base_no_arranca_ni_cae_a_json(tmp_path):
                 "postgresql://postgres@127.0.0.1:1/rma_inexistente", tmp_path
             )
         )
+
+
+def test_remoto_exige_habilitarlo_y_verify_full(tmp_path):
+    """Sin el interruptor de E8 no conecta; con el, la URL remota exige
+    TLS verify-full (la validacion es anterior a cualquier conexion)."""
+    remota = "postgresql://rma_api@db.ejemplo.supabase.co:6543/postgres"
+    with pytest.raises(ConfiguracionPersistenciaError, match="HABILITADO"):
+        create_app(_settings(remota, tmp_path))
+    habilitado = _settings(remota + "?sslmode=require", tmp_path)
+    habilitado = habilitado.model_copy(update={"db_remoto_habilitado": True})
+    with pytest.raises(ConfiguracionPersistenciaError, match="verify-full"):
+        create_app(habilitado)
