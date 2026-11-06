@@ -9,9 +9,13 @@ Ademas del dominio devuelve la ``Instantanea``: los uuid de cada fila y
 la version persistida, que ``guardar`` usa para comparar lo que cambio
 (DA-1) y para el control de version (DA-2).
 
-Partes del agregado que todavia no tienen mapeo (pagos, descuentos y
-movimientos de insumo: slices A3, A6 y A7) se leen vacias; ``guardar`` las
-rechaza si llegan con datos.
+Movimientos de insumo (A6): los de la Orden en ``rma.movimiento_inventario``,
+por ``posicion``. El insumo vuelve a su ``clave`` y el Detalle, la Ejecucion
+y el movimiento de origen, a su codigo.
+
+Pagos, devoluciones de dinero y descuentos (A3): cada lista sale por
+``posicion``; los importes, sin ceros decimales de mas (DE3-3). El medio
+de pago y el pago de origen de una devolucion vuelven a ser codigos.
 
 Dos datos se reconstruyen (A4):
 
@@ -39,11 +43,19 @@ from app.domain.models import (
     EstadoWorkflow,
     HistorialWorkflow,
     InsumoUtilizado,
+    MovimientoInsumo,
     OrdenReparacion,
 )
+from app.domain.models.descuentos import RegistroDescuento
 from app.domain.models.documentos import Documento, DocumentoEmitido
 from app.domain.models.equipos import EntregaEquipo
 from app.domain.models.fotos import FotoOrden
+from app.domain.models.pagos import (
+    AnulacionPago,
+    DevolucionDinero,
+    Pago,
+    ResumenPago,
+)
 from app.domain.models.recepcion import (
     ConfirmacionRecepcion,
     DatosRecepcion,
@@ -88,6 +100,10 @@ class Instantanea:
     # El ``checkin_ingreso`` guardado: ``datos.checkin`` puede ser otro.
     checkin_ingreso: bool | None = None
     documentos: dict[str, UUID] = field(default_factory=dict)
+    # Por codigo de Pago: su uuid (devoluciones e historial lo referencian).
+    pagos: dict[str, UUID] = field(default_factory=dict)
+    # Por codigo de movimiento: su uuid (un CONSUMO referencia su RESERVA).
+    movimientos: dict[str, UUID] = field(default_factory=dict)
     # La que lleva la Orden entregada por ``obtener_para_modificar``. Sin
     # marca: la fila la creo esta misma transaccion (ver ``guardar``).
     marca: str | None = None
@@ -117,9 +133,77 @@ _ORDENES = consulta(
     """,
     modo=LECTURA,
 )
-_CODIGOS = consulta(
-    "ordenes.codigos",
-    'SELECT codigo FROM rma.orden ORDER BY codigo COLLATE "C"',
+# --- Filtros de las consultas dedicadas (E2, A5) ----------------------------
+# Cada uno devuelve las candidatas con su version: ``(codigo, version)``.
+# El resultado exacto lo decide el predicado del dominio sobre la Orden
+# cargada (``ordenes.py``), el mismo que usa JSON.
+
+FILTRO_UNA = consulta(
+    "ordenes.filtro_una",
+    "SELECT codigo, version FROM rma.orden WHERE codigo = %(codigo)s",
+    modo=LECTURA,
+)
+FILTRO_TODAS = consulta(
+    "ordenes.filtro_todas",
+    "SELECT codigo, version FROM rma.orden",
+    modo=LECTURA,
+)
+# ``esta_cerrada``: ENTREGADA o devuelta a Gestion RT (EVT-REP-999).
+FILTRO_ABIERTAS = consulta(
+    "ordenes.filtro_abiertas",
+    """
+    SELECT codigo, version FROM rma.orden
+    WHERE estado_workflow <> 'ENTREGADA'
+      AND posicion_proceso IS DISTINCT FROM 'EVT-REP-999'
+    """,
+    modo=LECTURA,
+)
+# QA-A2-L1: la copia del cliente en la Orden, como JSON; no el documento
+# vigente del Cliente compartido.
+FILTRO_DNI = consulta(
+    "ordenes.filtro_dni",
+    """
+    SELECT codigo, version FROM rma.orden
+    WHERE cliente_id IS NOT NULL AND cliente_documento_numero = %(dni)s
+    """,
+    modo=LECTURA,
+)
+# ``claves`` nulo: cualquier insumo. Toda Orden con alguna RESERVA, como
+# JSON (el contrato admite tambien las ya consumidas o liberadas).
+FILTRO_RESERVAS = consulta(
+    "ordenes.filtro_reservas",
+    """
+    SELECT o.codigo, o.version FROM rma.orden o
+    WHERE EXISTS (
+        SELECT 1 FROM rma.movimiento_inventario m
+        JOIN rma.insumo i ON i.id = m.insumo_id
+        WHERE m.orden_id = o.id AND m.tipo = 'RESERVA'
+          AND (%(claves)s::text[] IS NULL OR i.clave = ANY(%(claves)s))
+    )
+    """,
+    modo=LECTURA,
+)
+FILTRO_MOVIMIENTOS = consulta(
+    "ordenes.filtro_movimientos",
+    """
+    SELECT o.codigo, o.version FROM rma.orden o
+    WHERE EXISTS (
+        SELECT 1 FROM rma.movimiento_inventario m
+        JOIN rma.insumo i ON i.id = m.insumo_id
+        WHERE m.orden_id = o.id
+          AND (%(clave)s::text IS NULL OR i.clave = %(clave)s)
+    )
+    """,
+    modo=LECTURA,
+)
+VERSIONES = consulta(
+    "ordenes.versiones",
+    "SELECT codigo, version FROM rma.orden WHERE codigo = ANY(%(codigos)s)",
+    modo=LECTURA,
+)
+CLAVES_DE_FOTOS = consulta(
+    "ordenes.claves_de_fotos",
+    "SELECT objeto_clave FROM rma.foto",
     modo=LECTURA,
 )
 _ORIGEN = consulta(
@@ -345,6 +429,69 @@ _SALIDAS = consulta(
     """,
     modo=LECTURA,
 )
+_PAGOS = consulta(
+    "ordenes.pagos",
+    """
+    SELECT p.orden_id, p.id, p.codigo, p.monto, p.tipo_pago,
+           m.codigo AS metodo, u.codigo AS usuario, p.registrado_en,
+           p.referencia, p.operacion_id, a.codigo AS anulado_por,
+           p.anulado_en, p.anulacion_motivo
+    FROM rma.pago p
+    JOIN rma.medio_pago m ON m.id = p.medio_pago_id
+    JOIN rma.usuario u ON u.id = p.usuario_id
+    LEFT JOIN rma.usuario a ON a.id = p.anulado_por
+    WHERE p.orden_id = ANY(%(ids)s)
+    ORDER BY p.orden_id, p.posicion NULLS FIRST, p.registrado_en,
+             p.codigo COLLATE "C"
+    """,
+    modo=LECTURA,
+)
+_DEVOLUCIONES = consulta(
+    "ordenes.devoluciones_dinero",
+    """
+    SELECT d.orden_id, d.codigo, p.codigo AS pago, d.monto,
+           m.codigo AS medio, u.codigo AS usuario, d.registrada_en,
+           d.motivo, d.referencia, d.operacion_id
+    FROM rma.devolucion_dinero d
+    JOIN rma.pago p ON p.id = d.pago_id
+    JOIN rma.medio_pago m ON m.id = d.medio_pago_id
+    JOIN rma.usuario u ON u.id = d.usuario_id
+    WHERE d.orden_id = ANY(%(ids)s)
+    ORDER BY d.orden_id, d.posicion NULLS FIRST, d.registrada_en,
+             d.codigo COLLATE "C"
+    """,
+    modo=LECTURA,
+)
+_DESCUENTOS = consulta(
+    "ordenes.descuentos",
+    """
+    SELECT d.orden_id, d.tipo, d.valor, d.motivo, u.codigo AS usuario,
+           d.registrado_en
+    FROM rma.descuento d
+    JOIN rma.usuario u ON u.id = d.usuario_id
+    WHERE d.orden_id = ANY(%(ids)s)
+    ORDER BY d.orden_id, d.posicion NULLS FIRST, d.registrado_en, d.id
+    """,
+    modo=LECTURA,
+)
+_MOVIMIENTOS = consulta(
+    "ordenes.movimientos_insumo",
+    """
+    SELECT m.orden_id, m.id, m.codigo, m.tipo, i.clave AS insumo,
+           d.codigo AS detalle, x.codigo AS ejecucion, o.codigo AS origen,
+           m.cantidad, u.codigo AS usuario, m.registrado_en, m.observacion
+    FROM rma.movimiento_inventario m
+    JOIN rma.insumo i ON i.id = m.insumo_id
+    JOIN rma.detalle d ON d.id = m.detalle_id
+    LEFT JOIN rma.ejecucion x ON x.id = m.ejecucion_id
+    LEFT JOIN rma.movimiento_inventario o ON o.id = m.movimiento_origen_id
+    LEFT JOIN rma.usuario u ON u.id = m.usuario_id
+    WHERE m.orden_id = ANY(%(ids)s)
+    ORDER BY m.orden_id, m.posicion NULLS FIRST, m.registrado_en,
+             m.codigo COLLATE "C"
+    """,
+    modo=LECTURA,
+)
 _HISTORIAL = consulta(
     "ordenes.historial",
     """
@@ -371,9 +518,17 @@ def utc(valor: datetime | None) -> datetime | None:
     return None if valor is None else valor.astimezone(timezone.utc)
 
 
-def codigos_de_ordenes(lector: LectorSql) -> list[str]:
-    """Todos los numeros de Orden, en el orden de ``listar()``."""
-    return [fila.codigo for fila in lector.filas(_CODIGOS)]
+def versiones_de(lector: LectorSql, codigos: list[str]) -> dict[str, int]:
+    """La version persistida de cada Orden de ``codigos`` (QA-A2-M2)."""
+    return {
+        f.codigo: f.version
+        for f in lector.filas(VERSIONES, {"codigos": list(codigos)})
+    }
+
+
+def claves_de_fotos(lector: LectorSql) -> frozenset[str]:
+    """Las claves de objeto de todas las fotos, en una sola consulta."""
+    return frozenset(f.objeto_clave for f in lector.filas(CLAVES_DE_FOTOS))
 
 
 def cargar_ordenes(lector: LectorSql, codigos: list[str]) -> list[Instantanea]:
@@ -424,6 +579,12 @@ def _agrupar_hijas(lector: LectorSql, ids: list[UUID]) -> dict[str, Any]:
         "salidas": {
             fila.orden_id: fila for fila in lector.filas(_SALIDAS, parametros)
         },
+        "pagos": por("orden_id", lector.filas(_PAGOS, parametros)),
+        "devoluciones": por(
+            "orden_id", lector.filas(_DEVOLUCIONES, parametros)
+        ),
+        "descuentos": por("orden_id", lector.filas(_DESCUENTOS, parametros)),
+        "movimientos": por("orden_id", lector.filas(_MOVIMIENTOS, parametros)),
     }
 
 
@@ -437,6 +598,8 @@ def _armar(raiz: Any, hijas: dict[str, Any]) -> Instantanea:
     salida = _salida(hijas["salidas"].get(raiz.id))
     entregada = raiz.estado_workflow == EstadoWorkflow.ENTREGADA.value
     fila_recepcion = hijas["recepcion"].get(raiz.id)
+    filas_pago = hijas["pagos"].get(raiz.id, [])
+    filas_movimiento = hijas["movimientos"].get(raiz.id, [])
     orden = OrdenReparacion(
         id=raiz.codigo,
         origen=raiz.origen,
@@ -484,6 +647,17 @@ def _armar(raiz: Any, hijas: dict[str, Any]) -> Instantanea:
         ],
         recepcion=_recepcion(fila_recepcion, raiz.id, hijas),
         fotos=[_foto(fila) for fila in hijas["fotos"].get(raiz.id, [])],
+        resumen_pago=ResumenPago(
+            pagos=[_pago(fila) for fila in filas_pago],
+            devoluciones=[
+                _devolucion(fila)
+                for fila in hijas["devoluciones"].get(raiz.id, [])
+            ],
+        ),
+        descuentos=[
+            _descuento(fila) for fila in hijas["descuentos"].get(raiz.id, [])
+        ],
+        movimientos_insumo=[_movimiento(fila) for fila in filas_movimiento],
         devolucion=None if entregada else salida,
         entrega=salida if entregada else None,
         created_at=utc(raiz.creada_en),
@@ -506,6 +680,8 @@ def _armar(raiz: Any, hijas: dict[str, Any]) -> Instantanea:
             fila_recepcion.checkin_ingreso if fila_recepcion else None
         ),
         documentos={fila.codigo: fila.id for fila in filas_documento},
+        pagos={fila.codigo: fila.id for fila in filas_pago},
+        movimientos={fila.codigo: fila.id for fila in filas_movimiento},
     )
 
 
@@ -616,6 +792,66 @@ def _documento_emitido(fila: Any, orden_id: str) -> DocumentoEmitido:
         motivo=fila.motivo,
         reemplaza_a=fila.reemplaza,
         contenido=fila.contenido,
+    )
+
+
+def _pago(fila: Any) -> Pago:
+    anulacion = None
+    if fila.anulado_en is not None:
+        anulacion = AnulacionPago(
+            usuario_id=fila.anulado_por,
+            fecha=utc(fila.anulado_en),
+            motivo=fila.anulacion_motivo,
+        )
+    return Pago(
+        id=fila.codigo,
+        monto=decimal_sin_ceros(fila.monto),
+        tipo_pago=fila.tipo_pago,
+        metodo=fila.metodo,
+        usuario_id=fila.usuario,
+        fecha=utc(fila.registrado_en),
+        referencia=fila.referencia,
+        operacion_id=fila.operacion_id,
+        anulacion=anulacion,
+    )
+
+
+def _devolucion(fila: Any) -> DevolucionDinero:
+    return DevolucionDinero(
+        id=fila.codigo,
+        pago_id=fila.pago,
+        monto=decimal_sin_ceros(fila.monto),
+        medio=fila.medio,
+        usuario_id=fila.usuario,
+        fecha=utc(fila.registrada_en),
+        motivo=fila.motivo,
+        referencia=fila.referencia,
+        operacion_id=fila.operacion_id,
+    )
+
+
+def _descuento(fila: Any) -> RegistroDescuento:
+    return RegistroDescuento(
+        tipo=fila.tipo,
+        valor=None if fila.valor is None else decimal_sin_ceros(fila.valor),
+        motivo=fila.motivo,
+        usuario_id=fila.usuario,
+        fecha=utc(fila.registrado_en),
+    )
+
+
+def _movimiento(fila: Any) -> MovimientoInsumo:
+    return MovimientoInsumo(
+        id=fila.codigo,
+        tipo=fila.tipo,
+        insumo_id=fila.insumo,
+        reparacion_detail_id=fila.detalle,
+        ejecucion_id=fila.ejecucion,
+        cantidad=decimal_sin_ceros(fila.cantidad),
+        movimiento_origen_id=fila.origen,
+        usuario_id=fila.usuario,
+        fecha=utc(fila.registrado_en),
+        observacion=fila.observacion,
     )
 
 

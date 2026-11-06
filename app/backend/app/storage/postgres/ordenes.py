@@ -1,4 +1,4 @@
-"""``OrdenReparacionRepository`` sobre PostgreSQL (E4: slices A1 y A2).
+"""``OrdenReparacionRepository`` sobre PostgreSQL (E4: A1, A2, A3 y A4).
 
 Guardado por agregado sin borrar ni reinsertar (DA-1): ``rma_backend``
 no tiene ``DELETE`` y las historias son inmutables por trigger. ``guardar``
@@ -56,15 +56,47 @@ en la lista. ``rma.recepcion`` no se actualiza despues de decidir la
 custodia: el check-in posterior va a ``rma.checkin``. Lo que el esquema no
 puede representar se rechaza antes de escribir, nunca se pierde.
 
-Fuera de alcance (se rechazan con ``PersistenciaError`` si la Orden los
-trae): movimientos de insumo (A6, A7), pagos, devoluciones y descuentos
-(A3). Las consultas dedicadas de E2 llegan en A5.
+Finanzas (A3): pagos, devoluciones de dinero y descuentos solo crecen, con
+su ``posicion``. Lo unico mutable de un Pago es su anulacion, que se
+completa una sola vez (un trigger lo exige). El medio de pago se resuelve
+por codigo: uno que no existe en ``rma.medio_pago`` es un error (DA-10).
+Las devoluciones y los pasos del historial referencian su Pago por uuid.
+
+Consultas (A5): cada consulta dedicada de E2 es un filtro SQL que trae
+las candidatas con su version; las Ordenes se cargan por lote y el
+resultado lo decide el mismo predicado que usa JSON, sobre la Orden
+cargada. Fuera de un comando, la lectura breve es REPEATABLE READ: un
+solo instante. Dentro de un comando (READ COMMITTED) cada consulta ve el
+suyo, y una carga son varias (QA-A2-M2). Por eso, en un comando:
+
+- la carga se valida por version: al terminar se releen las versiones de
+  las candidatas, y si un comando confirmo en el medio se carga otra vez.
+  Alcanza porque todo cambio del agregado sube ``rma.orden.version``
+  (DA-2), y la confirmacion de otro comando es atomica. No bloquea a nadie
+  ni cambia el aislamiento;
+- una Orden que el comando no bloqueo ni escribio se ve en una sola
+  version: la primera que leyo (QA-E2-1, ``application/bandejas.py``).
+  Cada consulta se evalua sobre esa vista. Las que bloqueo
+  (``obtener_para_modificar``) o escribio se leen siempre como estan.
+
+Reservas (A6): los movimientos de la Orden solo crecen, con su
+``posicion``, en el libro ``rma.movimiento_inventario``; el trigger del libro
+aplica el stock. Antes del primer movimiento se bloquean sus insumos por
+``clave`` (DI-2), despues de la Orden: el orden de bloqueos de A2-3. Los
+movimientos llevan la accion del comando.
+
+Consumos y liberaciones (A7): cierran su RESERVA de origen, que el trigger
+verifica. Despues de insertarlos, ``guardar`` verifica el stock que espera
+el service (DI-1, ``verificar_stock_esperado``).
+
+Fuera de alcance: DEVOLUCION y DESPERDICIO no tienen operacion habilitada
+(DI-5) y se rechazan con ``PersistenciaError``.
 
 Diseno: ``docs/postgresql/e4-e7-diseno-integrado.md`` (secciones 3 y 4).
 """
 
 import json
-from collections.abc import Collection, Iterator
+from collections.abc import Callable, Collection, Iterator
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
@@ -72,7 +104,12 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel
 
-from app.domain.models import EstadoWorkflow, OrdenReparacion
+from app.domain.models import (
+    EstadoWorkflow,
+    OrdenReparacion,
+    TipoMovimientoInsumo,
+)
+from app.domain.models.pagos import Pago
 from app.domain.models.recepcion import RecepcionEquipo
 from app.domain.models.reparacion import ReparacionDetail
 from app.repositories.exceptions import (
@@ -82,16 +119,36 @@ from app.repositories.exceptions import (
 )
 
 from .acciones import accion_del_comando
-from .consultas import ESCRITURA, LECTURA, consulta
+from .catalogos import bloquear_insumos, verificar_stock_esperado
+from .consultas import ESCRITURA, LECTURA, Consulta, consulta
 from .ejecutor import EjecutorSql
 from .ordenes_lectura import (
+    FILTRO_ABIERTAS,
+    FILTRO_DNI,
+    FILTRO_MOVIMIENTOS,
+    FILTRO_RESERVAS,
+    FILTRO_TODAS,
+    FILTRO_UNA,
     Instantanea,
     cargar_ordenes,
-    codigos_de_ordenes,
+    claves_de_fotos,
+    versiones_de,
 )
 from .transaccion import UnidadDeTrabajoPostgres
 
 _INSTANTANEAS = "ordenes.instantaneas"
+# Primera version leida de cada Orden no bloqueada, por comando (QA-E2-1).
+_LEIDAS = "ordenes.leidas"
+# Cargas que un comando que confirma en el medio puede invalidar seguidas.
+_INTENTOS_DE_LECTURA = 3
+# Los que el libro admite en una Orden: DEVOLUCION y DESPERDICIO no (DI-5).
+_TIPOS_DE_MOVIMIENTO = frozenset(
+    {
+        TipoMovimientoInsumo.RESERVA,
+        TipoMovimientoInsumo.CONSUMO,
+        TipoMovimientoInsumo.LIBERACION_RESERVA,
+    }
+)
 # Atributo de la Orden entregada por ``obtener_para_modificar`` (QA-A2-H1).
 _MARCA = "_marca_de_instantanea"
 _DOS_DECIMALES = Decimal("0.01")
@@ -131,6 +188,7 @@ _IDS = {
         ("insumo", "clave"),
         ("modelo_equipo", "codigo"),
         ("orden", "codigo"),
+        ("medio_pago", "codigo"),
     )
 }
 _INSERTAR_VERSION_RECEPCION = consulta(
@@ -199,6 +257,66 @@ _INSERTAR_SALIDA = consulta(
     """,
     modo=ESCRITURA,
 )
+_INSERTAR_PAGO = consulta(
+    "ordenes.insertar_pago",
+    """
+    INSERT INTO rma.pago
+        (codigo, orden_id, monto, tipo_pago, medio_pago_id, referencia,
+         usuario_id, registrado_en, anulado_por, anulado_en,
+         anulacion_motivo, operacion_id, posicion)
+    VALUES (%(codigo)s, %(orden)s, %(monto)s, %(tipo)s, %(medio)s,
+            %(referencia)s, %(usuario)s, %(fecha)s, %(anulado_por)s,
+            %(anulado_en)s, %(anulacion_motivo)s, %(operacion)s,
+            %(posicion)s)
+    RETURNING id
+    """,
+    modo=ESCRITURA,
+)
+_ANULAR_PAGO = consulta(
+    "ordenes.anular_pago",
+    """
+    UPDATE rma.pago SET anulado_por = %(anulado_por)s,
+        anulado_en = %(anulado_en)s, anulacion_motivo = %(anulacion_motivo)s
+    WHERE id = %(id)s
+    """,
+    modo=ESCRITURA,
+)
+_INSERTAR_DEVOLUCION_DINERO = consulta(
+    "ordenes.insertar_devolucion_dinero",
+    """
+    INSERT INTO rma.devolucion_dinero
+        (codigo, orden_id, pago_id, monto, medio_pago_id, motivo,
+         referencia, usuario_id, registrada_en, operacion_id, posicion)
+    VALUES (%(codigo)s, %(orden)s, %(pago)s, %(monto)s, %(medio)s,
+            %(motivo)s, %(referencia)s, %(usuario)s, %(fecha)s,
+            %(operacion)s, %(posicion)s)
+    """,
+    modo=ESCRITURA,
+)
+_INSERTAR_DESCUENTO = consulta(
+    "ordenes.insertar_descuento",
+    """
+    INSERT INTO rma.descuento
+        (orden_id, tipo, valor, motivo, usuario_id, registrado_en, posicion)
+    VALUES (%(orden)s, %(tipo)s, %(valor)s, %(motivo)s, %(usuario)s,
+            %(fecha)s, %(posicion)s)
+    """,
+    modo=ESCRITURA,
+)
+_INSERTAR_MOVIMIENTO = consulta(
+    "ordenes.insertar_movimiento",
+    """
+    INSERT INTO rma.movimiento_inventario
+        (codigo, tipo, insumo_id, cantidad, orden_id, detalle_id,
+         ejecucion_id, movimiento_origen_id, observacion, usuario_id,
+         accion_id, registrado_en, posicion)
+    VALUES (%(codigo)s, %(tipo)s, %(insumo)s, %(cantidad)s, %(orden)s,
+            %(detalle)s, %(ejecucion)s, %(origen)s, %(observacion)s,
+            %(usuario)s, %(accion)s, %(fecha)s, %(posicion)s)
+    RETURNING id
+    """,
+    modo=ESCRITURA,
+)
 _DETALLE_DE_ORDEN = consulta(
     "ordenes.detalle_de_orden",
     "SELECT id FROM rma.detalle "
@@ -231,6 +349,7 @@ _INSERTAR_CLIENTE = consulta(
     """
     INSERT INTO rma.cliente (codigo, nombre, telefono, email)
     VALUES (%(codigo)s, %(nombre)s, %(telefono)s, %(email)s)
+    ON CONFLICT (codigo) DO NOTHING
     RETURNING id
     """,
     modo=ESCRITURA,
@@ -279,6 +398,7 @@ _INSERTAR_EQUIPO = consulta(
         (codigo, imei, numero_serie, modelo_equipo_id, capacidad_texto, color)
     VALUES (%(codigo)s, %(imei)s, %(numero_serie)s, %(modelo)s,
             %(capacidad)s, %(color)s)
+    ON CONFLICT (codigo) DO NOTHING
     RETURNING id
     """,
     modo=ESCRITURA,
@@ -580,12 +700,12 @@ _INSERTAR_EVENTO = consulta(
     """
     INSERT INTO rma.evento_negocio
         (orden_id, tipo_evento_id, accion_id, ocurrido_en, responsable_tipo,
-         usuario_id, detalle_id, ejecucion_id, observacion,
+         usuario_id, detalle_id, ejecucion_id, pago_id, observacion,
          historial_tipo_referencia, historial_referencia_id, historial_accion)
     VALUES (%(orden)s, %(tipo_evento)s, %(accion)s, %(fecha)s,
             %(responsable)s, %(usuario)s, %(detalle)s, %(ejecucion)s,
-            %(observacion)s, %(tipo_referencia)s, %(referencia_id)s,
-            %(accion_historial)s)
+            %(pago)s, %(observacion)s, %(tipo_referencia)s,
+            %(referencia_id)s, %(accion_historial)s)
     """,
     modo=ESCRITURA,
 )
@@ -601,18 +721,17 @@ class PostgresOrdenReparacionRepository:
         self._unidad = unidad
 
     def obtener(self, orden_id: str) -> OrdenReparacion:
-        with self._unidad.lectura() as lector:
-            cargadas = cargar_ordenes(lector, [orden_id])
+        cargadas = self._leer(
+            FILTRO_UNA, {"codigo": orden_id}, lambda o: o.id == orden_id
+        )
         if not cargadas:
             raise EntidadPersistidaNoEncontradaError(
                 f"No existe la Orden {orden_id}"
             )
-        return cargadas[0].orden
+        return cargadas[0]
 
     def listar(self) -> list[OrdenReparacion]:
-        with self._unidad.lectura() as lector:
-            codigos = codigos_de_ordenes(lector)
-            return [i.orden for i in cargar_ordenes(lector, codigos)]
+        return self._leer(FILTRO_TODAS, {}, lambda o: True)
 
     def obtener_para_modificar(self, orden_id: str) -> OrdenReparacion:
         self._exigir_transaccion("Leer una Orden para modificarla")
@@ -665,23 +784,135 @@ class PostgresOrdenReparacionRepository:
     # --- Consultas dedicadas de E2 (slice A5) -------------------------------
 
     def listar_abiertas(self) -> list[OrdenReparacion]:
-        raise _pendiente("listar_abiertas", "A5")
+        return self._leer(FILTRO_ABIERTAS, {}, lambda o: not o.esta_cerrada)
 
     def listar_por_dni_cliente(self, dni: str) -> list[OrdenReparacion]:
-        raise _pendiente("listar_por_dni_cliente", "A5")
+        # Con None coincidirian los clientes sin DNI en JSON (en SQL,
+        # ninguno): se rechaza en las dos.
+        if dni is None:
+            raise ValueError("El DNI a buscar no puede ser None.")
+        return self._leer(
+            FILTRO_DNI,
+            {"dni": dni},
+            lambda o: o.cliente is not None and o.cliente.dni == dni,
+        )
 
     def listar_con_reservas(
         self, insumo_ids: Collection[str] | None = None
     ) -> list[OrdenReparacion]:
-        raise _pendiente("listar_con_reservas", "A5")
+        if isinstance(insumo_ids, str):
+            # Un str tambien es Collection[str]: se tomaria letra por letra.
+            raise ValueError(
+                "insumo_ids es una coleccion de IDs, no un str: "
+                f"usar [{insumo_ids!r}]."
+            )
+        buscados = None if insumo_ids is None else sorted(set(insumo_ids))
+        if buscados == []:
+            return []
+
+        def con_reserva(orden: OrdenReparacion) -> bool:
+            return any(
+                m.tipo is TipoMovimientoInsumo.RESERVA
+                and (buscados is None or m.insumo_id in buscados)
+                for m in orden.movimientos_insumo
+            )
+
+        return self._leer(FILTRO_RESERVAS, {"claves": buscados}, con_reserva)
 
     def listar_con_movimientos(
         self, insumo_id: str | None = None
     ) -> list[OrdenReparacion]:
-        raise _pendiente("listar_con_movimientos", "A5")
+        return self._leer(
+            FILTRO_MOVIMIENTOS,
+            {"clave": insumo_id},
+            lambda o: any(
+                insumo_id is None or m.insumo_id == insumo_id
+                for m in o.movimientos_insumo
+            ),
+        )
 
     def claves_de_fotos(self) -> frozenset[str]:
-        raise _pendiente("claves_de_fotos", "A5")
+        # Una sola consulta: un solo instante. Las fotos solo crecen.
+        with self._unidad.lectura() as lector:
+            return claves_de_fotos(lector)
+
+    # --- Lectura consistente (A5, QA-A2-M2) ---------------------------------
+
+    def _leer(
+        self,
+        consulta_: Consulta,
+        parametros: dict[str, Any],
+        incluye: Callable[[OrdenReparacion], bool],
+    ) -> list[OrdenReparacion]:
+        """Las Ordenes que cumplen ``incluye``, por numero ascendente.
+
+        ``consulta_`` (un filtro registrado) trae las candidatas de la
+        base con su version; el resultado lo decide ``incluye``, como en
+        JSON.
+        """
+        with self._unidad.lectura() as lector:
+            if self._unidad.lectura_de_un_instante():
+                codigos = [
+                    f.codigo for f in lector.filas(consulta_, parametros)
+                ]
+                ordenes = [i.orden for i in cargar_ordenes(lector, codigos)]
+                return [o for o in ordenes if incluye(o)]
+            cargadas = self._cargar_sin_mezclar(lector, consulta_, parametros)
+        return self._en_la_vista_del_comando(cargadas, incluye)
+
+    def _cargar_sin_mezclar(
+        self, lector, consulta_: Consulta, parametros: dict[str, Any]
+    ) -> list[Instantanea]:
+        """Una carga que no mezcla dos instantes de una Orden: la version
+        de cada candidata es la misma al filtrar, al cargar y al terminar."""
+        for _ in range(_INTENTOS_DE_LECTURA):
+            versiones = {
+                f.codigo: f.version
+                for f in lector.filas(consulta_, parametros)
+            }
+            if not versiones:
+                return []
+            cargadas = cargar_ordenes(lector, sorted(versiones))
+            finales = versiones_de(lector, sorted(versiones))
+            if finales == versiones and all(
+                i.version == versiones[i.orden.id] for i in cargadas
+            ):
+                return cargadas
+        error = ConflictoDeEscrituraError(
+            "Las Ordenes cambiaron mientras se leian: reintenta."
+        )
+        error.reintentable = True
+        raise error
+
+    def _en_la_vista_del_comando(
+        self,
+        cargadas: list[Instantanea],
+        incluye: Callable[[OrdenReparacion], bool],
+    ) -> list[OrdenReparacion]:
+        """Cada Orden en una sola version por comando (QA-E2-1).
+
+        Las que el comando bloqueo o escribio, como estan. Las demas, la
+        primera version que leyo: tambien las que ya no pasan el filtro
+        SQL, porque se evaluan sobre esa version.
+        """
+        propias = self._instantaneas()
+        leidas: dict[str, OrdenReparacion] = (
+            self._unidad.datos_de_transaccion().setdefault(_LEIDAS, {})
+        )
+        vista: dict[str, OrdenReparacion] = {}
+        for instantanea in cargadas:
+            orden = instantanea.orden
+            if orden.id not in propias:
+                orden = leidas.setdefault(orden.id, orden)
+            vista[orden.id] = orden
+        for codigo, orden in leidas.items():
+            if codigo not in propias:
+                vista.setdefault(codigo, orden)
+        return [
+            vista[codigo].model_copy(deep=True)
+            for codigo in sorted(vista)
+            if incluye(vista[codigo])
+        ]
 
     # --- Interno -----------------------------------------------------------
 
@@ -696,12 +927,6 @@ class PostgresOrdenReparacionRepository:
         return self._unidad.datos_de_transaccion().setdefault(
             _INSTANTANEAS, {}
         )
-
-
-def _pendiente(metodo: str, slice_: str) -> PersistenciaError:
-    return PersistenciaError(
-        f"{metodo} en PostgreSQL llega en el slice {slice_} del Bloque A."
-    )
 
 
 def _marcar(orden: OrdenReparacion, marca: str) -> None:
@@ -742,18 +967,18 @@ def _exigir_procedencia(orden: OrdenReparacion, previa: Instantanea) -> None:
 
 
 def _exigir_partes_soportadas(orden: OrdenReparacion) -> None:
-    """Lo que A1 y A2 todavia no guardan se rechaza; nunca se pierde."""
-    faltan = []
-    if orden.movimientos_insumo:
-        faltan.append("movimientos de insumo (A6, A7)")
-    if orden.resumen_pago.pagos or orden.resumen_pago.devoluciones:
-        faltan.append("pagos y devoluciones (A3)")
-    if orden.descuentos:
-        faltan.append("descuentos (A3)")
-    if faltan:
+    """Lo que todavia no se guarda se rechaza; nunca se pierde."""
+    sin_operacion = sorted(
+        {
+            m.tipo.value
+            for m in orden.movimientos_insumo
+            if m.tipo not in _TIPOS_DE_MOVIMIENTO
+        }
+    )
+    if sin_operacion:
         raise PersistenciaError(
-            f"La Orden {orden.id} tiene partes que PostgreSQL todavia no "
-            f"guarda: {', '.join(faltan)}."
+            f"La Orden {orden.id} tiene movimientos sin operacion habilitada "
+            f"en el libro (DI-5): {', '.join(sin_operacion)}."
         )
     for nombre in ("comprobante_recepcion", "comprobante_final"):
         documento = getattr(orden.documentos, nombre)
@@ -825,6 +1050,8 @@ class _Guardado:
         self._tomas = dict(previa.tomas) if previa else {}
         self._ejecuciones = dict(previa.ejecuciones) if previa else {}
         self._documentos = dict(previa.documentos) if previa else {}
+        self._pagos = dict(previa.pagos) if previa else {}
+        self._movimientos = dict(previa.movimientos) if previa else {}
         self._checkin_ingreso = previa.checkin_ingreso if previa else None
 
     # --- Flujo ---------------------------------------------------------------
@@ -863,9 +1090,14 @@ class _Guardado:
         self._todas_las_tomas(orden_id)
         self._todas_las_ejecuciones(orden_id)
         self._todos_los_controles()
+        self._movimientos_de(orden_id)
+        verificar_stock_esperado(self._unidad, self._ej)
         self._fotos(orden_id)
         self._documentos_emitidos(orden_id)
         self._salida(orden_id)
+        self._pagos_de(orden_id)
+        self._devoluciones(orden_id)
+        self._descuentos(orden_id)
         self._historial(orden_id)
         # La raiz va al final: si este guardar cierra la Orden, nada se
         # inserta despues del cierre (diseno fisico, regla 9).
@@ -892,6 +1124,8 @@ class _Guardado:
             tiene_recepcion=orden.recepcion is not None,
             checkin_ingreso=self._checkin_ingreso,
             documentos=self._documentos,
+            pagos=self._pagos,
+            movimientos=self._movimientos,
             marca=previa.marca if previa else None,
         )
 
@@ -986,7 +1220,20 @@ class _Guardado:
         for ejecucion in orden.ejecuciones:
             usuarios.add(ejecucion.usuario_id)
             insumos.update(i.insumo_id for i in ejecucion.insumos_utilizados)
+        for movimiento in orden.movimientos_insumo:
+            insumos.add(movimiento.insumo_id)
+            if movimiento.usuario_id:
+                usuarios.add(movimiento.usuario_id)
         usuarios.update(p.usuario_id for p in orden.historial if p.usuario_id)
+        resumen = orden.resumen_pago
+        medios = {p.metodo for p in resumen.pagos}
+        medios.update(d.medio for d in resumen.devoluciones)
+        for pago in resumen.pagos:
+            usuarios.add(pago.usuario_id)
+            if pago.anulacion:
+                usuarios.add(pago.anulacion.usuario_id)
+        usuarios.update(d.usuario_id for d in resumen.devoluciones)
+        usuarios.update(d.usuario_id for d in orden.descuentos)
         pedidos = {
             "usuario": usuarios,
             "tipo_reparacion": tipos,
@@ -994,6 +1241,7 @@ class _Guardado:
             "insumo": insumos,
             "modelo_equipo": {orden.equipo.modelo_tecnico_id} - {None},
             "orden": {orden.orden_origen_id} - {None},
+            "medio_pago": medios,
         }
         for tabla, codigos in pedidos.items():
             encontrados = {
@@ -1036,9 +1284,16 @@ class _Guardado:
             "email": cliente.email,
         }
         if fila is None:
-            cliente_id = self._ej.fila(
+            # A3-3: otra alta simultanea pudo crear el mismo cliente nuevo.
+            # El INSERT espera a que confirme y no hace nada; se relee
+            # bloqueado y sigue como un cliente existente.
+            nuevo = self._ej.fila(
                 _INSERTAR_CLIENTE, {"codigo": cliente.id, **datos}
-            ).id
+            )
+            if nuevo is None:
+                fila = self._ej.fila(_CLIENTE, {"codigo": cliente.id})
+        if fila is None:
+            cliente_id = nuevo.id
         else:
             cliente_id = fila.id
             if (fila.nombre, fila.telefono, fila.email) != tuple(
@@ -1084,9 +1339,13 @@ class _Guardado:
         }
         fila = self._ej.fila(_EQUIPO, {"codigo": equipo.id})
         if fila is None:
-            return self._ej.fila(
+            # A3-3, como el cliente: el de otra alta simultanea se relee.
+            nuevo = self._ej.fila(
                 _INSERTAR_EQUIPO, {"codigo": equipo.id, **datos}
-            ).id
+            )
+            if nuevo is not None:
+                return nuevo.id
+            fila = self._ej.fila(_EQUIPO, {"codigo": equipo.id})
         actuales = (
             fila.imei,
             fila.numero_serie,
@@ -1361,6 +1620,187 @@ class _Guardado:
                 "observaciones": salida.observaciones,
             },
         )
+
+    # --- Movimientos de insumo (A6) -----------------------------------------
+
+    def _movimientos_de(self, orden_id: UUID) -> None:
+        """Solo crecen. Sus insumos se bloquean antes, por ``clave`` (DI-2);
+        el trigger del libro aplica el stock y rechaza un disponible
+        negativo."""
+        nuevos = list(
+            self._con_posicion(
+                "los movimientos de insumo",
+                self._previa.orden.movimientos_insumo if self._previa else [],
+                self._orden.movimientos_insumo,
+            )
+        )
+        if not nuevos:
+            return
+        bloquear_insumos(self._ej, {m.insumo_id for _, m in nuevos})
+        accion = self._accion(orden_id)
+        for posicion, movimiento in nuevos:
+            detalle = movimiento.reparacion_detail_id
+            if detalle not in self._detalles:
+                raise PersistenciaError(
+                    f"El movimiento {movimiento.id} es de un Detalle que la "
+                    f"Orden {self._orden.id} no tiene: {detalle}."
+                )
+            origen = movimiento.movimiento_origen_id
+            if origen is not None and origen not in self._movimientos:
+                raise PersistenciaError(
+                    f"El movimiento {movimiento.id} referencia {origen}, que "
+                    f"la Orden {self._orden.id} no tiene."
+                )
+            self._movimientos[movimiento.id] = self._ej.fila(
+                _INSERTAR_MOVIMIENTO,
+                {
+                    "codigo": movimiento.id,
+                    "tipo": movimiento.tipo.value,
+                    "insumo": self._id("insumo", movimiento.insumo_id),
+                    "cantidad": _escala(
+                        movimiento.cantidad, _TRES_DECIMALES, "cantidad"
+                    ),
+                    "orden": orden_id,
+                    "detalle": self._detalles[detalle],
+                    "ejecucion": self._ejecucion_de(movimiento.ejecucion_id),
+                    "origen": self._movimientos.get(origen),
+                    "observacion": movimiento.observacion,
+                    "usuario": self._id("usuario", movimiento.usuario_id),
+                    "accion": accion,
+                    "fecha": movimiento.fecha,
+                    "posicion": posicion,
+                },
+            ).id
+
+    def _accion(self, orden_id: UUID) -> UUID:
+        """La accion del comando (DA-3): la del primer paso nuevo del
+        historial o, sin pasos, un proceso del sistema."""
+        previos = self._previa.orden.historial if self._previa else []
+        nuevos = self._orden.historial[len(previos) :]
+        primero = nuevos[0] if nuevos else None
+        return accion_del_comando(
+            self._unidad,
+            self._ej,
+            operacion=primero.referencia_id if primero else "INVENTARIO",
+            usuario=self._id("usuario", primero.usuario_id)
+            if primero
+            else None,
+            orden=orden_id,
+        )
+
+    # --- Finanzas (A3) -------------------------------------------------------
+
+    def _pagos_de(self, orden_id: UUID) -> None:
+        """Los Pagos solo crecen; de uno guardado solo cambia su anulacion,
+        una vez (``pago_validar``)."""
+        previos = self._previa.orden.resumen_pago.pagos if self._previa else []
+        pagos = self._orden.resumen_pago.pagos
+        self._exigir_prefijo(
+            "los pagos", [p.id for p in previos], [p.id for p in pagos]
+        )
+        for anterior, pago in zip(previos, pagos):
+            if pago == anterior:
+                continue
+            if (
+                anterior.anulacion is not None
+                or pago.model_copy(update={"anulacion": None}) != anterior
+            ):
+                self._inmutable(f"el pago {pago.id}")
+            self._ej.ejecutar(
+                _ANULAR_PAGO,
+                {**self._anulacion(pago), "id": self._pagos[pago.id]},
+            )
+        for posicion, pago in enumerate(
+            pagos[len(previos) :], len(previos) + 1
+        ):
+            self._pagos[pago.id] = self._ej.fila(
+                _INSERTAR_PAGO,
+                {
+                    **self._anulacion(pago),
+                    "codigo": pago.id,
+                    "orden": orden_id,
+                    "monto": _escala(pago.monto, _DOS_DECIMALES, "importe"),
+                    "tipo": pago.tipo_pago.value,
+                    "medio": self._id("medio_pago", pago.metodo),
+                    "referencia": pago.referencia,
+                    "usuario": self._id("usuario", pago.usuario_id),
+                    "fecha": pago.fecha,
+                    "operacion": pago.operacion_id,
+                    "posicion": posicion,
+                },
+            ).id
+
+    def _anulacion(self, pago: Pago) -> dict[str, Any]:
+        anulacion = pago.anulacion
+        return {
+            "anulado_por": self._id(
+                "usuario", anulacion.usuario_id if anulacion else None
+            ),
+            "anulado_en": anulacion.fecha if anulacion else None,
+            "anulacion_motivo": anulacion.motivo if anulacion else None,
+        }
+
+    def _pago_de(self, codigo: str | None) -> UUID | None:
+        if codigo is None:
+            return None
+        if codigo not in self._pagos:
+            raise PersistenciaError(
+                f"La Orden {self._orden.id} referencia el pago {codigo}, que "
+                "no tiene."
+            )
+        return self._pagos[codigo]
+
+    def _devoluciones(self, orden_id: UUID) -> None:
+        for posicion, devolucion in self._con_posicion(
+            "las devoluciones de dinero",
+            self._previa.orden.resumen_pago.devoluciones
+            if self._previa
+            else [],
+            self._orden.resumen_pago.devoluciones,
+        ):
+            self._ej.ejecutar(
+                _INSERTAR_DEVOLUCION_DINERO,
+                {
+                    "codigo": devolucion.id,
+                    "orden": orden_id,
+                    "pago": self._pago_de(devolucion.pago_id),
+                    "monto": _escala(
+                        devolucion.monto, _DOS_DECIMALES, "importe"
+                    ),
+                    "medio": self._id("medio_pago", devolucion.medio),
+                    "motivo": devolucion.motivo,
+                    "referencia": devolucion.referencia,
+                    "usuario": self._id("usuario", devolucion.usuario_id),
+                    "fecha": devolucion.fecha,
+                    "operacion": devolucion.operacion_id,
+                    "posicion": posicion,
+                },
+            )
+
+    def _descuentos(self, orden_id: UUID) -> None:
+        for posicion, registro in self._con_posicion(
+            "los descuentos",
+            self._previa.orden.descuentos if self._previa else [],
+            self._orden.descuentos,
+        ):
+            self._ej.ejecutar(
+                _INSERTAR_DESCUENTO,
+                {
+                    "orden": orden_id,
+                    "tipo": registro.tipo.value if registro.tipo else None,
+                    "valor": (
+                        None
+                        if registro.valor is None
+                        else _escala(
+                            registro.valor, _DOS_DECIMALES, "descuento"
+                        )
+                    ),
+                    "motivo": registro.motivo,
+                    "usuario": self._id("usuario", registro.usuario_id),
+                    "fecha": registro.fecha,
+                    "posicion": posicion,
+                },
+            )
 
     # --- Detalles ------------------------------------------------------------
 
@@ -1749,20 +2189,8 @@ class _Guardado:
         if not nuevos:
             return
         equivalencias = self._equivalencias({p.referencia_id for p in nuevos})
-        primero = nuevos[0]
-        accion = accion_del_comando(
-            self._unidad,
-            self._ej,
-            operacion=primero.referencia_id,
-            usuario=self._id("usuario", primero.usuario_id),
-            orden=orden_id,
-        )
+        accion = self._accion(orden_id)
         for paso in nuevos:
-            if paso.pago_id is not None:
-                raise PersistenciaError(
-                    f"El historial de la Orden {self._orden.id} referencia el "
-                    f"pago {paso.pago_id}: los pagos llegan en A3."
-                )
             tipo_referencia = paso.tipo_referencia.value
             tipo_evento = equivalencias.get(
                 (tipo_referencia, paso.referencia_id, paso.accion)
@@ -1792,6 +2220,7 @@ class _Guardado:
                     if detalle
                     else None,
                     "ejecucion": self._ejecucion_de(paso.ejecucion_id),
+                    "pago": self._pago_de(paso.pago_id),
                     "observacion": paso.observacion,
                     "tipo_referencia": tipo_referencia,
                     "referencia_id": paso.referencia_id,

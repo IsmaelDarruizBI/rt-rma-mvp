@@ -188,14 +188,17 @@ def test_los_36_modelos_en_el_orden_del_catalogo(impl):
 # --- Solo PostgreSQL ---------------------------------------------------------
 
 
-def test_el_stock_queda_para_e5(postgres):
+def test_el_stock_se_escribe_solo_dentro_de_un_comando(postgres):
+    """E5 (A7): el historial son los ingresos y ajustes de un usuario; el
+    saldo inicial de desarrollo, cargado por el sistema, no lo es (en JSON
+    vive en el catalogo). Escribir exige la transaccion del comando."""
     catalogos = postgres[0]
+    assert catalogos.listar_movimientos_stock() == []
     for llamada in (
-        lambda: catalogos.listar_movimientos_stock(),
         lambda: catalogos.actualizar_stock_insumo("INS-001", Decimal("1")),
         lambda: catalogos.registrar_movimiento_stock(None),
     ):
-        with pytest.raises(PersistenciaError, match="E5"):
+        with pytest.raises(PersistenciaError, match="transaccion"):
             llamada()
 
 

@@ -1,23 +1,24 @@
-"""Corpus de Ordenes reales para el guardado por agregado (E4, A1, A2 y A4).
+"""Corpus de Ordenes reales para el guardado por agregado (E4 y E5).
 
 Corre flujos reales por la API en modo JSON y graba cada Orden que el
 repository JSON guarda, en el orden en que se guarda. Cada paso es una
 Orden valida del dominio, tal como la deja un comando.
 
-``proyectar`` deja solo lo que PostgreSQL ya guarda. Quita los pagos, los
-descuentos y los pasos del historial que referencian un pago (A3) y los
-movimientos de insumo (A6, A7). Esas partes van a tablas propias, asi que
-quitarlas no cambia como se guarda el resto.
+Desde A7 PostgreSQL guarda la Orden entera, tambien sus movimientos de
+insumo: el corpus no quita nada. Antes de los flujos se guarda el stock
+inicial del catalogo (``insumos_iniciales.json``): la base arranca con ese
+stock y el libro lo mueve igual que los flujos JSON.
 """
 
 import time
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
-from app.domain.models import OrdenReparacion, ResumenPago
+from app.domain.models import OrdenReparacion
 from app.main import create_app
 from app.storage.json.ordenes import JsonOrdenReparacionRepository
 from tests.fixtures import api_salidas as f
@@ -29,16 +30,12 @@ JPEG = b"\xff\xd8\xff\xe0" + b"\x00\x10JFIF" + b"\x00" * 200
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
 
 
+ARCHIVO_STOCK_INICIAL = "insumos_iniciales.json"
+
+
 def proyectar(orden: OrdenReparacion) -> OrdenReparacion:
-    """La Orden con solo las partes que PostgreSQL ya guarda."""
-    proyectada = orden.model_copy(deep=True)
-    proyectada.movimientos_insumo = []
-    proyectada.resumen_pago = ResumenPago()
-    proyectada.descuentos = []
-    proyectada.historial = [
-        paso for paso in proyectada.historial if paso.pago_id is None
-    ]
-    return proyectada
+    """La Orden tal cual: PostgreSQL ya guarda todas sus partes (A7)."""
+    return orden.model_copy(deep=True)
 
 
 def _crear_con_dni(cliente, cliente_id=None) -> str:
@@ -368,9 +365,107 @@ def _flujos_de_salida(cliente: TestClient) -> None:
     f.ok(c.entregar(cliente, garantia, f.ADMINISTRADOR))
 
 
+def _pagar(cliente, orden_id, monto, metodo="EFECTIVO", **extra) -> dict:
+    _tic()
+    return f.ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/payments",
+            json={
+                "usuario_id": f.RECEPCION,
+                "monto": monto,
+                "metodo": metodo,
+                **extra,
+            },
+        )
+    )
+
+
+def _descuento(cliente, orden_id, tipo, valor, motivo) -> dict:
+    _tic()
+    return f.ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/discount",
+            json={
+                "usuario_id": f.RECEPCION,
+                "tipo": tipo,
+                "valor": valor,
+                "motivo": motivo,
+            },
+        )
+    )
+
+
+def _ultimo_pago(orden: dict) -> str:
+    return orden["pagos"][-1]["id"]
+
+
+def _flujos_financieros(cliente: TestClient) -> None:
+    """Anticipos, anulacion, descuentos, pago final y devoluciones (A3)."""
+    # Dos anticipos (uno anulado), descuentos que se cambian y se quitan,
+    # un Detalle cancelado y el pago final al entregar.
+    orden = f.definida(cliente, f.BATERIA, f.PANTALLA)
+    _pagar(cliente, orden, "10000", operacion_id="op-a3-1", referencia="Sena")
+    anulado = _ultimo_pago(
+        _pagar(cliente, orden, "5000", "TRANSFERENCIA", operacion_id="op-2")
+    )
+    _tic()
+    f.ok(
+        cliente.post(
+            f"/api/orders/{orden}/payments/{anulado}/void",
+            json={"usuario_id": f.ADMINISTRADOR, "motivo": "Mal cargado."},
+        )
+    )
+    _descuento(cliente, orden, "PORCENTAJE", "10", "Promocion.")
+    _descuento(cliente, orden, "IMPORTE", "2000", "Convenio.")
+    _descuento(cliente, orden, None, None, "Fin del convenio.")
+    _descuento(cliente, orden, "IMPORTE", "1500.5", "Acuerdo.")
+    _tic()
+    f.ok(f.cancelar_detalle(cliente, orden, "DET-002"))
+    f.tomada(cliente, orden)
+    f.ejecutar(cliente, orden, "DET-001")
+    f.ok(f.aprobar(cliente, orden, "DET-001"))
+    # En el cierre: un pago parcial y el final, que salda la cuenta.
+    f.ok(
+        cliente.post(
+            f"/api/orders/{orden}/notify", json={"usuario_id": f.RECEPCION}
+        )
+    )
+    _pagar(cliente, orden, "20000", "TARJETA_CREDITO")
+    f.notificar_pagar_entregar(cliente, orden)
+
+    # Pago completo, Orden cancelada y el credito devuelto en dos partes.
+    cancelada = f.definida(cliente, f.BATERIA)
+    saldo = f.ok(cliente.get(f"/api/orders/{cancelada}"))["resumen"]["saldo"]
+    pago = _ultimo_pago(_pagar(cliente, cancelada, saldo, "TARJETA_DEBITO"))
+    _tic()
+    f.ok(f.cancelar_orden(cliente, cancelada))
+    for monto, medio in (("1000", "EFECTIVO"), (None, "TRANSFERENCIA")):
+        credito = f.ok(cliente.get(f"/api/orders/{cancelada}"))["resumen"][
+            "saldo"
+        ]
+        _tic()
+        f.ok(
+            cliente.post(
+                f"/api/orders/{cancelada}/refunds",
+                json={
+                    "usuario_id": f.ADMINISTRADOR,
+                    "pago_id": pago,
+                    "monto": monto or str(-Decimal(credito)),
+                    "medio": medio,
+                    "motivo": "Se cancelo el trabajo.",
+                    "operacion_id": f"dev-{medio}",
+                },
+            )
+        )
+    f.ok(f.devolver(cliente, cancelada))
+
+
 def armar_corpus(directorio: Path) -> list[OrdenReparacion]:
     """Cada Orden que guardan los flujos, en orden, ya proyectada."""
     f.sembrar(directorio)
+    (directorio / ARCHIVO_STOCK_INICIAL).write_bytes(
+        (directorio / "catalogs" / "insumos.json").read_bytes()
+    )
     grabadas: list[OrdenReparacion] = []
     original = JsonOrdenReparacionRepository.guardar
 
@@ -386,4 +481,5 @@ def armar_corpus(directorio: Path) -> list[OrdenReparacion]:
         with TestClient(create_app(configuracion)) as cliente:
             _flujos(cliente)
             _flujos_de_salida(cliente)
+            _flujos_financieros(cliente)
     return grabadas

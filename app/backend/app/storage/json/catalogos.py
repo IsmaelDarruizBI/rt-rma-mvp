@@ -88,6 +88,10 @@ class JsonCatalogosRepository:
     def obtener_insumo(self, insumo_id: str) -> Insumo:
         return self._buscar_por_id(self.listar_insumos(), insumo_id, "Insumo")
 
+    def bloquear_insumos(self, insumo_ids) -> None:
+        """Nada: el lock de la unidad de trabajo JSON ya serializa los
+        comandos que reservan, consumen o ajustan (DI-2)."""
+
     def actualizar_stock_insumo(
         self,
         insumo_id: str,

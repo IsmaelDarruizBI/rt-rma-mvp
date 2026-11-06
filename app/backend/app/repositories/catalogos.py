@@ -10,6 +10,7 @@ HP-REP-001 necesita. La unica escritura es la del stock fisico, que
 cambia cuando un CONSUMO se materializa (PROC-REP-210).
 """
 
+from collections.abc import Collection
 from decimal import Decimal
 from typing import Protocol, runtime_checkable
 
@@ -36,8 +37,7 @@ class CatalogosRepository(Protocol):
         """Lanza ``EntidadPersistidaNoEncontradaError`` si no existe."""
         ...
 
-    def listar_tipos_reparacion(self) -> list[TipoReparacion]:
-        ...
+    def listar_tipos_reparacion(self) -> list[TipoReparacion]: ...
 
     # --- Insumos ---
 
@@ -45,7 +45,18 @@ class CatalogosRepository(Protocol):
         """Lanza ``EntidadPersistidaNoEncontradaError`` si no existe."""
         ...
 
-    def listar_insumos(self) -> list[Insumo]:
+    def listar_insumos(self) -> list[Insumo]: ...
+
+    def bloquear_insumos(self, insumo_ids: Collection[str]) -> None:
+        """Nadie mas reserva, consume ni ajusta esos insumos hasta el final
+        de la transaccion en curso (DI-2, A6).
+
+        Se llama despues de bloquear la Orden y antes de decidir con el
+        disponible: entonces lo que se lee de reservas y stock ya no cambia
+        hasta confirmar. Exige una transaccion en curso. Un id inexistente
+        se ignora: lo informa quien lo busca. JSON no hace nada, porque su
+        unidad de trabajo ya serializa los comandos.
+        """
         ...
 
     def actualizar_stock_insumo(
@@ -80,8 +91,9 @@ class CatalogosRepository(Protocol):
 
     # --- Insumos previstos por Tipo de Reparacion ---
 
-    def listar_tipo_reparacion_insumos(self) -> list[TipoReparacionInsumos]:
-        ...
+    def listar_tipo_reparacion_insumos(
+        self,
+    ) -> list[TipoReparacionInsumos]: ...
 
     # --- Estaciones de trabajo ---
 
@@ -89,13 +101,11 @@ class CatalogosRepository(Protocol):
         """Lanza ``EntidadPersistidaNoEncontradaError`` si no existe."""
         ...
 
-    def listar_estaciones(self) -> list[EstacionTrabajo]:
-        ...
+    def listar_estaciones(self) -> list[EstacionTrabajo]: ...
 
     def listar_tipo_reparacion_estaciones(
         self,
-    ) -> list[TipoReparacionEstacion]:
-        ...
+    ) -> list[TipoReparacionEstacion]: ...
 
     # --- Usuarios ---
 
@@ -103,8 +113,7 @@ class CatalogosRepository(Protocol):
         """Lanza ``EntidadPersistidaNoEncontradaError`` si no existe."""
         ...
 
-    def listar_usuarios(self) -> list[Usuario]:
-        ...
+    def listar_usuarios(self) -> list[Usuario]: ...
 
     # --- Medios de pago ---
 

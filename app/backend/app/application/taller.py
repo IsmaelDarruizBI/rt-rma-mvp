@@ -35,6 +35,7 @@ from app.services import (
     ejecucion_activa,
     ejecutar_detalle,
     evaluar_situacion_orden,
+    insumos_previstos_de,
     intentar_reserva_e_inicio,
     registrar_ejecucion_completada,
     registrar_ejecucion_interrumpida,
@@ -50,6 +51,7 @@ from app.services import (
 from app.services import (
     liberar_orden as liberar_orden_servicio,
 )
+from app.services.tomas import buscar_detalle
 
 from .contexto import ApplicationContext
 from .modificacion import orden_para_modificar
@@ -167,14 +169,25 @@ def iniciar_detalle(
                 "implementa el override de incompatibilidad."
             )
 
+        # DI-2: con la Orden ya bloqueada, sus insumos previstos, por
+        # clave. Lo que sigue (stock y reservas de las demas Ordenes) ya no
+        # cambia hasta guardar: dos tecnicos no reservan la misma unidad.
+        previstos = contexto.catalogos.listar_tipo_reparacion_insumos()
+        contexto.catalogos.bloquear_insumos(
+            {
+                previsto.insumo_id
+                for previsto in insumos_previstos_de(
+                    buscar_detalle(orden, detalle_id).tipo_reparacion_id,
+                    previstos,
+                )
+            }
+        )
         orden, reserva_exitosa = intentar_reserva_e_inicio(
             orden,
             detalle_id=detalle_id,
             usuario=usuario,
             insumos=contexto.catalogos.listar_insumos(),
-            insumos_previstos=(
-                contexto.catalogos.listar_tipo_reparacion_insumos()
-            ),
+            insumos_previstos=previstos,
             fecha=fecha,
             reservas_externas=cargar_reservas_externas(
                 orden.id, contexto.ordenes
@@ -248,6 +261,7 @@ def liberar_orden(
                     fecha=fecha,
                     motivo=motivo,
                 )
+                _bloquear_insumos_de_la_ejecucion(contexto, orden, en_curso.id)
                 orden = aplicar_movimientos_inventario(
                     orden,
                     ejecucion_id=en_curso.id,
@@ -264,6 +278,22 @@ def liberar_orden(
             orden = liberar_orden_servicio(orden, usuario=usuario, fecha=fecha)
         contexto.ordenes.guardar(orden)
     return orden
+
+
+def _bloquear_insumos_de_la_ejecucion(
+    contexto: ApplicationContext, orden: OrdenReparacion, ejecucion_id: str
+) -> None:
+    """DI-2 antes de 210: los insumos del Detalle y los utilizados, despues
+    de la Orden. El tope del override y el stock que se descuenta se leen
+    ya bloqueados."""
+    ejecucion = _buscar_ejecucion(orden, ejecucion_id)
+    insumo_ids = {
+        movimiento.insumo_id
+        for movimiento in orden.movimientos_insumo
+        if movimiento.reparacion_detail_id == ejecucion.reparacion_detail_id
+    }
+    insumo_ids.update(u.insumo_id for u in ejecucion.insumos_utilizados)
+    contexto.catalogos.bloquear_insumos(insumo_ids)
 
 
 def _buscar_ejecucion(
@@ -423,6 +453,7 @@ def _cerrar_ejecucion(
             fecha=fecha,
             observaciones=observaciones,
         )
+        _bloquear_insumos_de_la_ejecucion(contexto, orden, ejecucion_id)
         orden = aplicar_movimientos_inventario(
             orden,
             ejecucion_id=ejecucion_id,

@@ -396,10 +396,20 @@ def test_todo_el_sql_registrado_de_los_repositories_es_valido():
         for nombre, c in registradas().items()
         if nombre.split(".")[0] in ("catalogos", "modelos_equipo")
     }
-    assert len(propias) == 14  # 12 de catalogos y 2 de modelos
     assert all(problema_de(c.sql, c.modo) is None for c in propias.values())
-    # Los catalogos solo leen (QA-E3-3).
-    assert {c.modo for c in propias.values()} == {LECTURA}
+    # Los catalogos solo leen (QA-E3-3), salvo el stock, que E5 escribe en
+    # el libro: bloquear insumos (A6) y registrar ingresos y ajustes (A7).
+    del_stock = {
+        "catalogos.bloquear_insumos",
+        "catalogos.stock_de",
+        "catalogos.insertar_movimiento_stock",
+        "catalogos.usuario_id",
+    }
+    assert {
+        n for n, c in propias.items() if c.modo is not LECTURA
+    } == del_stock
+    # 12 de catalogos, el historial de stock (A7), 2 de modelos y el stock.
+    assert len(propias) == 15 + len(del_stock)
 
 
 def test_solo_la_unidad_de_trabajo_toca_la_conexion_y_la_transaccion():

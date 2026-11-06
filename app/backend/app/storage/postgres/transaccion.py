@@ -246,6 +246,15 @@ class UnidadDeTrabajoPostgres:
             and actual.problema() is None
         )
 
+    def lectura_de_un_instante(self) -> bool:
+        """Si ``lectura()`` ve ahora un solo instante: sin transaccion en
+        curso abre una breve en REPEATABLE READ, y una de solo lectura
+        vigente tambien lo es. Dentro de un comando (READ COMMITTED) cada
+        consulta ve su propio instante: quien lee varias veces lo tiene que
+        resolver (QA-A2-M2, ``ordenes.py``)."""
+        actual = _EN_CURSO.get()
+        return actual is None or not actual.activa or actual.solo_lectura
+
     def _conexion_actual(self) -> psycopg.Connection:
         """La conexion de la transaccion en curso (solo para esta unidad y
         sus pruebas: los repositories usan ``ejecutor()`` o ``lectura()``).

@@ -7,11 +7,14 @@ prioridad (1 a 4) y antiguedad. Todo es de solo lectura.
 """
 
 import json
+from decimal import Decimal
 
 import pytest
 
 from app.application import AccionDisponible, puede_ejecutar
+from app.core.config import Settings
 from app.domain.models import RolUsuario, Usuario
+from app.storage.json.catalogos import JsonCatalogosRepository
 from tests.fixtures.api_salidas import (
     ADMINISTRADOR,
     BATERIA,
@@ -434,18 +437,12 @@ def test_coordinacion_ve_faltantes_y_disponible_negativo(tmp_path):
             )
         )
         finalizar(cliente, esperando)  # comprobante de ingreso: autoriza
-        # Se rompe la unica bateria del stock: queda reservada sin fisico.
-        ok(
-            cliente.post(
-                "/api/inventory/INS-001/adjustments",
-                json={
-                    "usuario_id": ADMINISTRADOR,
-                    "diferencia": "-1",
-                    "motivo": "Unidad danada",
-                    "confirmado": True,
-                },
-            )
-        )
+        # La unica bateria queda reservada sin fisico. Desde H-1 (DI-3) un
+        # ajuste no puede producirlo: es un dato anterior, como los de UAT
+        # que se regularizan en E8 (J-5).
+        JsonCatalogosRepository(
+            Settings(data_dir=tmp_path).catalogos_dir
+        ).actualizar_stock_insumo("INS-001", Decimal("0"))
 
         bandejas = _bandejas(cliente, COORDINADOR)
 

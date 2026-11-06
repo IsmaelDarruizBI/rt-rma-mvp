@@ -315,36 +315,40 @@ def test_6_un_ajuste_negativo_reintentado_no_se_duplica(tmp_path):
         ]
 
 
-def test_7_8_9_17_ajuste_con_reservas_exige_confirmacion(tmp_path):
-    """Fisico 8, reservado 5, salida de 4: fisico 4, disponible -1."""
+def test_7_8_9_17_ajuste_que_toca_reservas_se_rechaza_h1(tmp_path):
+    """H-1 (DI-3): fisico 8, reservado 5. Una salida de 4 dejaria el
+    disponible en -1: se rechaza aun confirmada, sin escribir nada y sin
+    tocar las reservas. Una salida de 3 (disponible 0) pide confirmacion."""
     with _cliente(tmp_path, stock_bateria="8", por_detalle="5") as cliente:
         orden_id = _con_reserva(cliente)
         assert _situacion(cliente)["disponible"] == "3"
         orden_antes = archivo(tmp_path, orden_id)
 
-        mensaje = conflicto(_ajuste(cliente, "-4"), "CONFIRMACION_REQUERIDA")
-        assert "disponible 3 -> -1" in mensaje
-        assert "Deja el disponible negativo: hay 5 reservadas" in mensaje
+        for confirmado in (False, True):
+            mensaje = conflicto(
+                _ajuste(cliente, "-4", confirmado=confirmado),
+                "PRECONDICION_INVALIDA",
+            )
+            assert "por debajo de lo reservado (5 por " in mensaje
+            assert orden_id in mensaje
         assert stock(tmp_path) == Decimal("8")
+        assert _detalle(cliente)["movimientos"][-1]["tipo"] != (
+            "AJUSTE_NEGATIVO"
+        )
 
-        ok(_ajuste(cliente, "-4", confirmado=True))
+        mensaje = conflicto(_ajuste(cliente, "-3"), "CONFIRMACION_REQUERIDA")
+        assert "disponible 3 -> 0" in mensaje
+        ok(_ajuste(cliente, "-3", confirmado=True))
 
         situacion = _situacion(cliente)
-        assert situacion["stock_fisico"] == "4"
+        assert situacion["stock_fisico"] == "5"
         assert situacion["reservado"] == "5"
-        assert situacion["disponible"] == "-1"
-        assert situacion["disponible_negativo"] is True
-        assert situacion["faltante"] is True
-        assert [
-            i["id"] for i in _inventario(cliente, solo_faltantes=True)
-        ] == [INSUMO_BATERIA]
+        assert situacion["disponible"] == "0"
+        assert situacion["faltante"] is False
         # 17: las reservas de la Orden no se tocan.
         assert archivo(tmp_path, orden_id) == orden_antes
         (reserva,) = _detalle(cliente)["reservas"]
         assert (reserva["orden_id"], reserva["cantidad"]) == (orden_id, "5")
-        (faltante,) = _detalle(cliente)["faltantes"]
-        assert faltante["origen"] == "AJUSTE_NEGATIVO"
-        assert "-1" in faltante["descripcion"]
 
 
 # --- 10/11. Historial y duplicados -------------------------------------------

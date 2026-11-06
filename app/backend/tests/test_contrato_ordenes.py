@@ -1,13 +1,19 @@
 """Contrato de ``OrdenReparacionRepository``: consultas dedicadas (E2).
 
-Las pruebas de este modulo valen para cualquier implementacion: hoy
-JSON. E4 y E5 agregan PostgreSQL a ``IMPLEMENTACIONES`` sin reescribirlas.
-Cada una arma un repository vacio y la transaccion de su unidad de
-trabajo. Las que dependen de como JSON numera estan al final, aparte.
+Las pruebas de este modulo valen para cualquier implementacion: JSON y,
+con ``RMA_TEST_DATABASE_URL``, PostgreSQL (A5). Cada una arma un
+repository vacio y la transaccion de su unidad de trabajo. Las que
+dependen de como JSON numera estan al final, aparte.
+
+PostgreSQL guarda reservas, consumos y liberaciones (A6 y A7). Un CONSUMO
+cierra siempre una RESERVA de la Orden (decision E3 del dominio, exigida por
+el libro), asi que en PostgreSQL el consumo de prueba "sin reserva" lleva
+la suya.
 
 Diseno: ``docs/postgresql/e2-consultas-dedicadas.md`` (seccion C).
 """
 
+import os
 import re
 import threading
 import time
@@ -16,6 +22,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -52,9 +59,27 @@ DNI = "30111222"
 class Implementacion:
     repo: OrdenReparacionRepository
     transaccion: Callable[[], AbstractContextManager[None]]
+    # Tipos de movimiento de insumo que guarda (``None``: todos). PostgreSQL,
+    # las reservas desde A6; el resto, desde A7.
+    tipos_de_movimiento: frozenset | None = None
+
+    def admite(self, orden: OrdenReparacion) -> bool:
+        return self.tipos_de_movimiento is None or all(
+            m.tipo in self.tipos_de_movimiento
+            for m in orden.movimientos_insumo
+        )
+
+    def admitidas(self, ordenes):
+        return [orden for orden in ordenes if self.admite(orden)]
+
+    # Restricciones del esquema PostgreSQL que JSON no tiene, y que la app
+    # ya respeta: una Orden se cierra despues de su alta (QA-A2-M3, E8),
+    # su numero es ``OR-NNNNNN`` y un DNI es de un solo Cliente (UAT-010).
+    # Solo cambian los datos de entrada; lo que se verifica es lo mismo.
+    esquema_libre: bool = True
 
 
-def _json(tmp_path) -> Implementacion:
+def _json(tmp_path, request=None) -> Implementacion:
     unidad = UnidadDeTrabajoJson()
     repo = JsonOrdenReparacionRepository(
         tmp_path / "ordenes", en_transaccion=unidad.en_curso
@@ -62,21 +87,130 @@ def _json(tmp_path) -> Implementacion:
     return Implementacion(repo=repo, transaccion=unidad.transaccion)
 
 
-IMPLEMENTACIONES = {"json": _json}
+# Lo que referencian las Ordenes de prueba (``hp_rep_001``). El cliente y
+# el equipo compartidos ya existen: dos altas simultaneas de un cliente
+# nuevo chocan en la base (A3-3, se resuelve en A8).
+_CATALOGO_POSTGRES = """
+insert into rma.usuario (codigo, nombre, activo, orden) values
+  ('RECEP-001', 'Recepcion', true, 1), ('TECH-001', 'Tecnico', true, 2),
+  ('ADMIN-001', 'Administracion', true, 3);
+insert into rma.tipo_reparacion
+  (codigo, nombre, precio, puntaje, garantia_dias, activo)
+  values ('TREP-001', 'Cambio de bateria', 1000, 1, 90, true);
+insert into rma.mesa_trabajo (codigo, nombre, activa)
+  values ('EST-001', 'Mesa 1', true);
+insert into rma.cliente (codigo, nombre, telefono)
+  values ('CLI-001', 'Cliente de Prueba', '341-0000000');
+insert into rma.equipo (codigo) values ('EQP-001');
+insert into rma.insumo (clave, codigo, nombre) values
+  ('INS-001', 'I1', 'Insumo 1'), ('INS-002', 'I2', 'Insumo 2'),
+  ('INS-10', 'I10', 'Insumo 10');
+"""
+
+
+@pytest.fixture(scope="module")
+def plantilla_postgres():
+    url = os.environ.get("RMA_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("RMA_TEST_DATABASE_URL no esta definida.")
+    pytest.importorskip("psycopg_pool")
+    import psycopg
+
+    from tests.postgres.base_local import (
+        archivos_sql,
+        borrar_base,
+        crear_base,
+        url_admin_local,
+    )
+
+    admin = url_admin_local(url)
+    base = crear_base(
+        admin, [a for a in archivos_sql() if a.parent.name != "desarrollo"]
+    )
+    with psycopg.connect(base, autocommit=True) as conexion:
+        conexion.execute(_CATALOGO_POSTGRES)
+        from tests.postgres.sembrado import ingresar_stock
+
+        for clave in ("INS-001", "INS-002", "INS-10"):
+            ingresar_stock(conexion, clave, 100)
+    nombre = urlsplit(base).path.lstrip("/")
+    yield admin, nombre
+    borrar_base(admin, nombre)
+
+
+def _postgres(tmp_path, request) -> Implementacion:
+    admin, plantilla = request.getfixturevalue("plantilla_postgres")
+    from app.core.config import Settings
+    from app.storage.postgres import AjustesPostgres, configuracion_postgres
+    from app.storage.postgres.ordenes import PostgresOrdenReparacionRepository
+    from app.storage.postgres.transaccion import (
+        UnidadDeTrabajoPostgres,
+        abrir_pool,
+    )
+    from tests.postgres.base_local import borrar_base, clonar_base
+
+    url = clonar_base(admin, plantilla)
+    ajustes = AjustesPostgres(pool_max=8)
+    pool = abrir_pool(
+        configuracion_postgres(
+            Settings(_env_file=None, persistencia="postgres", database_url=url)
+        ),
+        ajustes,
+    )
+
+    def cerrar():
+        pool.close()
+        borrar_base(admin, urlsplit(url).path.lstrip("/"))
+
+    request.addfinalizer(cerrar)
+    pool.wait(10)
+    unidad = UnidadDeTrabajoPostgres(pool, ajustes)
+    return Implementacion(
+        repo=PostgresOrdenReparacionRepository(unidad),
+        transaccion=unidad.transaccion,
+        tipos_de_movimiento=frozenset(
+            {
+                TipoMovimientoInsumo.RESERVA,
+                TipoMovimientoInsumo.CONSUMO,
+                TipoMovimientoInsumo.LIBERACION_RESERVA,
+            }
+        ),
+        esquema_libre=False,
+    )
+
+
+IMPLEMENTACIONES = {"json": _json, "postgres": _postgres}
 
 
 @pytest.fixture(params=sorted(IMPLEMENTACIONES))
 def impl(request, tmp_path) -> Implementacion:
-    return IMPLEMENTACIONES[request.param](tmp_path)
+    return IMPLEMENTACIONES[request.param](tmp_path, request)
+
+
+def _exigir_movimientos(impl: Implementacion, ordenes) -> None:
+    if impl.admitidas(ordenes) != list(ordenes):
+        pytest.skip("PostgreSQL guarda consumos y liberaciones desde A7.")
 
 
 # --- Ordenes de prueba ------------------------------------------------------
 
 _BASE = construir_orden_hp_rep_001()
+# Codigos de las hijas de la Orden base. En la app salen de un uuid
+# (``nuevo_id``) y son unicos entre Ordenes, como exige PostgreSQL: cada
+# copia les agrega su numero.
+_HIJAS = [
+    *(t.id for t in _BASE.tomas),
+    *(e.id for e in _BASE.ejecuciones),
+    *(p.id for p in _BASE.resumen_pago.pagos),
+    *(d.id for d in _BASE.documentos.emitidos),
+]
 
 
 def _orden(orden_id: str, **cambios) -> OrdenReparacion:
     """Una Orden ABIERTA, sin movimientos ni fotos, salvo ``cambios``."""
+    texto = _BASE.model_dump_json()
+    for codigo in _HIJAS:
+        texto = texto.replace(f'"{codigo}"', f'"{codigo}@{orden_id}"')
     datos = {
         "id": orden_id,
         "estado_workflow": EstadoWorkflow.REQUERIMIENTO,
@@ -85,7 +219,17 @@ def _orden(orden_id: str, **cambios) -> OrdenReparacion:
         "fotos": [],
         **cambios,
     }
-    return _BASE.model_copy(update=datos, deep=True)
+    orden = OrdenReparacion.model_validate_json(texto).model_copy(
+        update=datos, deep=True
+    )
+    # La Ejecucion de un movimiento tambien es la de esta copia.
+    orden.movimientos_insumo = [
+        m.model_copy(update={"ejecucion_id": f"{m.ejecucion_id}@{orden_id}"})
+        if m.ejecucion_id in _HIJAS
+        else m
+        for m in orden.movimientos_insumo
+    ]
+    return orden
 
 
 def _cliente(cliente_id: str, dni: str | None) -> Cliente:
@@ -108,6 +252,10 @@ def _mov(
         reparacion_detail_id="DET-001",
         cantidad=Decimal(cantidad),
         movimiento_origen_id=origen,
+        # Un consumo o una liberacion son de una Ejecucion del Detalle.
+        ejecucion_id=None
+        if tipo is TipoMovimientoInsumo.RESERVA
+        else "EJE-001",
         fecha=FECHA,
     )
 
@@ -136,9 +284,24 @@ CANCELADA = {"estado_workflow": EstadoWorkflow.CANCELADA}
 
 
 def _guardar(impl: Implementacion, *ordenes: OrdenReparacion) -> None:
-    with impl.transaccion():
-        for orden in ordenes:
-            impl.repo.guardar(orden)
+    for orden in ordenes:
+        with impl.transaccion():
+            if impl.esquema_libre or not orden.esta_cerrada:
+                impl.repo.guardar(orden)
+                continue
+            # Como en la app: el alta abierta y despues el cierre.
+            impl.repo.guardar(
+                orden.model_copy(
+                    update={
+                        "estado_workflow": EstadoWorkflow.REQUERIMIENTO,
+                        "current_process": "PROC-REP-040",
+                    }
+                )
+            )
+            cargada = impl.repo.obtener_para_modificar(orden.id)
+            for campo in type(orden).model_fields:
+                setattr(cargada, campo, getattr(orden, campo))
+            impl.repo.guardar(cargada)
 
 
 def _ids(ordenes) -> list[str]:
@@ -172,7 +335,7 @@ def test_toda_lista_va_por_numero_de_orden(impl):
         return _orden(
             f"OR-00000{n}",
             cliente=_cliente("CLI-1", DNI),
-            movimientos_insumo=[_mov(f"M-{n}", RESERVA)],
+            movimientos_insumo=([_mov(f"M-{n}", RESERVA)]),
             fotos=[_foto(f"F-{n}", f"ordenes/{n}.jpg")],
         )
 
@@ -235,10 +398,15 @@ def test_dni_exacto_sin_nulos_ni_ordenes_sin_cliente(impl):
         impl,
         _orden("OR-000001", cliente=_cliente("CLI-1", DNI)),
         # Otro cliente con el mismo DNI (ambiguo): tambien vuelve.
-        _orden("OR-000002", cliente=_cliente("CLI-2", DNI), **CERRADA),
+        _orden(
+            "OR-000002",
+            cliente=_cliente("CLI-2" if impl.esquema_libre else "CLI-1", DNI),
+            **CERRADA,
+        ),
         _orden("OR-000003", cliente=_cliente("CLI-3", None)),
         _orden("OR-000004", cliente=_cliente("CLI-4", "30111223")),
-        _orden("OR-000005", cliente=None),
+        # Sin cliente: en PostgreSQL solo un RT interno, que no se cobra.
+        *([_orden("OR-000005", cliente=None)] if impl.esquema_libre else []),
         _orden("OR-000006", cliente=_cliente("CLI-6", "3011122")),
     )
     repo = impl.repo
@@ -257,7 +425,9 @@ def test_dni_exacto_sin_nulos_ni_ordenes_sin_cliente(impl):
 # --- Reservas y movimientos -------------------------------------------------
 
 
-def _ordenes_con_movimientos() -> list[OrdenReparacion]:
+def _ordenes_con_movimientos(
+    consumo_sin_reserva: bool = True,
+) -> list[OrdenReparacion]:
     return [
         _orden("OR-000001", movimientos_insumo=[_mov("M-1", RESERVA)]),
         # Reserva ya consumida: puede volver o no (QA-E2-2).
@@ -269,7 +439,17 @@ def _ordenes_con_movimientos() -> list[OrdenReparacion]:
             ],
         ),
         # Consumo sin reserva (override): movimiento, pero no RESERVA.
-        _orden("OR-000003", movimientos_insumo=[_mov("M-4", CONSUMO)]),
+        _orden(
+            "OR-000003",
+            movimientos_insumo=(
+                [_mov("M-4", CONSUMO)]
+                if consumo_sin_reserva
+                else [
+                    _mov("M-4R", RESERVA),
+                    _mov("M-4", CONSUMO, origen="M-4R"),
+                ]
+            ),
+        ),
         _orden("OR-000004"),
         # Cerrada con una reserva pendiente: tiene que volver.
         _orden(
@@ -280,9 +460,11 @@ def _ordenes_con_movimientos() -> list[OrdenReparacion]:
     ]
 
 
-def _ordenes_con_reservas() -> list[OrdenReparacion]:
+def _ordenes_con_reservas(
+    consumo_sin_reserva: bool = True,
+) -> list[OrdenReparacion]:
     return [
-        *_ordenes_con_movimientos(),
+        *_ordenes_con_movimientos(consumo_sin_reserva),
         # Reserva liberada en parte: sigue pendiente lo que queda.
         _orden(
             "OR-000006",
@@ -331,7 +513,7 @@ def test_con_reservas_es_un_conjunto_candidato(impl, insumo_ids):
     """Las dos garantias minimas (QA-E2-2): toda Orden con una reserva
     pendiente, ninguna sin RESERVA. Las de reservas cerradas, a eleccion
     de la implementacion."""
-    _guardar(impl, *_ordenes_con_reservas())
+    _guardar(impl, *impl.admitidas(_ordenes_con_reservas(impl.esquema_libre)))
     todas = impl.repo.listar()
     ids = _ids(impl.repo.listar_con_reservas(insumo_ids))
     assert ids == sorted(set(ids))  # por numero, sin repetidos
@@ -344,7 +526,7 @@ def test_con_reservas_es_un_conjunto_candidato(impl, insumo_ids):
 def test_con_reservas_alcanza_para_los_calculos_de_reservas(impl, insumo_ids):
     """Los services calculan sobre las candidatas lo mismo que sobre
     todas las Ordenes (para los insumos pedidos)."""
-    _guardar(impl, *_ordenes_con_reservas())
+    _guardar(impl, *impl.admitidas(_ordenes_con_reservas(impl.esquema_libre)))
     todas = impl.repo.listar()
     candidatas = impl.repo.listar_con_reservas(insumo_ids)
 
@@ -372,7 +554,9 @@ def test_con_reservas_alcanza_para_los_calculos_de_reservas(impl, insumo_ids):
 
 def test_un_insumo_suelto_como_str_se_rechaza(impl):
     """Un str tambien es Collection[str]: se tomaria letra por letra."""
-    _guardar(impl, *_ordenes_con_movimientos())
+    _guardar(
+        impl, *impl.admitidas(_ordenes_con_movimientos(impl.esquema_libre))
+    )
     with pytest.raises(ValueError, match="no un str"):
         impl.repo.listar_con_reservas("INS-001")
 
@@ -386,7 +570,9 @@ def test_buscar_por_dni_none_se_rechaza(impl):
 
 
 def test_con_movimientos_compara_el_insumo_exacto(impl):
-    _guardar(impl, *_ordenes_con_movimientos())
+    ordenes = _ordenes_con_movimientos(impl.esquema_libre)
+    _exigir_movimientos(impl, ordenes)
+    _guardar(impl, *ordenes)
     repo = impl.repo
     assert _ids(repo.listar_con_movimientos()) == [
         "OR-000001",
@@ -425,12 +611,12 @@ def test_claves_de_fotos_de_abiertas_y_cerradas(impl):
 
 
 def test_reservar_codigo_nunca_repite_un_numero_guardado(impl):
+    otros = ["RT-77", "OR-ABC"] if impl.esquema_libre else []
     _guardar(
         impl,
         _orden("OR-000001"),
         _orden("OR-000007"),
-        _orden("RT-77"),
-        _orden("OR-ABC"),
+        *(_orden(codigo) for codigo in otros),
     )
     with impl.transaccion():
         codigo = impl.repo.reservar_codigo()

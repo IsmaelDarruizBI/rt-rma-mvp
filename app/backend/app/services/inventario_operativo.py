@@ -367,11 +367,12 @@ def registrar_movimiento_operativo(
     - El fisico no puede quedar negativo por un movimiento manual: solo
       un consumo respaldado por una reserva u override puede llevarlo ahi
       (PROC-REP-210), y queda trazado como faltante.
-    - Todo ajuste negativo exige ``confirmado``, quede como quede el
-      disponible; si lo deja negativo, el aviso lo dice: las reservas no
-      se tocan y el faltante queda registrado. Un ingreso o un ajuste
-      positivo solo suman al fisico: no pueden producir ninguna condicion
-      excepcional y no piden confirmacion.
+    - H-1 (DI-3): un ajuste negativo que dejaria el fisico por debajo de
+      lo reservado se rechaza, aun confirmado, diciendo cuanto esta
+      reservado y por que Ordenes. Las reservas no se tocan.
+    - El resto de los ajustes negativos exige ``confirmado``. Un
+      ingreso o un ajuste positivo solo suman al fisico: no pueden
+      producir ninguna condicion excepcional y no piden confirmacion.
     """
     validar_alguno_de(usuario, ROLES_GESTION_STOCK)
     if tipo not in TIPOS_OPERATIVOS:
@@ -412,18 +413,26 @@ def registrar_movimiento_operativo(
             f"debajo de cero (hay {insumo.stock_fisico})."
         )
     disponible = resultante - situacion.reservado
+    if disponible < 0:
+        # H-1 (G-2, DI-3): el fisico nunca queda por debajo de lo reservado.
+        # Las reservas no se tocan: primero se regularizan (se interrumpe la
+        # Ejecucion que las tiene, que libera lo no usado) y despues se
+        # ajusta. Ni con confirmacion.
+        ordenes = ", ".join(
+            sorted({reserva.orden_id for reserva in situacion.reservas})
+        )
+        raise PrecondicionInvalidaError(
+            f"El ajuste dejaria el stock fisico de {insumo.codigo} en "
+            f"{resultante}, por debajo de lo reservado ({situacion.reservado}"
+            f" por {ordenes}): el disponible no puede quedar negativo. "
+            "Regulariza antes esas reservas."
+        )
     if tipo is TipoMovimientoInsumo.AJUSTE_NEGATIVO and not confirmado:
         aviso = (
             f"El ajuste resta {cantidad} de {insumo.codigo}: fisico "
             f"{insumo.stock_fisico} -> {resultante}, disponible "
             f"{situacion.disponible} -> {disponible}."
         )
-        if disponible < 0:
-            aviso += (
-                f" Deja el disponible negativo: hay {situacion.reservado} "
-                f"reservadas por {situacion.ordenes_con_reserva} Orden(es), "
-                "que se conservan, y el faltante quedara registrado."
-            )
         raise ConfirmacionRequeridaError(
             f"{aviso} Confirma el ajuste negativo para registrarlo."
         )

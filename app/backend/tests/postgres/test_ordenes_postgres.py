@@ -51,8 +51,8 @@ from app.domain.models import (  # noqa: E402
     Equipo,
     EstadoWorkflow,
     HistorialWorkflow,
+    MovimientoInsumo,
     OrdenReparacion,
-    Pago,
 )
 from app.main import create_app  # noqa: E402
 from app.repositories.exceptions import (  # noqa: E402
@@ -295,20 +295,19 @@ def test_lo_que_todavia_no_se_guarda_se_rechaza_sin_escribir(
 ):
     repo, _ = armar()
     orden = corpus[1][0].model_copy(deep=True)
-    orden.resumen_pago.pagos.append(
-        Pago(
-            id="PAG-1",
-            monto=Decimal("10"),
-            tipo_pago="ANTICIPO",
-            metodo="EFECTIVO",
-            usuario_id="RECEP-001",
+    orden.movimientos_insumo.append(
+        MovimientoInsumo(
+            id="MOV-1",
+            tipo="DEVOLUCION",
+            insumo_id="INS-001",
+            reparacion_detail_id="DET-001",
+            cantidad=Decimal("1"),
+            movimiento_origen_id="MOV-0",
             fecha=orden.updated_at,
         )
     )
     antes = _cuentas(base)
-    with pytest.raises(
-        PersistenciaError, match="pagos y devoluciones \\(A3\\)"
-    ):
+    with pytest.raises(PersistenciaError, match="DI-5"):
         repo.guardar(orden)
     assert _cuentas(base) == antes
 
@@ -1380,20 +1379,32 @@ def test_l3_un_check_del_esquema_no_se_presenta_como_conflicto(armar, corpus):
     assert "cambiaron" not in str(capturado.value)
 
 
-def test_l3_una_clave_primaria_no_se_presenta_como_conflicto(armar, corpus):
-    """Hoy la dispara M-1 (insumo repetido, pendiente de A6)."""
-    repo, _ = armar()
-    orden = next(
-        o
-        for o in _ultimos(corpus).values()
-        if any(e.insumos_utilizados for e in o.ejecuciones)
-    ).model_copy(deep=True)
-    ejecucion = next(e for e in orden.ejecuciones if e.insumos_utilizados)
-    ejecucion.insumos_utilizados.append(ejecucion.insumos_utilizados[0])
+def test_l3_una_clave_primaria_no_se_presenta_como_conflicto(
+    armar, base, corpus
+):
+    """Un Detalle de origen repetido en el alta de una garantia viola la
+    clave primaria de ``orden_detalle_origen``. (Antes la disparaba M-1,
+    un insumo repetido, que A6 resolvio.)"""
+    repo, unidad = armar()
+    garantia = next(o for o in corpus[1] if o.orden_origen_id)
+    vistos = set()
+    for paso in corpus[1]:
+        if paso.id == garantia.orden_origen_id:
+            _guardar_paso(repo, unidad, paso, paso.id in vistos)
+            vistos.add(paso.id)
+    alta = garantia.model_copy(
+        update={"detalles_origen_ids": garantia.detalles_origen_ids * 2},
+        deep=True,
+    )
+    antes = _cuentas(base)
     with pytest.raises(RestriccionDeIntegridadError) as capturado:
-        repo.guardar(orden)
+        repo.guardar(alta)
+    # Una clave primaria repetida no es una carrera: ni 409 ni reintento.
+    assert not isinstance(capturado.value, ConflictoDeEscrituraError)
+    assert not capturado.value.reintentable
     assert capturado.value.sqlstate == "23505"
-    assert "ejecucion_insumo_pkey" in str(capturado.value)
+    assert capturado.value.restriccion == "orden_detalle_origen_pkey"
+    assert _cuentas(base) == antes
 
 
 def test_l3_un_valor_fuera_de_rango_es_un_dato_invalido(armar, base, corpus):

@@ -157,6 +157,10 @@ def _registrar_movimiento(
     fecha = contexto.ahora()
 
     with contexto.transaccion():
+        # DI-2: el insumo bloqueado antes de leer su stock, sus reservas y
+        # los movimientos existentes (duplicados): dos ingresos o ajustes
+        # del mismo insumo se aplican de a uno.
+        contexto.catalogos.bloquear_insumos([insumo_id])
         insumo = contexto.catalogos.obtener_insumo(insumo_id)
         ordenes = contexto.ordenes.listar_con_reservas([insumo_id])
         (situacion,) = situacion_inventario([insumo], ordenes)
