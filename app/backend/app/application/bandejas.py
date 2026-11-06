@@ -187,10 +187,10 @@ class _Lectura:
     def __init__(self, contexto: ApplicationContext, usuario: Usuario):
         self.usuario = usuario
         catalogos = contexto.catalogos
-        # Todas las lecturas dentro de una transaccion (QA-E2-1): una
-        # escritura no se mete entre ellas, asi que cada Orden se ve en una
-        # sola version. Solo lecturas: lo que sigue se calcula afuera.
-        with contexto.transaccion():
+        # Todas las lecturas en un solo instante (QA-E2-1): una escritura
+        # no se mete entre ellas, asi que cada Orden se ve en una sola
+        # version. Solo lecturas: lo que sigue se calcula afuera.
+        with contexto.lectura():
             tipos_reparacion = catalogos.listar_tipos_reparacion()
             # Ninguna bandeja lista Ordenes cerradas (E2). Las reservas
             # salen de las Ordenes que las registran, cerradas o no: no se
@@ -800,12 +800,22 @@ _INICIO: dict[RolUsuario, Callable[[_Lectura], list[Bandeja]]] = {
 }
 
 
+def _leer_bandejas(
+    contexto: ApplicationContext, usuario_id: str
+) -> tuple[Usuario, _Lectura]:
+    """El usuario y lo que ven sus bandejas, en una sola lectura."""
+    with contexto.lectura():
+        contexto.catalogos.anticipar(usuario_id=usuario_id)
+        contexto.ordenes.precargar(abiertas=True, con_reservas=True)
+        usuario = contexto.catalogos.obtener_usuario(usuario_id)
+        return usuario, _Lectura(contexto, usuario)
+
+
 def bandejas_de_inicio(
     contexto: ApplicationContext, *, usuario_id: str
 ) -> VistaBandejas:
     """Las bandejas del rol del usuario elegido. Solo lectura."""
-    usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    lectura = _Lectura(contexto, usuario)
+    usuario, lectura = _leer_bandejas(contexto, usuario_id)
     return VistaBandejas(
         usuario=usuario, bandejas=tuple(_INICIO[usuario.rol](lectura))
     )
@@ -821,8 +831,7 @@ def bandejas_de_taller(
     tienen otros tecnicos. Para los demas roles, la cola y todo lo que
     esta en el taller. Solo lectura.
     """
-    usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    lectura = _Lectura(contexto, usuario)
+    usuario, lectura = _leer_bandejas(contexto, usuario_id)
     if usuario.rol is RolUsuario.TECNICO:
         bandejas = [
             *_tecnico(lectura),

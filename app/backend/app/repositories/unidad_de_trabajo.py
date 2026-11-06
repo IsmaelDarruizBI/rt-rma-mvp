@@ -41,6 +41,13 @@ class UnidadDeTrabajo(Protocol):
         """Transaccion nueva, o la que ya esta en curso (reentrante)."""
         ...
 
+    def lectura_consistente(self) -> AbstractContextManager[None]:
+        """Varias lecturas de un caso de uso, sin que una escritura se meta
+        entre ellas. No admite escrituras: en PostgreSQL es una transaccion
+        de solo lectura (o el comando en curso, si lo hay); en JSON, la
+        seccion critica."""
+        ...
+
     def en_curso(self) -> bool:
         """Si quien llama esta dentro de una transaccion."""
         ...

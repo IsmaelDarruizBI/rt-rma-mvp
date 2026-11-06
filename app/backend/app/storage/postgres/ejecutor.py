@@ -39,6 +39,18 @@ class LectorSql(Protocol):
         """La primera fila, o ``None`` si no hay ninguna."""
         ...
 
+    def filas_en_lote(
+        self, pedidos: Sequence[tuple[Consulta, Parametros]]
+    ) -> list[list[Any]]:
+        """Las filas de cada consulta, en el orden pedido, con un solo viaje
+        a la base (modo pipeline).
+
+        La base las ejecuta en ese orden, una por una, dentro de la misma
+        transaccion: cada una con las reglas de ``filas``. Si una falla, las
+        siguientes no corren y la transaccion queda invalidada.
+        """
+        ...
+
 
 class EjecutorSql(LectorSql, Protocol):
     """Lectura y escritura dentro de la transaccion de un comando."""

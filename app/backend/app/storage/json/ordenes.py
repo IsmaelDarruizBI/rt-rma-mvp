@@ -211,6 +211,16 @@ class JsonOrdenReparacionRepository:
             )
         ]
 
+    def precargar(
+        self,
+        *,
+        todas: bool = False,
+        abiertas: bool = False,
+        con_reservas: bool = False,
+        insumo_id: str | None = None,
+    ) -> None:
+        """Sin viajes a una base: no hay nada que precargar."""
+
     def claves_de_fotos(self) -> frozenset[str]:
         return frozenset(
             foto.objeto for orden in self.listar() for foto in orden.fotos

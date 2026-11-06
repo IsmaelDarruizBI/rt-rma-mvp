@@ -107,6 +107,12 @@ class ApplicationContext:
         curso). Solo desde la capa de aplicacion."""
         return self.unidad_de_trabajo.transaccion()
 
+    def lectura(self) -> AbstractContextManager[None]:
+        """Abre una lectura de varios pasos: todo lo que lea el bloque se ve
+        en un solo instante. Solo lectura y solo desde la capa de
+        aplicacion."""
+        return self.unidad_de_trabajo.lectura_consistente()
+
 
 def _almacen_de_fotos(settings: Settings) -> AlmacenFotos | None:
     """El bucket privado si esta configurado; un directorio, solo en

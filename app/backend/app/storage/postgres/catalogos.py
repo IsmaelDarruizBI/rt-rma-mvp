@@ -34,6 +34,7 @@ curso o una breve de solo lectura.
 
 from datetime import timezone
 from decimal import Decimal
+from typing import Any
 
 from app.domain.models import (
     DATOS_EMPRESA_PREDETERMINADOS,
@@ -56,7 +57,7 @@ from app.repositories.exceptions import (
 )
 
 from .acciones import accion_del_comando
-from .consultas import ESCRITURA, LECTURA, consulta
+from .consultas import ESCRITURA, LECTURA, Consulta, consulta
 from .ejecutor import EjecutorSql
 from .mapeo import decimal_sin_ceros
 from .transaccion import UnidadDeTrabajoPostgres
@@ -291,6 +292,28 @@ class PostgresCatalogosRepository:
 
     def __init__(self, unidad: UnidadDeTrabajoPostgres) -> None:
         self._unidad = unidad
+
+    def anticipar(
+        self,
+        *,
+        usuario_id: str | None = None,
+        insumo_id: str | None = None,
+        movimientos: bool = False,
+    ) -> None:
+        pedidos: list[tuple[Consulta, Any]] = [
+            (_TIPOS, {"otros": TIPO_REPARACION_OTROS}),
+            (_PREVISTOS, ()),
+            (_INSUMOS, ()),
+            (_ESTACIONES, ()),
+            (_COMPATIBLES, ()),
+        ]
+        if usuario_id is not None:
+            pedidos.append((_USUARIO, {"codigo": usuario_id}))
+        if insumo_id is not None:
+            pedidos.append((_INSUMO, {"clave": insumo_id}))
+        if movimientos:
+            pedidos.append((_MOVIMIENTOS_STOCK, ()))
+        self._unidad.anticipar(pedidos)
 
     # --- Tipos de Reparacion ---
 

@@ -72,6 +72,15 @@ class JsonCatalogosRepository:
 
     # --- Tipos de Reparacion ---
 
+    def anticipar(
+        self,
+        *,
+        usuario_id: str | None = None,
+        insumo_id: str | None = None,
+        movimientos: bool = False,
+    ) -> None:
+        """Sin viajes a una base: no hay nada que anticipar."""
+
     def listar_tipos_reparacion(self) -> list[TipoReparacion]:
         return self._listar(ARCHIVO_TIPOS_REPARACION, TipoReparacion)
 

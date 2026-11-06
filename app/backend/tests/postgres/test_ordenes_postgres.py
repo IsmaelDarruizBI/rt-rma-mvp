@@ -1300,7 +1300,10 @@ def _consultas_de(unidad):
                 llamada = getattr(real, metodo)
 
                 def registrar(consulta_, *argumentos):
-                    nombres.append(consulta_.nombre)
+                    if metodo == "filas_en_lote":
+                        nombres.extend(c.nombre for c, _ in consulta_)
+                    else:
+                        nombres.append(consulta_.nombre)
                     return llamada(consulta_, *argumentos)
 
                 return registrar

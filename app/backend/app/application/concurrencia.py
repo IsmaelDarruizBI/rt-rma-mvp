@@ -58,7 +58,7 @@ UPDATE``), no este modulo.
 
 import threading
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 
 LOCK_INVENTARIO = threading.RLock()
 
@@ -84,6 +84,10 @@ class UnidadDeTrabajoJson:
                 yield
             finally:
                 self._local.nivel -= 1
+
+    def lectura_consistente(self) -> AbstractContextManager[None]:
+        """La seccion critica: una escritura no se mete en el medio."""
+        return self.transaccion()
 
     def en_curso(self) -> bool:
         """Si este hilo esta dentro de la seccion critica."""

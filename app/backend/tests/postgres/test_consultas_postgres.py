@@ -37,7 +37,10 @@ from app.application.contexto import ApplicationContext  # noqa: E402
 from app.core.config import Settings  # noqa: E402
 from app.domain.models.recepcion import NotaRecepcion  # noqa: E402
 from app.main import create_app  # noqa: E402
-from app.repositories.exceptions import ConflictoDeEscrituraError  # noqa: E402
+from app.repositories.exceptions import (  # noqa: E402
+    ConflictoDeEscrituraError,
+    EntidadPersistidaNoEncontradaError,
+)
 from app.storage.json.catalogos import JsonCatalogosRepository  # noqa: E402
 from app.storage.json.ordenes import (  # noqa: E402
     JsonOrdenReparacionRepository,
@@ -292,3 +295,108 @@ def test_a5_el_comprobante_de_ingreso_corre_sobre_postgres(mismo_estado):
     )
     assert en_pg.model_dump(mode="json") == en_js.model_dump(mode="json")
     assert en_postgres.ordenes.obtener(ingreso) == en_pg
+
+
+# --- Menos viajes a la base -------------------------------------------------
+
+
+def test_precargar_no_cambia_lo_que_devuelve_cada_consulta(armar, corpus):
+    repo, unidad = armar()
+    _cargar(repo, unidad, corpus[1])
+    clave = "INS-001"
+    sin = (
+        repo.listar(),
+        repo.listar_abiertas(),
+        repo.listar_con_reservas(),
+        repo.listar_con_reservas([clave]),
+        repo.listar_con_movimientos(clave),
+    )
+    with unidad.lectura_consistente():
+        repo.precargar(
+            todas=True, abiertas=True, con_reservas=True, insumo_id=clave
+        )
+        con = (
+            repo.listar(),
+            repo.listar_abiertas(),
+            repo.listar_con_reservas(),
+            repo.listar_con_reservas([clave]),
+            repo.listar_con_movimientos(clave),
+        )
+    assert con == sin
+
+
+def test_lo_precargado_se_entrega_en_copias(armar, corpus):
+    repo, unidad = armar()
+    orden = _abierta_con_recepcion(repo, unidad, corpus)
+    with unidad.lectura_consistente():
+        repo.precargar(abiertas=True)
+        primera = repo.obtener(orden.id)
+        primera.prioridad = 1
+        primera.recepcion.notas.clear()
+        segunda = repo.obtener(orden.id)
+    assert segunda == repo.obtener(orden.id)
+    assert segunda != primera
+
+
+def test_precargar_no_hace_nada_dentro_de_un_comando(armar, corpus):
+    """Un comando lee en READ COMMITTED: sigue validando por version."""
+    repo, unidad = armar()
+    orden = _abierta_con_recepcion(repo, unidad, corpus)
+    with unidad.transaccion():
+        repo.precargar(abiertas=True)
+        assert orden.id in {o.id for o in repo.listar_abiertas()}
+    repo.precargar(abiertas=True)  # sin transaccion, tampoco
+
+
+def test_cargar_para_modificar_lee_despues_de_obtener_el_bloqueo(
+    armar, corpus
+):
+    """El bloqueo y la carga van en un envio: lo que sigue al bloqueo corre
+    cuando lo obtiene y ve lo que el otro comando confirmo."""
+    repo, unidad = armar(pool_max=4)
+    orden = _abierta_con_recepcion(repo, unidad, corpus)
+    bloqueada = threading.Event()
+    seguir = threading.Event()
+    leidas = []
+
+    def primero():
+        with unidad.transaccion():
+            propia = repo.obtener_para_modificar(orden.id)
+            propia.prioridad = 2
+            propia.recepcion.notas.append(
+                NotaRecepcion(
+                    usuario_id=f.RECEPCION,
+                    fecha=propia.updated_at,
+                    texto="del primero",
+                )
+            )
+            repo.guardar(propia)
+            bloqueada.set()
+            seguir.wait(10)
+
+    def segundo():
+        bloqueada.wait(10)
+        with unidad.transaccion():
+            leidas.append(repo.obtener_para_modificar(orden.id))
+
+    hilos = [
+        threading.Thread(target=primero),
+        threading.Thread(target=segundo),
+    ]
+    for hilo in hilos:
+        hilo.start()
+    bloqueada.wait(10)
+    hilos[1].join(0.4)
+    assert hilos[1].is_alive()  # espera el bloqueo
+    seguir.set()
+    for hilo in hilos:
+        hilo.join(30)
+    assert leidas[0].prioridad == 2
+    assert _nota(leidas[0], "del primero")
+
+
+def test_una_orden_inexistente_no_se_puede_modificar(armar, corpus):
+    repo, unidad = armar()
+    with unidad.transaccion():
+        with pytest.raises(EntidadPersistidaNoEncontradaError):
+            repo.obtener_para_modificar("OR-999999")

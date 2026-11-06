@@ -48,6 +48,21 @@ otros clientes, asi que limpiar el pool propio no alcanzaria. Se evita
 antes: el registro rechaza las formas conocidas (``consultas.py``) y los
 privilegios del rol son la otra barrera.
 
+``lectura_consistente()``: la misma transaccion breve de ``lectura()``,
+para un caso de uso con varias lecturas que tienen que ver un solo instante
+(y pagar un solo ``BEGIN``). Dentro de un comando, usa el comando.
+
+Viajes a la base: entre Cloud Run y Supabase cada uno cuesta unos 180 ms y
+la consulta, casi nada, asi que lo que importa es cuantos hay. Dos
+herramientas, las dos dentro de la transaccion en curso:
+
+- ``filas_en_lote`` manda varias consultas en un envio (modo pipeline). Van
+  por la misma conexion y la base las ejecuta en orden; el pooler solo
+  reenvia, porque la transaccion ya esta abierta.
+- ``anticipar`` deja lecturas pedidas: salen en el proximo envio y su
+  resultado se conserva para cuando el caso de uso las haga. No es un cache
+  de datos: muere con la transaccion, y lo descarta la primera escritura.
+
 Anidadas: se unen a la exterior, sin savepoints, y solo la exterior
 termina la transaccion. Si una excepcion sale de una anidada, la
 transaccion queda invalidada: aunque el bloque exterior la atrape y
@@ -86,7 +101,7 @@ Sin reintentos automaticos: un conflicto llega como
 import asyncio
 import logging
 import threading
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -140,6 +155,8 @@ class _EnCurso:
     ``datos``: lo que los repositories guardan mientras dura la
     transaccion (instantaneas del agregado, la accion del comando). Se
     pierde con ella: nada queda viejo para la siguiente.
+    ``por_enviar`` y ``anticipadas``: las lecturas de ``anticipar``, antes
+    y despues de llegar a la base.
     """
 
     unidad: "UnidadDeTrabajoPostgres"
@@ -150,6 +167,24 @@ class _EnCurso:
     solo_lectura: bool = False
     descartar: bool = False
     datos: dict[str, Any] = field(default_factory=dict)
+    por_enviar: list[tuple[Consulta, Parametros]] = field(default_factory=list)
+    anticipadas: list[tuple[Consulta, Parametros, list[Any]]] = field(
+        default_factory=list
+    )
+
+    def resultado_de(
+        self, consulta: Consulta, parametros: Parametros
+    ) -> list[Any] | None:
+        """Lo que trajo ``anticipar`` para esa lectura, si la trajo."""
+        for anticipada, sus_parametros, filas in self.anticipadas:
+            if anticipada is consulta and sus_parametros == parametros:
+                return filas
+        return None
+
+    def olvidar_anticipadas(self) -> None:
+        """Una escritura: lo anticipado ya puede no valer."""
+        self.por_enviar.clear()
+        self.anticipadas.clear()
 
     def problema(self) -> str | None:
         """Por que el flujo actual no puede usarla (``None`` si puede)."""
@@ -296,6 +331,44 @@ class UnidadDeTrabajoPostgres:
             return
         with self._abrir(solo_lectura=True) as estado:
             yield _Lector(estado)
+
+    @contextmanager
+    def lectura_consistente(self) -> Iterator[None]:
+        """Varias lecturas de un caso de uso en una sola transaccion: la
+        que ya esta en curso o, si no hay, una breve de solo lectura."""
+        actual = _EN_CURSO.get()
+        if actual is not None and actual.activa:
+            self._exigir_propia(actual)
+            yield
+            return
+        with self._abrir(solo_lectura=True):
+            yield
+
+    def anticipar(
+        self, pedidos: Iterable[tuple[Consulta, Parametros]]
+    ) -> None:
+        """Lecturas que el caso de uso va a hacer enseguida: van en el
+        proximo envio. Sin transaccion en curso no hace nada: cada lectura
+        va por su cuenta, como siempre."""
+        actual = _EN_CURSO.get()
+        if (
+            actual is None
+            or actual.unidad is not self
+            or actual.problema() is not None
+        ):
+            return
+        for consulta_, parametros in pedidos:
+            registrada = exigir_registrada(consulta_)
+            if registrada.modo is not LECTURA:
+                raise TypeError(
+                    f"La consulta {registrada.nombre} es de escritura: solo "
+                    "se anticipan lecturas."
+                )
+            if (
+                (registrada, parametros) not in actual.por_enviar
+                and actual.resultado_de(registrada, parametros) is None
+            ):
+                actual.por_enviar.append((registrada, parametros))
 
     @contextmanager
     def transaccion(self) -> Iterator[None]:
@@ -584,19 +657,54 @@ class _Lector:
     def filas(
         self, consulta: Consulta, parametros: Parametros = ()
     ) -> list[Any]:
+        if self._hay_anticipadas():
+            return self.filas_en_lote([(consulta, parametros)])[0]
         return self._correr(consulta, parametros, lambda c: c.fetchall())
 
     def fila(self, consulta: Consulta, parametros: Parametros = ()) -> Any:
+        if self._hay_anticipadas():
+            filas = self.filas_en_lote([(consulta, parametros)])[0]
+            return filas[0] if filas else None
         return self._correr(consulta, parametros, lambda c: c.fetchone())
 
-    def _correr(
-        self,
-        consulta: Consulta,
-        parametros: Parametros,
-        resultado: Callable[[psycopg.Cursor], Any],
-        *,
-        lote: Iterable[Parametros] | None = None,
-    ) -> Any:
+    def filas_en_lote(
+        self, pedidos: Sequence[tuple[Consulta, Parametros]]
+    ) -> list[list[Any]]:
+        estado = self._estado
+        registrados = [
+            (self._admitida(consulta_), parametros)
+            for consulta_, parametros in pedidos
+        ]
+        conexion = _conexion_vigente(estado)
+        if any(pedido[0].modo is not LECTURA for pedido in registrados):
+            estado.olvidar_anticipadas()
+        anticipadas = list(estado.por_enviar)
+        # Cada pedido va por su cuenta, aunque se repita: entre dos lecturas
+        # iguales del lote puede haber una escritura.
+        faltan = [
+            pedido
+            for pedido in registrados
+            if pedido not in anticipadas
+            and estado.resultado_de(*pedido) is None
+        ]
+        recibidos = self._enviar(conexion, [*anticipadas, *faltan])
+        estado.por_enviar.clear()
+        estado.anticipadas += [
+            (consulta_, parametros, filas)
+            for (consulta_, parametros), filas in zip(anticipadas, recibidos)
+        ]
+        propios = iter(recibidos[len(anticipadas) :])
+        salida = []
+        for pedido in registrados:
+            filas = estado.resultado_de(*pedido)
+            salida.append(list(next(propios) if filas is None else filas))
+        return salida
+
+    def _hay_anticipadas(self) -> bool:
+        return bool(self._estado.por_enviar or self._estado.anticipadas)
+
+    def _admitida(self, consulta: Consulta) -> Consulta:
+        """La consulta, si es registrada y este lector puede ejecutarla."""
         registrada = exigir_registrada(consulta)
         estado = self._estado
         if registrada.modo not in self._MODOS:
@@ -608,7 +716,56 @@ class _Lector:
                 f"La consulta {registrada.nombre} es de escritura: el lector "
                 "solo ejecuta consultas registradas como LECTURA."
             )
+        return registrada
+
+    def _enviar(
+        self,
+        conexion: psycopg.Connection,
+        pedidos: Sequence[tuple[Consulta, Parametros]],
+    ) -> list[list[Any]]:
+        """Un solo envio. Las filas se leen al cerrar el pipeline: ahi
+        llega tambien el primer error, si lo hubo."""
+        if not pedidos:
+            return []
+        estado = self._estado
+        try:
+            with conexion.pipeline():
+                cursores = [
+                    conexion.cursor(
+                        binary=True, row_factory=namedtuple_row
+                    ).execute(consulta_.sql, parametros, binary=True)
+                    for consulta_, parametros in pedidos
+                ]
+            salida = [cursor.fetchall() for cursor in cursores]
+            for cursor in cursores:
+                cursor.close()
+        except psycopg.Error as error:
+            estado.invalidada = True
+            raise traducir_error(error) from None
+        self._exigir_dentro(conexion)
+        return salida
+
+    def _exigir_dentro(self, conexion: psycopg.Connection) -> None:
+        if _terminada_afuera(conexion):
+            # Ninguna consulta registrada termina la transaccion: si paso,
+            # el estado de la conexion es dudoso.
+            self._estado.invalidada = True
+            self._estado.descartar = True
+            raise _control_externo()
+
+    def _correr(
+        self,
+        consulta: Consulta,
+        parametros: Parametros,
+        resultado: Callable[[psycopg.Cursor], Any],
+        *,
+        lote: Iterable[Parametros] | None = None,
+    ) -> Any:
+        registrada = self._admitida(consulta)
+        estado = self._estado
         conexion = _conexion_vigente(estado)
+        if registrada.modo is not LECTURA:
+            estado.olvidar_anticipadas()
         try:
             # Binario: protocolo extendido, una sola sentencia por envio.
             with conexion.cursor(
@@ -622,12 +779,7 @@ class _Lector:
         except psycopg.Error as error:
             estado.invalidada = True
             raise traducir_error(error) from None
-        if _terminada_afuera(conexion):
-            # Ninguna consulta registrada termina la transaccion: si paso,
-            # el estado de la conexion es dudoso.
-            estado.invalidada = True
-            estado.descartar = True
-            raise _control_externo()
+        self._exigir_dentro(conexion)
         return salida
 
 

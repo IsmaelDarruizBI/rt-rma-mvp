@@ -165,10 +165,16 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
     Los insumos previstos se resuelven contra el catalogo al responder.
     Con ellos la UI puede proponer que confirmar en PROC-REP-200 sin
     conocer ningun ID de insumo. Lo mismo con los Detalles origen de una
-    garantia RMA: su Tipo se lee de la Orden origen.
+    garantia RMA: su Tipo se lee de la Orden origen. Lo que se lee, en una
+    sola lectura: la del comando, si sigue abierta.
     """
+    with contexto.lectura():
+        if orden.reparaciones_detail:
+            contexto.catalogos.anticipar()
+        nombres = nombres_de_tipo_por_detalle(contexto, orden)
+        previstos = insumos_previstos_por_detalle(contexto, orden)
+        origen = detalles_origen_de(contexto, orden)
     acciones = acciones_disponibles(orden)
-    nombres = nombres_de_tipo_por_detalle(contexto, orden)
     autorizacion = acciones_de_autorizacion(orden)
     financieras = acciones_financieras(orden)
     custodia = acciones_de_custodia(orden)
@@ -176,9 +182,9 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
         orden,
         progreso=progreso(orden),
         acciones=acciones,
-        insumos_previstos=insumos_previstos_por_detalle(contexto, orden),
+        insumos_previstos=previstos,
         nombres_de_tipo=nombres,
-        detalles_origen=detalles_origen_de(contexto, orden),
+        detalles_origen=origen,
         acciones_cancelacion=acciones_de_cancelacion(orden),
         acciones_autorizacion=autorizacion,
         acciones_financieras=financieras,
@@ -254,7 +260,9 @@ def get_pendientes_de_autorizacion(
 @router.get("/{orden_id}")
 def get_orden(orden_id: str, contexto: ContextoDep) -> OrdenOut:
     """Una Orden con su detalle completo."""
-    return _salida(obtener_orden(contexto, orden_id), contexto)
+    with contexto.lectura():
+        contexto.catalogos.anticipar()
+        return _salida(obtener_orden(contexto, orden_id), contexto)
 
 
 @router.get("/{orden_id}/finances")

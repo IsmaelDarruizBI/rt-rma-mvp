@@ -5,6 +5,14 @@ lista de Ordenes (``= ANY``): ``listar()`` no hace una consulta por
 Orden. Cada lista sale con ``ORDER BY`` explicito (posicion, secuencia o
 codigo), y cada fecha en UTC, como las del dominio.
 
+Viajes a la base (cada uno cuesta lo que la red, no lo que la consulta):
+las hijas salen juntas en un solo envio (``filas_en_lote``).
+``cargar_en_un_envio`` suma la raiz a ese envio y es para quien ya tiene un
+solo instante: una lectura ``REPEATABLE READ`` o una Orden bloqueada.
+``cargar_ordenes`` lee la raiz primero: es la de un comando que lee Ordenes
+sin bloquearlas, donde cada consulta ve su propio instante y quien llama
+compara versiones (QA-A2-M2).
+
 Ademas del dominio devuelve la ``Instantanea``: los uuid de cada fila y
 la version persistida, que ``guardar`` usa para comparar lo que cambio
 (DA-1) y para el control de version (DA-2).
@@ -77,8 +85,8 @@ from app.domain.models.reparacion import (
 )
 from app.repositories.exceptions import PersistenciaError
 
-from .consultas import LECTURA, consulta
-from .ejecutor import LectorSql
+from .consultas import LECTURA, Consulta, consulta
+from .ejecutor import LectorSql, Parametros
 from .mapeo import decimal_sin_ceros
 
 
@@ -212,7 +220,9 @@ _ORIGEN = consulta(
     SELECT x.orden_id, d.codigo
     FROM rma.orden_detalle_origen x
     JOIN rma.detalle d ON d.id = x.detalle_id
-    WHERE x.orden_id = ANY(%(ids)s)
+    WHERE x.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY x.orden_id, x.posicion, d.codigo COLLATE "C"
     """,
     modo=LECTURA,
@@ -231,7 +241,9 @@ _RECEPCION = consulta(
     JOIN rma.usuario ur ON ur.id = r.registrado_por
     LEFT JOIN rma.usuario uc ON uc.id = r.confirmada_por
     LEFT JOIN rma.usuario un ON un.id = r.no_recibido_por
-    WHERE r.orden_id = ANY(%(ids)s)
+    WHERE r.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     """,
     modo=LECTURA,
 )
@@ -248,7 +260,9 @@ _DETALLES = consulta(
     LEFT JOIN rma.usuario uc ON uc.id = d.control_usuario_id
     LEFT JOIN rma.usuario ux ON ux.id = d.cancelado_por
     LEFT JOIN rma.detalle od ON od.id = d.detalle_origen_id
-    WHERE d.orden_id = ANY(%(ids)s)
+    WHERE d.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY d.orden_id, d.codigo COLLATE "C"
     """,
     modo=LECTURA,
@@ -264,7 +278,9 @@ _VERSIONES = consulta(
     JOIN rma.detalle d ON d.id = v.detalle_id
     JOIN rma.tipo_reparacion t ON t.id = v.tipo_reparacion_id
     LEFT JOIN rma.usuario u ON u.id = v.definida_por
-    WHERE d.orden_id = ANY(%(ids)s)
+    WHERE d.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY v.detalle_id, v.numero
     """,
     modo=LECTURA,
@@ -278,7 +294,9 @@ _DECISIONES = consulta(
     JOIN rma.detalle_version v ON v.id = c.detalle_version_id
     JOIN rma.detalle d ON d.id = v.detalle_id
     JOIN rma.usuario u ON u.id = c.usuario_id
-    WHERE d.orden_id = ANY(%(ids)s)
+    WHERE d.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY v.detalle_id, c.posicion, c.registrada_en, c.id
     """,
     modo=LECTURA,
@@ -291,7 +309,9 @@ _AJUSTES = consulta(
     FROM rma.ajuste_garantia a
     JOIN rma.detalle d ON d.id = a.detalle_id
     JOIN rma.usuario u ON u.id = a.usuario_id
-    WHERE d.orden_id = ANY(%(ids)s)
+    WHERE d.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY a.detalle_id, a.posicion, a.registrado_en, a.id
     """,
     modo=LECTURA,
@@ -305,7 +325,9 @@ _CONTROLES = consulta(
     JOIN rma.detalle d ON d.id = c.detalle_id
     JOIN rma.usuario u ON u.id = c.usuario_id
     LEFT JOIN rma.ejecucion x ON x.id = c.ejecucion_id
-    WHERE d.orden_id = ANY(%(ids)s)
+    WHERE d.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY c.detalle_id, c.posicion, c.registrado_en, c.id
     """,
     modo=LECTURA,
@@ -320,7 +342,9 @@ _TOMAS = consulta(
     JOIN rma.usuario u ON u.id = t.usuario_id
     JOIN rma.mesa_trabajo m ON m.id = t.mesa_trabajo_id
     LEFT JOIN rma.usuario l ON l.id = t.liberada_por
-    WHERE t.orden_id = ANY(%(ids)s)
+    WHERE t.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY t.orden_id, t.posicion, t.inicio, t.codigo COLLATE "C"
     """,
     modo=LECTURA,
@@ -335,7 +359,9 @@ _EJECUCIONES = consulta(
     JOIN rma.detalle d ON d.id = x.detalle_id
     JOIN rma.toma t ON t.id = x.toma_id
     JOIN rma.usuario u ON u.id = x.usuario_id
-    WHERE x.orden_id = ANY(%(ids)s)
+    WHERE x.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY x.orden_id, x.posicion, x.inicio, x.codigo COLLATE "C"
     """,
     modo=LECTURA,
@@ -347,7 +373,9 @@ _INSUMOS_UTILIZADOS = consulta(
     FROM rma.ejecucion_insumo ei
     JOIN rma.ejecucion x ON x.id = ei.ejecucion_id
     JOIN rma.insumo i ON i.id = ei.insumo_id
-    WHERE x.orden_id = ANY(%(ids)s)
+    WHERE x.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY ei.ejecucion_id, ei.posicion, i.clave COLLATE "C"
     """,
     modo=LECTURA,
@@ -360,7 +388,9 @@ _VERSIONES_RECEPCION = consulta(
     FROM rma.recepcion_version v
     JOIN rma.usuario r ON r.id = v.registrado_por
     JOIN rma.usuario p ON p.id = v.reemplazado_por
-    WHERE v.orden_id = ANY(%(ids)s)
+    WHERE v.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY v.orden_id, v.posicion NULLS FIRST, v.reemplazado_en,
              v.registrado_en, v.id
     """,
@@ -373,7 +403,9 @@ _NOTAS_RECEPCION = consulta(
            n.interna
     FROM rma.recepcion_nota n
     JOIN rma.usuario u ON u.id = n.usuario_id
-    WHERE n.orden_id = ANY(%(ids)s)
+    WHERE n.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY n.orden_id, n.posicion NULLS FIRST, n.registrada_en, n.id
     """,
     modo=LECTURA,
@@ -384,7 +416,9 @@ _CHECKINS = consulta(
     SELECT c.orden_id, c.realizado, u.codigo AS usuario, c.registrado_en
     FROM rma.checkin c
     JOIN rma.usuario u ON u.id = c.usuario_id
-    WHERE c.orden_id = ANY(%(ids)s)
+    WHERE c.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY c.orden_id, c.posicion NULLS FIRST, c.registrado_en, c.id
     """,
     modo=LECTURA,
@@ -397,7 +431,9 @@ _FOTOS = consulta(
            f.nombre_original
     FROM rma.foto f
     JOIN rma.usuario u ON u.id = f.usuario_id
-    WHERE f.orden_id = ANY(%(ids)s)
+    WHERE f.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY f.orden_id, f.posicion NULLS FIRST, f.registrada_en,
              f.codigo COLLATE "C"
     """,
@@ -412,7 +448,9 @@ _DOCUMENTOS = consulta(
     FROM rma.documento_emitido d
     LEFT JOIN rma.usuario u ON u.id = d.usuario_id
     LEFT JOIN rma.documento_emitido r ON r.id = d.reemplaza_a
-    WHERE d.orden_id = ANY(%(ids)s)
+    WHERE d.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY d.orden_id, d.posicion NULLS FIRST, d.emitido_en, d.version,
              d.codigo COLLATE "C"
     """,
@@ -425,7 +463,9 @@ _SALIDAS = consulta(
            s.retira_identificacion, s.registrada_en, s.observaciones
     FROM rma.salida s
     JOIN rma.usuario u ON u.id = s.entregado_por
-    WHERE s.orden_id = ANY(%(ids)s)
+    WHERE s.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     """,
     modo=LECTURA,
 )
@@ -440,7 +480,9 @@ _PAGOS = consulta(
     JOIN rma.medio_pago m ON m.id = p.medio_pago_id
     JOIN rma.usuario u ON u.id = p.usuario_id
     LEFT JOIN rma.usuario a ON a.id = p.anulado_por
-    WHERE p.orden_id = ANY(%(ids)s)
+    WHERE p.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY p.orden_id, p.posicion NULLS FIRST, p.registrado_en,
              p.codigo COLLATE "C"
     """,
@@ -456,7 +498,9 @@ _DEVOLUCIONES = consulta(
     JOIN rma.pago p ON p.id = d.pago_id
     JOIN rma.medio_pago m ON m.id = d.medio_pago_id
     JOIN rma.usuario u ON u.id = d.usuario_id
-    WHERE d.orden_id = ANY(%(ids)s)
+    WHERE d.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY d.orden_id, d.posicion NULLS FIRST, d.registrada_en,
              d.codigo COLLATE "C"
     """,
@@ -469,7 +513,9 @@ _DESCUENTOS = consulta(
            d.registrado_en
     FROM rma.descuento d
     JOIN rma.usuario u ON u.id = d.usuario_id
-    WHERE d.orden_id = ANY(%(ids)s)
+    WHERE d.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY d.orden_id, d.posicion NULLS FIRST, d.registrado_en, d.id
     """,
     modo=LECTURA,
@@ -486,7 +532,9 @@ _MOVIMIENTOS = consulta(
     LEFT JOIN rma.ejecucion x ON x.id = m.ejecucion_id
     LEFT JOIN rma.movimiento_inventario o ON o.id = m.movimiento_origen_id
     LEFT JOIN rma.usuario u ON u.id = m.usuario_id
-    WHERE m.orden_id = ANY(%(ids)s)
+    WHERE m.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
     ORDER BY m.orden_id, m.posicion NULLS FIRST, m.registrado_en,
              m.codigo COLLATE "C"
     """,
@@ -505,11 +553,49 @@ _HISTORIAL = consulta(
     LEFT JOIN rma.detalle d ON d.id = e.detalle_id
     LEFT JOIN rma.ejecucion x ON x.id = e.ejecucion_id
     LEFT JOIN rma.pago p ON p.id = e.pago_id
-    WHERE e.orden_id = ANY(%(ids)s)
+    WHERE e.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
       AND e.historial_referencia_id IS NOT NULL
     ORDER BY e.orden_id, e.secuencia
     """,
     modo=LECTURA,
+)
+
+
+@dataclass(frozen=True)
+class _Hija:
+    """Una tabla del agregado: como se lee y por que columna se agrupa.
+    ``unica``: a lo sumo una fila por Orden."""
+
+    nombre: str
+    consulta: Consulta
+    columna: str = "orden_id"
+    unica: bool = False
+
+
+_HIJAS = (
+    _Hija("origen", _ORIGEN),
+    _Hija("recepcion", _RECEPCION, unica=True),
+    _Hija("detalles", _DETALLES),
+    _Hija("versiones", _VERSIONES, columna="detalle_id"),
+    _Hija("decisiones", _DECISIONES, columna="detalle_id"),
+    _Hija("ajustes", _AJUSTES, columna="detalle_id"),
+    _Hija("controles", _CONTROLES, columna="detalle_id"),
+    _Hija("tomas", _TOMAS),
+    _Hija("ejecuciones", _EJECUCIONES),
+    _Hija("insumos", _INSUMOS_UTILIZADOS, columna="ejecucion_id"),
+    _Hija("historial", _HISTORIAL),
+    _Hija("versiones_recepcion", _VERSIONES_RECEPCION),
+    _Hija("notas", _NOTAS_RECEPCION),
+    _Hija("checkins", _CHECKINS),
+    _Hija("fotos", _FOTOS),
+    _Hija("documentos", _DOCUMENTOS),
+    _Hija("salidas", _SALIDAS, unica=True),
+    _Hija("pagos", _PAGOS),
+    _Hija("devoluciones", _DEVOLUCIONES),
+    _Hija("descuentos", _DESCUENTOS),
+    _Hija("movimientos", _MOVIMIENTOS),
 )
 
 
@@ -538,54 +624,60 @@ def cargar_ordenes(lector: LectorSql, codigos: list[str]) -> list[Instantanea]:
     raices = lector.filas(_ORDENES, {"codigos": list(codigos)})
     if not raices:
         return []
-    ids = [raiz.id for raiz in raices]
-    por_orden = _agrupar_hijas(lector, ids)
+    por_orden = _agrupar_hijas(lector, [raiz.codigo for raiz in raices])
     return [_armar(raiz, por_orden) for raiz in raices]
 
 
-def _agrupar_hijas(lector: LectorSql, ids: list[UUID]) -> dict[str, Any]:
-    parametros = {"ids": ids}
+def cargar_en_un_envio(
+    lector: LectorSql,
+    codigos: list[str],
+    antes: tuple[Consulta, Parametros] | None = None,
+) -> list[Instantanea]:
+    """Como ``cargar_ordenes``, con la raiz en el mismo envio que las hijas.
 
-    def por(columna: str, filas: list[Any]) -> dict[UUID, list[Any]]:
+    Solo con un instante asegurado (ver el modulo). ``antes`` corre primero
+    en ese envio: la base ejecuta las consultas en orden, asi que las que
+    siguen a un bloqueo leen despues de obtenerlo.
+    """
+    if not codigos:
+        return []
+    parametros = {"codigos": list(codigos)}
+    pedidos = [(_ORDENES, parametros), *_pedidos_de_hijas(parametros)]
+    if antes is not None:
+        pedidos.insert(0, antes)
+    lotes = lector.filas_en_lote(pedidos)
+    if antes is not None:
+        lotes = lotes[1:]
+    raices, hijas = lotes[0], lotes[1:]
+    por_orden = _agrupadas(hijas)
+    return [_armar(raiz, por_orden) for raiz in raices]
+
+
+def _pedidos_de_hijas(
+    parametros: dict[str, Any],
+) -> list[tuple[Consulta, Any]]:
+    return [(hija.consulta, parametros) for hija in _HIJAS]
+
+
+def _agrupar_hijas(lector: LectorSql, codigos: list[str]) -> dict[str, Any]:
+    parametros = {"codigos": list(codigos)}
+    return _agrupadas(lector.filas_en_lote(_pedidos_de_hijas(parametros)))
+
+
+def _agrupadas(lotes: list[list[Any]]) -> dict[str, Any]:
+    """Las filas de cada hija, por la columna que la une al agregado."""
+    agrupadas: dict[str, Any] = {}
+    for hija, filas in zip(_HIJAS, lotes, strict=True):
+        if hija.unica:
+            agrupadas[hija.nombre] = {
+                getattr(fila, hija.columna): fila for fila in filas
+            }
+            continue
         grupos: dict[UUID, list[Any]] = defaultdict(list)
         for fila in filas:
-            grupos[getattr(fila, columna)].append(fila)
-        return grupos
-
-    return {
-        "origen": por("orden_id", lector.filas(_ORIGEN, parametros)),
-        "recepcion": {
-            fila.orden_id: fila
-            for fila in lector.filas(_RECEPCION, parametros)
-        },
-        "detalles": por("orden_id", lector.filas(_DETALLES, parametros)),
-        "versiones": por("detalle_id", lector.filas(_VERSIONES, parametros)),
-        "decisiones": por("detalle_id", lector.filas(_DECISIONES, parametros)),
-        "ajustes": por("detalle_id", lector.filas(_AJUSTES, parametros)),
-        "controles": por("detalle_id", lector.filas(_CONTROLES, parametros)),
-        "tomas": por("orden_id", lector.filas(_TOMAS, parametros)),
-        "ejecuciones": por("orden_id", lector.filas(_EJECUCIONES, parametros)),
-        "insumos": por(
-            "ejecucion_id", lector.filas(_INSUMOS_UTILIZADOS, parametros)
-        ),
-        "historial": por("orden_id", lector.filas(_HISTORIAL, parametros)),
-        "versiones_recepcion": por(
-            "orden_id", lector.filas(_VERSIONES_RECEPCION, parametros)
-        ),
-        "notas": por("orden_id", lector.filas(_NOTAS_RECEPCION, parametros)),
-        "checkins": por("orden_id", lector.filas(_CHECKINS, parametros)),
-        "fotos": por("orden_id", lector.filas(_FOTOS, parametros)),
-        "documentos": por("orden_id", lector.filas(_DOCUMENTOS, parametros)),
-        "salidas": {
-            fila.orden_id: fila for fila in lector.filas(_SALIDAS, parametros)
-        },
-        "pagos": por("orden_id", lector.filas(_PAGOS, parametros)),
-        "devoluciones": por(
-            "orden_id", lector.filas(_DEVOLUCIONES, parametros)
-        ),
-        "descuentos": por("orden_id", lector.filas(_DESCUENTOS, parametros)),
-        "movimientos": por("orden_id", lector.filas(_MOVIMIENTOS, parametros)),
-    }
+            grupos[getattr(fila, hija.columna)].append(fila)
+        agrupadas[hija.nombre] = grupos
+    return agrupadas
 
 
 def _armar(raiz: Any, hijas: dict[str, Any]) -> Instantanea:

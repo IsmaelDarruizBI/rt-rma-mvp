@@ -122,6 +122,25 @@ class OrdenReparacionRepository(Protocol):
         historial desempata fechas iguales por el orden de llegada."""
         ...
 
+    def precargar(
+        self,
+        *,
+        todas: bool = False,
+        abiertas: bool = False,
+        con_reservas: bool = False,
+        insumo_id: str | None = None,
+    ) -> None:
+        """Aviso de las consultas dedicadas que el caso de uso va a hacer
+        en esta lectura: ``listar``, ``listar_abiertas``,
+        ``listar_con_reservas`` o, con ``insumo_id``, las reservas y los
+        movimientos de ese insumo.
+
+        No cambia ningun resultado. Dentro de una lectura consistente,
+        PostgreSQL trae las Ordenes de todas juntas (ahorra viajes a la
+        base). En un comando, sin transaccion o en JSON no hace nada.
+        """
+        ...
+
     def claves_de_fotos(self) -> frozenset[str]:
         """Las claves de objeto de todas las fotos registradas, de
         cualquier Orden (abierta o cerrada)."""

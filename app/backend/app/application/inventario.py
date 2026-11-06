@@ -87,10 +87,12 @@ def consultar_inventario(
     solo_faltantes: bool = False,
 ) -> list[SituacionInsumo]:
     """Todos los insumos (o los que coinciden), con sus tres cantidades."""
-    situaciones = situacion_inventario(
-        contexto.catalogos.listar_insumos(),
-        contexto.ordenes.listar_con_reservas(),
-    )
+    with contexto.lectura():
+        contexto.catalogos.anticipar()
+        contexto.ordenes.precargar(con_reservas=True)
+        insumos = contexto.catalogos.listar_insumos()
+        con_reservas = contexto.ordenes.listar_con_reservas()
+    situaciones = situacion_inventario(insumos, con_reservas)
     return filtrar_situaciones(
         situaciones, buscar=buscar, solo_faltantes=solo_faltantes
     )
@@ -102,9 +104,11 @@ def detalle_de_insumo(
 ) -> DetalleInsumo:
     """Situacion, reservas vigentes, historial y evidencia de faltantes."""
     ordenes = contexto.ordenes
-    # Las lecturas, dentro de una transaccion (QA-E2-1): una escritura no
-    # se mete entre la de reservas y la de movimientos.
-    with contexto.transaccion():
+    # Las lecturas, en un solo instante (QA-E2-1): una escritura no se
+    # mete entre la de reservas y la de movimientos.
+    with contexto.lectura():
+        contexto.catalogos.anticipar(insumo_id=insumo_id, movimientos=True)
+        ordenes.precargar(todas=True, insumo_id=insumo_id)
         insumo = contexto.catalogos.obtener_insumo(insumo_id)
         movimientos_stock = contexto.catalogos.listar_movimientos_stock()
         con_reservas = ordenes.listar_con_reservas([insumo_id])
@@ -130,9 +134,13 @@ def movimientos_de_inventario(
     tipo: TipoMovimientoInsumo | None = None,
 ) -> list[MovimientoHistorial]:
     """Historial de movimientos, opcionalmente de un insumo o un tipo."""
+    with contexto.lectura():
+        contexto.catalogos.anticipar(movimientos=True)
+        con_movimientos = contexto.ordenes.listar_con_movimientos(insumo_id)
+        movimientos_stock = contexto.catalogos.listar_movimientos_stock()
     return historial_movimientos(
-        contexto.ordenes.listar_con_movimientos(insumo_id),
-        contexto.catalogos.listar_movimientos_stock(),
+        con_movimientos,
+        movimientos_stock,
         insumo_id=insumo_id,
         tipo=tipo,
     )

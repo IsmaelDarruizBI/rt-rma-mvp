@@ -79,6 +79,10 @@ suyo, y una carga son varias (QA-A2-M2). Por eso, en un comando:
   Cada consulta se evalua sobre esa vista. Las que bloqueo
   (``obtener_para_modificar``) o escribio se leen siempre como estan.
 
+Fuera de un comando, las Ordenes salen en un solo envio y sin revalidar
+nada: el instante ya es uno. ``precargar`` trae en dos envios las Ordenes
+que un caso de uso va a pedir con varias consultas dedicadas.
+
 Reservas (A6): los movimientos de la Orden solo crecen, con su
 ``posicion``, en el libro ``rma.movimiento_inventario``; el trigger del libro
 aplica el stock. Antes del primer movimiento se bloquean sus insumos por
@@ -130,6 +134,7 @@ from .ordenes_lectura import (
     FILTRO_TODAS,
     FILTRO_UNA,
     Instantanea,
+    cargar_en_un_envio,
     cargar_ordenes,
     claves_de_fotos,
     versiones_de,
@@ -139,6 +144,8 @@ from .transaccion import UnidadDeTrabajoPostgres
 _INSTANTANEAS = "ordenes.instantaneas"
 # Primera version leida de cada Orden no bloqueada, por comando (QA-E2-1).
 _LEIDAS = "ordenes.leidas"
+# Las Ordenes de ``precargar``, en una lectura de un solo instante.
+_PRECARGADAS = "ordenes.precargadas"
 # Cargas que un comando que confirma en el medio puede invalidar seguidas.
 _INTENTOS_DE_LECTURA = 3
 # Los que el libro admite en una Orden: DEVOLUCION y DESPERDICIO no (DI-5).
@@ -164,8 +171,15 @@ _BLOQUEAR = consulta(
 )
 _SIGUIENTE_NUMERO = consulta(
     "ordenes.siguiente_numero",
-    "SELECT rma.formatear_numero_orden(nextval('rma.orden_numero_seq')) "
-    "AS codigo",
+    """
+    SELECT n.codigo,
+           EXISTS (SELECT 1 FROM rma.orden o WHERE o.codigo = n.codigo)
+               AS usado
+    FROM (
+        SELECT rma.formatear_numero_orden(nextval('rma.orden_numero_seq'))
+            AS codigo
+    ) n
+    """,
     modo=ESCRITURA,
 )
 _EXISTE = consulta(
@@ -722,7 +736,10 @@ class PostgresOrdenReparacionRepository:
 
     def obtener(self, orden_id: str) -> OrdenReparacion:
         cargadas = self._leer(
-            FILTRO_UNA, {"codigo": orden_id}, lambda o: o.id == orden_id
+            FILTRO_UNA,
+            {"codigo": orden_id},
+            lambda o: o.id == orden_id,
+            codigos=[orden_id],
         )
         if not cargadas:
             raise EntidadPersistidaNoEncontradaError(
@@ -736,11 +753,16 @@ class PostgresOrdenReparacionRepository:
     def obtener_para_modificar(self, orden_id: str) -> OrdenReparacion:
         self._exigir_transaccion("Leer una Orden para modificarla")
         ejecutor = self._unidad.ejecutor()
-        if ejecutor.fila(_BLOQUEAR, {"codigo": orden_id}) is None:
+        # Un solo envio: lo que sigue al bloqueo corre despues de obtenerlo,
+        # cada consulta con su propio instante, y la Orden ya no cambia.
+        cargadas = cargar_en_un_envio(
+            ejecutor, [orden_id], antes=(_BLOQUEAR, {"codigo": orden_id})
+        )
+        if not cargadas:
             raise EntidadPersistidaNoEncontradaError(
                 f"No existe la Orden {orden_id}"
             )
-        instantanea = cargar_ordenes(ejecutor, [orden_id])[0]
+        instantanea = cargadas[0]
         instantaneas = self._instantaneas()
         # Pedirla otra vez en el comando conserva la marca: lo que ya se
         # cargo sigue siendo la Orden de esta transaccion.
@@ -757,9 +779,9 @@ class PostgresOrdenReparacionRepository:
         # La secuencia nunca repite, pero una Orden pudo guardarse con un
         # numero explicito (importada o de prueba): ese no se devuelve.
         while True:
-            codigo = ejecutor.fila(_SIGUIENTE_NUMERO).codigo
-            if ejecutor.fila(_EXISTE, {"codigo": codigo}) is None:
-                return codigo
+            siguiente = ejecutor.fila(_SIGUIENTE_NUMERO)
+            if not siguiente.usado:
+                return siguiente.codigo
 
     def guardar(self, orden: OrdenReparacion) -> None:
         with self._unidad.transaccion():
@@ -831,6 +853,38 @@ class PostgresOrdenReparacionRepository:
             ),
         )
 
+    def precargar(
+        self,
+        *,
+        todas: bool = False,
+        abiertas: bool = False,
+        con_reservas: bool = False,
+        insumo_id: str | None = None,
+    ) -> None:
+        # Sin un instante fijo cada lectura decide por su cuenta (QA-A2-M2).
+        if not self._unidad.en_curso() or (
+            not self._unidad.lectura_de_un_instante()
+        ):
+            return
+        pedidos: list[tuple[Consulta, dict[str, Any]]] = []
+        if todas:
+            pedidos.append((FILTRO_TODAS, {}))
+        if abiertas:
+            pedidos.append((FILTRO_ABIERTAS, {}))
+        if con_reservas:
+            pedidos.append((FILTRO_RESERVAS, {"claves": None}))
+        if insumo_id is not None:
+            pedidos.append((FILTRO_RESERVAS, {"claves": [insumo_id]}))
+            pedidos.append((FILTRO_MOVIMIENTOS, {"clave": insumo_id}))
+        self._unidad.anticipar(pedidos)
+        with self._unidad.lectura() as lector:
+            lotes = lector.filas_en_lote(pedidos)
+            codigos = sorted({f.codigo for filas in lotes for f in filas})
+            cargadas = cargar_en_un_envio(lector, codigos)
+        self._unidad.datos_de_transaccion()[_PRECARGADAS] = {
+            instantanea.orden.id: instantanea.orden for instantanea in cargadas
+        }
+
     def claves_de_fotos(self) -> frozenset[str]:
         # Una sola consulta: un solo instante. Las fotos solo crecen.
         with self._unidad.lectura() as lector:
@@ -843,22 +897,46 @@ class PostgresOrdenReparacionRepository:
         consulta_: Consulta,
         parametros: dict[str, Any],
         incluye: Callable[[OrdenReparacion], bool],
+        codigos: list[str] | None = None,
     ) -> list[OrdenReparacion]:
         """Las Ordenes que cumplen ``incluye``, por numero ascendente.
 
         ``consulta_`` (un filtro registrado) trae las candidatas de la
         base con su version; el resultado lo decide ``incluye``, como en
-        JSON.
+        JSON. ``codigos``: las candidatas, si ya se saben; con un instante
+        fijo el filtro no hace falta.
         """
         with self._unidad.lectura() as lector:
             if self._unidad.lectura_de_un_instante():
-                codigos = [
-                    f.codigo for f in lector.filas(consulta_, parametros)
-                ]
-                ordenes = [i.orden for i in cargar_ordenes(lector, codigos)]
+                if codigos is None:
+                    codigos = [
+                        f.codigo for f in lector.filas(consulta_, parametros)
+                    ]
+                ordenes = self._del_instante(lector, codigos)
                 return [o for o in ordenes if incluye(o)]
             cargadas = self._cargar_sin_mezclar(lector, consulta_, parametros)
         return self._en_la_vista_del_comando(cargadas, incluye)
+
+    def _del_instante(
+        self, lector, codigos: list[str]
+    ) -> list[OrdenReparacion]:
+        """Las Ordenes de un instante fijo, por numero ascendente: las que
+        ``precargar`` ya trajo (una copia: se entregan a varios) y el resto
+        de la base. Un instante fijo no cambia: no hay nada que revalidar."""
+        previas: dict[str, OrdenReparacion] = (
+            self._unidad.datos_de_transaccion().get(_PRECARGADAS, {})
+        )
+        faltan = [c for c in codigos if c not in previas]
+        leidas = {
+            i.orden.id: i.orden for i in cargar_en_un_envio(lector, faltan)
+        }
+        return [
+            leidas[codigo]
+            if codigo in leidas
+            else previas[codigo].model_copy(deep=True)
+            for codigo in sorted(set(codigos))
+            if codigo in leidas or codigo in previas
+        ]
 
     def _cargar_sin_mezclar(
         self, lector, consulta_: Consulta, parametros: dict[str, Any]
@@ -1053,6 +1131,9 @@ class _Guardado:
         self._pagos = dict(previa.pagos) if previa else {}
         self._movimientos = dict(previa.movimientos) if previa else {}
         self._checkin_ingreso = previa.checkin_ingreso if previa else None
+        # De ``_resolver_referencias``.
+        self._tipo_dni: Any = None
+        self._equivalencias: dict[tuple[str, str, str | None], UUID] = {}
 
     # --- Flujo ---------------------------------------------------------------
 
@@ -1243,14 +1324,30 @@ class _Guardado:
             "orden": {orden.orden_origen_id} - {None},
             "medio_pago": medios,
         }
+        # Todas las referencias en un solo envio, con lo demas de catalogo
+        # que este guardar va a necesitar.
+        tablas = {t: codigos for t, codigos in pedidos.items() if codigos}
+        previos = len(self._previa.orden.historial) if self._previa else 0
+        referencias = {p.referencia_id for p in orden.historial[previos:]}
+        lotes = self._ej.filas_en_lote(
+            [
+                (_TIPO_DNI, ()),
+                (_EQUIVALENCIAS, {"referencias": sorted(referencias)}),
+                *(
+                    (_IDS[tabla], {"codigos": sorted(codigos)})
+                    for tabla, codigos in tablas.items()
+                ),
+            ]
+        )
+        self._tipo_dni = lotes[0][0]
+        self._equivalencias = {
+            (f.tipo_referencia, f.referencia_id, f.accion): f.tipo_evento_id
+            for f in lotes[1]
+        }
+        filas_de = dict(zip(tablas, lotes[2:], strict=True))
         for tabla, codigos in pedidos.items():
             encontrados = {
-                fila.codigo: fila.id
-                for fila in (
-                    self._ej.filas(_IDS[tabla], {"codigos": sorted(codigos)})
-                    if codigos
-                    else []
-                )
+                fila.codigo: fila.id for fila in filas_de.get(tabla, [])
             }
             faltan = sorted(set(codigos) - set(encontrados))
             if faltan:
@@ -1306,7 +1403,7 @@ class _Guardado:
         return cliente_id
 
     def _documento(self, cliente_id: UUID, dni: str | None) -> None:
-        tipo = self._ej.fila(_TIPO_DNI)
+        tipo = self._tipo_dni
         vigente = self._ej.fila(
             _DOCUMENTO_VIGENTE, {"cliente": cliente_id, "tipo": tipo.id}
         )
@@ -2188,8 +2285,9 @@ class _Guardado:
         )
         if not nuevos:
             return
-        equivalencias = self._equivalencias({p.referencia_id for p in nuevos})
+        equivalencias = self._equivalencias
         accion = self._accion(orden_id)
+        eventos = []
         for paso in nuevos:
             tipo_referencia = paso.tipo_referencia.value
             tipo_evento = equivalencias.get(
@@ -2207,8 +2305,7 @@ class _Guardado:
                     f"El historial de {self._orden.id} referencia el Detalle "
                     f"{detalle}, que la Orden no tiene."
                 )
-            self._ej.ejecutar(
-                _INSERTAR_EVENTO,
+            eventos.append(
                 {
                     "orden": orden_id,
                     "tipo_evento": tipo_evento,
@@ -2225,19 +2322,10 @@ class _Guardado:
                     "tipo_referencia": tipo_referencia,
                     "referencia_id": paso.referencia_id,
                     "accion_historial": paso.accion,
-                },
+                }
             )
-
-    def _equivalencias(
-        self, referencias: set[str]
-    ) -> dict[tuple[str, str, str | None], UUID]:
-        filas = self._ej.filas(
-            _EQUIVALENCIAS, {"referencias": sorted(referencias)}
-        )
-        return {
-            (f.tipo_referencia, f.referencia_id, f.accion): f.tipo_evento_id
-            for f in filas
-        }
+        # En orden, en un solo envio: la secuencia sigue al historial.
+        self._ej.ejecutar_lote(_INSERTAR_EVENTO, eventos)
 
 
 def _fila_recepcion(

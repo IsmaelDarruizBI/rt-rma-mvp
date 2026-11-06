@@ -231,6 +231,10 @@ def test_a4_cargar_no_hace_una_consulta_por_orden(armar, corpus):
             consultas.append(argumentos[0].nombre)
             return self._real.filas(*argumentos)
 
+        def filas_en_lote(self, pedidos):
+            consultas.extend(consulta.nombre for consulta, _ in pedidos)
+            return self._real.filas_en_lote(pedidos)
+
     codigos = list(_ultimos(corpus))
     with unidad.lectura() as lector:
         cargar_ordenes(Espia(lector), codigos[:1])

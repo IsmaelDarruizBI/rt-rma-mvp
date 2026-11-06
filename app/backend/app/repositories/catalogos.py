@@ -31,6 +31,20 @@ from app.domain.models import (
 class CatalogosRepository(Protocol):
     """Acceso a los catalogos que las Ordenes referencian por ID."""
 
+    def anticipar(
+        self,
+        *,
+        usuario_id: str | None = None,
+        insumo_id: str | None = None,
+        movimientos: bool = False,
+    ) -> None:
+        """Aviso de que el caso de uso va a leer los catalogos enseguida:
+        los tipos, los insumos, sus relaciones, las estaciones y lo que se
+        indique. No cambia ningun resultado: PostgreSQL los trae en el
+        proximo envio de la transaccion en curso (ahorra viajes a la base);
+        JSON no hace nada."""
+        ...
+
     # --- Tipos de Reparacion ---
 
     def obtener_tipo_reparacion(self, tipo_id: str) -> TipoReparacion:

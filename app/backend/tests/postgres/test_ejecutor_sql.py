@@ -342,13 +342,19 @@ def test_los_resultados_no_exponen_la_conexion(armar):
         filas = lector.filas(_TIPOS)
     assert isinstance(fila, tuple) and isinstance(filas, list)
     publicos = {n for n in dir(lector) if not n.startswith("_")}
-    assert publicos == {"filas", "fila"}
+    assert publicos == {"filas", "fila", "filas_en_lote"}
     publicos_ejecutor = set()
     with unidad.transaccion():
         publicos_ejecutor = {
             n for n in dir(unidad.ejecutor()) if not n.startswith("_")
         }
-    assert publicos_ejecutor == {"filas", "fila", "ejecutar", "ejecutar_lote"}
+    assert publicos_ejecutor == {
+        "filas",
+        "fila",
+        "filas_en_lote",
+        "ejecutar",
+        "ejecutar_lote",
+    }
     assert not hasattr(unidad, "conexion_actual")
 
 
@@ -943,3 +949,197 @@ def test_el_rol_de_la_aplicacion_lee_pero_no_cambia_ni_define(
     finally:
         with conectar(base, autocommit=True) as admin:
             admin.execute(sql.SQL("drop role {}").format(sql.Identifier(rol)))
+
+
+# --- Menos viajes a la base: envio en lote y anticipacion --------------------
+
+
+def _contar_envios(unidad, monkeypatch) -> list[int]:
+    """Cuantas consultas salio en cada envio del lote."""
+    from app.storage.postgres import transaccion
+
+    envios: list[int] = []
+    original = transaccion._Lector._enviar
+
+    def enviar(self, conexion, pedidos):
+        if pedidos:
+            envios.append(len(pedidos))
+        return original(self, conexion, pedidos)
+
+    monkeypatch.setattr(transaccion._Lector, "_enviar", enviar)
+    return envios
+
+
+def test_el_lote_devuelve_cada_consulta_en_orden_en_la_misma_transaccion(
+    armar,
+):
+    unidad, pool = armar()
+    with unidad.transaccion():
+        unidad.ejecutor().ejecutar(_INSERTAR, (1, "a"))
+        ejecutor = unidad.ejecutor()
+        pid_antes = ejecutor.fila(_PID).pid
+        uno, pid, todos = ejecutor.filas_en_lote(
+            [(_UNO, {"id": 1}), (_PID, ()), (_TODOS, ())]
+        )
+    assert [f.valor for f in uno] == ["a"]
+    assert pid[0].pid == pid_antes
+    assert [f.id for f in todos] == [1]
+    assert _estable(pool)
+
+
+def test_el_lote_corre_en_orden_una_escritura_se_ve_en_lo_que_sigue(
+    armar, base
+):
+    unidad, _ = armar()
+    with unidad.transaccion():
+        ejecutor = unidad.ejecutor()
+        ejecutor.ejecutar(_INSERTAR, (1, "a"))
+        antes, actualizadas, despues = ejecutor.filas_en_lote(
+            [(_TODOS, ()), (_ACTUALIZAR, ("b",)), (_TODOS, ())]
+        )
+    assert [f.valor for f in antes] == ["a"]
+    assert [f.id for f in actualizadas] == [1]
+    assert [f.valor for f in despues] == ["b"]
+
+
+def test_el_lector_rechaza_una_escritura_en_el_lote_sin_enviar_nada(
+    armar, base
+):
+    unidad, pool = armar()
+    with pytest.raises(TransaccionInvalidadaError):
+        with unidad.transaccion():
+            with unidad.lectura() as lector:
+                with pytest.raises(TypeError, match="escritura"):
+                    lector.filas_en_lote(
+                        [(_TODOS, ()), (_ACTUALIZAR, ("b",))]
+                    )
+    assert _ids(base) == []
+    assert _estable(pool)
+
+
+def test_una_consulta_del_lote_que_falla_revierte_todo(armar, base):
+    unidad, pool = armar()
+    with pytest.raises(PersistenciaError):
+        with unidad.transaccion():
+            ejecutor = unidad.ejecutor()
+            ejecutor.ejecutar(_INSERTAR, (1, "a"))
+            ejecutor.filas_en_lote(
+                [(_TODOS, ()), (_DIVISION, ()), (_ACTUALIZAR, ("b",))]
+            )
+    assert _ids(base) == []
+    assert _estable(pool)
+
+
+def test_un_error_del_lote_atrapado_no_deja_confirmar(armar, base):
+    unidad, _ = armar()
+    with pytest.raises(TransaccionInvalidadaError):
+        with unidad.transaccion():
+            ejecutor = unidad.ejecutor()
+            ejecutor.ejecutar(_INSERTAR, (1, "a"))
+            with pytest.raises(PersistenciaError):
+                ejecutor.filas_en_lote([(_DIVISION, ())])
+    assert _ids(base) == []
+
+
+def test_lo_anticipado_sale_con_el_proximo_envio_y_no_se_vuelve_a_pedir(
+    armar, monkeypatch
+):
+    unidad, _ = armar()
+    envios = _contar_envios(unidad, monkeypatch)
+    with unidad.lectura_consistente():
+        unidad.anticipar([(_TODOS, ()), (_PID, ())])
+        with unidad.lectura() as lector:
+            lector.filas(_UNO, {"id": 1})
+            assert envios == [3]
+            lector.filas(_TODOS)
+            lector.fila(_PID)
+            assert envios == [3]
+
+
+def test_lo_anticipado_se_entrega_como_una_lista_nueva(armar):
+    unidad, _ = armar()
+    with unidad.lectura_consistente():
+        unidad.anticipar([(_PID, ())])
+        with unidad.lectura() as lector:
+            primera = lector.filas(_PID)
+            primera.clear()
+            assert len(lector.filas(_PID)) == 1
+
+
+def test_una_escritura_descarta_lo_anticipado(armar):
+    unidad, _ = armar()
+    with unidad.transaccion():
+        ejecutor = unidad.ejecutor()
+        unidad.anticipar([(_TODOS, ())])
+        assert ejecutor.filas(_TODOS) == []
+        ejecutor.ejecutar(_INSERTAR, (1, "a"))
+        assert [f.id for f in ejecutor.filas(_TODOS)] == [1]
+
+
+def test_una_escritura_en_un_lote_descarta_lo_anticipado(armar):
+    unidad, _ = armar()
+    with unidad.transaccion():
+        ejecutor = unidad.ejecutor()
+        ejecutor.ejecutar(_INSERTAR, (1, "a"))
+        unidad.anticipar([(_TODOS, ())])
+        assert [f.valor for f in ejecutor.filas(_TODOS)] == ["a"]
+        ejecutor.filas_en_lote([(_ACTUALIZAR, ("b",))])
+        assert [f.valor for f in ejecutor.filas(_TODOS)] == ["b"]
+
+
+def test_lo_anticipado_no_pasa_a_la_transaccion_siguiente(armar, base):
+    unidad, _ = armar()
+    with unidad.lectura_consistente():
+        unidad.anticipar([(_TODOS, ())])
+        with unidad.lectura() as lector:
+            assert lector.filas(_TODOS) == []
+    with conectar(base, autocommit=True) as conexion:
+        conexion.execute(
+            "insert into prueba_ejecutor.registro values (1, 'a')"
+        )
+    with unidad.lectura_consistente():
+        with unidad.lectura() as lector:
+            assert [f.id for f in lector.filas(_TODOS)] == [1]
+
+
+def test_anticipar_sin_transaccion_no_hace_nada(armar):
+    unidad, _ = armar()
+    unidad.anticipar([(_TODOS, ())])
+    with unidad.lectura() as lector:
+        assert lector.filas(_TODOS) == []
+
+
+def test_solo_se_anticipan_lecturas(armar):
+    unidad, _ = armar()
+    with unidad.lectura_consistente():
+        with pytest.raises(TypeError, match="solo se anticipan lecturas"):
+            unidad.anticipar([(_ACTUALIZAR, ("b",))])
+
+
+def test_la_lectura_consistente_ve_un_solo_instante_y_no_escribe(armar, base):
+    unidad, pool = armar()
+    with unidad.lectura_consistente():
+        with unidad.lectura() as lector:
+            assert lector.filas(_TODOS) == []
+            solo = lector.fila(_AJUSTE, ("transaction_read_only",))
+            assert solo.valor == "on"
+            with conectar(base, autocommit=True) as conexion:
+                conexion.execute(
+                    "insert into prueba_ejecutor.registro values (1, 'a')"
+                )
+            assert lector.filas(_TODOS) == []
+        with pytest.raises(PersistenciaError, match="dentro de una lectura"):
+            with unidad.transaccion():
+                pass
+    assert _estable(pool)
+
+
+def test_la_lectura_consistente_se_une_al_comando_en_curso(armar, base):
+    unidad, _ = armar()
+    with unidad.transaccion():
+        unidad.ejecutor().ejecutar(_INSERTAR, (1, "a"))
+        with unidad.lectura_consistente():
+            with unidad.lectura() as lector:
+                assert [f.id for f in lector.filas(_TODOS)] == [1]
+        unidad.ejecutor().ejecutar(_INSERTAR, (2, "b"))
+    assert _ids(base) == [1, 2]
