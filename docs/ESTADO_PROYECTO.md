@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 05/11/2026, al cerrar la etapa E3 de la migración a PostgreSQL.
+**Última actualización:** 05/11/2026, al cerrar el checkpoint A4 del Bloque A de la migración a PostgreSQL. **Para retomar el trabajo: [`postgresql/CHECKPOINT_A4_HANDOFF.md`](postgresql/CHECKPOINT_A4_HANDOFF.md).**
 
 ## A. Estado general
 
@@ -22,11 +22,11 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 **Rama de trabajo:** `feat/postgresql-esquema`, que sale de `mvp-v2`.
 
-**Último commit de código:** el de E3, `feat(postgres): implementar infraestructura SQL y catalogos E3` (ver `git log`).
+**Último commit de código:** el del agregado Orden, `feat(postgres): implementar agregado Orden A0 a A4` (ver `git log`).
 
 **Estado de desarrollo:**
 - El MVP funciona sobre JSON y está en UAT.
-- La migración a PostgreSQL avanza por etapas: E0 a E3 están terminadas. Lo siguiente es el discovery de E4, que no se implementa sin autorización.
+- La migración a PostgreSQL avanza por etapas: E0 a E3 están terminadas. E4 y E5 se implementan juntas como Bloque A, por slices: A0, A1, A2 y A4 están hechos; E4 **no** está completa. Lo siguiente es A3 (finanzas).
 - PostgreSQL sigue desactivado en la aplicación: `RMA_PERSISTENCIA=postgres` detiene el arranque.
 
 **Funcionalidad:**
@@ -131,6 +131,16 @@ El detalle (diseño, implementación, QA y correcciones) está en [`postgresql/e
   - `ruff check` y `ruff format --check` sin errores, y `npm run validate:all` pasa.
 - **Sin cambios** en la aplicación, la API, el frontend, Cloud Run, Vercel ni Supabase remoto. PostgreSQL sigue desactivado.
 
+### Bloque A: A0, A1, A2 y A4 (05/11/2026)
+
+El detalle está en [`postgresql/e4-e7-diseno-integrado.md`](postgresql/e4-e7-diseno-integrado.md), secciones 13 y 14, y el resumen para continuar en [`postgresql/CHECKPOINT_A4_HANDOFF.md`](postgresql/CHECKPOINT_A4_HANDOFF.md).
+
+- **A0, A1 y A2:** migración aditiva, `PostgresOrdenReparacionRepository`, alta y lectura sin N+1, bloqueo con `FOR NO KEY UPDATE`, guardado incremental y versión. QA independiente: **APPROVED WITH OBSERVATIONS**.
+- **QA-A2-H1 y L-3:** resueltos y aprobados. Una Orden existente solo se guarda si viene de `obtener_para_modificar` en la misma transacción. Una restricción violada ya no se presenta como un conflicto, y el cliente no recibe detalles SQL.
+- **A4:** recepción y sus versiones, notas, check-in, fotos, documentos con reemplazos, entrega y devolución. Implementado, probado y aprobado para continuar.
+- **Migraciones:** dos nuevas, aditivas, aplicadas y verificadas **solo en PostgreSQL local**.
+- **Sin cambios** en el dominio, la API, el frontend, Cloud Run, Vercel ni Supabase remoto. PostgreSQL sigue desactivado.
+
 ## C. Estado de la migración
 
 Plan aprobado el 03/11/2026. Las etapas y sus dependencias son las del plan; los criterios de aceptación se resumen debajo.
@@ -141,12 +151,19 @@ Plan aprobado el 03/11/2026. Las etapas y sus dependencias son las del plan; los
 | E1: Unidad de trabajo | Completada (`6b5cdb8`) | Ninguna |
 | E2: Consultas dedicadas | Completada (`feat(postgres): implementar consultas dedicadas E2`) | Ninguna |
 | E3: Infraestructura SQL y catálogos | Completada (`feat(postgres): implementar infraestructura SQL y catalogos E3`) | Ninguna |
-| E4: Orden (guardado por agregado) | Pendiente | Discovery (sección F). Condiciones de entrada: E4-MP y QAF-14 |
-| E5: Inventario | Pendiente | Reserva, consumo 210 y 211 atómicos, ajustes, override P-06; integridad y concurrencia |
-| E6: Acciones e idempotencia | Pendiente | Repetición por clave y commit incierto (M4) |
-| E7: Equivalencia completa | Pendiente | La misma suite en modo `json` y en modo `postgres` |
-| E8: DEV/UAT desde una máquina local | Pendiente | Conexión real con `verify-full` y medición de latencia. Necesita autorización |
-| E9: Cloud Run | Fuera del plan | Requiere una aprobación aparte |
+| E4: Orden (guardado por agregado) | **En curso, no completa** | A0, A1, A2 y A4 hechos. Faltan A3 (finanzas) y A5 (consultas dedicadas) |
+| E5: Inventario | Pendiente | A6 y A7: reserva, consumo 210 y 211 atómicos, ajustes, override P-06. A8: integración y endurecimiento del Bloque A |
+| E6: Acciones e idempotencia | Pendiente | B1 a B3: repetición por clave y commit incierto (M4) |
+| E7: Equivalencia completa | Pendiente | B4 a B6: cableado, la misma suite en modo `json` y en modo `postgres`, activación local |
+| E8: DEV/UAT desde una máquina local | Pendiente | Actualización controlada del esquema Supabase, conexión real con `verify-full` y medición de latencia. Necesita autorización |
+| E9: Cloud Run | Fuera del plan | Despliegue. Requiere una aprobación aparte |
+
+**Infraestructura:**
+- Supabase DEV/UAT tiene el esquema inicial: las 12 primeras migraciones.
+- La migración de E3 y las dos del Bloque A están aplicadas y verificadas únicamente en PostgreSQL local.
+- No hay datos operativos históricos que migrar.
+- El objetivo posterior es actualizar o inicializar el esquema remoto y desplegar. Ninguno de los dos pasos está autorizado.
+- PostgreSQL sigue desactivado como persistencia de la aplicación.
 
 Alcance y criterio de aceptación de cada etapa pendiente:
 
@@ -214,8 +231,10 @@ El detalle, asignado por etapa, está en [`postgresql/integracion-pendientes.md`
 
 | # | Riesgo | Etapa |
 |---|---|---|
-| E4-MP | Los medios de pago predeterminados no tienen fila en la base: un pago no podría referenciarlos por clave foránea | Condición de entrada de E4 |
-| QAF-14 | Después de un `nextval`, `currval` y `lastval` quedan en la sesión del pool | Condición de entrada de E4 |
+| E4-MP | Resuelto en A0: los medios de pago predeterminados tienen fila en la base | Cerrado |
+| QAF-14 | Resuelto en A0: el registro de consultas rechaza `currval` y `lastval` | Cerrado |
+| QA-A2-M1 a M4, QA-A2-L1 a L5, A4-1 a A4-5 | Hallazgos diferidos del Bloque A, con su etapa. A4-1 requiere una decisión antes de E7 | [`postgresql/CHECKPOINT_A4_HANDOFF.md`](postgresql/CHECKPOINT_A4_HANDOFF.md), sección 8 |
+| DI-8 | El esquema exige un motivo de ajuste del catálogo y la API manda texto libre: decisión de producto pendiente | Antes de A7 |
 | QA-E3-4 | El contador que distingue «sin conexión» de «pool agotado» es por unidad de trabajo: con un pool compartido clasifica mal | Antes de conectar el pool a la aplicación (E7 o E9) |
 | QA-E3-8 | La equivalencia de orden y formato numérico con JSON depende de que las fuentes estén ordenadas y normalizadas | E7 o E8 |
 | QA-E3-6, QA-E3-7, QAF-5, QAF-12, QAF-13 | Identidad de los insumos y `orden` en DEV/UAT: paso de datos verificado, inventario previo y guarda de la migración | E8 |
@@ -224,8 +243,8 @@ El detalle, asignado por etapa, está en [`postgresql/integracion-pendientes.md`
 | QAF-6, QAF-7, QAF-9, QAF-11 | Generador de cargas (listas vacías, validación de valores, `TR-OTROS`) y `orden` de filas nuevas | Antes de cargar catálogos reales, E6 o E8 |
 | M4 | Si se pierde la conexión durante el `COMMIT`, el resultado es incierto y la API responde un 500 genérico | E6 |
 | QA-E2-8 | En JSON, las bandejas y el detalle de un insumo retienen el lock global mientras leen (con 1010 Órdenes, 1,2 s y 2,0 s). Riesgo temporal aceptado, con alerta si supera 500 ms de forma sostenida | JSON (hasta PostgreSQL) |
-| F-09 | Snapshot consistente para las respuestas que hacen varias consultas en PostgreSQL (evaluar `REPEATABLE READ`) | E4 |
-| F-05, F-06, QA-E2-5 | Qué DNI cuenta con el Cliente compartido, `cerrada_en` en las Órdenes entregadas y el formato del número de Orden por encima de 999999 | E4 |
+| F-09 | Resuelto en parte: la lectura breve usa `REPEATABLE READ`. Dentro de un comando sigue pendiente (QA-A2-M2) | A5 |
+| F-05 | Qué DNI cuenta con el Cliente compartido (ver QA-A2-L1). F-06 y QA-E2-5 se resolvieron en A0 y A2 | A5 |
 | F-03, QA-E2-10 | Evidencias de faltante por subcadena de texto; criterio de reserva pendiente con `DESPERDICIO` | E5 |
 | L1 a L10 y el resto de E2 y E3 | Observaciones menores de E1, F-07, F-08, QA-E2-4, QA-E2-6, QA-E2-7, QA-E2-9 y QA-E3-L | Por etapa |
 
@@ -236,21 +255,17 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso: discovery de E4 (Orden, guardado por agregado).** Conviene hacerlo integrado con E5 a E7, porque comparten el agregado de la Orden, el inventario, la idempotencia y la equivalencia de modos. Empieza con un discovery técnico y un diseño, y no se implementa sin autorización.
+**Próximo paso: A3 (finanzas), autorizado para la próxima sesión.** Alcance y primeras tareas en [`postgresql/CHECKPOINT_A4_HANDOFF.md`](postgresql/CHECKPOINT_A4_HANDOFF.md), sección 10.
 
-Condiciones de entrada de E4 ([`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md)):
-1. **E4-MP:** antes de persistir pagos en PostgreSQL, todo medio de pago que use el dominio tiene que existir como fila referenciable.
-2. **QAF-14:** las secuencias no deben depender de `currval` ni de `lastval` de una transacción anterior.
-3. Los pendientes ya asignados a E4: F-05, F-06, F-09, QA-E2-5 y el vínculo de la unidad de trabajo por contexto (QA-E2-4).
+Después, en orden:
+1. QA integral de recepción, taller y entrega, con A3 y A4 hechos.
+2. **A5:** consultas dedicadas de E2. Antes hay que resolver QA-A2-M2.
+3. **A6 y A7:** inventario, reservas y movimientos. Antes, QA-A2-M1, QA-A2-M4 y la decisión DI-8.
+4. **A8:** integración y endurecimiento del Bloque A.
+5. **B1 a B6:** idempotencia, cableado, equivalencia y activación local.
+6. Actualización controlada del esquema Supabase y despliegue en Cloud Run, con su propia autorización.
 
-Lo que E4 recibe de E3:
-- la unidad de trabajo con `lectura()` y `ejecutor()`;
-- el registro de consultas con su clasificación;
-- el mapeo de identificadores (`clave` del insumo) y las reglas numéricas.
-
-El contrato de duplicados de movimientos de stock (Q23) sigue asignado a E5.
-
-Recordatorio: no hay modo mixto. Los repositories de catálogos existen, pero la aplicación no los usa hasta la activación integral.
+Recordatorio: no hay modo mixto. Los repositories PostgreSQL existen, pero la aplicación no los usa hasta la activación integral.
 
 ## G. Cómo retomar el desarrollo
 
@@ -273,7 +288,7 @@ ruff check .
 
 **Pruebas de integración con PostgreSQL:**
 - Hace falta un PostgreSQL **local** 15 o posterior, con un usuario que pueda crear bases y roles. Se puede instalar nativo o en un contenedor.
-- En la máquina de desarrollo original se usó un PostgreSQL 17 embebido (paquete npm `embedded-postgres`), fuera del repositorio.
+- En la máquina de desarrollo original se usó un PostgreSQL 17 embebido (paquete npm `embedded-postgres`), fuera del repositorio. Los comandos están en [`postgresql/CHECKPOINT_A4_HANDOFF.md`](postgresql/CHECKPOINT_A4_HANDOFF.md), sección 11.
 - Comando, desde `app/backend/`:
 
   ```bash
