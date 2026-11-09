@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 06/11/2026, al publicar en UAT la optimización de rendimiento (`00017-wer`). **Para retomar el trabajo: [`CHECKPOINT_PRE_DEPLOY.md`](CHECKPOINT_PRE_DEPLOY.md).**
+**Última actualización:** 09/11/2026, checkpoint después de publicar en UAT la optimización de rendimiento (`00017-wer`). **Para retomar el trabajo: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md).**
 
 ## A. Estado general
 
@@ -16,19 +16,19 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | Tooling de la raíz | Node y TypeScript: validaciones, diagramas Mermaid y visor HTML (`package.json`) |
 | `app/backend/` | Python 3.11 o posterior, FastAPI y Pydantic v2. Capas `api → application → services → repositories ← storage` ([README](../app/backend/README.md)) |
 | `app/frontend/` | React, TypeScript y Vite ([README](../app/frontend/README.md)) |
-| `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). La aplicación todavía no lo usa |
-| Persistencia en uso | UAT: archivos JSON (`RMA_PERSISTENCIA=json`, el valor por defecto). Local: PostgreSQL activado con `RMA_PERSISTENCIA=postgres` (B6), solo contra un servidor local |
-| UAT publicado | Backend en Cloud Run (`app/backend/Dockerfile`) y frontend en Vercel, sobre JSON |
+| `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). Aplicado en `rt-rma-db` (19 de 19) |
+| Persistencia en uso | UAT: PostgreSQL en Supabase (`RMA_PERSISTENCIA=postgres`). JSON sigue siendo el valor por defecto local |
+| UAT publicado | Backend en Cloud Run (`app/backend/Dockerfile`) y frontend en Vercel, sobre PostgreSQL ([`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md)) |
 
 **Rama de trabajo:** `feat/postgresql-esquema`, que sale de `mvp-v2`.
 
-**Últimos commits de código:** `fe655d7` (rediseño del frontend) y `2444773` (preparación de E8), sobre el Bloque B (`b84b87a`). Ver `git log`.
+**Últimos commits de código:** `c21f289` (lecturas en lote) y `750756c` (frontend sin recargas tras los comandos); desplegados desde `3249a0a`. Ver `git log`.
 
 **Estado de desarrollo:**
-- El MVP funciona sobre JSON y está en UAT.
+- El MVP está en UAT sobre PostgreSQL (E9), solo con datos ficticios y sin autenticación real.
 - La migración a PostgreSQL tiene E0 a E7 terminadas: Bloque A (E4 + E5) y Bloque B (E6 + E7, B1 a B6). La app corre localmente sobre PostgreSQL, con los datos persistentes entre reinicios.
 - El frontend tiene el rediseño aprobado: sidebar, barra de acciones, modales y «Pendientes» (`fe655d7`).
-- **Pendiente para la puesta en marcha:** suites completas PostgreSQL y JSON; E8 (procedimiento seguro de E3 y siete migraciones en Supabase, con autorización; latencia); sincronización automática de la copia del catálogo de Ventas; E9 (despliegue) con su propia aprobación.
+- **Pendiente para la puesta en marcha:** autenticación real, latencia de los comandos, paginación y sincronización automática del catálogo de Ventas. Lista priorizada en [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 4.
 
 **Funcionalidad:**
 
@@ -243,8 +243,7 @@ Plan aprobado el 03/11/2026. Las etapas y sus dependencias son las del plan; los
 - Supabase DEV/UAT tiene las 19 migraciones aplicadas y es la persistencia de UAT. E3 se aplicó en una transacción con `supabase db query --remote` (`supabase/scripts/e8_aplicar_e3.sql`); el trigger `insumo_clave_por_defecto` se conserva.
 - La migración de E3 y las dos del Bloque A están aplicadas y verificadas únicamente en PostgreSQL local.
 - No hay datos operativos históricos que migrar. Se conservan los catálogos remotos existentes (5 medios de pago y 36 modelos técnicos).
-- El objetivo posterior es actualizar o inicializar el esquema remoto y desplegar. Ninguno de los dos pasos está autorizado.
-- PostgreSQL es la persistencia de la app local (`RMA_PERSISTENCIA=postgres`); el UAT publicado sigue en JSON.
+- PostgreSQL es la persistencia del UAT publicado y de la app local (`RMA_PERSISTENCIA=postgres`).
 
 Alcance y criterio de aceptación de cada etapa pendiente:
 
@@ -337,17 +336,13 @@ Otros riesgos registrados:
 ## F. Próximos pasos
 
 **Próximo paso:** autenticación real antes de cargar datos de clientes (hoy el login es demo y la API no tiene autenticación), y decidir si la base se mueve a São Paulo (no ejecutado; plan en [`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md)). No ejecutar `/photos/cleanup` con `aplicar`: el bucket conserva fotos anteriores a PostgreSQL.
-1. Confirmar las migraciones aplicadas y repetir las verificaciones de solo lectura.
-2. Probar localmente y aprobar el script único de E3; aplicarlo y luego las seis migraciones restantes en orden.
-3. `verificar_integridad()` vacío y medición de latencia.
+Lista priorizada de pendientes, identificación del despliegue y vuelta atrás: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md).
 
-Después: suites completas, QA integral y **E9** (Cloud Run), con su propia aprobación.
-
-Recordatorio: no hay modo mixto. El UAT publicado sigue en JSON hasta E9; los datos creados en PostgreSQL no vuelven a JSON.
+Recordatorio: no hay modo mixto. Los datos creados en PostgreSQL no vuelven a JSON.
 
 ## G. Cómo retomar el desarrollo
 
-En una computadora nueva (pasos completos, con PostgreSQL local y `rma_dev`: [`CHECKPOINT_PRE_DEPLOY.md`](CHECKPOINT_PRE_DEPLOY.md), sección 7):
+En una computadora nueva (pasos completos, con PostgreSQL local y `rma_dev`: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 5):
 
 ```bash
 git clone https://github.com/IsmaelDarruizBI/rt-rma-mvp.git
@@ -378,7 +373,7 @@ ruff check .
 
 **Variables de entorno.** No se versiona ningún secreto.
 - **Backend:** usa el prefijo `RMA_`. La lista completa y sus valores por defecto están en `app/backend/app/core/config.py` y en la sección «Configuración» de [`app/backend/README.md`](../app/backend/README.md).
-- **`RMA_DATABASE_URL`:** solo con `RMA_PERSISTENCIA=postgres`. Nunca se versiona; en Cloud Run llegará desde Secret Manager.
+- **`RMA_DATABASE_URL`:** solo con `RMA_PERSISTENCIA=postgres`. Nunca se versiona; en Cloud Run sale de Secret Manager (`rma-uat-database-url:latest`).
 - **Frontend:** `VITE_API_BASE_URL`, a partir de `app/frontend/.env.example`.
 
 **Antes de una tarea**, leer [`AGENTS.md`](../AGENTS.md) y, según el tema:

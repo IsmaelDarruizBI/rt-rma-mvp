@@ -1,5 +1,7 @@
 # Checkpoint pre-deploy (06/11/2026)
 
+> **Sustituido** por [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md): E8 y E9 ya se completaron. Este archivo queda como registro histórico; su sección 7 conserva el script de la base `rma_dev`.
+
 Punto de retorno para continuar desde otra computadora con **E8** (Supabase DEV/UAT) y después **E9** (Cloud Run). Resume y enlaza; las fuentes de verdad siguen siendo [`ESTADO_PROYECTO.md`](ESTADO_PROYECTO.md) y [`postgresql/`](postgresql/README.md).
 
 ## 1. Rama y commits

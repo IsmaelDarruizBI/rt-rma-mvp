@@ -127,6 +127,8 @@ Los identificadores llevan el prefijo `QA-A2-` para no confundirse con M1 a M4 y
 
 ### Resultado en UAT (06/11/2026)
 
+Estado del despliegue, vuelta atrás y prioridades: [`../CHECKPOINT_UAT_OPTIMIZADO.md`](../CHECKPOINT_UAT_OPTIMIZADO.md).
+
 Revisión `00017-wer` (commit `3249a0a`) contra `00012-d4z`, con datos ficticios. Lecturas: tiempo del cliente con pausas de 3 s, mediana de 3; el «antes» de `documentos` y `detalle de insumo` es la latencia de Cloud Run. Comandos: latencia de Cloud Run, una muestra del primer intento. Los viajes antes y después se deducen dividiendo el tiempo por 177 ms; los del banco se contaron con PostgreSQL local detrás de un proxy.
 
 | Operación | `00012-d4z` | `00017-wer` | Viajes antes | Viajes después | Viajes en banco |
