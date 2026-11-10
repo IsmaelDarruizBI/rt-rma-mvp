@@ -1322,13 +1322,8 @@ def test_a4_comandos_reales_de_custodia_documentos_y_devolucion(armar, corpus):
     assert repo.obtener(codigo) == reemplazo
     documentos = reemplazo.documentos.emitidos
     assert documentos[-1].reemplaza_a == documentos[-2].id
-    cancelada = cancelar_orden(
-        contexto,
-        orden_id=codigo,
-        usuario_id=f.RECEPCION,
-        motivo="El cliente desiste.",
-    )
-    assert repo.obtener(codigo) == cancelada
+    # DC31: la devolucion fisica se registra antes de cancelar, y la
+    # cancelacion explicita cierra la Orden.
     devuelta = registrar_devolucion(
         contexto,
         orden_id=codigo,
@@ -1337,18 +1332,21 @@ def test_a4_comandos_reales_de_custodia_documentos_y_devolucion(armar, corpus):
     )
     assert repo.obtener(codigo) == devuelta
     assert devuelta.devolucion is not None
+    cancelada = cancelar_orden(
+        contexto,
+        orden_id=codigo,
+        usuario_id=f.RECEPCION,
+        motivo="El cliente desiste.",
+    )
+    assert repo.obtener(codigo) == cancelada
+    assert cancelada.esta_cerrada
 
 
 def test_a4_comando_real_de_equipo_no_recibido(armar, corpus):
     repo, unidad = armar()
     contexto = _contexto(repo, unidad, corpus)
     codigo = _orden_nueva(contexto, "NOR").id
-    cancelar_orden(
-        contexto,
-        orden_id=codigo,
-        usuario_id=f.RECEPCION,
-        motivo="El cliente desiste.",
-    )
+    # DC31: la custodia se resuelve antes de cancelar.
     orden = registrar_no_recepcion(
         contexto,
         orden_id=codigo,
@@ -1357,6 +1355,14 @@ def test_a4_comando_real_de_equipo_no_recibido(armar, corpus):
     )
     assert repo.obtener(codigo) == orden
     assert orden.recepcion.no_recibido is not None
+    cancelada = cancelar_orden(
+        contexto,
+        orden_id=codigo,
+        usuario_id=f.RECEPCION,
+        motivo="El cliente desiste.",
+    )
+    assert repo.obtener(codigo) == cancelada
+    assert cancelada.esta_cerrada
 
 
 def test_a4_subidas_reales_simultaneas_dan_el_error_funcional(

@@ -34,6 +34,7 @@ from tests.fixtures.api_salidas import (
     ok,
     tomada,
 )
+from tests.fixtures.cancelacion_heredada import cancelada_heredada
 from tests.fixtures.custodia import confirmar_recepcion, no_recibido
 
 MOTIVO = "El cliente nunca trajo el equipo."
@@ -81,9 +82,15 @@ def _revisada_sin_custodia(cliente) -> str:
 
 
 def _cancelada_sin_custodia(cliente) -> str:
+    """Una Orden CANCELADA y abierta del circuito anterior a DC31, con la
+    custodia sin definir (hoy cancelar exige resolverla antes)."""
     orden_id = _sin_custodia(cliente)
-    ok(cancelar_orden(cliente, orden_id))
+    cancelada_heredada(cliente, _directorio(cliente), orden_id)
     return orden_id
+
+
+def _directorio(cliente):
+    return cliente.app.state.settings.data_dir
 
 
 def _pagar(cliente, orden_id, monto) -> str:
@@ -129,7 +136,7 @@ def _orden(cliente, orden_id) -> dict:
 def test_1_cancelar_con_custodia_pendiente_no_cierra(cliente):
     orden_id = _sin_custodia(cliente)
 
-    orden = ok(cancelar_orden(cliente, orden_id))
+    orden = cancelada_heredada(cliente, _directorio(cliente), orden_id)
 
     assert orden["estado_workflow"] == "CANCELADA"
     assert orden["cerrada"] is False
@@ -219,16 +226,24 @@ def test_4_no_recibido_exige_motivo_y_rol(cliente, tmp_path):
     assert archivo(tmp_path, orden_id) == antes
 
 
-def test_no_recibido_solo_en_una_orden_cancelada(cliente):
-    """En una Orden activa la recepcion queda pendiente hasta que llegue."""
+def test_no_recibido_resuelve_la_custodia_antes_de_cancelar(cliente):
+    """DC31: en una Orden activa sin trabajo completo, "no recibido" resuelve
+    la custodia; no cierra ni cancela: la cancelacion es explicita."""
     orden_id = _sin_custodia(cliente)
-    assert "REGISTRAR_EQUIPO_NO_RECIBIDO" not in _custodia(
+    assert "REGISTRAR_EQUIPO_NO_RECIBIDO" in _custodia(
         _orden(cliente, orden_id)
     )
+    assert "custodia" in conflicto(cancelar_orden(cliente, orden_id))
 
-    mensaje = conflicto(no_recibido(cliente, orden_id))
+    orden = ok(no_recibido(cliente, orden_id, MOTIVO))
 
-    assert "Orden cancelada" in mensaje
+    assert orden["custodia"]["estado"] == "NO_RECIBIDO"
+    assert orden["estado_workflow"] != "CANCELADA"
+    assert orden["cerrada"] is False
+
+    cerrada = ok(cancelar_orden(cliente, orden_id))
+    assert cerrada["cerrada"] is True
+    assert cerrada["estado_workflow"] == "CANCELADA"
 
 
 # --- 7. Cierre financiero ----------------------------------------------------
@@ -237,7 +252,7 @@ def test_no_recibido_solo_en_una_orden_cancelada(cliente):
 def test_7_no_recibido_con_credito_espera_la_devolucion_del_dinero(cliente):
     orden_id = _sin_custodia(cliente)
     pago_id = _pagar(cliente, orden_id, "30000")
-    ok(cancelar_orden(cliente, orden_id))
+    cancelada_heredada(cliente, _directorio(cliente), orden_id)
 
     orden = ok(no_recibido(cliente, orden_id, MOTIVO))
 
@@ -267,7 +282,7 @@ def test_custodia_pendiente_con_credito_no_cierra_al_devolver_el_dinero(
     """Devolver el dinero no alcanza: la custodia sigue sin definir."""
     orden_id = _sin_custodia(cliente)
     pago_id = _pagar(cliente, orden_id, "30000")
-    ok(cancelar_orden(cliente, orden_id))
+    cancelada_heredada(cliente, _directorio(cliente), orden_id)
 
     orden = _reintegrar(cliente, orden_id, pago_id, "30000")
 
@@ -293,7 +308,7 @@ def test_8_no_recibido_con_ejecucion_previa_se_rechaza(cliente, tmp_path):
             cliente, orden_id, ejecucion_id, accion="interrupt", cantidad=""
         )
     )
-    ok(cancelar_orden(cliente, orden_id))
+    cancelada_heredada(cliente, _directorio(cliente), orden_id)
     ruta = tmp_path / "ordenes" / f"{orden_id}.json"
     datos = json.loads(ruta.read_text(encoding="utf-8"))
     datos["recepcion"]["confirmacion"] = None
@@ -324,7 +339,7 @@ def test_no_recibido_con_una_toma_previa_se_rechaza(cliente):
             json={"usuario_id": TECNICO},
         )
     )
-    ok(cancelar_orden(cliente, orden_id))
+    cancelada_heredada(cliente, _directorio(cliente), orden_id)
 
     mensaje = conflicto(no_recibido(cliente, orden_id, MOTIVO))
 
@@ -335,7 +350,7 @@ def test_9_no_recibido_con_devolucion_o_entrega_anterior_se_rechaza(cliente):
     # Devuelto el equipo, la Orden sigue abierta esperando el dinero.
     devuelta = definida(cliente)
     _pagar(cliente, devuelta, "10000")
-    ok(cancelar_orden(cliente, devuelta))
+    cancelada_heredada(cliente, _directorio(cliente), devuelta)
     orden = ok(devolver(cliente, devuelta))
     assert orden["cerrada"] is False
     assert orden["custodia"]["estado"] == "DEVUELTO"
@@ -395,7 +410,7 @@ def test_11_el_comprobante_no_implica_recepcion_fisica(cliente):
     )
 
     # El comprobante no es evidencia de custodia: ni impide "no recibido".
-    ok(cancelar_orden(cliente, orden_id))
+    cancelada_heredada(cliente, _directorio(cliente), orden_id)
     orden = ok(no_recibido(cliente, orden_id, MOTIVO))
 
     assert orden["cerrada"] is True
@@ -458,7 +473,7 @@ def test_rt_interno_no_usa_no_recibido(cliente):
             },
         )
     )["id"]
-    orden = ok(cancelar_orden(cliente, orden_id))
+    orden = cancelada_heredada(cliente, _directorio(cliente), orden_id)
     # Circuito RT: el equipo se devuelve a Gestion RT, como siempre.
     assert orden["devolucion_pendiente"] is True
 

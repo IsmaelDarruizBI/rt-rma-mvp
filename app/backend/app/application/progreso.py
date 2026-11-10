@@ -352,10 +352,19 @@ def _con_retrabajo(
 
 _NODOS_DE_CANCELACION: tuple[tuple[str, str], ...] = (
     ("PROC-REP-300", "Cancelar Detalle"),
-    ("PROC-REP-305", "Cancelar Orden / trabajos pendientes"),
-    ("PROC-REP-306", "Cancelar Orden sin Detalles"),
+    ("PROC-REP-305", "Cancelar trabajos pendientes"),
 )
-_CIERRE_DE_LA_CANCELACION = {"PROC-REP-211", "PROC-REP-270", "EVT-REP-999"}
+# DC31: cancelar la Orden es el ultimo paso, explicito (con o sin Detalles).
+_CANCELACION_DE_LA_ORDEN: tuple[tuple[str, str], ...] = (
+    ("PROC-REP-306", "Cancelar Orden sin Detalles"),
+    ("PROC-REP-308", "Cancelar Orden"),
+)
+_CIERRE_DE_LA_CANCELACION = {
+    "PROC-REP-211",
+    "PROC-REP-270",
+    "PROC-REP-307",
+    "EVT-REP-999",
+}
 
 
 def _cancelada(
@@ -367,22 +376,31 @@ def _cancelada(
     """Lo recorrido hasta cancelar, la cancelacion y su cierre.
 
     Una Orden CANCELADA no sigue el resto de su ruta: se muestra lo que
-    efectivamente recorrio, el nodo de cancelacion, el resolver (si paso
-    por el), la devolucion fisica si el equipo estaba en custodia
-    (PROC-REP-270) y el fin.
+    efectivamente recorrio, la cancelacion de trabajos, el resolver (si paso
+    por el), la Orden sin trabajos vigentes (DC31), la devolucion fisica si
+    el equipo estaba en custodia (PROC-REP-270), la cancelacion de la Orden
+    y el fin. Una Orden del circuito anterior a DC31 no tiene 307 ni 308:
+    se muestra igual que antes.
     """
     recorrido = [
         nodo
         for nodo in ruta
-        if nodo[0] in alcanzados and nodo[0] not in _CIERRE_DE_LA_CANCELACION
+        if nodo[0] in alcanzados
+        and nodo[0] not in _CIERRE_DE_LA_CANCELACION
+        and nodo[0] not in {n for n, _ in _CANCELACION_DE_LA_ORDEN}
     ]
     recorrido.extend(
         nodo for nodo in _NODOS_DE_CANCELACION if nodo[0] in alcanzados
     )
     if "PROC-REP-211" in alcanzados:
         recorrido.append(("PROC-REP-211", "Evaluar situacion de la Orden"))
+    if "PROC-REP-307" in alcanzados:
+        recorrido.append(("PROC-REP-307", "Orden sin trabajos vigentes"))
     if con_devolucion:
         recorrido.append(("PROC-REP-270", "Devolver el equipo sin reparar"))
+    recorrido.extend(
+        nodo for nodo in _CANCELACION_DE_LA_ORDEN if nodo[0] in alcanzados
+    )
     recorrido.append(("EVT-REP-999", "Proceso finalizado"))
     return tuple(recorrido)
 

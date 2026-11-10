@@ -198,22 +198,27 @@ def test_completo_y_cancelado_avanzan_a_control_y_entrega(cliente):
     assert detalle(entregada, "DET-002")["estado"] == "CANCELADO"
 
 
-def test_todos_los_detalles_cancelados_llevan_a_la_cancelacion_de_la_orden(
-    cliente,
-):
+def test_todos_los_detalles_cancelados_no_cancelan_la_orden(cliente):
+    """DC31: la Orden queda abierta sin trabajos vigentes (PROC-REP-307)."""
     orden_id = definida(cliente, BATERIA, PANTALLA)
     ok(cancelar_detalle(cliente, orden_id, "DET-001"))
 
     orden = ok(cancelar_detalle(cliente, orden_id, "DET-002"))
 
-    assert orden["historial"][-1]["observacion"] == "TODO_CANCELADO"
-    assert orden["estado_workflow"] == "CANCELADA"
-    # La recepcion fisica se confirmo: el equipo esta en custodia y hay que
-    # devolverlo antes del cierre operativo.
+    evaluacion = next(
+        p
+        for p in reversed(orden["historial"])
+        if p["referencia_id"] == "PROC-REP-211"
+    )
+    assert evaluacion["observacion"] == "TODO_CANCELADO"
+    assert orden["historial"][-1]["referencia_id"] == "PROC-REP-307"
+    assert orden["estado_workflow"] != "CANCELADA"
+    assert orden["situacion"]["codigo"] == "SIN_TRABAJOS_VIGENTES"
+    # La recepcion fisica se confirmo: el equipo esta en custodia y se
+    # devuelve antes de cancelar la Orden.
     assert orden["cerrada"] is False
-    assert orden["devolucion_pendiente"] is True
     assert codigos(orden) == ["REGISTRAR_DEVOLUCION"]
-    assert codigos_cancelacion(orden) == []
+    assert codigos_cancelacion(orden) == [("CANCELAR_ORDEN", None)]
 
 
 def test_cancelar_conserva_ejecuciones_y_movimientos(cliente, tmp_path):

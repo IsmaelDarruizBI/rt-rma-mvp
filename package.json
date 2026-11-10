@@ -40,7 +40,7 @@
     "generate:viewer:cliente-externo:v1.4": "tsx scripts/generate-process-viewer.ts business/processes/repair-management-v1.4.yaml business/rules/business-rules-v1.4.yaml business/actors/actors.yaml business/features/repair-management-features-v1.4.yaml business/scenarios/repair-management-scenarios-v1.4.yaml --origin=CLIENTE_EXTERNO",
     "generate:v1.4": "npm run validate:v1.4 && npm run generate:mermaid:v1.4 && npm run generate:viewer:v1.4 && npm run generate:mermaid:cliente-externo:v1.4 && npm run generate:viewer:cliente-externo:v1.4",
     "verify:functional-copy": "node scripts/verify-functional-copy.mjs .",
-    "verify:functional-copy:source": "node scripts/verify-functional-copy.mjs . --source-repo ../rt-rma-app --expect-commit e99b28386695df537aabd02d7068c0102de09eae",
+    "verify:functional-copy:source": "node scripts/verify-functional-copy.mjs . --source-repo ../rt-rma-app --expect-commit ab928b6e33203257c26427cbb9af7875bd38693b",
     "validate:discrepancies": "tsx scripts/validate-baseline-discrepancies.ts",
     "validate:traceability:files": "tsx scripts/validate-traceability-files.ts",
     "validate:traceability:global": "tsx scripts/validate-traceability-global.ts",

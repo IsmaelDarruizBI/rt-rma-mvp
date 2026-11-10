@@ -848,9 +848,12 @@ def evaluar_situacion_orden(
     Se invoca tambien despues de cancelar Detalles (PROC-REP-300/305) y de
     rechazar un control (PROC-REP-235):
 
-    - TODO_CANCELADO (caso d): la Orden pasa a CANCELADA
-      (``marcar_orden_cancelada``), y espera la devolucion del equipo si
-      esta en custodia.
+    - TODO_CANCELADO (caso d): DC31 (09/11/2026) -cancelar Detalles nunca
+      cancela la Orden-. La Orden sigue ABIERTA sin trabajos vigentes
+      (PROC-REP-307, situacion SIN_TRABAJOS_VIGENTES): no cambia
+      ``estado_workflow``; la toma se cierra como en los demas resultados
+      sin trabajo. La cancelacion es la accion explicita y terminal
+      ``services.cancelaciones.cancelar_orden``.
     - ABIERTA_TRABAJABLE sin toma activa (caso b) con la Orden ya en el
       taller (EN_REPARACION): vuelve a la cola (PROC-REP-170), por
       ejemplo con un Detalle reabierto para retrabajo. En las etapas
@@ -893,8 +896,14 @@ def evaluar_situacion_orden(
         # sigue donde estaba. Al finalizar, 129 lo registra el comando.
         nueva_orden = marcar_pendiente_autorizacion(nueva_orden, fecha=fecha)
     elif resultado is ResultadoEvaluacionOrden.TODO_CANCELADO:
-        # PROC-REP-211 (d): CANCELADA [-> 270 devolucion] -> EVT-REP-999.
-        nueva_orden = marcar_orden_cancelada(nueva_orden, fecha=fecha)
+        # DC31: PROC-REP-211 -> PROC-REP-307. La Orden queda abierta sin
+        # trabajos vigentes; nada se cancela ni se cierra solo.
+        nueva_orden = registrar_paso(
+            nueva_orden,
+            process_id="PROC-REP-307",
+            accion="ORDEN_SIN_TRABAJOS_VIGENTES",
+            fecha=fecha,
+        )
     elif (
         resultado is ResultadoEvaluacionOrden.ABIERTA_TRABAJABLE
         and toma_activa(nueva_orden) is None

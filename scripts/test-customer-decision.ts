@@ -71,7 +71,7 @@ check("1-2) 045 [No] -> 055 -> 056 (CLIENTE_EXTERNO): la OR queda EN_REVISION y 
   assert.ok(out("PROC-REP-045").includes("No->PROC-REP-055"));
   assert.ok(out("PROC-REP-055").includes("CLIENTE_EXTERNO->PROC-REP-056"));
   assert.ok(!out("PROC-REP-055").some((o) => o.endsWith("->PROC-REP-046")), "055 ya no llama a 046");
-  assert.deepEqual(out("PROC-REP-056"), ["Acepta la revision tecnica->PROC-REP-050", "Desiste sin Detalles->PROC-REP-306"].sort());
+  assert.deepEqual(out("PROC-REP-056"), ["Acepta la revision tecnica->PROC-REP-050", "Desiste sin Detalles->PROC-REP-307"].sort());
   assert.equal(node("PROC-REP-056")?.actor, "ACT-RECEP");
   assert.match(text("PROC-REP-055"), /La Orden pasa a EN_REVISION/);
   // se conserva el circuito inicial: comprobante (050/060), revision (065/068) y definicion por el tecnico (075)
@@ -113,11 +113,11 @@ check("la revision sin reparacion conserva el circuito SIN_REPARACION existente,
   assert.ok(!o.includes("PROC-REP-046") && !o.includes("PROC-REP-047"));
 });
 
-check("desistimiento sin Detalles: via propia de la etapa (056 -> 306), con custodia y saldo, separada de la autorizacion por Detalle", () => {
-  assert.deepEqual(out("PROC-REP-306"), ["Custodia sin confirmar->PROC-REP-271", "Equipo bajo custodia->PROC-REP-270", "Sin equipo bajo custodia->PROC-REP-268"].sort());
-  assert.deepEqual(into("PROC-REP-306"), ["PROC-REP-056"]);
+check("desistimiento sin Detalles: via propia de la etapa (056 -> 307), separada de la autorizacion por Detalle; la cancelacion sin Detalles (306) es explicita y terminal (DC31)", () => {
+  assert.deepEqual(out("PROC-REP-306"), ["Orden cancelada y cerrada->PROC-REP-268"]);
+  assert.deepEqual(into("PROC-REP-306"), ["PROC-REP-307"]);
   const o = order(scenario("VAR-REP-004"));
-  assert.deepEqual(o.slice(-5), ["PROC-REP-055", "PROC-REP-056", "PROC-REP-306", "PROC-REP-268", "EVT-REP-999"]);
+  assert.deepEqual(o.slice(-6), ["PROC-REP-055", "PROC-REP-056", "PROC-REP-307", "PROC-REP-306", "PROC-REP-268", "EVT-REP-999"]);
   assert.match(rule("BR-REP-027"), /PROC-REP-056, "Desiste sin Detalles"/);
 });
 
@@ -216,17 +216,17 @@ check("6) rechaza algunos Detalles: se cancelan solo los rechazados (300) y los 
 
 console.log("\nD) Cierre, custodia, devolucion y otros origenes\n");
 
-check("14) rechaza todos los trabajos: 305 -> 211 -> custodia/fin pasando siempre por la verificacion de saldo (268) y la devolucion de dinero", () => {
+check("14) rechaza todos los trabajos: 305 -> 211 -> Orden sin trabajos vigentes (307), y la cancelacion explicita (308) pasa por la verificacion de saldo (268) (DC31)", () => {
   const v6 = order(scenario("VAR-REP-006"));
-  assert.deepEqual(v6.slice(-4), ["PROC-REP-305", "PROC-REP-211", "PROC-REP-268", "EVT-REP-999"]);
+  assert.deepEqual(v6.slice(-6), ["PROC-REP-305", "PROC-REP-211", "PROC-REP-307", "PROC-REP-308", "PROC-REP-268", "EVT-REP-999"]);
   const v7 = order(scenario("VAR-REP-007"));
-  assert.deepEqual(v7.slice(-5), ["PROC-REP-305", "PROC-REP-211", "PROC-REP-270", "PROC-REP-268", "EVT-REP-999"]);
+  assert.deepEqual(v7.slice(-8), ["PROC-REP-305", "PROC-REP-211", "PROC-REP-307", "PROC-REP-270", "PROC-REP-307", "PROC-REP-308", "PROC-REP-268", "EVT-REP-999"]);
   const v32 = order(scenario("VAR-REP-032"));
-  assert.deepEqual(v32.slice(-5), ["PROC-REP-270", "PROC-REP-268", "PROC-REP-267", "PROC-REP-268", "EVT-REP-999"]);
+  assert.deepEqual(v32.slice(-7), ["PROC-REP-270", "PROC-REP-307", "PROC-REP-267", "PROC-REP-307", "PROC-REP-308", "PROC-REP-268", "EVT-REP-999"]);
   const v33 = order(scenario("VAR-REP-033"));
   assert.ok(v33.includes("PROC-REP-267") && v33[v33.length - 1] === "EVT-REP-999");
-  // los exits de cancelacion total de 211 conservan custodia y todos terminan en 268
-  for (const c of ["Todos cancelados, equipo bajo custodia->PROC-REP-270", "Todos cancelados, sin equipo bajo custodia->PROC-REP-268", "Todos cancelados, custodia sin confirmar->PROC-REP-271"]) assert.ok(out("PROC-REP-211").includes(c), c);
+  // DC31: con todos cancelados 211 deja la Orden abierta en 307; ya no deriva a custodia ni al fin
+  assert.deepEqual(out("PROC-REP-211").filter((o) => o.startsWith("Todos cancelados")), ["Todos cancelados, sin trabajos vigentes->PROC-REP-307"]);
   assert.deepEqual(into("EVT-REP-999"), ["PROC-REP-268"], "todo fin pasa por la verificacion de saldo");
   assert.match(text("PROC-REP-047"), /custodia fisica del equipo\s+\(BR-REP-033\) y el saldo, los anticipos y su\s+devolucion \(BR-REP-038\)/);
 });

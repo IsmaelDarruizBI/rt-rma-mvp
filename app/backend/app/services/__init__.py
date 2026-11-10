@@ -37,7 +37,10 @@ from .cancelaciones import (
     ROLES_CANCELACION,
     cancelar_detalle,
     cancelar_orden,
+    cancelar_trabajos_pendientes,
+    impedimentos_cancelacion,
     registrar_devolucion_equipo,
+    sin_trabajos_vigentes,
     validar_cancelacion_detalle,
 )
 from .catalogo_equipos import (
@@ -416,6 +419,9 @@ __all__ = [
     "ROLES_CANCELACION",
     "cancelar_detalle",
     "cancelar_orden",
+    "cancelar_trabajos_pendientes",
+    "impedimentos_cancelacion",
+    "sin_trabajos_vigentes",
     "registrar_devolucion_equipo",
     "validar_cancelacion_detalle",
     "cerrar_cancelada_si_corresponde",

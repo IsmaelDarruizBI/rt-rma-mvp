@@ -85,10 +85,10 @@ const COMMERCIAL_NODES = ["PROC-REP-220", "PROC-REP-250", "PROC-REP-260", "PROC-
  * (context-labelled exit idiom, like PROC-REP-270). Pure topological reachability
  * crosses contexts; this traversal honours the labelled exit.
  */
-function reachableInContext(start: string): Set<string> {
+function reachableInContext(start: string, from = ""): Set<string> {
   const seen = new Set<string>();
   const visited = new Set<string>();
-  const queue: Array<{ id: string; prev: string }> = [{ id: start, prev: "" }];
+  const queue: Array<{ id: string; prev: string }> = [{ id: start, prev: from }];
   while (queue.length > 0) {
     const { id, prev } = queue.shift() as { id: string; prev: string };
     const state = `${id}<${prev}`;
@@ -96,7 +96,10 @@ function reachableInContext(start: string): Set<string> {
     visited.add(state);
     seen.add(id);
     for (const e of model.edges.filter((edge) => edge.from === id)) {
-      if (id === REFUND && (e.to === "PROC-REP-265") !== (prev === "PROC-REP-265")) continue;
+      // 267 vuelve a donde entro (entrega, fin u Orden sin trabajos vigentes, DC31)
+      if (id === REFUND && e.to !== prev && ["PROC-REP-265", GATE, "PROC-REP-307"].includes(prev)) continue;
+      // DC31: 270/271 entrados desde 307 vuelven a 307; las Ordenes ya CANCELADA siguen al fin
+      if ((id === "PROC-REP-270" || id === "PROC-REP-271") && (prev === "PROC-REP-307") !== (e.to === "PROC-REP-307")) continue;
       queue.push({ id: e.to, prev: id });
     }
   }
@@ -169,8 +172,8 @@ check("ningun camino desde un evento de inicio llega al fin sin pasar por PROC-R
 
 check("268 y 267: salidas exactas; 267 rotula su salida por contexto (entrega o fin de Orden)", () => {
   assert.deepEqual(out(GATE), ["Saldo a favor del cliente pendiente de devolver->PROC-REP-267", "Sin saldo a favor pendiente->EVT-REP-999"].sort());
-  assert.deepEqual(out(REFUND), ["Devolucion registrada, validar entrega->PROC-REP-265", "Devolucion registrada, validar fin de Orden->PROC-REP-268"].sort());
-  assert.deepEqual(into(REFUND), ["PROC-REP-265::No, saldo a favor del cliente", "PROC-REP-268::Saldo a favor del cliente pendiente de devolver"].sort());
+  assert.deepEqual(out(REFUND), ["Devolucion registrada, validar entrega->PROC-REP-265", "Devolucion registrada, validar fin de Orden->PROC-REP-268", "Devolucion registrada, Orden sin trabajos vigentes->PROC-REP-307"].sort());
+  assert.deepEqual(into(REFUND), ["PROC-REP-265::No, saldo a favor del cliente", "PROC-REP-268::Saldo a favor del cliente pendiente de devolver", "PROC-REP-307::Saldo a favor del cliente"].sort());
   assert.equal(node(REFUND)?.actor, "ACT-RECEP");
   assert.equal(node(GATE)?.type, "decision");
 });
@@ -207,15 +210,18 @@ check("no hay ciclos sin accion financiera: todo ciclo entre 265/266/267/268 pas
   assert.match(nodeText("PROC-REP-266"), /pago/i);
 });
 
-check("cancelaciones y desistimientos (306, 211 cancelado, 271) llegan a la verificacion de saldo y nunca a la entrega comercial", () => {
+check("cancelaciones y desistimientos (211 cancelado, 307, 306, 308, 271) llegan a la verificacion de saldo y nunca a la entrega comercial", () => {
+  // DC31: 211 deja la Orden abierta en 307; la cancelacion explicita (306/308) es terminal
   const exits = [
     ...model.edges.filter((e) => e.from === "PROC-REP-211" && /Todos cancelados/.test(e.condition ?? "")),
+    ...model.edges.filter((e) => e.from === "PROC-REP-307"),
     ...model.edges.filter((e) => e.from === "PROC-REP-306"),
+    ...model.edges.filter((e) => e.from === "PROC-REP-308"),
     ...model.edges.filter((e) => e.from === "PROC-REP-271"),
   ];
-  assert.equal(exits.length, 3 + 3 + 2);
+  assert.equal(exits.length, 1 + 5 + 1 + 1 + 1);
   for (const e of exits) {
-    const reach = reachableInContext(e.to);
+    const reach = reachableInContext(e.to, e.from);
     assert.ok(reach.has(GATE), `${e.from} -> ${e.to} [${e.condition}] llega a 268`);
     for (const bad of COMMERCIAL_NODES) assert.ok(!reach.has(bad), `${e.from} -> ${e.to} no alcanza ${bad}`);
   }
@@ -238,7 +244,7 @@ check("RT_INTERNO (290 -> 270 -> 268) no pasa por cobro ni devolucion de dinero:
 });
 
 check("la devolucion fisica (270) y la de dinero (267) son dimensiones independientes", () => {
-  assert.deepEqual(out("PROC-REP-270"), ["->PROC-REP-268"], "la devolucion fisica no finaliza la Orden: pasa por la verificacion de saldo");
+  assert.deepEqual(out("PROC-REP-270"), ["->PROC-REP-268", "Devolucion sin reparar, Orden sin trabajos vigentes->PROC-REP-307"].sort(), "la devolucion fisica no finaliza la Orden: pasa por la verificacion de saldo o vuelve a la Orden sin trabajos vigentes (DC31)");
   assert.match(nodeText(REFUND), /Es independiente de la\s+devolucion FISICA del equipo/);
   assert.match(nodeText(GATE), /independiente de la devolucion fisica del equipo/);
   assert.match(nodeText("PROC-REP-270"), /independientes/);
@@ -451,7 +457,8 @@ check("VAR-REP-032: cancelacion con anticipo y equipo en custodia -> devolucion 
   const r = replay(s);
   const order = edgeSteps(s).flatMap((e) => [e.from, e.to]).filter((id, i, all) => i === 0 || id !== all[i - 1]);
   const at = (id: string): number => order.indexOf(id);
-  assert.ok(at("PROC-REP-270") < at(GATE) && at(GATE) < at(REFUND) && at(REFUND) < at("EVT-REP-999"), `orden: ${order.join(" > ")}`);
+  // DC31: devolucion fisica y de dinero ANTES de la cancelacion explicita (308), que recien entonces cierra
+  assert.ok(at("PROC-REP-270") < at(REFUND) && at(REFUND) < at("PROC-REP-308") && at("PROC-REP-308") < at(GATE) && at(GATE) < at("EVT-REP-999"), `orden: ${order.join(" > ")}`);
   assert.equal(r.balanceAtFirst267, -8000);
   assert.equal(r.ledger.balance, 0);
   for (const bad of COMMERCIAL_NODES) assert.ok(!traversed(s).has(bad), `la Orden CANCELADA no recorre ${bad}`);

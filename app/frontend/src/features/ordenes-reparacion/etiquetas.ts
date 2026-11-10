@@ -104,6 +104,7 @@ export const SITUACION: Record<string, string> = {
   PENDIENTE_COBRO: "Pendiente de cobro",
   PENDIENTE_CHECKIN: "Pendiente de verificación de funciones básicas",
   LISTA_PARA_ENTREGAR: "Lista para entregar",
+  SIN_TRABAJOS_VIGENTES: "Sin trabajos vigentes",
   CANCELADA_PENDIENTE_DEVOLUCION: "Cancelada, pendiente de devolución",
   CERRADA: "Cerrada",
   SIN_TAREAS: "Sin tareas pendientes",

@@ -54,6 +54,7 @@ from tests.fixtures.api_salidas import (
     repo_ordenes,
     tomada,
 )
+from tests.fixtures.cancelacion_heredada import cancelada_heredada
 from tests.fixtures.custodia import entregar, no_recibido
 from tests.test_api_hp_rep_002 import TIPO, _crear_orden_rt, _sembrar_catalogos
 
@@ -209,6 +210,23 @@ def _financieras(orden: dict) -> list[tuple[str, str | None]]:
 
 
 # --- 1/2/3. Anticipo, parcial y final ----------------------------------------
+
+
+def _sin_trabajos(cliente, orden_id) -> dict:
+    """DC31: cancela todos los trabajos; la Orden sigue abierta (sin
+    trabajos vigentes) y lo pagado queda a favor del cliente."""
+    orden = _orden(cliente, orden_id)
+    for detalle in orden["reparaciones_detail"]:
+        if detalle["estado"] == "DEFINIDO":
+            orden = ok(cancelar_detalle(cliente, orden_id, detalle["id"]))
+    return orden
+
+
+def _heredada(cliente, orden_id) -> dict:
+    """Orden CANCELADA y abierta del circuito anterior a DC31."""
+    return cancelada_heredada(
+        cliente, cliente.app.state.settings.data_dir, orden_id
+    )
 
 
 def test_1_anticipo_se_registra_sin_mover_el_proceso(cliente):
@@ -509,9 +527,7 @@ def test_14_no_se_devuelve_mas_que_lo_que_queda_del_pago(cliente):
     orden_id = _autorizada(cliente, T100)
     primero = _ultimo_pago(ok(pagar(cliente, orden_id, "30000")))["id"]
     segundo = _ultimo_pago(ok(pagar(cliente, orden_id, "70000")))["id"]
-    ok(
-        cancelar_orden(cliente, orden_id, "El cliente desiste.")
-    )  # credito 100000
+    _sin_trabajos(cliente, orden_id)  # credito 100000
 
     mensaje = conflicto(reintegrar(cliente, orden_id, primero, "50000"))
 
@@ -526,9 +542,10 @@ def test_15_caso_b_saldo_despues_de_cancelar_todo(cliente):
     orden_id = _autorizada(cliente, T100)
     pago_id = _ultimo_pago(ok(pagar(cliente, orden_id, "40000")))["id"]
 
-    orden = ok(cancelar_orden(cliente, orden_id, "El cliente desiste."))
+    orden = _sin_trabajos(cliente, orden_id)
 
-    assert orden["estado_workflow"] == "CANCELADA"
+    # DC31: la Orden sigue abierta, sin trabajos vigentes.
+    assert orden["situacion"]["codigo"] == "SIN_TRABAJOS_VIGENTES"
     assert _resumen(orden) == (
         Decimal("0"),
         Decimal("40000"),
@@ -550,7 +567,7 @@ def test_15_caso_b_saldo_despues_de_cancelar_todo(cliente):
 def test_devolucion_valida_medio_motivo_rol_y_duplicados(cliente, tmp_path):
     orden_id = _autorizada(cliente, T100)
     pago_id = _ultimo_pago(ok(pagar(cliente, orden_id, "40000")))["id"]
-    ok(cancelar_orden(cliente, orden_id, "Desiste."))
+    _sin_trabajos(cliente, orden_id)
     escribir_json_atomico(
         tmp_path / "catalogs" / "medios_pago.json",
         [
@@ -596,9 +613,10 @@ def test_devolucion_valida_medio_motivo_rol_y_duplicados(cliente, tmp_path):
 
 
 def test_17_18_devolucion_fisica_antes_que_la_financiera(cliente):
+    """Orden CANCELADA y abierta del circuito anterior a DC31."""
     orden_id = _autorizada(cliente, T100)
     pago_id = _ultimo_pago(ok(pagar(cliente, orden_id, "40000")))["id"]
-    orden = ok(cancelar_orden(cliente, orden_id, "Desiste."))
+    orden = _heredada(cliente, orden_id)
     assert orden["devolucion_pendiente"] is True
 
     orden = ok(devolver(cliente, orden_id, recibido_por="Cliente"))
@@ -628,9 +646,10 @@ def test_17_18_devolucion_fisica_antes_que_la_financiera(cliente):
 
 
 def test_19_devolucion_financiera_antes_que_la_fisica(cliente):
+    """Orden CANCELADA y abierta del circuito anterior a DC31."""
     orden_id = _autorizada(cliente, T100)
     pago_id = _ultimo_pago(ok(pagar(cliente, orden_id, "40000")))["id"]
-    ok(cancelar_orden(cliente, orden_id, "Desiste."))
+    _heredada(cliente, orden_id)
 
     orden = ok(reintegrar(cliente, orden_id, pago_id, "40000"))
 
@@ -655,7 +674,8 @@ def test_cancelada_sin_custodia_con_seña_espera_la_devolucion(cliente):
     assert _resumen(orden)[3] == Decimal("-15000")
     pago_id = _ultimo_pago(orden)["id"]
 
-    orden = ok(cancelar_orden(cliente, orden_id, "No deja el equipo."))
+    # Orden CANCELADA y abierta del circuito anterior a DC31.
+    orden = _heredada(cliente, orden_id)
     # Sin decision de custodia no se asume que no hay equipo.
     assert orden["current_process"] == "PROC-REP-306"
     orden = ok(no_recibido(cliente, orden_id, "No dejo el equipo."))
@@ -875,7 +895,8 @@ def test_circuito_b_seña_desistimiento_devoluciones_y_cierre(cliente):
             },
         )
     )
-    assert orden["estado_workflow"] == "CANCELADA"
+    # DC31: el desistimiento cancela los trabajos, no la Orden.
+    assert orden["situacion"]["codigo"] == "SIN_TRABAJOS_VIGENTES"
     assert orden["resumen"]["credito_a_favor"] == "40000"
 
     orden = ok(devolver(cliente, orden_id, recibido_por="Cliente"))
@@ -883,6 +904,8 @@ def test_circuito_b_seña_desistimiento_devoluciones_y_cierre(cliente):
     orden = ok(
         reintegrar(cliente, orden_id, pago_id, "40000", "TRANSFERENCIA")
     )
+    assert orden["cerrada"] is False
+    orden = ok(cancelar_orden(cliente, orden_id, "Ya no lo quiere."))
 
     assert orden["cerrada"] is True
     assert orden["estado_workflow"] == "CANCELADA"

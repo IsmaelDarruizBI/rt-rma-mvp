@@ -578,6 +578,28 @@ decisions:
       status: CONTRARIO
       evidence: la decision del cliente cancela en el mismo acto (services/decision_cliente.py)
 
+  - id: DC31
+    block: DC07
+    title: Cancelar Detalles no cancela la Orden; la cancelacion de la Orden es explicita y terminal, con custodia, devolucion y saldo resueltos antes
+    status: CONFIRMADA
+    rules: [BR-REP-014, BR-REP-027, BR-REP-030, BR-REP-033]
+    nodes: [PROC-REP-211, PROC-REP-305, PROC-REP-306, PROC-REP-307, PROC-REP-308, PROC-REP-270, PROC-REP-271, PROC-REP-267]
+    features: [FEAT-REP-002, FEAT-REP-009]
+    scenarios: [VAR-REP-004, VAR-REP-006, VAR-REP-007, VAR-REP-015, VAR-REP-018, VAR-REP-032, VAR-REP-033, VAR-REP-043]
+    notes: >
+      Aprobada por negocio el 09/11/2026 (decisiones D1 a D6 del analisis de
+      cancelacion de rt-rma-mvp). Reemplaza, en lo que se refiere a cancelar la
+      Orden, los desenlaces de BR-REP-014 (A/B), BR-REP-030 y BR-REP-033: con
+      todos los Detalles CANCELADO la Orden sigue abierta en
+      SIN_TRABAJOS_VIGENTES (PROC-REP-307); la cancelacion es explicita y
+      terminal (PROC-REP-308, o 306 sin Detalles) y exige sin Ejecucion, toma,
+      reservas ni saldo, custodia resuelta, equipo devuelto si ingreso y ningun
+      Detalle COMPLETO. Las Ordenes CANCELADA y abiertas por la regla anterior
+      terminan el circuito anterior sin migrar datos.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: rt-rma-mvp feat/postgresql-esquema (services/cancelaciones.py, services/ordenes.py evaluar_situacion_orden, application/situacion.py SIN_TRABAJOS_VIGENTES, application/acciones.py y bandejas.py; migracion 20261110000100_dc31_cancelacion.sql)
+
   # ------------------------------------------------------------------ Baseline y sincronizacion
   - id: DC01
     block: BASELINE

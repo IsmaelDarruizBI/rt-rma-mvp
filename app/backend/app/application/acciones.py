@@ -66,6 +66,11 @@ from app.services import (
     toma_activa,
     ultimo_documento,
 )
+from app.services.cancelaciones import (
+    admite_devolucion_sin_reparar,
+    impedimentos_cancelacion,
+    sin_trabajos_vigentes,
+)
 from app.services.ordenes import ROLES_ENTREGA, ROLES_PRIORIZACION
 from app.services.pagos import (
     ROLES_ANULACION_PAGO,
@@ -339,19 +344,25 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
     ):
         return []
 
-    # Orden CANCELADA: lo unico que puede quedar del flujo es devolver el
-    # equipo (PROC-REP-270). Sin cobro, control ni entrega comercial; un
-    # anticipo a devolver es de ``acciones_financieras``.
+    # Orden CANCELADA y abierta: solo puede venir del circuito anterior a
+    # DC31 (hoy cancelar cierra en el mismo acto). Lo unico que puede quedar
+    # del flujo es devolver el equipo (PROC-REP-270). Sin cobro, control ni
+    # entrega comercial; un anticipo a devolver es de ``acciones_financieras``.
     if orden.estado_workflow is EstadoWorkflow.CANCELADA:
         if not devolucion_pendiente(orden):
             return []
-        return [
-            AccionDisponible(
-                codigo=ACCION_REGISTRAR_DEVOLUCION,
-                etiqueta="Registrar la devolucion del equipo",
-                roles=ROLES_ENTREGA,
-            )
-        ]
+        return [_accion_devolucion()]
+
+    # DC31: sin trabajos vigentes (todos los Detalles CANCELADO) no hay flujo
+    # tecnico ni comercial: solo devolver el equipo, si esta en el local. La
+    # custodia y el dinero van en sus propios grupos; cancelar la Orden, en
+    # ``acciones_de_cancelacion``.
+    if sin_trabajos_vigentes(orden):
+        return (
+            [_accion_devolucion()]
+            if admite_devolucion_sin_reparar(orden)
+            else []
+        )
 
     politica = politica_de(orden.origen)
 
@@ -703,7 +714,19 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             )
         )
 
+    # DC31: una Orden sin Detalles con el equipo en el local puede
+    # devolverlo para despues cancelarse (situacion especial).
+    if admite_devolucion_sin_reparar(orden):
+        acciones.append(_accion_devolucion())
     return acciones
+
+
+def _accion_devolucion() -> AccionDisponible:
+    return AccionDisponible(
+        codigo=ACCION_REGISTRAR_DEVOLUCION,
+        etiqueta="Registrar la devolucion del equipo",
+        roles=ROLES_ENTREGA,
+    )
 
 
 def acciones_de_cancelacion(orden: OrdenReparacion) -> list[AccionDisponible]:
@@ -716,9 +739,10 @@ def acciones_de_cancelacion(orden: OrdenReparacion) -> list[AccionDisponible]:
     estado cuando el comando llega.
 
     - Cancelar un Detalle: cada Detalle PENDIENTE (DEFINIDO); nunca uno
-      COMPLETO, CANCELADO o en ejecucion.
-    - Cancelar la Orden: sin Ejecucion activa, y con al menos un Detalle
-      pendiente o sin Detalles todavia.
+      COMPLETO, CANCELADO o en ejecucion. No cancela la Orden (DC31).
+    - Cancelar la Orden (DC31, explicita y terminal): mientras no haya
+      trabajo COMPLETO. Si hoy no se puede (Ejecucion, toma, reservas,
+      saldo o custodia), se ofrece con ``bloqueo`` y el motivo.
 
     Ninguna sobre una Orden cerrada, CANCELADA, SIN_REPARACION o con la
     reparacion lista: ahi ya no queda nada pendiente que cancelar.
@@ -744,14 +768,21 @@ def acciones_de_cancelacion(orden: OrdenReparacion) -> list[AccionDisponible]:
         )
         for detalle_id in pendientes
     ]
-    if ejecucion_activa(orden) is None and (
-        pendientes or not orden.reparaciones_detail
+    if not any(
+        detalle.estado is EstadoReparacionDetail.COMPLETO
+        for detalle in orden.reparaciones_detail
     ):
+        motivos = impedimentos_cancelacion(orden)
         acciones.append(
             AccionDisponible(
                 codigo=ACCION_CANCELAR_ORDEN,
-                etiqueta="Cancelar la Orden (trabajos pendientes)",
+                etiqueta="Cancelar la Orden",
                 roles=ROLES_CANCELACION,
+                bloqueo=(
+                    "No se puede cancelar todavia: " + "; ".join(motivos) + "."
+                    if motivos
+                    else None
+                ),
             )
         )
     return acciones
@@ -935,8 +966,10 @@ def acciones_de_custodia(orden: OrdenReparacion) -> list[AccionDisponible]:
       este confirmada y el equipo no haya salido. En una Orden anterior al
       registro de recepcion, es la regularizacion.
     - Confirmar la recepcion fisica: hay datos de ingreso sin decidir.
-    - Registrar "Equipo no recibido": Orden cancelada con la custodia sin
-      definir y sin evidencias de que el equipo estuvo en el local.
+    - Registrar "Equipo no recibido": custodia sin definir y sin evidencias
+      de que el equipo estuvo en el local, en una Orden sin trabajo
+      COMPLETO (DC31: se resuelve antes de cancelarla) o en una CANCELADA
+      del circuito anterior.
     - Agregar una observacion complementaria: hay datos de ingreso.
     - Emitir una version nueva del comprobante: el proceso ya emitio el
       primero (PROC-REP-060).
@@ -983,9 +1016,12 @@ def acciones_de_custodia(orden: OrdenReparacion) -> list[AccionDisponible]:
         )
     if (
         politica.requiere_confirmacion_recepcion
-        and orden.estado_workflow is EstadoWorkflow.CANCELADA
         and custodia_por_definir(orden)
         and not evidencias_de_equipo(orden)
+        and not any(
+            detalle.estado is EstadoReparacionDetail.COMPLETO
+            for detalle in orden.reparaciones_detail
+        )
     ):
         acciones.append(
             AccionDisponible(

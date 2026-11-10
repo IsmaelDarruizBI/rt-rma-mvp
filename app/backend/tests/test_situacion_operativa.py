@@ -19,7 +19,7 @@ from tests.fixtures.api_salidas import (
     agregar,
     aprobar,
     archivo,
-    cancelar_orden,
+    cancelar_detalle,
     cerrar_ejecucion,
     crear,
     decidir,
@@ -29,6 +29,7 @@ from tests.fixtures.api_salidas import (
     ok,
     tomada,
 )
+from tests.fixtures.cancelacion_heredada import cancelada_heredada
 from tests.fixtures.custodia import (
     confirmar_recepcion,
     entregar,
@@ -435,9 +436,10 @@ def test_aviso_cobro_y_entrega(tmp_path):
 
 
 def test_cancelada_pendiente_de_devolver_el_equipo(tmp_path):
+    """Una Orden CANCELADA y abierta del circuito anterior a DC31."""
     with _cliente(tmp_path, stock_bateria="5") as cliente:
         orden_id = definida(cliente)
-        ok(cancelar_orden(cliente, orden_id))
+        cancelada_heredada(cliente, tmp_path, orden_id)
 
         situacion = _situacion(cliente, orden_id)
 
@@ -446,6 +448,21 @@ def test_cancelada_pendiente_de_devolver_el_equipo(tmp_path):
         (tarea,) = situacion["tareas"]
         assert _codigos(tarea) == ["REGISTRAR_DEVOLUCION"]
         assert _etapas(situacion)["ENTREGA"] == "EN_CURSO"
+
+
+def test_sin_trabajos_vigentes(tmp_path):
+    """DC31: todos los trabajos cancelados, la Orden abierta."""
+    with _cliente(tmp_path, stock_bateria="5") as cliente:
+        orden_id = definida(cliente)
+        ok(cancelar_detalle(cliente, orden_id, "DET-001"))
+
+        situacion = _situacion(cliente, orden_id)
+
+        assert situacion["codigo"] == "SIN_TRABAJOS_VIGENTES"
+        assert situacion["titulo"] == "Sin trabajos vigentes"
+        (tarea,) = situacion["tareas"]
+        assert _codigos(tarea) == ["REGISTRAR_DEVOLUCION"]
+        assert "devolver el equipo" in situacion["descripcion"]
 
 
 def test_rt_interno_informa_a_gestion_rt_sin_autorizacion(tmp_path):

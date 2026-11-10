@@ -204,7 +204,14 @@ class _Lectura:
                 catalogos.listar_tipo_reparacion_estaciones()
             )
         tipos = {tipo.id: tipo.nombre for tipo in tipos_reparacion}
-        self.leidas = [self._leer(orden, tipos) for orden in self.ordenes]
+        # DC31: una Orden CANCELADA no es un pendiente de Inicio ni de
+        # Taller (las abiertas del circuito anterior se resuelven desde la
+        # Orden).
+        self.leidas = [
+            self._leer(orden, tipos)
+            for orden in self.ordenes
+            if orden.estado_workflow is not EstadoWorkflow.CANCELADA
+        ]
 
     @staticmethod
     def _leer(orden: OrdenReparacion, tipos: Mapping[str, str]) -> _Orden:
@@ -638,10 +645,11 @@ def _recepcion(lectura: _Lectura) -> list[Bandeja]:
         ),
         _bandeja(
             "DEVOLUCION_EQUIPO",
-            "Devolver equipos de órdenes canceladas",
-            "El equipo sigue en el local: se devuelve sin cobro.",
+            "Cerrar órdenes sin trabajos vigentes",
+            "Todos sus trabajos se cancelaron: devolver el equipo sin cobro "
+            "y cancelar la Orden.",
             tareas,
-            lectura.por_acciones("REGISTRAR_DEVOLUCION"),
+            lectura.por_acciones("REGISTRAR_DEVOLUCION", "CANCELAR_ORDEN"),
         ),
         _bandeja(
             "PRIORIZAR",

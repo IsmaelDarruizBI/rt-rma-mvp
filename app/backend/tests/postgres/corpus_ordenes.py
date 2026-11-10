@@ -113,9 +113,11 @@ def _flujos(cliente: TestClient) -> None:
         )
     )
     f.ok(f.cancelar_detalle(cliente, interrumpida, "DET-002"))
-    # En revision, cancelada, RT interno y un cliente con DNI en dos Ordenes.
+    # En revision, sin trabajos vigentes (DC31: todos los trabajos
+    # cancelados, la Orden abierta), RT interno y un cliente con DNI en dos
+    # Ordenes.
     f.por_revision(cliente, f.PANTALLA)
-    f.ok(f.cancelar_orden(cliente, f.definida(cliente)))
+    f.ok(f.cancelar_detalle(cliente, f.definida(cliente), "DET-001"))
     f.ok(
         cliente.post(
             "/api/orders/rt-interno",
@@ -295,15 +297,17 @@ def _flujos_de_salida(cliente: TestClient) -> None:
         )
     )
 
-    # Cancelada con devolucion del equipo.
+    # Cancelada con devolucion del equipo (DC31: devolucion y despues la
+    # cancelacion explicita, que cierra).
     cancelada = f.definida(cliente)
-    f.ok(f.cancelar_orden(cliente, cancelada))
+    f.ok(f.cancelar_detalle(cliente, cancelada, "DET-001"))
     f.ok(f.devolver(cliente, cancelada))
+    f.ok(f.cancelar_orden(cliente, cancelada))
 
     # Cancelada sin que el equipo haya ingresado.
     nunca = f.crear(cliente)
-    f.ok(f.cancelar_orden(cliente, nunca))
     f.ok(c.no_recibido(cliente, nunca))
+    f.ok(f.cancelar_orden(cliente, nunca))
 
     # Sin reparacion: se entrega como devolucion, con la Orden ENTREGADA.
     sin_reparacion = f.crear(cliente)
@@ -438,7 +442,7 @@ def _flujos_financieros(cliente: TestClient) -> None:
     saldo = f.ok(cliente.get(f"/api/orders/{cancelada}"))["resumen"]["saldo"]
     pago = _ultimo_pago(_pagar(cliente, cancelada, saldo, "TARJETA_DEBITO"))
     _tic()
-    f.ok(f.cancelar_orden(cliente, cancelada))
+    f.ok(f.cancelar_detalle(cliente, cancelada, "DET-001"))
     for monto, medio in (("1000", "EFECTIVO"), (None, "TRANSFERENCIA")):
         credito = f.ok(cliente.get(f"/api/orders/{cancelada}"))["resumen"][
             "saldo"
@@ -458,6 +462,7 @@ def _flujos_financieros(cliente: TestClient) -> None:
             )
         )
     f.ok(f.devolver(cliente, cancelada))
+    f.ok(f.cancelar_orden(cliente, cancelada))
 
 
 def armar_corpus(directorio: Path) -> list[OrdenReparacion]:

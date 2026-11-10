@@ -2,7 +2,7 @@
 
 La baseline funcional vigente es PROC-REP V1.4, aprobada en DC01 y sincronizada desde `rt-rma-app` (DC02):
 
-- Commit de origen: `e99b28386695df537aabd02d7068c0102de09eae`, etiqueta `v1.4-baseline`.
+- Commit de origen: `ab928b6e33203257c26427cbb9af7875bd38693b` (rama `dc31/cancelacion-explicita`: V1.4 con la revisión DC31, sobre la etiqueta `v1.4-baseline`).
 - Contenido funcional aprobado en `b6cc3a5`.
 - Manifiesto de procedencia: `business/FUNCTIONAL_SOURCE.json`.
 

@@ -2,7 +2,7 @@
 %% DO NOT EDIT MANUALLY.
 %% SOURCE: business/processes/repair-management-v1.4.yaml
 %% VIEW: origen CLIENTE_EXTERNO (subconjunto de nodos y aristas reales; ver scripts/lib/origin-filter.ts)
-%% Nodos: 69 | Aristas: 119 | Aristas punteadas: carril independiente de Recepcion (EVT secundarios)
+%% Nodos: 71 | Aristas: 122 | Aristas punteadas: carril independiente de Recepcion (EVT secundarios)
 
 flowchart TD
     EVT-REP-001{{"Surge necesidad de reparacion"}}
@@ -70,8 +70,10 @@ flowchart TD
     PROC-REP-269["Orden pendiente de check-in (entrega bloqueada)<br/>[Sistema]"]
     PROC-REP-270["Entregar equipo<br/>[Administrador]"]
     PROC-REP-300["Cancelar Detalle"]
-    PROC-REP-305["Cancelar Orden / trabajos pendientes"]
-    PROC-REP-306["Cancelar Orden por desistimiento del cliente (sin Detalles)"]
+    PROC-REP-305["Cancelar trabajos pendientes"]
+    PROC-REP-306["Cancelar Orden sin Detalles"]
+    PROC-REP-307{"Orden sin trabajos vigentes<br/>[Recepcion]"}
+    PROC-REP-308["Cancelar Orden"]
     EVT-REP-003{{"Hay una solicitud de autorizacion de un Detalle pendiente de gestion"}}
     EVT-REP-999((("Fin del flujo de Orden de Reparacion")))
 
@@ -81,17 +83,22 @@ flowchart TD
     EVT-REP-003 -.-> PROC-REP-046
     PROC-REP-040 -->|CLIENTE_EXTERNO| PROC-REP-032
     PROC-REP-032 --> PROC-REP-045
-    PROC-REP-306 -->|Equipo bajo custodia| PROC-REP-270
-    PROC-REP-306 -->|Sin equipo bajo custodia| PROC-REP-268
-    PROC-REP-306 -->|Custodia sin confirmar| PROC-REP-271
-    PROC-REP-271 -->|Equipo bajo custodia| PROC-REP-270
-    PROC-REP-271 -->|Sin equipo bajo custodia| PROC-REP-268
+    PROC-REP-306 -->|Orden cancelada y cerrada| PROC-REP-268
+    PROC-REP-308 -->|Orden cancelada y cerrada| PROC-REP-268
+    PROC-REP-307 -->|Custodia sin confirmar| PROC-REP-271
+    PROC-REP-307 -->|Equipo bajo custodia, devolucion sin reparar| PROC-REP-270
+    PROC-REP-307 -->|Saldo a favor del cliente| PROC-REP-267
+    PROC-REP-307 -->|Cancelar Orden, con Detalles cancelados| PROC-REP-308
+    PROC-REP-307 -->|Cancelar Orden, sin Detalles| PROC-REP-306
+    PROC-REP-271 -->|Custodia resuelta, Orden sin trabajos vigentes| PROC-REP-307
+    PROC-REP-270 -->|Devolucion sin reparar, Orden sin trabajos vigentes| PROC-REP-307
+    PROC-REP-267 -->|Devolucion registrada, Orden sin trabajos vigentes| PROC-REP-307
     PROC-REP-045 -->|Si| PROC-REP-070
     PROC-REP-045 -->|No| PROC-REP-055
     PROC-REP-070 -->|CLIENTE_EXTERNO| PROC-REP-046
     PROC-REP-055 -->|CLIENTE_EXTERNO| PROC-REP-056
     PROC-REP-056 -->|Acepta la revision tecnica| PROC-REP-050
-    PROC-REP-056 -->|Desiste sin Detalles| PROC-REP-306
+    PROC-REP-056 -->|Desiste sin Detalles| PROC-REP-307
     PROC-REP-050 -->|Si| PROC-REP-060
     PROC-REP-060 -->|Detalles definidos| PROC-REP-080
     PROC-REP-060 -->|Aun en revision| PROC-REP-065
@@ -157,9 +164,7 @@ flowchart TD
     PROC-REP-211 -->|Existe Detalle trabajable, toma activa| PROC-REP-212
     PROC-REP-211 -->|Existe Detalle trabajable, sin toma activa| PROC-REP-170
     PROC-REP-211 -->|Todos terminales, existe completo| PROC-REP-220
-    PROC-REP-211 -->|Todos cancelados, equipo bajo custodia| PROC-REP-270
-    PROC-REP-211 -->|Todos cancelados, sin equipo bajo custodia| PROC-REP-268
-    PROC-REP-211 -->|Todos cancelados, custodia sin confirmar| PROC-REP-271
+    PROC-REP-211 -->|Todos cancelados, sin trabajos vigentes| PROC-REP-307
     PROC-REP-211 -->|PENDIENTE_RECURSOS| PROC-REP-120
     PROC-REP-211 -->|REQUIERE_REVISION| PROC-REP-125
     PROC-REP-211 -->|Antes del comprobante de recepcion| PROC-REP-050
@@ -192,5 +197,5 @@ flowchart TD
     PROC-REP-170 -->|Cancelar Detalle| PROC-REP-300
     PROC-REP-300 -->|Cancelacion fuera de la evaluacion tecnica| PROC-REP-211
     PROC-REP-300 -->|Descarte durante la evaluacion tecnica| PROC-REP-184
-    PROC-REP-170 -->|Cancelar Orden| PROC-REP-305
+    PROC-REP-170 -->|Cancelar Orden| PROC-REP-308
     PROC-REP-305 --> PROC-REP-211

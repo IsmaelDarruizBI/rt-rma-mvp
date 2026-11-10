@@ -37,6 +37,7 @@ from tests.fixtures.api_salidas import (
     aprobar,
     archivo,
     cancelar_detalle,
+    cancelar_orden,
     cerrar_ejecucion,
     cliente_http,
     codigos,
@@ -246,7 +247,9 @@ def test_2_autorizar_algunos_y_rechazar_otros(cliente):
 # --- 3. Rechazar todo --------------------------------------------------------
 
 
-def test_3_rechazar_todo_cancela_y_espera_la_devolucion(cliente):
+def test_3_rechazar_todo_cancela_los_trabajos_y_no_la_orden(cliente):
+    """DC31: queda sin trabajos vigentes; se devuelve el equipo y despues
+    se cancela la Orden de forma explicita."""
     orden_id = _finalizada(cliente, BATERIA, PANTALLA)
 
     orden = ok(
@@ -258,28 +261,32 @@ def test_3_rechazar_todo_cancela_y_espera_la_devolucion(cliente):
         )
     )
 
-    assert ids(orden)[-5:] == [
+    assert ids(orden)[-6:] == [
         "PROC-REP-046",
         "PROC-REP-046",
         "PROC-REP-047",
         "PROC-REP-305",
         "PROC-REP-211",
+        "PROC-REP-307",
     ]
-    assert orden["historial"][-3]["observacion"] == (
+    assert orden["historial"][-4]["observacion"] == (
         "RECHAZA_TODOS_LOS_TRABAJOS"
     )
-    assert orden["historial"][-1]["observacion"] == "TODO_CANCELADO"
-    assert orden["estado_workflow"] == "CANCELADA"
+    assert orden["historial"][-2]["observacion"] == "TODO_CANCELADO"
+    assert orden["estado_workflow"] != "CANCELADA"
+    assert orden["situacion"]["codigo"] == "SIN_TRABAJOS_VIGENTES"
     assert {
         d["cancelacion"]["origen"] for d in orden["reparaciones_detail"]
     } == {"RECHAZO_CLIENTE"}
     assert Decimal(orden["resumen"]["total"]) == Decimal("0")
-    # La recepcion se confirmo: el equipo esta en custodia y se devuelve.
-    assert orden["devolucion_pendiente"] is True
+    # La recepcion se confirmo: el equipo esta en custodia y se devuelve
+    # antes de cancelar la Orden.
     assert codigos(orden) == ["REGISTRAR_DEVOLUCION"]
     assert orden["acciones_autorizacion"] == []
 
-    cerrada = ok(devolver(cliente, orden_id, recibido_por="Cliente"))
+    devuelta = ok(devolver(cliente, orden_id, recibido_por="Cliente"))
+    assert devuelta["cerrada"] is False
+    cerrada = ok(cancelar_orden(cliente, orden_id))
     assert cerrada["cerrada"] is True
     assert cerrada["estado_workflow"] == "CANCELADA"
 
@@ -668,6 +675,7 @@ def test_16_una_orden_cerrada_no_registra_decisiones(cliente, tmp_path):
     devuelta = _finalizada(cliente, BATERIA)
     ok(decidir(cliente, devuelta, {"DET-001": "RECHAZADO"}))
     ok(devolver(cliente, devuelta))
+    ok(cancelar_orden(cliente, devuelta))  # DC31: la cancelacion cierra
     conflicto(
         decidir(cliente, devuelta, {"DET-001": "AUTORIZADO"}),
         codigo="ORDEN_CERRADA",

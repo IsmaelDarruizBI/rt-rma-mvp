@@ -37,6 +37,11 @@ import type {
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
 import {
+  avisoCancelacionOrden,
+  motivosDeBloqueo,
+  trabajosACancelar,
+} from "./cancelacion";
+import {
   NOMBRE_ACCION,
   descripcionCheckin,
   nombreAccion,
@@ -658,11 +663,10 @@ function FormularioAccion({
 
     case "CANCELAR_ORDEN":
       return (
-        <FormularioMotivo
+        <FormularioCancelarOrden
+          orden={orden}
+          bloqueo={accion.bloqueo}
           deshabilitado={deshabilitado}
-          etiqueta="Motivo de la cancelación de la Orden (obligatorio)"
-          textoBoton="Cancelar la Orden"
-          confirmar={() => window.confirm(mensajeCancelarOrden(orden))}
           onConfirmar={ejecutar.cancelarOrden}
         />
       );
@@ -709,27 +713,6 @@ function FormularioAccion({
 
 // --- Formularios --------------------------------------------------------
 
-/** Texto de la confirmación antes de cancelar la Orden completa. */
-function mensajeCancelarOrden(orden: Orden): string {
-  const pendientes = orden.reparaciones_detail.filter(
-    (detalle) => detalle.estado === "DEFINIDO",
-  ).length;
-  const completos = orden.reparaciones_detail.filter(
-    (detalle) => detalle.estado === "COMPLETO",
-  ).length;
-  if (orden.reparaciones_detail.length === 0) {
-    return `¿Cancelar la Orden ${orden.id}? No tiene trabajos: queda cancelada.`;
-  }
-  return (
-    `¿Cancelar la Orden ${orden.id}? Se cancelan ${pendientes} trabajo(s) ` +
-    "pendiente(s). " +
-    (completos > 0
-      ? `Los ${completos} trabajo(s) ya realizados no se cancelan y siguen ` +
-        "al control y la entrega."
-      : "Sin trabajo realizado, la Orden queda cancelada.")
-  );
-}
-
 /**
  * Un motivo obligatorio y un botón. `confirmar` (opcional) se consulta
  * antes de enviar: si devuelve `false`, no se hace nada.
@@ -772,7 +755,107 @@ function FormularioMotivo({
   );
 }
 
-/** Devolución física del equipo de una Orden CANCELADA: quién lo recibe. */
+/**
+ * Cancelar la Orden (DC31): definitiva. Muestra qué impide cancelarla
+ * todavía (y no deja confirmar), los trabajos que se cancelan y pide el
+ * motivo y una confirmación explícita.
+ */
+function FormularioCancelarOrden({
+  orden,
+  bloqueo,
+  deshabilitado,
+  onConfirmar,
+}: {
+  orden: Orden;
+  bloqueo: string | null;
+  deshabilitado: boolean;
+  onConfirmar: (motivo: string) => void;
+}) {
+  const [motivo, setMotivo] = useState("");
+  const [confirmada, setConfirmada] = useState(false);
+  const idConfirmacion = useId();
+  const motivos = motivosDeBloqueo(bloqueo);
+  const trabajos = trabajosACancelar(orden);
+  const bloqueada = motivos.length > 0;
+
+  return (
+    <div>
+      {bloqueada && (
+        <div
+          role="status"
+          style={{
+            margin: "0 0 0.6rem",
+            padding: "0.5rem 0.7rem",
+            borderRadius: 6,
+            border: `1px solid ${colores.alerta}`,
+            background: "#fff8e6",
+            fontSize: "0.85rem",
+          }}
+        >
+          <strong>Todavía no se puede cancelar la Orden:</strong>
+          <ul style={{ margin: "0.3rem 0 0", paddingLeft: "1.1rem" }}>
+            {motivos.map((texto) => (
+              <li key={texto}>{texto}.</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {trabajos.length > 0 && (
+        <div style={{ margin: "0 0 0.5rem", fontSize: "0.85rem" }}>
+          Trabajos que se cancelan:
+          <ul style={{ margin: "0.2rem 0 0", paddingLeft: "1.1rem" }}>
+            {trabajos.map((nombre, indice) => (
+              <li key={`${nombre}-${indice}`}>{nombre}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p style={{ margin: "0 0 0.6rem", fontSize: "0.85rem" }}>
+        {avisoCancelacionOrden(orden)}
+      </p>
+      <Campo etiqueta="Motivo de la cancelación de la Orden (obligatorio)">
+        <input
+          value={motivo}
+          onChange={(evento) => setMotivo(evento.target.value)}
+          disabled={deshabilitado || bloqueada}
+          style={estiloInput}
+        />
+      </Campo>
+      <label
+        htmlFor={idConfirmacion}
+        style={{
+          display: "flex",
+          gap: "0.4rem",
+          margin: "0 0 0.6rem",
+          fontSize: "0.85rem",
+        }}
+      >
+        <input
+          id={idConfirmacion}
+          type="checkbox"
+          checked={confirmada}
+          onChange={(evento) => setConfirmada(evento.target.checked)}
+          disabled={deshabilitado || bloqueada}
+        />
+        Confirmo que la cancelación es definitiva.
+      </label>
+      <Boton
+        disabled={
+          deshabilitado || bloqueada || !confirmada || motivo.trim() === ""
+        }
+        onClick={() => onConfirmar(motivo.trim())}
+      >
+        Cancelar la Orden
+      </Boton>
+    </div>
+  );
+}
+
+/**
+ * Devolución física del equipo sin reparar: quién lo recibe. Se registra
+ * antes de cancelar la Orden (sin trabajos pendientes) o, en una Orden
+ * cancelada antes de DC31, para cerrarla. No cobra ni da garantía.
+ */
 function FormularioDevolucion({
   orden,
   deshabilitado,

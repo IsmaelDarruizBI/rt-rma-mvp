@@ -480,6 +480,27 @@ rules:
       Recepcion), cada uno con permiso configurable (BR-REP-039); por eso
       PROC-REP-300/305/306 no declaran un unico actor. El catalogo de motivos de
       cancelacion sigue pendiente.
+      Revision DC31 (09/11/2026; reemplaza los desenlaces (A) y (B) en lo que
+      se refiere a cancelar la Orden): cancelar un Detalle solo cancela ese
+      Detalle y NUNCA cancela la Orden, aunque todos queden CANCELADO; en ese
+      caso la Orden sigue abierta con la situacion derivada
+      SIN_TRABAJOS_VIGENTES (PROC-REP-307), que no habilita trabajo tecnico.
+      Cancelar la Orden es una accion EXPLICITA y TERMINAL (PROC-REP-308, o
+      PROC-REP-306 sin Detalles) que solo se permite si, a la vez: no hay
+      Ejecucion activa ni toma tecnica abierta, no quedan reservas de insumos
+      por conciliar, no hay deuda del cliente ni dinero a favor del cliente
+      por devolver, la custodia esta resuelta y, si el equipo ingreso
+      fisicamente, su devolucion ya se registro, y ningun Detalle esta
+      COMPLETO (el trabajo realizado sigue el cierre normal: control, cobro y
+      entrega). Si alguna condicion falla no se cancela nada. Si se cumplen,
+      en una sola operacion cancela los Detalles pendientes cancelables,
+      registra usuario, fecha/hora, motivo y trazabilidad, fija la Orden en
+      CANCELADA y la cierra (EVT-REP-999); despues no admite acciones
+      operativas, solo consulta. Lo COMPLETO, las Ejecuciones, los
+      movimientos y el historial nunca se alteran retroactivamente. Las
+      Ordenes que quedaron CANCELADA y abiertas por la regla anterior
+      completan el circuito anterior de custodia, devolucion y saldo
+      (PROC-REP-271/270/267/268) y despues quedan cerradas.
     status: approved
 
   - id: BR-REP-015
@@ -910,6 +931,11 @@ rules:
       Ordenes que ya poseen Detalles ni de trabajos completados (BR-REP-014).
       Es un desistimiento solicitado por el cliente: lo registra Recepcion y el
       permiso de la cancelacion es configurable (BR-REP-014, BR-REP-039).
+      Revision DC31 (09/11/2026): el desistimiento sin Detalles
+      (PROC-REP-056) ya no cancela la Orden: queda abierta sin trabajos
+      vigentes (PROC-REP-307) y se cancela con la accion explicita, terminal,
+      de PROC-REP-306, con las precondiciones de BR-REP-014 (custodia
+      resuelta, equipo devuelto si ingreso y sin saldo).
     status: approved
 
   - id: BR-REP-028
@@ -1054,6 +1080,12 @@ rules:
       Detalles afectados, el motivo y la resolucion de cada uno, y no se cierra
       la Orden con Ejecuciones sin resolver. Los Detalles completos conservan su
       resultado.
+      Revision DC31 (09/11/2026): rechazar todos los trabajos, desistir de
+      todo o desistir sin Detalles cancela los Detalles que correspondan, pero
+      NO cancela la Orden: queda abierta sin trabajos vigentes (PROC-REP-307)
+      y la cancelacion definitiva es la accion explicita "Cancelar Orden"
+      (BR-REP-014, PROC-REP-308/306). Donde este texto dice que con todos los
+      Detalles CANCELADO la Orden queda CANCELADA, rige esta revision.
     status: approved
 
   - id: BR-REP-031
@@ -1194,6 +1226,17 @@ rules:
       cuya recepcion no esta confirmada o que se registro como no recibido; el
       rechazo no genera Ejecucion, reservas ni movimientos (PROC-REP-185).
       RT_INTERNO conserva su politica de recepcion.
+      Revision DC31 (09/11/2026): la custodia y la devolucion fisica se
+      resuelven ANTES de cancelar. Con la Orden abierta y sin trabajos
+      vigentes (PROC-REP-307, sin Ejecucion, toma ni reservas) Recepcion
+      resuelve una custodia sin confirmar (PROC-REP-271) y registra la
+      devolucion fisica del equipo recibido (PROC-REP-270), que no es una
+      entrega comercial: no cobra, no emite garantia ni comprobante de
+      entrega y la Orden no pasa a ENTREGADA. Cancelar la Orden exige la
+      custodia resuelta y, si el equipo ingreso, la devolucion registrada;
+      por eso una Orden cancelada ya no espera la devolucion: es terminal.
+      Las Ordenes que quedaron CANCELADA y abiertas por la regla anterior
+      conservan ese circuito hasta cerrarse.
     status: approved
 
   - id: BR-REP-034

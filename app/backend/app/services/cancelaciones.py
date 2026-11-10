@@ -11,8 +11,20 @@ por que. Lo ya realizado (COMPLETO) no se cancela, y con una Ejecucion
 activa no se cancela nada: primero se interrumpe o completa
 (PROC-REP-200), lo que concilia sus insumos (PROC-REP-210). Que sigue
 despues de cancelar Detalles lo decide el resolver (PROC-REP-211, lo
-compone la capa de aplicacion): CANCELADA si todos quedan CANCELADO, o el
-cierre normal si queda trabajo realizado.
+compone la capa de aplicacion): con trabajo realizado, el cierre normal;
+con todos CANCELADO, la Orden sigue ABIERTA sin trabajos vigentes
+(PROC-REP-307).
+
+DC31 (09/11/2026): cancelar la ORDEN es una accion explicita y TERMINAL
+(PROC-REP-308, o 306 sin Detalles). Solo se permite sin Ejecucion activa,
+sin toma, sin reservas por conciliar, sin deuda ni credito del cliente, con
+la custodia resuelta (si el equipo ingreso, ya devuelto) y sin Detalles
+COMPLETO; si algo falla no cambia nada. Cancela los Detalles pendientes,
+fija CANCELADA y cierra la Orden (EVT-REP-999) en el mismo acto. Con la
+Orden sin trabajos pendientes, la devolucion fisica se registra ANTES de
+cancelar (``registrar_devolucion_equipo``). Una Orden CANCELADA y abierta
+solo puede venir del circuito anterior a DC31: conserva ese circuito
+(devolucion, custodia y dinero) hasta cerrarse.
 
 Una Orden CANCELADA no es una Orden ENTREGADA. Si el equipo esta en
 custodia, su devolucion fisica se registra con
@@ -50,14 +62,19 @@ from app.domain.models import (
 )
 
 from .autorizacion import validar_alguno_de
+from .custodia import (
+    EstadoCustodia,
+    custodia_por_definir,
+    estado_custodia,
+)
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .inventario import reservas_activas
 from .ordenes import (
     ROLES_ENTREGA,
     equipo_bajo_custodia,
-    marcar_orden_cancelada,
     verificar_fin_financiero,
 )
+from .pagos import es_cobrable
 from .revisiones import finalizada_sin_reparacion, lista_para_cierre
 from .tomas import hay_ejecucion_activa, toma_activa
 from .workflow import registrar_paso
@@ -228,7 +245,115 @@ def cancelar_detalle(
     return nueva_orden
 
 
-def cancelar_orden(
+def sin_trabajos_vigentes(orden: OrdenReparacion) -> bool:
+    """DC31: la Orden sigue abierta pero no le queda trabajo (PROC-REP-307).
+
+    Todos sus Detalles quedaron CANCELADO, o no tiene Detalles y el equipo
+    ya se devolvio. No es un estado de workflow: se deriva. No habilita
+    trabajo tecnico; solo resolver custodia, devolucion y dinero, y
+    cancelar la Orden.
+    """
+    if orden.esta_cerrada or orden.estado_workflow is EstadoWorkflow.CANCELADA:
+        return False
+    if orden.reparaciones_detail:
+        return all(
+            detalle.estado is EstadoReparacionDetail.CANCELADO
+            for detalle in orden.reparaciones_detail
+        )
+    return orden.devolucion is not None
+
+
+def admite_devolucion_sin_reparar(orden: OrdenReparacion) -> bool:
+    """DC31: la devolucion fisica se puede registrar con la Orden activa.
+
+    Sin trabajos pendientes de ejecucion (todos los Detalles CANCELADO, o
+    ninguno), con el equipo en el local, sin Ejecucion, toma ni reservas, y
+    sin una devolucion previa. Corresponde finalizar sin reparar: no hay
+    nada COMPLETO que entregar.
+    """
+    return (
+        not orden.esta_cerrada
+        and orden.estado_workflow is not EstadoWorkflow.CANCELADA
+        and all(
+            detalle.estado is EstadoReparacionDetail.CANCELADO
+            for detalle in orden.reparaciones_detail
+        )
+        and orden.devolucion is None
+        and equipo_bajo_custodia(orden)
+        and not hay_ejecucion_activa(orden)
+        and toma_activa(orden) is None
+        and not reservas_activas(orden.movimientos_insumo)
+    )
+
+
+def _pendientes(orden: OrdenReparacion) -> list[str]:
+    return [
+        detalle.id
+        for detalle in orden.reparaciones_detail
+        if detalle.estado is EstadoReparacionDetail.DEFINIDO
+    ]
+
+
+def impedimentos_cancelacion(orden: OrdenReparacion) -> list[str]:
+    """DC31: por que la Orden todavia no se puede cancelar (vacio: se puede).
+
+    Evalua todas las condiciones a la vez, para decirlas juntas. El saldo
+    se mide como quedaria la Orden con sus trabajos pendientes cancelados.
+    """
+    motivos: list[str] = []
+    if hay_ejecucion_activa(orden):
+        motivos.append(
+            "hay una Ejecucion activa: primero hay que interrumpirla o "
+            "completarla"
+        )
+    toma = toma_activa(orden)
+    if toma is not None:
+        motivos.append(
+            f"la Orden esta tomada por {toma.usuario_id}: primero tiene que "
+            "liberarse"
+        )
+    if reservas_activas(orden.movimientos_insumo):
+        motivos.append("hay reservas de insumos sin conciliar")
+    if any(
+        detalle.estado is EstadoReparacionDetail.COMPLETO
+        for detalle in orden.reparaciones_detail
+    ):
+        motivos.append(
+            "hay trabajos COMPLETOS: siguen el cierre normal (control, cobro "
+            "y entrega)"
+        )
+    pendientes = _pendientes(orden)
+    if custodia_por_definir(orden):
+        motivos.append(
+            "falta definir la custodia del equipo: confirmar la recepcion o "
+            "registrar que nunca ingreso"
+        )
+    elif estado_custodia(orden) is EstadoCustodia.EN_CUSTODIA:
+        motivos.append(
+            "el equipo esta en el local: "
+            + (
+                "cancela los trabajos pendientes, registra la devolucion "
+                "del equipo y despues cancela la Orden"
+                if pendientes
+                else "registra su devolucion antes de cancelar"
+            )
+        )
+    simulada = orden.model_copy(deep=True)
+    for detalle in simulada.reparaciones_detail:
+        if detalle.id in pendientes:
+            detalle.estado = EstadoReparacionDetail.CANCELADO
+    if es_cobrable(simulada) and simulada.saldo != 0:
+        if simulada.saldo > 0:
+            motivos.append(f"el cliente adeuda {simulada.saldo}")
+        else:
+            motivos.append(
+                f"hay {simulada.credito_a_favor} a favor del cliente: "
+                "registra la devolucion del dinero antes de cancelar"
+            )
+    return motivos
+
+
+def cancelar_trabajos_pendientes(
     orden: OrdenReparacion,
     *,
     usuario: Usuario,
@@ -237,56 +362,25 @@ def cancelar_orden(
     origen: OrigenCancelacion = OrigenCancelacion.INTERNA,
     origenes: Mapping[str, OrigenCancelacion] | None = None,
 ) -> OrdenReparacion:
-    """PROC-REP-305 (con Detalles) o PROC-REP-306 (sin Detalles).
+    """PROC-REP-305: cancela los Detalles PENDIENTE; NO cancela la Orden.
 
-    Nunca con una Ejecucion activa: no se cancela nada y las reservas
-    quedan como estaban hasta conciliarse.
-
-    Con Detalles cancela todos los PENDIENTE y deja COMPLETO lo realizado;
-    NO fija CANCELADA: el caller invoca el resolver (PROC-REP-211), que
-    decide entre CANCELADA y el cierre normal. Sin Detalles es una
-    transicion EXPLICITA a CANCELADA (V1.4 PROC-REP-306: no se infiere con
-    el resolver sobre una coleccion vacia), con la custodia resuelta por
-    ``marcar_orden_cancelada``. ``origen`` queda en cada Detalle cancelado,
-    salvo los que ``origenes`` indique por Detalle (el desistimiento total
-    del cliente mezcla rechazos de pendientes y desistimientos).
+    Es la cascada de "Rechaza todos los trabajos" y del desistimiento total
+    (DC31): lo COMPLETO y lo ya CANCELADO quedan como estan, nunca con una
+    Ejecucion activa ni con reservas por conciliar. El caller invoca el
+    resolver (PROC-REP-211): con trabajo realizado sigue el cierre normal y
+    con todo CANCELADO la Orden queda abierta sin trabajos vigentes
+    (PROC-REP-307). Cancelar la Orden es ``cancelar_orden``.
     """
     validar_alguno_de(usuario, ROLES_CANCELACION)
-    motivo = _motivo_obligatorio(motivo, "Cancelar la Orden")
+    motivo = _motivo_obligatorio(motivo, "Cancelar los trabajos pendientes")
     exigir_orden_cancelable(orden)
-
-    activa = next(
-        (
-            ejecucion
-            for ejecucion in orden.ejecuciones
-            if ejecucion.estado is EstadoEjecucion.EN_PROGRESO
-        ),
-        None,
-    )
-    if activa is not None:
+    if hay_ejecucion_activa(orden):
         raise PrecondicionInvalidaError(
-            f"La Orden tiene una Ejecucion activa ({activa.id}, Detalle "
-            f"{activa.reparacion_detail_id}): primero hay que interrumpirla "
-            "o completarla (PROC-REP-200) para conciliar sus insumos. No se "
-            "cancelo nada."
+            "La Orden tiene una Ejecucion activa: primero hay que "
+            "interrumpirla o completarla (PROC-REP-200) para conciliar sus "
+            "insumos. No se cancelo nada."
         )
-
-    if not orden.reparaciones_detail:
-        nueva_orden = registrar_paso(
-            orden,
-            process_id="PROC-REP-306",
-            accion="CANCELAR_ORDEN_SIN_DETALLES",
-            fecha=fecha,
-            usuario_id=usuario.id,
-            observacion=f"Motivo: {motivo}",
-        )
-        return marcar_orden_cancelada(nueva_orden, fecha=fecha)
-
-    pendientes = [
-        detalle.id
-        for detalle in orden.reparaciones_detail
-        if detalle.estado is EstadoReparacionDetail.DEFINIDO
-    ]
+    pendientes = _pendientes(orden)
     if not pendientes:
         raise PrecondicionInvalidaError(
             "No hay trabajos pendientes que cancelar: los Detalles ya "
@@ -294,11 +388,10 @@ def cancelar_orden(
         )
     for detalle_id in pendientes:
         _sin_reservas_activas(orden, detalle_id)
-
     nueva_orden = registrar_paso(
         orden,
         process_id="PROC-REP-305",
-        accion="CANCELAR_ORDEN",
+        accion="CANCELAR_TRABAJOS_PENDIENTES",
         fecha=fecha,
         usuario_id=usuario.id,
         observacion=(
@@ -314,7 +407,81 @@ def cancelar_orden(
             fecha=fecha,
             origen=(origenes or {}).get(detalle_id, origen),
         )
+    nueva_orden.updated_at = fecha
     return nueva_orden
+
+
+def cancelar_orden(
+    orden: OrdenReparacion,
+    *,
+    usuario: Usuario,
+    motivo: str,
+    fecha: datetime,
+    origen: OrigenCancelacion = OrigenCancelacion.INTERNA,
+    origenes: Mapping[str, OrigenCancelacion] | None = None,
+) -> OrdenReparacion:
+    """Cancelar la Orden (DC31): explicita, terminal y atomica.
+
+    PROC-REP-308 con Detalles, PROC-REP-306 sin Detalles. Exige que
+    ``impedimentos_cancelacion`` este vacio; si no, rechaza con todos los
+    motivos y no cambia nada. Cancela los Detalles pendientes (DEFINIDO ->
+    CANCELADO, conservando lo ya CANCELADO y todo el historial), registra
+    usuario, fecha y motivo, fija CANCELADA y cierra la Orden en el mismo
+    acto (PROC-REP-268 -> EVT-REP-999). ``origen`` queda en cada Detalle
+    cancelado, salvo los que ``origenes`` indique por Detalle.
+    """
+    validar_alguno_de(usuario, ROLES_CANCELACION)
+    motivo = _motivo_obligatorio(motivo, "Cancelar la Orden")
+    exigir_orden_cancelable(orden)
+    motivos = impedimentos_cancelacion(orden)
+    if motivos:
+        raise PrecondicionInvalidaError(
+            f"No se puede cancelar la Orden {orden.id}: "
+            + "; ".join(motivos)
+            + ". No se cancelo nada."
+        )
+    pendientes = _pendientes(orden)
+    for detalle_id in pendientes:
+        _sin_reservas_activas(orden, detalle_id)
+    if orden.reparaciones_detail:
+        observacion = f"Motivo: {motivo}"
+        if pendientes:
+            observacion += f". Detalles cancelados: {', '.join(pendientes)}"
+        nueva_orden = registrar_paso(
+            orden,
+            process_id="PROC-REP-308",
+            accion="CANCELAR_ORDEN",
+            fecha=fecha,
+            usuario_id=usuario.id,
+            observacion=observacion,
+        )
+    else:
+        nueva_orden = registrar_paso(
+            orden,
+            process_id="PROC-REP-306",
+            accion="CANCELAR_ORDEN_SIN_DETALLES",
+            fecha=fecha,
+            usuario_id=usuario.id,
+            observacion=f"Motivo: {motivo}",
+        )
+    for detalle_id in pendientes:
+        _cancelar(
+            nueva_orden,
+            detalle_id,
+            usuario=usuario,
+            motivo=motivo,
+            fecha=fecha,
+            origen=(origenes or {}).get(detalle_id, origen),
+        )
+    nueva_orden.estado_workflow = EstadoWorkflow.CANCELADA
+    nueva_orden.updated_at = fecha
+    cerrada = verificar_fin_financiero(nueva_orden, fecha=fecha)
+    if not cerrada.esta_cerrada:  # defensa: las precondiciones lo aseguran
+        raise PrecondicionInvalidaError(
+            f"La Orden {orden.id} no pudo cerrarse al cancelarla. No se "
+            "cancelo nada."
+        )
+    return cerrada
 
 
 def registrar_devolucion_equipo(
@@ -326,7 +493,12 @@ def registrar_devolucion_equipo(
     observaciones: str | None = None,
     identificacion_receptor: str | None = None,
 ) -> OrdenReparacion:
-    """PROC-REP-270 (V1.4): devolucion fisica del equipo, Orden CANCELADA.
+    """PROC-REP-270: devolucion fisica del equipo sin reparar.
+
+    DC31: se registra con la Orden ACTIVA y sin trabajos pendientes
+    (``admite_devolucion_sin_reparar``), antes de cancelarla; la Orden no se
+    cierra ni cambia de estado. En una Orden CANCELADA y abierta (circuito
+    anterior a DC31) sigue como antes: despues verifica el saldo y cierra.
 
     Mismos actores que la entrega (``ROLES_ENTREGA``). No es una entrega
     comercial: no pasa por notificacion, cobro ni comprobante final, no
@@ -340,10 +512,19 @@ def registrar_devolucion_equipo(
     """
     validar_alguno_de(usuario, ROLES_ENTREGA)
 
-    if orden.estado_workflow is not EstadoWorkflow.CANCELADA:
+    heredada = orden.estado_workflow is EstadoWorkflow.CANCELADA
+    if orden.esta_cerrada:
         raise PrecondicionInvalidaError(
-            "La devolucion sin reparar es de una Orden CANCELADA; esta "
-            f"Orden esta {orden.estado_workflow.value}."
+            f"La Orden {orden.id} esta cerrada: no admite cambios."
+        )
+    if not heredada and any(
+        detalle.estado is not EstadoReparacionDetail.CANCELADO
+        for detalle in orden.reparaciones_detail
+    ):
+        raise PrecondicionInvalidaError(
+            "La devolucion sin reparar se registra cuando la Orden no tiene "
+            "trabajos pendientes ni completos: primero cancela los trabajos "
+            "pendientes."
         )
     if not equipo_bajo_custodia(orden):
         raise PrecondicionInvalidaError(
@@ -392,6 +573,10 @@ def registrar_devolucion_equipo(
         fecha=fecha,
         observaciones=(observaciones or "").strip() or None,
     )
-    # V1.4 PROC-REP-270 -> 268: con un anticipo sin devolver, la Orden sigue
-    # abierta hasta la devolucion de dinero.
+    if not heredada:
+        # DC31: la Orden sigue abierta sin trabajos vigentes (270 -> 307);
+        # la cancelacion explicita la cierra.
+        return nueva_orden
+    # Circuito anterior (PROC-REP-270 -> 268): con un anticipo sin devolver,
+    # la Orden sigue abierta hasta la devolucion de dinero.
     return verificar_fin_financiero(nueva_orden, fecha=fecha)

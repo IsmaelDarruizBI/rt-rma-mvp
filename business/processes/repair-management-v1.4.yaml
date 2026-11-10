@@ -1778,6 +1778,13 @@ nodes:
       interrumpido" -> PROC-REP-300 y "Desistimiento total solicitado, sin
       Ejecucion activa" -> PROC-REP-305. Los Detalles COMPLETO conservan su
       resultado y nunca se cancelan.
+      Revision DC31 (09/11/2026, reemplaza la salida (d) y las salidas
+      "Todos cancelados" de V1.4): cancelar Detalles nunca cancela la Orden.
+      Si tras la evaluacion TODOS los Detalles quedan CANCELADO, la situacion
+      derivada es SIN_TRABAJOS_VIGENTES y la Orden sigue ABIERTA en
+      PROC-REP-307, donde Recepcion resuelve la custodia, la devolucion fisica
+      y el dinero y, cuando corresponde, cancela la Orden de forma explicita
+      (PROC-REP-306/308). La toma activa se cierra igual que en (c), (e) y (f).
     rules:
       - BR-REP-012
       - BR-REP-030
@@ -2104,6 +2111,11 @@ nodes:
       Administracion; Recepcion es el actor declarado, y los responsables
       predeterminados de cada evento de custodia siguen pendientes de decision
       (BR-REP-039).
+      Revision DC31 (09/11/2026): se alcanza desde la Orden abierta sin trabajos
+      vigentes (PROC-REP-307) y, resuelta la custodia, vuelve a ella; la
+      devolucion y la cancelacion explicita siguen desde alli. Las Ordenes que
+      quedaron CANCELADA y abiertas por la regla anterior resuelven aqui su
+      custodia y despues registran la devolucion o cierran (BR-REP-014/033).
     inputs:
       - Orden CANCELADA con recepcion fisica sin confirmar
     outputs:
@@ -2323,8 +2335,16 @@ nodes:
 
   - id: PROC-REP-305
     type: activity
-    name: Cancelar Orden / trabajos pendientes
+    name: Cancelar trabajos pendientes
     description: >
+      Revision DC31 (09/11/2026): este nodo cancela TRABAJOS, no la Orden. Es
+      la cascada de "Rechaza todos los trabajos" (PROC-REP-047) y del
+      desistimiento total (PROC-REP-211); despues el resolver (PROC-REP-211)
+      deja la Orden abierta: con Detalles COMPLETO sigue el cierre normal, y
+      con todos CANCELADO pasa a SIN_TRABAJOS_VIGENTES (PROC-REP-307). La
+      cancelacion de la Orden es una accion explicita y terminal
+      (PROC-REP-308). Lo que sigue describe la cascada, vigente salvo en lo
+      que dice del desenlace CANCELADA.
       Cancela los Detalles NO TERMINALES de la Orden (DEFINIDO ->
       CANCELADO); los Detalles ya COMPLETO permanecen COMPLETO, nunca se
       reescribe trabajo efectivamente realizado. No puede ejecutarse
@@ -2364,8 +2384,16 @@ nodes:
 
   - id: PROC-REP-306
     type: activity
-    name: Cancelar Orden por desistimiento del cliente (sin Detalles)
+    name: Cancelar Orden sin Detalles
     description: >
+      Revision DC31 (09/11/2026): es la cancelacion EXPLICITA y TERMINAL de una
+      Orden con cantidad_detalles = 0, desde PROC-REP-307, con las mismas
+      precondiciones que PROC-REP-308 (custodia resuelta, equipo devuelto si
+      ingreso, sin saldo de ningun lado). Deja la Orden CANCELADA y cerrada
+      en el mismo acto (PROC-REP-268 -> EVT-REP-999). El desistimiento sin
+      Detalles (PROC-REP-056) ya no cancela: lleva a PROC-REP-307. Lo que
+      sigue es el texto V1.4, vigente salvo el desenlace y el siguiente paso
+      segun la custodia, que ahora se resuelven antes de cancelar.
       Nodo nuevo en V1.4 de FEAT-REP-009. Cancela anticipadamente una Orden
       sin Detalles (REQUERIMIENTO o EN_REVISION, cantidad_detalles = 0)
       cuando el cliente desiste (PROC-REP-056, "Desiste sin Detalles": no continua
@@ -2406,6 +2434,61 @@ nodes:
       - BR-REP-013
       - BR-REP-027
       - BR-REP-033
+
+  - id: PROC-REP-307
+    type: decision
+    name: Orden sin trabajos vigentes
+    actor: ACT-RECEP
+    description: >
+      Nodo nuevo (DC31, 09/11/2026). La Orden sigue ABIERTA sin trabajos
+      vigentes: todos sus Detalles quedaron CANCELADO (PROC-REP-211, por
+      cancelaciones individuales, "Rechaza todos los trabajos" o el
+      desistimiento total) o el cliente desistio sin Detalles (PROC-REP-056).
+      Situacion derivada SIN_TRABAJOS_VIGENTES: no es un estado nuevo ni
+      habilita trabajo tecnico (no hay toma, Ejecucion ni control final).
+      Recepcion resuelve lo que impide cerrar: la custodia sin confirmar
+      (PROC-REP-271), la devolucion fisica de un equipo recibido, sin cobro,
+      garantia ni comprobante comercial (PROC-REP-270), y el dinero a favor del
+      cliente (PROC-REP-267). Cuando no queda nada pendiente, la Orden se
+      cancela de forma explicita (PROC-REP-308, o PROC-REP-306 sin Detalles).
+      Nada se cancela ni se cierra automaticamente.
+    rules:
+      - BR-REP-014
+      - BR-REP-030
+      - BR-REP-033
+      - BR-REP-038
+
+  - id: PROC-REP-308
+    type: activity
+    name: Cancelar Orden
+    description: >
+      Nodo nuevo (DC31, 09/11/2026). Cancelacion EXPLICITA y TERMINAL de la
+      Orden. Precondiciones, todas a la vez: sin Ejecucion activa, sin toma
+      tecnica abierta, sin reservas de insumos por conciliar, sin deuda del
+      cliente ni dinero a favor del cliente por devolver, custodia resuelta y,
+      si el equipo ingreso fisicamente, su devolucion ya registrada
+      (PROC-REP-270); y ningun Detalle COMPLETO (el trabajo realizado sigue el
+      cierre normal, BR-REP-014). Si alguna falla no se cancela nada. Si se
+      cumplen, en una sola operacion cancela los Detalles pendientes
+      cancelables (DEFINIDO -> CANCELADO), registra usuario, fecha/hora y
+      motivo (obligatorio), fija la Orden en CANCELADA y la cierra
+      (PROC-REP-268 -> EVT-REP-999). Despues no admite acciones operativas:
+      solo consulta de informacion, documentos e historial. El permiso es el de
+      la cancelacion administrativa (BR-REP-039).
+    inputs:
+      - Orden abierta sin Ejecucion activa, toma, reservas ni saldo pendiente
+      - Custodia resuelta y, si el equipo ingreso, devolucion registrada
+      - Motivo (obligatorio)
+    outputs:
+      - Detalles pendientes CANCELADO
+      - Orden CANCELADA y cerrada
+      - Usuario responsable, fecha/hora y motivo
+    rules:
+      - BR-REP-014
+      - BR-REP-030
+      - BR-REP-033
+      - BR-REP-038
+      - BR-REP-039
 
   - id: EVT-REP-003
     type: event
@@ -2522,24 +2605,44 @@ edges:
     to: PROC-REP-045
 
   - from: PROC-REP-306
-    to: PROC-REP-270
-    condition: Equipo bajo custodia
-
-  - from: PROC-REP-306
     to: PROC-REP-268
-    condition: Sin equipo bajo custodia
+    condition: Orden cancelada y cerrada
 
-  - from: PROC-REP-306
+  - from: PROC-REP-308
+    to: PROC-REP-268
+    condition: Orden cancelada y cerrada
+
+  - from: PROC-REP-307
     to: PROC-REP-271
     condition: Custodia sin confirmar
 
-  - from: PROC-REP-271
+  - from: PROC-REP-307
     to: PROC-REP-270
-    condition: Equipo bajo custodia
+    condition: Equipo bajo custodia, devolucion sin reparar
+
+  - from: PROC-REP-307
+    to: PROC-REP-267
+    condition: Saldo a favor del cliente
+
+  - from: PROC-REP-307
+    to: PROC-REP-308
+    condition: Cancelar Orden, con Detalles cancelados
+
+  - from: PROC-REP-307
+    to: PROC-REP-306
+    condition: Cancelar Orden, sin Detalles
 
   - from: PROC-REP-271
-    to: PROC-REP-268
-    condition: Sin equipo bajo custodia
+    to: PROC-REP-307
+    condition: Custodia resuelta, Orden sin trabajos vigentes
+
+  - from: PROC-REP-270
+    to: PROC-REP-307
+    condition: Devolucion sin reparar, Orden sin trabajos vigentes
+
+  - from: PROC-REP-267
+    to: PROC-REP-307
+    condition: Devolucion registrada, Orden sin trabajos vigentes
 
   - from: PROC-REP-045
     to: PROC-REP-070
@@ -2570,7 +2673,7 @@ edges:
     condition: Acepta la revision tecnica
 
   - from: PROC-REP-056
-    to: PROC-REP-306
+    to: PROC-REP-307
     condition: Desiste sin Detalles
 
   - from: PROC-REP-050
@@ -2841,16 +2944,8 @@ edges:
     condition: Todos terminales, existe completo
 
   - from: PROC-REP-211
-    to: PROC-REP-270
-    condition: Todos cancelados, equipo bajo custodia
-
-  - from: PROC-REP-211
-    to: PROC-REP-268
-    condition: Todos cancelados, sin equipo bajo custodia
-
-  - from: PROC-REP-211
-    to: PROC-REP-271
-    condition: Todos cancelados, custodia sin confirmar
+    to: PROC-REP-307
+    condition: Todos cancelados, sin trabajos vigentes
 
   - from: PROC-REP-211
     to: PROC-REP-120
@@ -2980,7 +3075,7 @@ edges:
     condition: Descarte durante la evaluacion tecnica
 
   - from: PROC-REP-170
-    to: PROC-REP-305
+    to: PROC-REP-308
     condition: Cancelar Orden
 
   - from: PROC-REP-305

@@ -29,6 +29,9 @@ export const CODIGOS_ESPECIALES = new Set([
   "DESISTIR_DETALLE",
   "DESISTIR_TODO",
   "REGISTRAR_EQUIPO_NO_RECIBIDO",
+  // DC31: devolver sin reparar es la tarea de una Orden sin trabajos
+  // vigentes; en cualquier otro caso, una situacion especial.
+  "REGISTRAR_DEVOLUCION",
   "ANULAR_PAGO",
   "INICIAR_GARANTIA_RMA",
   "ESPERAR_RECURSOS",

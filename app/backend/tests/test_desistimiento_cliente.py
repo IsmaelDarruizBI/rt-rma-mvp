@@ -40,6 +40,7 @@ from tests.fixtures.api_salidas import (
     TECNICO,
     aprobar,
     archivo,
+    cancelar_orden,
     cliente_http,
     codigos,
     conflicto,
@@ -125,11 +126,14 @@ def test_1_rechazar_todos_los_pendientes_sigue_siendo_un_rechazo(cliente):
         )
     )
 
-    assert orden["estado_workflow"] == "CANCELADA"
+    # DC31: rechazar todo cancela los trabajos, no la Orden.
+    assert orden["estado_workflow"] != "CANCELADA"
+    assert orden["cerrada"] is False
+    assert orden["situacion"]["codigo"] == "SIN_TRABAJOS_VIGENTES"
     assert {
         d["cancelacion"]["origen"] for d in orden["reparaciones_detail"]
     } == {"RECHAZO_CLIENTE"}
-    assert "PROC-REP-305" in ids(orden)
+    assert ids(orden)[-3:] == ["PROC-REP-305", "PROC-REP-211", "PROC-REP-307"]
 
 
 # --- 2/4/5. Desistir de UN Detalle autorizado --------------------------------
@@ -228,24 +232,25 @@ def test_3_desistir_de_todo_mezcla_autorizados_y_pendientes(cliente):
 
     orden = ok(desistir(cliente, orden_id))
 
-    assert ids(orden)[-6:] == [
+    assert ids(orden)[-7:] == [
         "PROC-REP-046",
         "PROC-REP-046",
         "PROC-REP-046",
         "PROC-REP-047",
         "PROC-REP-305",
         "PROC-REP-211",
+        "PROC-REP-307",
     ]
     acciones_046 = [
         (p["reparacion_detail_id"], p["accion"])
-        for p in orden["historial"][-6:-3]
+        for p in orden["historial"][-7:-4]
     ]
     assert acciones_046 == [
         ("DET-002", "REGISTRAR_DECISION_CLIENTE"),
         ("DET-001", "REGISTRAR_DESISTIMIENTO_CLIENTE"),
         ("DET-003", "REGISTRAR_DESISTIMIENTO_CLIENTE"),
     ]
-    assert orden["historial"][-3]["observacion"] == (
+    assert orden["historial"][-4]["observacion"] == (
         "RECHAZA_TODOS_LOS_TRABAJOS"
     )
     assert {
@@ -267,20 +272,27 @@ def test_3_desistir_de_todo_mezcla_autorizados_y_pendientes(cliente):
         ] == ["AUTORIZADO"]
 
 
-def test_10_11_todo_cancelado_queda_cancelada_y_exige_la_devolucion(cliente):
+def test_10_11_todo_cancelado_sin_trabajos_vigentes_y_cancelacion_explicita(
+    cliente,
+):
+    """DC31: desistir de todo deja la Orden abierta; se devuelve el equipo y
+    despues se cancela de forma explicita."""
     orden_id = _mixta(cliente)
 
     orden = ok(desistir(cliente, orden_id))
 
-    assert orden["historial"][-1]["observacion"] == "TODO_CANCELADO"
-    assert orden["estado_workflow"] == "CANCELADA"
-    assert orden["devolucion_pendiente"] is True
+    assert orden["historial"][-2]["observacion"] == "TODO_CANCELADO"
+    assert orden["historial"][-1]["referencia_id"] == "PROC-REP-307"
+    assert orden["estado_workflow"] != "CANCELADA"
+    assert orden["situacion"]["codigo"] == "SIN_TRABAJOS_VIGENTES"
     assert orden["cerrada"] is False
     assert Decimal(orden["resumen"]["total"]) == Decimal("0")
     assert codigos(orden) == ["REGISTRAR_DEVOLUCION"]
     assert orden["acciones_autorizacion"] == []
 
-    cerrada = ok(devolver(cliente, orden_id, recibido_por="Cliente"))
+    devuelta = ok(devolver(cliente, orden_id, recibido_por="Cliente"))
+    assert devuelta["cerrada"] is False
+    cerrada = ok(cancelar_orden(cliente, orden_id))
     assert cerrada["cerrada"] is True
     assert cerrada["estado_workflow"] == "CANCELADA"
 
@@ -553,7 +565,7 @@ def test_17_json_anterior_y_round_trip_del_desistimiento(cliente, tmp_path):
         for d in orden["reparaciones_detail"]
         if d["id"] != "DET-003"
     } == {"DET-001": "RECHAZO_CLIENTE", "DET-002": "RECHAZO_CLIENTE"}
-    assert orden["estado_workflow"] == "CANCELADA"
+    assert orden["situacion"]["codigo"] == "SIN_TRABAJOS_VIGENTES"
 
 
 # --- Circuito por HTTP -------------------------------------------------------
@@ -586,14 +598,15 @@ def test_circuito_desistimiento_posterior_a_la_autorizacion(cliente, tmp_path):
 
     orden = ok(desistir(cliente, orden_id, motivo="Se lleva el equipo."))
 
-    assert orden["estado_workflow"] == "CANCELADA"
+    assert orden["situacion"]["codigo"] == "SIN_TRABAJOS_VIGENTES"
     assert [e["estado"] for e in orden["ejecuciones"]] == ["INTERRUMPIDO"]
     assert (
         len(repo_ordenes(tmp_path).obtener(orden_id).movimientos_insumo)
         == movimientos
     )
     assert orden["toma_activa"] is None
-    cerrada = ok(devolver(cliente, orden_id))
+    ok(devolver(cliente, orden_id))
+    cerrada = ok(cancelar_orden(cliente, orden_id))
     assert cerrada["cerrada"] is True
     # Nada se puede tomar ni iniciar despues.
     conflicto(

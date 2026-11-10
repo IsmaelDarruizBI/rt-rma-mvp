@@ -50,10 +50,12 @@ from app.services import (
     situacion_de_la_orden,
     toma_activa,
 )
+from app.services.cancelaciones import sin_trabajos_vigentes
 
 from .acciones import (
     AccionDisponible,
     acciones_de_autorizacion,
+    acciones_de_cancelacion,
     acciones_de_custodia,
     acciones_disponibles,
     acciones_financieras,
@@ -80,6 +82,10 @@ class CodigoSituacion:
     # Solo presentacion: el workflow sigue en REPARACION_LISTA.
     PENDIENTE_CHECKIN = "PENDIENTE_CHECKIN"
     LISTA_PARA_ENTREGAR = "LISTA_PARA_ENTREGAR"
+    # DC31: todos los trabajos cancelados; la Orden sigue abierta hasta
+    # que se cancele de forma explicita.
+    SIN_TRABAJOS_VIGENTES = "SIN_TRABAJOS_VIGENTES"
+    # Solo Ordenes CANCELADA y abiertas del circuito anterior a DC31.
     CANCELADA_PENDIENTE_DEVOLUCION = "CANCELADA_PENDIENTE_DEVOLUCION"
     CERRADA = "CERRADA"
     SIN_TAREAS = "SIN_TAREAS"
@@ -358,6 +364,8 @@ def _principal(datos: _Datos) -> _Principal:
         return _cerrada(datos)
     if orden.estado_workflow is EstadoWorkflow.CANCELADA:
         return _cancelada(datos)
+    if sin_trabajos_vigentes(orden):
+        return _sin_trabajos_vigentes(datos)
     if lista_para_cierre(orden):
         cierre = _cierre(datos)
         if cierre is not None:
@@ -417,6 +425,89 @@ def _cerrada(datos: _Datos) -> _Principal:
         titulo=titulo,
         descripcion=descripcion,
         desde=salida.fecha if salida else None,
+    )
+
+
+def _sin_trabajos_vigentes(datos: _Datos) -> _Principal:
+    """DC31: todos los trabajos cancelados y la Orden abierta.
+
+    No hay trabajo tecnico. Recepcion resuelve lo que impide cerrar
+    (custodia, devolucion del equipo, dinero) y, sin nada pendiente, cancela
+    la Orden: es la unica forma de cerrarla.
+    """
+    orden = datos.orden
+    custodia = datos.equipo(
+        "CONFIRMAR_RECEPCION", "REGISTRAR_EQUIPO_NO_RECIBIDO"
+    )
+    devolver = datos.flujo("REGISTRAR_DEVOLUCION")
+    dinero = datos.dinero("REGISTRAR_DEVOLUCION_DINERO")
+    tareas: list[TareaOperativa] = []
+    faltan: list[str] = []
+    if custodia:
+        tareas.append(
+            _tarea(
+                "Resolver la custodia del equipo",
+                "Confirmar que está en el local (y después devolverlo) o "
+                "registrar que nunca ingresó.",
+                custodia,
+            )
+        )
+        faltan.append("definir si el equipo está en el local")
+    if devolver:
+        tareas.append(
+            _tarea(
+                "Registrar la devolución del equipo",
+                "El equipo sigue en el local: se devuelve sin cobro, sin "
+                "garantía ni comprobante de entrega.",
+                devolver,
+            )
+        )
+        faltan.append("devolver el equipo")
+    if dinero:
+        credito = _importe(credito_pendiente(orden))
+        tareas.append(
+            _tarea(
+                "Devolver el dinero al cliente",
+                f"Hay {credito} a favor del cliente.",
+                dinero,
+            )
+        )
+        faltan.append(f"devolverle {credito} al cliente")
+    cancelar = [
+        accion
+        for accion in acciones_de_cancelacion(orden)
+        if accion.codigo == "CANCELAR_ORDEN" and accion.bloqueo is None
+    ]
+    if cancelar and not tareas:
+        tareas.append(
+            _tarea(
+                "Cancelar la Orden",
+                "No quedan trabajos ni nada pendiente: la cancelación la "
+                "cierra definitivamente.",
+                cancelar,
+            )
+        )
+    desde = _ultimo_paso(orden, "PROC-REP-307", "PROC-REP-270")
+    if faltan:
+        descripcion = (
+            "Todos los trabajos se cancelaron. Antes de cancelar la Orden "
+            f"falta {_unir(faltan, 'y')}."
+        )
+    elif cancelar:
+        descripcion = (
+            "Todos los trabajos se cancelaron y no queda nada pendiente: "
+            "la Orden ya se puede cancelar."
+        )
+    else:
+        descripcion = (
+            "Todos los trabajos se cancelaron. La Orden sigue abierta."
+        )
+    return _Principal(
+        codigo=CodigoSituacion.SIN_TRABAJOS_VIGENTES,
+        titulo="Sin trabajos vigentes",
+        descripcion=descripcion,
+        desde=desde,
+        tareas=tuple(tareas),
     )
 
 

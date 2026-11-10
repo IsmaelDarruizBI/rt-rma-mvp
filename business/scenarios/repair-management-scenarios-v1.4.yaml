@@ -1948,18 +1948,24 @@ scenarios:
       reparaciones, control tecnico, notificacion de reparacion lista ni
       validacion de saldo. No altera la cancelacion de Ordenes con Detalles
       (PROC-REP-300/305, BR-REP-014).
+      Revision DC31 (09/11/2026): cancelar Detalles no cancela la Orden;
+      con todos CANCELADO queda abierta en SIN_TRABAJOS_VIGENTES
+      (PROC-REP-307), donde se resuelven custodia, devolucion fisica y
+      dinero, y despues se cancela de forma explicita y terminal
+      (PROC-REP-308, o PROC-REP-306 sin Detalles).
 
     trigger:
       node: PROC-REP-056
       edge:
         from: PROC-REP-056
-        to: PROC-REP-306
+        to: PROC-REP-307
         condition: Desiste sin Detalles
       condition: Desiste sin Detalles
 
     affected_nodes:
       - PROC-REP-056
       - PROC-REP-306
+      - PROC-REP-307
 
     rules:
       - BR-REP-027
@@ -1994,13 +2000,18 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-056
-        to: PROC-REP-306
+        to: PROC-REP-307
         condition: Desiste sin Detalles
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-307
+        to: PROC-REP-306
+        condition: Cancelar Orden, sin Detalles
 
       - kind: PROCESS_EDGE
         from: PROC-REP-306
         to: PROC-REP-268
-        condition: Sin equipo bajo custodia
+        condition: Orden cancelada y cerrada
 
       - kind: PROCESS_EDGE
         from: PROC-REP-268
@@ -2156,6 +2167,11 @@ scenarios:
       comprobante de recepcion: el cliente desiste antes de recibirlo, por lo
       que el equipo no fue recibido y no hay devolucion fisica (PROC-REP-211,
       "Todos cancelados, sin equipo bajo custodia", BR-REP-033).
+      Revision DC31 (09/11/2026): cancelar Detalles no cancela la Orden;
+      con todos CANCELADO queda abierta en SIN_TRABAJOS_VIGENTES
+      (PROC-REP-307), donde se resuelven custodia, devolucion fisica y
+      dinero, y despues se cancela de forma explicita y terminal
+      (PROC-REP-308, o PROC-REP-306 sin Detalles).
 
     trigger:
       node: PROC-REP-047
@@ -2170,6 +2186,8 @@ scenarios:
       - PROC-REP-047
       - PROC-REP-305
       - PROC-REP-211
+      - PROC-REP-307
+      - PROC-REP-308
 
     rules:
       - BR-REP-028
@@ -2208,8 +2226,18 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-211
+        to: PROC-REP-307
+        condition: Todos cancelados, sin trabajos vigentes
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-307
+        to: PROC-REP-308
+        condition: Cancelar Orden, con Detalles cancelados
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-308
         to: PROC-REP-268
-        condition: Todos cancelados, sin equipo bajo custodia
+        condition: Orden cancelada y cerrada
 
       - kind: PROCESS_EDGE
         from: PROC-REP-268
@@ -2221,8 +2249,8 @@ scenarios:
         label: Estado de los Detalles
         value: CANCELADO
       - key: order_state_determined_by_resolver
-        label: Estado de la Orden determinado por el resolver
-        value: CANCELADA
+        label: Situacion que determina el resolver
+        value: SIN_TRABAJOS_VIGENTES
       - key: reception_receipt_generated
         label: Comprobante de recepcion generado
         value: false
@@ -2264,6 +2292,11 @@ scenarios:
       PROC-REP-270 ("Todos cancelados, equipo bajo custodia") con fecha/hora,
       usuario que entrega y persona que recibe, sin convertir CANCELADA en
       ENTREGADA ni pasar por control tecnico, cobro o entrega comercial.
+      Revision DC31 (09/11/2026): cancelar Detalles no cancela la Orden;
+      con todos CANCELADO queda abierta en SIN_TRABAJOS_VIGENTES
+      (PROC-REP-307), donde se resuelven custodia, devolucion fisica y
+      dinero, y despues se cancela de forma explicita y terminal
+      (PROC-REP-308, o PROC-REP-306 sin Detalles).
 
     trigger:
       node: PROC-REP-075
@@ -2279,6 +2312,8 @@ scenarios:
       - PROC-REP-305
       - PROC-REP-211
       - PROC-REP-270
+      - PROC-REP-307
+      - PROC-REP-308
 
     rules:
       - BR-REP-028
@@ -2320,12 +2355,28 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-211
+        to: PROC-REP-307
+        condition: Todos cancelados, sin trabajos vigentes
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-307
         to: PROC-REP-270
-        condition: Todos cancelados, equipo bajo custodia
+        condition: Equipo bajo custodia, devolucion sin reparar
 
       - kind: PROCESS_EDGE
         from: PROC-REP-270
+        to: PROC-REP-307
+        condition: Devolucion sin reparar, Orden sin trabajos vigentes
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-307
+        to: PROC-REP-308
+        condition: Cancelar Orden, con Detalles cancelados
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-308
         to: PROC-REP-268
+        condition: Orden cancelada y cerrada
 
       - kind: PROCESS_EDGE
         from: PROC-REP-268
@@ -3117,19 +3168,26 @@ scenarios:
       ENTREGADA. Si Recepcion hubiera determinado que el equipo nunca se
       recibio, o que ya estaba devuelto, PROC-REP-271 finaliza sin devolucion
       (arista "Sin equipo bajo custodia"), sin duplicarla.
+      Revision DC31 (09/11/2026): cancelar Detalles no cancela la Orden;
+      con todos CANCELADO queda abierta en SIN_TRABAJOS_VIGENTES
+      (PROC-REP-307), donde se resuelven custodia, devolucion fisica y
+      dinero, y despues se cancela de forma explicita y terminal
+      (PROC-REP-308, o PROC-REP-306 sin Detalles).
 
     trigger:
-      node: PROC-REP-211
+      node: PROC-REP-307
       edge:
-        from: PROC-REP-211
+        from: PROC-REP-307
         to: PROC-REP-271
-        condition: Todos cancelados, custodia sin confirmar
-      condition: Todos cancelados, custodia sin confirmar
+        condition: Custodia sin confirmar
+      condition: Custodia sin confirmar
 
     affected_nodes:
       - PROC-REP-211
       - PROC-REP-271
       - PROC-REP-270
+      - PROC-REP-307
+      - PROC-REP-308
 
     rules:
       - BR-REP-033
@@ -3150,17 +3208,38 @@ scenarios:
     steps:
       - kind: PROCESS_EDGE
         from: PROC-REP-211
+        to: PROC-REP-307
+        condition: Todos cancelados, sin trabajos vigentes
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-307
         to: PROC-REP-271
-        condition: Todos cancelados, custodia sin confirmar
+        condition: Custodia sin confirmar
 
       - kind: PROCESS_EDGE
         from: PROC-REP-271
+        to: PROC-REP-307
+        condition: Custodia resuelta, Orden sin trabajos vigentes
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-307
         to: PROC-REP-270
-        condition: Equipo bajo custodia
+        condition: Equipo bajo custodia, devolucion sin reparar
 
       - kind: PROCESS_EDGE
         from: PROC-REP-270
+        to: PROC-REP-307
+        condition: Devolucion sin reparar, Orden sin trabajos vigentes
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-307
+        to: PROC-REP-308
+        condition: Cancelar Orden, con Detalles cancelados
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-308
         to: PROC-REP-268
+        condition: Orden cancelada y cerrada
 
       - kind: PROCESS_EDGE
         from: PROC-REP-268
@@ -3455,6 +3534,11 @@ scenarios:
       antes del fin operativo, sin pasar a ENTREGADA. Con custodia sin confirmar
       se pasaria por PROC-REP-271 y con equipo sin custodia se finalizaria
       directamente.
+      Revision DC31 (09/11/2026): cancelar Detalles no cancela la Orden;
+      con todos CANCELADO queda abierta en SIN_TRABAJOS_VIGENTES
+      (PROC-REP-307), donde se resuelven custodia, devolucion fisica y
+      dinero, y despues se cancela de forma explicita y terminal
+      (PROC-REP-308, o PROC-REP-306 sin Detalles).
 
     trigger:
       node: PROC-REP-183
@@ -3470,6 +3554,8 @@ scenarios:
       - PROC-REP-184
       - PROC-REP-211
       - PROC-REP-270
+      - PROC-REP-307
+      - PROC-REP-308
 
     rules:
       - BR-REP-036
@@ -3509,12 +3595,28 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-211
+        to: PROC-REP-307
+        condition: Todos cancelados, sin trabajos vigentes
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-307
         to: PROC-REP-270
-        condition: Todos cancelados, equipo bajo custodia
+        condition: Equipo bajo custodia, devolucion sin reparar
 
       - kind: PROCESS_EDGE
         from: PROC-REP-270
+        to: PROC-REP-307
+        condition: Devolucion sin reparar, Orden sin trabajos vigentes
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-307
+        to: PROC-REP-308
+        condition: Cancelar Orden, con Detalles cancelados
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-308
         to: PROC-REP-268
+        condition: Orden cancelada y cerrada
 
       - kind: PROCESS_EDGE
         from: PROC-REP-268
@@ -5408,14 +5510,19 @@ scenarios:
       PROC-REP-267 vuelve a PROC-REP-268 ("Devolucion registrada, validar fin de
       Orden"), que ya no encuentra saldo a favor pendiente. La Orden permanece
       CANCELADA, nunca ENTREGADA, y el pago original queda intacto.
+      Revision DC31 (09/11/2026): cancelar Detalles no cancela la Orden;
+      con todos CANCELADO queda abierta en SIN_TRABAJOS_VIGENTES
+      (PROC-REP-307), donde se resuelven custodia, devolucion fisica y
+      dinero, y despues se cancela de forma explicita y terminal
+      (PROC-REP-308, o PROC-REP-306 sin Detalles).
 
     trigger:
-      node: PROC-REP-268
+      node: PROC-REP-307
       edge:
-        from: PROC-REP-268
+        from: PROC-REP-307
         to: PROC-REP-267
-        condition: Saldo a favor del cliente pendiente de devolver
-      condition: Saldo a favor del cliente pendiente de devolver
+        condition: Saldo a favor del cliente
+      condition: Saldo a favor del cliente
 
     affected_nodes:
       - PROC-REP-305
@@ -5423,6 +5530,8 @@ scenarios:
       - PROC-REP-270
       - PROC-REP-268
       - PROC-REP-267
+      - PROC-REP-307
+      - PROC-REP-308
 
     rules:
       - BR-REP-038
@@ -5479,17 +5588,23 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-211
+        to: PROC-REP-307
+        condition: Todos cancelados, sin trabajos vigentes
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-307
         to: PROC-REP-270
-        condition: Todos cancelados, equipo bajo custodia
+        condition: Equipo bajo custodia, devolucion sin reparar
 
       - kind: PROCESS_EDGE
         from: PROC-REP-270
-        to: PROC-REP-268
+        to: PROC-REP-307
+        condition: Devolucion sin reparar, Orden sin trabajos vigentes
 
       - kind: PROCESS_EDGE
-        from: PROC-REP-268
+        from: PROC-REP-307
         to: PROC-REP-267
-        condition: Saldo a favor del cliente pendiente de devolver
+        condition: Saldo a favor del cliente
 
       - kind: FUNCTIONAL_ACTION
         feature: FEAT-REP-007
@@ -5502,8 +5617,18 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-267
+        to: PROC-REP-307
+        condition: Devolucion registrada, Orden sin trabajos vigentes
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-307
+        to: PROC-REP-308
+        condition: Cancelar Orden, con Detalles cancelados
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-308
         to: PROC-REP-268
-        condition: Devolucion registrada, validar fin de Orden
+        condition: Orden cancelada y cerrada
 
       - kind: PROCESS_EDGE
         from: PROC-REP-268
@@ -5567,20 +5692,27 @@ scenarios:
       distinto del Pago) y vuelve a PROC-REP-268, que ahora permite el fin. No
       hay entrega comercial, comprobante final ni circuito de cobro: es una
       cancelacion, no una entrega.
+      Revision DC31 (09/11/2026): cancelar Detalles no cancela la Orden;
+      con todos CANCELADO queda abierta en SIN_TRABAJOS_VIGENTES
+      (PROC-REP-307), donde se resuelven custodia, devolucion fisica y
+      dinero, y despues se cancela de forma explicita y terminal
+      (PROC-REP-308, o PROC-REP-306 sin Detalles).
 
     trigger:
-      node: PROC-REP-211
+      node: PROC-REP-307
       edge:
-        from: PROC-REP-211
-        to: PROC-REP-268
-        condition: Todos cancelados, sin equipo bajo custodia
-      condition: Todos cancelados, sin equipo bajo custodia
+        from: PROC-REP-307
+        to: PROC-REP-267
+        condition: Saldo a favor del cliente
+      condition: Saldo a favor del cliente
 
     affected_nodes:
       - PROC-REP-305
       - PROC-REP-211
       - PROC-REP-268
       - PROC-REP-267
+      - PROC-REP-307
+      - PROC-REP-308
 
     rules:
       - BR-REP-038
@@ -5637,13 +5769,13 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-211
-        to: PROC-REP-268
-        condition: Todos cancelados, sin equipo bajo custodia
+        to: PROC-REP-307
+        condition: Todos cancelados, sin trabajos vigentes
 
       - kind: PROCESS_EDGE
-        from: PROC-REP-268
+        from: PROC-REP-307
         to: PROC-REP-267
-        condition: Saldo a favor del cliente pendiente de devolver
+        condition: Saldo a favor del cliente
 
       - kind: FUNCTIONAL_ACTION
         feature: FEAT-REP-007
@@ -5655,8 +5787,18 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-267
+        to: PROC-REP-307
+        condition: Devolucion registrada, Orden sin trabajos vigentes
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-307
+        to: PROC-REP-308
+        condition: Cancelar Orden, con Detalles cancelados
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-308
         to: PROC-REP-268
-        condition: Devolucion registrada, validar fin de Orden
+        condition: Orden cancelada y cerrada
 
       - kind: PROCESS_EDGE
         from: PROC-REP-268
@@ -6807,6 +6949,11 @@ scenarios:
       del equipo es obligatoria (PROC-REP-270) y el fin pasa por la verificacion
       de saldo a favor (PROC-REP-268), sin pagos en este caso. Si hubiera un
       Detalle COMPLETO no se cancelaria y la Orden seguiria al control tecnico.
+      Revision DC31 (09/11/2026): cancelar Detalles no cancela la Orden;
+      con todos CANCELADO queda abierta en SIN_TRABAJOS_VIGENTES
+      (PROC-REP-307), donde se resuelven custodia, devolucion fisica y
+      dinero, y despues se cancela de forma explicita y terminal
+      (PROC-REP-308, o PROC-REP-306 sin Detalles).
 
     trigger:
       node: PROC-REP-211
@@ -6823,6 +6970,8 @@ scenarios:
       - PROC-REP-305
       - PROC-REP-270
       - PROC-REP-268
+      - PROC-REP-307
+      - PROC-REP-308
 
     rules:
       - BR-REP-014
@@ -6875,12 +7024,28 @@ scenarios:
 
       - kind: PROCESS_EDGE
         from: PROC-REP-211
+        to: PROC-REP-307
+        condition: Todos cancelados, sin trabajos vigentes
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-307
         to: PROC-REP-270
-        condition: Todos cancelados, equipo bajo custodia
+        condition: Equipo bajo custodia, devolucion sin reparar
 
       - kind: PROCESS_EDGE
         from: PROC-REP-270
+        to: PROC-REP-307
+        condition: Devolucion sin reparar, Orden sin trabajos vigentes
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-307
+        to: PROC-REP-308
+        condition: Cancelar Orden, con Detalles cancelados
+
+      - kind: PROCESS_EDGE
+        from: PROC-REP-308
         to: PROC-REP-268
+        condition: Orden cancelada y cerrada
 
       - kind: PROCESS_EDGE
         from: PROC-REP-268

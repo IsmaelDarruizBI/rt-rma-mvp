@@ -4,11 +4,11 @@
 
 | Ítem | Valor |
 |---|---|
-| Fuente | `rt-rma-app`, etiqueta `v1.4-baseline` |
-| Commit de origen | `e99b28386695df537aabd02d7068c0102de09eae` |
+| Fuente | `rt-rma-app`, rama `dc31/cancelacion-explicita` (V1.4 con la revisión DC31, sobre la etiqueta `v1.4-baseline`) |
+| Commit de origen | `ab928b6e33203257c26427cbb9af7875bd38693b` |
 | Contenido funcional aprobado | `b6cc3a5` (DC01, 24/10/2026) |
 | Manifiesto | `business/FUNCTIONAL_SOURCE.json`: repositorio, commit, etiqueta y SHA-256 de cada archivo |
-| Sincronizado | 24/10/2026, rama `sync/functional-v1.4` |
+| Sincronizado | 10/11/2026 (DC31: cancelación de Detalles y de la Orden); antes, 24/10/2026, rama `sync/functional-v1.4` |
 
 ## Qué contiene `business/`
 

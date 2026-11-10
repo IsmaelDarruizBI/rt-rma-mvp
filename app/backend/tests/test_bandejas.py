@@ -27,7 +27,7 @@ from tests.fixtures.api_salidas import (
     aprobar,
     archivo,
     autorizar_todo,
-    cancelar_orden,
+    cancelar_detalle,
     cerrar_ejecucion,
     conflicto,
     crear,
@@ -40,6 +40,7 @@ from tests.fixtures.api_salidas import (
     tomada,
     tomar,
 )
+from tests.fixtures.cancelacion_heredada import cancelada_heredada
 from tests.fixtures.custodia import confirmar_recepcion, entregar
 from tests.test_api_hp_rep_002 import _crear_orden_rt
 from tests.test_inventario_operativo import _cliente
@@ -362,7 +363,7 @@ def test_la_cola_excluye_cerradas_canceladas_y_tomadas(tmp_path):
     with _cliente(tmp_path, stock_bateria="9") as cliente:
         disponible = _en_cola(cliente, 4)
         cancelada = _en_cola(cliente, 1)
-        ok(cancelar_orden(cliente, cancelada))
+        cancelada_heredada(cliente, tmp_path, cancelada)
         tomada_id = _en_cola(cliente, 1)
         tomar(cliente, tomada_id)
         entregada = _reparada(cliente)
@@ -467,9 +468,11 @@ def test_coordinacion_ve_faltantes_y_disponible_negativo(tmp_path):
 
 def test_administracion_cobros_credito_y_saldos(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
-        con_sena = crear(cliente)
-        _pagar(cliente, con_sena, "50000")  # sena antes de definir
-        ok(cancelar_orden(cliente, con_sena))
+        # DC31: todos los trabajos cancelados, la Orden sigue abierta con la
+        # sena a favor del cliente.
+        con_sena = definida(cliente)
+        _pagar(cliente, con_sena, "50000")
+        ok(cancelar_detalle(cliente, con_sena, "DET-001"))
         en_curso = definida(cliente)  # total definido, nada cobrado
         lista = _reparada(cliente)
         ok(aprobar(cliente, lista, "DET-001"))

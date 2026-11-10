@@ -378,6 +378,12 @@ def _resultado(orden: OrdenReparacion, tipo_entrega: TipoEntrega) -> str:
         resultado = f"Finalizada sin reparacion ({paso.observacion})"
     elif tipo_entrega is TipoEntrega.REPARACION_TERMINADA:
         resultado = "Reparacion terminada y aprobada en control"
+    elif orden.reparaciones_detail and all(
+        detalle.estado is EstadoReparacionDetail.CANCELADO
+        for detalle in orden.reparaciones_detail
+    ):
+        # DC31: la devolucion se registra antes de cancelar la Orden.
+        resultado = "Trabajos cancelados: el equipo se devuelve sin reparar"
     else:
         resultado = "Devolucion sin reparacion"
     if orden.orden_origen_id and not _es_cobrable(orden):

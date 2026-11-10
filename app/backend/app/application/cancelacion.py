@@ -1,8 +1,12 @@
 """Tramo de cancelacion: Detalles, Orden y devolucion del equipo.
 
-    cancelar_detalle      PROC-REP-300 -> 211 [-> CANCELADA | 120 | 125 ...]
-    cancelar_orden        PROC-REP-305 -> 211, o PROC-REP-306 sin Detalles
-    registrar_devolucion  PROC-REP-270 (Orden CANCELADA) -> EVT-REP-999
+    cancelar_detalle      PROC-REP-300 -> 211 [-> 307 sin trabajos vigentes
+                          | 120 | 125 ...]: nunca cancela la Orden (DC31)
+    cancelar_orden        PROC-REP-308 (o 306 sin Detalles) -> 268 ->
+                          EVT-REP-999: explicita, terminal y atomica (DC31)
+    registrar_devolucion  PROC-REP-270 sin reparar: con la Orden activa y sin
+                          trabajos pendientes (DC31), o el circuito anterior
+                          de una Orden CANCELADA abierta -> 268 -> fin
                           (+ comprobante de devolucion sin reparacion)
 
 Como el resto de los comandos, cargan la Orden por
@@ -57,21 +61,16 @@ def cancelar_orden(
     usuario_id: str,
     motivo: str,
 ) -> OrdenReparacion:
-    """Cancela los trabajos pendientes de la Orden (305 -> 211 | 306).
-
-    Sin Detalles, PROC-REP-306 ya deja la Orden CANCELADA: no hay nada que
-    reevaluar.
-    """
+    """Cancela la Orden (DC31): cancela lo pendiente, fija CANCELADA y la
+    cierra en el mismo acto. Si alguna precondicion falla, el service
+    rechaza sin cambiar nada y no se guarda nada."""
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
     with orden_para_modificar(contexto, orden_id) as orden:
-        con_detalles = bool(orden.reparaciones_detail)
         orden = cancelar_orden_servicio(
             orden, usuario=usuario, motivo=motivo, fecha=fecha
         )
-        if con_detalles:
-            orden, _ = evaluar_situacion_orden(orden, fecha=fecha)
         contexto.ordenes.guardar(orden)
     return orden
 
@@ -85,10 +84,12 @@ def registrar_devolucion(
     observaciones: str | None = None,
     identificacion_receptor: str | None = None,
 ) -> OrdenReparacion:
-    """Devolucion fisica del equipo de una Orden CANCELADA (270 -> fin).
+    """Devolucion fisica del equipo sin reparar (PROC-REP-270).
 
     Emite el comprobante de devolucion sin reparacion (no una entrega de
-    reparacion terminada, ni garantia). La Orden sigue CANCELADA.
+    reparacion terminada, ni garantia). Con la Orden activa sin trabajos
+    pendientes, la Orden sigue abierta hasta cancelarla (DC31); en una Orden
+    CANCELADA del circuito anterior, sigue CANCELADA y puede cerrarse.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()

@@ -49,6 +49,7 @@ from app.storage.postgres import ordenes_lectura  # noqa: E402
 from app.storage.postgres.ordenes_lectura import cargar_ordenes  # noqa: E402
 from tests.fixtures import api_salidas as f  # noqa: E402
 from tests.fixtures import custodia  # noqa: E402
+from tests.fixtures.cancelacion_heredada import cancelada_heredada
 from tests.postgres import test_ordenes_postgres as ordenes  # noqa: E402
 from tests.postgres.corpus_ordenes import DNI, _crear_con_dni  # noqa: E402
 from tests.postgres.test_ordenes_postgres import (  # noqa: E402
@@ -238,7 +239,8 @@ def mismo_estado(armar, tmp_path, corpus):
         f.por_revision(cliente, f.BATERIA)
         primera = _crear_con_dni(cliente)
         _crear_con_dni(cliente, primera["cliente"]["id"])
-        f.ok(f.cancelar_orden(cliente, f.definida(cliente)))
+        # Cancelada y abierta (circuito anterior a DC31).
+        cancelada_heredada(cliente, tmp_path, f.definida(cliente))
     json_repo = JsonOrdenReparacionRepository(tmp_path / "ordenes")
     todas = json_repo.listar()
     assert all(not o.movimientos_insumo for o in todas)

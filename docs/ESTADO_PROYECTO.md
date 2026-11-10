@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 09/11/2026, autenticación real implementada y publicada en la rama, **todavía no desplegada**; antes, el checkpoint de la optimización de rendimiento (`00017-wer`). **Para retomar el trabajo: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md).**
+**Última actualización:** 10/11/2026, nuevo circuito de cancelación (DC31) publicado en la rama y `business/` sincronizado, **todavía no desplegado**; autenticación real publicada en la rama, **todavía no desplegada**; antes, el checkpoint de la optimización de rendimiento (`00017-wer`). **Para retomar el trabajo: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md).**
 
 ## A. Estado general
 
@@ -49,6 +49,10 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Circuito de cancelación DC31 (10/11/2026): publicado, no desplegado
+
+Cancelar un trabajo nunca cancela la Orden: con todos los trabajos cancelados la Orden sigue abierta en `SIN_TRABAJOS_VIGENTES` (PROC-REP-307), sin trabajo técnico. Cancelar la Orden es una acción explícita y terminal (PROC-REP-308, o 306 sin Detalles): exige sin Ejecución, toma, reservas ni saldo, la custodia resuelta, el equipo devuelto si ingresó y ningún trabajo COMPLETO; si algo falla no cambia nada, y si no, cancela lo pendiente y cierra la Orden en el mismo acto. Rechazar o desistir de todo cancela los trabajos (305), no la Orden. La devolución física se registra antes de cancelar. Las Órdenes CANCELADA y abiertas del circuito anterior (OR-000003, 006 y 009 en UAT) lo terminan sin migrar datos: no figuran en Inicio ni Taller, se encuentran en Órdenes. Una Orden sin trabajos vigentes no admite trabajos nuevos: se crea otra Orden. Fuente: `rt-rma-app` `ab928b6` (rama `dc31/cancelacion-explicita`), sincronizada en `business/` ([`sincronizacion-funcional.md`](sincronizacion-funcional.md)). **Antes de desplegarlo** hay que aplicar en Supabase la migración nueva `supabase/migrations/20261110000100_dc31_cancelacion.sql` (aditiva, solo equivalencias del historial para los pasos 305/307/308): sin ella PostgreSQL rechaza guardar esos pasos.
 
 ### Autenticación real, implementada y no desplegada (09/11/2026): `feat(auth)`, ver `git log`
 
@@ -339,7 +343,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso:** desplegar la autenticación (implementada, no desplegada): aplicar con autorización la configuración de Supabase Auth, Cloud Run y Vercel según [`autenticacion.md`](autenticacion.md), secciones 4 y 5. Sin datos de clientes hasta entonces. También decidir si la base se mueve a São Paulo (no ejecutado; plan en [`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md)). No ejecutar `/photos/cleanup` con `aplicar`: el bucket conserva fotos anteriores a PostgreSQL.
+**Próximo paso:** aplicar DC31 en UAT, con autorización: la migración `20261110000100_dc31_cancelacion.sql` en Supabase y después el backend y el frontend. Después, desplegar la autenticación (implementada, no desplegada): aplicar con autorización la configuración de Supabase Auth, Cloud Run y Vercel según [`autenticacion.md`](autenticacion.md), secciones 4 y 5. Sin datos de clientes hasta entonces. También decidir si la base se mueve a São Paulo (no ejecutado; plan en [`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md)). No ejecutar `/photos/cleanup` con `aplicar`: el bucket conserva fotos anteriores a PostgreSQL.
 Lista priorizada de pendientes, identificación del despliegue y vuelta atrás: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md).
 
 Recordatorio: no hay modo mixto. Los datos creados en PostgreSQL no vuelven a JSON.

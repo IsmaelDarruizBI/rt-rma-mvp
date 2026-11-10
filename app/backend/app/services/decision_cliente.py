@@ -59,7 +59,7 @@ from .autorizacion_cliente import (
 )
 from .cancelaciones import (
     cancelar_detalle,
-    cancelar_orden,
+    cancelar_trabajos_pendientes,
     exigir_orden_cancelable,
     tiene_ejecucion_activa,
     tiene_reservas_sin_conciliar,
@@ -291,7 +291,8 @@ def registrar_decision_cliente(
     )
 
     if resultado is ResultadoComercial.RECHAZA_TODOS_LOS_TRABAJOS:
-        nueva_orden = cancelar_orden(
+        # DC31: cancela los trabajos, no la Orden (PROC-REP-305 -> 211).
+        nueva_orden = cancelar_trabajos_pendientes(
             nueva_orden,
             usuario=usuario,
             motivo=motivo_rechazo,
@@ -584,7 +585,8 @@ def registrar_desistimiento_cliente(
         for desistido in desistidos
     }
     if resultado is ResultadoComercial.RECHAZA_TODOS_LOS_TRABAJOS:
-        return cancelar_orden(
+        # DC31: cancela los trabajos, no la Orden (PROC-REP-305 -> 211).
+        return cancelar_trabajos_pendientes(
             nueva_orden,
             usuario=usuario,
             motivo=motivo_cancelacion,

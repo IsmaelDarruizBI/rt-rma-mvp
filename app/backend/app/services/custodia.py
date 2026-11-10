@@ -31,6 +31,7 @@ from app.domain.models import (
     EntregaEquipo,
     Equipo,
     EstadoCustodia,
+    EstadoReparacionDetail,
     EstadoWorkflow,
     NoRecepcion,
     NotaRecepcion,
@@ -457,11 +458,12 @@ def registrar_equipo_no_recibido(
 ) -> OrdenReparacion:
     """Recepcion o Administracion registran que el equipo nunca ingreso.
 
-    Es la alternativa explicita a confirmar la recepcion, y la que permite
-    cerrar una Orden CANCELADA sin devolucion fisica. Exige motivo, la
-    Orden cancelada (en una Orden activa la recepcion queda pendiente hasta
-    que llegue el equipo) y ninguna evidencia de que el equipo estuvo en el
-    local: ante un historial contradictorio se rechaza para regularizar. Se
+    Es la alternativa explicita a confirmar la recepcion. DC31: resuelve la
+    custodia ANTES de cancelar una Orden activa sin trabajo COMPLETO (el
+    cliente no trajo el equipo), o cierra una Orden CANCELADA del circuito
+    anterior sin devolucion fisica. Exige motivo y ninguna evidencia de que
+    el equipo estuvo en el local: ante un historial contradictorio se
+    rechaza para regularizar. Se
     registra una sola vez. En una Orden anterior sin registro de recepcion,
     lo crea como REGULARIZACION.
     """
@@ -472,11 +474,13 @@ def registrar_equipo_no_recibido(
             f"Un equipo {orden.origen.value} llega por el circuito de "
             "Gestion RT: su politica no registra la recepcion."
         )
-    if orden.estado_workflow is not EstadoWorkflow.CANCELADA:
+    if orden.estado_workflow is not EstadoWorkflow.CANCELADA and any(
+        detalle.estado is EstadoReparacionDetail.COMPLETO
+        for detalle in orden.reparaciones_detail
+    ):
         raise PrecondicionInvalidaError(
-            '"Equipo no recibido" resuelve el cierre de una Orden cancelada; '
-            f"esta Orden esta {orden.estado_workflow.value}. Mientras siga "
-            "activa, la recepcion queda pendiente hasta que llegue el equipo."
+            '"Equipo no recibido" no corresponde: la Orden tiene trabajos '
+            "completos, que exigen el equipo en el local."
         )
     if orden.recepcion is not None and orden.recepcion.confirmada:
         confirmacion = orden.recepcion.confirmacion

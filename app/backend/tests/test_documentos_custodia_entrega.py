@@ -734,10 +734,18 @@ def test_13_17_entrega_despues_del_cierre_financiero(cliente):
 # --- 14/15. Devolucion por cancelacion ---------------------------------------
 
 
+def _sin_trabajos(cliente, orden_id) -> None:
+    """DC31: cancela los trabajos; la Orden sigue abierta."""
+    orden = _orden(cliente, orden_id)
+    for detalle in orden["reparaciones_detail"]:
+        if detalle["estado"] == "DEFINIDO":
+            ok(cancelar_detalle(cliente, orden_id, detalle["id"]))
+
+
 def test_14_la_devolucion_por_cancelacion_no_es_una_entrega(cliente):
     orden_id = _definida(cliente)
-    ok(cancelar_orden(cliente, orden_id))
-    # La entrega comercial no aplica a una Orden CANCELADA.
+    _sin_trabajos(cliente, orden_id)
+    # La entrega comercial no aplica sin trabajos realizados.
     conflicto(_entregar(cliente, orden_id, **RETIRA))
 
     orden = ok(
@@ -746,7 +754,9 @@ def test_14_la_devolucion_por_cancelacion_no_es_una_entrega(cliente):
         )
     )
 
-    assert orden["estado_workflow"] == "CANCELADA"
+    # DC31: la devolucion es antes de cancelar; la Orden sigue abierta.
+    assert orden["estado_workflow"] != "CANCELADA"
+    assert orden["cerrada"] is False
     assert orden["entrega"] is None
     assert orden["devolucion"]["tipo"] == "DEVOLUCION_SIN_REPARACION"
     assert orden["devolucion"]["identificacion_receptor"] == "DNI 28111222"
@@ -759,37 +769,46 @@ def test_14_la_devolucion_por_cancelacion_no_es_una_entrega(cliente):
     ]
     contenido = comprobante["contenido"]
     assert contenido["tipo_entrega"] == "DEVOLUCION_SIN_REPARACION"
-    assert contenido["estado_final"] == "CANCELADA"
     assert contenido["trabajos_realizados"] == []
-    assert contenido["resultado"].startswith("Orden cancelada")
+    assert contenido["resultado"].startswith("Trabajos cancelados")
     assert "GARANTIA" not in [
         d["tipo"] for d in _documentos(cliente, orden_id)["emitidos"]
     ]
+    cerrada = ok(cancelar_orden(cliente, orden_id))
+    assert cerrada["estado_workflow"] == "CANCELADA"
+    assert cerrada["cerrada"] is True
 
 
 def test_15_devolucion_fisica_y_financiera_en_cualquier_orden(cliente):
+    """DC31: ambas antes de cancelar, en cualquier orden; la cancelacion
+    explicita cierra."""
     # Primero el equipo, despues el dinero.
     primero_equipo = _definida(cliente)
     pago = _pagar(cliente, primero_equipo, "30000")["pagos"][-1]["id"]
-    ok(cancelar_orden(cliente, primero_equipo))
+    _sin_trabajos(cliente, primero_equipo)
     orden = ok(_devolver_equipo(cliente, primero_equipo))
-    assert orden["cerrada"] is False  # falta devolver el dinero
+    assert orden["cerrada"] is False
     contenido = _vigente(cliente, primero_equipo, "COMPROBANTE_ENTREGA")[
         "contenido"
     ]
     assert contenido["saldo"] == "-30000"
+    conflicto(cancelar_orden(cliente, primero_equipo))  # falta el dinero
     orden = _devolver_dinero(cliente, primero_equipo, pago, "30000")
+    assert orden["cerrada"] is False
+    orden = ok(cancelar_orden(cliente, primero_equipo))
     assert orden["cerrada"] is True
     assert orden["estado_workflow"] == "CANCELADA"
 
     # Primero el dinero, despues el equipo.
     primero_dinero = _definida(cliente)
     pago = _pagar(cliente, primero_dinero, "30000")["pagos"][-1]["id"]
-    ok(cancelar_orden(cliente, primero_dinero))
+    _sin_trabajos(cliente, primero_dinero)
     orden = _devolver_dinero(cliente, primero_dinero, pago, "30000")
-    assert orden["cerrada"] is False  # falta devolver el equipo
-    assert orden["devolucion_pendiente"] is True
+    assert orden["cerrada"] is False
+    conflicto(cancelar_orden(cliente, primero_dinero))  # falta el equipo
     orden = ok(_devolver_equipo(cliente, primero_dinero))
+    assert orden["cerrada"] is False
+    orden = ok(cancelar_orden(cliente, primero_dinero))
     assert orden["cerrada"] is True
     assert orden["estado_workflow"] == "CANCELADA"
     contenido = _vigente(cliente, primero_dinero, "COMPROBANTE_ENTREGA")[
@@ -1064,8 +1083,9 @@ def test_24_ordenes_json_anteriores_siguen_cargando(cliente, tmp_path):
     entregada = _lista_y_cobrada(cliente)
     ok(_entregar(cliente, entregada, **RETIRA))
     cancelada = _definida(cliente)
-    ok(cancelar_orden(cliente, cancelada))
+    _sin_trabajos(cliente, cancelada)
     ok(_devolver_equipo(cliente, cancelada))
+    ok(cancelar_orden(cliente, cancelada))
     for orden_id in (entregada, cancelada):
         ruta = tmp_path / "ordenes" / f"{orden_id}.json"
         datos = json.loads(ruta.read_text(encoding="utf-8"))
@@ -1123,7 +1143,7 @@ def test_circuito_a_cliente_externo(cliente, reloj):
 
 def test_circuito_b_cancelacion(cliente):
     """Ingreso -> recepcion -> anticipo -> desistimiento -> devolucion
-    financiera -> devolucion fisica -> cierre CANCELADA."""
+    financiera -> devolucion fisica -> cancelacion explicita (DC31)."""
     orden_id = _definida(cliente)
     pago_id = _pagar(cliente, orden_id, "40000")["pagos"][-1]["id"]
 
@@ -1137,14 +1157,15 @@ def test_circuito_b_cancelacion(cliente):
             },
         )
     )
-    assert orden["estado_workflow"] == "CANCELADA"
+    assert orden["situacion"]["codigo"] == "SIN_TRABAJOS_VIGENTES"
     orden = _devolver_dinero(cliente, orden_id, pago_id, "40000")
-    assert orden["devolucion_pendiente"] is True
     orden = ok(
         _devolver_equipo(
             cliente, orden_id, identificacion_receptor="DNI 28111222"
         )
     )
+    assert orden["cerrada"] is False
+    orden = ok(cancelar_orden(cliente, orden_id))
 
     assert orden["estado_workflow"] == "CANCELADA"
     assert orden["cerrada"] is True

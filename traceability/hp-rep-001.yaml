@@ -144,7 +144,7 @@ items:
   - {id: PROC-REP-235, type: process_node, name: Identificar Detalle(s) a retrabajar, node_type: activity, actor: ACT-RECEP, status: draft, in_scenario: false, implemented: false}
   - {id: PROC-REP-290, type: process_node, name: Informar resultado al sistema RT, node_type: activity, actor: ACT-SYSTEM, status: draft, in_scenario: false, implemented: false}
   - {id: PROC-REP-300, type: process_node, name: Cancelar Detalle, node_type: activity, status: draft, in_scenario: false, implemented: false}
-  - {id: PROC-REP-305, type: process_node, name: Cancelar Orden / trabajos pendientes, node_type: activity, status: draft, in_scenario: false, implemented: false}
+  - {id: PROC-REP-305, type: process_node, name: Cancelar trabajos pendientes, node_type: activity, status: draft, in_scenario: false, implemented: false}
   # Business Rules (las 18 de V1.3, vigentes en V1.4). `coverage` describe cuanto de la regla
   # ejercita el slice implementado; NO es el estado de la regla.
   - {id: BR-REP-001, type: business_rule, name: Definicion del requerimiento, status: draft, coverage: PARTIAL}

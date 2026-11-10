@@ -56,7 +56,6 @@ from tests.fixtures.api_salidas import (
     TECNICO,
     TECNICO_B,
     aprobar,
-    cancelar_orden,
     definida,
     ejecutar,
     iniciar,
@@ -65,6 +64,7 @@ from tests.fixtures.api_salidas import (
     sembrar,
     tomada,
 )
+from tests.fixtures.cancelacion_heredada import cancelada_heredada
 from tests.test_fotos_orden import JPEG
 
 AHORA = datetime(2026, 11, 5, 15, 0, tzinfo=timezone.utc)
@@ -171,8 +171,9 @@ def corpus(tmp_path_factory) -> Path:
         tomada(cliente, con_reserva, TECNICO_B)
         iniciar(cliente, con_reserva, tecnico=TECNICO_B)
         _subir_foto(cliente, con_reserva)
-        # Cancelada: sigue abierta (esta_cerrada es ENTREGADA o 999).
-        ok(cancelar_orden(cliente, definida(cliente)))
+        # Cancelada y abierta: hoy solo del circuito anterior a DC31
+        # (cancelar cierra en el mismo acto); sigue siendo un caso valido.
+        cancelada_heredada(cliente, directorio, definida(cliente))
         # El mismo cliente con DNI en dos Ordenes.
         primera = _crear_con_dni(cliente)
         _crear_con_dni(cliente, primera["cliente"]["id"])

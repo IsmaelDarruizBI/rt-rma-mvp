@@ -799,8 +799,12 @@ if (REVISION === "v1.4") {
       seen.add(node);
       for (const e of processModel.edges.filter((edge) => edge.from === node)) {
         if (node === "PROC-REP-267") {
-          const returnsToDelivery = e.to === "PROC-REP-265";
-          if (returnsToDelivery !== (prev === "PROC-REP-265")) continue;
+          // vuelve a donde entro: la entrega (265), el fin (268) o la Orden sin trabajos vigentes (307, DC31)
+          if (e.to !== prev && ["PROC-REP-265", "PROC-REP-268", "PROC-REP-307"].includes(prev)) continue;
+        }
+        if (node === "PROC-REP-270" || node === "PROC-REP-271") {
+          // DC31: desde la Orden sin trabajos vigentes vuelven a ella; las Ordenes ya CANCELADA siguen al fin
+          if ((prev === "PROC-REP-307") !== (e.to === "PROC-REP-307")) continue;
         }
         queue.push({ node: e.to, prev: node });
       }
@@ -858,6 +862,7 @@ if (REVISION === "v1.4") {
       "PROC-REP-090::Existe Detalle trabajable::PROC-REP-140",
       "PROC-REP-090::Ninguno trabajable::PROC-REP-100",
       "PROC-REP-127::::PROC-REP-080",
+      "PROC-REP-170::Cancelar Orden::PROC-REP-305",
       "PROC-REP-180::::PROC-REP-181",
       "PROC-REP-181::::PROC-REP-174",
       "PROC-REP-211::Todos cancelados::EVT-REP-999",
@@ -880,7 +885,7 @@ if (REVISION === "v1.4") {
         "PROC-REP-047::Rechaza todos los trabajos::PROC-REP-305",
         "PROC-REP-055::CLIENTE_EXTERNO::PROC-REP-056",
         "PROC-REP-056::Acepta la revision tecnica::PROC-REP-050",
-        "PROC-REP-056::Desiste sin Detalles::PROC-REP-306",
+        "PROC-REP-056::Desiste sin Detalles::PROC-REP-307",
         `PROC-REP-055::${OTHER}::PROC-REP-050`,
         "PROC-REP-070::CLIENTE_EXTERNO::PROC-REP-046",
         `PROC-REP-070::${OTHER}::PROC-REP-050`,
@@ -904,13 +909,19 @@ if (REVISION === "v1.4") {
         "PROC-REP-211::Comprobante emitido, factibilidad pendiente::PROC-REP-080",
         "PROC-REP-211::Ejecucion activa vigente::PROC-REP-190",
         "PROC-REP-211::PENDIENTE_AUTORIZACION::PROC-REP-129",
-        "PROC-REP-211::Todos cancelados, sin equipo bajo custodia::PROC-REP-268",
-        "PROC-REP-211::Todos cancelados, equipo bajo custodia::PROC-REP-270",
-        "PROC-REP-306::Sin equipo bajo custodia::PROC-REP-268",
-        "PROC-REP-306::Equipo bajo custodia::PROC-REP-270",
-        "PROC-REP-306::Custodia sin confirmar::PROC-REP-271",
-        "PROC-REP-271::Equipo bajo custodia::PROC-REP-270",
-        "PROC-REP-271::Sin equipo bajo custodia::PROC-REP-268",
+        // DC31: cancelar Detalles no cancela la Orden; la cancelacion es explicita y terminal
+        "PROC-REP-170::Cancelar Orden::PROC-REP-308",
+        "PROC-REP-211::Todos cancelados, sin trabajos vigentes::PROC-REP-307",
+        "PROC-REP-306::Orden cancelada y cerrada::PROC-REP-268",
+        "PROC-REP-308::Orden cancelada y cerrada::PROC-REP-268",
+        "PROC-REP-307::Custodia sin confirmar::PROC-REP-271",
+        "PROC-REP-307::Equipo bajo custodia, devolucion sin reparar::PROC-REP-270",
+        "PROC-REP-307::Saldo a favor del cliente::PROC-REP-267",
+        "PROC-REP-307::Cancelar Orden, con Detalles cancelados::PROC-REP-308",
+        "PROC-REP-307::Cancelar Orden, sin Detalles::PROC-REP-306",
+        "PROC-REP-271::Custodia resuelta, Orden sin trabajos vigentes::PROC-REP-307",
+        "PROC-REP-270::Devolucion sin reparar, Orden sin trabajos vigentes::PROC-REP-307",
+        "PROC-REP-267::Devolucion registrada, Orden sin trabajos vigentes::PROC-REP-307",
         // V1.4 saldo a favor del cliente (AUD-V14-001, BR-REP-038)
         "PROC-REP-265::No, saldo pendiente de cobro::PROC-REP-266",
         "PROC-REP-265::No, saldo a favor del cliente::PROC-REP-267",
@@ -919,7 +930,6 @@ if (REVISION === "v1.4") {
         "PROC-REP-268::Sin saldo a favor pendiente::EVT-REP-999",
         "PROC-REP-268::Saldo a favor del cliente pendiente de devolver::PROC-REP-267",
         "PROC-REP-270::::PROC-REP-268",
-        "PROC-REP-211::Todos cancelados, custodia sin confirmar::PROC-REP-271",
         "PROC-REP-181::::PROC-REP-182",
         // consolidacion: la toma conduce a la decision de iniciar un Detalle o liberar (cambio del MVP, DC04)
         "PROC-REP-180::::PROC-REP-212",
@@ -948,7 +958,7 @@ if (REVISION === "v1.4") {
     const v13Ids = new Set(v13Process.nodes.map((n) => n.id));
     assert.deepEqual(
       processModel.nodes.map((n) => n.id).filter((id) => !v13Ids.has(id)),
-      ["PROC-REP-032", "PROC-REP-036", "PROC-REP-046", "PROC-REP-047", "PROC-REP-056", "PROC-REP-128", "PROC-REP-129", "PROC-REP-182", "PROC-REP-183", "PROC-REP-184", "PROC-REP-271", "PROC-REP-267", "PROC-REP-268", "PROC-REP-269", "PROC-REP-306", "EVT-REP-003", "EVT-REP-998"]
+      ["PROC-REP-032", "PROC-REP-036", "PROC-REP-046", "PROC-REP-047", "PROC-REP-056", "PROC-REP-128", "PROC-REP-129", "PROC-REP-182", "PROC-REP-183", "PROC-REP-184", "PROC-REP-271", "PROC-REP-267", "PROC-REP-268", "PROC-REP-269", "PROC-REP-306", "PROC-REP-307", "PROC-REP-308", "EVT-REP-003", "EVT-REP-998"]
     );
     const changed = v13Process.nodes
       .filter((n) => JSON.stringify(n) !== JSON.stringify(nodeById.get(n.id)))
@@ -1078,9 +1088,7 @@ if (REVISION === "v1.4") {
       "PENDIENTE_AUTORIZACION->PROC-REP-129",
       "PENDIENTE_RECURSOS->PROC-REP-120",
       "REQUIERE_REVISION->PROC-REP-125",
-      "Todos cancelados, sin equipo bajo custodia->PROC-REP-268",
-      "Todos cancelados, equipo bajo custodia->PROC-REP-270",
-      "Todos cancelados, custodia sin confirmar->PROC-REP-271",
+      "Todos cancelados, sin trabajos vigentes->PROC-REP-307",
       "Todos terminales, existe completo->PROC-REP-220",
     ].sort());
     assert.ok(!outgoing("PROC-REP-211").some((o) => o.startsWith("Orden sin habilitar")), "condicion generica reemplazada");
@@ -1223,14 +1231,14 @@ if (REVISION === "v1.4") {
     for (const [id, from, edgeText] of [
       ["VAR-REP-005", "PROC-REP-047", "Rechaza algunos Detalles->PROC-REP-300"],
       ["VAR-REP-006", "PROC-REP-047", "Rechaza todos los trabajos->PROC-REP-305"],
-      ["VAR-REP-004", "PROC-REP-056", "Desiste sin Detalles->PROC-REP-306"],
+      ["VAR-REP-004", "PROC-REP-056", "Desiste sin Detalles->PROC-REP-307"],
     ] as const) {
       assert.ok(outgoing(from).includes(edgeText), edgeText);
       assert.equal(real(id).trigger?.node, from, id);
     }
-    assert.deepEqual(outgoing("PROC-REP-056"), ["Acepta la revision tecnica->PROC-REP-050", "Desiste sin Detalles->PROC-REP-306"].sort(), "056 conserva la via de desistimiento sin Detalles, separada de la autorizacion por Detalle");
+    assert.deepEqual(outgoing("PROC-REP-056"), ["Acepta la revision tecnica->PROC-REP-050", "Desiste sin Detalles->PROC-REP-307"].sort(), "056 conserva la via de desistimiento sin Detalles, separada de la autorizacion por Detalle");
     const f9 = featureNodes("FEAT-REP-009");
-    assert.deepEqual(f9.filter((n) => n.startsWith("PROC-REP-30")).sort(), ["PROC-REP-300", "PROC-REP-305", "PROC-REP-306"]);
+    assert.deepEqual(f9.filter((n) => n.startsWith("PROC-REP-30")).sort(), ["PROC-REP-300", "PROC-REP-305", "PROC-REP-306", "PROC-REP-307", "PROC-REP-308"]);
     assert.ok(!processModel.nodes.some((n) => /cancel/i.test(n.name) && !f9.includes(n.id)), "no hay otro nodo de cancelacion");
   });
 
@@ -1258,14 +1266,16 @@ if (REVISION === "v1.4") {
       assert.ok(!traversedNodes(real(id)).has("PROC-REP-060"), `${id} no emitio comprobante`);
       assert.equal(orderOf(real(id)).at(-1), "EVT-REP-999");
     }
-    // VAR-REP-007: el comprobante ya se entrego => equipo recibido => 211 -> 270 -> fin
+    // VAR-REP-007: el comprobante ya se entrego => equipo recibido => 211 -> 307 -> 270 -> 307 -> 308 -> fin (DC31)
     const o7 = orderOf(real("VAR-REP-007"));
-    assert.deepEqual(o7.slice(-4), ["PROC-REP-211", "PROC-REP-270", "PROC-REP-268", "EVT-REP-999"]);
+    assert.deepEqual(o7.slice(-7), ["PROC-REP-211", "PROC-REP-307", "PROC-REP-270", "PROC-REP-307", "PROC-REP-308", "PROC-REP-268", "EVT-REP-999"]);
     assert.equal(expectedOf(real("VAR-REP-007"), "marked_delivered"), false);
     assert.equal(expectedOf(real("VAR-REP-007"), "equipment_return_registered"), true);
     // A cancelled order can never reach commercial delivery (la salida de 267 respeta el contexto de entrada)
-    for (const bad of ["PROC-REP-250", "PROC-REP-260", "PROC-REP-265", "PROC-REP-266", "PROC-REP-280", "PROC-REP-220"]) {
-      assert.ok(!reachableInContext("PROC-REP-306").includes(bad), `306 no alcanza ${bad}`);
+    for (const start of ["PROC-REP-306", "PROC-REP-307", "PROC-REP-308"]) {
+      for (const bad of ["PROC-REP-250", "PROC-REP-260", "PROC-REP-265", "PROC-REP-266", "PROC-REP-280", "PROC-REP-220"]) {
+        assert.ok(!reachableInContext(start).includes(bad), `${start} no alcanza ${bad}`);
+      }
     }
     assert.match(nodeText("PROC-REP-270"), /Cuarto contexto/);
     assert.match(nodeText("PROC-REP-270"), /no convierte CANCELADA en ENTREGADA/);
@@ -1275,7 +1285,7 @@ if (REVISION === "v1.4") {
   check("VAR-REP-004: desiste sin Detalles (056), sin comprobante -> 306 -> fin directo (equipo no recibido); sin consulta por Detalle, reparacion, control, notificacion, cobro ni SIN_REPARACION", () => {
     const scenario = real("VAR-REP-004");
     assert.deepEqual(scenario.applies_to, ["HP-REP-001"]);
-    assert.deepEqual(orderOf(scenario).slice(-5), ["PROC-REP-055", "PROC-REP-056", "PROC-REP-306", "PROC-REP-268", "EVT-REP-999"]);
+    assert.deepEqual(orderOf(scenario).slice(-6), ["PROC-REP-055", "PROC-REP-056", "PROC-REP-307", "PROC-REP-306", "PROC-REP-268", "EVT-REP-999"]);
     const nodes = traversedNodes(scenario);
     for (const forbidden of ["PROC-REP-046", "PROC-REP-047", "PROC-REP-050", "PROC-REP-060", "PROC-REP-069", "PROC-REP-070", "PROC-REP-075", "PROC-REP-090", "PROC-REP-185", "PROC-REP-200", "PROC-REP-210", "PROC-REP-211", "PROC-REP-220", "PROC-REP-240", "PROC-REP-250", "PROC-REP-260", "PROC-REP-265", "PROC-REP-266", "PROC-REP-270", "PROC-REP-280", "PROC-REP-300", "PROC-REP-305"]) {
       assert.ok(!nodes.has(forbidden), `VAR-REP-004 no debe recorrer ${forbidden}`);
@@ -1286,7 +1296,8 @@ if (REVISION === "v1.4") {
     assert.equal(expectedOf(scenario, "marked_delivered"), false);
     assert.equal(expectedOf(scenario, "equipment_return_registered"), false);
     assert.equal(expectedOf(scenario, "reception_receipt_generated"), false);
-    assert.deepEqual(reachableInContext("PROC-REP-306").sort(), ["EVT-REP-999", "PROC-REP-267", "PROC-REP-268", "PROC-REP-270", "PROC-REP-271", "PROC-REP-306"]);
+    // DC31: 306 ya es terminal (custodia y dinero se resuelven antes, en 307)
+    assert.deepEqual(reachableInContext("PROC-REP-306").sort(), ["EVT-REP-999", "PROC-REP-267", "PROC-REP-268", "PROC-REP-306"]);
     assert.equal(nodeById.get("PROC-REP-306")?.actor, undefined, "actor no definido por negocio");
   });
 
@@ -1512,7 +1523,8 @@ if (REVISION === "v1.4") {
       assert.equal(expectedOf(real(id), "equipment_return_registered"), false, id);
     }
     const o7 = orderOf(real("VAR-REP-007"));
-    assert.deepEqual(o7.slice(-4), ["PROC-REP-211", "PROC-REP-270", "PROC-REP-268", "EVT-REP-999"]);
+    assert.ok(o7.indexOf("PROC-REP-270") < o7.indexOf("PROC-REP-308"), "DC31: la devolucion se registra antes de cancelar");
+    assert.deepEqual(o7.slice(-3), ["PROC-REP-308", "PROC-REP-268", "EVT-REP-999"]);
     assert.equal(expectedOf(real("VAR-REP-007"), "equipment_return_registered"), true);
     assert.match(rule("BR-REP-033"), /Equipo nunca recibido \(1\): no requiere\s+devolucion/);
     assert.match(rule("BR-REP-033"), /puede finalizar operativamente mientras no este determinada/);
@@ -1534,7 +1546,8 @@ if (REVISION === "v1.4") {
 
   // ---------------------------------------------------------------- correcciones finales: custodia pendiente y salidas de 090
   check("custodia desconocida: toda cancelacion con recepcion sin confirmar pasa por 271 y no alcanza FIN ni 270 de forma directa (VAR-REP-015)", () => {
-    for (const from of ["PROC-REP-211", "PROC-REP-306"]) {
+    // DC31: la Orden sin trabajos vigentes (307) es el unico punto de cancelacion con custodia por resolver
+    for (const from of ["PROC-REP-307"]) {
       const outs = processModel.edges.filter((e) => e.from === from);
       const unk = outs.filter((e) => e.to === "PROC-REP-271");
       assert.equal(unk.length, 1, `${from} -> 271`);
@@ -1544,9 +1557,13 @@ if (REVISION === "v1.4") {
         assert.doesNotMatch(e.condition ?? "", /sin confirmar/i);
       }
     }
-    assert.deepEqual(outgoing("PROC-REP-271"), ["Equipo bajo custodia->PROC-REP-270", "Sin equipo bajo custodia->PROC-REP-268"].sort());
+    // DC31: 271 vuelve a la Orden sin trabajos vigentes; las Ordenes ya CANCELADA del circuito anterior se tratan en BR-REP-014/033
+    assert.deepEqual(outgoing("PROC-REP-271"), ["Custodia resuelta, Orden sin trabajos vigentes->PROC-REP-307"]);
+    for (const id of ["PROC-REP-211", "PROC-REP-306", "PROC-REP-308"]) {
+      assert.ok(!processModel.edges.some((e) => e.from === id && e.to === "PROC-REP-271"), `${id} ya no deriva a 271`);
+    }
     const o = orderOf(real("VAR-REP-015"));
-    assert.deepEqual(o, ["PROC-REP-211", "PROC-REP-271", "PROC-REP-270", "PROC-REP-268", "EVT-REP-999"]);
+    assert.deepEqual(o, ["PROC-REP-211", "PROC-REP-307", "PROC-REP-271", "PROC-REP-307", "PROC-REP-270", "PROC-REP-307", "PROC-REP-308", "PROC-REP-268", "EVT-REP-999"]);
     assert.ok(o.indexOf("PROC-REP-271") < o.indexOf("EVT-REP-999"), "271 antes del fin");
     assert.equal(expectedOf(real("VAR-REP-015"), "operational_end_before_custody_resolved"), false);
     assert.equal(expectedOf(real("VAR-REP-015"), "automatic_return_of_unconfirmed_equipment"), false);
@@ -1565,8 +1582,8 @@ if (REVISION === "v1.4") {
     assert.match(c, /mutuamente excluyentes\s+y completas/);
     assert.match(nodeText("PROC-REP-271"), /recibido y ya devuelto -> fin, sin duplicar la devolucion/);
     assert.match(nodeText("PROC-REP-270"), /no se registra una segunda\s+devolucion/);
-    // 270 solo es alcanzable desde 211, 306 y 271 (la cancelacion), ademas de los contextos previos
-    assert.ok(processModel.edges.filter((e) => e.to === "PROC-REP-270").map((e) => e.from).includes("PROC-REP-271"));
+    // DC31: la devolucion sin reparar se registra desde la Orden abierta sin trabajos vigentes (307)
+    assert.ok(processModel.edges.filter((e) => e.to === "PROC-REP-270").map((e) => e.from).includes("PROC-REP-307"));
     // la devolucion no pasa por entrega comercial
     for (const bad of ["PROC-REP-250", "PROC-REP-260", "PROC-REP-265", "PROC-REP-266", "PROC-REP-280", "PROC-REP-220"]) {
       assert.ok(!reachableInContext("PROC-REP-271").includes(bad), bad);
@@ -1749,7 +1766,7 @@ if (REVISION === "v1.4") {
       assert.ok(!nodes.has("PROC-REP-305") && !nodes.has("PROC-REP-306") && (id === "VAR-REP-024" || !nodes.has("PROC-REP-047")), `${id}: no es desistimiento del cliente`);
       assert.equal(orderOf(real(id)).filter((n) => n === "PROC-REP-300").length, 1, `${id}: una sola cancelacion`);
     }
-    assert.deepEqual(orderOf(real("VAR-REP-018")), ["PROC-REP-183", "PROC-REP-300", "PROC-REP-184", "PROC-REP-211", "PROC-REP-270", "PROC-REP-268", "EVT-REP-999"]);
+    assert.deepEqual(orderOf(real("VAR-REP-018")), ["PROC-REP-183", "PROC-REP-300", "PROC-REP-184", "PROC-REP-211", "PROC-REP-307", "PROC-REP-270", "PROC-REP-307", "PROC-REP-308", "PROC-REP-268", "EVT-REP-999"]);
     assert.equal(expectedOf(real("VAR-REP-018"), "marked_delivered"), false);
     assert.equal(expectedOf(real("VAR-REP-018"), "equipment_return_registered"), true);
     assert.match(nodeText("PROC-REP-300"), /DIAGNOSTICO_DESCARTADO/);

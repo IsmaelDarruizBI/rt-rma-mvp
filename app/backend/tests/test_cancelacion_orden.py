@@ -1,19 +1,27 @@
-"""PROC-REP-305 / 306: cancelacion de la Orden y devolucion del equipo.
+"""Cancelacion de Detalles y de la Orden (DC31, 09/11/2026).
 
-PROC-REP-305 cancela los Detalles PENDIENTE de la Orden y deja COMPLETO lo
-que ya se hizo; el resolver (PROC-REP-211) decide el desenlace: CANCELADA
-si todos quedan CANCELADO, o el cierre normal (control, cobro, entrega)
-si hay trabajo realizado. Una Orden sin Detalles se cancela de forma
-explicita (PROC-REP-306, V1.4). Con una Ejecucion activa no se cancela
-nada. Una Orden CANCELADA no es ENTREGADA: si el equipo esta en custodia,
-su devolucion fisica (PROC-REP-270, sin cobro) se registra antes del
-cierre operativo (EVT-REP-999).
+- Cancelar un Detalle cancela solo ese Detalle y NUNCA la Orden. Si todos
+  quedan CANCELADO la Orden sigue abierta: SIN_TRABAJOS_VIGENTES
+  (PROC-REP-307), sin trabajo tecnico.
+- Cancelar la Orden es explicito y terminal (PROC-REP-308, o 306 sin
+  Detalles): exige sin Ejecucion, toma, reservas ni saldo, la custodia
+  resuelta (si el equipo ingreso, ya devuelto) y ningun Detalle COMPLETO;
+  si algo falla no cambia nada. Cancela lo pendiente, fija CANCELADA y
+  cierra la Orden en el mismo acto.
+- La devolucion fisica (PROC-REP-270) se registra ANTES de cancelar, con la
+  Orden sin trabajos pendientes: no cobra, no da garantia ni comprobante de
+  entrega.
+
+Las Ordenes CANCELADA y abiertas del circuito anterior estan en
+``test_cancelacion_heredada.py``.
 """
 
 from decimal import Decimal
 
 import pytest
 
+from app.domain.models import OrdenReparacion
+from app.services import impedimentos_cancelacion
 from tests.fixtures.api_salidas import (
     ADMINISTRADOR,
     BATERIA,
@@ -22,6 +30,7 @@ from tests.fixtures.api_salidas import (
     PANTALLA,
     RECEPCION,
     TECNICO,
+    agregar,
     aprobar,
     archivo,
     cancelar_detalle,
@@ -36,7 +45,6 @@ from tests.fixtures.api_salidas import (
     devolver,
     ejecutar,
     encolar,
-    finalizar,
     ids,
     iniciar,
     notificar_pagar_entregar,
@@ -53,46 +61,174 @@ def cliente(tmp_path):
         yield test_client
 
 
-# --- Sin Detalles ------------------------------------------------------------
+def _orden(cliente, orden_id) -> dict:
+    return ok(cliente.get(f"/api/orders/{orden_id}"))
 
 
-def test_una_orden_sin_detalles_se_cancela_explicitamente(cliente):
-    """Recien creada, sin decision de custodia: no cierra sola.
-
-    Cierra cuando Recepcion registra que el equipo nunca ingreso (o, si lo
-    tiene, confirma la recepcion y lo devuelve).
-    """
-    orden_id = crear(cliente)
-    assert ("CANCELAR_ORDEN", None) in codigos_cancelacion(
-        cliente.get(f"/api/orders/{orden_id}").json()
+def _cancelar_orden_accion(orden: dict) -> dict | None:
+    return next(
+        (
+            a
+            for a in orden["acciones_cancelacion"]
+            if a["codigo"] == "CANCELAR_ORDEN"
+        ),
+        None,
     )
+
+
+def _sin_acciones(orden: dict) -> None:
+    for grupo in (
+        "acciones_disponibles",
+        "acciones_cancelacion",
+        "acciones_autorizacion",
+        "acciones_financieras",
+        "acciones_custodia",
+        "acciones_complementarias",
+    ):
+        assert orden[grupo] == [], grupo
+
+
+def _cancelar_todos_los_trabajos(cliente, orden_id) -> dict:
+    orden = _orden(cliente, orden_id)
+    for d in orden["reparaciones_detail"]:
+        if d["estado"] == "DEFINIDO":
+            orden = ok(cancelar_detalle(cliente, orden_id, d["id"]))
+    return orden
+
+
+# --- Cancelar Detalles no cancela la Orden -----------------------------------
+
+
+def test_cancelar_un_detalle_entre_varios(cliente):
+    orden_id = definida(cliente, BATERIA, PANTALLA)
+    antes = _orden(cliente, orden_id)["estado_workflow"]
+
+    orden = ok(cancelar_detalle(cliente, orden_id, "DET-001"))
+
+    assert detalle(orden, "DET-001")["estado"] == "CANCELADO"
+    assert detalle(orden, "DET-002")["estado"] == "DEFINIDO"
+    assert orden["estado_workflow"] == antes != "CANCELADA"
+    assert orden["situacion"]["codigo"] != "SIN_TRABAJOS_VIGENTES"
+    assert orden["cerrada"] is False
+
+
+def test_cancelar_el_ultimo_detalle_deja_la_orden_sin_trabajos_vigentes(
+    cliente,
+):
+    orden_id = definida(cliente, BATERIA, PANTALLA)
+    estado = _orden(cliente, orden_id)["estado_workflow"]
+
+    orden = _cancelar_todos_los_trabajos(cliente, orden_id)
+
+    assert [d["estado"] for d in orden["reparaciones_detail"]] == [
+        "CANCELADO",
+        "CANCELADO",
+    ]
+    # La Orden NO se cancela ni se cierra: queda abierta sin trabajo.
+    assert orden["estado_workflow"] == estado
+    assert orden["estado_workflow"] != "CANCELADA"
+    assert orden["cerrada"] is False
+    assert ids(orden)[-2:] == ["PROC-REP-211", "PROC-REP-307"]
+    assert orden["situacion"]["codigo"] == "SIN_TRABAJOS_VIGENTES"
+    # Sin trabajo tecnico: solo devolver el equipo (esta en el local).
+    assert codigos(orden) == ["REGISTRAR_DEVOLUCION"]
+    assert orden["toma_activa"] is None
+    # Cancelar la Orden se ofrece, pero bloqueado hasta devolver el equipo.
+    cancelar = _cancelar_orden_accion(orden)
+    assert cancelar is not None and "devolucion" in cancelar["bloqueo"]
+    # El historial de cada Detalle se conserva.
+    assert all(
+        d["cancelacion"]["motivo"] == MOTIVO
+        for d in orden["reparaciones_detail"]
+    )
+    assert "PROC-REP-140" in ids(orden)
+
+
+# --- Cancelacion explicita y terminal ----------------------------------------
+
+
+def test_sin_trabajos_vigentes_devuelve_y_cancela(cliente, tmp_path):
+    orden_id = definida(cliente, BATERIA, PANTALLA)
+    _cancelar_todos_los_trabajos(cliente, orden_id)
+
+    # Con el equipo en el local no se puede cancelar: no cambia nada.
+    antes = archivo(tmp_path, orden_id)
+    mensaje = conflicto(cancelar_orden(cliente, orden_id))
+    assert "devolucion" in mensaje and "No se cancelo nada" in mensaje
+    assert archivo(tmp_path, orden_id) == antes
+
+    # La devolucion fisica no es una entrega: sin cobro ni comprobante.
+    conflicto(devolver(cliente, orden_id, usuario=TECNICO))
+    conflicto(devolver(cliente, orden_id, recibido_por="  "))
+    orden = ok(devolver(cliente, orden_id, recibido_por="Juan Perez"))
+    assert orden["estado_workflow"] != "CANCELADA"
+    assert orden["cerrada"] is False
+    assert orden["devolucion"]["recibido_por"] == "Juan Perez"
+    assert orden["pagos"] == []
+    assert orden["documentos"]["comprobante_final"]["generado"] is False
+    assert orden["situacion"]["codigo"] == "SIN_TRABAJOS_VIGENTES"
+    assert codigos(orden) == []
+    assert _cancelar_orden_accion(orden)["bloqueo"] is None
+    assert [
+        t["acciones"][0]["codigo"] for t in orden["situacion"]["tareas"]
+    ] == ["CANCELAR_ORDEN"]
+    conflicto(devolver(cliente, orden_id))  # no se devuelve dos veces
 
     orden = ok(cancelar_orden(cliente, orden_id))
 
     assert orden["estado_workflow"] == "CANCELADA"
-    assert ids(orden)[-1] == "PROC-REP-306"
-    paso = orden["historial"][-1]
-    assert paso["usuario_id"] == RECEPCION and MOTIVO in paso["observacion"]
-    assert orden["current_process"] == "PROC-REP-306"
-    assert orden["devolucion_pendiente"] is False
-    assert orden["cerrada"] is False
-    assert orden["acciones_disponibles"] == []
-    assert "Falta definir la custodia" in orden["pendientes_de_cierre"][0]
-
-    orden = ok(no_recibido(cliente, orden_id))
-
+    assert orden["cerrada"] is True
     assert orden["current_process"] == "EVT-REP-999"
+    paso = next(
+        p for p in orden["historial"] if p["referencia_id"] == "PROC-REP-308"
+    )
+    assert paso["usuario_id"] == RECEPCION and MOTIVO in paso["observacion"]
+    _sin_acciones(orden)
+
+
+def test_cancelar_la_orden_cancela_varios_pendientes(cliente):
+    """El equipo nunca ingreso: se resuelve la custodia y se cancela todo."""
+    orden_id = crear(cliente)
+    agregar(cliente, orden_id, BATERIA)
+    agregar(cliente, orden_id, PANTALLA)
+    assert "custodia" in conflicto(cancelar_orden(cliente, orden_id))
+
+    ok(no_recibido(cliente, orden_id))
+    orden = ok(cancelar_orden(cliente, orden_id))
+
+    assert [d["estado"] for d in orden["reparaciones_detail"]] == [
+        "CANCELADO",
+        "CANCELADO",
+    ]
+    paso = next(
+        p for p in orden["historial"] if p["referencia_id"] == "PROC-REP-308"
+    )
+    assert "DET-001, DET-002" in paso["observacion"]
+    assert orden["estado_workflow"] == "CANCELADA"
+    assert orden["cerrada"] is True
+    assert "PROC-REP-211" not in ids(orden)  # no se infiere: es explicita
+    _sin_acciones(orden)
+
+
+def test_sin_detalles_sin_custodia_definida(cliente, tmp_path):
+    orden_id = crear(cliente)
+    accion = _cancelar_orden_accion(_orden(cliente, orden_id))
+    assert accion is not None and "custodia" in accion["bloqueo"]
+    antes = archivo(tmp_path, orden_id)
+    conflicto(cancelar_orden(cliente, orden_id))
+    assert archivo(tmp_path, orden_id) == antes
+
+    ok(no_recibido(cliente, orden_id))
+    orden = ok(cancelar_orden(cliente, orden_id))
+
+    assert ids(orden)[-1] == "PROC-REP-306"
+    assert orden["estado_workflow"] == "CANCELADA"
     assert orden["cerrada"] is True
     assert orden["custodia"]["estado"] == "NO_RECIBIDO"
     conflicto(cancelar_orden(cliente, orden_id), "ORDEN_CERRADA")
 
 
-def test_sin_detalles_en_revision_requiere_devolver_el_equipo(cliente):
-    """EN_REVISION con la recepcion confirmada: el equipo esta en custodia.
-
-    La custodia sale de la confirmacion, no del comprobante emitido al
-    enviar a revision.
-    """
+def test_sin_detalles_con_equipo_en_custodia(cliente):
     orden_id = crear(cliente)
     ok(
         cliente.post(
@@ -101,63 +237,21 @@ def test_sin_detalles_en_revision_requiere_devolver_el_equipo(cliente):
         )
     )
     confirmar_recepcion(cliente, orden_id)
+    assert "devolucion" in conflicto(cancelar_orden(cliente, orden_id))
+    assert "REGISTRAR_DEVOLUCION" in codigos(_orden(cliente, orden_id))
 
+    orden = ok(devolver(cliente, orden_id, recibido_por="Cliente"))
+    assert orden["situacion"]["codigo"] == "SIN_TRABAJOS_VIGENTES"
     orden = ok(cancelar_orden(cliente, orden_id))
 
-    assert orden["estado_workflow"] == "CANCELADA"
-    assert orden["devolucion_pendiente"] is True
-    assert orden["cerrada"] is False
-    assert codigos(orden) == ["REGISTRAR_DEVOLUCION"]
+    assert orden["cerrada"] is True
+    assert orden["devolucion"]["recibido_por"] == "Cliente"
 
 
-# --- Con Detalles ------------------------------------------------------------
+# --- Precondiciones: si alguna falla no cambia nada -------------------------
 
 
-def test_cancelar_la_orden_cancela_todos_los_pendientes(cliente, tmp_path):
-    orden_id = definida(cliente, BATERIA, PANTALLA)
-
-    orden = ok(cancelar_orden(cliente, orden_id))
-
-    assert [d["estado"] for d in orden["reparaciones_detail"]] == [
-        "CANCELADO",
-        "CANCELADO",
-    ]
-    assert all(
-        d["cancelacion"]["motivo"] == MOTIVO
-        for d in orden["reparaciones_detail"]
-    )
-    assert ids(orden)[-2:] == ["PROC-REP-305", "PROC-REP-211"]
-    assert orden["historial"][-1]["observacion"] == "TODO_CANCELADO"
-    assert orden["estado_workflow"] == "CANCELADA"
-    assert orden["devolucion_pendiente"] is True
-    # Nada que cobrar: total 0, y no figura PAGADA sin haber pagado.
-    assert Decimal(orden["resumen"]["total"]) == Decimal("0")
-    assert orden["resumen"]["estado_pago"] == "PENDIENTE"
-    # Nada se borra: prioridad, habilitacion e historial se conservan.
-    assert "PROC-REP-140" in ids(orden)
-
-
-def test_completos_y_pendientes_cancela_solo_los_pendientes(cliente):
-    """Con trabajo realizado la Orden NO queda CANCELADA: sigue el cierre."""
-    orden_id = definida(cliente, BATERIA, PANTALLA)
-    tomada(cliente, orden_id)
-    ejecutar(cliente, orden_id, "DET-001")
-
-    orden = ok(cancelar_orden(cliente, orden_id))
-
-    assert detalle(orden, "DET-001")["estado"] == "COMPLETO"
-    assert detalle(orden, "DET-002")["estado"] == "CANCELADO"
-    assert orden["estado_workflow"] == "EN_REPARACION"
-    assert orden["historial"][-1]["observacion"] == "COMPLETA"
-    assert orden["toma_activa"] is None
-    orden = ok(aprobar(cliente, orden_id, "DET-001"))
-    assert orden["estado_workflow"] == "REPARACION_LISTA"
-    entregada = notificar_pagar_entregar(cliente, orden_id)
-    assert entregada["estado_workflow"] == "ENTREGADA"
-    assert Decimal(entregada["resumen"]["total"]) == Decimal("80000")
-
-
-def test_con_ejecucion_activa_no_se_cancela_nada(cliente, tmp_path):
+def test_con_ejecucion_activa_y_reservas_no_se_cancela_nada(cliente, tmp_path):
     orden_id = definida(cliente, BATERIA, PANTALLA)
     tomada(cliente, orden_id)
     iniciar(cliente, orden_id, "DET-001")
@@ -166,26 +260,94 @@ def test_con_ejecucion_activa_no_se_cancela_nada(cliente, tmp_path):
     mensaje = conflicto(cancelar_orden(cliente, orden_id))
 
     assert "Ejecucion activa" in mensaje
-    assert "interrump" in mensaje.lower()
-    # Reservas, Ejecucion y Detalles intactos hasta su conciliacion.
+    assert "tomada" in mensaje
+    assert "reservas" in mensaje
     assert archivo(tmp_path, orden_id) == antes
-    orden = cliente.get(f"/api/orders/{orden_id}").json()
-    assert ("CANCELAR_ORDEN", None) not in codigos_cancelacion(orden)
+    orden = repo_ordenes(tmp_path).obtener(orden_id)
+    motivos = impedimentos_cancelacion(orden)
+    assert any("Ejecucion activa" in m for m in motivos)
+    assert any("reservas" in m for m in motivos)
 
 
-def test_no_hay_pendientes_que_cancelar(cliente, tmp_path):
-    orden_id = definida(cliente)
+def test_con_toma_abierta_no_se_cancela(cliente, tmp_path):
+    orden_id = definida(cliente, BATERIA)
+    tomada(cliente, orden_id)
+    antes = archivo(tmp_path, orden_id)
+
+    assert "tomada" in conflicto(cancelar_orden(cliente, orden_id))
+    assert archivo(tmp_path, orden_id) == antes
+
+
+def test_un_trabajo_completo_impide_la_cancelacion_total(cliente, tmp_path):
+    orden_id = definida(cliente, BATERIA, PANTALLA)
     tomada(cliente, orden_id)
     ejecutar(cliente, orden_id, "DET-001")
     antes = archivo(tmp_path, orden_id)
 
-    conflicto(cancelar_orden(cliente, orden_id))
+    mensaje = conflicto(cancelar_orden(cliente, orden_id))
 
+    assert "COMPLETOS" in mensaje
     assert archivo(tmp_path, orden_id) == antes
+    # No se ofrece: lo realizado sigue el cierre normal.
+    assert _cancelar_orden_accion(_orden(cliente, orden_id)) is None
+    # Cancelar el pendiente si: la Orden sigue al control, cobro y entrega.
+    orden = ok(cancelar_detalle(cliente, orden_id, "DET-002"))
+    assert detalle(orden, "DET-001")["estado"] == "COMPLETO"
+    assert orden["situacion"]["codigo"] != "SIN_TRABAJOS_VIGENTES"
+    ok(aprobar(cliente, orden_id, "DET-001"))
+    entregada = notificar_pagar_entregar(cliente, orden_id)
+    assert entregada["estado_workflow"] == "ENTREGADA"
+    assert Decimal(entregada["resumen"]["total"]) == Decimal("80000")
+
+
+def test_saldo_a_favor_se_devuelve_antes_de_cancelar(cliente, tmp_path):
+    orden_id = definida(cliente, BATERIA)
+    orden = ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/payments",
+            json={
+                "usuario_id": RECEPCION,
+                "monto": "10000",
+                "metodo": "EFECTIVO",
+            },
+        )
+    )
+    pago_id = orden["pagos"][-1]["id"]
+    _cancelar_todos_los_trabajos(cliente, orden_id)
+    ok(devolver(cliente, orden_id))
+
+    antes = archivo(tmp_path, orden_id)
+    assert "a favor del cliente" in conflicto(
+        cancelar_orden(cliente, orden_id)
+    )
+    assert archivo(tmp_path, orden_id) == antes
+    orden = _orden(cliente, orden_id)
+    assert "REGISTRAR_DEVOLUCION_DINERO" in [
+        a["codigo"] for a in orden["acciones_financieras"]
+    ]
+
+    ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/refunds",
+            json={
+                "usuario_id": RECEPCION,
+                "pago_id": pago_id,
+                "monto": "10000",
+                "medio": "EFECTIVO",
+                "motivo": "Cancelacion.",
+            },
+        )
+    )
+    orden = ok(cancelar_orden(cliente, orden_id))
+
+    assert orden["cerrada"] is True
+    assert Decimal(orden["resumen"]["saldo"]) == Decimal("0")
+    assert len(orden["pagos"]) == 1  # el pago original se conserva
 
 
 def test_roles_y_motivo(cliente, tmp_path):
-    orden_id = definida(cliente)
+    orden_id = crear(cliente)
+    ok(no_recibido(cliente, orden_id))
     antes = archivo(tmp_path, orden_id)
 
     conflicto(cancelar_orden(cliente, orden_id, usuario=TECNICO))
@@ -194,8 +356,37 @@ def test_roles_y_motivo(cliente, tmp_path):
     assert archivo(tmp_path, orden_id) == antes
 
     ok(cancelar_orden(cliente, orden_id, usuario=COORDINADOR))
-    # Ya CANCELADA: no se cancela de nuevo.
-    conflicto(cancelar_orden(cliente, orden_id))
+    conflicto(cancelar_orden(cliente, orden_id), "ORDEN_CERRADA")
+
+
+# --- Orden cancelada: terminal, sin acciones ---------------------------------
+
+
+def test_orden_cancelada_cerrada_no_admite_acciones(cliente, tmp_path):
+    orden_id = crear(cliente)
+    ok(no_recibido(cliente, orden_id))
+    orden = ok(cancelar_orden(cliente, orden_id))
+    _sin_acciones(orden)
+
+    for respuesta in (
+        cliente.post(
+            f"/api/orders/{orden_id}/payments",
+            json={"usuario_id": RECEPCION, "monto": "1", "metodo": "EFECTIVO"},
+        ),
+        cliente.post(
+            f"/api/orders/{orden_id}/deliver",
+            json={"usuario_id": ADMINISTRADOR},
+        ),
+        cliente.post(
+            f"/api/orders/{orden_id}/details",
+            json={"usuario_id": RECEPCION, "tipo_reparacion_id": BATERIA},
+        ),
+        devolver(cliente, orden_id),
+    ):
+        conflicto(respuesta, "ORDEN_CERRADA")
+    # Se puede consultar: informacion, documentos e historial.
+    assert cliente.get(f"/api/orders/{orden_id}").status_code == 200
+    assert cliente.get(f"/api/orders/{orden_id}/documents").status_code == 200
 
 
 def test_no_se_cancela_una_orden_entregada(cliente, tmp_path):
@@ -222,67 +413,10 @@ def test_una_orden_lista_no_se_cancela(cliente, tmp_path):
     conflicto(cancelar_orden(cliente, orden_id))
 
     assert archivo(tmp_path, orden_id) == antes
-    orden = cliente.get(f"/api/orders/{orden_id}").json()
-    assert codigos_cancelacion(orden) == []
+    assert codigos_cancelacion(_orden(cliente, orden_id)) == []
 
 
-# --- Devolucion fisica -------------------------------------------------------
-
-
-def test_devolucion_fisica_despues_de_cancelar(cliente, tmp_path):
-    orden_id = definida(cliente)
-    orden = ok(cancelar_orden(cliente, orden_id))
-    assert orden["estado_workflow"] == "CANCELADA"
-
-    # Una Orden CANCELADA no es ENTREGADA: no se notifica, cobra ni entrega.
-    conflicto(
-        cliente.post(
-            f"/api/orders/{orden_id}/payments",
-            json={"usuario_id": RECEPCION, "monto": "1", "metodo": "EFECTIVO"},
-        )
-    )
-    conflicto(
-        cliente.post(
-            f"/api/orders/{orden_id}/deliver",
-            json={"usuario_id": ADMINISTRADOR},
-        )
-    )
-    conflicto(devolver(cliente, orden_id, usuario=TECNICO))
-    conflicto(devolver(cliente, orden_id, recibido_por="  "))
-
-    orden = ok(devolver(cliente, orden_id, recibido_por="Juan Perez"))
-
-    assert orden["estado_workflow"] == "CANCELADA"  # nunca ENTREGADA
-    assert orden["current_process"] == "EVT-REP-999"
-    assert orden["cerrada"] is True
-    assert orden["devolucion_pendiente"] is False
-    devolucion = orden["devolucion"]
-    assert devolucion["entregado_por"] == RECEPCION
-    assert devolucion["recibido_por"] == "Juan Perez"
-    assert devolucion["fecha"] is not None
-    paso = orden["historial"][-1]
-    assert (paso["referencia_id"], paso["accion"]) == (
-        "PROC-REP-270",
-        "DEVOLVER_EQUIPO_SIN_REPARAR",
-    )
-    assert "Juan Perez" in paso["observacion"]
-    # Sin cobro ni documentos comerciales por cancelar.
-    assert orden["pagos"] == []
-    assert orden["documentos"]["comprobante_final"]["generado"] is False
-    # No se registra una segunda devolucion.
-    conflicto(devolver(cliente, orden_id), "ORDEN_CERRADA")
-
-
-def test_sin_custodia_no_hay_devolucion_que_registrar(cliente):
-    orden_id = crear(cliente)
-    ok(cancelar_orden(cliente, orden_id))
-
-    assert "custodia confirmada" in conflicto(devolver(cliente, orden_id))
-    ok(no_recibido(cliente, orden_id))
-    conflicto(devolver(cliente, orden_id), "ORDEN_CERRADA")
-
-
-def test_una_orden_rt_cancelada_se_devuelve_a_gestion_rt(cliente):
+def test_una_orden_rt_se_devuelve_a_gestion_rt_y_despues_se_cancela(cliente):
     respuesta = cliente.post(
         "/api/orders/rt-interno",
         json={
@@ -296,78 +430,33 @@ def test_una_orden_rt_cancelada_se_devuelve_a_gestion_rt(cliente):
         },
     )
     orden_id = ok(respuesta)["id"]
+    assert "devolucion" in conflicto(cancelar_orden(cliente, orden_id))
 
+    ok(devolver(cliente, orden_id, recibido_por="Gestion RT"))
     orden = ok(cancelar_orden(cliente, orden_id))
-    assert orden["devolucion_pendiente"] is True
 
-    orden = ok(devolver(cliente, orden_id, recibido_por="Gestion RT"))
     assert orden["cerrada"] is True
     assert orden["devolucion"]["recibido_por"] == "Gestion RT"
 
 
-def test_un_anticipo_queda_registrado_sin_cobro_adicional(cliente, tmp_path):
-    """La devolucion de dinero sigue pendiente (V1.4 PROC-REP-267/268)."""
-    orden_id = definida(cliente)
-    ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/payments",
-            json={
-                "usuario_id": RECEPCION,
-                "monto": "10000",
-                "metodo": "EFECTIVO",
-            },
-        )
-    )
-
-    orden = ok(cancelar_orden(cliente, orden_id))
-
-    assert len(orden["pagos"]) == 1
-    assert Decimal(orden["resumen"]["total"]) == Decimal("0")
-    assert Decimal(orden["resumen"]["saldo"]) == Decimal("-10000")
-    assert "REGISTRAR_PAGO" not in codigos(orden)
-
-
-# --- Circuito completo -------------------------------------------------------
-
-
-def test_circuito_ingreso_definicion_cancelacion_devolucion_cierre(
-    cliente, tmp_path
-):
-    orden_id = crear(cliente)
-    confirmar_recepcion(cliente, orden_id)
-    for tipo in (BATERIA, PANTALLA):
-        ok(
-            cliente.post(
-                f"/api/orders/{orden_id}/details",
-                json={"usuario_id": RECEPCION, "tipo_reparacion_id": tipo},
-            )
-        )
-    # Comprobante de ingreso: confirma, autoriza y entra a la cola.
-    en_cola = finalizar(cliente, orden_id)
-    assert en_cola["estado_workflow"] == "EN_COLA"
+def test_circuito_ingreso_cancelacion_devolucion_cierre(cliente, tmp_path):
+    orden_id = definida(cliente, BATERIA, PANTALLA)
     ok(encolar(cliente, orden_id, 2))
 
-    cancelada = ok(cancelar_orden(cliente, orden_id, "El cliente desiste."))
-    assert cancelada["estado_workflow"] == "CANCELADA"
-    assert cancelada["prioridad"] == 2
+    _cancelar_todos_los_trabajos(cliente, orden_id)
+    ok(devolver(cliente, orden_id, recibido_por="Cliente"))
+    cerrada = ok(cancelar_orden(cliente, orden_id, "El cliente desiste."))
 
-    cerrada = ok(devolver(cliente, orden_id, recibido_por="Cliente"))
-    assert cerrada["cerrada"] is True
-    assert cerrada["acciones_disponibles"] == []
-    assert cerrada["acciones_cancelacion"] == []
-
-    persistida = repo_ordenes(tmp_path).obtener(orden_id)
+    assert cerrada["prioridad"] == 2
+    persistida: OrdenReparacion = repo_ordenes(tmp_path).obtener(orden_id)
     assert persistida.current_process == "EVT-REP-999"
-    # Solo los nodos del proceso (el cambio de prioridad es transversal).
-    assert [p.process_id for p in persistida.historial if p.process_id][
-        -4:
-    ] == [
-        "PROC-REP-170",
-        "PROC-REP-305",
-        "PROC-REP-211",
+    pasos = [p.process_id for p in persistida.historial if p.process_id]
+    assert pasos[-4:] == [
+        "PROC-REP-307",
         "PROC-REP-270",
-    ]
-    # Cualquier otro comando queda rechazado: la Orden esta cerrada.
+        "PROC-REP-308",
+        "PROC-REP-268",
+    ] or pasos[-3:] == ["PROC-REP-307", "PROC-REP-270", "PROC-REP-308"]
     conflicto(
         cliente.post(
             f"/api/orders/{orden_id}/take",
