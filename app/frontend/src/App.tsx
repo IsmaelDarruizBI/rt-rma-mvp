@@ -10,6 +10,7 @@ const AUTENTICACION = configuracionAuth({
   VITE_AUTH_MODO: import.meta.env.VITE_AUTH_MODO,
   VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
   VITE_SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  VITE_AUTH_DOMINIO_USUARIOS: import.meta.env.VITE_AUTH_DOMINIO_USUARIOS,
   DEV: import.meta.env.DEV,
 });
 
@@ -78,7 +79,13 @@ export default function App() {
   }
 
   if (AUTENTICACION.modo === "supabase") {
-    return <AccesoRma url={AUTENTICACION.url} clave={AUTENTICACION.clave} />;
+    return (
+      <AccesoRma
+        url={AUTENTICACION.url}
+        clave={AUTENTICACION.clave}
+        dominio={AUTENTICACION.dominio}
+      />
+    );
   }
   return <PanelOrdenes />;
 }

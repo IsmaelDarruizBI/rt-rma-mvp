@@ -4,12 +4,13 @@
 -- vez por persona:
 --
 --   psql "$URL_ADMIN" -v ON_ERROR_STOP=1 --single-transaction \
---     -v codigo=RECEP-001 -v email=recepcion@ejemplo.com \
+--     -v codigo=RECEP-001 -v email=jperez@usuarios.rma.invalid \
 --     -f supabase/scripts/vincular_usuarios_auth.sql
 --
 -- Solo completa un vinculo vacio: nunca pisa otro. Falla (y no cambia
 -- nada) si el usuario o la cuenta no existen, o si ya estaba vinculado.
--- No crea cuentas ni contrasenas: eso se hace en Supabase Auth.
+-- No crea cuentas ni contrasenas: eso lo hace supabase/scripts/cuentas_rma.py.
+-- El email es la identidad interna de la cuenta (<usuario>@<dominio>).
 
 select set_config('rma.vinculo_codigo', :'codigo', true),
        set_config('rma.vinculo_email', lower(:'email'), true);

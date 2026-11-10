@@ -3,7 +3,8 @@
  *
  * - `demo`: el acceso de prueba de siempre (usuarios ficticios validados
  *   en el navegador). Solo para desarrollo local (`npm run dev`).
- * - `supabase`: email y contraseña con Supabase Auth. Es el único modo
+ * - `supabase`: usuario y contraseña con Supabase Auth (cada usuario tiene una
+ *   identidad interna, ver `usuario.ts`; los empleados no usan su correo). Es el único modo
  *   admitido en un build de producción (UAT): sin configuración, la app
  *   muestra el error en lugar de caer al acceso de prueba.
  *
@@ -11,17 +12,21 @@
  * navegador); nunca se usa una clave de servicio.
  */
 
+import { DOMINIO_USUARIOS_POR_DEFECTO, dominioValido } from "./usuario.ts";
+
 export interface EntornoAuth {
   VITE_AUTH_MODO?: string;
   VITE_SUPABASE_URL?: string;
   VITE_SUPABASE_PUBLISHABLE_KEY?: string;
+  /** Dominio de las identidades internas (opcional; por defecto reservado). */
+  VITE_AUTH_DOMINIO_USUARIOS?: string;
   /** `import.meta.env.DEV`: true con el servidor de desarrollo de Vite. */
   DEV: boolean;
 }
 
 export type ConfiguracionAuth =
   | { modo: "demo" }
-  | { modo: "supabase"; url: string; clave: string }
+  | { modo: "supabase"; url: string; clave: string; dominio: string }
   | { modo: "invalida"; motivo: string };
 
 export function configuracionAuth(entorno: EntornoAuth): ConfiguracionAuth {
@@ -61,7 +66,18 @@ export function configuracionAuth(entorno: EntornoAuth): ConfiguracionAuth {
       motivo: "La clave configurada es secreta: usá la clave publicable.",
     };
   }
-  return { modo: "supabase", url, clave };
+  const dominio = (
+    entorno.VITE_AUTH_DOMINIO_USUARIOS ?? DOMINIO_USUARIOS_POR_DEFECTO
+  )
+    .trim()
+    .toLowerCase();
+  if (!dominioValido(dominio)) {
+    return {
+      modo: "invalida",
+      motivo: "VITE_AUTH_DOMINIO_USUARIOS no es un dominio válido.",
+    };
+  }
+  return { modo: "supabase", url, clave, dominio };
 }
 
 /** El `role` de una clave antigua en formato JWT (`anon` o `service_role`). */

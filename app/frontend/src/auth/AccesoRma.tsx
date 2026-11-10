@@ -1,8 +1,9 @@
 /**
  * Acceso con Supabase Auth (UAT y producción).
  *
- * 1. Email y contraseña contra Supabase Auth (sin registro público: las
- *    cuentas las crea Administración).
+ * 1. Usuario y contraseña contra Supabase Auth (sin registro público: las
+ *    cuentas las crea Administración). El usuario se traduce a la identidad
+ *    interna de su cuenta (`usuario.ts`); nunca se muestra.
  * 2. Con la sesión, `GET /api/me` dice quién es en RMA (rol y nombre los
  *    decide el backend, desde PostgreSQL).
  * 3. La aplicación de siempre (`PanelOrdenes`) con ese usuario. Cada pedido
@@ -26,10 +27,18 @@ type Estado =
 
 const SESION_VENCIDA = "Tu sesión venció. Volvé a iniciar sesión.";
 
-export function AccesoRma({ url, clave }: { url: string; clave: string }) {
+export function AccesoRma({
+  url,
+  clave,
+  dominio,
+}: {
+  url: string;
+  clave: string;
+  dominio: string;
+}) {
   const gestor = useMemo(
-    () => new GestorSesion(crearClienteAuth(url, clave)),
-    [url, clave],
+    () => new GestorSesion(crearClienteAuth(url, clave), { dominio }),
+    [url, clave, dominio],
   );
   const [estado, setEstado] = useState<Estado>({ tipo: "verificando" });
   const [aviso, setAviso] = useState<string | null>(null);
@@ -102,11 +111,11 @@ export function AccesoRma({ url, clave }: { url: string; clave: string }) {
   if (estado.tipo === "fuera") {
     return (
       <PantallaAcceso
-        campoUsuario={{ etiqueta: "Email", tipo: "email", autoComplete: "username" }}
+        campoUsuario={{ etiqueta: "Usuario", tipo: "text", autoComplete: "username" }}
         aviso={aviso}
-        onIngresar={async (email, contrasena) => {
+        onIngresar={async (usuario, contrasena) => {
           setAviso(null);
-          const resultado = await gestor.iniciar(email, contrasena);
+          const resultado = await gestor.iniciar(usuario, contrasena);
           if (!resultado.ok) return resultado.mensaje;
           return entrar();
         }}

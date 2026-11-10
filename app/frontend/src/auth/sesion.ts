@@ -8,6 +8,8 @@
  * sus resultados y errores a lo que muestra la pantalla de acceso.
  */
 
+import { DOMINIO_USUARIOS_POR_DEFECTO, identidadDeUsuario } from "./usuario.ts";
+
 /** Lo que se usa del cliente de Supabase Auth. */
 export interface ClienteAuth {
   signInWithPassword(credenciales: {
@@ -28,31 +30,83 @@ export interface ClienteAuth {
 
 export type ResultadoIngreso = { ok: true } | { ok: false; mensaje: string };
 
+export interface OpcionesSesion {
+  /** Dominio de las identidades internas (`<usuario>@<dominio>`). */
+  dominio?: string;
+  /** Fallos seguidos que activan la espera (en este navegador). */
+  maximoFallos?: number;
+  /** Cuánto se espera, en milisegundos, después de esos fallos. */
+  esperaMs?: number;
+  reloj?: () => number;
+}
+
+/**
+ * La sesión de un empleado: usuario y contraseña. El usuario se traduce a su
+ * identidad interna (`usuario.ts`) y Supabase Auth verifica la contraseña.
+ *
+ * Contra la enumeración, un usuario inexistente, una contraseña incorrecta,
+ * una cuenta sin confirmar o bloqueada dan el MISMO mensaje. Contra el abuso
+ * de intentos, Supabase limita el endpoint por IP; además, después de
+ * `maximoFallos` fallos seguidos este navegador espera `esperaMs` antes de
+ * volver a intentar (no reemplaza al límite del servidor).
+ */
 export class GestorSesion {
   private readonly cliente: ClienteAuth;
+  private readonly dominio: string;
+  private readonly maximoFallos: number;
+  private readonly esperaMs: number;
+  private readonly reloj: () => number;
+  private fallos = 0;
+  private bloqueadoHasta = 0;
 
-  constructor(cliente: ClienteAuth) {
+  constructor(cliente: ClienteAuth, opciones: OpcionesSesion = {}) {
     this.cliente = cliente;
+    this.dominio = opciones.dominio ?? DOMINIO_USUARIOS_POR_DEFECTO;
+    this.maximoFallos = opciones.maximoFallos ?? 5;
+    this.esperaMs = opciones.esperaMs ?? 30_000;
+    this.reloj = opciones.reloj ?? (() => Date.now());
   }
 
-  async iniciar(email: string, contrasena: string): Promise<ResultadoIngreso> {
-    const correo = email.trim();
-    if (!correo || !contrasena) {
-      return { ok: false, mensaje: "Ingresá tu email y tu contraseña." };
+  async iniciar(usuario: string, contrasena: string): Promise<ResultadoIngreso> {
+    if (!usuario.trim() || !contrasena) {
+      return { ok: false, mensaje: "Ingresá tu usuario y tu contraseña." };
+    }
+    const ahora = this.reloj();
+    if (ahora < this.bloqueadoHasta) {
+      const segundos = Math.ceil((this.bloqueadoHasta - ahora) / 1000);
+      return { ok: false, mensaje: `Demasiados intentos. Esperá ${segundos} s y volvé a probar.` };
+    }
+    const identidad = identidadDeUsuario(usuario, this.dominio);
+    if (identidad === null) {
+      // Un nombre que no puede existir: el mismo mensaje y el mismo conteo.
+      return this.fallo(MENSAJE_CREDENCIALES);
     }
     let respuesta;
     try {
       respuesta = await this.cliente.signInWithPassword({
-        email: correo,
+        email: identidad,
         password: contrasena,
       });
     } catch {
       return { ok: false, mensaje: MENSAJE_SIN_CONEXION };
     }
     if (respuesta.error || !respuesta.data.session) {
-      return { ok: false, mensaje: mensajeDeIngreso(respuesta.error) };
+      const mensaje = mensajeDeIngreso(respuesta.error);
+      return mensaje === MENSAJE_CREDENCIALES
+        ? this.fallo(mensaje)
+        : { ok: false, mensaje };
     }
+    this.fallos = 0;
+    this.bloqueadoHasta = 0;
     return { ok: true };
+  }
+
+  private fallo(mensaje: string): ResultadoIngreso {
+    this.fallos += 1;
+    if (this.fallos >= this.maximoFallos) {
+      this.bloqueadoHasta = this.reloj() + this.esperaMs;
+    }
+    return { ok: false, mensaje };
   }
 
   /** El token vigente (renovado si hacía falta), o `null` sin sesión. */
@@ -82,18 +136,21 @@ export class GestorSesion {
 const MENSAJE_SIN_CONEXION =
   "No se pudo contactar al servicio de acceso. Revisá la conexión.";
 
+/** Credenciales rechazadas, sin decir por qué (no se enumeran cuentas). */
+export const MENSAJE_CREDENCIALES =
+  "Usuario o contraseña incorrectos, o la cuenta no está habilitada.";
+
 export function mensajeDeIngreso(
   error: { message: string; status?: number; code?: string } | null,
 ): string {
   if (!error) return "No se pudo iniciar sesión.";
-  if (error.code === "invalid_credentials" || error.status === 400) {
-    return "Email o contraseña incorrectos.";
-  }
-  if (error.code === "email_not_confirmed") {
-    return "La cuenta todavía no está confirmada.";
-  }
-  if (error.code === "user_banned") {
-    return "La cuenta está deshabilitada.";
+  if (
+    error.code === "invalid_credentials" ||
+    error.code === "email_not_confirmed" ||
+    error.code === "user_banned" ||
+    error.status === 400
+  ) {
+    return MENSAJE_CREDENCIALES;
   }
   if (error.status === 429 || error.code === "over_request_rate_limit") {
     return "Demasiados intentos. Esperá un momento y volvé a probar.";
