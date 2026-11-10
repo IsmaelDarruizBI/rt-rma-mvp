@@ -17,6 +17,7 @@ from app.application import (
     revalidar_ordenes_pendientes,
 )
 from app.domain.models import TipoMovimientoInsumo
+from app.services import ROLES_GESTION_STOCK, ROLES_REVALIDACION_RECURSOS
 
 from .dependencias import ContextoDep
 from .idempotencia import idempotente
@@ -30,6 +31,7 @@ from .schemas_inventario import (
     RevalidacionOut,
     SituacionInsumoOut,
 )
+from .seguridad import exigir_rol
 
 router = APIRouter(prefix="/api/inventory", tags=["inventario"])
 
@@ -68,7 +70,10 @@ def get_movimientos(
     ]
 
 
-@router.post("/revalidate-orders")
+@router.post(
+    "/revalidate-orders",
+    dependencies=[exigir_rol(ROLES_REVALIDACION_RECURSOS)],
+)
 def post_revalidar_ordenes(
     cuerpo: RevalidacionIn,
     contexto: ContextoDep,
@@ -92,7 +97,9 @@ def get_insumo(insumo_id: str, contexto: ContextoDep) -> DetalleInsumoOut:
     )
 
 
-@router.post("/{insumo_id}/receipts")
+@router.post(
+    "/{insumo_id}/receipts", dependencies=[exigir_rol(ROLES_GESTION_STOCK)]
+)
 @idempotente("REGISTRAR_INGRESO_STOCK")
 def post_ingreso(
     insumo_id: str,
@@ -113,7 +120,9 @@ def post_ingreso(
     )
 
 
-@router.post("/{insumo_id}/adjustments")
+@router.post(
+    "/{insumo_id}/adjustments", dependencies=[exigir_rol(ROLES_GESTION_STOCK)]
+)
 @idempotente("REGISTRAR_AJUSTE_STOCK")
 def post_ajuste(
     insumo_id: str,

@@ -126,6 +126,22 @@ class Settings(BaseSettings):
     db_lock_timeout_ms: int = 5000
     db_statement_timeout_ms: int = 15000
 
+    # Autenticacion. ``demo``: sin login real, solo desarrollo local y
+    # tests (la API confia en el ``usuario_id`` que recibe). ``supabase``:
+    # cada pedido trae el token de Supabase Auth, que se verifica aca con
+    # las claves publicas del proyecto (JWKS); la identidad sale de
+    # ``rma.usuario.auth_user_id`` y los roles, de PostgreSQL. Cloud Run
+    # o una base remota exigen ``supabase``: no hay fallback a ``demo``.
+    auth_modo: Literal["demo", "supabase"] = "demo"
+    # URL del proyecto (``https://<ref>.supabase.co``): de ella salen el
+    # emisor (``/auth/v1``) y las claves (``/auth/v1/.well-known/jwks.json``).
+    auth_supabase_url: str | None = None
+    auth_audiencia: str = "authenticated"
+    # Solo firmas asimetricas: el backend no guarda ningun secreto.
+    auth_algoritmos: list[str] = ["ES256"]
+    # Tolerancia de reloj al validar ``exp``/``iat``, en segundos.
+    auth_margen_reloj_s: int = 10
+
     @property
     def ordenes_dir(self) -> Path:
         """Directorio de las Ordenes persistidas."""

@@ -8,6 +8,8 @@ dependencies = [
     "uvicorn[standard]>=0.32.0",
     "pydantic>=2.13.0",
     "pydantic-settings>=2.6.0",
+    # Verificacion local de los tokens de Supabase Auth (ES256 por JWKS).
+    "PyJWT[crypto]>=2.10.1",
 ]
 
 [project.optional-dependencies]

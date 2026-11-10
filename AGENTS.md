@@ -43,3 +43,4 @@ No repetir información entre documentos: enlazar.
 | Diseño de la base | `docs/postgresql/diseno-logico.md` y `diseno-fisico.md` |
 | Pendientes y riesgos de la integración con PostgreSQL | `docs/postgresql/integracion-pendientes.md` |
 | Instalación, configuración y pruebas del backend | `app/backend/README.md` |
+| Autenticación, autorización y su despliegue | `docs/autenticacion.md` |

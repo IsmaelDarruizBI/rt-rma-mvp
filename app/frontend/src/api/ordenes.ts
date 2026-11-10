@@ -25,7 +25,7 @@ import type {
   Usuario,
   VistaPreviaDocumento,
 } from "../types/api";
-import { get, getArchivo, post, postArchivo, put, urlApi } from "./client";
+import { get, getArchivo, post, postArchivo, put } from "./client";
 
 // --- Catalogos ---------------------------------------------------------
 
@@ -480,9 +480,12 @@ export function subirFoto(
   return postArchivo<Orden>(`/api/orders/${ordenId}/photos?${consulta}`, foto);
 }
 
-/** Dirección de la imagen de una foto (la sirve el backend). */
-export function urlFoto(ordenId: string, fotoId: string): string {
-  return urlApi(`/api/orders/${ordenId}/photos/${fotoId}`);
+/**
+ * La imagen de una foto. Se descarga con la sesión (el backend la exige):
+ * un `<img src>` directo no enviaría el token.
+ */
+export function descargarFoto(ordenId: string, fotoId: string): Promise<Blob> {
+  return getArchivo(`/api/orders/${ordenId}/photos/${fotoId}`);
 }
 
 /**

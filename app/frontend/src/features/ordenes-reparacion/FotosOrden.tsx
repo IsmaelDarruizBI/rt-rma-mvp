@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { urlFoto } from "../../api/ordenes";
+import { descargarFoto } from "../../api/ordenes";
 import { VentanaConservada } from "../../components/Modal";
 import { Boton, colores, fechaCorta } from "../../components/ui";
 import type { FotoOrden, Orden, RolUsuario, Usuario } from "../../types/api";
@@ -406,26 +406,56 @@ function MiniaturaFoto({
   usuarios: Usuario[];
   onAmpliar: (foto: Ampliada) => void;
 }) {
-  const url = urlFoto(orden.id, foto.id);
+  const url = useImagenDeFoto(orden.id, foto.id);
   const quien = `${nombreDeUsuario(usuarios, foto.usuario_id)} · ${fechaCorta(foto.fecha)}`;
   return (
     <li style={{ fontSize: "0.75rem", color: colores.suave }}>
       <button
         type="button"
-        onClick={() => onAmpliar({ url, texto: quien })}
+        onClick={() => url && onAmpliar({ url, texto: quien })}
+        disabled={!url}
         style={estiloBotonImagen}
         title="Ver ampliada"
       >
-        <img
-          src={url}
-          alt={`Foto del equipo subida por ${nombreDeUsuario(usuarios, foto.usuario_id)}`}
-          loading="lazy"
-          style={estiloMiniatura}
-        />
+        {url ? (
+          <img
+            src={url}
+            alt={`Foto del equipo subida por ${nombreDeUsuario(usuarios, foto.usuario_id)}`}
+            style={estiloMiniatura}
+          />
+        ) : (
+          <span aria-label="Cargando la foto" style={{ ...estiloMiniatura, display: "block" }} />
+        )}
       </button>
       <span style={{ display: "block", marginTop: "0.2rem" }}>{quien}</span>
     </li>
   );
+}
+
+/**
+ * La foto guardada como URL local del navegador: se descarga con la
+ * sesión y se libera al dejar de mostrarse.
+ */
+function useImagenDeFoto(ordenId: string, fotoId: string): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let vigente = true;
+    let creada: string | null = null;
+    descargarFoto(ordenId, fotoId)
+      .then((imagen) => {
+        if (!vigente) return;
+        creada = URL.createObjectURL(imagen);
+        setUrl(creada);
+      })
+      .catch(() => {
+        // Sin la imagen queda el recuadro vacío; el resto de la Orden sigue.
+      });
+    return () => {
+      vigente = false;
+      if (creada) URL.revokeObjectURL(creada);
+    };
+  }, [ordenId, fotoId]);
+  return url;
 }
 
 /** La foto ampliada sobre la pantalla; se cierra con «Cerrar» o Escape. */

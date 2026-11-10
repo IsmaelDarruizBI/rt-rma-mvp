@@ -23,10 +23,11 @@ from app.application import (
     sincronizar_catalogo_equipos,
 )
 from app.domain.models import ResultadoSincronizacion, SincronizacionCatalogo
-from app.services import OpcionModelo
+from app.services import ROLES_SINCRONIZACION_CATALOGO, OpcionModelo
 
 from .dependencias import ContextoDep
 from .idempotencia import idempotente
+from .seguridad import exigir_rol
 
 router = APIRouter(prefix="/api/catalogs/equipment", tags=["catalogos"])
 
@@ -160,7 +161,7 @@ def get_catalogo_equipos(contexto: ContextoDep) -> CatalogoEquiposOut:
     )
 
 
-@router.post("/sync")
+@router.post("/sync", dependencies=[exigir_rol(ROLES_SINCRONIZACION_CATALOGO)])
 @idempotente("SINCRONIZAR_CATALOGO_EQUIPOS")
 def post_sincronizar(
     usuario_id: str, contexto: ContextoDep

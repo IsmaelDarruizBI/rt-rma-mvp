@@ -8,9 +8,10 @@ queda en ``app.state``. Un test que quiera otro directorio de datos
 solo tiene que llamar a ``create_app(Settings(data_dir=tmp_path))``.
 """
 
+import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
@@ -23,10 +24,22 @@ from app.api import (
     mantenimiento,
     modelos_equipo,
     ordenes,
+    seguridad,
     trabajo,
 )
 from app.api.errores import registrar_manejadores_de_error
+from app.api.seguridad import (
+    Autenticacion,
+    exigir_identidad,
+    registrar_manejadores_de_seguridad,
+)
 from app.application import construir_contexto
+from app.core.autenticacion import (
+    VerificadorDeTokens,
+    exigir_modo_seguro,
+    obtener_clave_jwks,
+    parametros_de,
+)
 from app.core.config import Settings, get_settings
 
 
@@ -64,20 +77,55 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application.state.settings = settings
     application.state.contexto = construir_contexto(settings)
+    try:
+        application.state.autenticacion = construir_autenticacion(settings)
+    except Exception:
+        cerrar = getattr(application.state.contexto, "cerrar", None)
+        if cerrar is not None:
+            cerrar()
+        raise
 
     registrar_manejadores_de_error(application)
+    registrar_manejadores_de_seguridad(application)
 
+    # ``/health`` es publico; todo lo demas pasa por la sesion.
     application.include_router(health.router)
-    application.include_router(catalogos.router)
-    application.include_router(catalogo_equipos.router)
-    application.include_router(modelos_equipo.router)
-    application.include_router(clientes.router)
-    application.include_router(ordenes.router)
-    application.include_router(inventario.router)
-    application.include_router(trabajo.router)
-    application.include_router(mantenimiento.router)
+    protegido = [Depends(exigir_identidad)]
+    for modulo in (
+        seguridad,
+        catalogos,
+        catalogo_equipos,
+        modelos_equipo,
+        clientes,
+        ordenes,
+        inventario,
+        trabajo,
+        mantenimiento,
+    ):
+        application.include_router(modulo.router, dependencies=protegido)
 
     return application
+
+
+def construir_autenticacion(
+    settings: Settings, entorno: dict[str, str] | None = None
+) -> Autenticacion:
+    """``demo`` sin verificador; ``supabase`` con las claves del proyecto.
+
+    Falla al arrancar si el modo no es seguro para el entorno (Cloud Run
+    o base remota en ``demo``) o si falta configuracion.
+    """
+    exigir_modo_seguro(
+        settings, dict(os.environ) if entorno is None else entorno
+    )
+    if settings.auth_modo == "demo":
+        return Autenticacion(None)
+    parametros = parametros_de(settings)
+    return Autenticacion(
+        VerificadorDeTokens(
+            parametros, obtener_clave_jwks(parametros.url_claves)
+        )
+    )
 
 
 app = create_app()

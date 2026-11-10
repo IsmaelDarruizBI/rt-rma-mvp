@@ -129,6 +129,13 @@ class CatalogosRepository(Protocol):
 
     def listar_usuarios(self) -> list[Usuario]: ...
 
+    def obtener_usuario_por_identidad(
+        self, auth_user_id: str
+    ) -> Usuario | None:
+        """La persona vinculada a esa identidad de Supabase Auth
+        (``rma.usuario.auth_user_id``), o ``None`` si no hay ninguna."""
+        ...
+
     # --- Medios de pago ---
 
     def listar_medios_pago(self) -> list[MedioPago]:

@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 09/11/2026, checkpoint después de publicar en UAT la optimización de rendimiento (`00017-wer`). **Para retomar el trabajo: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md).**
+**Última actualización:** 09/11/2026, autenticación real implementada y publicada en la rama, **todavía no desplegada**; antes, el checkpoint de la optimización de rendimiento (`00017-wer`). **Para retomar el trabajo: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md).**
 
 ## A. Estado general
 
@@ -25,7 +25,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Últimos commits de código:** `c21f289` (lecturas en lote) y `750756c` (frontend sin recargas tras los comandos); desplegados desde `3249a0a`. Ver `git log`.
 
 **Estado de desarrollo:**
-- El MVP está en UAT sobre PostgreSQL (E9), solo con datos ficticios y sin autenticación real.
+- El MVP está en UAT sobre PostgreSQL (E9), solo con datos ficticios y sin autenticación real. La autenticación con Supabase Auth está implementada y lista para UAT ([`autenticacion.md`](autenticacion.md)), pero **no está desplegada**: el UAT publicado sigue sin autenticación.
 - La migración a PostgreSQL tiene E0 a E7 terminadas: Bloque A (E4 + E5) y Bloque B (E6 + E7, B1 a B6). La app corre localmente sobre PostgreSQL, con los datos persistentes entre reinicios.
 - El frontend tiene el rediseño aprobado: sidebar, barra de acciones, modales y «Pendientes» (`fe655d7`).
 - **Pendiente para la puesta en marcha:** autenticación real, latencia de los comandos, paginación y sincronización automática del catálogo de Ventas. Lista priorizada en [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 4.
@@ -49,6 +49,10 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Autenticación real, implementada y no desplegada (09/11/2026): `feat(auth)`, ver `git log`
+
+Supabase Auth (email y contraseña, sin registro público) y autorización en FastAPI con los roles de PostgreSQL: token ES256 verificado localmente por JWKS, identidad por `rma.usuario.auth_user_id`, `usuario_id` del pedido igual al de la sesión, 403 por rol en las rutas administrativas y `GET /api/me`. Frontend con `@supabase/auth-js` solo para la sesión. La persona (activo y rol) se lee de PostgreSQL en cada pedido: una desactivación vale desde el pedido siguiente. Sin cambios de reglas de negocio ni de esquema. **No desplegada:** Supabase Auth, Cloud Run y Vercel siguen sin cambios. Diseño, endpoints, configuración y despliegue en [`autenticacion.md`](autenticacion.md).
 
 ### Optimización de rendimiento en UAT (06/11/2026): `c21f289`, `750756c`
 
@@ -335,7 +339,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso:** autenticación real antes de cargar datos de clientes (hoy el login es demo y la API no tiene autenticación), y decidir si la base se mueve a São Paulo (no ejecutado; plan en [`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md)). No ejecutar `/photos/cleanup` con `aplicar`: el bucket conserva fotos anteriores a PostgreSQL.
+**Próximo paso:** desplegar la autenticación (implementada, no desplegada): aplicar con autorización la configuración de Supabase Auth, Cloud Run y Vercel según [`autenticacion.md`](autenticacion.md), secciones 4 y 5. Sin datos de clientes hasta entonces. También decidir si la base se mueve a São Paulo (no ejecutado; plan en [`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md)). No ejecutar `/photos/cleanup` con `aplicar`: el bucket conserva fotos anteriores a PostgreSQL.
 Lista priorizada de pendientes, identificación del despliegue y vuelta atrás: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md).
 
 Recordatorio: no hay modo mixto. Los datos creados en PostgreSQL no vuelven a JSON.

@@ -91,6 +91,7 @@ from app.domain.models import OrdenReparacion, TipoDocumento
 from app.domain.prioridad import clave_de_prioridad
 from app.services import (
     MAX_BYTES_FOTO,
+    ROLES_FOTOS,
     DecisionDetalle,
     PrecondicionInvalidaError,
 )
@@ -155,6 +156,7 @@ from .schemas import (
     TomarIn,
     VistaPreviaDocumentoOut,
 )
+from .seguridad import exigir_rol
 
 router = APIRouter(prefix="/api/orders", tags=["ordenes"])
 
@@ -1376,7 +1378,7 @@ def post_devolver_dinero(
     return _salida_con_entrega(orden, contexto, puede_entregar)
 
 
-@router.post("/{orden_id}/photos")
+@router.post("/{orden_id}/photos", dependencies=[exigir_rol(ROLES_FOTOS)])
 async def post_agregar_foto(
     orden_id: str,
     usuario_id: str,
@@ -1433,7 +1435,9 @@ async def post_agregar_foto(
     )
 
 
-@router.get("/{orden_id}/photos/{foto_id}")
+@router.get(
+    "/{orden_id}/photos/{foto_id}", dependencies=[exigir_rol(ROLES_FOTOS)]
+)
 def get_foto(
     orden_id: str,
     foto_id: str,

@@ -1,11 +1,10 @@
 /**
  * Pantalla de acceso (UAT).
  *
- * Solo look & feel y navegación por rol: valida credenciales dummy en el
- * frontend (`validarCredenciales`) y entrega el ID del usuario elegido. La
- * estructura visual -tarjeta de dos columnas, marca a la izquierda y
- * formulario a la derecha- es la que se reutilizará con la autenticación
- * definitiva; cambiará solo `onIngresar`.
+ * `PantallaAcceso` es la tarjeta de dos columnas (marca a la izquierda,
+ * formulario a la derecha) que usan los dos modos: `LoginDemo` (desarrollo
+ * local: credenciales dummy validadas en el frontend) y el acceso con
+ * Supabase Auth (email y contraseña).
  */
 
 import { useState, type FormEvent } from "react";
@@ -79,22 +78,57 @@ export function LoginDemo({
   usuarios: Usuario[];
   onIngresar: (usuarioId: string) => void;
 }) {
+  return (
+    <PantallaAcceso
+      campoUsuario={{ etiqueta: "Usuario", tipo: "text", autoComplete: "username" }}
+      cargando={usuarios.length === 0}
+      nota="Acceso de prueba (desarrollo local). No es un inicio de sesión real."
+      onIngresar={(usuario, contrasena) => {
+        const resultado = validarCredenciales(usuario, contrasena, usuarios);
+        if (!resultado.ok) return resultado.mensaje;
+        onIngresar(resultado.usuarioId);
+        return null;
+      }}
+    />
+  );
+}
+
+/** La tarjeta de acceso; `onIngresar` devuelve el error a mostrar o `null`. */
+export function PantallaAcceso({
+  campoUsuario,
+  cargando = false,
+  nota,
+  aviso,
+  onIngresar,
+}: {
+  campoUsuario: { etiqueta: string; tipo: "text" | "email"; autoComplete: string };
+  cargando?: boolean;
+  nota?: string;
+  /** Un aviso previo (por ejemplo, la sesión venció). */
+  aviso?: string | null;
+  onIngresar: (
+    usuario: string,
+    contrasena: string,
+  ) => string | null | Promise<string | null>;
+}) {
   const [usuario, setUsuario] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
 
-  const ingresar = (evento: FormEvent) => {
+  const ingresar = async (evento: FormEvent) => {
     evento.preventDefault();
-    const resultado = validarCredenciales(usuario, contrasena, usuarios);
-    if (!resultado.ok) {
-      setError(resultado.mensaje);
-      return;
+    if (enviando) return;
+    setEnviando(true);
+    try {
+      const fallo = await onIngresar(usuario, contrasena);
+      setError(fallo);
+      if (fallo) setContrasena("");
+    } finally {
+      setEnviando(false);
     }
-    setError(null);
-    onIngresar(resultado.usuarioId);
   };
-
-  const cargando = usuarios.length === 0;
+  const mensaje = error ?? aviso ?? null;
 
   return (
     <div className="rt-login">
@@ -109,7 +143,11 @@ export function LoginDemo({
           </div>
         </div>
 
-        <form className="rt-login-formulario" onSubmit={ingresar} noValidate>
+        <form
+          className="rt-login-formulario"
+          onSubmit={(evento) => void ingresar(evento)}
+          noValidate
+        >
           <h1 style={{ margin: 0, fontSize: "1.6rem", color: colores.texto }}>
             Sistema de Gestión
           </h1>
@@ -128,10 +166,11 @@ export function LoginDemo({
           </p>
 
           <label style={{ display: "block", marginBottom: "0.9rem" }}>
-            <span style={estiloEtiqueta}>Usuario</span>
+            <span style={estiloEtiqueta}>{campoUsuario.etiqueta}</span>
             <input
               name="usuario"
-              autoComplete="username"
+              type={campoUsuario.tipo}
+              autoComplete={campoUsuario.autoComplete}
               autoFocus
               value={usuario}
               onChange={(evento) => setUsuario(evento.target.value)}
@@ -150,7 +189,7 @@ export function LoginDemo({
             />
           </label>
 
-          {error && (
+          {mensaje && (
             <p
               role="alert"
               style={{
@@ -163,13 +202,13 @@ export function LoginDemo({
                 fontSize: "0.85rem",
               }}
             >
-              {error}
+              {mensaje}
             </p>
           )}
 
           <button
             type="submit"
-            disabled={cargando}
+            disabled={cargando || enviando}
             style={{
               padding: "0.7rem 1rem",
               borderRadius: 8,
@@ -179,21 +218,23 @@ export function LoginDemo({
               fontSize: "0.95rem",
               fontWeight: 600,
               fontFamily: "inherit",
-              cursor: cargando ? "not-allowed" : "pointer",
-              opacity: cargando ? 0.6 : 1,
+              cursor: cargando || enviando ? "not-allowed" : "pointer",
+              opacity: cargando || enviando ? 0.6 : 1,
             }}
           >
-            {cargando ? "Cargando…" : "Iniciar sesión"}
+            {cargando ? "Cargando…" : enviando ? "Ingresando…" : "Iniciar sesión"}
           </button>
-          <p
-            style={{
-              margin: "1rem 0 0",
-              fontSize: "0.75rem",
-              color: colores.suave,
-            }}
-          >
-            Acceso de prueba (UAT). No es un inicio de sesión real.
-          </p>
+          {nota && (
+            <p
+              style={{
+                margin: "1rem 0 0",
+                fontSize: "0.75rem",
+                color: colores.suave,
+              }}
+            >
+              {nota}
+            </p>
+          )}
         </form>
       </section>
     </div>

@@ -35,6 +35,7 @@ curso o una breve de solo lectura.
 from datetime import timezone
 from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 from app.domain.models import (
     DATOS_EMPRESA_PREDETERMINADOS,
@@ -164,6 +165,15 @@ _USUARIO = consulta(
     _COLUMNAS_USUARIO
     + """
     WHERE u.codigo = %(codigo)s
+    GROUP BY u.id
+    """,
+    modo=LECTURA,
+)
+_USUARIO_POR_IDENTIDAD = consulta(
+    "catalogos.usuario_por_identidad",
+    _COLUMNAS_USUARIO
+    + """
+    WHERE u.auth_user_id = %(auth_user_id)s
     GROUP BY u.id
     """,
     modo=LECTURA,
@@ -455,6 +465,16 @@ class PostgresCatalogosRepository:
     def obtener_usuario(self, usuario_id: str) -> Usuario:
         fila = self._fila(_USUARIO, {"codigo": usuario_id})
         return _usuario(_existente(fila, "Usuario", usuario_id))
+
+    def obtener_usuario_por_identidad(
+        self, auth_user_id: str
+    ) -> Usuario | None:
+        try:
+            identidad = UUID(auth_user_id)
+        except ValueError:
+            return None
+        fila = self._fila(_USUARIO_POR_IDENTIDAD, {"auth_user_id": identidad})
+        return None if fila is None else _usuario(fila)
 
     # --- Medios de pago ---
 

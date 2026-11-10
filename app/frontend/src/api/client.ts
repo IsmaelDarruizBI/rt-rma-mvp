@@ -6,6 +6,7 @@
  * acciones son posibles lo dice el backend en cada respuesta.
  */
 
+import { EVENTO_SESION_VENCIDA } from "../auth/sesion";
 import { ActividadDeRed, LecturasEnCurso } from "./actividad";
 import { ClavesDeEnvio, conClave } from "./idempotencia";
 
@@ -33,6 +34,37 @@ interface CuerpoError {
 export const actividad = new ActividadDeRed();
 const lecturas = new LecturasEnCurso();
 
+/**
+ * Con Supabase Auth, el token de la sesión para cada pedido. Sin él (modo
+ * demo) los pedidos van como siempre.
+ */
+let obtenerToken: (() => Promise<string | null>) | null = null;
+
+export function usarToken(
+  proveedor: (() => Promise<string | null>) | null,
+): void {
+  obtenerToken = proveedor;
+}
+
+async function encabezados(
+  propios?: HeadersInit,
+): Promise<Record<string, string>> {
+  const resultado: Record<string, string> = {};
+  new Headers(propios).forEach((valor, nombre) => {
+    resultado[nombre] = valor;
+  });
+  const token = obtenerToken ? await obtenerToken() : null;
+  if (token) resultado["Authorization"] = `Bearer ${token}`;
+  return resultado;
+}
+
+/** 401: la sesión venció o no es válida; la app vuelve al acceso. */
+function avisarSiVencio(respuesta: Response): void {
+  if (respuesta.status === 401 && obtenerToken) {
+    window.dispatchEvent(new Event(EVENTO_SESION_VENCIDA));
+  }
+}
+
 function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
   return actividad.seguir(() => enviar<T>(ruta, init));
 }
@@ -42,8 +74,10 @@ async function enviar<T>(ruta: string, init?: RequestInit): Promise<T> {
 
   try {
     respuesta = await fetch(`${API_BASE_URL}${ruta}`, {
-      headers: { "Content-Type": "application/json" },
       ...init,
+      headers: await encabezados(
+        init?.headers ?? { "Content-Type": "application/json" },
+      ),
     });
   } catch {
     throw new ApiError(
@@ -54,6 +88,7 @@ async function enviar<T>(ruta: string, init?: RequestInit): Promise<T> {
   }
 
   if (!respuesta.ok) {
+    avisarSiVencio(respuesta);
     let codigo = "ERROR";
     let mensaje = `La operación falló (HTTP ${respuesta.status}).`;
     try {
@@ -77,7 +112,9 @@ export function get<T>(ruta: string): Promise<T> {
 export async function getArchivo(ruta: string): Promise<Blob> {
   let respuesta: Response;
   try {
-    respuesta = await fetch(`${API_BASE_URL}${ruta}`);
+    respuesta = await fetch(`${API_BASE_URL}${ruta}`, {
+      headers: await encabezados(),
+    });
   } catch {
     throw new ApiError(
       0,
@@ -86,6 +123,7 @@ export async function getArchivo(ruta: string): Promise<Blob> {
     );
   }
   if (!respuesta.ok) {
+    avisarSiVencio(respuesta);
     let codigo = "ERROR";
     let mensaje = `No se pudo obtener el archivo (HTTP ${respuesta.status}).`;
     try {
@@ -118,11 +156,6 @@ export function post<T>(ruta: string, cuerpo: unknown): Promise<T> {
   );
 }
 
-/** URL absoluta de un recurso de la API (por ejemplo, una foto). */
-export function urlApi(ruta: string): string {
-  return `${API_BASE_URL}${ruta}`;
-}
-
 /** Un archivo como cuerpo (por ejemplo, una foto), con respuesta JSON. */
 export function postArchivo<T>(ruta: string, archivo: Blob): Promise<T> {
   return conClave(claves, ruta, archivo, (clave) =>
@@ -141,5 +174,6 @@ export function put<T>(ruta: string, cuerpo: unknown): Promise<T> {
   return pedir<T>(ruta, {
     method: "PUT",
     body: JSON.stringify(cuerpo),
+    headers: { "Content-Type": "application/json" },
   });
 }

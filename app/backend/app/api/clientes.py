@@ -10,14 +10,16 @@ configurada, en esa fuente. No guarda nada.
 from fastapi import APIRouter
 
 from app.application import buscar_cliente_por_dni
+from app.application.clientes import ROLES_BUSQUEDA_CLIENTE
 
 from .dependencias import ContextoDep
 from .schemas import BusquedaClienteOut
+from .seguridad import exigir_rol
 
 router = APIRouter(prefix="/api/clients", tags=["clientes"])
 
 
-@router.get("/lookup")
+@router.get("/lookup", dependencies=[exigir_rol(ROLES_BUSQUEDA_CLIENTE)])
 def get_buscar_cliente(
     dni: str,
     usuario_id: str,

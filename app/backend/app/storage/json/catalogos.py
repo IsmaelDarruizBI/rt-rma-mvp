@@ -207,6 +207,19 @@ class JsonCatalogosRepository:
             self.listar_usuarios(), usuario_id, "Usuario"
         )
 
+    def obtener_usuario_por_identidad(
+        self, auth_user_id: str
+    ) -> Usuario | None:
+        """En JSON, el vinculo es un campo opcional ``auth_user_id`` de
+        ``usuarios.json`` (solo para desarrollo y tests)."""
+        ruta = self._directorio / ARCHIVO_USUARIOS
+        if not ruta.is_file():
+            return None
+        for dato in leer_json(ruta):
+            if dato.get("auth_user_id") == auth_user_id:
+                return Usuario.model_validate(dato)
+        return None
+
     # --- Medios de pago ---
 
     def listar_medios_pago(self) -> list[MedioPago]:

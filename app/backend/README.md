@@ -423,6 +423,11 @@ Variables de entorno con prefijo `RMA_` (ver `app/core/config.py`):
 | `RMA_DB_POOL_MAX_IDLE_S` | `300`: las conexiones que superan `RMA_DB_POOL_MIN` y estan ociosas mas tiempo se cierran (provisorio, E3) |
 | `RMA_DB_LOCK_TIMEOUT_MS` | `5000` (`SET LOCAL` por transaccion; maximo 2147483647) |
 | `RMA_DB_STATEMENT_TIMEOUT_MS` | `15000` (`SET LOCAL` por transaccion; maximo 2147483647) |
+| `RMA_AUTH_MODO` | `demo` (solo local y tests). `supabase`: token de Supabase Auth obligatorio. Cloud Run o una base remota no arrancan en `demo` ([`docs/autenticacion.md`](../../docs/autenticacion.md)) |
+| `RMA_AUTH_SUPABASE_URL` | sin valor; con `supabase`, `https://<proyecto>.supabase.co` (emisor y JWKS) |
+| `RMA_AUTH_ALGORITMOS` | `["ES256"]` (solo asimetricos) |
+| `RMA_AUTH_AUDIENCIA` | `authenticated` |
+| `RMA_AUTH_MARGEN_RELOJ_S` | `10` |
 
 `RMA_DATA_DIR` decide donde viven `ordenes/` y `catalogs/`. Los tests
 siempre usan `tmp_path`: nunca escriben sobre los catalogos DEMO

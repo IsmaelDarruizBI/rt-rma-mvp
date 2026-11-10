@@ -145,7 +145,13 @@ function guardarFiltros(filtros: FiltrosListado): void {
   }
 }
 
-export function PanelOrdenes() {
+/** Una sesión real (Supabase Auth): el usuario lo decidió el backend. */
+export interface SesionReal {
+  usuarioId: string;
+  cerrar: () => void;
+}
+
+export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [tipos, setTipos] = useState<TipoReparacion[]>([]);
   const [estaciones, setEstaciones] = useState<Estacion[]>([]);
@@ -224,13 +230,14 @@ export function PanelOrdenes() {
   // Cerrar sesión: olvida el usuario y vuelve al acceso. Se cierra la Orden
   // abierta para que el próximo usuario no herede la pantalla anterior.
   const cerrarSesion = useCallback(() => {
-    borrarUsuarioDemo();
+    if (!sesion) borrarUsuarioDemo();
     olvidarBandejas();
     setActorId("");
     setOrden(null);
     setError(null);
     navegar({ pantalla: "inicio" });
-  }, [navegar]);
+    sesion?.cerrar();
+  }, [navegar, sesion]);
 
   useEffect(() => {
     async function cargar() {
@@ -253,9 +260,13 @@ export function PanelOrdenes() {
         setEstaciones(listaEstaciones);
         setMedios(listaMedios);
         setPrioridades(listaPrioridades);
-        // La sesión de demostración recordada, si su usuario sigue en el
-        // catálogo; si no, se muestra el acceso.
-        setActorId(elegirUsuarioDemo(listaUsuarios, leerUsuarioDemo()));
+        // Con sesión real, el usuario de la sesión. En demo, el recordado
+        // si sigue en el catálogo; si no, se muestra el acceso.
+        setActorId(
+          sesion
+            ? sesion.usuarioId
+            : elegirUsuarioDemo(listaUsuarios, leerUsuarioDemo()),
+        );
       } catch (fallo) {
         setError(errorDe(fallo, null));
       }
@@ -560,7 +571,25 @@ export function PanelOrdenes() {
   const nombreAccion = (accion: Accion) =>
     NOMBRE_ACCION[accion.codigo] ?? accion.etiqueta;
 
-  // Sin sesión de demostración: pantalla de acceso (UAT).
+  // Con sesión real, mientras llegan los catálogos (o si fallaron).
+  if (actor === null && sesion) {
+    return (
+      <div style={{ maxWidth: 880, margin: "2rem auto", padding: "0 1rem" }}>
+        {error ? (
+          <>
+            <MensajeDeComando error={error} />
+            <Boton variante="secundario" onClick={cerrarSesion}>
+              Cerrar sesión
+            </Boton>
+          </>
+        ) : (
+          <p role="status">Cargando…</p>
+        )}
+      </div>
+    );
+  }
+
+  // Sin sesión de demostración: pantalla de acceso (desarrollo local).
   if (actor === null) {
     return (
       <>
