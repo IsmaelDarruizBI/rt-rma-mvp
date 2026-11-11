@@ -65,7 +65,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ### Integración separada del despliegue (11/11/2026)
 
-- **Vercel:** `rt-rma-uat` tiene `gitProviderOptions.createDeployments: disabled`. Antes, cada push creaba un despliegue y un push a `mvp-v2` publicaba en producción. Sin cambios en variables, dominios ni el despliegue activo (`rt-rma-n49rz9qgv…`).
+- **Vercel:** `rt-rma-uat` está desconectado del repositorio. Antes, cada push creaba un despliegue y un push a `mvp-v2` publicaba en producción. Sin cambios en variables, dominios ni el despliegue activo (`rt-rma-n49rz9qgv…`). Desactivar `createDeployments` no alcanzó ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), al principio).
 - **`mvp-v2`:** integrada por avance rápido, sin force push; P0-2 queda pendiente solo para `main`.
 - **DC31:** `ac619ed` corrige la devolución previa a cancelar en Órdenes con resultado (P0-4).
 
