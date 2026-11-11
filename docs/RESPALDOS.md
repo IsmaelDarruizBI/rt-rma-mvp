@@ -2,11 +2,12 @@
 
 Respaldo mínimo, cifrado y restaurable de la base del UAT (Supabase PostgreSQL), con su procedimiento de recuperación.
 
-**Estado (11/11/2026): activo en la nube.**
+**Estado (11/11/2026): operativo.**
 
 - Respaldo diario de São Paulo (`pcdnmhzwhzymznojndrn`) a las 03:00 de Argentina, con un rol de solo lectura.
 - La primera copia se generó y verificó, y la restauración completa se ensayó en la nube (sección 3).
-- **Pendiente de la persona responsable:** comprobar que una copia real se descifra con su clave privada (sección 3, «Descifrado con la clave real»).
+- **Descifrado con la clave real: OK.** La persona responsable descifró en su máquina, con su clave privada, `rma.dump.age` y `auth.dump.age` de la copia `uat/20261111T193144Z`: los dos dan `PGDMP`. Borró los descifrados; la clave no se compartió.
+- La primera ejecución programada es el 12/11/2026 a las 06:00 UTC. Hasta entonces, el Scheduler se probó disparado a mano.
 
 ## 1. Opciones evaluadas
 
@@ -107,7 +108,7 @@ El Job usa el rol `rma_respaldo`, creado con [`crear_secreto_respaldo.py`](../su
   - Secuencias iguales al manifiesto.
   - Auth: 4 cuentas.
 
-**Descifrado con la clave real:** lo hace solo la persona responsable, en su máquina; la clave privada no se comparte. En PowerShell, sobre una copia descargada:
+**Descifrado con la clave real:** lo hace solo la persona responsable, en su máquina; la clave privada no se comparte. **Resultado del 11/11/2026: OK**, los dos archivos de `uat/20261111T193144Z` dan `PGDMP`. En PowerShell, sobre una copia descargada:
 
 ```powershell
 $d = "$env:USERPROFILE\respaldos-rma\nube-uat-20261111T193144Z"
@@ -181,7 +182,7 @@ Revisar el costo al cargar datos reales.
 |---|---|
 | Respaldos diarios | 30 días, inmutables por la política del bucket; se borran a los 35 |
 | Fotos borradas | 7 días de borrado suave (hoy); con versionado, 30 días |
-| Copia descargada `%USERPROFILE%\respaldos-rma\nube-uat-20261111T193144Z\` | Cifrada. Se conserva para el descifrado con la clave real; después se borra |
+| Copia descargada `%USERPROFILE%\respaldos-rma\nube-uat-20261111T193144Z\` | Cifrada. Ya sirvió para el descifrado con la clave real; se borra junto con los respaldos manuales previos (25/11/2026) |
 | Respaldos manuales previos (`%USERPROFILE%\respaldos-rma\`) | Hasta el 25/11/2026, cuando cierra el período de vuelta atrás de la migración. Tienen datos personales `uat-reinicio-20261110` y `sp-or000001-20261111`. Esta última está en la computadora actual, con acceso solo para la cuenta de Windows de quien opera. `uat-reinicio-20261110` y `sp-pruebas-20261111` quedaron en la computadora anterior: confirmar dónde están y borrarlas en la misma fecha |
 
 Cuando el UAT pase a datos reales, revisar la retención y considerar el plan Pro (copias físicas y PITR).

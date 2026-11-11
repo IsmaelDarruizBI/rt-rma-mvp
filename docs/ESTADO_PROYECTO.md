@@ -63,6 +63,17 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ## B. Últimos avances
 
+### Consolidación técnica cerrada (11/11/2026)
+
+- **Respaldo operativo:** la persona responsable descifró la copia real (`uat/20261111T193144Z`) con su clave privada: `rma.dump.age` y `auth.dump.age` dan `PGDMP`.
+- **Infraestructura de São Paulo** (verificación de solo lectura):
+  - `00024-top` con el 100 % del tráfico;
+  - Vercel `dpl_6vsL…` publicado contra São Paulo;
+  - Job y Scheduler de respaldo habilitados, con 4 copias en el bucket;
+  - sin errores recientes.
+- **Git:** todo publicado; `feat/postgresql-esquema` y `mvp-v2` en el mismo commit.
+- **Siguiente etapa:** desarrollo funcional.
+
 ### Respaldo diario activo y limpieza posterior al corte (11/11/2026)
 
 - **Inicio de sesión manual verificado** en los registros: lecturas autenticadas con 200 después del corte.
@@ -70,7 +81,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 - **Respaldo:** activo, con el Job `rt-rma-respaldo-db`, el Scheduler `rt-rma-respaldo-diario` (03:00 de Argentina) y el bucket `rt-rma-uat-respaldos`, inmutable 30 días.
   - Usa el rol de solo lectura `rma_respaldo`, no el administrador.
   - Primera copia `uat/20261111T193144Z` verificada; ensayo de restauración completo en la nube.
-  - **Falta:** el descifrado con la clave real ([`RESPALDOS.md`](RESPALDOS.md)).
+  - Descifrado con la clave real: OK (ver «Consolidación técnica cerrada»).
 
 ### Cierre técnico posterior al corte (11/11/2026)
 
@@ -430,30 +441,32 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso:** los P0 de [`DEUDA_TECNICA.md`](DEUDA_TECNICA.md), cada uno con autorización.
+**Próximo paso:** la consolidación técnica está cerrada; empieza el desarrollo funcional, con los criterios de abajo. Quedan pendientes operativos con fecha y `main`:
 
 1. **Hecho (11/11/2026):** inicio de sesión manual en `rt-rma-uat.vercel.app`, verificado en los registros.
 2. **Hecho (11/11/2026):** limpieza (P2-4) y respaldo diario (P0-1).
-3. **Descifrar una copia con la clave privada real** ([`RESPALDOS.md`](RESPALDOS.md), sección 3). Lo hace la persona responsable, en su máquina.
+3. **Hecho (11/11/2026):** descifrado de una copia real con la clave privada.
+   - **El 12/11/2026:** confirmar la primera ejecución programada del respaldo (06:00 UTC).
+   - **Cada mes:** el ensayo en la nube.
 4. **Hasta el 25/11/2026:** una consulta semanal de solo lectura en Oregón, para que el plan Free no lo pause.
 5. **El 25/11/2026:**
    - decidir sobre Oregón: pausarlo o eliminarlo, junto con `00020-tux`, `rma-uat-database-url` y `dpl_F1M6…`;
-   - borrar las copias externas con datos personales ([`RESPALDOS.md`](RESPALDOS.md), sección 5).
+   - borrar las copias externas con datos personales y la copia descargada `nube-uat-20261111T193144Z` ([`RESPALDOS.md`](RESPALDOS.md), sección 5).
 6. **Integrar en `main`** (P0-2), con un PR.
 
 **Criterios para empezar el desarrollo funcional** ([`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md), sección 7), al 11/11/2026:
 
 | Criterio | Estado |
 |---|---|
-| 1. Rama integrada en `mvp-v2`, CI en verde | Cumplido (`5ebf474`). Falta `main` (P0-2) |
+| 1. Rama integrada en `mvp-v2`, CI en verde | Cumplido. Falta `main` (P0-2) |
 | 2. Una sola base de UAT | Cumplido: São Paulo. Oregón es solo la vuelta atrás |
-| 3. Respaldo diario y restauración ensayada | Cumplido (11/11/2026): respaldo diario activo y restauración ensayada en la nube. Falta confirmar el descifrado con la clave real antes de cargar datos reales |
+| 3. Respaldo diario y restauración ensayada | Cumplido (11/11/2026): respaldo diario activo, restauración ensayada en la nube y descifrado con la clave real |
 | 4. Cambios funcionales primero en `business/` | Regla vigente |
 | 5. Solo migraciones aditivas, `postgres` en verde | Regla vigente |
 | 6. Checklist de seguridad y par de vuelta atrás en cada despliegue | Regla vigente. Integrar ya no despliega |
 | 7. Los P1 de cada módulo, dentro del módulo | Regla vigente ([`DEUDA_TECNICA.md`](DEUDA_TECNICA.md)) |
 
-Se puede empezar el desarrollo funcional, en ramas propias que salgan de `mvp-v2`. Los datos reales se cargan después de confirmar el descifrado con la clave real.
+Se puede empezar el desarrollo funcional, en ramas propias que salgan de `mvp-v2`. Antes de cargar datos reales: revisar la retención de los respaldos, el plan de Supabase (P2-7) y el versionado de fotos (P2-11).
 
 Después empieza el desarrollo funcional, con los criterios de [`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md), sección 7.
 
