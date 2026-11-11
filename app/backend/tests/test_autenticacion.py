@@ -322,6 +322,21 @@ def test_rutas_administrativas_rechazan_otros_roles(
     _error(tecnico, 403, "ROL_NO_AUTORIZADO")
 
 
+# --- Documentacion de la API -------------------------------------------------
+
+
+@pytest.mark.parametrize("ruta", ["/docs", "/redoc", "/openapi.json"])
+def test_con_autenticacion_real_no_se_publica_la_documentacion(cliente, ruta):
+    assert cliente.get(ruta).status_code == 404
+
+
+def test_en_modo_demo_la_documentacion_sigue_disponible(tmp_path):
+    sembrar(tmp_path)
+    cliente = TestClient(create_app(Settings(data_dir=tmp_path)))
+    assert cliente.get("/openapi.json").status_code == 200
+    assert cliente.get("/docs").status_code == 200
+
+
 # --- Modo demo y arranque ----------------------------------------------------
 
 

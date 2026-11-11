@@ -57,10 +57,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """Construye y configura la instancia de FastAPI."""
     settings = settings or get_settings()
 
+    # La documentacion interactiva (/docs, /redoc, /openapi.json) solo en
+    # desarrollo local: con autenticacion real (UAT y produccion) no se
+    # publica el mapa de la API.
+    documentacion = settings.auth_modo == "demo"
     application = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
         lifespan=_ciclo_de_vida,
+        docs_url="/docs" if documentacion else None,
+        redoc_url="/redoc" if documentacion else None,
+        openapi_url="/openapi.json" if documentacion else None,
     )
 
     application.add_middleware(
