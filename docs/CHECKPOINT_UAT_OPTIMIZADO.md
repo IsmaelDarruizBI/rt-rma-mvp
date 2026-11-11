@@ -29,7 +29,7 @@ Verificado el 06/11/2026 con `gcloud`. El 09/11 la credencial de `gcloud` estaba
 
 | Elemento | Valor |
 |---|---|
-| Rama | `feat/postgresql-esquema` (sin merge; `mvp-v2` es la rama de producción de Vercel) |
+| Rama | `feat/postgresql-esquema` (sin merge; `mvp-v2` es la rama de producción de Vercel). Actualización del 11/11: `mvp-v2` integrada y Vercel ya no despliega desde Git ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)) |
 | HEAD | `git log -1`: el commit que agrega este archivo, de solo documentación |
 | Backend construido desde | `3249a0a`: el código es el de `c21f289` y `750756c` |
 | Cloud Run | Servicio `rt-rma-uat-api`, proyecto `rosariotecno-460217`, región `southamerica-east1`. Revisión `rt-rma-uat-api-00017-wer`, con etiqueta `commit=3249a0a` y el 100 % del tráfico (`LATEST`) |

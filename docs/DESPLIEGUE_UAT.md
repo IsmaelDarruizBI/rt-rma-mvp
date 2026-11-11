@@ -2,8 +2,10 @@
 
 Procedimiento para publicar una versión nueva del backend y del frontend del UAT, y para volver a la anterior.
 
-- **Despliegues manuales:** se hacen por CLI con autorización explícita ([`AGENTS.md`](../AGENTS.md)).
-- **Despliegues automáticos de Vercel (verificado el 11/11/2026):** el proyecto `rt-rma-uat` está conectado a GitHub (`createDeployments: enabled`) y su rama de producción es `mvp-v2`, con el dominio asignado automáticamente. Cada push a otra rama crea una vista previa; **un push a `mvp-v2` publica el frontend en `rt-rma-uat.vercel.app`**. Integrar `mvp-v2` es, por lo tanto, un despliegue de Vercel y necesita esa autorización, salvo que antes se cambie la configuración del proyecto.
+- **Integrar no es publicar.** El código se integra por Git y CI: push a la rama, workflows en verde (sección 5) y avance rápido de `mvp-v2`. Ningún push despliega.
+- **Publicar en el UAT es una operación aparte y explícita,** por CLI y con autorización ([`AGENTS.md`](../AGENTS.md)): el backend con `gcloud run deploy` (sección 3) y el frontend con `vercel deploy --prod` (sección 4).
+- **No hay despliegues automáticos a producción (desde el 11/11/2026).** El proyecto Vercel `rt-rma-uat` sigue conectado a GitHub y su rama de producción sigue siendo `mvp-v2`, pero con `gitProviderOptions.createDeployments: disabled`: ningún push crea despliegues, ni de producción ni vistas previas. Volver a activarlo es un cambio de configuración que necesita autorización. Para verificarlo: `vercel api "/v9/projects/rt-rma-uat?teamId=team_G7XTlKAQ4rGyOrfcvOqgZm24"`, campo `gitProviderOptions`.
+- **Backend y frontend se publican coordinados** cuando el cambio toca a los dos: el contrato de la API, la autenticación o el proyecto de Supabase. Primero el backend sin tráfico, después la prueba del frontend contra su etiqueta y, recién entonces, el tráfico del backend y `vercel deploy --prod` del mismo commit. Un cambio que toca una sola pieza se publica solo.
 - **Corte a São Paulo:** el procedimiento propio está en [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16.
 
 ## 1. Piezas
@@ -68,7 +70,7 @@ cd <carpeta temporal> && vercel deploy --prod --yes --scope ismaeldarruizbis-pro
 | `frontend` | Cambios en `app/frontend/` | `typecheck`, pruebas y construcción |
 | `funcional` | Cambios en `business/`, `specs/`, `traceability/` o sus scripts | `npm run validate:all` |
 
-Ninguno despliega ni usa secretos. Se activan al publicar la rama en GitHub.
+Ninguno despliega ni usa secretos. Se activan al publicar la rama en GitHub. Como Vercel tampoco despliega desde Git, el push que integra en `mvp-v2` solo dispara estos workflows.
 
 ## 6. Vuelta atrás
 

@@ -32,7 +32,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | Persistencia en uso | UAT: PostgreSQL en Supabase (`RMA_PERSISTENCIA=postgres`). JSON sigue siendo el valor por defecto local |
 | UAT publicado | Backend en Cloud Run (`00020-tux`, con autenticación) y frontend en Vercel, sobre Supabase Oregón. São Paulo, preparado para el corte ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md)) |
 
-**Rama de trabajo:** `feat/postgresql-esquema`, que sale de `mvp-v2`.
+**Rama de trabajo:** `feat/postgresql-esquema`. `mvp-v2` está integrada por avance rápido y apunta al mismo commit (11/11/2026). Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
 
 **Últimos commits de código:** `61e2a14` (inicio de sesión con usuario y contraseña), `50170e4` (DC31) y `d60c124` (autenticación). Desplegado: `61e2a14`. Sin commit todavía: los scripts de `supabase/scripts/migracion_sp/` y `reinicio_uat/`, su test y esta documentación. Ver `git log`.
 
@@ -62,6 +62,12 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Integración separada del despliegue (11/11/2026)
+
+- **Vercel:** `rt-rma-uat` tiene `gitProviderOptions.createDeployments: disabled`. Antes, cada push creaba un despliegue y un push a `mvp-v2` publicaba en producción. Sin cambios en variables, dominios ni el despliegue activo (`rt-rma-n49rz9qgv…`).
+- **`mvp-v2`:** integrada por avance rápido, sin force push; P0-2 queda pendiente solo para `main`.
+- **DC31:** `ac619ed` corrige la devolución previa a cancelar en Órdenes con resultado (P0-4).
 
 ### Consolidación técnica (11/11/2026): commits locales, sin push
 
@@ -401,9 +407,9 @@ Otros riesgos registrados:
 
 **Próximo paso:** los P0 de [`DEUDA_TECNICA.md`](DEUDA_TECNICA.md), cada uno con autorización.
 
-1. **Integrar `mvp-v2` por avance rápido** (P0-2). P0-4 está resuelto (`fbdfaec`, `ac619ed`) y los cinco workflows pasan sobre `ac619ed`. Un push a `mvp-v2` publica el frontend en Vercel ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 1): requiere autorizar ese despliegue o cambiar antes la configuración del proyecto.
-2. **Decidir sobre `OR-000001` en São Paulo** y ejecutar el corte ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16). Vuelta atrás: `00020-tux` y `rt-rma-n49rz9qgv…`.
-3. **Activar el respaldo** ([`RESPALDOS.md`](RESPALDOS.md), sección 4).
+1. **Decidir sobre `OR-000001` en São Paulo** y ejecutar el corte ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16). Vuelta atrás: `00020-tux` y `rt-rma-n49rz9qgv…`. El UAT publicado no incluye la corrección de DC31 (`ac619ed`): publicarla es una operación aparte, coordinada entre backend y frontend ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
+2. **Activar el respaldo** ([`RESPALDOS.md`](RESPALDOS.md), sección 4).
+3. **Integrar en `main`** (P0-2), con un PR.
 
 Después empieza el desarrollo funcional, con los criterios de [`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md), sección 7.
 
