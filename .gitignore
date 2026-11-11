@@ -22,3 +22,6 @@ venv/
 
 # Copia local del catalogo de equipos de Ventas (se sincroniza; no se versiona)
 app/backend/data/catalogo_equipos/
+
+# Capturas locales del navegador de pruebas (no se versionan)
+.playwright-mcp/
