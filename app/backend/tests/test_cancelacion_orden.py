@@ -52,7 +52,7 @@ from tests.fixtures.api_salidas import (
     repo_ordenes,
     tomada,
 )
-from tests.fixtures.custodia import confirmar_recepcion, no_recibido
+from tests.fixtures.custodia import confirmar_recepcion, entregar, no_recibido
 
 
 @pytest.fixture
@@ -464,3 +464,130 @@ def test_circuito_ingreso_cancelacion_devolucion_cierre(cliente, tmp_path):
         ),
         "ORDEN_CERRADA",
     )
+
+
+# --- Una Orden con resultado devuelve el equipo en su cierre ----------------
+#
+# La devolucion de DC31 es la previa a cancelar. Una Orden que finalizo SIN
+# REPARACION (PROC-REP-069) ya no se cancela: sigue su cierre (notificar y
+# entregar, o informar a Gestion RT y devolver) sin saltear pasos.
+
+
+def _con_continuacion(orden: dict) -> None:
+    """Una Orden abierta siempre tiene como seguir."""
+    if orden["cerrada"]:
+        return
+    assert any(
+        orden[grupo]
+        for grupo in (
+            "acciones_disponibles",
+            "acciones_cancelacion",
+            "acciones_autorizacion",
+            "acciones_financieras",
+            "acciones_custodia",
+            "acciones_complementarias",
+        )
+    ), orden["situacion"]
+
+
+def _revisada_sin_reparacion(cliente, orden_id) -> dict:
+    ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/technical-review",
+            json={"usuario_id": TECNICO, "resultado": "Sin falla reparable."},
+        )
+    )
+    return ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/review/without-repair",
+            json={"usuario_id": RECEPCION, "motivo": MOTIVO},
+        )
+    )
+
+
+def _la_devolucion_previa_se_rechaza(cliente, tmp_path, orden_id) -> None:
+    antes = archivo(tmp_path, orden_id)
+    mensaje = conflicto(devolver(cliente, orden_id, usuario=ADMINISTRADOR))
+    assert "resultado" in mensaje
+    conflicto(cancelar_orden(cliente, orden_id))
+    assert archivo(tmp_path, orden_id) == antes
+
+
+def test_rt_sin_reparacion_informa_a_gestion_rt_antes_de_devolver(
+    cliente, tmp_path
+):
+    respuesta = cliente.post(
+        "/api/orders/rt-interno",
+        json={
+            "usuario_id": RECEPCION,
+            "equipo": {
+                "marca": "Apple",
+                "modelo": "iPhone 13",
+                "falla_reportada": "No enciende.",
+            },
+            "referencia_rt": "RT-0002",
+        },
+    )
+    orden_id = ok(respuesta)["id"]
+    ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/send-to-review",
+            json={"usuario_id": RECEPCION},
+        )
+    )
+    orden = _revisada_sin_reparacion(cliente, orden_id)
+
+    assert orden["custodia"]["estado"] == "EN_CUSTODIA"
+    assert codigos(orden) == ["INFORMAR_RT"]
+    assert codigos_cancelacion(orden) == []
+    _con_continuacion(orden)
+    _la_devolucion_previa_se_rechaza(cliente, tmp_path, orden_id)
+
+    orden = ok(cliente.post(f"/api/orders/{orden_id}/inform-rt"))
+    assert codigos(orden) == ["DEVOLVER_RT"]
+    _con_continuacion(orden)
+
+    orden = ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/return-rt",
+            json={"usuario_id": ADMINISTRADOR},
+        )
+    )
+    assert ids(orden)[-3:] == ["PROC-REP-250", "PROC-REP-290", "PROC-REP-270"]
+    assert orden["current_process"] == "EVT-REP-999"
+    assert orden["cerrada"] is True
+    assert orden["devolucion"] is None
+
+
+def test_cliente_sin_reparacion_con_custodia_notifica_y_entrega(
+    cliente, tmp_path
+):
+    orden_id = crear(cliente)
+    ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/send-to-review",
+            json={"usuario_id": RECEPCION},
+        )
+    )
+    confirmar_recepcion(cliente, orden_id)
+    orden = _revisada_sin_reparacion(cliente, orden_id)
+
+    assert orden["custodia"]["estado"] == "EN_CUSTODIA"
+    assert codigos(orden) == ["NOTIFICAR"]
+    assert codigos_cancelacion(orden) == []
+    _con_continuacion(orden)
+    _la_devolucion_previa_se_rechaza(cliente, tmp_path, orden_id)
+
+    orden = ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/notify", json={"usuario_id": RECEPCION}
+        )
+    )
+    assert codigos(orden) == ["ENTREGAR"]
+    _con_continuacion(orden)
+
+    orden = ok(entregar(cliente, orden_id, ADMINISTRADOR))
+    assert ids(orden)[-2:] == ["PROC-REP-280", "PROC-REP-270"]
+    assert orden["estado_workflow"] == "ENTREGADA"
+    assert orden["cerrada"] is True
+    assert orden["devolucion"] is None

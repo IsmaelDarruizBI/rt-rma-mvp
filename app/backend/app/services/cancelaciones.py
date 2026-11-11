@@ -270,10 +270,17 @@ def admite_devolucion_sin_reparar(orden: OrdenReparacion) -> bool:
     ninguno), con el equipo en el local, sin Ejecucion, toma ni reservas, y
     sin una devolucion previa. Corresponde finalizar sin reparar: no hay
     nada COMPLETO que entregar.
+
+    Es la devolucion previa a cancelar: una Orden con resultado
+    (``lista_para_cierre``: SIN_REPARACION por PROC-REP-069 o la reparacion
+    lista) ya no se cancela (``exigir_orden_cancelable``) y devuelve el
+    equipo en su propio cierre (notificar y entregar, o informar a Gestion
+    RT y devolver), sin saltear esos pasos.
     """
     return (
         not orden.esta_cerrada
         and orden.estado_workflow is not EstadoWorkflow.CANCELADA
+        and not lista_para_cierre(orden)
         and all(
             detalle.estado is EstadoReparacionDetail.CANCELADO
             for detalle in orden.reparaciones_detail
@@ -516,6 +523,12 @@ def registrar_devolucion_equipo(
     if orden.esta_cerrada:
         raise PrecondicionInvalidaError(
             f"La Orden {orden.id} esta cerrada: no admite cambios."
+        )
+    if not heredada and lista_para_cierre(orden):
+        raise PrecondicionInvalidaError(
+            f"La Orden {orden.id} ya tiene un resultado: el equipo se "
+            "devuelve en su cierre (notificar y entregar, o informar a "
+            "Gestion RT y devolver), no con la devolucion previa a cancelar."
         )
     if not heredada and any(
         detalle.estado is not EstadoReparacionDetail.CANCELADO
