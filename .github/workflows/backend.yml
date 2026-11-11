@@ -1,0 +1,53 @@
+# Backend: lint, regresión (JSON) y construcción de la imagen, solo si cambia
+# el backend. No publica la imagen ni despliega (ver docs/DESPLIEGUE_UAT.md).
+name: backend
+
+on:
+  pull_request:
+    paths:
+      - "app/backend/**"
+      - "supabase/scripts/**/*.py"
+      - ".github/workflows/backend.yml"
+  push:
+    branches: [main, mvp-v2, "feat/**"]
+    paths:
+      - "app/backend/**"
+      - "supabase/scripts/**/*.py"
+      - ".github/workflows/backend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11" # la del Dockerfile
+          cache: pip
+          cache-dependency-path: app/backend/pyproject.toml
+      - name: Dependencias
+        run: pip install -e ".[dev,postgres]"
+      - name: Lint (ruff)
+        run: ruff check . ../../supabase/scripts --config pyproject.toml
+      - name: Pruebas (modo JSON; las de PostgreSQL corren en el workflow postgres)
+        run: pytest -q --ignore=tests/postgres
+
+  imagen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construcción reproducible de la imagen (sin publicar)
+        run: docker build --pull -t rt-rma-uat-api:ci app/backend

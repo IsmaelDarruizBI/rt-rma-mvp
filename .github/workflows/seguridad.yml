@@ -1,0 +1,30 @@
+# Controles livianos en cada cambio: credenciales en el repositorio y
+# espacios en blanco erróneos en el diff.
+name: seguridad
+
+on:
+  pull_request:
+  push:
+    branches: [main, mvp-v2, "feat/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seguridad-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repositorio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Sin credenciales versionadas
+        run: bash scripts/ci/buscar_secretos.sh
+      - name: git diff --check
+        if: github.event_name == 'pull_request'
+        run: git diff --check "origin/${{ github.base_ref }}...HEAD"

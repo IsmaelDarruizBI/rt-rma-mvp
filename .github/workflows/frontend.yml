@@ -1,0 +1,44 @@
+# Frontend: tipos, pruebas y construcción, solo si cambia el frontend.
+# No publica en Vercel (ver docs/DESPLIEGUE_UAT.md).
+name: frontend
+
+on:
+  pull_request:
+    paths:
+      - "app/frontend/**"
+      - ".github/workflows/frontend.yml"
+  push:
+    branches: [main, mvp-v2, "feat/**"]
+    paths:
+      - "app/frontend/**"
+      - ".github/workflows/frontend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas-y-construccion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: app/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+      - run: npm ci
+      - name: Tipos
+        run: npm run typecheck
+      - name: Pruebas
+        run: npm test
+      - name: "Construcción (sin variables de entorno: no apunta a ningún UAT)"
+        run: npm run build
