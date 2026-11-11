@@ -63,6 +63,15 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ## B. Últimos avances
 
+### Respaldo diario activo y limpieza posterior al corte (11/11/2026)
+
+- **Inicio de sesión manual verificado** en los registros: lecturas autenticadas con 200 después del corte.
+- **Limpieza:** se quitaron las etiquetas `saopaulo` y `corte` y se borró la vista previa `rt-rma-k1qeeu33d`. Sin cambios de tráfico; `00020-tux` (`auth`) y `dpl_F1M6…` se conservan.
+- **Respaldo:** activo, con el Job `rt-rma-respaldo-db`, el Scheduler `rt-rma-respaldo-diario` (03:00 de Argentina) y el bucket `rt-rma-uat-respaldos`, inmutable 30 días.
+  - Usa el rol de solo lectura `rma_respaldo`, no el administrador.
+  - Primera copia `uat/20261111T193144Z` verificada; ensayo de restauración completo en la nube.
+  - **Falta:** el descifrado con la clave real ([`RESPALDOS.md`](RESPALDOS.md)).
+
 ### Cierre técnico posterior al corte (11/11/2026)
 
 - **Git:** `5ebf474` publicado; `feat/postgresql-esquema` y `mvp-v2` en el mismo commit, por avance rápido. `seguridad` en verde y ningún despliegue de Vercel.
@@ -415,7 +424,7 @@ El detalle, asignado por etapa, está en [`postgresql/integracion-pendientes.md`
 Otros riesgos registrados:
 - **Latencia entre regiones:** resuelta con el corte a São Paulo (11/11/2026). La medición previa está en [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 8.
 - **Período de vuelta atrás, hasta el 25/11/2026:** Oregón (`00020-tux`, `rt-rma-n49rz9qgv…`, proyecto y secreto) se conserva. En plan Free se pausa a los 7 días sin actividad: hace falta una consulta semanal de solo lectura. Una vuelta atrás pierde lo creado en São Paulo.
-- **Sin respaldo automático** de São Paulo (P0-1): un error borra datos sin vuelta atrás.
+- **Respaldo diario de São Paulo activo** desde el 11/11/2026 ([`RESPALDOS.md`](RESPALDOS.md)). Las herramientas del bucket no se pueden reemplazar durante 30 días: se cambian subiéndolas a otra carpeta.
 - **Doble escritura no atómica de la Orden al cerrar una reparación** (JSON): ver [`pendientes-producto.md`](pendientes-producto.md).
 - **Foto subida cuya registración falla:** ver [`pendientes-producto.md`](pendientes-producto.md). Es una tarea separada, no de una etapa.
 
@@ -423,16 +432,9 @@ Otros riesgos registrados:
 
 **Próximo paso:** los P0 de [`DEUDA_TECNICA.md`](DEUDA_TECNICA.md), cada uno con autorización.
 
-1. **Inicio de sesión manual** de las 4 personas usuarias en `rt-rma-uat.vercel.app`, sin crear Órdenes. Hasta el 11/11/2026 no hubo ninguno después del corte. Si falla, vuelta atrás coordinada ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16).
-2. **Limpieza, después de ese inicio de sesión** (P2-4):
-
-   ```bash
-   gcloud run services update-traffic rt-rma-uat-api --region southamerica-east1 --project rosariotecno-460217 --remove-tags saopaulo,corte
-   vercel remove rt-rma-k1qeeu33d-ismaeldarruizbis-projects.vercel.app --yes --scope ismaeldarruizbis-projects
-   ```
-
-   No toca el tráfico, `00020-tux` ni su etiqueta `auth`. Las revisiones quedan, sin etiqueta.
-3. **Activar el respaldo** de São Paulo (P0-1, [`RESPALDOS.md`](RESPALDOS.md), sección 4) y ensayar una restauración.
+1. **Hecho (11/11/2026):** inicio de sesión manual en `rt-rma-uat.vercel.app`, verificado en los registros.
+2. **Hecho (11/11/2026):** limpieza (P2-4) y respaldo diario (P0-1).
+3. **Descifrar una copia con la clave privada real** ([`RESPALDOS.md`](RESPALDOS.md), sección 3). Lo hace la persona responsable, en su máquina.
 4. **Hasta el 25/11/2026:** una consulta semanal de solo lectura en Oregón, para que el plan Free no lo pause.
 5. **El 25/11/2026:**
    - decidir sobre Oregón: pausarlo o eliminarlo, junto con `00020-tux`, `rma-uat-database-url` y `dpl_F1M6…`;
@@ -445,13 +447,13 @@ Otros riesgos registrados:
 |---|---|
 | 1. Rama integrada en `mvp-v2`, CI en verde | Cumplido (`5ebf474`). Falta `main` (P0-2) |
 | 2. Una sola base de UAT | Cumplido: São Paulo. Oregón es solo la vuelta atrás |
-| 3. Respaldo diario y restauración ensayada | **Pendiente** (P0-1): bloquea cargar datos reales, no empezar a desarrollar |
+| 3. Respaldo diario y restauración ensayada | Cumplido (11/11/2026): respaldo diario activo y restauración ensayada en la nube. Falta confirmar el descifrado con la clave real antes de cargar datos reales |
 | 4. Cambios funcionales primero en `business/` | Regla vigente |
 | 5. Solo migraciones aditivas, `postgres` en verde | Regla vigente |
 | 6. Checklist de seguridad y par de vuelta atrás en cada despliegue | Regla vigente. Integrar ya no despliega |
 | 7. Los P1 de cada módulo, dentro del módulo | Regla vigente ([`DEUDA_TECNICA.md`](DEUDA_TECNICA.md)) |
 
-Se puede empezar el desarrollo funcional después del inicio de sesión manual, en ramas propias que salgan de `mvp-v2`. No se cargan datos reales hasta cumplir el criterio 3.
+Se puede empezar el desarrollo funcional, en ramas propias que salgan de `mvp-v2`. Los datos reales se cargan después de confirmar el descifrado con la clave real.
 
 Después empieza el desarrollo funcional, con los criterios de [`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md), sección 7.
 

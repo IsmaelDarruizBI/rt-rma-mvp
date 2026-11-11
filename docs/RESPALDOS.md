@@ -2,14 +2,11 @@
 
 Respaldo mínimo, cifrado y restaurable de la base del UAT (Supabase PostgreSQL), con su procedimiento de recuperación.
 
-**Estado (11/11/2026):**
+**Estado (11/11/2026): activo en la nube.**
 
-- Scripts preparados y probados en local con datos ficticios.
-- **Compatibles con São Paulo** (`pcdnmhzwhzymznojndrn`, la base del UAT desde el corte), verificado sin credenciales:
-  - el servidor es PostgreSQL 17.11 y el Job usa `postgres:17-alpine`, de la misma versión mayor;
-  - el pooler en modo sesión, `aws-0-sa-east-1.pooler.supabase.com:5432`, valida `verify-full` con `supabase-ca.crt`, la CA que va al Job;
-  - Auth tiene 4 cuentas y 4 identidades.
-- **Sin activar en la nube:** falta autorizar los recursos de la sección 4. En el proyecto GCP no hay Jobs, la API de Cloud Scheduler no está habilitada y hay 2 versiones de secretos activas.
+- Respaldo diario de São Paulo (`pcdnmhzwhzymznojndrn`) a las 03:00 de Argentina, con un rol de solo lectura.
+- La primera copia se generó y verificó, y la restauración completa se ensayó en la nube (sección 3).
+- **Pendiente de la persona responsable:** comprobar que una copia real se descifra con su clave privada (sección 3, «Descifrado con la clave real»).
 
 ## 1. Opciones evaluadas
 
@@ -17,11 +14,11 @@ Respaldo mínimo, cifrado y restaurable de la base del UAT (Supabase PostgreSQL)
 |---|---|---|
 | Copias administradas de Supabase (diarias y PITR) | No en plan Free: «We automatically back up all Pro, Team, and Enterprise Plan projects» ([backups](https://supabase.com/docs/guides/platform/backups)) | Descartada mientras el UAT siga en Free. Pasar a Pro las incluye, con costo |
 | JSON de tablas (`reinicio_uat/00_exportar.sql`) | Sí | Útil para auditar, **no es un respaldo restaurable** por sí solo: no lleva secuencias ni Auth y no tiene restauración automatizada |
-| `pg_dump` lógico, cifrado, en un Cloud Run Job programado | Sí, con la infraestructura actual (Cloud Run, Secret Manager, GCS) | **Elegida:** menor complejidad y costo |
+| `pg_dump` lógico, cifrado, en un Cloud Run Job programado | Sí, con la infraestructura actual (Cloud Run, Secret Manager, GCS) | **Elegida y activa:** menor complejidad y costo |
 
 ## 2. Qué se respalda
 
-[`supabase/scripts/respaldo/respaldar.sh`](../supabase/scripts/respaldo/respaldar.sh), en `postgres:17-alpine`. Cada ejecución deja `<etiqueta>/<marca UTC>/`:
+[`supabase/scripts/respaldo/respaldar.sh`](../supabase/scripts/respaldo/respaldar.sh), en `postgres:17-alpine`. Cada ejecución deja `uat/<marca UTC>/`:
 
 | Archivo | Contenido | Protección |
 |---|---|---|
@@ -30,15 +27,35 @@ Respaldo mínimo, cifrado y restaurable de la base del UAT (Supabase PostgreSQL)
 | `manifiesto.json` | Versión de `pg_dump`, migraciones aplicadas, conteos por tabla, secuencias, cantidad de cuentas | Sin datos de negocio ni personales |
 | `SHA256SUMS` | Sumas de los tres archivos | — |
 
+**Conexión, sin credencial de administración:**
+
+El Job usa el rol `rma_respaldo`, creado con [`crear_secreto_respaldo.py`](../supabase/scripts/respaldo/crear_secreto_respaldo.py):
+
+- **Permisos:** `LOGIN` y `BYPASSRLS`, miembro de `pg_read_all_data` con `INHERIT TRUE, SET FALSE`.
+  - `pg_read_all_data` da lectura de tablas y secuencias y `USAGE` sobre los esquemas, incluido `auth`. No da escritura ni DDL.
+  - `BYPASSRLS` hace falta porque `auth.users` y `auth.identities` tienen RLS y `pg_dump` no respalda tablas filtradas.
+- **Límites:** `default_transaction_read_only = on`, 2 conexiones y `statement_timeout` de 5 minutos.
+- **Verificado en una transacción revertida:** lee `rma`, `auth` y las migraciones, y la escritura es rechazada.
+- **Credencial:** la contraseña se genera al azar y va directo a Secret Manager. Nadie la ve, y la base recibe solo el verificador SCRAM.
+- **Conexión:** pooler en modo sesión, `aws-0-sa-east-1.pooler.supabase.com:5432` (el que admite `pg_dump`), con `sslmode=verify-full` y la CA `supabase-ca.crt` montada en el Job.
+
 **Cifrado:**
 
-- Con la clave **pública** de `age` (`age1…`), que viaja como variable del Job.
-- La clave **privada** no está en la nube ni en el repositorio: la guarda la persona responsable, en su gestor de contraseñas y con una copia fuera de línea. Sin ella el respaldo no se puede leer.
+- Con la clave **pública** de `age` (`age1zen3sqv9…yazx5`), la única que tiene el Job.
+- La clave **privada** no está en GCP ni en el repositorio: la guarda la persona responsable, en su gestor de contraseñas y con una copia fuera de línea. Sin ella el respaldo no se puede leer.
 - Los volcados sin cifrar solo existen en un temporal del contenedor, con `umask 077`, y se borran al terminar.
+
+**Escritura en el bucket:**
+
+- Los cuatro archivos se arman completos en el temporal y se copian de a uno.
+- El Job relee el destino y falla si `SHA256SUMS` está vacío o no coincide.
+- **Motivo:** la cuenta del Job solo crea objetos. Con streaming writes, gcsfuse puede crear un objeto vacío al abrir el archivo y después necesitar sobrescribirlo, y el error de cierre no siempre llega al shell. La primera ejecución quedó así: `SHA256SUMS` en 0 bytes y el Job con éxito igual. Se borró y se corrigió el script.
 
 **Fuera de la base:**
 
-- **Fotos:** `gs://rt-rma-uat-fotos`, en GCS, no en Supabase. Hoy tiene borrado suave de 7 días y no tiene versionado. Recomendado, con autorización: versionado más una regla de ciclo de vida que borre las versiones no actuales a los 30 días.
+- **Fotos:** `gs://rt-rma-uat-fotos`, en GCS, no en Supabase.
+  - Hoy tiene borrado suave de 7 días, sin versionado, y está vacío.
+  - Pendiente (P2): versionado más una regla que borre las versiones no actuales a los 30 días, antes de que haya fotos reales.
 - **Documentos emitidos:** se generan desde la base; no hay archivos que respaldar (`archivo_clave` vacío).
 - **Configuración de Auth y claves del proyecto:** no están en la base. Se documentan en [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 4, y se repiten a mano.
 
@@ -66,73 +83,97 @@ Respaldo mínimo, cifrado y restaurable de la base del UAT (Supabase PostgreSQL)
 
 | Caso | Pasos |
 |---|---|
-| Error de datos en el mismo proyecto | `restaurar.sh` `rma` sobre el proyecto (ensayo y después aplicar). Las cuentas no se tocan |
-| Proyecto perdido | Proyecto nuevo y configuración de Auth (sección 4 de la migración) → `supabase db push` → `restaurar.sh` `rma` → base de trabajo local con `restaurar.sh` `auth` → `migrar_uat.py cuentas` → `rma_api` y su secreto → nueva revisión de Cloud Run. Es el mismo recorrido ya ejecutado en la migración a São Paulo |
+| Error de datos en el mismo proyecto | `restaurar.sh` `rma` sobre el proyecto (ensayo y después aplicar), con una conexión de administración. Las cuentas no se tocan |
+| Proyecto perdido | Proyecto nuevo y configuración de Auth (sección 4 de la migración) → `supabase db push` → `restaurar.sh` `rma` → base de trabajo con `restaurar.sh` `auth` → `migrar_uat.py cuentas` → `rma_api`, `rma_respaldo` y sus secretos → nueva revisión de Cloud Run. Es el mismo recorrido ya ejecutado en la migración a São Paulo |
 | Foto borrada | Dentro de los 7 días: `gcloud storage restore`. Con versionado: la versión anterior |
 
-**Prueba local** ([`probar_respaldo_local.sh`](../supabase/scripts/respaldo/probar_respaldo_local.sh), 11/11/2026): **OK**.
+**Ensayo en la nube** ([`ensayar_restauracion.sh`](../supabase/scripts/respaldo/ensayar_restauracion.sh)): la cadena completa con datos reales y sin la clave privada.
 
-- Respaldo cifrado (sin cabecera `PGDMP` legible).
-- Ensayo sin cambios en el destino.
-- Restauración de `rma` con el contenido de las 45 tablas y las secuencias idéntico al origen, e integridad 0.
-- `auth` rechazado sobre una base con `auth.users`; cargado en una base de trabajo con el mismo id, email y hash.
+- **Comando:**
 
-Datos de la prueba: 4 usuarios, 4 cuentas ficticias, catálogos y stock con su libro. Ninguna Orden: los triggers de saldos ya demuestran el modo `replica`. **Ensayo periódico:** una vez por mes, descargar el último respaldo y repetir la restauración contra la pila local.
+  ```bash
+  gcloud run jobs execute rt-rma-respaldo-db --region southamerica-east1 --project rosariotecno-460217 \
+    --args /respaldos/_herramientas/ensayar_restauracion.sh --wait
+  ```
 
-## 4. Activación en la nube (requiere autorización: crea recursos)
+  En Git Bash, usar PowerShell: Git Bash convierte `/respaldos/...` en una ruta de Windows.
+- **Recorrido:**
+  1. Respalda São Paulo con la misma conexión de solo lectura, cifrado con una clave `age` que se genera y se borra dentro del contenedor. No escribe en el bucket.
+  2. Levanta un PostgreSQL temporal con las migraciones de `_herramientas/migraciones`.
+  3. Restaura `rma` en ensayo y en aplicar; compara secuencias y restaura Auth en una base de trabajo.
+- **Resultado del 11/11/2026, ejecución `rt-rma-respaldo-db-tjjmb`: OK.**
+  - 20 migraciones aplicadas.
+  - `rma`: ensayo revertido y aplicación con las 45 tablas, sus conteos e integridad sin problemas.
+  - Secuencias iguales al manifiesto.
+  - Auth: 4 cuentas.
 
-**Costo estimado (11/11/2026),** con 15 MB de base, de los cuales 3,7 MB son `rma`, y cero Órdenes. Menos de US$ 0,15 por mes:
+**Descifrado con la clave real:** lo hace solo la persona responsable, en su máquina; la clave privada no se comparte. En PowerShell, sobre una copia descargada:
 
-| Recurso | Uso | Costo |
-|---|---|---|
-| GCS `rt-rma-uat-respaldos` (Standard, `southamerica-east1`) | Menos de 1 MB por día y 35 respaldos, menos de 50 MB | Menos de US$ 0,01 por mes |
-| Cloud Run Job (1 vCPU, 512 MiB) | Alrededor de 1 minuto por día | Dentro del uso gratuito |
-| Secret Manager | 1 versión más; quedan 3 activas de 6 gratuitas | US$ 0 |
-| Cloud Scheduler | 1 trabajo; hay 3 gratis por cuenta de facturación | US$ 0, o US$ 0,10 por mes si la cuenta ya usa los 3 |
-| Versionado de fotos | El bucket está vacío | US$ 0 hoy |
+```powershell
+$d = "$env:USERPROFILE\respaldos-rma\nube-uat-20261111T193144Z"
+age -d -i <ruta a rma-respaldo.key> -o "$env:TEMP\rma.dump" "$d\rma.dump.age"
+age -d -i <ruta a rma-respaldo.key> -o "$env:TEMP\auth.dump" "$d\auth.dump.age"
+[Text.Encoding]::ASCII.GetString((Get-Content "$env:TEMP\rma.dump" -Encoding Byte -TotalCount 5))   # PGDMP
+[Text.Encoding]::ASCII.GetString((Get-Content "$env:TEMP\auth.dump" -Encoding Byte -TotalCount 5))  # PGDMP
+Remove-Item "$env:TEMP\rma.dump", "$env:TEMP\auth.dump"
+```
 
-Crece con los datos reales: revisar al cargarlos.
+Las dos líneas tienen que mostrar `PGDMP`. Los descifrados contienen los hashes de las contraseñas: se borran enseguida.
 
-Hay que habilitar la API `cloudscheduler.googleapis.com`.
+**Prueba local** ([`probar_respaldo_local.sh`](../supabase/scripts/respaldo/probar_respaldo_local.sh), con Docker y la pila local de Supabase, 11/11/2026): **OK**. Los mismos controles con datos ficticios, y además el contenido de las 45 tablas idéntico al origen.
 
-1. **Claves de age** (en la máquina de la persona responsable; en Windows, `winget install FiloSottile.age`): `age-keygen -o rma-respaldo.key`. La línea `public key: age1…` es la clave pública; el archivo, la privada (gestor de contraseñas y copia fuera de línea).
-2. **Bucket** `rt-rma-uat-respaldos` en `southamerica-east1`:
-   - acceso uniforme;
-   - prevención de acceso público;
-   - **política de retención de 30 días**, para que nadie, ni el propio Job, borre un respaldo antes de tiempo;
-   - ciclo de vida que borra a los 35 días.
+**Ensayo periódico:** una vez por mes, el ensayo en la nube. Además, cada tanto, el descifrado de la última copia con la clave real.
 
-   Subir a `_herramientas/` `respaldar.sh` y `app/backend/app/datos/supabase-ca.crt` (certificado público).
-3. **Cuenta de servicio** `rt-rma-respaldo`, con:
-   - `secretAccessor` solo sobre su secreto;
-   - `storage.objectUser` solo sobre ese bucket.
-4. **Secreto** `rma-uat-respaldo-db-url`: crearlo vacío con acceso solo para esa cuenta, y cargarlo con [`crear_secreto_respaldo.py`](../supabase/scripts/respaldo/crear_secreto_respaldo.py).
-   - Pide sin eco la contraseña del administrador de la base.
-   - Usa el pooler en **modo sesión** (5432, el que admite `pg_dump`), con `verify-full`.
-   - Pendiente P1: un rol de respaldo de solo lectura, en lugar del administrador, si Supabase permite otorgarle lectura sobre `auth.users`.
-5. **Job:**
+## 4. Recursos activos (11/11/2026)
 
-   ```bash
-   gcloud run jobs create rt-rma-respaldo-db --region southamerica-east1 --project rosariotecno-460217 \
-     --image docker.io/library/postgres:17-alpine --service-account rt-rma-respaldo@rosariotecno-460217.iam.gserviceaccount.com \
-     --add-volume name=respaldos,type=cloud-storage,bucket=rt-rma-uat-respaldos \
-     --add-volume-mount volume=respaldos,mount-path=/respaldos \
-     --set-secrets RMA_RESPALDO_DB_URL=rma-uat-respaldo-db-url:1 \
-     --set-env-vars RMA_RESPALDO_DESTINATARIO=<age1…>,RMA_RESPALDO_DESTINO=/respaldos,RMA_RESPALDO_ETIQUETA=uat \
-     --max-retries 1 --task-timeout 600s --command sh --args /respaldos/_herramientas/respaldar.sh
-   ```
+Proyecto `rosariotecno-460217`, región `southamerica-east1`.
 
-6. **Programación diaria** (03:00, hora de Argentina):
+| Recurso | Configuración |
+|---|---|
+| Bucket `gs://rt-rma-uat-respaldos` | Standard, acceso uniforme, acceso público bloqueado (un pedido anónimo recibe 403). **Retención de 30 días** en todo el bucket: ningún objeto se borra ni se sobrescribe antes. Ciclo de vida: borra `uat/` a los 35 días. `_herramientas/` queda excluida: si se borrara, el Job dejaría de funcionar. Borrado suave de 7 días |
+| `_herramientas/` | `respaldar.sh`, `restaurar.sh`, `ensayar_restauracion.sh`, `supabase-ca.crt` y `migraciones/` (las 20 del repositorio) |
+| Cuenta de servicio `rt-rma-respaldo` | Sin roles en el proyecto. `storage.objectCreator` y `storage.objectViewer` solo en ese bucket: crea y lee, no borra ni sobrescribe. `secretAccessor` solo en su secreto. `run.invoker` solo en su Job |
+| Secreto `rma-uat-respaldo-db-url` | Versión 1. Solo la lee `rt-rma-respaldo`. Conexión de `rma_respaldo` (sección 2) |
+| Rol `rma_respaldo` en São Paulo | Sección 2 |
+| Cloud Run Job `rt-rma-respaldo-db` | Imagen `postgres@sha256:e5d2edd2…4700d0` (`17-alpine`, fijada por digest), 1 vCPU, 512 MiB, gen2. Bucket montado en `/respaldos`. `RMA_RESPALDO_DB_URL` desde el secreto `:1`, `RMA_RESPALDO_DESTINATARIO` con la clave pública. 600 s, 1 reintento |
+| Cloud Scheduler `rt-rma-respaldo-diario` | `0 3 * * *`, `America/Argentina/Buenos_Aires`. POST a `…/jobs/rt-rma-respaldo-db:run` con OAuth de `rt-rma-respaldo`. Probado a mano: ejecución `rt-rma-respaldo-db-lm5gf`, OK |
 
-   ```bash
-   gcloud scheduler jobs create http rt-rma-respaldo-diario --location southamerica-east1 --project rosariotecno-460217 \
-     --schedule "0 3 * * *" --time-zone "America/Argentina/Buenos_Aires" \
-     --uri https://run.googleapis.com/v2/projects/rosariotecno-460217/locations/southamerica-east1/jobs/rt-rma-respaldo-db:run \
-     --http-method POST --oauth-service-account-email rt-rma-respaldo@rosariotecno-460217.iam.gserviceaccount.com
-   ```
+**Primera copia:** `uat/20261111T193144Z/`.
 
-   La cuenta necesita `run.invoker` sobre el Job.
-7. **Primera ejecución manual** (`gcloud run jobs execute … --wait`). Después, la restauración en ensayo contra la pila local (sección 3).
+- `SHA256SUMS` coincide, verificado en el Job y de nuevo en local.
+- Los volcados están cifrados para un solo destinatario y sin cabecera `PGDMP` legible.
+- El manifiesto informa `pg_dump` 17.11, 20 migraciones, 45 tablas con los conteos de São Paulo, 4 cuentas y 4 identidades.
+- Además quedaron `193846Z`, `193925Z`, la primera con la retención activa, y `194141Z`, la del Scheduler.
+
+**Costo:** cada copia pesa unos 45 KB y el Job tarda unos 12 s. Menos de US$ 0,15 por mes:
+
+| Recurso | Costo |
+|---|---|
+| GCS: 35 copias, menos de 2 MB | Menos de US$ 0,01 por mes |
+| Cloud Run Job | Dentro del uso gratuito |
+| Secret Manager: 3 versiones activas de 6 gratuitas | US$ 0 |
+| Cloud Scheduler: 3 trabajos gratis por cuenta de facturación | US$ 0, o US$ 0,10 por mes si la cuenta ya usa los 3 |
+
+Revisar el costo al cargar datos reales.
+
+**Cambiar las herramientas:** por la retención, un archivo de `_herramientas/` no se puede reemplazar durante 30 días desde que se subió.
+
+1. Subir la versión nueva con otro nombre o en otra carpeta (por ejemplo `_herramientas/v2/`).
+2. Actualizar el Job:
+   - `--args`;
+   - si cambian las migraciones, `ensayar_restauracion.sh` busca la carpeta `migraciones` **junto a sí mismo**: subirlas a la carpeta nueva.
+3. Correr el ensayo en la nube.
+
+**Rotar la credencial:** `crear_secreto_respaldo.py rotar …`. Después:
+
+1. Actualizar el Job al secreto `:2`.
+2. Correr el ensayo.
+3. Deshabilitar la versión 1.
+
+**Recrear desde cero:** los comandos están en el historial de Git de este archivo (`f304b5b`). Diferencias con lo que se ejecutó:
+- desde Git Bash, el Job se crea con PowerShell (las rutas `/respaldos/...`);
+- la retención se aplica después del primer respaldo válido;
+- el ciclo de vida se limita a `uat/`.
 
 ## 5. Retención
 
@@ -140,6 +181,7 @@ Hay que habilitar la API `cloudscheduler.googleapis.com`.
 |---|---|
 | Respaldos diarios | 30 días, inmutables por la política del bucket; se borran a los 35 |
 | Fotos borradas | 7 días de borrado suave (hoy); con versionado, 30 días |
+| Copia descargada `%USERPROFILE%\respaldos-rma\nube-uat-20261111T193144Z\` | Cifrada. Se conserva para el descifrado con la clave real; después se borra |
 | Respaldos manuales previos (`%USERPROFILE%\respaldos-rma\`) | Hasta el 25/11/2026, cuando cierra el período de vuelta atrás de la migración. Tienen datos personales `uat-reinicio-20261110` y `sp-or000001-20261111`. Esta última está en la computadora actual, con acceso solo para la cuenta de Windows de quien opera. `uat-reinicio-20261110` y `sp-pruebas-20261111` quedaron en la computadora anterior: confirmar dónde están y borrarlas en la misma fecha |
 
 Cuando el UAT pase a datos reales, revisar la retención y considerar el plan Pro (copias físicas y PITR).

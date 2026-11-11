@@ -80,11 +80,25 @@ select json_build_object(
 SQL
 sed -i "s/^/{\"herramienta\":\"$(pg_dump --version | sed 's/"//g')\",\"respaldo\":/; s/\$/}/" "$TMP/manifiesto.json"
 
+# Todo se arma completo en el temporal local y recién después se copia, un
+# archivo por vez, al destino. En el bucket montado (gcsfuse) cada archivo
+# tiene que crearse de una sola vez: la cuenta del Job solo puede crear
+# objetos, no sobrescribirlos ni borrarlos, y un error al cerrar un archivo
+# no siempre llega al shell. Por eso, al final, se relee el destino.
+mkdir "$TMP/salida"
+age -r "$RMA_RESPALDO_DESTINATARIO" -o "$TMP/salida/rma.dump.age" "$TMP/rma.dump"
+age -r "$RMA_RESPALDO_DESTINATARIO" -o "$TMP/salida/auth.dump.age" "$TMP/auth.dump"
+cp "$TMP/manifiesto.json" "$TMP/salida/manifiesto.json"
+(cd "$TMP/salida" && sha256sum rma.dump.age auth.dump.age manifiesto.json > SHA256SUMS)
+
 DIR="$RMA_RESPALDO_DESTINO/$ETIQUETA/$MARCA"
 mkdir -p "$DIR"
-age -r "$RMA_RESPALDO_DESTINATARIO" -o "$DIR/rma.dump.age" "$TMP/rma.dump"
-age -r "$RMA_RESPALDO_DESTINATARIO" -o "$DIR/auth.dump.age" "$TMP/auth.dump"
-cp "$TMP/manifiesto.json" "$DIR/manifiesto.json"
-(cd "$DIR" && sha256sum rma.dump.age auth.dump.age manifiesto.json > SHA256SUMS)
+for f in rma.dump.age auth.dump.age manifiesto.json SHA256SUMS; do
+  cp "$TMP/salida/$f" "$DIR/$f" || fallar "copia de $f al destino"
+done
+# Verificación de lo que quedó guardado, leído de nuevo desde el destino.
+[ "$(wc -c < "$DIR/SHA256SUMS")" -gt 0 ] || fallar "SHA256SUMS vacío en el destino"
+cmp -s "$TMP/salida/SHA256SUMS" "$DIR/SHA256SUMS" || fallar "SHA256SUMS del destino distinto del generado"
+(cd "$DIR" && sha256sum -c -s SHA256SUMS) || fallar "los archivos del destino no coinciden con SHA256SUMS"
 
 echo "RESPALDO_OK $ETIQUETA/$MARCA rma=$(wc -c < "$DIR/rma.dump.age")B auth=$(wc -c < "$DIR/auth.dump.age")B"
