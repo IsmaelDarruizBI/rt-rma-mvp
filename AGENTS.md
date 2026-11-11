@@ -49,3 +49,4 @@ No repetir información entre documentos: enlazar.
 | Controles de seguridad de cada despliegue | `docs/CHECKLIST_SEGURIDAD_DESPLIEGUE.md` |
 | Deuda técnica priorizada | `docs/DEUDA_TECNICA.md` |
 | Migración del UAT a Supabase São Paulo | `docs/MIGRACION_SUPABASE_SAO_PAULO.md` |
+| Retomar el proyecto en otra computadora | `docs/CONTINUIDAD.md` |

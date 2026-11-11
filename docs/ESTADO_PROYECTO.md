@@ -63,6 +63,14 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ## B. Últimos avances
 
+### Preparación para el cambio de computadora (11/11/2026)
+
+- [`CONTINUIDAD.md`](CONTINUIDAD.md) reescrito con la arquitectura de São Paulo; es la guía para retomar.
+- Auditoría de portabilidad: [`AUDITORIA_PORTABILIDAD.md`](AUDITORIA_PORTABILIDAD.md).
+- La guía de pruebas manual del UAT quedó versionada en [`qa/guia-pruebas-uat.html`](qa/guia-pruebas-uat.html).
+- El commit local de `rt-rma-app` se archivó en `archivo/test-v1.2-3cf273e`.
+- Se traslada a mano la clave privada `age` ([`CONTINUIDAD.md`](CONTINUIDAD.md), sección 7).
+
 ### Consolidación técnica cerrada (11/11/2026)
 
 - **Respaldo operativo:** la persona responsable descifró la copia real (`uat/20261111T193144Z`) con su clave privada: `rma.dump.age` y `auth.dump.age` dan `PGDMP`.

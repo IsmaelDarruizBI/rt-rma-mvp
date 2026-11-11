@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guía de pruebas — Rosario Tecno RMA</title>
+<style>
+  :root {
+    --fondo: #f6f7f9;
+    --tarjeta: #ffffff;
+    --texto: #1c2430;
+    --suave: #5d6878;
+    --borde: #e2e6ec;
+    --acento: #1f5fbf;
+    --recepcion: #1f5fbf; --recepcion-fondo: #eef4ff; --recepcion-borde: #c7d8f7;
+    --tecnico: #1d7a3e; --tecnico-fondo: #eefaf1; --tecnico-borde: #bfe3c9;
+    --coordinacion: #9a6200; --coordinacion-fondo: #fff7e6; --coordinacion-borde: #f1d7a1;
+    --administracion: #6b3fb5; --administracion-fondo: #f5f0ff; --administracion-borde: #d9cbf4;
+    --radio: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--fondo);
+    color: var(--texto);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  .contenedor { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+  header {
+    background: #fff;
+    border-bottom: 1px solid var(--borde);
+    padding: 22px 0 18px;
+  }
+  .cabecera { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 1.55rem; letter-spacing: -0.01em; }
+  .subtitulo { margin: 4px 0 0; color: var(--suave); }
+  .aviso {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 10px; padding: 4px 10px; border-radius: 999px;
+    background: #fff4e5; color: #8a5300; font-size: 0.85rem; font-weight: 600;
+  }
+  .boton-app {
+    display: inline-block; padding: 12px 20px; border-radius: 10px;
+    background: var(--acento); color: #fff; text-decoration: none; font-weight: 600;
+    white-space: nowrap;
+  }
+  .boton-app:hover { background: #174b98; }
+  main { padding: 24px 0 48px; }
+  section { margin-bottom: 32px; }
+  h2 { font-size: 1.2rem; margin: 0 0 4px; }
+  .intro { margin: 0 0 14px; color: var(--suave); }
+  .tarjeta {
+    background: var(--tarjeta); border: 1px solid var(--borde); border-radius: var(--radio);
+    padding: 16px;
+  }
+  .antes ul { margin: 0; padding-left: 20px; }
+  .antes li { margin: 4px 0; }
+
+  /* Las 7 etapas */
+  .etapas { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); counter-reset: etapa; }
+  .etapa { background: #fff; border: 1px solid var(--borde); border-radius: var(--radio); padding: 12px; }
+  .etapa .numero {
+    display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+    background: #eaf0f8; color: var(--acento); font-weight: 700; font-size: 0.9rem;
+  }
+  .etapa h3 { margin: 8px 0 4px; font-size: 0.98rem; }
+  .etapa p { margin: 0; font-size: 0.86rem; color: var(--suave); }
+
+  /* Pestañas */
+  .pestanas { display: flex; gap: 6px; border-bottom: 1px solid var(--borde); margin-bottom: 16px; overflow-x: auto; }
+  .pestana {
+    appearance: none; border: 0; background: none; cursor: pointer; font: inherit; font-weight: 600;
+    padding: 10px 16px; color: var(--suave); border-bottom: 3px solid transparent; white-space: nowrap;
+  }
+  .pestana[aria-selected="true"] { color: var(--acento); border-bottom-color: var(--acento); }
+  .pestana:focus-visible, button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+    outline: 3px solid #9cc0f2; outline-offset: 2px;
+  }
+  .barra { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .progreso { color: var(--suave); font-size: 0.95rem; }
+  .progreso strong { color: var(--texto); }
+  .boton {
+    appearance: none; font: inherit; cursor: pointer; border-radius: 10px; padding: 9px 16px;
+    border: 1px solid var(--borde); background: #fff; color: var(--texto); font-weight: 600;
+  }
+  .boton:hover { background: #f1f3f6; }
+  .boton.primario { background: var(--acento); border-color: var(--acento); color: #fff; }
+  .boton.primario:hover { background: #174b98; }
+
+  /* Grupos por rol */
+  .grupo { border-radius: var(--radio); padding: 14px; margin-bottom: 18px; border: 1px solid; }
+  .grupo h3 { margin: 0 0 4px; font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
+  .grupo .rol-nota { margin: 0 0 12px; font-size: 0.88rem; color: var(--suave); }
+  .punto { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .rol-recepcion { background: var(--recepcion-fondo); border-color: var(--recepcion-borde); }
+  .rol-recepcion .punto, .rol-recepcion .etiqueta-etapa { background: var(--recepcion); }
+  .rol-tecnico { background: var(--tecnico-fondo); border-color: var(--tecnico-borde); }
+  .rol-tecnico .punto, .rol-tecnico .etiqueta-etapa { background: var(--tecnico); }
+  .rol-coordinacion { background: var(--coordinacion-fondo); border-color: var(--coordinacion-borde); }
+  .rol-coordinacion .punto, .rol-coordinacion .etiqueta-etapa { background: var(--coordinacion); }
+  .rol-administracion { background: var(--administracion-fondo); border-color: var(--administracion-borde); }
+  .rol-administracion .punto, .rol-administracion .etiqueta-etapa { background: var(--administracion); }
+  /* Paso compartido: lo hace Recepción o Coordinación. */
+  .rol-priorizacion { background: linear-gradient(90deg, var(--recepcion-fondo), var(--coordinacion-fondo)); border-color: var(--coordinacion-borde); }
+  .rol-priorizacion .punto { background: linear-gradient(90deg, var(--recepcion) 50%, var(--coordinacion) 50%); }
+  .rol-priorizacion .etiqueta-etapa { background: var(--coordinacion); }
+  .responsable { margin: 0; font-size: 0.86rem; font-weight: 600; }
+  .otras { margin-top: 4px; }
+  .otras .grupo { padding-bottom: 4px; }
+
+  .pasos { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+  .paso { background: #fff; border: 1px solid var(--borde); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .paso.hecho { border-color: #9fd3b0; box-shadow: inset 4px 0 0 #2e9d58; }
+  .paso-cabecera { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.8rem; color: var(--suave); }
+  .etiqueta-etapa { color: #fff; border-radius: 999px; padding: 2px 9px; font-weight: 600; font-size: 0.78rem; }
+  .paso h4 { margin: 0; font-size: 1rem; }
+  .campo { margin: 0; font-size: 0.92rem; }
+  .campo b { display: block; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--suave); }
+  .check { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 8px; border-top: 1px dashed var(--borde); cursor: pointer; font-weight: 600; }
+  .check input { width: 22px; height: 22px; accent-color: #2e9d58; cursor: pointer; flex: none; }
+
+  /* Variantes */
+  details.variantes { background: #fff; border: 1px solid var(--borde); border-radius: 10px; margin: 0 0 10px; }
+  details.variantes summary { cursor: pointer; padding: 12px 14px; font-weight: 600; }
+  details.variantes .lista { padding: 0 14px 12px; display: grid; gap: 10px; }
+  .variante { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid var(--borde); border-radius: 8px; }
+  .variante input { width: 20px; height: 20px; margin-top: 2px; accent-color: #2e9d58; flex: none; cursor: pointer; }
+  .variante strong { display: block; }
+  .variante span { font-size: 0.9rem; color: var(--suave); }
+
+  /* Observaciones */
+  form.observacion { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+  form.observacion .ancho { grid-column: 1 / -1; }
+  label.campo-form { display: grid; gap: 4px; font-size: 0.9rem; font-weight: 600; }
+  input[type="text"], select, textarea {
+    font: inherit; padding: 9px 10px; border: 1px solid #cfd5de; border-radius: 8px; background: #fff; color: var(--texto); width: 100%;
+  }
+  textarea { min-height: 84px; resize: vertical; }
+  .acciones-form { display: flex; gap: 10px; flex-wrap: wrap; }
+  .lista-obs { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 10px; }
+  .obs { background: #fff; border: 1px solid var(--borde); border-radius: 10px; padding: 12px; }
+  .obs .meta { font-size: 0.82rem; color: var(--suave); display: flex; gap: 8px; flex-wrap: wrap; justify-content: space-between; align-items: center; }
+  .obs p { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .vacio { color: var(--suave); font-size: 0.92rem; margin: 12px 0 0; }
+  .boton-quitar { appearance: none; border: 0; background: none; color: #b42318; cursor: pointer; font: inherit; font-size: 0.85rem; padding: 2px 4px; }
+  footer { color: var(--suave); font-size: 0.85rem; padding: 0 0 32px; }
+  [hidden] { display: none !important; }
+  @media (max-width: 520px) {
+    h1 { font-size: 1.3rem; }
+    .boton-app { width: 100%; text-align: center; }
+    .grupo { padding: 10px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="contenedor cabecera">
+    <div>
+      <h1>Guía de pruebas — Rosario Tecno RMA</h1>
+      <p class="subtitulo">Recorrido de una reparación de cliente externo, paso a paso.</p>
+      <span class="aviso">Entorno de pruebas · usar solo datos ficticios</span>
+    </div>
+    <a class="boton-app" href="https://rt-rma-uat.vercel.app/" target="_blank" rel="noopener noreferrer">Abrir aplicación RMA ↗</a>
+  </div>
+</header>
+
+<main class="contenedor">
+  <section class="antes tarjeta" aria-labelledby="t-antes">
+    <h2 id="t-antes">Antes de empezar</h2>
+    <ul>
+      <li>Abrí la aplicación en otra pestaña y elegí tu rol en <b>«Usuario (modo demo)»</b>, arriba a la derecha.</li>
+      <li>Usá solo datos inventados: nombres, teléfonos e IMEI ficticios.</li>
+      <li>En cada Orden, el panel de acciones (a la derecha; en el celular, arriba) muestra <b>«Próximo paso»</b>: qué hay que hacer, quién lo hace y el formulario. Las demás acciones están en <b>«Otras acciones»</b> y las excepcionales (cancelar, desistir, forzar sin stock…) en <b>«Situaciones especiales»</b>. En <b>Inicio</b> cada rol ve sus tareas pendientes.</li>
+      <li>Orden recomendado del ingreso: crear la Orden, cargar los trabajos, confirmar la recepción física, finalizar la definición, registrar la autorización del cliente y generar su comprobante.</li>
+      <li>Si un trabajo queda <b>«Sin repuestos»</b>, Administración o Coordinación pueden cargar stock desde <b>Inventario</b>.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="t-etapas">
+    <h2 id="t-etapas">Las 7 etapas de una reparación</h2>
+    <p class="intro">Toda Orden recorre estas etapas, desde que el equipo llega hasta que se entrega.</p>
+    <div class="etapas" id="etapas"></div>
+  </section>
+
+  <section aria-labelledby="t-pruebas">
+    <h2 id="t-pruebas">Pruebas del camino normal</h2>
+    <p class="intro">Elegí tu rol, hacé cada actividad en la aplicación y marcá «Probado correctamente» si el resultado coincide.</p>
+    <div class="pestanas" role="tablist" aria-label="Rol">
+      <button class="pestana" role="tab" id="tab-todos" aria-controls="panel-todos" aria-selected="true" data-vista="todos">Todos</button>
+      <button class="pestana" role="tab" id="tab-recepcion" aria-controls="panel-recepcion" aria-selected="false" tabindex="-1" data-vista="recepcion">Recepción</button>
+      <button class="pestana" role="tab" id="tab-tecnico" aria-controls="panel-tecnico" aria-selected="false" tabindex="-1" data-vista="tecnico">Técnico</button>
+    </div>
+    <div class="barra">
+      <span class="progreso" id="progreso" aria-live="polite"></span>
+      <button class="boton" type="button" id="reiniciar">Reiniciar pruebas</button>
+    </div>
+    <div role="tabpanel" id="panel-todos" aria-labelledby="tab-todos"></div>
+    <div role="tabpanel" id="panel-recepcion" aria-labelledby="tab-recepcion" hidden></div>
+    <div role="tabpanel" id="panel-tecnico" aria-labelledby="tab-tecnico" hidden></div>
+  </section>
+
+  <section class="tarjeta" aria-labelledby="t-obs">
+    <h2 id="t-obs">Observaciones de las pruebas</h2>
+    <p class="intro">Si algo no funcionó como se esperaba o resultó confuso, registralo acá.</p>
+    <form class="observacion" id="form-obs">
+      <label class="campo-form">Rol
+        <select name="rol" required>
+          <option value="">Elegí…</option>
+          <option>Recepción</option>
+          <option>Técnico</option>
+          <option>Coordinación</option>
+          <option>Administración</option>
+        </select>
+      </label>
+      <label class="campo-form">Número de OR
+        <input type="text" name="or" placeholder="Ej.: OR-000012" autocomplete="off">
+      </label>
+      <label class="campo-form ancho">Qué problema o dificultad encontraste
+        <input type="text" name="problema" required placeholder="Ej.: no encontraba dónde confirmar la recepción" autocomplete="off">
+      </label>
+      <label class="campo-form ancho">Observaciones
+        <textarea name="detalle" placeholder="Qué hiciste, qué esperabas y qué pasó."></textarea>
+      </label>
+      <div class="acciones-form ancho">
+        <button class="boton primario" type="submit">Agregar observación</button>
+        <button class="boton" type="button" id="exportar">Exportar resultados</button>
+      </div>
+    </form>
+    <ul class="lista-obs" id="lista-obs"></ul>
+    <p class="vacio" id="sin-obs">Todavía no hay observaciones.</p>
+  </section>
+</main>
+
+<footer class="contenedor">
+  Versión 2 · Las marcas y observaciones se guardan solo en este navegador; no se envían a ningún servidor. Usá «Exportar resultados» para compartirlas.
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var APP = "https://rt-rma-uat.vercel.app/";
+  var CLAVE = "rt-rma-guia-pruebas-v2";
+  // La v1 tenía otro orden de pasos: sus marcas se traducen y las
+  // observaciones se conservan.
+  var CLAVE_V1 = "rt-rma-guia-pruebas-v1";
+  var DE_V1 = { p01: "p01", p02: "p03", p03: "p02", p04: "p04", p05: "p05", p06: "p07", p07: "p08", p08: "p09", p09: "p10", p10: "p11", p11: "p12", p12: "p13", p13: "p14" };
+
+  var ETAPAS = [
+    { n: 1, titulo: "Ingreso de Orden", texto: "Recepción registra al cliente y el equipo, y confirma que el equipo quedó en el local." },
+    { n: 2, titulo: "Definición de trabajos", texto: "Se cargan los trabajos a realizar, cada uno con su precio." },
+    { n: 3, titulo: "Autorización del cliente", texto: "El cliente acepta o rechaza cada trabajo; solo lo autorizado avanza. Recepción le envía el comprobante de lo autorizado." },
+    { n: 4, titulo: "Recursos y cola", texto: "Se verifican los repuestos, se asigna la prioridad y la Orden entra a la cola del taller." },
+    { n: 5, titulo: "Reparación", texto: "El técnico toma la Orden, inicia el trabajo y registra lo realizado." },
+    { n: 6, titulo: "Control técnico", texto: "Recepción revisa el trabajo realizado y lo aprueba o lo devuelve." },
+    { n: 7, titulo: "Entrega y cierre", texto: "Se avisa al cliente, se cobra el saldo y se entrega el equipo." }
+  ];
+
+  // `pestanas`: en qué pestaña por rol aparece el paso (además de «Todos»).
+  var ROLES = {
+    recepcion: { nombre: "Recepción", responsable: "Recepción", pestanas: ["recepcion"], nota: "Atiende al cliente: ingreso, trabajos, autorización, control y entrega." },
+    priorizacion: { nombre: "Recepción o Coordinación", responsable: "Recepción o Coordinación", pestanas: ["recepcion"], nota: "Paso compartido: lo hace cualquiera de los dos, una sola vez." },
+    tecnico: { nombre: "Técnico", responsable: "Técnico", pestanas: ["tecnico"], nota: "Repara los equipos desde la cola del taller." },
+    administracion: { nombre: "Administración", responsable: "Administración", pestanas: [], nota: "Registra los cobros. (Recepción también puede cobrar.)" }
+  };
+
+  // Camino normal de Cliente Externo, en orden cronológico.
+  var PASOS = [
+    { id: "p01", rol: "recepcion", etapa: 1, actividad: "Crear la Orden",
+      como: "En Inicio, tocar «+ Nueva orden», elegir «Cliente externo» y cargar cliente, teléfono, equipo, falla, estado físico y accesorios.",
+      recibe: "Un cliente que trae su equipo para reparar.",
+      espera: "Se abre la Orden nueva con su número (OR-…), en «Pendiente de recepción». «Próximo paso» propone primero cargar los trabajos." },
+    { id: "p02", rol: "recepcion", etapa: 2, actividad: "Cargar los trabajos",
+      como: "En «Próximo paso» › «Cargar los trabajos», agregar uno o más trabajos de reparación (por ejemplo, «Cambio bateria iPhone 14»).",
+      recibe: "Una Orden recién creada, con el equipo todavía sin confirmar.",
+      espera: "Cada trabajo aparece en «Trabajos» con su precio y «Próximo paso» pasa a «Confirmar la recepción física del equipo»." },
+    { id: "p03", rol: "recepcion", etapa: 1, actividad: "Confirmar la recepción física",
+      como: "En «Próximo paso», confirmar que el equipo quedó en el local.",
+      recibe: "Una Orden con los trabajos cargados y el equipo sin confirmar.",
+      espera: "El equipo queda «En el local» (con su estado físico y accesorios) y «Próximo paso» propone finalizar la definición." },
+    { id: "p04", rol: "recepcion", etapa: 2, actividad: "Finalizar la definición",
+      como: "Cuando estén todos los trabajos, finalizar la definición.",
+      recibe: "Una Orden con al menos un trabajo cargado.",
+      espera: "La Orden queda «Esperando autorización del cliente» y en «Documentos» aparece el comprobante de recepción (constancia de ingreso y custodia del equipo, sin trabajos ni precios)." },
+    { id: "p05", rol: "recepcion", etapa: 3, actividad: "Registrar la autorización del cliente",
+      como: "Marcar «Autorizar» o «Rechazar» en cada trabajo, elegir el canal y registrar la decisión.",
+      recibe: "Una Orden con trabajos definidos pendientes de autorización.",
+      espera: "Los trabajos autorizados pueden continuar (con repuestos disponibles, la Orden queda «Pendiente de prioridad»); los rechazados se cancelan y no se cobran." },
+    { id: "p06", rol: "recepcion", etapa: 3, actividad: "Generar el comprobante de autorización",
+      como: "En «Próximo paso», tocar «Generar comprobante de autorización». Se abre el comprobante: usar «Descargar PDF» o «Compartir por WhatsApp» (en el celular abre el menú para compartir con el PDF; en la computadora descarga el PDF y abre WhatsApp con el mensaje, para adjuntarlo).",
+      recibe: "Una Orden con al menos un trabajo autorizado.",
+      espera: "Un PDF con la OR, fecha, cliente, equipo, solo los trabajos autorizados con su precio y el total, que aclara que no es un comprobante de pago. Queda en «Documentos». Compartirlo no lo marca como enviado." },
+    { id: "p07", rol: "priorizacion", etapa: 4, actividad: "Priorizar e ingresar a la cola",
+      como: "En «Próximo paso», confirmar la prioridad: propone «4 — Normal» y se puede elegir de 1 (Urgente) a 3 (Media).",
+      recibe: "Una Orden autorizada, «Pendiente de prioridad».",
+      espera: "La Orden queda «En cola» con su prioridad y aparece en la Cola de taller, de la más urgente a la normal. Se prioriza una sola vez." },
+    { id: "p08", rol: "tecnico", etapa: 5, actividad: "Tomar la Orden desde la cola",
+      como: "En Taller › «Cola de taller», elegir la estación y tocar «Tomar».",
+      recibe: "Una Orden en cola.",
+      espera: "Se abre la Orden, aparece en «Mis órdenes tomadas» y deja de estar disponible para otros técnicos." },
+    { id: "p09", rol: "tecnico", etapa: 5, actividad: "Iniciar el trabajo",
+      como: "En «Próximo paso», iniciar el trabajo.",
+      recibe: "Una Orden tomada por vos, con el equipo en el local.",
+      espera: "El trabajo pasa a «En reparación» y se reservan sus repuestos (se ve en Inventario)." },
+    { id: "p10", rol: "tecnico", etapa: 5, actividad: "Registrar la reparación realizada",
+      como: "En «Próximo paso», indicar los repuestos usados y tocar «Registrar la reparación». Debajo está «Interrumpir la reparación» por si hay que dejarla a medias.",
+      recibe: "Un trabajo en reparación.",
+      espera: "El trabajo queda realizado, se descuentan los repuestos usados y la Orden pasa a «Control de la reparación»." },
+    { id: "p11", rol: "recepcion", etapa: 6, actividad: "Aprobar el control técnico",
+      como: "Revisar el trabajo realizado y aprobarlo.",
+      recibe: "Una Orden con trabajos realizados pendientes de control.",
+      espera: "El control queda aprobado y la Orden pasa a «Pendiente de aviso al cliente»." },
+    { id: "p12", rol: "recepcion", etapa: 7, actividad: "Avisar al cliente",
+      como: "Registrar que se le avisó al cliente que puede retirar el equipo.",
+      recibe: "Una Orden con la reparación lista.",
+      espera: "Queda registrado el aviso; si hay saldo, la Orden pasa a «Pendiente de cobro»; si no, a «Lista para entregar»." },
+    { id: "p13", rol: "administracion", etapa: 7, actividad: "Registrar el pago",
+      como: "En «Próximo paso» (o en «Otras acciones»), registrar el importe y el medio de pago.",
+      recibe: "Una Orden avisada, con saldo pendiente.",
+      espera: "El saldo queda en $ 0 y la Orden pasa a «Lista para entregar»." },
+    { id: "p14", rol: "recepcion", etapa: 7, actividad: "Entregar el equipo",
+      como: "Registrar quién retira el equipo y confirmar la entrega.",
+      recibe: "Una Orden avisada y con la cuenta saldada.",
+      espera: "La Orden queda «Entregada» y cerrada, con comprobante de entrega y garantía; ya no admite cambios." }
+  ];
+
+  var VARIANTES = {
+    recepcion: [
+      { id: "v-r1", titulo: "Autorización parcial y versión nueva del comprobante", texto: "Con dos trabajos, autorizar uno y dejar el otro pendiente: el autorizado sigue su curso y el comprobante de autorización lista solo ese. Al autorizar el otro, se puede generar una versión nueva; la anterior queda guardada como «Reemplazado»." },
+      { id: "v-r2", titulo: "Cancelación y devolución del equipo", texto: "Cancelar la Orden desde «Situaciones especiales» con el equipo en el local: queda pendiente de devolución y, al registrarla, se cierra sin cobro." },
+      { id: "v-r3", titulo: "Control rechazado y retrabajo", texto: "Rechazar el control con un motivo: el trabajo vuelve a la cola para que un técnico lo rehaga." }
+    ],
+    tecnico: [
+      { id: "v-t1", titulo: "Interrupción de reparación", texto: "En «Próximo paso», debajo de «Registrar la reparación», tocar «Interrumpir la reparación», escribir el motivo y lo usado: el trabajo vuelve a quedar pendiente, se liberan sus repuestos y se puede iniciar de nuevo." },
+      { id: "v-t2", titulo: "Varios trabajos en una Orden", texto: "Con dos trabajos autorizados, iniciar y registrar uno por vez: el control se habilita cuando están todos terminados." },
+      { id: "v-t3", titulo: "Trabajo sin repuestos disponibles", texto: "Si un repuesto no tiene stock, ese trabajo queda «Sin repuestos» y no se puede iniciar hasta que ingrese stock; los demás trabajos de la Orden sí." }
+    ]
+  };
+
+  // --- Estado guardado en este navegador -------------------------------
+  function leer(clave) {
+    var datos = JSON.parse(localStorage.getItem(clave) || "null");
+    if (!datos || typeof datos !== "object") return null;
+    return { checks: datos.checks || {}, observaciones: Array.isArray(datos.observaciones) ? datos.observaciones : [] };
+  }
+  function cargar() {
+    try {
+      var actual = leer(CLAVE);
+      if (actual) return actual;
+      var anterior = leer(CLAVE_V1);
+      if (anterior) {
+        var checks = {};
+        Object.keys(anterior.checks).forEach(function (id) {
+          if (DE_V1[id]) checks[DE_V1[id]] = true;
+          else if (/^v-/.test(id)) checks[id] = true;
+        });
+        return { checks: checks, observaciones: anterior.observaciones };
+      }
+    } catch (e) { /* sin almacenamiento: la guía funciona igual */ }
+    return { checks: {}, observaciones: [] };
+  }
+  var estado = cargar();
+  function guardar() {
+    try { localStorage.setItem(CLAVE, JSON.stringify(estado)); } catch (e) { /* modo privado o bloqueado */ }
+  }
+
+  function el(etiqueta, atributos, hijos) {
+    var nodo = document.createElement(etiqueta);
+    Object.keys(atributos || {}).forEach(function (k) {
+      if (k === "texto") nodo.textContent = atributos[k];
+      else if (k === "clase") nodo.className = atributos[k];
+      else nodo.setAttribute(k, atributos[k]);
+    });
+    (hijos || []).forEach(function (h) { if (h) nodo.appendChild(typeof h === "string" ? document.createTextNode(h) : h); });
+    return nodo;
+  }
+  function nombreEtapa(n) { return ETAPAS[n - 1].titulo; }
+
+  // --- Las 7 etapas ------------------------------------------------------
+  var contEtapas = document.getElementById("etapas");
+  ETAPAS.forEach(function (e) {
+    contEtapas.appendChild(el("article", { clase: "etapa" }, [
+      el("span", { clase: "numero", texto: String(e.n), "aria-hidden": "true" }),
+      el("h3", { texto: e.n + ". " + e.titulo }),
+      el("p", { texto: e.texto })
+    ]));
+  });
+
+  // --- Tarjetas (la misma marca en todas las vistas) --------------------
+  function casilla(id, texto) {
+    var input = el("input", { type: "checkbox", "data-id": id });
+    input.checked = !!estado.checks[id];
+    return el("label", { clase: "check" }, [input, el("span", { texto: texto })]);
+  }
+  function tarjetaPaso(paso, numero, total) {
+    var hecho = !!estado.checks[paso.id];
+    return el("article", { clase: "paso" + (hecho ? " hecho" : ""), "data-paso": paso.id, "data-numero": String(numero) }, [
+      el("div", { clase: "paso-cabecera" }, [
+        el("span", { clase: "etiqueta-etapa", texto: "Etapa " + paso.etapa }),
+        el("span", { clase: "numero-paso", texto: nombreEtapa(paso.etapa) + " · paso " + numero + " de " + total })
+      ]),
+      el("h4", { texto: numero + ". " + paso.actividad }),
+      el("p", { clase: "responsable", texto: "Responsable: " + ROLES[paso.rol].responsable + "." }),
+      el("p", { clase: "campo" }, [el("b", { texto: "Actividad" }), paso.como]),
+      el("p", { clase: "campo" }, [el("b", { texto: "Qué recibe" }), paso.recibe]),
+      el("p", { clase: "campo" }, [el("b", { texto: "Qué debería pasar" }), paso.espera]),
+      casilla(paso.id, "Probado correctamente")
+    ]);
+  }
+  function seccionVariantes(rol, titulo) {
+    var lista = el("div", { clase: "lista" });
+    VARIANTES[rol].forEach(function (v) {
+      var input = el("input", { type: "checkbox", "data-id": v.id, "aria-label": "Probado: " + v.titulo });
+      input.checked = !!estado.checks[v.id];
+      lista.appendChild(el("label", { clase: "variante" }, [input, el("div", {}, [el("strong", { texto: v.titulo }), el("span", { texto: v.texto })])]));
+    });
+    return el("details", { clase: "variantes", "data-rol": rol }, [el("summary", { texto: titulo }), lista]);
+  }
+  // Un grupo = pasos SEGUIDOS del mismo responsable. Si el rol vuelve a
+  // intervenir más adelante, abre un grupo nuevo.
+  function bloques(pasos) {
+    var lista = [];
+    pasos.forEach(function (p) {
+      var ultimo = lista[lista.length - 1];
+      if (ultimo && ultimo.rol === p.rol) ultimo.pasos.push(p);
+      else lista.push({ rol: p.rol, pasos: [p] });
+    });
+    return lista;
+  }
+  function grupo(rol, pasos, numeroDe, total) {
+    var contenido = el("div", { clase: "pasos" });
+    pasos.forEach(function (p) { contenido.appendChild(tarjetaPaso(p, numeroDe(p), total)); });
+    return el("div", { clase: "grupo rol-" + rol, "data-rol": rol }, [
+      el("h3", {}, [el("span", { clase: "punto", "aria-hidden": "true" }), ROLES[rol].nombre]),
+      el("p", { clase: "rol-nota", texto: ROLES[rol].nota }),
+      contenido
+    ]);
+  }
+  // Los pasos que muestra cada vista: «Todos», o los que puede hacer el rol.
+  function pasosDe(v) {
+    return v === "todos" ? PASOS : PASOS.filter(function (p) { return ROLES[p.rol].pestanas.indexOf(v) >= 0; });
+  }
+  function variantesDe(v) {
+    return v === "todos" ? ["recepcion", "tecnico"] : (VARIANTES[v] ? [v] : []);
+  }
+  // Cada vista numera sus pasos visibles de corrido; la etapa no cambia.
+  function pintarVista(v, panel) {
+    var pasos = pasosDe(v);
+    var numeroDe = function (p) { return pasos.indexOf(p) + 1; };
+    bloques(pasos).forEach(function (b) { panel.appendChild(grupo(b.rol, b.pasos, numeroDe, pasos.length)); });
+    var roles = variantesDe(v);
+    if (roles.length) {
+      var otras = el("div", { clase: "otras" }, [el("h3", { texto: "Otras situaciones para probar" })]);
+      roles.forEach(function (rol) {
+        otras.appendChild(el("div", { clase: "grupo rol-" + rol, "data-rol-variantes": rol }, [
+          seccionVariantes(rol, ROLES[rol].nombre + ": otras situaciones")
+        ]));
+      });
+      panel.appendChild(otras);
+    }
+  }
+  pintarVista("todos", document.getElementById("panel-todos"));
+  pintarVista("recepcion", document.getElementById("panel-recepcion"));
+  pintarVista("tecnico", document.getElementById("panel-tecnico"));
+
+  // --- Marcar, sincronizar y contar --------------------------------------
+  var vista = "todos";
+  function idsDeVista(v) {
+    var variantes = [];
+    variantesDe(v).forEach(function (rol) { variantes = variantes.concat(VARIANTES[rol]); });
+    return { pasos: pasosDe(v).map(function (p) { return p.id; }), variantes: variantes.map(function (x) { return x.id; }) };
+  }
+  function actualizarProgreso() {
+    var ids = idsDeVista(vista);
+    var hechos = ids.pasos.filter(function (id) { return estado.checks[id]; }).length;
+    var variantes = ids.variantes.filter(function (id) { return estado.checks[id]; }).length;
+    var progreso = document.getElementById("progreso");
+    progreso.textContent = "";
+    progreso.appendChild(el("strong", { texto: hechos + " de " + ids.pasos.length }));
+    progreso.appendChild(document.createTextNode(" pasos probados · " + variantes + " de " + ids.variantes.length + " otras situaciones"));
+  }
+  function aplicarMarca(id, marcado) {
+    document.querySelectorAll('input[data-id="' + id + '"]').forEach(function (i) { i.checked = marcado; });
+    document.querySelectorAll('[data-paso="' + id + '"]').forEach(function (t) { t.classList.toggle("hecho", marcado); });
+  }
+  document.addEventListener("change", function (evento) {
+    var input = evento.target;
+    if (!input.matches || !input.matches('input[type="checkbox"][data-id]')) return;
+    var id = input.getAttribute("data-id");
+    if (input.checked) estado.checks[id] = true; else delete estado.checks[id];
+    guardar();
+    aplicarMarca(id, input.checked);
+    actualizarProgreso();
+  });
+  document.getElementById("reiniciar").addEventListener("click", function () {
+    if (!window.confirm("¿Reiniciar las pruebas? Se desmarcan todos los pasos y situaciones de esta guía. Las observaciones se conservan.")) return;
+    Object.keys(estado.checks).forEach(function (id) { aplicarMarca(id, false); });
+    estado.checks = {};
+    guardar();
+    actualizarProgreso();
+  });
+
+  // --- Pestañas ------------------------------------------------------------
+  var pestanas = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+  function mostrar(v, enfocar) {
+    vista = v;
+    pestanas.forEach(function (p) {
+      var activa = p.getAttribute("data-vista") === v;
+      p.setAttribute("aria-selected", activa ? "true" : "false");
+      p.tabIndex = activa ? 0 : -1;
+      document.getElementById(p.getAttribute("aria-controls")).hidden = !activa;
+      if (activa && enfocar) p.focus();
+    });
+    actualizarProgreso();
+  }
+  pestanas.forEach(function (p, i) {
+    p.addEventListener("click", function () { mostrar(p.getAttribute("data-vista")); });
+    p.addEventListener("keydown", function (e) {
+      var destino = e.key === "ArrowRight" ? (i + 1) % pestanas.length : e.key === "ArrowLeft" ? (i - 1 + pestanas.length) % pestanas.length : null;
+      if (destino !== null) { e.preventDefault(); mostrar(pestanas[destino].getAttribute("data-vista"), true); }
+    });
+  });
+
+  // --- Observaciones -----------------------------------------------------
+  var lista = document.getElementById("lista-obs");
+  function pintarObservaciones() {
+    lista.textContent = "";
+    estado.observaciones.forEach(function (o, i) {
+      var quitar = el("button", { clase: "boton-quitar", type: "button", texto: "Quitar" });
+      quitar.addEventListener("click", function () {
+        if (!window.confirm("¿Quitar esta observación?")) return;
+        estado.observaciones.splice(i, 1);
+        guardar();
+        pintarObservaciones();
+      });
+      var fecha = new Date(o.fecha);
+      lista.appendChild(el("li", { clase: "obs" }, [
+        el("div", { clase: "meta" }, [
+          el("span", { texto: o.rol + (o.or ? " · " + o.or : "") + " · " + fecha.toLocaleString("es-AR") }),
+          quitar
+        ]),
+        el("p", {}, [el("strong", { texto: o.problema })]),
+        o.detalle ? el("p", { texto: o.detalle }) : null
+      ]));
+    });
+    document.getElementById("sin-obs").hidden = estado.observaciones.length > 0;
+  }
+  document.getElementById("form-obs").addEventListener("submit", function (evento) {
+    evento.preventDefault();
+    var f = evento.target;
+    estado.observaciones.push({
+      fecha: new Date().toISOString(),
+      rol: f.rol.value,
+      or: f.or.value.trim().toUpperCase(),
+      problema: f.problema.value.trim(),
+      detalle: f.detalle.value.trim()
+    });
+    guardar();
+    pintarObservaciones();
+    f.or.value = ""; f.problema.value = ""; f.detalle.value = "";
+    f.problema.focus();
+  });
+
+  // --- Exportar ------------------------------------------------------------
+  document.getElementById("exportar").addEventListener("click", function () {
+    var todas = VARIANTES.recepcion.map(function (v) { return { rol: "Recepción", v: v }; })
+      .concat(VARIANTES.tecnico.map(function (v) { return { rol: "Técnico", v: v }; }));
+    var datos = {
+      guia: "Guía de pruebas — Rosario Tecno RMA (v2)",
+      aplicacion: APP,
+      exportado: new Date().toISOString(),
+      pasos: PASOS.map(function (p, i) {
+        return { paso: i + 1, etapa: p.etapa + ". " + nombreEtapa(p.etapa), responsable: ROLES[p.rol].responsable, actividad: p.actividad, probado: !!estado.checks[p.id] };
+      }),
+      otras_situaciones: todas.map(function (x) { return { rol: x.rol, situacion: x.v.titulo, probado: !!estado.checks[x.v.id] }; }),
+      observaciones: estado.observaciones
+    };
+    var blob = new Blob([JSON.stringify(datos, null, 2)], { type: "application/json" });
+    var enlace = document.createElement("a");
+    enlace.href = URL.createObjectURL(blob);
+    enlace.download = "resultados-pruebas-rma-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(enlace);
+    enlace.click();
+    setTimeout(function () { URL.revokeObjectURL(enlace.href); enlace.remove(); }, 0);
+  });
+
+  pintarObservaciones();
+  mostrar("todos");
+})();
+</script>
+</body>
+</html>
