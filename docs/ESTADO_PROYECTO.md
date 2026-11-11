@@ -2,7 +2,15 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 10/11/2026, nuevo circuito de cancelación (DC31) publicado en la rama y `business/` sincronizado, **todavía no desplegado**; autenticación real publicada en la rama, **todavía no desplegada**; antes, el checkpoint de la optimización de rendimiento (`00017-wer`). **Para retomar el trabajo: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md).**
+**Última actualización:** 11/11/2026.
+
+- **Hecho:**
+  - autenticación real y DC31 desplegadas en UAT (10/11, `00020-tux`);
+  - datos de UAT reiniciados a cero Órdenes (10/11);
+  - Supabase de São Paulo migrado, validado y en cero Órdenes, con la revisión de corte `00023-zus` sin tráfico (11/11).
+- **Falta:** el corte del UAT a São Paulo.
+
+**Para retomar el trabajo: [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md)**, sección 16 (corte y vuelta atrás). Para el entorno local: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 5.
 
 ## A. Estado general
 
@@ -16,19 +24,20 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | Tooling de la raíz | Node y TypeScript: validaciones, diagramas Mermaid y visor HTML (`package.json`) |
 | `app/backend/` | Python 3.11 o posterior, FastAPI y Pydantic v2. Capas `api → application → services → repositories ← storage` ([README](../app/backend/README.md)) |
 | `app/frontend/` | React, TypeScript y Vite ([README](../app/frontend/README.md)) |
-| `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). Aplicado en `rt-rma-db` (19 de 19) |
+| `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). 20 de 20 aplicadas en `rt-rma-db` (Oregón, `us-west-2`) y en `db-rt-rma` (São Paulo, `sa-east-1`) |
 | Persistencia en uso | UAT: PostgreSQL en Supabase (`RMA_PERSISTENCIA=postgres`). JSON sigue siendo el valor por defecto local |
-| UAT publicado | Backend en Cloud Run (`app/backend/Dockerfile`) y frontend en Vercel, sobre PostgreSQL ([`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md)) |
+| UAT publicado | Backend en Cloud Run (`00020-tux`, con autenticación) y frontend en Vercel, sobre Supabase Oregón. São Paulo, preparado para el corte ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md)) |
 
 **Rama de trabajo:** `feat/postgresql-esquema`, que sale de `mvp-v2`.
 
-**Últimos commits de código:** `c21f289` (lecturas en lote) y `750756c` (frontend sin recargas tras los comandos); desplegados desde `3249a0a`. Ver `git log`.
+**Últimos commits de código:** `61e2a14` (inicio de sesión con usuario y contraseña), `50170e4` (DC31) y `d60c124` (autenticación). Desplegado: `61e2a14`. Sin commit todavía: los scripts de `supabase/scripts/migracion_sp/` y `reinicio_uat/`, su test y esta documentación. Ver `git log`.
 
 **Estado de desarrollo:**
-- El MVP está en UAT sobre PostgreSQL (E9), solo con datos ficticios y sin autenticación real. La autenticación con Supabase Auth está implementada y lista para UAT ([`autenticacion.md`](autenticacion.md)), pero **no está desplegada**: el UAT publicado sigue sin autenticación.
+- El MVP está en UAT sobre PostgreSQL, con autenticación real (Supabase Auth, usuario y contraseña) y DC31, solo con datos ficticios y en cero Órdenes ([`autenticacion.md`](autenticacion.md)).
+- La base y Auth están replicadas en São Paulo para bajar la latencia. El corte está pendiente de autorización ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md)).
 - La migración a PostgreSQL tiene E0 a E7 terminadas: Bloque A (E4 + E5) y Bloque B (E6 + E7, B1 a B6). La app corre localmente sobre PostgreSQL, con los datos persistentes entre reinicios.
 - El frontend tiene el rediseño aprobado: sidebar, barra de acciones, modales y «Pendientes» (`fe655d7`).
-- **Pendiente para la puesta en marcha:** autenticación real, latencia de los comandos, paginación y sincronización automática del catálogo de Ventas. Lista priorizada en [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 4.
+- **Pendiente para la puesta en marcha:** el corte a São Paulo (resuelve la latencia), paginación y sincronización automática del catálogo de Ventas. Lista priorizada en [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 4.
 
 **Funcionalidad:**
 
@@ -50,11 +59,40 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ## B. Últimos avances
 
-### Circuito de cancelación DC31 (10/11/2026): publicado, no desplegado
+### Supabase en São Paulo, listo para el corte (11/11/2026): sin commit
+
+**Proyecto nuevo:** `db-rt-rma` (`pcdnmhzwhzymznojndrn`, `sa-east-1`, plan Free).
+
+- **Esquema:** las 20 migraciones del repositorio.
+- **Datos:** maestros, usuarios y stock inicial copiados por código.
+- **Cuentas de Auth:** las 4, con el mismo id y la misma contraseña (hash bcrypt, por la API de administración).
+- **Conexión:** `rma_api` igual al de Oregón, secreto nuevo `rma-uat-sp-database-url:1` y TLS `verify-full` con la CA de la imagen.
+
+**Validación:**
+
+- `verificar` 9/9 y `comparar` 32/32 contra Oregón.
+- Recorridos funcionales (HP-REP-001, DC31, idempotencia, stock y permisos): TODO OK; las Órdenes de prueba se borraron con el reinicio.
+
+**Rendimiento:**
+
+- viaje a la base: 179 → 3 ms;
+- lecturas en el servidor: 1,08 → 0,06 s; en el cliente, −82,7 %;
+- comandos: 2,4–4,7 → 0,24–0,50 s.
+
+**Revisión de corte:** `rt-rma-uat-api-00023-zus` (etiqueta `corte`), sin tráfico. El UAT público sigue en Oregón (`00020-tux`).
+
+Plan, resultados, corte y vuelta atrás: [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md).
+
+### Despliegue de autenticación y DC31, y reinicio de datos de UAT (10/11/2026)
+
+- **Despliegue:** `61e2a14` en `rt-rma-uat-api-00020-tux` (100 %) y en Vercel (`rt-rma-n49rz9qgv…`). Supabase Auth de Oregón tiene 4 cuentas vinculadas a `ADMIN-001`, `COORD-001`, `RECEP-001` y `TECH-001`. Se aplicó la migración `20261110000100_dc31_cancelacion.sql`.
+- **Reinicio de datos:** con [`supabase/scripts/reinicio_uat/`](../supabase/scripts/reinicio_uat/) se eliminaron las 10 Órdenes ficticias y sus datos (402 filas) y las 42 fotos del bucket. El UAT quedó en cero Órdenes, con BAT-IP14 10/0. El respaldo externo queda fuera del repositorio.
+
+### Circuito de cancelación DC31 (10/11/2026): desplegado el 10/11
 
 Cancelar un trabajo nunca cancela la Orden: con todos los trabajos cancelados la Orden sigue abierta en `SIN_TRABAJOS_VIGENTES` (PROC-REP-307), sin trabajo técnico. Cancelar la Orden es una acción explícita y terminal (PROC-REP-308, o 306 sin Detalles): exige sin Ejecución, toma, reservas ni saldo, la custodia resuelta, el equipo devuelto si ingresó y ningún trabajo COMPLETO; si algo falla no cambia nada, y si no, cancela lo pendiente y cierra la Orden en el mismo acto. Rechazar o desistir de todo cancela los trabajos (305), no la Orden. La devolución física se registra antes de cancelar. Las Órdenes CANCELADA y abiertas del circuito anterior (OR-000003, 006 y 009 en UAT) lo terminan sin migrar datos: no figuran en Inicio ni Taller, se encuentran en Órdenes. Una Orden sin trabajos vigentes no admite trabajos nuevos: se crea otra Orden. Fuente: `rt-rma-app` `ab928b6` (rama `dc31/cancelacion-explicita`), sincronizada en `business/` ([`sincronizacion-funcional.md`](sincronizacion-funcional.md)). **Antes de desplegarlo** hay que aplicar en Supabase la migración nueva `supabase/migrations/20261110000100_dc31_cancelacion.sql` (aditiva, solo equivalencias del historial para los pasos 305/307/308): sin ella PostgreSQL rechaza guardar esos pasos.
 
-### Autenticación real, implementada y no desplegada (09/11/2026): `feat(auth)`, ver `git log`
+### Autenticación real (09/11/2026): `feat(auth)`, desplegada el 10/11
 
 Supabase Auth (usuario y contraseña, sin registro público) y autorización en FastAPI con los roles de PostgreSQL: token ES256 verificado localmente por JWKS, identidad por `rma.usuario.auth_user_id`, `usuario_id` del pedido igual al de la sesión, 403 por rol en las rutas administrativas y `GET /api/me`. Frontend con `@supabase/auth-js` solo para la sesión. La persona (activo y rol) se lee de PostgreSQL en cada pedido: una desactivación vale desde el pedido siguiente. Sin cambios de reglas de negocio ni de esquema. **No desplegada:** Supabase Auth, Cloud Run y Vercel siguen sin cambios. Diseño, endpoints, configuración y despliegue en [`autenticacion.md`](autenticacion.md). **Ajuste (10/11/2026, sin commit):** los empleados inician sesión con **usuario y contraseña**, sin correo: cada cuenta de Supabase Auth tiene una identidad interna `<usuario>@usuarios.rma.invalid` (dominio reservado), las cuentas las crea, restablece y bloquea Administración con `supabase/scripts/cuentas_rma.py`, y los errores no revelan qué cuentas existen ([`autenticacion.md`](autenticacion.md), sección 3).
 
@@ -245,10 +283,11 @@ Plan aprobado el 03/11/2026. Las etapas y sus dependencias son las del plan; los
 | E6: Acciones e idempotencia | Completada (`b84b87a`) | Ninguna local; migración remota en E8 |
 | E7: Equivalencia completa | Completada (`b84b87a`) | B4 a B6: cableado, equivalencia de los recorridos y activación local. Las suites completas en los dos modos quedan para preparar el despliegue |
 | E8: DEV/UAT | **Completada** (06/11/2026, `17bf69a`) | 19 de 19 migraciones en `rt-rma-db`, `verificar_integridad()` vacío. Cargados los catálogos demo (`seeds/desarrollo`): el entorno es UAT, solo para datos de prueba |
-| E9: Cloud Run y Vercel | **Completada** (06/11/2026) | `rt-rma-uat-api` revisión `00017-wer` sobre PostgreSQL; frontend en `rt-rma-uat.vercel.app`, publicado por CLI. Anterior: `00012-d4z`; anterior en JSON: `00010-pgz` |
+| E9: Cloud Run y Vercel | **Completada** (06/11/2026) | `rt-rma-uat-api` sobre PostgreSQL; frontend en `rt-rma-uat.vercel.app`, publicado por CLI. Hoy `00020-tux`, con autenticación (10/11). `00017-wer` no tiene autenticación: no sirve como vuelta atrás |
+| E10: Supabase en São Paulo | **Preparada** (11/11/2026) | `db-rt-rma` migrado y validado; revisión `00023-zus` sin tráfico. Falta el corte coordinado ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16) |
 
 **Infraestructura:**
-- Supabase DEV/UAT tiene las 19 migraciones aplicadas y es la persistencia de UAT. E3 se aplicó en una transacción con `supabase db query --remote` (`supabase/scripts/e8_aplicar_e3.sql`); el trigger `insumo_clave_por_defecto` se conserva.
+- Supabase DEV/UAT (Oregón) tiene las 20 migraciones aplicadas y es la persistencia de UAT; São Paulo tiene las mismas 20, aplicadas desde cero el 11/11. E3 se aplicó en una transacción con `supabase db query --remote` (`supabase/scripts/e8_aplicar_e3.sql`); el trigger `insumo_clave_por_defecto` se conserva.
 - La migración de E3 y las dos del Bloque A están aplicadas y verificadas únicamente en PostgreSQL local.
 - No hay datos operativos históricos que migrar. Se conservan los catálogos remotos existentes (5 medios de pago y 36 modelos técnicos).
 - PostgreSQL es la persistencia del UAT publicado y de la app local (`RMA_PERSISTENCIA=postgres`).
@@ -337,14 +376,29 @@ El detalle, asignado por etapa, está en [`postgresql/integracion-pendientes.md`
 | L1 a L10 y el resto de E2 y E3 | Observaciones menores de E1, F-07, F-08, QA-E2-4, QA-E2-6, QA-E2-7, QA-E2-9 y QA-E3-L | Por etapa |
 
 Otros riesgos registrados:
-- **Latencia entre regiones:** Cloud Run en São Paulo y Supabase en Oregón: unos 177 ms por viaje a la base. Con la optimización publicada, las lecturas tardan 1,0 a 1,2 s y los comandos 2,4 a 4,7 s. Medición y alternativa en [`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md).
+- **Latencia entre regiones:** Cloud Run en São Paulo y Supabase en Oregón, unos 179 ms por viaje: lecturas de 1,08 s en el servidor y comandos de 2,4 a 4,7 s. Se resuelve con el corte a São Paulo (3 ms por viaje; lecturas de 0,06 s). Medición en [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 8.
+- **Período de vuelta atrás:** Oregón se conserva 14 días después del corte. En plan Free se pausa a los 7 días sin actividad: hace falta actividad semanal.
 - **Doble escritura no atómica de la Orden al cerrar una reparación** (JSON): ver [`pendientes-producto.md`](pendientes-producto.md).
 - **Foto subida cuya registración falla:** ver [`pendientes-producto.md`](pendientes-producto.md). Es una tarea separada, no de una etapa.
 
 ## F. Próximos pasos
 
-**Próximo paso:** aplicar DC31 en UAT, con autorización: la migración `20261110000100_dc31_cancelacion.sql` en Supabase y después el backend y el frontend. Después, desplegar la autenticación (implementada, no desplegada): aplicar con autorización la configuración de Supabase Auth, Cloud Run y Vercel según [`autenticacion.md`](autenticacion.md), secciones 4 y 5. Sin datos de clientes hasta entonces. También decidir si la base se mueve a São Paulo (no ejecutado; plan en [`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md)). No ejecutar `/photos/cleanup` con `aplicar`: el bucket conserva fotos anteriores a PostgreSQL.
-Lista priorizada de pendientes, identificación del despliegue y vuelta atrás: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md).
+**Próximo paso:** el corte coordinado del UAT a São Paulo, con autorización ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16):
+
+1. variables de producción de Vercel;
+2. tráfico a `rt-rma-uat-api-00023-zus`;
+3. `vercel deploy --prod`;
+4. verificación.
+
+**Vuelta atrás:** `00020-tux` y `rt-rma-n49rz9qgv…`.
+
+**Después:**
+
+- commit de los scripts y la documentación;
+- 14 días de vuelta atrás con actividad semanal en Oregón;
+- quitar la etiqueta `saopaulo` y la vista previa.
+
+Los otros pendientes priorizados siguen en [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 4.
 
 Recordatorio: no hay modo mixto. Los datos creados en PostgreSQL no vuelven a JSON.
 
