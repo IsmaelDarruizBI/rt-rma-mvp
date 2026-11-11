@@ -121,7 +121,9 @@ const sql =
         "comment on role rma_api is 'Usuario de conexión del backend FastAPI de Rosario Tecno RMA; permisos heredados de rma_backend.';",
       ]
     : [`alter role rma_api password '${verificador}';`];
-const aplicado = ejecutar("npx", ["supabase", "db", "query", "--remote", "--yes"], sql.join("\n"));
+// Versión fija de la CLI: sin ella, npx podría pedir confirmación para instalar y consumir el SQL
+// de la entrada estándar.
+const aplicado = ejecutar("npx", ["-y", "supabase@3.1.0", "db", "query", "--remote", "--yes"], sql.join("\n"));
 const salida = ocultar(`${aplicado.salida}\n${aplicado.error}`);
 if (!aplicado.ok || /"_tag"\s*:\s*"Error"/.test(salida)) {
   console.error("El SQL del rol falló en Supabase. La versión del secreto quedó guardada sin un rol que la use; no se rotó nada.");
