@@ -37,6 +37,10 @@ jobs:
         image: postgres:17
         env:
           POSTGRES_PASSWORD: postgres # base descartable del job
+          # Algunas pruebas crean roles de login sin contraseña y se conectan
+          # con ellos, como en el PostgreSQL local de desarrollo. El servidor
+          # solo existe dentro del job.
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
