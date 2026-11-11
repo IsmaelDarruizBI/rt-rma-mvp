@@ -690,6 +690,12 @@ Todos los pasos van con `--remote=pcdnmhzwhzymznojndrn`:
 
   **Pendiente de validación manual:** la pantalla de acceso, porque la vista previa exige la sesión de Vercel. Servida localmente, la app arranca y consulta `saopaulo---…/health`, que desde `localhost` rechaza CORS, como corresponde.
 
+**Hallazgo (11/11/2026, después del reinicio):** São Paulo tiene una Orden, `OR-000001`.
+
+- **Qué es:** abierta, sin Detalles, cliente sin la marca «PRUEBA». La creó `RECEP-001` a las 03:57:41 UTC, desde la vista previa (`00022-vab`), 40 s después de iniciar sesión.
+- **Cómo se interpreta:** es la validación manual de la vista previa, que además confirma que allí funciona el acceso.
+- **Pendiente:** antes del corte, decidir si se conserva o se repite el reinicio, con `v_ordenes = ['OR-000001']`.
+
 ### Antes del corte (solo lectura)
 
 1. `migrar_uat.py verificar --destino pcdnmhzwhzymznojndrn` OK y `comparar` 32/32.

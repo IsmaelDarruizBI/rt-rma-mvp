@@ -7,10 +7,14 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 - **Hecho:**
   - autenticación real y DC31 desplegadas en UAT (10/11, `00020-tux`);
   - datos de UAT reiniciados a cero Órdenes (10/11);
-  - Supabase de São Paulo migrado, validado y en cero Órdenes, con la revisión de corte `00023-zus` sin tráfico (11/11).
-- **Falta:** el corte del UAT a São Paulo.
+  - Supabase de São Paulo migrado, validado y en cero Órdenes, con la revisión de corte `00023-zus` sin tráfico (11/11);
+  - consolidación técnica (11/11): CI, respaldo cifrado probado, checklist de seguridad, despliegue y deuda técnica ([`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md)).
+- **Falta:**
+  - el corte del UAT a São Paulo;
+  - activar el respaldo;
+  - publicar e integrar la rama.
 
-**Para retomar el trabajo: [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md)**, sección 16 (corte y vuelta atrás). Para el entorno local: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 5.
+**Para retomar el trabajo: [`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md)**: estado, pendientes con autorización y criterios para el desarrollo funcional. Corte y vuelta atrás: [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16. Entorno local: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 5.
 
 ## A. Estado general
 
@@ -59,7 +63,19 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ## B. Últimos avances
 
-### Supabase en São Paulo, listo para el corte (11/11/2026): sin commit
+### Consolidación técnica (11/11/2026): commits locales, sin push
+
+- **Estado real verificado:** el público sigue en Oregón (`00020-tux`, `rt-rma-n49rz9qgv…`), coherente. El corte no se ejecutó. São Paulo tiene una Orden de la prueba manual de la vista previa.
+- **Commits:** reinicio, herramientas de migración, documentación, cierre de `/docs` (`4af9854`), respaldo cifrado probado de punta a punta (`bea870a`), CI y documentos de cierre.
+- **Documentos nuevos:**
+  - [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md): despliegue, CI y vuelta atrás;
+  - [`RESPALDOS.md`](RESPALDOS.md);
+  - [`CHECKLIST_SEGURIDAD_DESPLIEGUE.md`](CHECKLIST_SEGURIDAD_DESPLIEGUE.md);
+  - [`DEUDA_TECNICA.md`](DEUDA_TECNICA.md).
+
+Resumen: [`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md).
+
+### Supabase en São Paulo, listo para el corte (11/11/2026): commits `0724fca` y `1c06be5`
 
 **Proyecto nuevo:** `db-rt-rma` (`pcdnmhzwhzymznojndrn`, `sa-east-1`, plan Free).
 
@@ -383,22 +399,13 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso:** el corte coordinado del UAT a São Paulo, con autorización ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16):
+**Próximo paso:** los P0 de [`DEUDA_TECNICA.md`](DEUDA_TECNICA.md), cada uno con autorización.
 
-1. variables de producción de Vercel;
-2. tráfico a `rt-rma-uat-api-00023-zus`;
-3. `vercel deploy --prod`;
-4. verificación.
+1. **Publicar la rama** e integrarla en `mvp-v2` (avance rápido); CI en verde.
+2. **Decidir sobre `OR-000001` en São Paulo** y ejecutar el corte ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16). Vuelta atrás: `00020-tux` y `rt-rma-n49rz9qgv…`.
+3. **Activar el respaldo** ([`RESPALDOS.md`](RESPALDOS.md), sección 4).
 
-**Vuelta atrás:** `00020-tux` y `rt-rma-n49rz9qgv…`.
-
-**Después:**
-
-- commit de los scripts y la documentación;
-- 14 días de vuelta atrás con actividad semanal en Oregón;
-- quitar la etiqueta `saopaulo` y la vista previa.
-
-Los otros pendientes priorizados siguen en [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 4.
+Después empieza el desarrollo funcional, con los criterios de [`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md), sección 7.
 
 Recordatorio: no hay modo mixto. Los datos creados en PostgreSQL no vuelven a JSON.
 

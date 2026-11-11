@@ -2,7 +2,7 @@
 
 > **Estado superado (11/11/2026).** Las secciones 1 a 3 describen el UAT del 06 al 09/11: sin autenticación, en `00017-wer` y con Órdenes ficticias. Hoy el UAT tiene autenticación y DC31 (`00020-tux`), está en cero Órdenes y tiene São Paulo listo para el corte.
 >
-> - **Estado vigente:** [`ESTADO_PROYECTO.md`](ESTADO_PROYECTO.md).
+> - **Estado vigente:** [`ESTADO_PROYECTO.md`](ESTADO_PROYECTO.md) y [`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md). Los pendientes de la sección 4 de este documento están reclasificados en [`DEUDA_TECNICA.md`](DEUDA_TECNICA.md).
 > - **Despliegue, corte y vuelta atrás:** [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16. La vuelta atrás de la sección 2 de este documento ya no aplica: `00012-d4z` y `00017-wer` no tienen autenticación.
 > - **Siguen vigentes:** las secciones 4 a 7 (pendientes, entorno local y consultas de solo lectura).
 

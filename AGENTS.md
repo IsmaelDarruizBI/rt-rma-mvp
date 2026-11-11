@@ -44,3 +44,8 @@ No repetir información entre documentos: enlazar.
 | Pendientes y riesgos de la integración con PostgreSQL | `docs/postgresql/integracion-pendientes.md` |
 | Instalación, configuración y pruebas del backend | `app/backend/README.md` |
 | Autenticación, autorización y su despliegue | `docs/autenticacion.md` |
+| Despliegue del UAT, integración continua y vuelta atrás | `docs/DESPLIEGUE_UAT.md` |
+| Respaldos y recuperación | `docs/RESPALDOS.md` |
+| Controles de seguridad de cada despliegue | `docs/CHECKLIST_SEGURIDAD_DESPLIEGUE.md` |
+| Deuda técnica priorizada | `docs/DEUDA_TECNICA.md` |
+| Migración del UAT a Supabase São Paulo | `docs/MIGRACION_SUPABASE_SAO_PAULO.md` |
