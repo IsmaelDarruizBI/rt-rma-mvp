@@ -408,8 +408,11 @@ def test_todo_el_sql_registrado_de_los_repositories_es_valido():
     assert {
         n for n, c in propias.items() if c.modo is not LECTURA
     } == del_stock
-    # 12 de catalogos, el historial de stock (A7), 2 de modelos y el stock.
-    assert len(propias) == 15 + len(del_stock)
+    # La identidad del token (autenticacion) es una lectura mas.
+    assert propias["catalogos.usuario_por_identidad"].modo is LECTURA
+    # 12 de catalogos, el historial de stock (A7), 2 de modelos, la
+    # identidad y el stock.
+    assert len(propias) == 16 + len(del_stock)
 
 
 def test_solo_la_unidad_de_trabajo_toca_la_conexion_y_la_transaccion():

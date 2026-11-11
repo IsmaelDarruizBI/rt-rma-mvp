@@ -105,6 +105,13 @@ def test_requerimiento_sin_detalles():
         ("AGREGAR_DETALLE", (RolUsuario.RECEPCION,), None),
         # Slice 4: la otra rama de PROC-REP-045 (Detalles no conocidos).
         ("ENVIAR_A_REVISION", (RolUsuario.RECEPCION,), None),
+        # DC31: sin Detalles y con el equipo en el local, se puede devolver
+        # para despues cancelar la Orden.
+        (
+            "REGISTRAR_DEVOLUCION",
+            (RolUsuario.ADMINISTRADOR, RolUsuario.RECEPCION),
+            None,
+        ),
     ]
     assert _alcanzados(orden) == [
         "PROC-REP-010",

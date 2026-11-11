@@ -259,10 +259,16 @@ def test_un_origen_que_no_es_garantia_no_admite_detalle_origen():
 
 def test_acciones_a_lo_largo_de_la_revision():
     orden = flujo_mvp.orden_creada()
-    assert _codigos(orden) == ["AGREGAR_DETALLE", "ENVIAR_A_REVISION"]
+    # DC31: sin Detalles y con el equipo en el local, tambien se puede
+    # devolver para despues cancelar la Orden.
+    assert _codigos(orden) == [
+        "AGREGAR_DETALLE",
+        "ENVIAR_A_REVISION",
+        "REGISTRAR_DEVOLUCION",
+    ]
 
     orden = _en_revision(orden)
-    assert _codigos(orden) == ["REALIZAR_REVISION"]
+    assert _codigos(orden) == ["REALIZAR_REVISION", "REGISTRAR_DEVOLUCION"]
     assert acciones_disponibles(orden)[0].roles == (TECNICO.rol,)
 
     # Sin Detalles: agregar uno o concluir SIN_REPARACION (068 No -> 069).
@@ -270,8 +276,12 @@ def test_acciones_a_lo_largo_de_la_revision():
     assert _codigos(orden) == [
         "AGREGAR_DETALLE_DESDE_REVISION",
         "FINALIZAR_SIN_REPARACION",
+        "REGISTRAR_DEVOLUCION",
     ]
-    assert {a.roles for a in acciones_disponibles(orden)} == {(RECEPCION.rol,)}
+    assert {a.roles for a in acciones_disponibles(orden)} == {
+        (RECEPCION.rol,),
+        (ADMINISTRADOR.rol, RECEPCION.rol),
+    }
 
     # Con al menos un Detalle: agregar otro o finalizar la definicion.
     orden = _definir(orden)
@@ -296,10 +306,15 @@ def test_enviar_a_revision_no_se_ofrece_con_detalles_ya_definidos():
 
 def test_rt_en_revision_ofrece_las_mismas_acciones_sin_garantia():
     orden = flujo_rt.orden_rt_creada()
-    assert _codigos(orden) == ["AGREGAR_DETALLE", "ENVIAR_A_REVISION"]
+    # DC31: igual que CLIENTE_EXTERNO, devolver para despues cancelar.
+    assert _codigos(orden) == [
+        "AGREGAR_DETALLE",
+        "ENVIAR_A_REVISION",
+        "REGISTRAR_DEVOLUCION",
+    ]
 
     orden = _en_revision(orden)
-    assert _codigos(orden) == ["REALIZAR_REVISION"]
+    assert _codigos(orden) == ["REALIZAR_REVISION", "REGISTRAR_DEVOLUCION"]
     assert "INICIAR_GARANTIA_RMA" not in _codigos(flujo_rt.orden_rt_devuelta())
 
 
