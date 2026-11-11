@@ -401,7 +401,7 @@ Otros riesgos registrados:
 
 **Próximo paso:** los P0 de [`DEUDA_TECNICA.md`](DEUDA_TECNICA.md), cada uno con autorización.
 
-1. **Corregir las 5 pruebas desactualizadas** (P0-4, con aprobación) y, con CI en verde, integrar `mvp-v2` por avance rápido. La rama ya está publicada.
+1. **Integrar `mvp-v2` por avance rápido** (P0-2). P0-4 está resuelto (`fbdfaec`, `ac619ed`) y los cinco workflows pasan sobre `ac619ed`. Un push a `mvp-v2` publica el frontend en Vercel ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 1): requiere autorizar ese despliegue o cambiar antes la configuración del proyecto.
 2. **Decidir sobre `OR-000001` en São Paulo** y ejecutar el corte ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16). Vuelta atrás: `00020-tux` y `rt-rma-n49rz9qgv…`.
 3. **Activar el respaldo** ([`RESPALDOS.md`](RESPALDOS.md), sección 4).
 

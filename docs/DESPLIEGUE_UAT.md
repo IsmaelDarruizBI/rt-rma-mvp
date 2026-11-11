@@ -2,7 +2,8 @@
 
 Procedimiento para publicar una versión nueva del backend y del frontend del UAT, y para volver a la anterior.
 
-- **Despliegues manuales:** se hacen por CLI con autorización explícita ([`AGENTS.md`](../AGENTS.md)). No hay despliegues automáticos.
+- **Despliegues manuales:** se hacen por CLI con autorización explícita ([`AGENTS.md`](../AGENTS.md)).
+- **Despliegues automáticos de Vercel (verificado el 11/11/2026):** el proyecto `rt-rma-uat` está conectado a GitHub (`createDeployments: enabled`) y su rama de producción es `mvp-v2`, con el dominio asignado automáticamente. Cada push a otra rama crea una vista previa; **un push a `mvp-v2` publica el frontend en `rt-rma-uat.vercel.app`**. Integrar `mvp-v2` es, por lo tanto, un despliegue de Vercel y necesita esa autorización, salvo que antes se cambie la configuración del proyecto.
 - **Corte a São Paulo:** el procedimiento propio está en [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16.
 
 ## 1. Piezas
