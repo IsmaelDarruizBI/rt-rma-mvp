@@ -30,18 +30,18 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | `app/frontend/` | React, TypeScript y Vite ([README](../app/frontend/README.md)) |
 | `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). 20 de 20 aplicadas en `rt-rma-db` (Oregón, `us-west-2`) y en `db-rt-rma` (São Paulo, `sa-east-1`) |
 | Persistencia en uso | UAT: PostgreSQL en Supabase (`RMA_PERSISTENCIA=postgres`). JSON sigue siendo el valor por defecto local |
-| UAT publicado | Backend en Cloud Run (`00020-tux`, con autenticación) y frontend en Vercel, sobre Supabase Oregón. São Paulo, preparado para el corte ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md)) |
+| UAT publicado | Desde el 11/11/2026, sobre Supabase São Paulo: backend en Cloud Run (`00024-top`, código `d226fd2`) y frontend en Vercel (`dpl_6vsL…`). Oregón queda como vuelta atrás hasta el 25/11/2026 ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16) |
 
 **Rama de trabajo:** `feat/postgresql-esquema`. `mvp-v2` está integrada por avance rápido y apunta al mismo commit (11/11/2026). Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
 
-**Últimos commits de código:** `61e2a14` (inicio de sesión con usuario y contraseña), `50170e4` (DC31) y `d60c124` (autenticación). Desplegado: `61e2a14`. Sin commit todavía: los scripts de `supabase/scripts/migracion_sp/` y `reinicio_uat/`, su test y esta documentación. Ver `git log`.
+**Últimos commits de código:** `61e2a14` (inicio de sesión con usuario y contraseña), `50170e4` (DC31) y `d60c124` (autenticación). Desplegado: `d226fd2`, que incluye la corrección de DC31 (`ac619ed`) y el cierre de `/docs`. Ver `git log`.
 
 **Estado de desarrollo:**
 - El MVP está en UAT sobre PostgreSQL, con autenticación real (Supabase Auth, usuario y contraseña) y DC31, solo con datos ficticios y en cero Órdenes ([`autenticacion.md`](autenticacion.md)).
-- La base y Auth están replicadas en São Paulo para bajar la latencia. El corte está pendiente de autorización ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md)).
+- El UAT corre sobre São Paulo desde el 11/11/2026 ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16).
 - La migración a PostgreSQL tiene E0 a E7 terminadas: Bloque A (E4 + E5) y Bloque B (E6 + E7, B1 a B6). La app corre localmente sobre PostgreSQL, con los datos persistentes entre reinicios.
 - El frontend tiene el rediseño aprobado: sidebar, barra de acciones, modales y «Pendientes» (`fe655d7`).
-- **Pendiente para la puesta en marcha:** el corte a São Paulo (resuelve la latencia), paginación y sincronización automática del catálogo de Ventas. Lista priorizada en [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 4.
+- **Pendiente para la puesta en marcha:** el respaldo automático, paginación y sincronización automática del catálogo de Ventas. Lista priorizada en [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 4.
 
 **Funcionalidad:**
 
@@ -62,6 +62,14 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Corte del UAT a São Paulo (11/11/2026)
+
+- **Publicado:** `d226fd2` en Cloud Run (`00024-top`, 100 %) y en Vercel (`dpl_6vsL…`), sobre Supabase São Paulo. Incluye DC31 corregido y `/docs`, `/redoc` y `/openapi.json` cerrados.
+- **Antes:** São Paulo volvió a cero Órdenes, porque `OR-000001` tenía datos personales reales. Ensayo con huella idéntica; copia externa protegida, que se borra el 25/11/2026.
+- **Verificado:** 401 sin token en todas las rutas, documentación cerrada, CORS solo para producción, bundle sin Oregón ni claves secretas, `verificar` 9/9 y registros sin errores.
+- **Pendiente:** el inicio de sesión manual de las 4 personas usuarias.
+- **Detalle:** [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16.
 
 ### Integración separada del despliegue (11/11/2026)
 
@@ -398,8 +406,9 @@ El detalle, asignado por etapa, está en [`postgresql/integracion-pendientes.md`
 | L1 a L10 y el resto de E2 y E3 | Observaciones menores de E1, F-07, F-08, QA-E2-4, QA-E2-6, QA-E2-7, QA-E2-9 y QA-E3-L | Por etapa |
 
 Otros riesgos registrados:
-- **Latencia entre regiones:** Cloud Run en São Paulo y Supabase en Oregón, unos 179 ms por viaje: lecturas de 1,08 s en el servidor y comandos de 2,4 a 4,7 s. Se resuelve con el corte a São Paulo (3 ms por viaje; lecturas de 0,06 s). Medición en [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 8.
-- **Período de vuelta atrás:** Oregón se conserva 14 días después del corte. En plan Free se pausa a los 7 días sin actividad: hace falta actividad semanal.
+- **Latencia entre regiones:** resuelta con el corte a São Paulo (11/11/2026). La medición previa está en [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 8.
+- **Período de vuelta atrás, hasta el 25/11/2026:** Oregón (`00020-tux`, `rt-rma-n49rz9qgv…`, proyecto y secreto) se conserva. En plan Free se pausa a los 7 días sin actividad: hace falta una consulta semanal de solo lectura. Una vuelta atrás pierde lo creado en São Paulo.
+- **Sin respaldo automático** de São Paulo (P0-1): un error borra datos sin vuelta atrás.
 - **Doble escritura no atómica de la Orden al cerrar una reparación** (JSON): ver [`pendientes-producto.md`](pendientes-producto.md).
 - **Foto subida cuya registración falla:** ver [`pendientes-producto.md`](pendientes-producto.md). Es una tarea separada, no de una etapa.
 
@@ -407,9 +416,11 @@ Otros riesgos registrados:
 
 **Próximo paso:** los P0 de [`DEUDA_TECNICA.md`](DEUDA_TECNICA.md), cada uno con autorización.
 
-1. **Decidir sobre `OR-000001` en São Paulo** y ejecutar el corte ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16). Vuelta atrás: `00020-tux` y `rt-rma-n49rz9qgv…`. El UAT publicado no incluye la corrección de DC31 (`ac619ed`): publicarla es una operación aparte, coordinada entre backend y frontend ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
-2. **Activar el respaldo** ([`RESPALDOS.md`](RESPALDOS.md), sección 4).
-3. **Integrar en `main`** (P0-2), con un PR.
+1. **Inicio de sesión manual** de las 4 personas usuarias en `rt-rma-uat.vercel.app`, sin crear Órdenes. Si falla, vuelta atrás coordinada ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16).
+2. **Activar el respaldo** de São Paulo (P0-1, [`RESPALDOS.md`](RESPALDOS.md), sección 4).
+3. **Limpieza posterior al corte:** quitar las etiquetas `saopaulo` (`00022-vab`) y `corte` (`00023-zus`) y borrar la vista previa `rt-rma-k1qeeu33d`. Durante los 14 días, actividad semanal en Oregón.
+4. **Al cerrar los 14 días (25/11/2026):** decidir sobre Oregón y borrar la copia externa `sp-or000001-20261111`.
+5. **Integrar en `main`** (P0-2), con un PR.
 
 Después empieza el desarrollo funcional, con los criterios de [`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md), sección 7.
 

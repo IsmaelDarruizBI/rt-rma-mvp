@@ -662,6 +662,50 @@ Todos los pasos van con `--remote=pcdnmhzwhzymznojndrn`:
 
 ## 16. Corte coordinado y vuelta atrás
 
+### Corte ejecutado (11/11/2026)
+
+**El UAT público corre sobre São Paulo con el código de `d226fd2`.**
+
+| Pieza | Activo | Vuelta atrás (Oregón) |
+|---|---|---|
+| Cloud Run | `rt-rma-uat-api-00024-top`, etiqueta `sp-d226fd2`, **100 %**; imagen `sha256:37fabb71…`, código `d226fd2` | `rt-rma-uat-api-00020-tux` (etiqueta `auth`, código `61e2a14`) |
+| Vercel | `dpl_6vsLwpAzxE2yS5K7RLHBMNVvETN8` (`rt-rma-pktu8ktbq…`), bundle `index-D3QXcP7l.js` | `dpl_F1M6Msv1FUHo3ghNYPVviYQtmztb` (`rt-rma-n49rz9qgv…`) |
+| Base y Auth | `pcdnmhzwhzymznojndrn`, secreto `rma-uat-sp-database-url:1`, `verify-full` | `okcscsglnujnxtgobjfw`, secreto `rma-uat-database-url` |
+
+**Segundo reinicio de São Paulo, antes del corte:**
+
+- **Motivo:** `OR-000001`, de la prueba manual de la vista previa, tenía datos personales reales. Se eliminó con autorización explícita.
+- **Procedimiento:** el mismo de la sección 15, con `v_ordenes = ['OR-000001']`. Huella previa de 45 tablas, 2 secuencias, esquemas, Auth y migraciones. Ensayo «ENSAYO OK» con la huella idéntica; aplicación; `03_verificar.sql`; `04_eliminar_respaldo.sql`.
+- **Resultado:** 0 Órdenes, clientes y equipos; BAT-IP14 10/0 conciliado; próxima Orden OR-000001. Auth (4 cuentas), migraciones, esquemas y maestras quedaron iguales a la huella previa. `verificar` dio 9/9 y `comparar` contra Oregón, 32/32.
+- **Copia externa:** `%USERPROFILE%\respaldos-rma\sp-or000001-20261111\`, fuera del repositorio, con acceso solo para la cuenta de Windows de quien opera. Son 30 tablas y 12 filas, con el SHA-256 en un archivo al lado. **Contiene datos personales:** se borra al cerrar el período de vuelta atrás (25/11/2026), salvo que antes se decida otra cosa. Ninguna fotografía en el bucket.
+
+**Revisión `00024-top`, antes del tráfico:** desplegada sin tráfico desde una exportación limpia de `d226fd2`. Tiene la misma configuración que `00023-zus` y las mismas variables (fotos, catálogo, pool), y fija el secreto `:1`, Auth de São Paulo y CORS solo para `https://rt-rma-uat.vercel.app`.
+
+- `/health` respondió 200, y `/api/me` y `/api/orders`, 401 sin token y con token inválido. `/docs`, `/redoc` y `/openapi.json` respondieron 404.
+- CORS: 200 desde producción y 400 desde un origen ajeno.
+- Arranque limpio. La app solo arranca si el pool conecta con `verify-full` (`pool.wait`), así que el arranque prueba la conexión con la base de São Paulo.
+- El JWKS de Auth de São Paulo publica una clave ES256.
+
+**Frontend, antes del corte:**
+
+- **Variables de producción:** se reemplazaron solo `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`, con la URL y la clave publicable de São Paulo.
+- **Despliegue:** `vercel deploy --prod --skip-domain`, desde una exportación limpia, construyó el despliegue nuevo sin asignarle el dominio.
+- **Contenido:** un build local con las mismas variables produjo el mismo `index-D3QXcP7l.js`. Contiene el ref de São Paulo, la API pública y `usuarios.rma.invalid`; no contiene el ref de Oregón ni claves `sb_secret_`.
+
+**Corte:** Oregón y São Paulo tenían 0 Órdenes. `update-traffic` a `00024-top` terminó a las 17:29:40 UTC y `vercel promote` 4 s después.
+
+**Después del corte:**
+
+- **Por las dos URL de la API:** `/health` 200.
+- **Sin token o con token inválido:** 401 en `/api/me`, Órdenes, bandeja, taller, catálogos (usuarios, tipos de reparación, medios de pago, modelos), inventario, movimientos y clientes.
+- **Documentación:** `/docs`, `/redoc` y `/openapi.json` 404.
+- **CORS** solo para producción.
+- **Dominio:** `rt-rma-uat.vercel.app` sirve `index-D3QXcP7l.js`, con São Paulo y sin Oregón. Auth de São Paulo acepta la clave publicable, con email habilitado y registro deshabilitado.
+- **Base:** `verificar` 9/9 OK. Integridad, stock, usuarios, permisos y `rma_api` correctos.
+- **Registros:** sin errores, 5xx ni tracebacks desde el corte.
+
+**Sin verificar por el agente:** el inicio de sesión con contraseña y las lecturas autenticadas (catálogos, usuarios, inventario), porque requieren las contraseñas de las personas usuarias. Queda como la prueba manual de la sección «Pendientes del corte».
+
 ### Estado listo para el corte (11/11/2026)
 
 | Pieza | Oregón (público hoy) | São Paulo (preparado) |
@@ -752,7 +796,7 @@ gcloud run services update-traffic rt-rma-uat-api --region southamerica-east1 \
 vercel promote rt-rma-n49rz9qgv-ismaeldarruizbis-projects.vercel.app --scope ismaeldarruizbis-projects
 ```
 
-Después, devolver las dos variables de producción de Vercel a los valores de Oregón registrados.
+Después, devolver las dos variables de producción de Vercel a los valores de Oregón: `VITE_SUPABASE_URL=https://okcscsglnujnxtgobjfw.supabase.co` y la clave publicable de Oregón (`supabase projects api-keys --project-ref okcscsglnujnxtgobjfw`, tipo `publishable`). `vercel promote` no depende de las variables: el despliegue anterior ya trae las de Oregón.
 
 - **Sin API abierta:** nunca se usa `00017-wer`.
 - **Datos:** lo creado en São Paulo después del corte no está en Oregón.

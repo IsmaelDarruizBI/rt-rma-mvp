@@ -84,8 +84,10 @@ Ninguno despliega ni usa secretos. Se activan al publicar la rama en GitHub. Com
 
 | Uso | Backend | Frontend | Supabase |
 |---|---|---|---|
-| Público hoy | `rt-rma-uat-api-00020-tux` (etiqueta `auth`) | `rt-rma-n49rz9qgv…` | Oregón `okcscsglnujnxtgobjfw` |
-| Corte preparado | `rt-rma-uat-api-00023-zus` (etiqueta `corte`) | Despliegue nuevo con las variables de São Paulo | São Paulo `pcdnmhzwhzymznojndrn` |
+| Público (desde el corte, 11/11/2026) | `rt-rma-uat-api-00024-top` (etiqueta `sp-d226fd2`, código `d226fd2`) | `rt-rma-pktu8ktbq…` (`dpl_6vsLwpAzxE2yS5K7RLHBMNVvETN8`) | São Paulo `pcdnmhzwhzymznojndrn` |
+| Vuelta atrás hasta el 25/11/2026 | `rt-rma-uat-api-00020-tux` (etiqueta `auth`, código `61e2a14`) | `rt-rma-n49rz9qgv…` (`dpl_F1M6Msv1FUHo3ghNYPVviYQtmztb`) | Oregón `okcscsglnujnxtgobjfw` |
+
+Los comandos de la vuelta atrás coordinada están en [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16.
 
 **Nunca como vuelta atrás:** `00017-wer`, `00012-d4z` y anteriores, porque no tienen autenticación; ni `00010-pgz` y anteriores, que trabajan en JSON.
 

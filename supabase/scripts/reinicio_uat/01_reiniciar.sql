@@ -41,9 +41,11 @@ declare
   -- Parámetros revisados (ajustar solo con una nueva revisión).
   v_modo constant text := 'ensayo';  -- 'ensayo' | 'aplicar'
   -- Órdenes revisadas que se eliminan. Uso vigente: São Paulo
-  -- (pcdnmhzwhzymznojndrn), Órdenes de probar_recorridos.py del 11/11/2026.
-  -- El reinicio de Oregón (10/11/2026) usó OR-000001 a 006 y 009 a 012.
-  v_ordenes constant text[] := array['OR-000001', 'OR-000002'];
+  -- (pcdnmhzwhzymznojndrn), OR-000001 de la prueba manual de la vista previa
+  -- (11/11/2026, segundo reinicio, antes del corte). Antes: OR-000001 y 002 de
+  -- probar_recorridos.py en São Paulo, y en Oregón (10/11/2026) OR-000001 a
+  -- 006 y 009 a 012.
+  v_ordenes constant text[] := array['OR-000001'];
   -- Stock inicial: clave, código y cantidad de cada insumo. Los insumos no
   -- listados quedan en cero.
   v_stock constant jsonb := '[{"clave": "INS-001", "codigo": "BAT-IP14", "cantidad": 10}]';
