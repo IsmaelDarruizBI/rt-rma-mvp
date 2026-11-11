@@ -6,10 +6,10 @@ Guía breve para clonar, preparar el entorno y recuperar el acceso. El estado y 
 
 | Repositorio | Uso | Rama para continuar |
 |---|---|---|
-| `https://github.com/IsmaelDarruizBI/rt-rma-mvp` | Aplicación, base, scripts, documentación | **`mvp-v2`**, integrada por avance rápido con `feat/postgresql-esquema` el 11/11/2026. Si la integración no se completó, `feat/postgresql-esquema` |
+| `https://github.com/IsmaelDarruizBI/rt-rma-mvp` | Aplicación, base, scripts, documentación | **`feat/postgresql-esquema`** (publicada el 11/11/2026). `mvp-v2` no se integró: el workflow `backend` falla por 5 pruebas desactualizadas desde la autenticación y DC31 ([`DEUDA_TECNICA.md`](DEUDA_TECNICA.md), P0-4). Al corregirlas, `mvp-v2` admite un avance rápido |
 | `https://github.com/IsmaelDarruizBI/rt-rma-app` | Fuente funcional (`business/`), en la carpeta hermana `../rt-rma-app` | `dc31/cancelacion-explicita` (commit `ab928b6`, sincronizado en `business/`) |
 
-Último commit publicado: `git log -1 origin/mvp-v2` (o la rama de arriba).
+Último commit publicado: `git log -1 origin/feat/postgresql-esquema`.
 
 ## 2. Herramientas
 
@@ -31,7 +31,7 @@ Guía breve para clonar, preparar el entorno y recuperar el acceso. El estado y 
 mkdir -p ~/repositorios-rt && cd ~/repositorios-rt
 git clone https://github.com/IsmaelDarruizBI/rt-rma-mvp.git
 git clone https://github.com/IsmaelDarruizBI/rt-rma-app.git
-cd rt-rma-mvp && git checkout mvp-v2
+cd rt-rma-mvp && git checkout feat/postgresql-esquema
 
 # Raíz: validaciones de la fuente funcional
 npm ci && npm run validate:all
