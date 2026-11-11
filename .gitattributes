@@ -17,3 +17,9 @@ supabase/** text eol=lf
 # La CA que viaja con el backend es copia byte a byte de
 # supabase/certs/supabase-ca.crt: tambien se extrae con LF.
 app/backend/app/datos/*.crt text eol=lf
+
+# Scripts de shell y workflows de CI: siempre LF, porque corren en contenedores
+# y runners Linux aunque se editen en Windows con core.autocrlf.
+*.sh text eol=lf
+scripts/ci/** text eol=lf
+.github/** text eol=lf
