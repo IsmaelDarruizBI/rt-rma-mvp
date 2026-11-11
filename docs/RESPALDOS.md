@@ -5,7 +5,11 @@ Respaldo mínimo, cifrado y restaurable de la base del UAT (Supabase PostgreSQL)
 **Estado (11/11/2026):**
 
 - Scripts preparados y probados en local con datos ficticios.
-- **Sin activar en la nube:** falta autorizar los recursos de la sección 4.
+- **Compatibles con São Paulo** (`pcdnmhzwhzymznojndrn`, la base del UAT desde el corte), verificado sin credenciales:
+  - el servidor es PostgreSQL 17.11 y el Job usa `postgres:17-alpine`, de la misma versión mayor;
+  - el pooler en modo sesión, `aws-0-sa-east-1.pooler.supabase.com:5432`, valida `verify-full` con `supabase-ca.crt`, la CA que va al Job;
+  - Auth tiene 4 cuentas y 4 identidades.
+- **Sin activar en la nube:** falta autorizar los recursos de la sección 4. En el proyecto GCP no hay Jobs, la API de Cloud Scheduler no está habilitada y hay 2 versiones de secretos activas.
 
 ## 1. Opciones evaluadas
 
@@ -77,15 +81,21 @@ Datos de la prueba: 4 usuarios, 4 cuentas ficticias, catálogos y stock con su l
 
 ## 4. Activación en la nube (requiere autorización: crea recursos)
 
-**Costo estimado:**
+**Costo estimado (11/11/2026),** con 15 MB de base, de los cuales 3,7 MB son `rma`, y cero Órdenes. Menos de US$ 0,15 por mes:
 
-- unos pocos MB por día en GCS;
-- la ejecución del Job, dentro del uso gratuito de Cloud Run;
-- Cloud Scheduler incluye 3 trabajos gratis por cuenta de facturación.
+| Recurso | Uso | Costo |
+|---|---|---|
+| GCS `rt-rma-uat-respaldos` (Standard, `southamerica-east1`) | Menos de 1 MB por día y 35 respaldos, menos de 50 MB | Menos de US$ 0,01 por mes |
+| Cloud Run Job (1 vCPU, 512 MiB) | Alrededor de 1 minuto por día | Dentro del uso gratuito |
+| Secret Manager | 1 versión más; quedan 3 activas de 6 gratuitas | US$ 0 |
+| Cloud Scheduler | 1 trabajo; hay 3 gratis por cuenta de facturación | US$ 0, o US$ 0,10 por mes si la cuenta ya usa los 3 |
+| Versionado de fotos | El bucket está vacío | US$ 0 hoy |
+
+Crece con los datos reales: revisar al cargarlos.
 
 Hay que habilitar la API `cloudscheduler.googleapis.com`.
 
-1. **Claves de age** (en la máquina de la persona responsable): `age-keygen -o rma-respaldo.key`. La línea `public key: age1…` es la clave pública; el archivo, la privada (gestor de contraseñas y copia fuera de línea).
+1. **Claves de age** (en la máquina de la persona responsable; en Windows, `winget install FiloSottile.age`): `age-keygen -o rma-respaldo.key`. La línea `public key: age1…` es la clave pública; el archivo, la privada (gestor de contraseñas y copia fuera de línea).
 2. **Bucket** `rt-rma-uat-respaldos` en `southamerica-east1`:
    - acceso uniforme;
    - prevención de acceso público;
@@ -130,6 +140,6 @@ Hay que habilitar la API `cloudscheduler.googleapis.com`.
 |---|---|
 | Respaldos diarios | 30 días, inmutables por la política del bucket; se borran a los 35 |
 | Fotos borradas | 7 días de borrado suave (hoy); con versionado, 30 días |
-| Respaldos manuales previos (`%USERPROFILE%\respaldos-rma\`) | Hasta que se cierre el período de vuelta atrás de la migración; `uat-reinicio-20261110` contiene datos personales |
+| Respaldos manuales previos (`%USERPROFILE%\respaldos-rma\`) | Hasta el 25/11/2026, cuando cierra el período de vuelta atrás de la migración. Tienen datos personales `uat-reinicio-20261110` y `sp-or000001-20261111`. Esta última está en la computadora actual, con acceso solo para la cuenta de Windows de quien opera. `uat-reinicio-20261110` y `sp-pruebas-20261111` quedaron en la computadora anterior: confirmar dónde están y borrarlas en la misma fecha |
 
 Cuando el UAT pase a datos reales, revisar la retención y considerar el plan Pro (copias físicas y PITR).

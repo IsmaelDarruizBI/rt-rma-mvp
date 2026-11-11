@@ -63,6 +63,13 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ## B. Últimos avances
 
+### Cierre técnico posterior al corte (11/11/2026)
+
+- **Git:** `5ebf474` publicado; `feat/postgresql-esquema` y `mvp-v2` en el mismo commit, por avance rápido. `seguridad` en verde y ningún despliegue de Vercel.
+- **Respaldos:** compatibles con São Paulo; costo estimado menor a US$ 0,15 por mes. Falta la autorización para crear los recursos ([`RESPALDOS.md`](RESPALDOS.md)).
+- **Limpieza:** no se hizo, porque todavía no hay un inicio de sesión real después del corte.
+- **Deuda técnica** consolidada en [`DEUDA_TECNICA.md`](DEUDA_TECNICA.md).
+
 ### Corte del UAT a São Paulo (11/11/2026)
 
 - **Publicado:** `d226fd2` en Cloud Run (`00024-top`, 100 %) y en Vercel (`dpl_6vsL…`), sobre Supabase São Paulo. Incluye DC31 corregido y `/docs`, `/redoc` y `/openapi.json` cerrados.
@@ -416,11 +423,35 @@ Otros riesgos registrados:
 
 **Próximo paso:** los P0 de [`DEUDA_TECNICA.md`](DEUDA_TECNICA.md), cada uno con autorización.
 
-1. **Inicio de sesión manual** de las 4 personas usuarias en `rt-rma-uat.vercel.app`, sin crear Órdenes. Si falla, vuelta atrás coordinada ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16).
-2. **Activar el respaldo** de São Paulo (P0-1, [`RESPALDOS.md`](RESPALDOS.md), sección 4).
-3. **Limpieza posterior al corte:** quitar las etiquetas `saopaulo` (`00022-vab`) y `corte` (`00023-zus`) y borrar la vista previa `rt-rma-k1qeeu33d`. Durante los 14 días, actividad semanal en Oregón.
-4. **Al cerrar los 14 días (25/11/2026):** decidir sobre Oregón y borrar la copia externa `sp-or000001-20261111`.
-5. **Integrar en `main`** (P0-2), con un PR.
+1. **Inicio de sesión manual** de las 4 personas usuarias en `rt-rma-uat.vercel.app`, sin crear Órdenes. Hasta el 11/11/2026 no hubo ninguno después del corte. Si falla, vuelta atrás coordinada ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16).
+2. **Limpieza, después de ese inicio de sesión** (P2-4):
+
+   ```bash
+   gcloud run services update-traffic rt-rma-uat-api --region southamerica-east1 --project rosariotecno-460217 --remove-tags saopaulo,corte
+   vercel remove rt-rma-k1qeeu33d-ismaeldarruizbis-projects.vercel.app --yes --scope ismaeldarruizbis-projects
+   ```
+
+   No toca el tráfico, `00020-tux` ni su etiqueta `auth`. Las revisiones quedan, sin etiqueta.
+3. **Activar el respaldo** de São Paulo (P0-1, [`RESPALDOS.md`](RESPALDOS.md), sección 4) y ensayar una restauración.
+4. **Hasta el 25/11/2026:** una consulta semanal de solo lectura en Oregón, para que el plan Free no lo pause.
+5. **El 25/11/2026:**
+   - decidir sobre Oregón: pausarlo o eliminarlo, junto con `00020-tux`, `rma-uat-database-url` y `dpl_F1M6…`;
+   - borrar las copias externas con datos personales ([`RESPALDOS.md`](RESPALDOS.md), sección 5).
+6. **Integrar en `main`** (P0-2), con un PR.
+
+**Criterios para empezar el desarrollo funcional** ([`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md), sección 7), al 11/11/2026:
+
+| Criterio | Estado |
+|---|---|
+| 1. Rama integrada en `mvp-v2`, CI en verde | Cumplido (`5ebf474`). Falta `main` (P0-2) |
+| 2. Una sola base de UAT | Cumplido: São Paulo. Oregón es solo la vuelta atrás |
+| 3. Respaldo diario y restauración ensayada | **Pendiente** (P0-1): bloquea cargar datos reales, no empezar a desarrollar |
+| 4. Cambios funcionales primero en `business/` | Regla vigente |
+| 5. Solo migraciones aditivas, `postgres` en verde | Regla vigente |
+| 6. Checklist de seguridad y par de vuelta atrás en cada despliegue | Regla vigente. Integrar ya no despliega |
+| 7. Los P1 de cada módulo, dentro del módulo | Regla vigente ([`DEUDA_TECNICA.md`](DEUDA_TECNICA.md)) |
+
+Se puede empezar el desarrollo funcional después del inicio de sesión manual, en ramas propias que salgan de `mvp-v2`. No se cargan datos reales hasta cumplir el criterio 3.
 
 Después empieza el desarrollo funcional, con los criterios de [`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md), sección 7.
 
