@@ -13,10 +13,11 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - **iteración funcional 1 cerrada** (11/11): DC06, DC07, DC11 y DC15B alineadas con V1.4 y las cinco decisiones DEC-IT1-01 a 05 incorporadas en `rt-rma-app` (`708d81b`) e implementadas (sección B);
   - **iteración 1 en UAT** (12/11): migración `20261111000100` en São Paulo, Cloud Run `00027-sas` (`14108ef`) y Vercel `dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2` (sección B);
   - **macroiteración funcional** (12/11): evaluación técnica, reparaciones adicionales, desistimiento total guiado, antecedentes del equipo, reporte operativo y configuración auditada; integrada en `mvp-v2` (`5c6137e`) con el CI en verde (sección B);
-  - **macroiteración en UAT** (12/11): migraciones `20261112000100` y `20261112000200` en São Paulo, Cloud Run `00029-kay` (`5c6137e`) y Vercel `dpl_CRXZubTCVE1ALhZmLe2wHhoZhbWR` (sección B).
+  - **macroiteración en UAT** (12/11): migraciones `20261112000100` y `20261112000200` en São Paulo, Cloud Run `00029-kay` (`5c6137e`) y Vercel `dpl_CRXZubTCVE1ALhZmLe2wHhoZhbWR` (sección B);
+  - **UAT validada** (12/11): inicio de sesión de las cuatro cuentas, aislamiento de tokens, lecturas y E2E de la macroiteración con datos ficticios (67 de 67), limpiados después; el UAT volvió a su estado inicial (sección B).
 - **Falta:**
   - las decisiones abiertas que bloquean el resto de la macroiteración (`rt-rma-app`, `docs/consolidation/README.md`, sección I);
-  - la validación autenticada en UAT con una cuenta real (lecturas y recorridos de la iteración 1 y de la macroiteración; sección F);
+  - repetir `medir_api.py` (falló el inicio de sesión, HTTP 400, probablemente por la contraseña tipeada; solo mide tiempos);
   - integrar en `main` (P0-2).
 
 **Para retomar el trabajo: [`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md)**: estado, pendientes con autorización y criterios para el desarrollo funcional. Corte y vuelta atrás: [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16. Entorno local: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 5. En otra computadora: [`CONTINUIDAD.md`](CONTINUIDAD.md).
@@ -70,6 +71,68 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ## B. Últimos avances
 
+### Validación autenticada y E2E de la macroiteración en UAT (12/11/2026)
+
+Procedimiento y scripts: [`supabase/scripts/validacion_uat/`](../supabase/scripts/validacion_uat/README.md). Ejecutados por la persona responsable (contraseñas sin eco) contra la API pública (`00029-kay`) y São Paulo.
+
+- **Antes:**
+  - 0 Órdenes, 0 cambios de configuración y BAT-IP14 10/0;
+  - catálogos TR-001 (80 000), TR-002 (120 000) y TR-OTROS, y EST-001 con TR-001 y TR-002;
+  - 4 usuarios vinculados a 4 cuentas de Auth y secuencia de Órdenes sin usar;
+  - último respaldo `uat/20261112T151635Z`.
+- **Ensayo previo:** el script E2E y la limpieza se ensayaron completos sobre PostgreSQL local con las mismas semillas: 60 de 60 comprobaciones, y la limpieza (y su vuelta atrás) correcta.
+- **Paso 1, `probar_entornos.py`: OK.**
+  - Inicio de sesión en Oregón y en São Paulo.
+  - El token de cada proyecto entra solo en su revisión (401 en la otra), y `/api/me` es ADMIN-001.
+  - Usuarios, tipos de reparación, estaciones, medios de pago, Inicio y Taller responden 200, con 0 Órdenes y BAT-IP14 10 disponibles.
+  - El script apuntaba a la etiqueta `saopaulo---`, que ya no existe: ahora usa la API pública por defecto (`--api-sao-paulo`, `--sin-oregon`).
+- **Paso 2, `medir_api.py`: no corrió.** El inicio de sesión respondió HTTP 400 (credenciales inválidas), probablemente por la contraseña tipeada: la misma cuenta inició sesión en los pasos 1 y 3. Solo mide tiempos; las lecturas quedaron cubiertas por el paso 1. Pendiente de repetir.
+- **Paso 3, `probar_macro_v14.py`: 67 de 67 OK**, con las cuatro cuentas (sesión y `/api/me` de cada una):
+  1. **Evaluación obligatoria:**
+     - el trabajo de Recepción exige evaluación: se ofrece EVALUAR y no INICIAR, e iniciar sin evaluación es rechazado;
+     - Recepción no puede evaluar;
+     - el CONFIRMADO del técnico titular no reserva ni consume;
+     - historial 182 → 183 → 184 → 128;
+     - después se inicia con reserva y al completar se consume.
+  2. **Adicionales:**
+     - desde la evaluación y durante la ejecución, sin interrumpirla; nacen pendientes del cliente;
+     - Recepción no puede registrarlos.
+  3. **Redefinición en la evaluación** (VAR-REP-019): sin Tipo o sin motivo es rechazada. Queda v2 sobre TR-002, del técnico, vuelve a la autorización (127 → 129) y, autorizada, se inicia sin otra evaluación.
+  4. **Descarte técnico:** sin motivo es rechazado. Con motivo cancela con DESCARTE_TECNICO, la Orden sigue abierta (307) y luego se devuelve y se cancela.
+  5. **Desistimiento total con reparación activa** (DC07C, VAR-REP-043):
+     - la solicitud queda en cada trabajo, no se duplica y el técnico ya no puede completar;
+     - al interrumpir se cancelan juntos (211 → 305) y la reserva se libera sin consumo;
+     - DC31 se cumple: la Orden sigue abierta.
+  6. **Antecedentes:** por IMEI con o sin espacios y por serie sin distinguir mayúsculas, sin mezclar otro equipo y sin datos del cliente. Otro rol también consulta.
+  7. **Reporte:** cuenta las 7 Órdenes, 2 canceladas, 2 trabajos completados de TECH-001 y 1 unidad consumida, con los pendientes correctos y sin datos personales.
+  8. **Administración:**
+     - Recepción, Técnico y Coordinación reciben 403 en la administración, al editar Tipos y al configurar Mesas;
+     - se rechazan la edición sin cambios, el alta con TR-OTROS o con TR-001 (sin crear nada) y un Tipo inexistente en la Mesa;
+     - el cambio de precio de TR-002 (120 000 → 125 000) y el de EST-001 quedan auditados;
+     - lo ya registrado conserva su precio (BR-REP-015);
+     - precio y Mesa devueltos a sus valores, con el catálogo igual al inicial.
+
+  No se crearon Tipos de Reparación: `tipo_reparacion` no admite borrado y el alta quedaría para siempre.
+- **Datos creados, identificados en la base:**
+  - 7 Órdenes (OR-000001 a OR-000007), creadas de 17:03:20 a 17:03:42 UTC, con 7 clientes «Cliente Ficticio E2E V14» y sus equipos;
+  - 4 evaluaciones, 6 comprobantes, 0 fotos y 0 pagos;
+  - movimientos de reserva, consumo y liberación de la prueba;
+  - 4 cambios de configuración de ADMIN-001.
+
+  No había eventos fuera de esas Órdenes ni otra actividad.
+- **Limpieza** (`supabase/scripts/reinicio_uat/`, actualizado para `evaluacion_tecnica` y `cambio_configuracion`):
+  - ensayo correcto y revertido;
+  - respaldo previo `uat/20261112T170628Z` (`rt-rma-respaldo-db-gxrv5`);
+  - aplicada a las 17:06:57 UTC sobre esas 7 Órdenes.
+- **Después:**
+  - 0 Órdenes, 0 clientes y 0 evaluaciones y cambios de configuración;
+  - BAT-IP14 10/0 conciliado; próxima Orden OR-000001;
+  - catálogos, secuencias y conteos iguales al estado inicial;
+  - integridad sin problemas (en la limpieza y en el ensayo de restauración en la nube `rt-rma-respaldo-db-r92bz`, con 23 migraciones y 47 tablas);
+  - respaldo `uat/20261112T170800Z` (`x8qt8`).
+- **Auth:** las 4 cuentas siguen, creadas antes del 12/11, activas, con su identidad sin cambios y vinculadas. Solo cambió `updated_at`, igual al último inicio de sesión.
+- **Queda en la base** `rma_respaldo_reinicio`, con las 7 Órdenes ficticias y sin acceso para la API. Mientras exista, el próximo reinicio no corre: se elimina con `04_eliminar_respaldo.sql`, con autorización.
+
 ### Despliegue de la macroiteración V1.4 en UAT (12/11/2026)
 
 - **Antes:** `mvp-v2` limpio y sincronizado en `5c6137e`; `business/` igual a `420feb9`; tráfico 100 % en `00027-sas`; Vercel `dpl_CdRi5ttv…`, desconectado de GitHub; São Paulo con 21 migraciones, 0 Órdenes y los mismos conteos que el respaldo de las 06:00 UTC, sin actividad; respaldo previo `uat/20261112T145502Z` (ejecución `rt-rma-respaldo-db-5ncpg`).
@@ -79,7 +142,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 - **Frontend:** `vercel deploy --prod --skip-domain` desde una exportación limpia de `5c6137e` (`dpl_CRXZubTCVE1ALhZmLe2wHhoZhbWR`, `rt-rma-62sdml5sb…`). El bundle apunta a São Paulo y a la API pública, sin Oregón ni URL de etiqueta, solo con la clave publicable, sin JWT ni claves secretas, y con el contrato nuevo. Las mismas 5 variables `VITE_*`.
 - **Corte coordinado:** de 15:13:46 a 15:14:43 UTC (tráfico del backend y `vercel promote`).
 - **Después:** tráfico 100 % en `00029-kay`; el dominio sirve `dpl_CRXZ…`; la API pública (las dos URL) repite los controles; la pantalla de ingreso carga sin errores, salvo el `favicon.ico` 404 que ya existía; sin errores, 5xx ni credenciales en los registros. Respaldo posterior `uat/20261112T151635Z` (`rt-rma-respaldo-db-t2lzw`): 23 migraciones; el único cambio de conteos son las 4 equivalencias nuevas.
-- **Sin validar en UAT:** el inicio de sesión, las lecturas autenticadas y los recorridos de la macroiteración (evaluación, adicionales, desistimiento total, Configuración, antecedentes y reportes). Piden la contraseña de una cuenta real y los recorridos escriben datos; no se crearon Órdenes ni se cambió la configuración. La cobertura está en las pruebas JSON y PostgreSQL, en la prueba con `rma_backend` y en la verificación por interfaz sobre PostgreSQL local.
+- **Validación autenticada y E2E:** hecha después, el mismo día (ver arriba).
 
 ### Macroiteración de desarrollo funcional (12/11/2026), rama `feat/macro-v14`
 
@@ -524,7 +587,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (12/11/2026):** la macroiteración está desplegada en UAT. Falta la validación autenticada con una cuenta real, a cargo de la persona responsable: `probar_entornos.py` y `medir_api.py` (solo lectura, contraseña pedida sin eco) y, con autorización para datos ficticios, una pasada por la evaluación técnica, los adicionales, el desistimiento total con una Ejecución activa, Configuración (un cambio de prueba queda auditado y no se puede borrar), antecedentes y reportes. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
+**Próximo paso (12/11/2026):** la macroiteración está desplegada y validada en UAT, con los datos de prueba limpiados (sección B). Quedan repetir `medir_api.py` y eliminar `rma_respaldo_reinicio` antes del próximo reinicio, cada uno con su autorización. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
 
 **Paso anterior:** la iteración 1 está desplegada en UAT (12/11/2026). Falta la validación autenticada con una cuenta real: `probar_entornos.py` y `medir_api.py` (solo lectura, contraseña pedida sin eco) y una pasada manual por los recorridos de la iteración 1 con Órdenes ficticias. Después, la iteración 2. Pruebas del cierre (11/11/2026): JSON 1720 pasan y 29 se saltean; `tests/postgres` 389 pasan; frontend: typecheck, 124 tests y build; `npm run validate:all` en verde; los cinco workflows de CI en verde en la rama y en `mvp-v2`. Quedan además los pendientes operativos con fecha y `main`:
 

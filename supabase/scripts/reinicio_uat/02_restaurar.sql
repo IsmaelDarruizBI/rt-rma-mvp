@@ -24,11 +24,13 @@ declare
   c_tablas constant text[] := array[
     'cliente', 'equipo', 'documento_cliente', 'orden', 'accion_usuario',
     'auditoria_tecnica', 'recepcion', 'recepcion_version', 'recepcion_nota',
-    'checkin', 'detalle', 'detalle_version', 'orden_detalle_origen',
+    'checkin', 'detalle', 'detalle_version', 'evaluacion_tecnica',
+    'orden_detalle_origen',
     'decision_cliente', 'override_recursos', 'override_insumo',
     'ajuste_garantia', 'toma', 'ejecucion', 'ejecucion_insumo',
     'control_tecnico', 'movimiento_inventario', 'pago', 'devolucion_dinero',
-    'descuento', 'documento_emitido', 'foto', 'salida', 'evento_negocio'
+    'descuento', 'documento_emitido', 'foto', 'salida', 'evento_negocio',
+    'cambio_configuracion'
   ];
   v_tabla text;
   v_columnas text;
@@ -55,7 +57,9 @@ begin
       from pg_attribute
      where attrelid = format('rma.%I', v_tabla)::regclass
        and attnum > 0 and not attisdropped and attgenerated = '';
-    execute format('insert into rma.%I (%s) select %s from %I.%I',
+    -- OVERRIDING SYSTEM VALUE: conserva las columnas identity ALWAYS
+    -- (cambio_configuracion.secuencia); en las demás tablas no cambia nada.
+    execute format('insert into rma.%I (%s) overriding system value select %s from %I.%I',
                    v_tabla, v_columnas, v_columnas, c_respaldo, v_tabla);
     execute format('select count(*) from rma.%I', v_tabla) into v_n;
     execute format('select count(*) from %I.%I', c_respaldo, v_tabla) into v_m;

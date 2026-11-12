@@ -64,7 +64,12 @@ Controles críticos para revisar antes y después de publicar. No es una auditor
   - base: las tablas nuevas solo con SELECT e INSERT para `rma_backend` y con triggers de inmutabilidad; `anon` y `authenticated` sin acceso; `rma_respaldo` solo lee; las pruebas de la macroiteración pasan con un rol miembro de `rma_backend`; la migración no cambia roles; integridad sin problemas en el ensayo de restauración;
   - Supabase Auth: registro deshabilitado, solo `email`, JWKS `ES256`;
   - frontend: solo la clave publicable, sin JWT ni claves secretas; mismo ref que el backend y la URL pública de la API.
-- **No verificado en esta revisión:** con una sesión real, que la administración dé 403 a los demás roles y que reportes y antecedentes no muestren datos personales (cubierto por las pruebas automáticas); token de otro proyecto y suplantación; el largo mínimo de contraseña en el panel.
+- **Verificado después con sesiones reales** (validación del 12/11/2026, [`ESTADO_PROYECTO.md`](ESTADO_PROYECTO.md), sección B):
+  - un token de Oregón da 401 en São Paulo y viceversa;
+  - Recepción, Técnico y Coordinación reciben 403 en la administración, al editar Tipos y al configurar Mesas;
+  - Recepción no puede evaluar ni registrar adicionales;
+  - reportes y antecedentes no muestran datos personales del cliente.
+- **No verificado en esta revisión:** suplantación con una sesión real (el script usa siempre el token del actor del pedido); el largo mínimo de contraseña en el panel.
 
 ## Resultado de la revisión del 12/11/2026 (`00027-sas`, iteración 1, São Paulo)
 

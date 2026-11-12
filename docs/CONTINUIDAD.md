@@ -118,7 +118,7 @@ Todo lo demás se regenera o se recupera iniciando sesión: dependencias, la bas
 ## 8. Recursos de QA
 
 - **Guía de pruebas manual del UAT:** [`qa/guia-pruebas-uat.html`](qa/guia-pruebas-uat.html), versión 2 del 15/10/2026. Se abre en el navegador; las marcas quedan solo en ese navegador. **Está desactualizada en un punto:** el rol ya no se elige en «Usuario (modo demo)», ahora se inicia sesión con usuario y contraseña ([`autenticacion.md`](autenticacion.md)). El resto del recorrido sigue valiendo.
-- **Pruebas de API del UAT:** `supabase/scripts/migracion_sp/probar_recorridos.py` y `probar_entornos.py`. No usarlas en el UAT sin autorización, porque crean Órdenes.
+- **Pruebas de API del UAT:** `supabase/scripts/migracion_sp/probar_entornos.py` (solo lectura) y la validación E2E de [`supabase/scripts/validacion_uat/`](../supabase/scripts/validacion_uat/README.md), con su limpieza. `probar_recorridos.py` quedó para la revisión `saopaulo---`, que ya no existe. Las que escriben no se usan en el UAT sin autorización, porque crean Órdenes.
 
 ## 9. Pendientes con fecha
 

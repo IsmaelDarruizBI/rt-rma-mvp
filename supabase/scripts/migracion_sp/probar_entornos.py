@@ -15,6 +15,11 @@ Imprime solo OK/FALLA, códigos HTTP y conteos: nunca tokens ni contraseñas.
     $env:SUPABASE_PUBLISHABLE_KEY_ORIGEN  = "<clave publicable de Oregón>"
     $env:SUPABASE_PUBLISHABLE_KEY_DESTINO = "<clave publicable de São Paulo>"
     app/backend/.venv/Scripts/python supabase/scripts/migracion_sp/probar_entornos.py
+
+La API de São Paulo es, por defecto, la URL pública del servicio (desde el
+corte, la revisión con tráfico); ``--api-sao-paulo`` apunta a otra revisión
+o etiqueta. ``--sin-oregon`` omite Oregón (y su clave) si esa cuenta ya no
+tiene la misma contraseña.
 """
 
 from __future__ import annotations
@@ -35,7 +40,7 @@ ENTORNOS = {
     },
     "São Paulo": {
         "supabase": "https://pcdnmhzwhzymznojndrn.supabase.co",
-        "api": "https://saopaulo---rt-rma-uat-api-nszqooxxla-rj.a.run.app",
+        "api": "https://rt-rma-uat-api-nszqooxxla-rj.a.run.app",
         "clave": "SUPABASE_PUBLISHABLE_KEY_DESTINO",
     },
 }
@@ -85,11 +90,25 @@ def main() -> int:
         default="BAT-IP14=10",
         help="código=disponible esperado en São Paulo",
     )
+    p.add_argument(
+        "--api-sao-paulo",
+        default=ENTORNOS["São Paulo"]["api"],
+        help="URL de la API de São Paulo (por defecto, la pública)",
+    )
+    p.add_argument(
+        "--sin-oregon",
+        action="store_true",
+        help="no inicia sesión en Oregón ni prueba el aislamiento",
+    )
     a = p.parse_args()
+    ENTORNOS["São Paulo"]["api"] = a.api_sao_paulo.rstrip("/")
+    if a.sin_oregon:
+        del ENTORNOS["Oregón"]
     claves = {n: os.environ.get(e["clave"], "") for n, e in ENTORNOS.items()}
     if not all(c.startswith("sb_publishable_") for c in claves.values()):
         print(
-            "Faltan SUPABASE_PUBLISHABLE_KEY_ORIGEN y/o SUPABASE_PUBLISHABLE_KEY_DESTINO."
+            "Faltan las claves publicables: "
+            + ", ".join(e["clave"] for e in ENTORNOS.values())
         )
         return 2
 

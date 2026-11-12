@@ -32,6 +32,12 @@
 -- 02_restaurar.sql y se elimina con 04_eliminar_respaldo.sql antes de migrar
 -- la base a otra región.
 --
+-- Macroiteración V1.4 (12/11/2026): evaluacion_tecnica y cambio_configuracion
+-- son operativas. La primera es historia de los Detalles; la segunda, la
+-- auditoría de los cambios de catálogo hechos durante las pruebas del UAT.
+-- Los catálogos en sí (tipo_reparacion, mesa_tipo_reparacion) son maestros y
+-- no se tocan: un cambio de prueba se devuelve antes por la API.
+--
 -- TRUNCATE: los triggers de inmutabilidad y «sin borrado» son BEFORE DELETE
 -- por fila y no se disparan con TRUNCATE (no hay triggers ON TRUNCATE en rma).
 -- Sin CASCADE: si una tabla no listada dependiera de las operativas, falla.
@@ -41,21 +47,25 @@ declare
   -- Parámetros revisados (ajustar solo con una nueva revisión).
   v_modo constant text := 'ensayo';  -- 'ensayo' | 'aplicar'
   -- Órdenes revisadas que se eliminan. Uso vigente: São Paulo
-  -- (pcdnmhzwhzymznojndrn), OR-000001 de la prueba manual de la vista previa
-  -- (11/11/2026, segundo reinicio, antes del corte). Antes: OR-000001 y 002 de
-  -- probar_recorridos.py en São Paulo, y en Oregón (10/11/2026) OR-000001 a
-  -- 006 y 009 a 012.
-  v_ordenes constant text[] := array['OR-000001'];
+  -- (pcdnmhzwhzymznojndrn), OR-000001 a 007 de la validación E2E de la
+  -- macroiteración V1.4 (12/11/2026, validacion_uat/probar_macro_v14.py).
+  -- Antes: OR-000001 de la prueba manual de la vista previa (11/11/2026,
+  -- antes del corte), OR-000001 y 002 de probar_recorridos.py en São Paulo, y
+  -- en Oregón (10/11/2026) OR-000001 a 006 y 009 a 012.
+  v_ordenes constant text[] := array[
+    'OR-000001', 'OR-000002', 'OR-000003', 'OR-000004', 'OR-000005',
+    'OR-000006', 'OR-000007'
+  ];
   -- Stock inicial: clave, código y cantidad de cada insumo. Los insumos no
   -- listados quedan en cero.
   v_stock constant jsonb := '[{"clave": "INS-001", "codigo": "BAT-IP14", "cantidad": 10}]';
 
   c_operativas constant text[] := array[
-    'accion_usuario', 'ajuste_garantia', 'auditoria_tecnica', 'checkin',
-    'cliente', 'control_tecnico', 'decision_cliente', 'descuento', 'detalle',
+    'accion_usuario', 'ajuste_garantia', 'auditoria_tecnica',
+    'cambio_configuracion', 'checkin', 'cliente', 'control_tecnico', 'decision_cliente', 'descuento', 'detalle',
     'detalle_version', 'devolucion_dinero', 'documento_cliente',
     'documento_emitido', 'ejecucion', 'ejecucion_insumo', 'equipo',
-    'evento_negocio', 'foto', 'movimiento_inventario', 'orden',
+    'evaluacion_tecnica', 'evento_negocio', 'foto', 'movimiento_inventario', 'orden',
     'orden_detalle_origen', 'override_insumo', 'override_recursos', 'pago',
     'recepcion', 'recepcion_nota', 'recepcion_version', 'salida', 'toma'
   ];

@@ -15,6 +15,8 @@ select 'operativa' as grupo, t.tabla, t.filas from (
   union all select 'cliente', count(*) from rma.cliente
   union all select 'equipo', count(*) from rma.equipo
   union all select 'detalle', count(*) from rma.detalle
+  union all select 'evaluacion_tecnica', count(*) from rma.evaluacion_tecnica
+  union all select 'cambio_configuracion', count(*) from rma.cambio_configuracion
   union all select 'ejecucion', count(*) from rma.ejecucion
   union all select 'pago', count(*) from rma.pago
   union all select 'documento_emitido', count(*) from rma.documento_emitido
