@@ -415,9 +415,15 @@ El evento de cierre conserva además, como evidencia, el texto que hoy registra 
 - **Restricción:** el control vigente del Detalle es el último.
 - **MVP:** `RegistroControlTecnico`.
 
+#### `evaluacion_tecnica` — Nueva (macroiteración V1.4, 12/11/2026)
+- **Propósito:** cada evaluación técnica de un Detalle diagnosticado por Recepción (BR-REP-035/036, PROC-REP-183).
+- **ID:** interno; posición dentro del Detalle.
+- **Atributos:** versión de la definición evaluada; resultado (CONFIRMADO, DESCARTADO o REQUIERE_REDEFINICION); técnico y fecha; observaciones, obligatorias salvo CONFIRMADO.
+- **Restricción:** inmutable; la vigente es la última sobre la definición vigente. El Detalle guarda además `origen_diagnostico` (RECEPCION o REVISION_TECNICA; vacío en los datos anteriores, que no la exigen).
+- **MVP:** `EvaluacionTecnica`. Migración `20261112000100_evaluacion_tecnica.sql`.
+
 **Sin entidad propia:**
 - la custodia y la situación técnica, que se calculan;
-- la evaluación técnica previa, que no existe (PC-01);
 - la solicitud de desistimiento, futura (DC07).
 
 ### M3. Inventario y abastecimiento
@@ -624,6 +630,13 @@ RMA administra solo los aspectos económicos de sus reparaciones. No implementa 
 
   La auditoría de configuración llega con su administración.
 - **MVP:** solo los registros del servidor (logs).
+
+#### `cambio_configuracion` — Nueva (macroiteración V1.4, 12/11/2026)
+- **Propósito:** la auditoría de la configuración (DC23AUD, BR-REP-040).
+- **ID:** interno; `secuencia` ordena los cambios.
+- **Atributos:** entidad (TIPO_REPARACION o MESA_TRABAJO); clave; campo; valor anterior y nuevo como texto; usuario y fecha.
+- **Restricción:** inmutable; se escribe en la misma transacción que el cambio del catálogo. La vista `historial_precio` muestra los cambios del campo `precio`.
+- **MVP:** `CambioConfiguracion`. Migración `20261112000200_configuracion_auditada.sql`.
 
 **Las cinco capas:**
 - **Estado actual:** atributos de las entidades.
@@ -917,7 +930,7 @@ Hoy la pantalla envía clave solo en cobros, devoluciones y movimientos de stock
 
 ### Imprescindible para operar RMA con PostgreSQL
 
-Las 45 entidades de los seis módulos, que conservan:
+Las 47 entidades de los seis módulos (45 del diseño aprobado más `evaluacion_tecnica` y `cambio_configuracion`, de la macroiteración V1.4), que conservan:
 - la funcionalidad de la UAT (`6516d4c`), incluido el override de P-06;
 - las transacciones de la sección D;
 - la consulta del historial visible con su formato actual;
@@ -1088,7 +1101,7 @@ Aprobadas por el responsable de producto el 02/11/2026. No quedan decisiones abi
 | G-9 | Idempotencia | **Definida.** Clave obligatoria en las operaciones críticas que se pueden reintentar (cobros, devoluciones, movimientos de stock, cierres, alta de Orden, documentos, fotos, decisiones, override); no se exige en las consultas | Sección D; cambio funcional H-4 |
 | G-10 | Módulo 4 | **Renombrado** «Administración, finanzas y contabilidad», sin contabilidad general: sus registros quedan disponibles para un módulo contable independiente | M4 |
 
-El total queda en **45 entidades**: las 44 aprobadas más `texto_legal`, justificada por G-8.
+El total queda en **45 entidades**: las 44 aprobadas más `texto_legal`, justificada por G-8. La macroiteración V1.4 (12/11/2026) suma `evaluacion_tecnica` (BR-REP-035) y `cambio_configuracion` (DC23AUD): **47**.
 
 ## H. Cambios funcionales que requiere el MVP
 

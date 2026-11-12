@@ -2,9 +2,9 @@
   "notice": "Copia GENERADA de la definicion funcional. No editar a mano: los cambios se hacen en el repositorio de origen y se vuelve a generar la copia (DC02).",
   "generated_by": "rt-rma-app/scripts/export-functional-copy.ts",
   "source_repository": "https://github.com/IsmaelDarruizBI/rt-rma-app.git",
-  "source_commit": "708d81b0dab03605c70e5264e2662093126496b9",
-  "source_ref": "708d81b0dab03605c70e5264e2662093126496b9",
-  "generated_at": "2026-11-12T02:39:13.460Z",
+  "source_commit": "420feb97fd71fb85f62a722e3033db8cefd45e40",
+  "source_ref": "420feb9",
+  "generated_at": "2026-11-12T04:21:52.618Z",
   "files": [
     {
       "path": "actors/actors.yaml",
@@ -13,8 +13,8 @@
     },
     {
       "path": "decisions/decision-log-v1.4.yaml",
-      "bytes": 58679,
-      "sha256": "1001a0f1364395c9bd684dc70f5fb48349bd7e4c1a262a6829d5ec35a72cc556"
+      "bytes": 59897,
+      "sha256": "0ed6a98e46a426469239df2c4170a4f3bacd4d823ea69b3c966ad08b616554ee"
     },
     {
       "path": "features/repair-management-features-v1.3.yaml",

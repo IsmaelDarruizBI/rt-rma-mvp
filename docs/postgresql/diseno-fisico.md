@@ -88,6 +88,8 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 | M2 | `toma` | `orden`, `usuario`, `mesa_trabajo` | Una ACTIVA por Orden |
 | M2 | `ejecucion` | `detalle`, `detalle_version` y `toma` (comp.) | Una EN_PROGRESO por Orden; terminada no cambia |
 | M2 | `ejecucion_insumo`, `control_tecnico` | `ejecucion` (comp.), `insumo`, `detalle` | Solo lo declarado; inmutables |
+| M2 | `evaluacion_tecnica` | `detalle`, `usuario` | Posición única por Detalle; motivo salvo CONFIRMADO; inmutable (macroiteración V1.4) |
+| M5 | `cambio_configuracion` | `usuario` | Inmutable; vista `historial_precio` (macroiteración V1.4) |
 | M3 | `insumo` | — | `stock_fisico >= stock_reservado >= 0`; nace en cero |
 | M3 | `movimiento_inventario` | `insumo`, `orden`, `detalle` y `ejecucion` (comp.), sí mismo (comp.), `motivo_ajuste`, `usuario`, `accion_usuario` | Vínculos por tipo; DESPERDICIO y DEVOLUCION sin operación; inmutable; sin ON CONFLICT |
 | M3 | `override_recursos`, `override_insumo` | `detalle_version` (comp.), `insumo` | Vale para una versión; cálculo del impacto verificado |

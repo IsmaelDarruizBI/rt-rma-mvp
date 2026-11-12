@@ -11,8 +11,11 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - consolidación técnica (11/11): CI, respaldo cifrado probado, checklist de seguridad, despliegue y deuda técnica ([`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md));
   - corte del UAT a São Paulo y respaldo diario activo (11/11);
   - **iteración funcional 1 cerrada** (11/11): DC06, DC07, DC11 y DC15B alineadas con V1.4 y las cinco decisiones DEC-IT1-01 a 05 incorporadas en `rt-rma-app` (`708d81b`) e implementadas (sección B);
-  - **iteración 1 en UAT** (12/11): migración `20261111000100` en São Paulo, Cloud Run `00027-sas` (`14108ef`) y Vercel `dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2` (sección B).
+  - **iteración 1 en UAT** (12/11): migración `20261111000100` en São Paulo, Cloud Run `00027-sas` (`14108ef`) y Vercel `dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2` (sección B);
+  - **macroiteración funcional** (12/11, rama local `feat/macro-v14`, sin push): evaluación técnica, reparaciones adicionales, desistimiento total guiado, antecedentes del equipo, reporte operativo y configuración auditada (sección B).
 - **Falta:**
+  - revisar e integrar `feat/macro-v14` y `rt-rma-app` `spec/macro-v14` (push, CI, avance de `mvp-v2`), y después aplicar en São Paulo las migraciones `20261112000100` y `20261112000200` y desplegar, cada paso con su autorización;
+  - las decisiones abiertas que bloquean el resto de la macroiteración (`rt-rma-app`, `docs/consolidation/README.md`, sección I);
   - la validación autenticada en UAT con una cuenta real (lecturas y recorridos de la iteración 1; sección F);
   - integrar en `main` (P0-2).
 
@@ -65,6 +68,20 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Macroiteración de desarrollo funcional (12/11/2026), rama `feat/macro-v14`
+
+Commits locales sobre `mvp-v2` (`6e6bf0b`), sin push ni merge. Especificación: `rt-rma-app` `spec/macro-v14` (`420feb9`), sincronizada en `business/`. Diferencias con la baseline: [`discrepancias-baseline-v1.4.md`](../traceability/discrepancias-baseline-v1.4.md), sección H. Sin decisiones nuevas: lo bloqueado por decisiones abiertas figura en la sección I del README de consolidación de `rt-rma-app`.
+
+- **Evaluación técnica (BR-REP-035/036, HP-REP-001/002, VAR-REP-019):** todo Detalle diagnosticado por Recepción se evalúa antes de su primera Ejecución (182 → 183 → 184): CONFIRMADO, DESCARTADO (cancelación por descarte técnico) o REQUIERE_REDEFINICION (127 en el mismo acto). La hace el técnico titular de la toma; no reserva ni consume. Los Detalles anteriores (sin origen del diagnóstico) no la exigen: plan de transición sin migrar datos.
+- **Reparaciones adicionales (PROC-REP-128, BR-REP-037):** desde la evaluación (antes del resolver, para que un descarte no deje la Orden sin trabajos) o como acción complementaria durante la participación. Nacen pendientes del cliente en CLIENTE_EXTERNO; la Ejecución en curso sigue.
+- **Desistimiento total guiado (DC07C, VAR-REP-043):** con una Ejecución activa se registra la solicitud en cada trabajo; al interrumpir, el técnico los cancela juntos (211 → 305). Lo COMPLETO se conserva; DC31 sin cambios.
+- **Antecedentes del equipo (BR-REP-022):** otras Órdenes con el mismo IMEI o número de serie, en el detalle de la Orden.
+- **Reporte operativo v1 (DC29, sin umbrales):** pantalla «Reportes».
+- **Configuración (DC23, DC23AUD):** pantalla «Configuración», solo Administración y sobre PostgreSQL: Tipos de Reparación y Tipos habilitados por Mesa, con auditoría inmutable e historial de precios. En el modo JSON es de solo lectura.
+- **Interfaz:** botones por trabajo con el nombre del trabajo cuando hay varios. Recorridos verificados en el navegador sobre datos locales: evaluación con adicional, inicio, adicional durante la ejecución, antecedentes, reportes y configuración.
+- **Migraciones aditivas, sin aplicar en ninguna base remota:** `20261112000100_evaluacion_tecnica.sql` y `20261112000200_configuracion_auditada.sql`.
+- **Pruebas:** JSON 1777 pasan, 0 fallan (397 omitidas, las de PostgreSQL); `tests/postgres`: suite completa 400 pasan y 1 falla (la prueba que cuenta tablas y vistas: 47 y 7 por la adición prevista; ajustada, su archivo pasa 18 de 18); compatibilidad hacia atrás: las de `14108ef` sobre el esquema migrado, 387 pasan y 2 fallan, ambas pruebas de inventario del esquema; `ruff` sin errores; frontend: typecheck, 124 tests y build; `npm run validate:all` y `validate:v1.4` en verde; búsqueda de secretos limpia.
 
 ### Despliegue de la iteración 1 en UAT (12/11/2026)
 
@@ -493,7 +510,9 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso:** la iteración 1 está desplegada en UAT (12/11/2026). Falta la validación autenticada con una cuenta real: `probar_entornos.py` y `medir_api.py` (solo lectura, contraseña pedida sin eco) y una pasada manual por los recorridos de la iteración 1 con Órdenes ficticias. Después, la iteración 2. Pruebas del cierre (11/11/2026): JSON 1720 pasan y 29 se saltean; `tests/postgres` 389 pasan; frontend: typecheck, 124 tests y build; `npm run validate:all` en verde; los cinco workflows de CI en verde en la rama y en `mvp-v2`. Quedan además los pendientes operativos con fecha y `main`:
+**Próximo paso de la macroiteración (12/11/2026):** revisar `feat/macro-v14` y `spec/macro-v14`; con autorización, publicarlas, esperar el CI y avanzar `mvp-v2`. Luego, con su propia autorización, aplicar en São Paulo `20261112000100` y `20261112000200` (aditivas: columnas que admiten vacío, tablas, una vista, equivalencias y un CHECK ampliado; compatibilidad hacia atrás verificada en local: `tests/postgres` de `14108ef`, el código de la vuelta atrás `00027-sas`, sobre el esquema migrado: 387 pasan y fallan solo las 2 pruebas que cuentan las tablas del esquema) y desplegar. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
+
+**Paso anterior:** la iteración 1 está desplegada en UAT (12/11/2026). Falta la validación autenticada con una cuenta real: `probar_entornos.py` y `medir_api.py` (solo lectura, contraseña pedida sin eco) y una pasada manual por los recorridos de la iteración 1 con Órdenes ficticias. Después, la iteración 2. Pruebas del cierre (11/11/2026): JSON 1720 pasan y 29 se saltean; `tests/postgres` 389 pasan; frontend: typecheck, 124 tests y build; `npm run validate:all` en verde; los cinco workflows de CI en verde en la rama y en `mvp-v2`. Quedan además los pendientes operativos con fecha y `main`:
 
 1. **Hecho (11/11/2026):** inicio de sesión manual en `rt-rma-uat.vercel.app`, verificado en los registros.
 2. **Hecho (11/11/2026):** limpieza (P2-4) y respaldo diario (P0-1).

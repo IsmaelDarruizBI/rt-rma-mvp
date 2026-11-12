@@ -144,9 +144,8 @@ decisions:
     features: [FEAT-REP-002]
     scenarios: [VAR-REP-019]
     implementation:
-      status: PARCIAL
-      evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/reparaciones.py y services/redefinicion.py exigen TECNICO en 075 y 127; application/acciones.py)
-      gap: VAR-REP-019 (el tecnico redefine antes de ejecutar, PROC-REP-183) depende de la evaluacion tecnica de BR-REP-035, que el producto no tiene.
+      status: IMPLEMENTADO
+      evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/reparaciones.py y services/redefinicion.py exigen TECNICO en 075 y 127); rt-rma-mvp feat/macro-v14 (services/evaluacion_tecnica.py, VAR-REP-019 por PROC-REP-183 REQUIERE_REDEFINICION -> 127; services/reparaciones.py agregar_detalle_adicional, PROC-REP-128 del tecnico)
 
   - id: DC08
     block: 1
@@ -158,8 +157,8 @@ decisions:
     scenarios: [VAR-REP-042]
     implementation:
       status: PARCIAL
-      evidence: roles fijos por constante (por ejemplo services/cancelaciones.py:66 ROLES_CANCELACION RECEP y COORD); domain/models/enums.py:164-176 OrigenCancelacion sin descarte tecnico
-      gap: permisos configurables (hito M) y tipo descarte tecnico.
+      evidence: roles fijos por constante (por ejemplo services/cancelaciones.py ROLES_CANCELACION RECEP y COORD); rt-rma-mvp feat/macro-v14 (domain/models/enums.py OrigenCancelacion.DESCARTE_TECNICO, aplicado por la evaluacion tecnica DESCARTADO)
+      gap: permisos configurables (hito M).
     open: [ABI-06, ABI-23]
 
   # ------------------------------------------------------------------ Bloque 2
@@ -246,8 +245,8 @@ decisions:
     features: [FEAT-REP-001]
     implementation:
       status: PARCIAL
-      evidence: domain/models/equipos.py:10-63 (tp_id separado del identificador fisico; el Equipo se copia en cada Orden con un identificador nuevo)
-      gap: entidad Equipo con historia propia, busqueda y confirmacion de reutilizacion.
+      evidence: domain/models/equipos.py (tp_id separado del identificador fisico; el Equipo se copia en cada Orden con un identificador nuevo); rt-rma-mvp feat/macro-v14 (application/consultas_operativas.py y GET /api/equipment/history, antecedentes por IMEI o numero de serie, solo consulta)
+      gap: entidad Equipo con historia propia y confirmacion de reutilizacion por Recepcion (ABI-05).
     open: [ABI-05]
 
   - id: DC15A
@@ -309,8 +308,9 @@ decisions:
     features: [FEAT-REP-010]
     notes: La administracion de configuraciones nuevas se implementa sobre la persistencia definitiva (DC28), no sobre los archivos JSON del MVP. Se retiro de BR-REP-040 por ser un detalle de almacenamiento (correccion final, M9).
     implementation:
-      status: NO_IMPLEMENTADO
-      evidence: catalogos en archivos JSON sin administracion
+      status: PARCIAL
+      evidence: "rt-rma-mvp feat/macro-v14 (application/configuracion.py, api/configuracion.py y la pantalla Configuracion: Administracion da de alta, edita y desactiva Tipos de Reparacion y define los Tipos habilitados de cada Mesa de trabajo; solo sobre PostgreSQL, en JSON los catalogos son de solo lectura)"
+      gap: insumos, checklist por tipo de equipo (DC12), politicas de garantia (ABI-03), plantillas (ABI-13), parametros y la delegacion por permisos (DC08).
 
   - id: DC23AUD
     block: 4
@@ -320,8 +320,8 @@ decisions:
     features: [FEAT-REP-010]
     implementation:
       status: PARCIAL
-      evidence: snapshots en Detalles y documentos protegen lo historico; el catalogo guarda solo el precio vigente
-      gap: auditoria e historial de precios.
+      evidence: snapshots en Detalles y documentos protegen lo historico; rt-rma-mvp feat/macro-v14 (rma.cambio_configuracion inmutable, un registro por campo con valor anterior y nuevo, usuario y fecha; vista rma.historial_precio)
+      gap: la auditoria cubre los catalogos que ya se administran (Tipos de Reparacion y Mesas); los demas catalogos la suman cuando se administren.
 
   - id: GLO-01
     block: 4
@@ -470,7 +470,7 @@ decisions:
     notes: Principio de gobierno; no agrega indicadores. Los eventos de cada funcionalidad estan en docs/consolidation/diseno-logico-v1.4.md.
     implementation:
       status: NO_APLICA
-      evidence: historial de la Orden existente
+      evidence: historial de la Orden existente; rt-rma-mvp feat/macro-v14 agrega un reporte operativo de primera version (application/consultas_operativas.py, GET /api/reports/operational) que solo agrega datos registrados, sin umbrales ni indicadores nuevos
     open: [ABI-15]
 
   # ------------------------------------------------------------------ Bloque 7
@@ -550,8 +550,8 @@ decisions:
     features: [FEAT-REP-002, FEAT-REP-009]
     scenarios: [VAR-REP-043]
     implementation:
-      status: PARCIAL
-      evidence: services/decision_cliente.py:337-376 (analisis previo que senala lo que bloquea; sin circuito guiado)
+      status: IMPLEMENTADO
+      evidence: rt-rma-mvp feat/macro-v14 (services/decision_cliente.py registra la solicitud total sobre los Detalles afectados con una Ejecucion activa; services/cancelaciones.py resolver_desistimientos_pendientes cancela en conjunto al interrumpir, 211 -> 305; lo COMPLETO se conserva)
 
   - id: DC07D
     block: DC07
@@ -574,9 +574,8 @@ decisions:
     features: [FEAT-REP-002, FEAT-REP-009]
     scenarios: [VAR-REP-042, VAR-REP-043]
     implementation:
-      status: PARCIAL
-      evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/decision_cliente.py registra la solicitud sobre un Detalle en ejecucion; services/cancelaciones.py resolver_desistimiento_solicitado aplica la cancelacion efectiva al interrumpir)
-      gap: el desistimiento total con una Ejecucion activa sigue bloqueado (DC07C, VAR-REP-043).
+      status: IMPLEMENTADO
+      evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/decision_cliente.py registra la solicitud sobre un Detalle en ejecucion; services/cancelaciones.py resolver_desistimiento_solicitado aplica la cancelacion efectiva al interrumpir); rt-rma-mvp feat/macro-v14 (desistimiento total con Ejecucion activa, VAR-REP-043)
 
   - id: DC31
     block: DC07
