@@ -107,6 +107,8 @@ El Job usa el rol `rma_respaldo`, creado con [`crear_secreto_respaldo.py`](../su
   - `rma`: ensayo revertido y aplicación con las 45 tablas, sus conteos e integridad sin problemas.
   - Secuencias iguales al manifiesto.
   - Auth: 4 cuentas.
+- **Resultado del 12/11/2026, después de aplicar la migración 21, ejecución `rt-rma-respaldo-db-kk6k6`: OK.** 21 migraciones aplicadas; 45 tablas con sus conteos e integridad sin problemas; secuencias iguales al manifiesto; 4 cuentas. Antes de migrar se tomó la copia `uat/20261112T031447Z` (ejecución `rt-rma-respaldo-db-jsk68`).
+- **Cada migración nueva** se agrega a `_herramientas/migraciones/` al aplicarla (un archivo nuevo no choca con la retención). Las copias anteriores se restauran con las migraciones que lista su manifiesto, que están en el historial de Git.
 
 **Descifrado con la clave real:** lo hace solo la persona responsable, en su máquina; la clave privada no se comparte. **Resultado del 11/11/2026: OK**, los dos archivos de `uat/20261111T193144Z` dan `PGDMP`. En PowerShell, sobre una copia descargada:
 
@@ -132,7 +134,7 @@ Proyecto `rosariotecno-460217`, región `southamerica-east1`.
 | Recurso | Configuración |
 |---|---|
 | Bucket `gs://rt-rma-uat-respaldos` | Standard, acceso uniforme, acceso público bloqueado (un pedido anónimo recibe 403). **Retención de 30 días** en todo el bucket: ningún objeto se borra ni se sobrescribe antes. Ciclo de vida: borra `uat/` a los 35 días. `_herramientas/` queda excluida: si se borrara, el Job dejaría de funcionar. Borrado suave de 7 días |
-| `_herramientas/` | `respaldar.sh`, `restaurar.sh`, `ensayar_restauracion.sh`, `supabase-ca.crt` y `migraciones/` (las 20 del repositorio) |
+| `_herramientas/` | `respaldar.sh`, `restaurar.sh`, `ensayar_restauracion.sh`, `supabase-ca.crt` y `migraciones/` (las 21 del repositorio; la 21 se agregó el 12/11/2026, al aplicarla en São Paulo) |
 | Cuenta de servicio `rt-rma-respaldo` | Sin roles en el proyecto. `storage.objectCreator` y `storage.objectViewer` solo en ese bucket: crea y lee, no borra ni sobrescribe. `secretAccessor` solo en su secreto. `run.invoker` solo en su Job |
 | Secreto `rma-uat-respaldo-db-url` | Versión 1. Solo la lee `rt-rma-respaldo`. Conexión de `rma_respaldo` (sección 2) |
 | Rol `rma_respaldo` en São Paulo | Sección 2 |

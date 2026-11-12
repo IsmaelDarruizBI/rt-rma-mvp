@@ -80,12 +80,24 @@ Ninguno despliega ni usa secretos. Se activan al publicar la rama en GitHub. Com
 | Backend | `gcloud run services update-traffic … --to-revisions <revisión anterior>=100` | La anterior usa el mismo proyecto de Supabase y es compatible con el esquema (migraciones aditivas) |
 | Frontend | `vercel promote <despliegue anterior> --scope ismaeldarruizbis-projects` | Construido contra el mismo proyecto de Supabase que el backend al que se vuelve |
 
-**Pares vigentes (11/11/2026):**
+**Pares vigentes (12/11/2026):**
 
 | Uso | Backend | Frontend | Supabase |
 |---|---|---|---|
-| Público (desde el corte, 11/11/2026) | `rt-rma-uat-api-00024-top` (etiqueta `sp-d226fd2`, código `d226fd2`) | `rt-rma-pktu8ktbq…` (`dpl_6vsLwpAzxE2yS5K7RLHBMNVvETN8`) | São Paulo `pcdnmhzwhzymznojndrn` |
-| Vuelta atrás hasta el 25/11/2026 | `rt-rma-uat-api-00020-tux` (etiqueta `auth`, código `61e2a14`) | `rt-rma-n49rz9qgv…` (`dpl_F1M6Msv1FUHo3ghNYPVviYQtmztb`) | Oregón `okcscsglnujnxtgobjfw` |
+| Público (iteración 1, desde el 12/11/2026) | `rt-rma-uat-api-00027-sas` (etiqueta `it1-14108ef`, código `14108ef`) | `rt-rma-j00dbv3fc…` (`dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2`) | São Paulo `pcdnmhzwhzymznojndrn` |
+| Vuelta atrás de la iteración 1 | `rt-rma-uat-api-00024-top` (etiqueta `sp-d226fd2`, código `d226fd2`) | `rt-rma-pktu8ktbq…` (`dpl_6vsLwpAzxE2yS5K7RLHBMNVvETN8`) | São Paulo `pcdnmhzwhzymznojndrn` (con la migración 21, compatible) |
+| Vuelta atrás de la migración, hasta el 25/11/2026 | `rt-rma-uat-api-00020-tux` (etiqueta `auth`, código `61e2a14`) | `rt-rma-n49rz9qgv…` (`dpl_F1M6Msv1FUHo3ghNYPVviYQtmztb`) | Oregón `okcscsglnujnxtgobjfw` |
+
+**Vuelta atrás de la iteración 1** (coordinada, sin tocar la base: la migración 21 es aditiva y `d226fd2` funciona sobre ella, 383 de 384 pruebas; la que falla solo cuenta los tipos de evento):
+
+```bash
+gcloud run services update-traffic rt-rma-uat-api --region southamerica-east1 --project rosariotecno-460217 --to-revisions rt-rma-uat-api-00024-top=100
+vercel promote dpl_6vsLwpAzxE2yS5K7RLHBMNVvETN8 --scope ismaeldarruizbis-projects
+```
+
+No se revierten columnas ni se borran datos. Los datos que la iteración 1 haya escrito en las columnas nuevas quedan en la base y la versión anterior los ignora.
+
+**Despliegue de producción sin dominio:** `vercel deploy --prod --skip-domain` construye el despliegue de producción sin publicarlo; `vercel promote <id>` lo publica. Así el corte con el backend dura segundos (12/11/2026: 12 s).
 
 Los comandos de la vuelta atrás coordinada están en [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16.
 

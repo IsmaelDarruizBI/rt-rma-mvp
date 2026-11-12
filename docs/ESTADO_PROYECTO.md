@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 11/11/2026.
+**Última actualización:** 12/11/2026.
 
 - **Hecho:**
   - autenticación real y DC31 desplegadas en UAT (10/11, `00020-tux`);
@@ -10,9 +10,10 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - Supabase de São Paulo migrado, validado y en cero Órdenes, con la revisión de corte `00023-zus` sin tráfico (11/11);
   - consolidación técnica (11/11): CI, respaldo cifrado probado, checklist de seguridad, despliegue y deuda técnica ([`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md));
   - corte del UAT a São Paulo y respaldo diario activo (11/11);
-  - **iteración funcional 1 cerrada** (11/11, rama `feat/iteracion-1-alineacion-v14`, sin publicar): DC06, DC07, DC11 y DC15B alineadas con V1.4 y las cinco decisiones DEC-IT1-01 a 05 incorporadas en `rt-rma-app` (`708d81b`) e implementadas (sección B).
+  - **iteración funcional 1 cerrada** (11/11): DC06, DC07, DC11 y DC15B alineadas con V1.4 y las cinco decisiones DEC-IT1-01 a 05 incorporadas en `rt-rma-app` (`708d81b`) e implementadas (sección B);
+  - **iteración 1 en UAT** (12/11): migración `20261111000100` en São Paulo, Cloud Run `00027-sas` (`14108ef`) y Vercel `dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2` (sección B).
 - **Falta:**
-  - desplegar la iteración 1 en UAT (con autorización): primero la migración `20261111000100` en São Paulo, después Cloud Run y Vercel;
+  - la validación autenticada en UAT con una cuenta real (lecturas y recorridos de la iteración 1; sección F);
   - integrar en `main` (P0-2).
 
 **Para retomar el trabajo: [`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md)**: estado, pendientes con autorización y criterios para el desarrollo funcional. Corte y vuelta atrás: [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16. Entorno local: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 5. En otra computadora: [`CONTINUIDAD.md`](CONTINUIDAD.md).
@@ -29,13 +30,13 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | Tooling de la raíz | Node y TypeScript: validaciones, diagramas Mermaid y visor HTML (`package.json`) |
 | `app/backend/` | Python 3.11 o posterior, FastAPI y Pydantic v2. Capas `api → application → services → repositories ← storage` ([README](../app/backend/README.md)) |
 | `app/frontend/` | React, TypeScript y Vite ([README](../app/frontend/README.md)) |
-| `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). 20 de 20 aplicadas en `rt-rma-db` (Oregón, `us-west-2`) y en `db-rt-rma` (São Paulo, `sa-east-1`). La 21 (`20261111000100_it1_alineacion_v14.sql`, aditiva) está solo en la rama de la iteración 1: no se aplicó en ninguna base remota |
+| `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). 21 de 21 aplicadas en `db-rt-rma` (São Paulo, `sa-east-1`): la 21 (`20261111000100_it1_alineacion_v14.sql`, aditiva) el 12/11/2026. Oregón (`rt-rma-db`, vuelta atrás) queda en 20 |
 | Persistencia en uso | UAT: PostgreSQL en Supabase (`RMA_PERSISTENCIA=postgres`). JSON sigue siendo el valor por defecto local |
-| UAT publicado | Desde el 11/11/2026, sobre Supabase São Paulo: backend en Cloud Run (`00024-top`, código `d226fd2`) y frontend en Vercel (`dpl_6vsL…`). Oregón queda como vuelta atrás hasta el 25/11/2026 ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16) |
+| UAT publicado | Desde el 12/11/2026, iteración 1 sobre Supabase São Paulo: backend en Cloud Run (`00027-sas`, código `14108ef`) y frontend en Vercel (`dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2`). Vuelta atrás inmediata: `00024-top` y `dpl_6vsL…` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 6). Oregón sigue como vuelta atrás de la migración hasta el 25/11/2026 |
 
 **Rama de trabajo:** `mvp-v2`, con la iteración 1 integrada por avance rápido el 12/11/2026 (`feat/iteracion-1-alineacion-v14`, publicada). CI en verde en la rama y en `mvp-v2`. `business/` viene de `rt-rma-app` `708d81b` (rama `spec/iteracion-1-decisiones`, publicada). `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
 
-**Últimos commits de código:** `61e2a14` (inicio de sesión con usuario y contraseña), `50170e4` (DC31) y `d60c124` (autenticación). Desplegado: `d226fd2`, que incluye la corrección de DC31 (`ac619ed`) y el cierre de `/docs`. Ver `git log`.
+**Últimos commits de código:** `61e2a14` (inicio de sesión con usuario y contraseña), `50170e4` (DC31) y `d60c124` (autenticación). Desplegado: `14108ef` (iteración 1), desde el 12/11/2026. Ver `git log`.
 
 **Estado de desarrollo:**
 - El MVP está en UAT sobre PostgreSQL, con autenticación real (Supabase Auth, usuario y contraseña) y DC31, solo con datos ficticios y en cero Órdenes ([`autenticacion.md`](autenticacion.md)).
@@ -64,6 +65,17 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Despliegue de la iteración 1 en UAT (12/11/2026)
+
+- **Antes:** Git limpio en `14108ef`; tráfico 100 % en `00024-top`; Vercel `dpl_6vsL…`, desconectado de GitHub; São Paulo con 0 Órdenes, 20 migraciones y sin columnas nuevas; respaldo previo `uat/20261112T031447Z` (ejecución `rt-rma-respaldo-db-jsk68`); `business/` igual a `708d81b`.
+- **Compatibilidad hacia atrás demostrada:** las pruebas `tests/postgres` de `d226fd2` (el código de `00024-top`) sobre sus 20 migraciones más la nueva: 383 de 384 pasan. La única falla es la prueba SQL que cuenta exactamente 51 tipos de evento (ahora 52 por EV-REP-052): es la adición prevista, no un fallo de funcionamiento.
+- **Migración:** `supabase db push --dry-run` mostró solo `20261111000100`; aplicada. Registrada, 13 columnas y 3 restricciones nuevas, 52 eventos de negocio, 90 equivalencias, permisos de `rma_backend` y `rma_respaldo` sobre las columnas nuevas y `verificar_integridad()` sin problemas.
+- **Backend:** revisión `rt-rma-uat-api-00027-sas` (etiqueta `it1-14108ef`, imagen `sha256:a3d960a7aa5d…`), con la plantilla de `00024-top` (São Paulo, secreto `rma-uat-sp-database-url:1`, CORS solo del frontend, fotos en GCS). Por la etiqueta: arranque con la base (sin base no arranca), `/health` 200, 401 sin token y con token inválido, `/docs`, `/redoc` y `/openapi.json` 404, CORS sin origen ajeno.
+- **Frontend:** `vercel deploy --prod --skip-domain` desde una exportación limpia de `14108ef`; luego `vercel promote`. Corte coordinado de 03:27:12 a 03:27:24 UTC (tráfico del backend y promoción).
+- **Después:** tráfico 100 % en `00027-sas`; Vercel sirve `dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2`; el bundle apunta a São Paulo y a la API pública, solo con la clave publicable, sin JWT ni claves secretas, con el contrato nuevo; la API pública repite los controles; Auth con registro deshabilitado, solo `email` y JWKS `ES256`; sin errores, 5xx ni credenciales en los registros.
+- **Respaldos:** la migración 21 se agregó a `_herramientas/migraciones/` y el ensayo en la nube (`rt-rma-respaldo-db-kk6k6`) restauró con 21 migraciones, 45 tablas, integridad y secuencias correctas y 4 cuentas.
+- **Sin validar en UAT:** las lecturas y los recorridos autenticados. Piden la contraseña de una cuenta real (no se usa ni se crea ninguna sin la persona responsable) y los recorridos escriben datos. La cobertura funcional está en las pruebas JSON y PostgreSQL y en la verificación por interfaz sobre datos locales.
 
 ### Iteración funcional 1: alineación con V1.4 (11/11/2026), rama `feat/iteracion-1-alineacion-v14`
 
@@ -481,7 +493,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso:** la iteración 1 está integrada en `mvp-v2` (12/11/2026) y lista para un despliegue controlado a UAT, con autorización: aplicar la migración `20261111000100` en São Paulo (`supabase migration list` la muestra pendiente) y después desplegar Cloud Run y Vercel con el checklist de seguridad. Pruebas del cierre (11/11/2026): JSON 1720 pasan y 29 se saltean; `tests/postgres` 389 pasan; frontend: typecheck, 124 tests y build; `npm run validate:all` en verde; los cinco workflows de CI en verde en la rama y en `mvp-v2`. Quedan además los pendientes operativos con fecha y `main`:
+**Próximo paso:** la iteración 1 está desplegada en UAT (12/11/2026). Falta la validación autenticada con una cuenta real: `probar_entornos.py` y `medir_api.py` (solo lectura, contraseña pedida sin eco) y una pasada manual por los recorridos de la iteración 1 con Órdenes ficticias. Después, la iteración 2. Pruebas del cierre (11/11/2026): JSON 1720 pasan y 29 se saltean; `tests/postgres` 389 pasan; frontend: typecheck, 124 tests y build; `npm run validate:all` en verde; los cinco workflows de CI en verde en la rama y en `mvp-v2`. Quedan además los pendientes operativos con fecha y `main`:
 
 1. **Hecho (11/11/2026):** inicio de sesión manual en `rt-rma-uat.vercel.app`, verificado en los registros.
 2. **Hecho (11/11/2026):** limpieza (P2-4) y respaldo diario (P0-1).

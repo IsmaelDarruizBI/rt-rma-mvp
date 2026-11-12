@@ -55,3 +55,13 @@ Controles críticos para revisar antes y después de publicar. No es una auditor
   - registro deshabilitado y ES256 en los dos proyectos.
 - **Hallazgo corregido en código (sin desplegar):** `/docs`, `/redoc` y `/openapi.json` eran públicos y mostraban 78 rutas; se corrige en `4af9854`. Queda pendiente para el próximo despliegue.
 - **Pendiente de confirmar en el panel:** el largo mínimo 10 en los dos proyectos.
+
+## Resultado de la revisión del 12/11/2026 (`00027-sas`, iteración 1, São Paulo)
+
+- **Correcto:**
+  - repositorio: escaneo de secretos sin hallazgos y migración aditiva con el workflow `postgres` en verde;
+  - backend: `RMA_AUTH_MODO=supabase` con el Auth de São Paulo; 401 sin token y con token inválido; `/docs`, `/redoc` y `/openapi.json` 404; CORS solo del frontend; `RMA_DATABASE_URL` desde `rma-uat-sp-database-url:1`; registros sin errores, 5xx ni credenciales;
+  - base: permisos de `rma_backend` sobre las columnas nuevas y `verificar_integridad()` sin problemas; la migración no cambia roles ni permisos;
+  - Supabase Auth: registro deshabilitado, solo `email`, JWKS `ES256`;
+  - frontend: solo la clave publicable, sin JWT; mismo ref que el backend y la URL pública de la API.
+- **No verificado en esta revisión:** token de otro proyecto, suplantación y rol sin permiso con una sesión real (piden la contraseña de una cuenta); el largo mínimo de contraseña en el panel.
