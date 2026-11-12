@@ -34,9 +34,11 @@ from app.domain.models import (
     DatosRecepcion,
     Equipo,
     OrdenReparacion,
+    RolUsuario,
     TipoReparacion,
 )
 from app.services import (
+    ROLES_EXCEPCION_GARANTIA,
     PrecondicionInvalidaError,
     ResultadoEvaluacionOrden,
     cargar_reservas_externas,
@@ -346,8 +348,14 @@ def iniciar_garantia_rma(
     detalle_origen_ids: Sequence[str],
     usuario_id: str,
     datos_recepcion: DatosRecepcion | None = None,
+    motivo_excepcion: str | None = None,
 ) -> OrdenReparacion:
     """Recepcion inicia la garantia RMA de una Orden ENTREGADA (HP-REP-003).
+
+    Antes valida la vigencia de la garantia de origen (PROC-REP-036,
+    DC15B): vencida y sin ``motivo_excepcion`` no se crea nada
+    (``GarantiaVencidaError``); con motivo, un usuario autorizado admite el
+    ingreso como excepcion (VAR-REP-039).
 
     Una unica entrada canonica: PROC-REP-035 (1..N Detalles origen) ->
     040 -> 045 (No) -> 055 (EN_REVISION) -> 050 -> 060, y se detiene a
@@ -373,8 +381,21 @@ def iniciar_garantia_rma(
             usuario=usuario,
             fecha=fecha,
             datos_recepcion=datos_recepcion,
+            zona_horaria=contexto.zona_horaria,
+            motivo_excepcion=motivo_excepcion,
         )
-        orden = marcar_orden_en_revision(orden, usuario=usuario, fecha=fecha)
+        # VAR-REP-039: con excepcion la admite el usuario autorizado; el paso
+        # automatico 055 que sigue no le exige ademas ser Recepcion.
+        orden = marcar_orden_en_revision(
+            orden,
+            usuario=usuario,
+            fecha=fecha,
+            roles=(
+                ROLES_EXCEPCION_GARANTIA
+                if orden.excepcion_garantia is not None
+                else (RolUsuario.RECEPCION,)
+            ),
+        )
         orden = generar_comprobante_recepcion(orden, fecha=fecha)
         orden = emitir_comprobante_recepcion_inicial(
             contexto, orden, usuario_id=usuario.id, fecha=fecha

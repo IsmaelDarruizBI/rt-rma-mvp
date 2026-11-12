@@ -46,6 +46,7 @@ from app.domain.models import (
     ReparacionDetail,
     ResultadoAutorizacion,
     RolUsuario,
+    SolicitudDesistimiento,
     Usuario,
 )
 
@@ -448,7 +449,13 @@ def _registrar_desistimiento(
     motivo: str,
     fecha: datetime,
 ) -> OrdenReparacion:
-    """046 DESISTE de un Detalle ya autorizado: su autorizacion no cambia."""
+    """046 DESISTE de un Detalle ya autorizado: su autorizacion no cambia.
+
+    DC07: la solicitud queda en el Detalle (usuario, fecha, motivo y canal)
+    aparte de la cancelacion efectiva, que registra PROC-REP-300. Si ya
+    habia una solicitud pendiente (por ejemplo, de cuando se estaba
+    ejecutando) se conserva la original.
+    """
     detalle = next(d for d in orden.reparaciones_detail if d.id == detalle_id)
     previa = decision_vigente(detalle)
     antecedente = (
@@ -456,7 +463,7 @@ def _registrar_desistimiento(
         if previa is not None
         else "sin decision registrada"
     )
-    return registrar_paso(
+    nueva_orden = registrar_paso(
         orden,
         process_id=NODO_DECISION_CLIENTE,
         accion="REGISTRAR_DESISTIMIENTO_CLIENTE",
@@ -468,6 +475,56 @@ def _registrar_desistimiento(
             f"{antecedente}; canal {canal.value}): {motivo}"
         ),
     )
+    nuevo = next(
+        d for d in nueva_orden.reparaciones_detail if d.id == detalle_id
+    )
+    if nuevo.solicitud_desistimiento is None:
+        nuevo.solicitud_desistimiento = SolicitudDesistimiento(
+            usuario_id=usuario.id, fecha=fecha, motivo=motivo, canal=canal
+        )
+    return nueva_orden
+
+
+def _solicitar_desistimiento_en_ejecucion(
+    orden: OrdenReparacion,
+    detalle: ReparacionDetail,
+    *,
+    usuario: Usuario,
+    canal: CanalComunicacion,
+    motivo: str,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """DC07 / VAR-REP-042: el cliente desiste de un Detalle EN_PROGRESO.
+
+    Solo se registra la SOLICITUD: el Detalle sigue en ejecucion y no se
+    cancela todavia. El tecnico interrumpe la Ejecucion registrando el
+    estado del trabajo, los materiales y si puede revertirse (DC07B); al
+    resolverse, PROC-REP-211 deriva a la cancelacion efectiva
+    (``resolver_desistimiento_solicitado``).
+    """
+    if detalle.solicitud_desistimiento is not None:
+        raise PrecondicionInvalidaError(
+            f"Ya hay una solicitud de desistimiento del Detalle {detalle.id} "
+            "pendiente: se cancela cuando el tecnico interrumpa la Ejecucion."
+        )
+    nueva_orden = registrar_paso(
+        orden,
+        process_id=NODO_DECISION_CLIENTE,
+        accion="SOLICITAR_DESISTIMIENTO_CLIENTE",
+        fecha=fecha,
+        usuario_id=usuario.id,
+        reparacion_detail_id=detalle.id,
+        observacion=(
+            f"SOLICITA DESISTIR (Detalle en ejecucion; canal {canal.value}): "
+            f"{motivo}"
+        ),
+    )
+    next(
+        d for d in nueva_orden.reparaciones_detail if d.id == detalle.id
+    ).solicitud_desistimiento = SolicitudDesistimiento(
+        usuario_id=usuario.id, fecha=fecha, motivo=motivo, canal=canal
+    )
+    return nueva_orden
 
 
 def registrar_desistimiento_cliente(
@@ -533,6 +590,17 @@ def registrar_desistimiento_cliente(
                 f"El Detalle {detalle_id} sigue pendiente de autorizacion: no "
                 "hubo autorizacion de la que desistir. Corresponde registrar "
                 "el rechazo del cliente."
+            )
+        if tiene_ejecucion_activa(orden, detalle_id):
+            # VAR-REP-042: solicitud ahora, cancelacion despues de
+            # interrumpir.
+            return _solicitar_desistimiento_en_ejecucion(
+                orden,
+                detalle,
+                usuario=usuario,
+                canal=canal,
+                motivo=motivo,
+                fecha=fecha,
             )
         rechazados = []
         desistidos = [detalle_id]

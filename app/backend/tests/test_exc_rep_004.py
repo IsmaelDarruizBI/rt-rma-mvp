@@ -171,7 +171,7 @@ def _revisar(orden, detalle_id="DET-001", usuario=TECNICO, minuto=80):
 
 
 def _redefinir(
-    orden, tipo=TIPO_PLACA, detalle_id="DET-001", usuario=RECEPCION, minuto=90
+    orden, tipo=TIPO_PLACA, detalle_id="DET-001", usuario=TECNICO, minuto=90
 ):
     return redefinir_detalle_servicio(
         orden,
@@ -469,7 +469,8 @@ def test_126_registra_la_revision_sin_tocar_la_definicion():
         for a in acciones_disponibles(revisada)
         if a.codigo != "REGISTRAR_PAGO"
     ]
-    assert acciones == [("REDEFINIR_DETALLE", (RECEPCION.rol,))]
+    # V1.4 (DC06): redefinir (127) es del Tecnico.
+    assert acciones == [("REDEFINIR_DETALLE", (TECNICO.rol,))]
 
 
 @pytest.mark.parametrize("usuario", [RECEPCION, COORDINADOR, ADMINISTRADOR])
@@ -548,10 +549,10 @@ def test_127_redefine_el_mismo_detalle_y_conserva_lo_anterior():
         anterior.garantia_dias,
         anterior.reemplazada_en,
         anterior.usuario_id,
-    ) == ("TREP-001", Decimal("80000"), 10, 90, t(90), RECEPCION.id)
+    ) == ("TREP-001", Decimal("80000"), 10, 90, t(90), TECNICO.id)
     paso = redefinida.historial[-1]
     assert paso.referencia_id == "PROC-REP-127"
-    assert paso.usuario_id == RECEPCION.id
+    assert paso.usuario_id == TECNICO.id
     assert paso.reparacion_detail_id == "DET-001"
     assert "TREP-001 -> TREP-003" in paso.observacion
 
@@ -651,7 +652,8 @@ def test_una_revision_de_un_ciclo_anterior_no_habilita_127():
 
 def test_127_valida_rol_y_tipo_activo():
     orden = _revisar(_en_125())
-    for usuario in (TECNICO, COORDINADOR):
+    # V1.4 (DC06): Recepcion ya no redefine; solo el Tecnico.
+    for usuario in (RECEPCION, COORDINADOR):
         with pytest.raises(PrecondicionInvalidaError):
             _redefinir(orden, usuario=usuario)
     inactivo = TIPO_PLACA.model_copy(update={"activo": False})
@@ -913,7 +915,7 @@ def test_escrituras_de_la_orden_por_comando(tmp_path):
             contexto,
             orden_id=orden_id,
             detalle_id="DET-001",
-            usuario_id="RECEP-001",
+            usuario_id="TECH-001",
             tipo_reparacion_id="TR-002",
         )
         assert espia.guardados == 1

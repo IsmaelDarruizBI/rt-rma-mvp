@@ -251,7 +251,7 @@ def test_sin_reparacion_solo_tras_065_sin_detalles_y_una_vez(cliente):
     _enviada_y_revisada(cliente, con_detalle)
     cliente.post(
         f"/api/orders/{con_detalle}/review/details",
-        json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
+        json={"usuario_id": TECNICO, "tipo_reparacion_id": TIPO},
     )
     antes = cliente.get(f"/api/orders/{con_detalle}").json()
     assert _sin_reparacion(cliente, con_detalle).status_code == 409
@@ -264,11 +264,11 @@ def test_sin_reparacion_solo_tras_065_sin_detalles_y_una_vez(cliente):
     assert _sin_reparacion(cliente, otra).status_code == 409
     respuesta = cliente.post(
         f"/api/orders/{otra}/review/details",
-        json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
+        json={"usuario_id": TECNICO, "tipo_reparacion_id": TIPO},
     )
     assert respuesta.status_code == 409, respuesta.text
     respuesta = cliente.post(
         f"/api/orders/{otra}/definition/finalize",
-        json={"usuario_id": RECEPCION},
+        json={"usuario_id": TECNICO},
     )
     assert respuesta.status_code == 409, respuesta.text

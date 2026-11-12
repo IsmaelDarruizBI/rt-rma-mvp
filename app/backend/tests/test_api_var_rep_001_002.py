@@ -21,6 +21,7 @@ from app.storage.json.base import escribir_json_atomico
 from tests.fixtures.api_definicion import (
     definir_desde_revision_y_finalizar,
     definir_y_finalizar,
+    finalizar_definicion,
 )
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
@@ -71,7 +72,7 @@ def _revisar(cliente, orden_id, usuario=TECNICO, resultado="Falla de placa."):
     )
 
 
-def _agregar(cliente, orden_id, usuario=RECEPCION, tipo=TIPO):
+def _agregar(cliente, orden_id, usuario=TECNICO, tipo=TIPO):
     """Agrega UN Detalle luego de la revision (068 Si -> 075)."""
     return cliente.post(
         f"/api/orders/{orden_id}/review/details",
@@ -79,7 +80,7 @@ def _agregar(cliente, orden_id, usuario=RECEPCION, tipo=TIPO):
     )
 
 
-def _definir(cliente, orden_id, usuario=RECEPCION, tipo=TIPO):
+def _definir(cliente, orden_id, usuario=TECNICO, tipo=TIPO):
     """Agrega UN Detalle luego de la revision y finaliza la definicion."""
     return definir_desde_revision_y_finalizar(
         cliente,
@@ -294,12 +295,26 @@ def test_technical_review_solo_tecnico(cliente, usuario):
     assert _revisar(cliente, orden_id, usuario).status_code == 409
 
 
-@pytest.mark.parametrize("usuario", [TECNICO, COORDINADOR, ADMINISTRADOR])
-def test_definir_desde_revision_solo_recepcion(cliente, usuario):
+@pytest.mark.parametrize("usuario", [RECEPCION, COORDINADOR, ADMINISTRADOR])
+def test_definir_desde_revision_solo_tecnico(cliente, usuario):
+    """V1.4 (DC06): definir luego de la revision (075) es del Tecnico."""
     orden_id = _crear_orden(cliente)
     _enviar(cliente, orden_id)
     _revisar(cliente, orden_id)
-    assert _definir(cliente, orden_id, usuario).status_code == 409
+    respuesta = _agregar(cliente, orden_id, usuario)
+    assert respuesta.status_code == 409
+    assert "TECNICO" in respuesta.json()["error"]["mensaje"]
+
+
+def test_finalizar_luego_de_revision_solo_tecnico(cliente):
+    """V1.4 (DC06): cerrar la carga de 075 tambien es del Tecnico."""
+    orden_id = _crear_orden(cliente)
+    _enviar(cliente, orden_id)
+    _revisar(cliente, orden_id)
+    assert _agregar(cliente, orden_id).status_code == 200
+    respuesta = finalizar_definicion(cliente, orden_id, RECEPCION)
+    assert respuesta.status_code == 409
+    assert finalizar_definicion(cliente, orden_id, TECNICO).status_code == 200
 
 
 # --- Negativos --------------------------------------------------------------
@@ -382,7 +397,7 @@ def test_definir_desde_revision_negativos(cliente, tmp_path):
     respuesta = cliente.post(
         f"/api/orders/{orden_id}/review/details",
         json={
-            "usuario_id": RECEPCION,
+            "usuario_id": TECNICO,
             "tipo_reparacion_id": "TR-OFF",
             "detalle_origen_id": "DET-001",
         },

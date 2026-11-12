@@ -23,6 +23,7 @@ from app.main import create_app
 from app.storage.json.ordenes import JsonOrdenReparacionRepository
 from tests.fixtures import api_salidas as f
 from tests.fixtures import custodia as c
+from tests.fixtures import iteracion1 as it1
 from tests.fixtures.api_definicion import definir_desde_revision_y_finalizar
 
 DNI = "30111222"
@@ -98,7 +99,7 @@ def _flujos(cliente: TestClient) -> None:
         cliente.post(
             f"/api/orders/{redefinida}/details/DET-001/redefine",
             json={
-                "usuario_id": f.RECEPCION,
+                "usuario_id": f.TECNICO,
                 "tipo_reparacion_id": f.PANTALLA,
             },
         )
@@ -465,6 +466,30 @@ def _flujos_financieros(cliente: TestClient) -> None:
     f.ok(f.cancelar_orden(cliente, cancelada))
 
 
+def _flujos_iteracion1(cliente: TestClient) -> None:
+    """Iteracion 1 (V1.4): HP-REP-003 con 036 vigente, VAR-REP-039/041/042
+    y el circuito DC31 despues del desistimiento. La garantia vencida se
+    arma con el reloj del contexto corrido hacia atras; al terminar se
+    restituye."""
+    # Con pantallas: las baterias del stock inicial ya las usaron los
+    # flujos anteriores.
+    contexto = cliente.app.state.contexto
+    reloj = it1.instalar_reloj(cliente)
+    try:
+        it1.recorrido_garantia_vigente(cliente, f.PANTALLA)
+        it1.recorrido_garantia_con_excepcion(cliente, reloj, f.PANTALLA)
+        it1.recorrido_cortesia_con_pagos(cliente, f.PANTALLA)
+        desistida = it1.recorrido_desistimiento_en_ejecucion(
+            cliente, f.PANTALLA
+        )
+        # Sin trabajos vigentes la toma ya se libero: DC31 sigue con la
+        # devolucion del equipo y la cancelacion explicita de la Orden.
+        f.ok(f.devolver(cliente, desistida))
+        f.ok(f.cancelar_orden(cliente, desistida))
+    finally:
+        cliente.app.state.contexto = contexto
+
+
 def armar_corpus(directorio: Path) -> list[OrdenReparacion]:
     """Cada Orden que guardan los flujos, en orden, ya proyectada."""
     f.sembrar(directorio)
@@ -487,4 +512,5 @@ def armar_corpus(directorio: Path) -> list[OrdenReparacion]:
             _flujos(cliente)
             _flujos_de_salida(cliente)
             _flujos_financieros(cliente)
+            _flujos_iteracion1(cliente)
     return grabadas

@@ -42,6 +42,7 @@ from app.domain.garantia import GARANTIA_MAXIMA_DIAS
 from app.domain.models import (
     AjusteGarantia,
     CanalComunicacion,
+    ClaseAjuste,
     Cliente,
     CondicionReparacionDetail,
     ContenidoDocumento,
@@ -57,6 +58,7 @@ from app.domain.models import (
     EstadoReparacionDetail,
     EstadoTomaOrden,
     EstadoWorkflow,
+    ExcepcionGarantia,
     HistorialWorkflow,
     InsumoUtilizado,
     MedioPago,
@@ -71,6 +73,7 @@ from app.domain.models import (
     ResultadoAutorizacion,
     ResultadoControl,
     RolUsuario,
+    SolicitudDesistimiento,
     TipoDescuento,
     TipoDocumento,
     TipoEntrega,
@@ -79,6 +82,7 @@ from app.domain.models import (
     TipoReparacion,
     TomaOrden,
     Usuario,
+    VigenciaGarantiaOrigen,
 )
 from app.domain.politicas import CondicionComercial, politica_de
 from app.domain.prioridad import (
@@ -422,6 +426,11 @@ class InterrumpirEjecucionIn(BaseModel):
     insumos_utilizados: list[InsumoUtilizadoIn] = Field(default_factory=list)
     motivo: str = Field(min_length=1)
     observaciones: str | None = None
+    # DC07B: obligatorios si el cliente pidio desistir de ese trabajo: en
+    # que estado queda y si puede revertirse (opciones aun pendientes:
+    # por ahora si/no).
+    estado_trabajo: str | None = None
+    reversible: bool | None = None
 
 
 class RequiereRedefinicionIn(BaseModel):
@@ -527,6 +536,8 @@ class DescuentoIn(BaseModel):
     tipo: TipoDescuento | None = None
     valor: Decimal | None = Field(default=None, gt=0, decimal_places=2)
     motivo: str = Field(min_length=1)
+    # DC11: DESCUENTO (default) o CORTESIA total (Administracion).
+    clase: ClaseAjuste = ClaseAjuste.DESCUENTO
 
 
 class AjustarGarantiaIn(BaseModel):
@@ -623,6 +634,10 @@ class IniciarGarantiaRmaIn(BaseModel):
     usuario_id: str = Field(min_length=1)
     detalle_origen_ids: list[str] = Field(min_length=1)
     recepcion: DatosRecepcionIn | None = None
+    # VAR-REP-039 (DC15B): solo si la garantia de origen esta vencida y
+    # quien inicia puede admitir el ingreso como excepcion. Obligatorio en
+    # ese caso; sin el, una garantia vencida se rechaza (GARANTIA_VENCIDA).
+    motivo_excepcion: str | None = None
 
 
 class OverrideRecursosIn(BaseModel):
@@ -1047,6 +1062,9 @@ class DetalleOut(BaseModel):
     controles: list[ControlTecnicoOut] = Field(default_factory=list)
     pendiente_de_retrabajo: bool = False
     cancelacion: CancelacionOut | None = None
+    # DC07: solicitud de desistimiento, aparte de la cancelacion efectiva.
+    # Con el Detalle todavia no CANCELADO, esta pendiente de resolverse.
+    solicitud_desistimiento: SolicitudDesistimiento | None = None
     insumos_previstos: list[InsumoPrevistoOut] = Field(default_factory=list)
     version_definicion: int = 1
     autorizaciones: list[AutorizacionClienteOut] = Field(default_factory=list)
@@ -1133,6 +1151,8 @@ class EjecucionOut(BaseModel):
     observaciones: str | None = None
     motivo_interrupcion: str | None = None
     motivo_redefinicion: str | None = None
+    estado_trabajo: str | None = None
+    reversible: bool | None = None
 
     @classmethod
     def desde_dominio(cls, ejecucion: EjecucionReparacion) -> "EjecucionOut":
@@ -1868,6 +1888,17 @@ class OrdenOut(BaseModel):
     referencia_rt: str | None
     orden_origen_id: str | None
     detalles_origen_ids: list[str]
+    # DC15B: en una garantia RMA, PROC-REP-036 tal como se evaluo al
+    # crearla, y la excepcion si la garantia de origen estaba vencida.
+    vigencia_garantia_origen: list[VigenciaGarantiaOrigen] = Field(
+        default_factory=list
+    )
+    excepcion_garantia: ExcepcionGarantia | None = None
+    # En una Orden ENTREGADA: la vigencia HOY de la garantia de cada
+    # Detalle realizado, para iniciar una garantia RMA (PROC-REP-036).
+    garantia_por_detalle: list[VigenciaGarantiaOrigen] = Field(
+        default_factory=list
+    )
     # Presentacion (BR-REP-019): Tipo de cada Detalle origen, resuelto al
     # leer desde la Orden origen. No se persiste en la garantia.
     detalles_origen: list[DetalleOrigenOut] = Field(default_factory=list)
@@ -1956,6 +1987,7 @@ class OrdenOut(BaseModel):
         acciones_complementarias: Sequence[AccionDisponible] = (),
         situacion: SituacionOperativa | None = None,
         fotos_habilitadas: bool = False,
+        garantia_por_detalle: Sequence[VigenciaGarantiaOrigen] = (),
     ) -> "OrdenOut":
         vigentes = _vigentes(orden)
         en_ingreso = es_ingreso_inicial(orden)
@@ -1976,6 +2008,9 @@ class OrdenOut(BaseModel):
             referencia_rt=orden.referencia_rt,
             orden_origen_id=orden.orden_origen_id,
             detalles_origen_ids=list(orden.detalles_origen_ids),
+            vigencia_garantia_origen=list(orden.vigencia_garantia_origen),
+            excepcion_garantia=orden.excepcion_garantia,
+            garantia_por_detalle=list(garantia_por_detalle),
             detalles_origen=[
                 DetalleOrigenOut(
                     id=origen.id,

@@ -197,6 +197,10 @@ function FormularioDesistimiento({
       ? `${detalle.id} · ${detalle.tipo_reparacion_nombre}`
       : detalleId;
   };
+  const enCurso = (detalleId: string) =>
+    orden.reparaciones_detail.some(
+      (d) => d.id === detalleId && d.estado === "EN_PROGRESO",
+    );
   const vista = orden.desistimiento;
   const bloqueantes = alcance === TODOS ? (vista?.bloqueantes ?? []) : [];
   const deshabilitado = !rolHabilitado || ocupado;
@@ -216,8 +220,9 @@ function FormularioDesistimiento({
       </p>
       <p style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: colores.suave }}>
         La autorización anterior queda en el historial; el trabajo se cancela
-        (no se cobra). Lo COMPLETO no se toca y una ejecución en curso no se
-        interrumpe.
+        (no se cobra). Lo COMPLETO no se toca. Si el trabajo se está
+        reparando, queda registrado el pedido y se cancela cuando el técnico
+        lo interrumpe.
       </p>
       {!rolHabilitado && (
         <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.alerta }}>
@@ -245,6 +250,15 @@ function FormularioDesistimiento({
           )}
         </select>
       </Campo>
+      {enCurso(alcance) && (
+        <p
+          role="status"
+          style={{ margin: "0 0 0.6rem", fontSize: "0.85rem", color: colores.alerta }}
+        >
+          Ese trabajo se está reparando: se registra el pedido del cliente y
+          el técnico tiene que interrumpirlo; recién ahí se cancela.
+        </p>
+      )}
       {alcance === TODOS && vista && (
         <ul style={{ margin: "0 0 0.6rem", paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
           {vista.desistibles.length > 0 && (

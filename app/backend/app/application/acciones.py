@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from app.domain.models import (
+    ClaseAjuste,
     CondicionReparacionDetail,
     EstadoControl,
     EstadoCustodia,
@@ -41,6 +42,7 @@ from app.services import (
     ROLES_CANCELACION,
     ROLES_CHECKIN,
     ROLES_COMPROBANTE_AUTORIZACION,
+    ROLES_CORTESIA,
     ROLES_DESCUENTO,
     ROLES_LIBERACION_AJENA,
     ROLES_OVERRIDE_RECURSOS,
@@ -68,6 +70,7 @@ from app.services import (
 )
 from app.services.cancelaciones import (
     admite_devolucion_sin_reparar,
+    desistimiento_pendiente,
     impedimentos_cancelacion,
     sin_trabajos_vigentes,
 )
@@ -140,6 +143,7 @@ ACCION_EMITIR_COMPROBANTE_AUTORIZACION = "EMITIR_COMPROBANTE_AUTORIZACION"
 # MVP v2 (iteracion 1 del UAT).
 ACCION_GENERAR_COMPROBANTE_INGRESO = "GENERAR_COMPROBANTE_INGRESO"
 ACCION_APLICAR_DESCUENTO = "APLICAR_DESCUENTO"
+ACCION_OTORGAR_CORTESIA = "OTORGAR_CORTESIA"
 ACCION_CAMBIAR_PRIORIDAD = "CAMBIAR_PRIORIDAD"
 ACCION_LIBERAR_ORDEN_AJENA = "LIBERAR_ORDEN_AJENA"
 ACCION_AJUSTAR_GARANTIA = "AJUSTAR_GARANTIA"
@@ -404,7 +408,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
 
     # EXC-REP-004: en PROC-REP-125/126 cada Detalle pendiente se revisa
     # (Tecnico, PROC-REP-126) y, ya revisado en su ciclo actual, se
-    # redefine (Recepcion, PROC-REP-127). Como en 100/120, el hito de
+    # redefine (Tecnico, PROC-REP-127: V1.4, DC06). Como en 100/120, el hito de
     # workflow (EN_REPARACION) no ofrece nada propio.
     if orden.current_process in _NODOS_REVISION_POSTERIOR:
         estado = None
@@ -416,7 +420,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                     AccionDisponible(
                         codigo=ACCION_REDEFINIR_DETALLE,
                         etiqueta="Redefinir la reparacion del Detalle",
-                        roles=(RolUsuario.RECEPCION,),
+                        roles=(RolUsuario.TECNICO,),
                         detalle_id=detalle.id,
                     )
                 )
@@ -504,7 +508,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 AccionDisponible(
                     codigo=ACCION_AGREGAR_DETALLE_DESDE_REVISION,
                     etiqueta="Agregar un Detalle luego de la revision",
-                    roles=(RolUsuario.RECEPCION,),
+                    roles=(RolUsuario.TECNICO,),
                 )
             )
             # PROC-REP-068: sin Detalles todavia se puede concluir
@@ -521,7 +525,13 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                         if orden.reparaciones_detail
                         else "Finalizar sin reparacion"
                     ),
-                    roles=(RolUsuario.RECEPCION,),
+                    # 075 (definir y cerrar la carga) es del Tecnico; 069
+                    # (finalizar sin reparacion) sigue en Recepcion.
+                    roles=(
+                        (RolUsuario.TECNICO,)
+                        if orden.reparaciones_detail
+                        else (RolUsuario.RECEPCION,)
+                    ),
                 )
             )
 
@@ -577,22 +587,37 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
         )
 
     if estado is EstadoWorkflow.EN_REPARACION and en_curso is not None:
-        acciones.append(
-            AccionDisponible(
-                codigo=ACCION_COMPLETAR_EJECUCION,
-                etiqueta="Registrar la ejecucion realizada",
-                roles=(RolUsuario.TECNICO,),
-                detalle_id=en_curso.reparacion_detail_id,
-                ejecucion_id=en_curso.id,
-                usuario_id=titular,
+        # DC07 / VAR-REP-042: con el desistimiento solicitado sobre ese
+        # Detalle el tecnico solo puede interrumpir (y decir en que estado
+        # quedo el trabajo); completar o redefinir se rechazarian.
+        desiste = desistimiento_pendiente(
+            next(
+                d
+                for d in orden.reparaciones_detail
+                if d.id == en_curso.reparacion_detail_id
             )
         )
+        if not desiste:
+            acciones.append(
+                AccionDisponible(
+                    codigo=ACCION_COMPLETAR_EJECUCION,
+                    etiqueta="Registrar la ejecucion realizada",
+                    roles=(RolUsuario.TECNICO,),
+                    detalle_id=en_curso.reparacion_detail_id,
+                    ejecucion_id=en_curso.id,
+                    usuario_id=titular,
+                )
+            )
         # VAR-REP-003: la otra salida de PROC-REP-200. Continuar luego es
         # iniciar una Ejecucion nueva, no una accion propia.
         acciones.append(
             AccionDisponible(
                 codigo=ACCION_INTERRUMPIR_EJECUCION,
-                etiqueta="Interrumpir la ejecucion",
+                etiqueta=(
+                    "Interrumpir: el cliente desistio de este trabajo"
+                    if desiste
+                    else "Interrumpir la ejecucion"
+                ),
                 roles=(RolUsuario.TECNICO,),
                 detalle_id=en_curso.reparacion_detail_id,
                 ejecucion_id=en_curso.id,
@@ -601,16 +626,17 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
         )
         # EXC-REP-004: tercer resultado de PROC-REP-200. Igual que los
         # otros dos, solo lo acepta el tecnico propietario (service).
-        acciones.append(
-            AccionDisponible(
-                codigo=ACCION_REQUIERE_REDEFINICION,
-                etiqueta="El Detalle requiere redefinicion",
-                roles=(RolUsuario.TECNICO,),
-                detalle_id=en_curso.reparacion_detail_id,
-                ejecucion_id=en_curso.id,
-                usuario_id=titular,
+        if not desiste:
+            acciones.append(
+                AccionDisponible(
+                    codigo=ACCION_REQUIERE_REDEFINICION,
+                    etiqueta="El Detalle requiere redefinicion",
+                    roles=(RolUsuario.TECNICO,),
+                    detalle_id=en_curso.reparacion_detail_id,
+                    ejecucion_id=en_curso.id,
+                    usuario_id=titular,
+                )
             )
-        )
 
     # Factibilidad parcial: el override se ofrece igual, despues de las
     # acciones propias del taller, sin exigir que toda la Orden este
@@ -880,17 +906,33 @@ def acciones_financieras(orden: OrdenReparacion) -> list[AccionDisponible]:
             )
         )
     if descuento_editable(orden):
+        vigente = orden.descuento_vigente
+        cortesia = (
+            vigente is not None and vigente.clase is ClaseAjuste.CORTESIA
+        )
         acciones.append(
             AccionDisponible(
                 codigo=ACCION_APLICAR_DESCUENTO,
                 etiqueta=(
-                    "Cambiar o quitar el descuento"
-                    if orden.descuento_vigente
+                    "Quitar la cortesia"
+                    if cortesia
+                    else "Cambiar o quitar el descuento"
+                    if vigente
                     else "Aplicar un descuento"
                 ),
-                roles=ROLES_DESCUENTO,
+                roles=ROLES_CORTESIA if cortesia else ROLES_DESCUENTO,
             )
         )
+        # DC11 (VAR-REP-041): cortesia total, aunque haya Pagos previos: el
+        # saldo a favor se devuelve antes de entregar.
+        if not cortesia:
+            acciones.append(
+                AccionDisponible(
+                    codigo=ACCION_OTORGAR_CORTESIA,
+                    etiqueta="Otorgar una cortesia total",
+                    roles=ROLES_CORTESIA,
+                )
+            )
     acciones.extend(
         AccionDisponible(
             codigo=ACCION_ANULAR_PAGO,

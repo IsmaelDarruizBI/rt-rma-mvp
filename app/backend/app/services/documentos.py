@@ -25,9 +25,10 @@ documento existente: nunca se duplica.
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone, tzinfo
+from datetime import datetime, timezone, tzinfo
 from decimal import Decimal
 
+from app.domain.garantia import vencimiento_garantia
 from app.domain.models import (
     CoberturaGarantia,
     ContenidoComprobanteAutorizacion,
@@ -497,21 +498,6 @@ def contenido_comprobante_entrega(
             if cobrable
         ],
     )
-
-
-def vencimiento_garantia(
-    fecha_inicio: datetime | None,
-    garantia_dias: int,
-    zona_horaria: tzinfo,
-):
-    """Ultimo dia de garantia: el dia (local) de la entrega + el plazo.
-
-    ``None`` sin entrega todavia o con un plazo de 0 dias (sin garantia).
-    """
-    if fecha_inicio is None or garantia_dias <= 0:
-        return None
-    dia_entrega = fecha_inicio.astimezone(zona_horaria).date()
-    return dia_entrega + timedelta(days=garantia_dias)
 
 
 def contenido_garantia(

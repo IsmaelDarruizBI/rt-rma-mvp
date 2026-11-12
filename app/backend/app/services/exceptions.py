@@ -51,3 +51,10 @@ class EntidadNoEncontradaError(DomainError):
     """La entidad referenciada no existe en la Orden o en el catalogo."""
 
     codigo = "NO_ENCONTRADO"
+
+
+class GarantiaVencidaError(PrecondicionInvalidaError):
+    """PROC-REP-036 -> EVT-REP-998: la garantia de origen esta vencida y no
+    se autorizo una excepcion. No se crea la Orden de garantia (DC15B)."""
+
+    codigo = "GARANTIA_VENCIDA"

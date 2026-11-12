@@ -157,6 +157,17 @@ export function CabeceraOrden({
             ` (${orden.detalles_origen
               .map((origen) => origen.tipo_reparacion_nombre)
               .join(", ")})`}
+          {(orden.vigencia_garantia_origen ?? []).length > 0 &&
+            (orden.vigencia_garantia_origen ?? []).every((v) => v.vigente) &&
+            " · garantía vigente al ingresar"}
+        </p>
+      )}
+      {orden.excepcion_garantia && (
+        <p style={{ margin: "0.15rem 0 0", color: colores.alerta }}>
+          Garantía vencida admitida como excepción por{" "}
+          {nombreDeUsuario(usuarios, orden.excepcion_garantia.usuario_id)} ·{" "}
+          {fechaCorta(orden.excepcion_garantia.fecha)} ·{" "}
+          {orden.excepcion_garantia.motivo}
         </p>
       )}
       <p
@@ -385,6 +396,15 @@ function Trabajo({
           {ejecucion.motivo_interrupcion
             ? ` · Interrumpida: ${ejecucion.motivo_interrupcion}`
             : ""}
+          {ejecucion.estado_trabajo
+            ? ` · Quedó: ${ejecucion.estado_trabajo}${
+                ejecucion.reversible === true
+                  ? " (se puede revertir)"
+                  : ejecucion.reversible === false
+                    ? " (no se puede revertir)"
+                    : ""
+              }`
+            : ""}
           {ejecucion.observaciones ? ` · ${ejecucion.observaciones}` : ""}
           {ejecucion.motivo_redefinicion
             ? ` · Requiere redefinición: ${ejecucion.motivo_redefinicion}`
@@ -408,6 +428,18 @@ function Trabajo({
           {control.observaciones && ` · ${control.observaciones}`}
         </Linea>
       ))}
+      {detalle.solicitud_desistimiento && (
+        <Linea>
+          <span style={{ color: colores.alerta }}>
+            El cliente pidió desistir
+            {detalle.cancelacion ? "" : " (se cancela al interrumpir el trabajo)"}{" "}
+            · registró{" "}
+            {nombreDeUsuario(usuarios, detalle.solicitud_desistimiento.usuario_id)}{" "}
+            · {fechaCorta(detalle.solicitud_desistimiento.fecha)} ·{" "}
+            {detalle.solicitud_desistimiento.motivo}
+          </span>
+        </Linea>
+      )}
       {detalle.cancelacion && (
         <Linea>
           <span style={{ color: colores.error }}>

@@ -8,6 +8,7 @@
 
 import type {
   CanalComunicacion,
+  ClaseAjuste,
   DatosRecepcion,
   DecisionDetalle,
   DocumentoEmitido,
@@ -174,19 +175,24 @@ export function cambiarPrioridad(
   });
 }
 
-/** Aplicar, cambiar (o quitar, con `tipo: null`) el descuento comercial. */
+/**
+ * Aplicar, cambiar (o quitar, con `tipo: null`) el ajuste comercial: un
+ * descuento o, con `clase: "CORTESIA"`, la cortesía total (DC11).
+ */
 export function aplicarDescuento(
   ordenId: string,
   usuarioId: string,
   tipo: TipoDescuento | null,
   valor: string | null,
   motivo: string,
+  clase: ClaseAjuste = "DESCUENTO",
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/discount`, {
     usuario_id: usuarioId,
     tipo,
     valor,
     motivo,
+    clase,
   });
 }
 
@@ -282,7 +288,11 @@ export function interrumpirEjecucion(
   insumosUtilizados: InsumoUtilizado[],
   motivo: string,
   observaciones: string | null,
+  estadoTrabajo: string | null = null,
+  reversible: boolean | null = null,
 ): Promise<Orden> {
+  // DC07B: si el cliente pidió desistir, el backend exige cómo quedó el
+  // trabajo y si se puede revertir.
   return post<Orden>(
     `/api/orders/${ordenId}/executions/${ejecucionId}/interrupt`,
     {
@@ -290,6 +300,8 @@ export function interrumpirEjecucion(
       insumos_utilizados: insumosUtilizados,
       motivo,
       observaciones,
+      estado_trabajo: estadoTrabajo,
+      reversible,
     },
   );
 }
@@ -331,7 +343,7 @@ export function revisarDetalle(
 }
 
 /**
- * PROC-REP-127 -> 080 -> 090 [-> 140 | -> 100]: Recepción redefine el
+ * PROC-REP-127 -> 080 -> 090 [-> 140 | -> 100]: el Técnico redefine el
  * mismo Detalle y se revalida la factibilidad.
  */
 export function redefinirDetalle(
@@ -541,10 +553,14 @@ export function iniciarGarantiaRma(
   ordenOrigenId: string,
   usuarioId: string,
   detalleOrigenIds: string[],
+  motivoExcepcion: string | null = null,
 ): Promise<Orden> {
+  // PROC-REP-036 (DC15B): con algún trabajo vencido solo se admite como
+  // excepción, con motivo, por un usuario autorizado (VAR-REP-039).
   return post<Orden>(`/api/orders/${ordenOrigenId}/warranty-rma`, {
     usuario_id: usuarioId,
     detalle_origen_ids: detalleOrigenIds,
+    ...(motivoExcepcion ? { motivo_excepcion: motivoExcepcion } : {}),
   });
 }
 

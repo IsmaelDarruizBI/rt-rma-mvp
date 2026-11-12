@@ -50,7 +50,10 @@ def _codigos(orden: dict) -> list[str]:
     return [a["codigo"] for a in orden["acciones_disponibles"]]
 
 
-def _agregar(cliente, orden_id, ruta="details", usuario=RECEPCION):
+def _agregar(cliente, orden_id, ruta="details", usuario=None):
+    # V1.4 (DC06): luego de la revision (075) define el Tecnico.
+    if usuario is None:
+        usuario = TECNICO if ruta == "review/details" else RECEPCION
     return cliente.post(
         f"/api/orders/{orden_id}/{ruta}",
         json={"usuario_id": usuario, "tipo_reparacion_id": TIPO},
@@ -210,7 +213,7 @@ def test_camino_de_revision_finaliza_sin_regenerar_el_comprobante(cliente):
         ]
         assert "PROC-REP-080" not in _ids(orden)
 
-    orden = finalizar_definicion(cliente, orden_id, RECEPCION).json()
+    orden = finalizar_definicion(cliente, orden_id, TECNICO).json()
     assert _ids(orden)[-2:] == ["PROC-REP-211", "PROC-REP-129"]
     orden = registrar_decision(
         cliente, orden_id, {"DET-001": "AUTORIZADO", "DET-002": "AUTORIZADO"}

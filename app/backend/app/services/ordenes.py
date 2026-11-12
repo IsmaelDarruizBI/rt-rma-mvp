@@ -13,8 +13,9 @@ modifica.
 """
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, tzinfo
 
+from app.domain.garantia import vencimiento_garantia
 from app.domain.models import (
     Cliente,
     DatosRecepcion,
@@ -24,11 +25,13 @@ from app.domain.models import (
     EstadoEjecucion,
     EstadoTomaOrden,
     EstadoWorkflow,
+    ExcepcionGarantia,
     OrdenReparacion,
     OrigenOrden,
     ResumenPago,
     RolUsuario,
     Usuario,
+    VigenciaGarantiaOrigen,
 )
 from app.domain.prioridad import (
     NOMBRES_DE_PRIORIDAD,
@@ -51,6 +54,7 @@ from .custodia import (
 )
 from .exceptions import (
     EntidadNoEncontradaError,
+    GarantiaVencidaError,
     OrdenCerradaError,
     PrecondicionInvalidaError,
 )
@@ -375,6 +379,77 @@ def crear_orden_rt_interno(
     )
 
 
+# DC15B / BR-REP-039: quien admite un ingreso en garantia con la garantia
+# de origen vencida. PROVISIONAL: el responsable predeterminado sigue
+# pendiente de decision (VAR-REP-039); se toman Coordinacion (la que
+# autoriza los overrides de esta capa) y Administracion. Cambiarlo es
+# cambiar esta tupla.
+ROLES_EXCEPCION_GARANTIA = (
+    RolUsuario.COORDINADOR_RMA,
+    RolUsuario.ADMINISTRADOR,
+)
+
+
+def fecha_de_entrega(orden: OrdenReparacion) -> datetime | None:
+    """Cuando se entrego el equipo: desde ahi corre la garantia.
+
+    ``entrega`` en las Ordenes entregadas desde que se registra; en una
+    anterior, el ultimo paso PROC-REP-270 del historial.
+    """
+    if orden.entrega is not None:
+        return orden.entrega.fecha
+    pasos = [
+        paso.fecha
+        for paso in orden.historial
+        if paso.referencia_id == "PROC-REP-270"
+    ]
+    return max(pasos) if pasos else None
+
+
+def evaluar_vigencia_garantia(
+    orden_origen: OrdenReparacion,
+    detalle_origen_ids: Sequence[str],
+    *,
+    fecha: datetime,
+    zona_horaria: tzinfo,
+) -> list[VigenciaGarantiaOrigen]:
+    """PROC-REP-036: vigencia de la garantia de cada Detalle origen.
+
+    Plazo definitivo del Detalle (``garantia_dias``) contado desde la
+    entrega de la Orden origen (BR-REP-041); vigente hasta su ultimo dia
+    inclusive. Sin plazo (0 dias) o sin fecha de entrega no hay garantia
+    vigente. Solo lee.
+    """
+    entrega = fecha_de_entrega(orden_origen)
+    hoy = fecha.astimezone(zona_horaria).date()
+    detalles = {d.id: d for d in orden_origen.reparaciones_detail}
+    resultado = []
+    for detalle_id in detalle_origen_ids:
+        detalle = detalles[detalle_id]
+        vence = vencimiento_garantia(
+            entrega, detalle.garantia_dias, zona_horaria
+        )
+        resultado.append(
+            VigenciaGarantiaOrigen(
+                detalle_id=detalle_id,
+                garantia_dias=detalle.garantia_dias,
+                vence=vence,
+                vigente=vence is not None and hoy <= vence,
+            )
+        )
+    return resultado
+
+
+def describir_vencidos(vencidos: Sequence[VigenciaGarantiaOrigen]) -> str:
+    """"DET-001 vencio el 01/02/2026; DET-002 sin garantia vigente"."""
+    return "; ".join(
+        f"{v.detalle_id} vencio el {v.vence:%d/%m/%Y}"
+        if v.vence is not None
+        else f"{v.detalle_id} sin garantia vigente registrada"
+        for v in vencidos
+    )
+
+
 def crear_orden_garantia_rma(
     *,
     orden_id: str,
@@ -383,6 +458,8 @@ def crear_orden_garantia_rma(
     usuario: Usuario,
     fecha: datetime,
     datos_recepcion: DatosRecepcion | None = None,
+    zona_horaria: tzinfo | None = None,
+    motivo_excepcion: str | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-035 -> PROC-REP-040 (HP-REP-003, BR-REP-019).
 
@@ -398,10 +475,24 @@ def crear_orden_garantia_rma(
 
     No registra PROC-REP-010 ni PROC-REP-030: no es un alta nueva.
 
-    Fuera de alcance (BR-REP-019 los deja pendientes): vigencia de la
-    garantia, motivo valido, cantidad maxima de garantias.
+    PROC-REP-036 (DC15B): antes de crear la Orden se valida la vigencia
+    de la garantia de cada Detalle origen. Todos vigentes: la crea
+    Recepcion. Alguno vencido: sin ``motivo_excepcion`` se rechaza con
+    ``GarantiaVencidaError`` (EVT-REP-998: no se crea nada y la Orden
+    origen no cambia); con motivo, un usuario de
+    ``ROLES_EXCEPCION_GARANTIA`` admite el ingreso como excepcion y queda
+    auditada. Un Detalle vencido entre varios vigentes tambien exige la
+    excepcion: la garantia parcialmente vigente sigue pendiente de
+    decision y no se asume otra ruta.
+
+    Siguen fuera de alcance (BR-REP-019): motivo valido, cantidad maxima de
+    garantias y que se registra de un intento rechazado.
     """
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    motivo_excepcion = (motivo_excepcion or "").strip() or None
+    if motivo_excepcion is None:
+        validar_actor(usuario, RolUsuario.RECEPCION)
+    else:
+        validar_alguno_de(usuario, ROLES_EXCEPCION_GARANTIA)
 
     if orden_origen.estado_workflow is not EstadoWorkflow.ENTREGADA:
         raise PrecondicionInvalidaError(
@@ -430,6 +521,31 @@ def crear_orden_garantia_rma(
             f"{', '.join(ajenos)}."
         )
 
+    vigencia = evaluar_vigencia_garantia(
+        orden_origen,
+        detalle_origen_ids,
+        fecha=fecha,
+        zona_horaria=zona_horaria or fecha.tzinfo,
+    )
+    vencidos = [v for v in vigencia if not v.vigente]
+    if vencidos and motivo_excepcion is None:
+        raise GarantiaVencidaError(
+            "La garantia de la reparacion original esta vencida: "
+            f"{describir_vencidos(vencidos)}. No se crea la Orden de "
+            "garantia: solo un usuario autorizado puede admitir el ingreso "
+            "como excepcion, con motivo."
+        )
+    excepcion = None
+    if motivo_excepcion is not None:
+        if not vencidos:
+            raise PrecondicionInvalidaError(
+                "La garantia de origen esta vigente: no hace falta una "
+                "excepcion."
+            )
+        excepcion = ExcepcionGarantia(
+            usuario_id=usuario.id, fecha=fecha, motivo=motivo_excepcion
+        )
+
     orden = OrdenReparacion(
         id=orden_id,
         origen=OrigenOrden.RMA_GARANTIA_REPARACION,
@@ -439,6 +555,8 @@ def crear_orden_garantia_rma(
         equipo=orden_origen.equipo.model_copy(deep=True),
         orden_origen_id=orden_origen.id,
         detalles_origen_ids=list(detalle_origen_ids),
+        vigencia_garantia_origen=vigencia,
+        excepcion_garantia=excepcion,
         resumen_pago=ResumenPago(),
         documentos=DocumentosOrden(),
         recepcion=recepcion_inicial(
@@ -459,6 +577,23 @@ def crear_orden_garantia_rma(
             f"detalles_origen_ids={','.join(detalle_origen_ids)}"
         ),
     )
+    orden = registrar_paso(
+        orden,
+        process_id="PROC-REP-036",
+        accion=(
+            "AUTORIZAR_EXCEPCION_GARANTIA"
+            if excepcion is not None
+            else "VALIDAR_VIGENCIA_GARANTIA"
+        ),
+        fecha=fecha,
+        usuario_id=usuario.id,
+        observacion=(
+            "Vencida, excepcion autorizada "
+            f"({describir_vencidos(vencidos)}): {excepcion.motivo}"
+            if excepcion is not None
+            else "Vigente"
+        ),
+    )
     return registrar_paso(
         orden,
         process_id="PROC-REP-040",
@@ -473,6 +608,7 @@ def marcar_orden_en_revision(
     *,
     usuario: Usuario,
     fecha: datetime,
+    roles: Sequence[RolUsuario] = (RolUsuario.RECEPCION,),
 ) -> OrdenReparacion:
     """PROC-REP-045 ("No") -> PROC-REP-055 (VAR-REP-001/002, HP-REP-003).
 
@@ -488,9 +624,11 @@ def marcar_orden_en_revision(
     compone la capa de aplicacion segun ``PoliticaOrigen``.
 
     PROC-REP-055 es ACT-SYSTEM: queda sin actor humano. La intencion que
-    lo dispara es de Recepcion.
+    lo dispara es de Recepcion, salvo en la garantia RMA admitida por
+    excepcion (VAR-REP-039): alli la dispara el usuario que la autorizo
+    (``roles``).
     """
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    validar_alguno_de(usuario, roles)
 
     if orden.estado_workflow is not EstadoWorkflow.REQUERIMIENTO:
         raise PrecondicionInvalidaError(

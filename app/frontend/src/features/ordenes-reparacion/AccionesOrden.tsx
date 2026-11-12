@@ -32,8 +32,10 @@ import type {
   InsumoUtilizado,
   Orden,
   Prioridad,
+  SolicitudDesistimiento,
   TipoReparacion,
   Usuario,
+  VigenciaGarantia,
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
 import {
@@ -42,7 +44,7 @@ import {
   trabajosACancelar,
 } from "./cancelacion";
 import {
-  NOMBRE_ACCION,
+  nombreDeAccion,
   descripcionCheckin,
   nombreAccion,
   nombreTrabajo,
@@ -78,6 +80,7 @@ export interface EjecutorAcciones {
     insumosUtilizados: InsumoUtilizado[],
     motivo: string,
     observaciones: string,
+    resultado: ResultadoDesistimiento | null,
   ) => void;
   requerirRedefinicion: (
     ejecucionId: string,
@@ -94,7 +97,10 @@ export interface EjecutorAcciones {
   entregar: (retiro: DatosRetiro) => void;
   informarRt: () => void;
   devolverRt: () => void;
-  iniciarGarantiaRma: (detalleOrigenIds: string[]) => void;
+  iniciarGarantiaRma: (
+    detalleOrigenIds: string[],
+    motivoExcepcion: string | null,
+  ) => void;
   enviarARevision: () => void;
   realizarRevision: (resultado: string) => void;
   agregarDetalleDesdeRevision: (
@@ -239,7 +245,7 @@ function AccionUnica({
         {CODIGOS_SECUNDARIOS.has(accion.codigo) ? (
           // La tarea ya dice en qué trabajo: el botón va corto.
           <OpcionSecundaria
-            titulo={NOMBRE_ACCION[accion.codigo] ?? accion.etiqueta}
+            titulo={nombreDeAccion(accion)}
           >
             {formulario}
           </OpcionSecundaria>
@@ -493,14 +499,16 @@ function FormularioAccion({
         <FormularioEjecucion
           modo="interrumpir"
           previstos={insumosPrevistosDe(orden, accion.ejecucion_id)}
+          desistimiento={solicitudDesistimientoDe(orden, accion.ejecucion_id)}
           deshabilitado={deshabilitado || !accion.ejecucion_id}
-          onConfirmar={(insumosUtilizados, observaciones, motivo) =>
+          onConfirmar={(insumosUtilizados, observaciones, motivo, resultado) =>
             accion.ejecucion_id &&
             ejecutar.interrumpirEjecucion(
               accion.ejecucion_id,
               insumosUtilizados,
               motivo,
               observaciones,
+              resultado,
             )
           }
         />
@@ -1382,6 +1390,12 @@ function FormularioSinReparacion({
  * entregada. La revisión técnica es obligatoria: la Orden nueva nace en
  * revisión y sus Detalles se definen después.
  */
+/**
+ * HP-REP-003 / DC15B: elegir los trabajos reclamados viendo si su garantía
+ * sigue vigente. Con alguno vencido solo se admite como excepción, con
+ * motivo, por Coordinación o Administración (VAR-REP-039); el backend
+ * valida el permiso y la vigencia.
+ */
 function FormularioGarantiaRma({
   orden,
   deshabilitado,
@@ -1389,9 +1403,18 @@ function FormularioGarantiaRma({
 }: {
   orden: Orden;
   deshabilitado: boolean;
-  onConfirmar: (detalleOrigenIds: string[]) => void;
+  onConfirmar: (
+    detalleOrigenIds: string[],
+    motivoExcepcion: string | null,
+  ) => void;
 }) {
   const [elegidos, setElegidos] = useState<string[]>([]);
+  const [motivo, setMotivo] = useState("");
+  const vigencias = orden.garantia_por_detalle ?? [];
+  const vigenciaDe = (detalleId: string) =>
+    vigencias.find((vigencia) => vigencia.detalle_id === detalleId);
+  const vencidos = elegidos.filter((id) => vigenciaDe(id)?.vigente === false);
+  const conExcepcion = vencidos.length > 0;
 
   const alternar = (detalleId: string, marcado: boolean) =>
     setElegidos((actuales) =>
@@ -1423,20 +1446,54 @@ function FormularioGarantiaRma({
             disabled={deshabilitado}
           />
           {detalle.id} · {detalle.tipo_reparacion_nombre}
+          <TextoVigencia vigencia={vigenciaDe(detalle.id)} />
         </label>
       ))}
+      {conExcepcion && (
+        <div
+          role="status"
+          style={{
+            margin: "0.4rem 0",
+            padding: "0.5rem 0.7rem",
+            borderRadius: 6,
+            border: `1px solid ${colores.alerta}`,
+            fontSize: "0.85rem",
+          }}
+        >
+          <p style={{ margin: "0 0 0.4rem" }}>
+            La garantía de {vencidos.join(", ")} está vencida. Solo se admite
+            como excepción: la autoriza Coordinación o Administración y el
+            motivo queda registrado.
+          </p>
+          <Campo etiqueta="Motivo de la excepción (obligatorio)">
+            <input
+              value={motivo}
+              onChange={(evento) => setMotivo(evento.target.value)}
+              disabled={deshabilitado}
+              style={estiloInput}
+            />
+          </Campo>
+        </div>
+      )}
       <div style={{ marginTop: "0.4rem" }}>
         <Boton
-          disabled={deshabilitado || elegidos.length === 0}
+          disabled={
+            deshabilitado ||
+            elegidos.length === 0 ||
+            (conExcepcion && motivo.trim() === "")
+          }
           onClick={() =>
             onConfirmar(
               orden.reparaciones_detail
                 .map((detalle) => detalle.id)
                 .filter((id) => elegidos.includes(id)),
+              conExcepcion ? motivo.trim() : null,
             )
           }
         >
-          Iniciar garantía RMA
+          {conExcepcion
+            ? "Autorizar la excepción e iniciar la garantía"
+            : "Iniciar garantía RMA"}
         </Boton>
       </div>
     </div>
@@ -1836,25 +1893,36 @@ const MODOS_EJECUCION: Record<
 function FormularioEjecucion({
   modo,
   previstos,
+  desistimiento = null,
   deshabilitado,
   onConfirmar,
 }: {
   modo: ModoEjecucion;
   previstos: InsumoPrevisto[];
+  /** DC07: el cliente pidió desistir de este trabajo (solo al interrumpir). */
+  desistimiento?: SolicitudDesistimiento | null;
   deshabilitado: boolean;
   onConfirmar: (
     insumosUtilizados: InsumoUtilizado[],
     observaciones: string,
     motivo: string,
+    resultado: ResultadoDesistimiento | null,
   ) => void;
 }) {
+  const [estadoTrabajo, setEstadoTrabajo] = useState("");
+  const [reversible, setReversible] = useState<"" | "SI" | "NO">("");
+  const faltaResultado =
+    desistimiento !== null &&
+    (estadoTrabajo.trim() === "" || reversible === "");
   const {
     textoBoton,
     cantidadInicial,
     motivo: etiquetaMotivo,
   } = MODOS_EJECUCION[modo];
   const pideMotivo = etiquetaMotivo !== null;
-  const [motivo, setMotivo] = useState("");
+  const [motivo, setMotivo] = useState(
+    desistimiento ? `El cliente desistió: ${desistimiento.motivo}` : "",
+  );
   const [cantidades, setCantidades] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       previstos.map((previsto) => [
@@ -1921,6 +1989,45 @@ function FormularioEjecucion({
           />
         </Campo>
       )}
+      {desistimiento && (
+        <div
+          role="status"
+          style={{
+            margin: "0 0 0.6rem",
+            padding: "0.5rem 0.7rem",
+            borderRadius: 6,
+            border: `1px solid ${colores.alerta}`,
+            fontSize: "0.85rem",
+          }}
+        >
+          <p style={{ margin: "0 0 0.4rem" }}>
+            El cliente pidió desistir de este trabajo ({desistimiento.motivo}).
+            Al interrumpir, el trabajo se cancela y no se cobra.
+          </p>
+          <Campo etiqueta="Cómo queda el trabajo (obligatorio)">
+            <input
+              value={estadoTrabajo}
+              onChange={(evento) => setEstadoTrabajo(evento.target.value)}
+              disabled={deshabilitado}
+              style={estiloInput}
+            />
+          </Campo>
+          <Campo etiqueta="¿Lo hecho se puede revertir? (obligatorio)">
+            <select
+              value={reversible}
+              onChange={(evento) =>
+                setReversible(evento.target.value as "" | "SI" | "NO")
+              }
+              disabled={deshabilitado}
+              style={estiloInput}
+            >
+              <option value="">Elegir…</option>
+              <option value="SI">Sí, se puede revertir</option>
+              <option value="NO">No se puede revertir</option>
+            </select>
+          </Campo>
+        </div>
+      )}
       <Campo etiqueta="Observaciones">
         <input
           value={observaciones}
@@ -1930,12 +2037,68 @@ function FormularioEjecucion({
         />
       </Campo>
       <Boton
-        disabled={deshabilitado || (pideMotivo && motivo.trim() === "")}
-        onClick={() => onConfirmar(utilizados(), observaciones, motivo.trim())}
+        disabled={
+          deshabilitado ||
+          (pideMotivo && motivo.trim() === "") ||
+          faltaResultado
+        }
+        onClick={() =>
+          onConfirmar(
+            utilizados(),
+            observaciones,
+            motivo.trim(),
+            desistimiento
+              ? {
+                  estadoTrabajo: estadoTrabajo.trim(),
+                  reversible: reversible === "SI",
+                }
+              : null,
+          )
+        }
       >
         {textoBoton}
       </Boton>
     </div>
+  );
+}
+
+/** DC07B: lo que el técnico informa al interrumpir por un desistimiento. */
+export interface ResultadoDesistimiento {
+  estadoTrabajo: string;
+  reversible: boolean;
+}
+
+/** El pedido de desistimiento del Detalle de esa Ejecución, si lo hay. */
+function solicitudDesistimientoDe(
+  orden: Orden,
+  ejecucionId: string | null,
+): SolicitudDesistimiento | null {
+  const ejecucion = orden.ejecuciones.find(
+    (candidata) => candidata.id === ejecucionId,
+  );
+  const detalle = orden.reparaciones_detail.find(
+    (candidato) => candidato.id === ejecucion?.reparacion_detail_id,
+  );
+  return detalle?.solicitud_desistimiento ?? null;
+}
+
+/** «vigente hasta el 26/11/2026» o «vencida el ...» (DC15B). */
+function TextoVigencia({ vigencia }: { vigencia?: VigenciaGarantia }) {
+  if (!vigencia) return null;
+  const hasta = vigencia.vence
+    ? vigencia.vence.split("-").reverse().join("/")
+    : "sin fecha";
+  return (
+    <span
+      style={{
+        color: vigencia.vigente ? colores.ok : colores.error,
+        fontSize: "0.8rem",
+      }}
+    >
+      {vigencia.vigente
+        ? `· garantía vigente hasta el ${hasta}`
+        : `· garantía vencida (venció el ${hasta})`}
+    </span>
   );
 }
 

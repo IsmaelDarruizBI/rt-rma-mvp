@@ -56,6 +56,7 @@ from app.domain.models import (
     OrdenReparacion,
     OrigenCancelacion,
     RegistroCancelacion,
+    ReparacionDetail,
     RolUsuario,
     TipoEntrega,
     Usuario,
@@ -168,6 +169,7 @@ def validar_cancelacion_detalle(
     detalle_id: str,
     usuario: Usuario,
     motivo: str,
+    exigir_rol: bool = True,
 ) -> None:
     """Precondiciones de PROC-REP-300, sin registrar nada.
 
@@ -175,7 +177,8 @@ def validar_cancelacion_detalle(
     rechazos antes de cancelar el primero, para que una operacion mixta
     no quede a medias.
     """
-    validar_alguno_de(usuario, ROLES_CANCELACION)
+    if exigir_rol:
+        validar_alguno_de(usuario, ROLES_CANCELACION)
     _motivo_obligatorio(motivo, "Cancelar un Detalle")
     exigir_orden_cancelable(orden)
 
@@ -212,6 +215,7 @@ def cancelar_detalle(
     motivo: str,
     fecha: datetime,
     origen: OrigenCancelacion = OrigenCancelacion.INTERNA,
+    exigir_rol: bool = True,
 ) -> OrdenReparacion:
     """PROC-REP-300: cancela UN Detalle PENDIENTE (BR-REP-014).
 
@@ -221,7 +225,11 @@ def cancelar_detalle(
     lo cancela la organizacion, el rechazo o el desistimiento del cliente.
     """
     validar_cancelacion_detalle(
-        orden, detalle_id=detalle_id, usuario=usuario, motivo=motivo
+        orden,
+        detalle_id=detalle_id,
+        usuario=usuario,
+        motivo=motivo,
+        exigir_rol=exigir_rol,
     )
     motivo = motivo.strip()
 
@@ -243,6 +251,50 @@ def cancelar_detalle(
         origen=origen,
     )
     return nueva_orden
+
+
+def desistimiento_pendiente(detalle: ReparacionDetail) -> bool:
+    """DC07: el cliente pidio desistir y el Detalle todavia no se cancelo."""
+    return (
+        detalle.solicitud_desistimiento is not None
+        and detalle.estado is not EstadoReparacionDetail.CANCELADO
+    )
+
+
+def resolver_desistimiento_solicitado(
+    orden: OrdenReparacion,
+    *,
+    detalle_id: str,
+    usuario: Usuario,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """PROC-REP-211 -> 300 (VAR-REP-042): cancelacion efectiva de un
+    desistimiento ya solicitado, con la Ejecucion ya resuelta.
+
+    Se registra aparte de la solicitud, con su propio usuario y fecha/hora
+    (DC07): el de quien resolvio la Ejecucion. No exige el permiso de
+    cancelacion: la decision la tomo el cliente y Recepcion ya la
+    registro; aqui solo se aplica, con las mismas precondiciones de 300
+    (sin Ejecucion activa ni reservas abiertas).
+    """
+    detalle = next(d for d in orden.reparaciones_detail if d.id == detalle_id)
+    solicitud = detalle.solicitud_desistimiento
+    if solicitud is None or not desistimiento_pendiente(detalle):
+        raise PrecondicionInvalidaError(
+            f"El Detalle {detalle_id} no tiene un desistimiento pendiente."
+        )
+    return cancelar_detalle(
+        orden,
+        detalle_id=detalle_id,
+        usuario=usuario,
+        motivo=(
+            f"Desistimiento del cliente solicitado por {solicitud.usuario_id} "
+            f"el {solicitud.fecha:%Y-%m-%d %H:%M}: {solicitud.motivo}"
+        ),
+        fecha=fecha,
+        origen=OrigenCancelacion.DESISTIMIENTO_CLIENTE,
+        exigir_rol=False,
+    )
 
 
 def sin_trabajos_vigentes(orden: OrdenReparacion) -> bool:

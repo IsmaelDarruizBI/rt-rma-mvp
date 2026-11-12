@@ -147,7 +147,7 @@ def _sin_custodia_tomada(cliente) -> str:
         ("technical-review", {"usuario_id": TECNICO, "resultado": "Bateria."}),
         (
             "review/details",
-            {"usuario_id": RECEPCION, "tipo_reparacion_id": BATERIA},
+            {"usuario_id": TECNICO, "tipo_reparacion_id": BATERIA},
         ),
     ):
         ok(cliente.post(f"/api/orders/{orden_id}/{ruta}", json=cuerpo))

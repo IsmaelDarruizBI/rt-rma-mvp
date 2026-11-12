@@ -38,8 +38,10 @@ from .cancelaciones import (
     cancelar_detalle,
     cancelar_orden,
     cancelar_trabajos_pendientes,
+    desistimiento_pendiente,
     impedimentos_cancelacion,
     registrar_devolucion_equipo,
+    resolver_desistimiento_solicitado,
     sin_trabajos_vigentes,
     validar_cancelacion_detalle,
 )
@@ -98,6 +100,7 @@ from .decision_cliente import (
     registrar_desistimiento_cliente,
 )
 from .descuentos import (
+    ROLES_CORTESIA,
     ROLES_DESCUENTO,
     aplicar_descuento,
     descripcion_de_descuento,
@@ -142,6 +145,7 @@ from .exceptions import (
     ConfirmacionRequeridaError,
     DomainError,
     EntidadNoEncontradaError,
+    GarantiaVencidaError,
     OrdenCerradaError,
     PrecondicionInvalidaError,
     RecursoNoDisponibleError,
@@ -213,6 +217,7 @@ from .modelos_equipo import (
 )
 from .ordenes import (
     ROLES_CAMBIO_PRIORIDAD,
+    ROLES_EXCEPCION_GARANTIA,
     cambiar_prioridad,
     cerrar_cancelada_si_corresponde,
     crear_orden_cliente_externo,
@@ -223,7 +228,9 @@ from .ordenes import (
     devolver_equipo_rt,
     entregar_equipo,
     evaluar_situacion_orden,
+    evaluar_vigencia_garantia,
     exigir_orden_abierta,
+    fecha_de_entrega,
     fue_habilitada,
     fue_priorizada,
     habilitar_o_reevaluar,
@@ -321,6 +328,8 @@ from .tomas import (
 from .workflow import registrar_accion_funcional, registrar_paso
 
 __all__ = [
+    "desistimiento_pendiente",
+    "resolver_desistimiento_solicitado",
     # Catalogo de equipos de Ventas
     "CAMPOS_COMERCIALES",
     "ROLES_SINCRONIZACION_CATALOGO",
@@ -370,6 +379,7 @@ __all__ = [
     "DomainError",
     "EntidadNoEncontradaError",
     "OrdenCerradaError",
+    "GarantiaVencidaError",
     "PrecondicionInvalidaError",
     "RecursoNoDisponibleError",
     "TomaDeOtroTecnicoError",
@@ -379,7 +389,10 @@ __all__ = [
     "registrar_paso",
     # Ciclo de vida de la Orden
     "crear_orden_cliente_externo",
+    "ROLES_EXCEPCION_GARANTIA",
     "crear_orden_garantia_rma",
+    "evaluar_vigencia_garantia",
+    "fecha_de_entrega",
     "crear_orden_rt_interno",
     "definir_prioridad",
     "devolucion_pendiente",
@@ -587,6 +600,7 @@ __all__ = [
     "tipo_reparacion_otros",
     "ROLES_LIBERACION_AJENA",
     "es_liberacion_ajena",
+    "ROLES_CORTESIA",
     "ROLES_DESCUENTO",
     "aplicar_descuento",
     "descripcion_de_descuento",

@@ -431,7 +431,7 @@ def test_4_el_comprobante_no_implica_autorizacion_comercial(cliente):
         ok(
             cliente.post(
                 f"/api/orders/{orden_id}/review/details",
-                json={"usuario_id": RECEPCION, "tipo_reparacion_id": tipo},
+                json={"usuario_id": TECNICO, "tipo_reparacion_id": tipo},
             )
         )
     orden = finalizar(cliente, orden_id, confirmar_recepcion=False)
@@ -949,7 +949,7 @@ def _garantia_rma(cliente, origen_id) -> str:
         cliente.post(
             f"/api/orders/{rma_id}/review/details",
             json={
-                "usuario_id": RECEPCION,
+                "usuario_id": TECNICO,
                 "tipo_reparacion_id": BATERIA,
                 "detalle_origen_id": "DET-001",
             },

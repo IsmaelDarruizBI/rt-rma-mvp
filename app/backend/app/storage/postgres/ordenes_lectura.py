@@ -49,10 +49,13 @@ from app.domain.models import (
     DocumentosOrden,
     Equipo,
     EstadoWorkflow,
+    ExcepcionGarantia,
     HistorialWorkflow,
     InsumoUtilizado,
     MovimientoInsumo,
     OrdenReparacion,
+    SolicitudDesistimiento,
+    VigenciaGarantiaOrigen,
 )
 from app.domain.models.descuentos import RegistroDescuento
 from app.domain.models.documentos import Documento, DocumentoEmitido
@@ -130,12 +133,15 @@ _ORDENES = consulta(
            o.equipo_tipo_producto_id, me.codigo AS modelo_tecnico,
            o.falla_reportada, o.comprobante_recepcion_generado_en,
            o.comprobante_final_generado_en, o.garantia_generada_en,
-           o.version, o.creada_en, o.actualizado_en
+           o.version, o.creada_en, o.actualizado_en,
+           ue.codigo AS excepcion_garantia_por, o.excepcion_garantia_en,
+           o.excepcion_garantia_motivo
     FROM rma.orden o
     JOIN rma.equipo e ON e.id = o.equipo_id
     LEFT JOIN rma.orden oo ON oo.id = o.orden_origen_id
     LEFT JOIN rma.cliente c ON c.id = o.cliente_id
     LEFT JOIN rma.modelo_equipo me ON me.id = o.equipo_modelo_equipo_id
+    LEFT JOIN rma.usuario ue ON ue.id = o.excepcion_garantia_por
     WHERE o.codigo = ANY(%(codigos)s)
     ORDER BY o.codigo COLLATE "C"
     """,
@@ -217,7 +223,8 @@ CLAVES_DE_FOTOS = consulta(
 _ORIGEN = consulta(
     "ordenes.detalles_origen",
     """
-    SELECT x.orden_id, d.codigo
+    SELECT x.orden_id, d.codigo, x.garantia_dias, x.garantia_vence,
+           x.garantia_vigente
     FROM rma.orden_detalle_origen x
     JOIN rma.detalle d ON d.id = x.detalle_id
     WHERE x.orden_id = ANY(ARRAY(
@@ -255,10 +262,14 @@ _DETALLES = consulta(
            d.control_observaciones, d.garantia_dias,
            d.garantia_dias_sugerida, od.codigo AS detalle_origen,
            d.observaciones, d.cancelacion_origen, d.cancelacion_motivo,
-           ux.codigo AS cancelado_por, d.cancelado_en
+           ux.codigo AS cancelado_por, d.cancelado_en,
+           us.codigo AS desistimiento_solicitado_por,
+           d.desistimiento_solicitado_en, d.desistimiento_motivo,
+           d.desistimiento_canal
     FROM rma.detalle d
     LEFT JOIN rma.usuario uc ON uc.id = d.control_usuario_id
     LEFT JOIN rma.usuario ux ON ux.id = d.cancelado_por
+    LEFT JOIN rma.usuario us ON us.id = d.desistimiento_solicitado_por
     LEFT JOIN rma.detalle od ON od.id = d.detalle_origen_id
     WHERE d.orden_id = ANY(ARRAY(
         SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
@@ -354,7 +365,8 @@ _EJECUCIONES = consulta(
     """
     SELECT x.orden_id, x.id, x.codigo, d.codigo AS detalle,
            t.codigo AS toma, u.codigo AS usuario, x.estado, x.inicio, x.fin,
-           x.observaciones, x.motivo_interrupcion, x.motivo_redefinicion
+           x.observaciones, x.motivo_interrupcion, x.motivo_redefinicion,
+           x.estado_trabajo, x.reversible
     FROM rma.ejecucion x
     JOIN rma.detalle d ON d.id = x.detalle_id
     JOIN rma.toma t ON t.id = x.toma_id
@@ -510,7 +522,7 @@ _DESCUENTOS = consulta(
     "ordenes.descuentos",
     """
     SELECT d.orden_id, d.tipo, d.valor, d.motivo, u.codigo AS usuario,
-           d.registrado_en
+           d.registrado_en, d.clase
     FROM rma.descuento d
     JOIN rma.usuario u ON u.id = d.usuario_id
     WHERE d.orden_id = ANY(ARRAY(
@@ -716,6 +728,25 @@ def _armar(raiz: Any, hijas: dict[str, Any]) -> Instantanea:
         detalles_origen_ids=[
             fila.codigo for fila in hijas["origen"].get(raiz.id, [])
         ],
+        vigencia_garantia_origen=[
+            VigenciaGarantiaOrigen(
+                detalle_id=fila.codigo,
+                garantia_dias=fila.garantia_dias,
+                vence=fila.garantia_vence,
+                vigente=fila.garantia_vigente,
+            )
+            for fila in hijas["origen"].get(raiz.id, [])
+            if fila.garantia_vigente is not None
+        ],
+        excepcion_garantia=(
+            None
+            if raiz.excepcion_garantia_en is None
+            else ExcepcionGarantia(
+                usuario_id=raiz.excepcion_garantia_por,
+                fecha=utc(raiz.excepcion_garantia_en),
+                motivo=raiz.excepcion_garantia_motivo,
+            )
+        ),
         prioridad=raiz.prioridad,
         reparaciones_detail=detalles,
         tomas=tomas,
@@ -929,6 +960,7 @@ def _descuento(fila: Any) -> RegistroDescuento:
         motivo=fila.motivo,
         usuario_id=fila.usuario,
         fecha=utc(fila.registrado_en),
+        clase=fila.clase,
     )
 
 
@@ -1031,6 +1063,16 @@ def _detalles(
                     for control in hijas["controles"].get(fila.id, [])
                 ],
                 cancelacion=cancelacion,
+                solicitud_desistimiento=(
+                    None
+                    if fila.desistimiento_solicitado_en is None
+                    else SolicitudDesistimiento(
+                        usuario_id=fila.desistimiento_solicitado_por,
+                        fecha=utc(fila.desistimiento_solicitado_en),
+                        motivo=fila.desistimiento_motivo,
+                        canal=fila.desistimiento_canal,
+                    )
+                ),
                 observaciones=fila.observaciones,
                 detalle_origen_id=fila.detalle_origen,
                 definiciones_anteriores=anteriores,
@@ -1084,6 +1126,8 @@ def _ejecucion(fila: Any, insumos: list[Any]) -> EjecucionReparacion:
         observaciones=fila.observaciones,
         motivo_interrupcion=fila.motivo_interrupcion,
         motivo_redefinicion=fila.motivo_redefinicion,
+        estado_trabajo=fila.estado_trabajo,
+        reversible=fila.reversible,
     )
 
 

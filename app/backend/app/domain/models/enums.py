@@ -369,3 +369,17 @@ class TipoDescuento(str, Enum):
 
     PORCENTAJE = "PORCENTAJE"
     IMPORTE = "IMPORTE"
+
+
+class ClaseAjuste(str, Enum):
+    """Tipo del Ajuste Comercial (BR-REP-016, DC09/DC11).
+
+    ``DESCUENTO``: rebaja comercial; no puede dejar el total por debajo de
+    lo ya cobrado (el tratamiento de ese caso sigue pendiente).
+    ``CORTESIA``: la Orden no se cobra; por ahora solo la cortesia TOTAL
+    (si puede ser parcial sigue pendiente). Con pagos previos deja saldo a
+    favor del cliente, que se devuelve antes de entregar (DC11).
+    """
+
+    DESCUENTO = "DESCUENTO"
+    CORTESIA = "CORTESIA"

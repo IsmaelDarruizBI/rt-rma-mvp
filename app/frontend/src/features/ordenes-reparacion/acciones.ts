@@ -121,10 +121,17 @@ export function organizarBarra(
   maximo = 3,
 ): BarraDeAcciones {
   const posicion = new Map(clavesTareas.map((clave, i) => [clave, i]));
+  // Una opción secundaria (interrumpir) resuelve la tarea si es la única:
+  // con el desistimiento pendiente no se ofrece completar (DC07).
+  const hayPrincipal = habilitadas.some(
+    (item) =>
+      posicion.has(item.clave) && !CODIGOS_SECUNDARIOS.has(item.accion.codigo),
+  );
   const deTareas = habilitadas
     .filter(
       (item) =>
-        posicion.has(item.clave) && !CODIGOS_SECUNDARIOS.has(item.accion.codigo),
+        posicion.has(item.clave) &&
+        (!hayPrincipal || !CODIGOS_SECUNDARIOS.has(item.accion.codigo)),
     )
     .sort((a, b) => posicion.get(a.clave)! - posicion.get(b.clave)!);
   const resto = habilitadas.filter((item) => !deTareas.includes(item));
@@ -178,10 +185,15 @@ export function pendientesDe(orden: Orden, actor: Usuario | null): Pendiente[] {
   const situacion = orden.situacion;
   situacion?.tareas.forEach((tarea, indice) => {
     const titular = tarea.acciones.find((accion) => accion.usuario_id);
-    const propias = tarea.acciones.filter(
-      (accion) =>
-        puedeEjecutar(accion, actor) && !CODIGOS_SECUNDARIOS.has(accion.codigo),
+    const ejecutables = tarea.acciones.filter((accion) =>
+      puedeEjecutar(accion, actor),
     );
+    const principales = ejecutables.filter(
+      (accion) => !CODIGOS_SECUNDARIOS.has(accion.codigo),
+    );
+    // Si la tarea solo tiene la opción secundaria (interrumpir por un
+    // desistimiento, DC07), esa es la acción de la tarea.
+    const propias = principales.length > 0 ? principales : ejecutables;
     pendientes.push({
       clave: `tarea-${indice}-${tarea.titulo}`,
       titulo: tarea.titulo,

@@ -65,15 +65,20 @@ def test_finalizar_exige_recepcion_un_detalle_y_definicion_abierta():
 def test_finalizar_desde_revision_exige_el_065_y_un_detalle():
     with pytest.raises(PrecondicionInvalidaError):
         exigir_definicion_finalizable(
-            _en_revision(flujo_mvp.orden_creada()), usuario=RECEPCION
+            _en_revision(flujo_mvp.orden_creada()), usuario=TECNICO
         )
     with pytest.raises(PrecondicionInvalidaError, match="Detalle"):
         exigir_definicion_finalizable(
-            _revisada(flujo_mvp.orden_creada()), usuario=RECEPCION
+            _revisada(flujo_mvp.orden_creada()), usuario=TECNICO
         )
     exigir_definicion_finalizable(
-        _definir(_revisada(flujo_mvp.orden_creada())), usuario=RECEPCION
+        _definir(_revisada(flujo_mvp.orden_creada())), usuario=TECNICO
     )
+    # V1.4 (DC06): luego de la revision Recepcion ya no cierra la carga.
+    with pytest.raises(PrecondicionInvalidaError, match="TECNICO"):
+        exigir_definicion_finalizable(
+            _definir(_revisada(flujo_mvp.orden_creada())), usuario=RECEPCION
+        )
 
 
 # --- SIN_REPARACION (068 No -> 069) ---------------------------------------

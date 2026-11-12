@@ -322,11 +322,18 @@ def test_6_13_con_una_ejecucion_activa_no_se_desiste_de_todo(
     assert "DET-001" in mensaje and "Ejecucion activa" in mensaje
     assert "no se cancelo nada" in mensaje
     assert archivo(tmp_path, orden_id) == antes
-    conflicto(desistir(cliente, orden_id, "DET-001"))
-    assert archivo(tmp_path, orden_id) == antes
-    orden = _orden(cliente, orden_id)
+    # V1.4 (DC07, VAR-REP-042): desistir SOLO del Detalle en ejecucion
+    # registra la solicitud; la cancelacion espera a que el tecnico
+    # interrumpa. La Ejecucion sigue en curso y el pedido no se duplica.
+    orden = ok(desistir(cliente, orden_id, "DET-001"))
     assert detalle(orden, "DET-001")["estado"] == "EN_PROGRESO"
+    assert detalle(orden, "DET-001")["cancelacion"] is None
+    assert detalle(orden, "DET-001")["solicitud_desistimiento"]["usuario_id"]
     assert [e["id"] for e in orden["ejecuciones"]] == [ejecucion_id]
+    assert orden["ejecuciones"][0]["estado"] == "EN_PROGRESO"
+    con_solicitud = archivo(tmp_path, orden_id)
+    conflicto(desistir(cliente, orden_id, "DET-001"))
+    assert archivo(tmp_path, orden_id) == con_solicitud
     # El desistimiento de OTRO Detalle no toca la Ejecucion en curso.
     orden = ok(desistir(cliente, orden_id, "DET-003"))
     assert orden["historial"][-1]["observacion"] == "EN_EJECUCION"

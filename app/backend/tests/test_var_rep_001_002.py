@@ -66,7 +66,7 @@ def _definir(orden, detalle_id="DET-001", **extra):
         orden,
         detalle_id=detalle_id,
         tipo_reparacion=TIPO_BATERIA,
-        usuario=RECEPCION,
+        usuario=TECNICO,
         fecha=t(4),
         **extra,
     )
@@ -217,7 +217,7 @@ def test_definir_luego_de_revision_guards():
             _revisada(flujo_mvp.orden_creada()),
             detalle_id="DET-001",
             tipo_reparacion=TIPO_BATERIA.model_copy(update={"activo": False}),
-            usuario=RECEPCION,
+            usuario=TECNICO,
             fecha=t(4),
         )
 
@@ -278,17 +278,25 @@ def test_acciones_a_lo_largo_de_la_revision():
         "FINALIZAR_SIN_REPARACION",
         "REGISTRAR_DEVOLUCION",
     ]
-    assert {a.roles for a in acciones_disponibles(orden)} == {
+    # V1.4 (DC06): definir luego de la revision es del Tecnico; concluir
+    # sin reparacion (069) sigue en Recepcion.
+    assert [a.roles for a in acciones_disponibles(orden)] == [
+        (TECNICO.rol,),
         (RECEPCION.rol,),
         (ADMINISTRADOR.rol, RECEPCION.rol),
-    }
+    ]
 
-    # Con al menos un Detalle: agregar otro o finalizar la definicion.
+    # Con al menos un Detalle: agregar otro o finalizar la definicion, ambas
+    # del Tecnico.
     orden = _definir(orden)
     assert _codigos(orden) == [
         "AGREGAR_DETALLE_DESDE_REVISION",
         "FINALIZAR_DEFINICION",
         "REGISTRAR_PAGO",
+    ]
+    assert [a.roles for a in acciones_disponibles(orden)][:2] == [
+        (TECNICO.rol,),
+        (TECNICO.rol,),
     ]
 
 

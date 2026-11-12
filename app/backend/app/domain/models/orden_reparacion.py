@@ -1,6 +1,6 @@
 """Aggregate raiz del MVP: la Orden de Reparacion."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, Field, computed_field
@@ -22,6 +22,36 @@ from .personas import Cliente
 from .recepcion import RecepcionEquipo
 from .reparacion import EjecucionReparacion, ReparacionDetail, TomaOrden
 from .workflow import HistorialWorkflow
+
+
+class VigenciaGarantiaOrigen(BaseModel):
+    """Resultado de PROC-REP-036 para UN Detalle origen (DC15B).
+
+    ``garantia_dias`` es el plazo definitivo del Detalle origen y ``vence``
+    su ultimo dia, contado desde la entrega de la Orden origen
+    (BR-REP-041). ``vence`` en ``None``: el Detalle no tenia garantia
+    (0 dias) o la Orden origen no registra la fecha de entrega; en ambos
+    casos no esta vigente.
+    """
+
+    detalle_id: str
+    garantia_dias: int = Field(ge=0)
+    vence: date | None = None
+    vigente: bool
+
+
+class ExcepcionGarantia(BaseModel):
+    """Ingreso en garantia admitido con la garantia de origen vencida.
+
+    VAR-REP-039: un usuario autorizado lo admite con motivo obligatorio;
+    queda auditado quien, cuando y por que. Los Detalles origen y sus
+    vencimientos estan en ``OrdenReparacion.vigencia_garantia_origen`` y la
+    condicion aplicada es la de la Orden (NO_COBRABLE, por su origen).
+    """
+
+    usuario_id: str
+    fecha: datetime
+    motivo: str
 
 
 class OrdenReparacion(BaseModel):
@@ -68,6 +98,14 @@ class OrdenReparacion(BaseModel):
     # origen) porque una garantia que entra en revision todavia no tiene
     # Detalles propios. Vacio en los demas Origenes (y en JSON previo).
     detalles_origen_ids: list[str] = Field(default_factory=list)
+
+    # DC15B / PROC-REP-036: vigencia de la garantia de cada Detalle origen
+    # al crear la garantia RMA, y la excepcion si alguno estaba vencido.
+    # Vacios en los demas Origenes y en las garantias anteriores.
+    vigencia_garantia_origen: list[VigenciaGarantiaOrigen] = Field(
+        default_factory=list
+    )
+    excepcion_garantia: ExcepcionGarantia | None = None
 
     prioridad: int = Field(default=0, ge=0)
 

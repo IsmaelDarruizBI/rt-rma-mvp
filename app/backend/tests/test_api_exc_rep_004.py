@@ -29,7 +29,6 @@ from tests.test_api_exc_rep_001 import (
 from tests.test_api_exc_rep_002 import _override, _tomar
 from tests.test_api_hp_rep_002 import (
     INSUMO,
-    RECEPCION,
     TECNICO,
     _crear_orden_rt,
 )
@@ -102,7 +101,7 @@ def _redefinir(
     return cliente.post(
         f"/api/orders/{orden_id}/details/{detalle_id}/redefine",
         json={
-            "usuario_id": usuario or multi.RECEPCION,
+            "usuario_id": usuario or multi.TECNICO,
             "tipo_reparacion_id": tipo or multi.TIPO_PANTALLA,
         },
     )
@@ -212,7 +211,8 @@ def test_caso_b_e2e_requiere_redefinicion_125_126_127_080_y_reingreso(
         assert detalle["estado_autorizacion"] == "PENDIENTE"
         (anterior,) = detalle["definiciones_anteriores"]
         assert anterior["tipo_reparacion_id"] == multi.TIPO_BATERIA
-        assert anterior["usuario_id"] == multi.RECEPCION
+        # V1.4 (DC06): la definicion reemplazada la registro el Tecnico.
+        assert anterior["usuario_id"] == multi.TECNICO
         assert orden["estado_workflow"] == "EN_REPARACION"
 
         # El cliente autoriza v2: factibilidad de ese Detalle y, como la
@@ -414,13 +414,14 @@ def test_redefine_404_409_422(tmp_path):
             cliente, orden_id, detalle_id="DET-999"
         ).status_code == (404)
         assert _redefinir(cliente, orden_id, tipo="TR-999").status_code == 404
+        # V1.4 (DC06): Recepcion ya no redefine.
         assert (
-            _redefinir(cliente, orden_id, usuario=multi.TECNICO).status_code
+            _redefinir(cliente, orden_id, usuario=multi.RECEPCION).status_code
             == 409
         )
         sin_tipo = cliente.post(
             f"/api/orders/{orden_id}/details/DET-001/redefine",
-            json={"usuario_id": multi.RECEPCION},
+            json={"usuario_id": multi.TECNICO},
         )
         assert sin_tipo.status_code == 422
         assert "PROC-REP-127" not in _ids(_orden(cliente, orden_id))
@@ -452,7 +453,7 @@ def test_garantia_rma_conserva_vinculo_al_detalle_origen(tmp_path):
             cliente,
             garantia["id"],
             tipo=garantia["reparaciones_detail"][0]["tipo_reparacion_id"],
-            usuario=RECEPCION,
+            usuario=TECNICO,
         )
         assert respuesta.status_code == 200, respuesta.text
         orden = respuesta.json()

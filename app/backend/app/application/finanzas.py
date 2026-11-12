@@ -23,6 +23,7 @@ from decimal import Decimal
 from enum import Enum
 
 from app.domain.models import (
+    ClaseAjuste,
     MedioPago,
     OrdenReparacion,
     TipoDescuento,
@@ -148,8 +149,10 @@ def aplicar_descuento_de_orden(
     tipo: TipoDescuento | None,
     valor: Decimal | None,
     motivo: str,
+    clase: ClaseAjuste = ClaseAjuste.DESCUENTO,
 ) -> tuple[OrdenReparacion, bool]:
-    """Recepcion o Administracion aplica, cambia o quita el descuento.
+    """Recepcion o Administracion aplica, cambia o quita el descuento; la
+    cortesia total la otorga Administracion (provisional, DC11).
 
     El total cambia, asi que si la Orden ya esta en la condicion de
     entrega se revalida igual que tras un pago.
@@ -165,6 +168,7 @@ def aplicar_descuento_de_orden(
             motivo=motivo,
             usuario=usuario,
             fecha=fecha,
+            clase=clase,
         )
         orden, puede_entregar = reevaluar_tras_movimiento(orden, fecha=fecha)
         contexto.ordenes.guardar(orden)

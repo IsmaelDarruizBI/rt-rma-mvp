@@ -32,6 +32,7 @@ from app.domain.models import (
 
 from .autorizacion import validar_actor, validar_alguno_de
 from .autorizacion_cliente import exigir_autorizacion_vigente
+from .cancelaciones import desistimiento_pendiente
 from .custodia import exigir_custodia_para_ejecutar
 from .exceptions import (
     EntidadNoEncontradaError,
@@ -224,6 +225,11 @@ def _validar_precondiciones_de_la_reserva(
             f"(condicion {detalle.condicion.value})."
         )
     exigir_autorizacion_vigente(orden, detalle)
+    if desistimiento_pendiente(detalle):
+        raise PrecondicionInvalidaError(
+            f"El cliente pidio desistir del Detalle {detalle_id}: no se "
+            "inicia otra Ejecucion (DC07)."
+        )
 
     toma = validar_titular_de_la_toma(
         orden,
@@ -453,7 +459,11 @@ def registrar_ejecucion_completada(
     admite que varios tecnicos participen del mismo Detalle en momentos
     distintos, pero cada uno con su propia Ejecucion, nunca cerrando la
     del anterior.
+
+    Con un desistimiento del cliente pendiente sobre ese Detalle no se
+    completa: hay que interrumpir (DC07, VAR-REP-042).
     """
+    _sin_desistimiento_pendiente(orden, ejecucion_id, "completar")
     return _registrar_fin_ejecucion(
         orden,
         ejecucion_id=ejecucion_id,
@@ -476,6 +486,8 @@ def registrar_ejecucion_interrumpida(
     fecha: datetime,
     motivo: str,
     observaciones: str | None = None,
+    estado_trabajo: str | None = None,
+    reversible: bool | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-200 con resultado "Interrumpido" (VAR-REP-003).
 
@@ -494,6 +506,15 @@ def registrar_ejecucion_interrumpida(
         raise PrecondicionInvalidaError(
             "Interrumpir la reparacion exige un motivo (VAR-REP-003)."
         )
+    estado_trabajo = (estado_trabajo or "").strip() or None
+    if _ejecucion_con_desistimiento(orden, ejecucion_id) and (
+        estado_trabajo is None or reversible is None
+    ):
+        raise PrecondicionInvalidaError(
+            "El cliente pidio desistir de este trabajo: al interrumpir hay "
+            "que registrar en que estado queda y si puede revertirse "
+            "(DC07B, BR-REP-004)."
+        )
     return _registrar_fin_ejecucion(
         orden,
         ejecucion_id=ejecucion_id,
@@ -505,6 +526,8 @@ def registrar_ejecucion_interrumpida(
         estado_del_detalle=EstadoReparacionDetail.DEFINIDO,
         observacion_200="Interrumpido",
         motivo_interrupcion=motivo.strip(),
+        estado_trabajo=estado_trabajo,
+        reversible=reversible,
     )
 
 
@@ -534,6 +557,7 @@ def registrar_ejecucion_requiere_redefinicion(
         raise PrecondicionInvalidaError(
             "Requiere redefinicion exige un motivo (BR-REP-004)."
         )
+    _sin_desistimiento_pendiente(orden, ejecucion_id, "redefinir")
     return _registrar_fin_ejecucion(
         orden,
         ejecucion_id=ejecucion_id,
@@ -597,6 +621,30 @@ def registrar_interrupcion_por_liberacion(
     )
 
 
+def _ejecucion_con_desistimiento(
+    orden: OrdenReparacion, ejecucion_id: str
+) -> bool:
+    """La Ejecucion es de un Detalle con un desistimiento pendiente."""
+    ejecucion = next(
+        (e for e in orden.ejecuciones if e.id == ejecucion_id), None
+    )
+    if ejecucion is None:
+        return False
+    detalle = buscar_detalle(orden, ejecucion.reparacion_detail_id)
+    return desistimiento_pendiente(detalle)
+
+
+def _sin_desistimiento_pendiente(
+    orden: OrdenReparacion, ejecucion_id: str, que: str
+) -> None:
+    if _ejecucion_con_desistimiento(orden, ejecucion_id):
+        raise PrecondicionInvalidaError(
+            f"El cliente pidio desistir de este trabajo: no se puede {que}; "
+            "hay que interrumpir la Ejecucion registrando el estado del "
+            "trabajo y si puede revertirse (DC07, VAR-REP-042)."
+        )
+
+
 def _registrar_fin_ejecucion(
     orden: OrdenReparacion,
     *,
@@ -612,6 +660,8 @@ def _registrar_fin_ejecucion(
     motivo_interrupcion: str | None = None,
     motivo_redefinicion: str | None = None,
     validar_titular: bool = True,
+    estado_trabajo: str | None = None,
+    reversible: bool | None = None,
 ) -> OrdenReparacion:
     """Cierre de una Ejecucion en PROC-REP-200, comun a sus tres resultados.
 
@@ -663,6 +713,8 @@ def _registrar_fin_ejecucion(
     nueva_ejecucion.observaciones = observaciones
     nueva_ejecucion.motivo_interrupcion = motivo_interrupcion
     nueva_ejecucion.motivo_redefinicion = motivo_redefinicion
+    nueva_ejecucion.estado_trabajo = estado_trabajo
+    nueva_ejecucion.reversible = reversible
 
     detalle = buscar_detalle(nueva_orden, detalle_id)
     detalle.estado = estado_del_detalle

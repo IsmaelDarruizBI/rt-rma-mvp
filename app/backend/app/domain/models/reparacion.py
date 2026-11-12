@@ -54,6 +54,22 @@ class RegistroCancelacion(BaseModel):
     origen: OrigenCancelacion = OrigenCancelacion.INTERNA
 
 
+class SolicitudDesistimiento(BaseModel):
+    """El cliente pide desistir de un trabajo ya autorizado (DC07).
+
+    La solicitud y la cancelacion efectiva se registran por separado, cada
+    una con su usuario y su fecha/hora (BR-REP-014). Si el Detalle esta
+    EN_PROGRESO la solicitud no cancela nada: el tecnico interrumpe la
+    Ejecucion y recien entonces se cancela (VAR-REP-042). Se conserva
+    despues de la cancelacion, como parte de la historia del Detalle.
+    """
+
+    usuario_id: str
+    fecha: datetime
+    motivo: str
+    canal: CanalComunicacion
+
+
 class RegistroAutorizacionCliente(BaseModel):
     """Una decision del cliente sobre un Detalle (PROC-REP-046, BR-REP-028).
 
@@ -149,6 +165,10 @@ class ReparacionDetail(BaseModel):
     # PROC-REP-300/305: solo en un Detalle CANCELADO.
     cancelacion: RegistroCancelacion | None = None
 
+    # DC07: solicitud de desistimiento del cliente, aparte de la
+    # cancelacion efectiva. Pendiente mientras el Detalle no se cancela.
+    solicitud_desistimiento: SolicitudDesistimiento | None = None
+
     observaciones: str | None = None
 
     # BR-REP-019: en un Detalle de garantia RMA, el Detalle de la Orden
@@ -229,3 +249,10 @@ class EjecucionReparacion(BaseModel):
     # PROC-REP-200 "Requiere redefinicion" (EXC-REP-004): motivo
     # obligatorio por el que la definicion del Detalle dejo de servir.
     motivo_redefinicion: str | None = None
+    # DC07B / BR-REP-004: al interrumpir para resolver un desistimiento, el
+    # tecnico registra en que estado queda el trabajo y si puede
+    # revertirse (las opciones de reversibilidad siguen pendientes de
+    # definicion: por ahora si/no). Los materiales son
+    # ``insumos_utilizados``. ``None`` en las demas interrupciones.
+    estado_trabajo: str | None = None
+    reversible: bool | None = None

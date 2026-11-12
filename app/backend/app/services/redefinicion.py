@@ -194,7 +194,11 @@ def redefinir_detalle(
     usuario: Usuario,
     fecha: datetime,
 ) -> OrdenReparacion:
-    """PROC-REP-127: Recepcion redefine el MISMO Detalle.
+    """PROC-REP-127: el TECNICO redefine el MISMO Detalle (V1.4, DC06).
+
+    Toda redefinicion nace de una revision tecnica (PROC-REP-126); Recepcion
+    no registra redefiniciones: gestiona la autorizacion del cliente de la
+    nueva definicion (PROC-REP-046/047).
 
     Exige un PROC-REP-126 de ese Detalle en su ciclo actual
     (``revision_vigente``), un Tipo activo y la Orden en el circuito de
@@ -204,7 +208,7 @@ def redefinir_detalle(
     Deja la condicion en SIN_BLOQUEO: PROC-REP-080 la reevalua. No
     encadena 080: eso es del comando de aplicacion.
     """
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    validar_actor(usuario, RolUsuario.TECNICO)
     _exigir_circuito_de_revision(orden)
     detalle = _detalle_pendiente(orden, detalle_id)
     if not revision_vigente(orden, detalle_id):

@@ -51,6 +51,7 @@ from .documentos import (
 )
 from .enums import (
     CanalComunicacion,
+    ClaseAjuste,
     CondicionReparacionDetail,
     EstadoControl,
     EstadoCustodia,
@@ -76,7 +77,11 @@ from .equipos import DevolucionEquipo, EntregaEquipo, Equipo
 from .fotos import FotoOrden
 from .inventario import InsumoUtilizado, MovimientoInsumo, MovimientoStock
 from .modelos_equipo import ModeloEquipo
-from .orden_reparacion import OrdenReparacion
+from .orden_reparacion import (
+    ExcepcionGarantia,
+    OrdenReparacion,
+    VigenciaGarantiaOrigen,
+)
 from .pagos import AnulacionPago, DevolucionDinero, Pago, ResumenPago
 from .personas import Cliente, Usuario
 from .recepcion import (
@@ -96,6 +101,7 @@ from .reparacion import (
     RegistroCancelacion,
     RegistroControlTecnico,
     ReparacionDetail,
+    SolicitudDesistimiento,
     TomaOrden,
 )
 from .workflow import HistorialWorkflow
@@ -160,6 +166,10 @@ __all__ = [
     "EjecucionReparacion",
     "RegistroAutorizacionCliente",
     "RegistroCancelacion",
+    "SolicitudDesistimiento",
+    "ExcepcionGarantia",
+    "VigenciaGarantiaOrigen",
+    "ClaseAjuste",
     "RegistroControlTecnico",
     "ReparacionDetail",
     "TomaOrden",

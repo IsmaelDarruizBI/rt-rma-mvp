@@ -15,7 +15,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from pydantic import BaseModel, Field
 
-from .enums import TipoDescuento
+from .enums import ClaseAjuste, TipoDescuento
 
 CENTAVO = Decimal("0.01")
 
@@ -32,6 +32,9 @@ class RegistroDescuento(BaseModel):
     motivo: str
     usuario_id: str
     fecha: datetime
+    # DC09/DC11: DESCUENTO o CORTESIA. Default DESCUENTO: un JSON anterior
+    # solo pudo registrar descuentos.
+    clase: ClaseAjuste = ClaseAjuste.DESCUENTO
 
 
 def importe_de_descuento(

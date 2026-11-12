@@ -32,6 +32,7 @@ from app.services import (
     ResultadoEvaluacionOrden,
     aplicar_movimientos_inventario,
     cargar_reservas_externas,
+    desistimiento_pendiente,
     ejecucion_activa,
     ejecutar_detalle,
     evaluar_situacion_orden,
@@ -41,6 +42,7 @@ from app.services import (
     registrar_ejecucion_interrumpida,
     registrar_ejecucion_requiere_redefinicion,
     registrar_interrupcion_por_liberacion,
+    resolver_desistimiento_solicitado,
     seleccionar_detalle,
     toma_activa,
     tomar_orden,
@@ -351,9 +353,15 @@ def interrumpir_ejecucion(
     insumos_utilizados: Sequence[InsumoUtilizado],
     motivo: str,
     observaciones: str | None = None,
+    estado_trabajo: str | None = None,
+    reversible: bool | None = None,
 ) -> tuple[OrdenReparacion, ResultadoEvaluacionOrden]:
     """El tecnico interrumpe la Ejecucion (190 -> 200 Interrumpido -> 210
     -> 211), VAR-REP-003.
+
+    Si el cliente habia pedido desistir de ese Detalle (DC07, VAR-REP-042)
+    exige el estado del trabajo y si puede revertirse (DC07B), y despues de
+    210 aplica la cancelacion efectiva (211 -> 300) antes de reevaluar.
 
     Paralelo a ``completar_ejecucion``: la Ejecucion queda INTERRUMPIDO y
     el Detalle vuelve a DEFINIDO; lo realmente utilizado se consume y lo
@@ -368,7 +376,10 @@ def interrumpir_ejecucion(
     return _cerrar_ejecucion(
         contexto,
         registrar_resultado=partial(
-            registrar_ejecucion_interrumpida, motivo=motivo
+            registrar_ejecucion_interrumpida,
+            motivo=motivo,
+            estado_trabajo=estado_trabajo,
+            reversible=reversible,
         ),
         orden_id=orden_id,
         ejecucion_id=ejecucion_id,
@@ -461,6 +472,18 @@ def _cerrar_ejecucion(
             ordenes_repo=contexto.ordenes,
             catalogos_repo=contexto.catalogos,
         )
+        # DC07 / VAR-REP-042: con la Ejecucion resuelta (210 ya consumio lo
+        # usado y libero lo reservado), un desistimiento solicitado sobre
+        # ese Detalle se cancela (211 -> 300), aparte de la solicitud.
+        detalle = next(
+            d
+            for d in orden.reparaciones_detail
+            if d.id == ejecucion.reparacion_detail_id
+        )
+        if desistimiento_pendiente(detalle):
+            orden = resolver_desistimiento_solicitado(
+                orden, detalle_id=detalle.id, usuario=usuario, fecha=fecha
+            )
         orden, resultado = evaluar_situacion_orden(orden, fecha=fecha)
 
         contexto.ordenes.guardar(orden)

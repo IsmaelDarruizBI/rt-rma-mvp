@@ -88,15 +88,21 @@ def exigir_definicion_finalizable(
     *,
     usuario: Usuario,
 ) -> None:
-    """Precondiciones de "Finalizar definicion" (ACT-RECEP).
+    """Precondiciones de "Finalizar definicion".
 
     Cierra la carga de Detalles de una Orden en REQUERIMIENTO (camino
-    070) o EN_REVISION ya revisada (camino 075): exige al menos un
-    Detalle y que la definicion siga abierta. Lo que sigue (comprobante si
-    corresponde, factibilidad, habilitacion o espera de recursos) lo
-    compone la capa de aplicacion reutilizando los services existentes.
+    070, ACT-RECEP) o EN_REVISION ya revisada (camino 075, ACT-TECH: V1.4,
+    DC06). Exige al menos un Detalle y que la definicion siga abierta. Lo
+    que sigue (comprobante si corresponde, factibilidad, habilitacion o
+    espera de recursos) lo compone la capa de aplicacion reutilizando los
+    services existentes.
     """
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    validar_actor(
+        usuario,
+        RolUsuario.TECNICO
+        if orden.estado_workflow is EstadoWorkflow.EN_REVISION
+        else RolUsuario.RECEPCION,
+    )
 
     if orden.estado_workflow not in (
         EstadoWorkflow.REQUERIMIENTO,
@@ -370,10 +376,11 @@ def definir_reparacion_detail_luego_revision(
 ) -> OrdenReparacion:
     """PROC-REP-068 ("Si") -> PROC-REP-075 (VAR-REP-001/002).
 
-    Recepcion define un Detalle usando el resultado de la revision
-    tecnica de una Orden EN_REVISION. Mismo snapshot que PROC-REP-070,
-    pero la traza es la del proceso real: NO registra PROC-REP-045 "Si"
-    ni PROC-REP-070.
+    El TECNICO define un Detalle usando el resultado de la revision
+    tecnica de una Orden EN_REVISION (V1.4, DC06: definir no es autorizar;
+    la decision del cliente la registra Recepcion en PROC-REP-046). Mismo
+    snapshot que PROC-REP-070, pero la traza es la del proceso real: NO
+    registra PROC-REP-045 "Si" ni PROC-REP-070.
 
     PROC-REP-068 se registra una sola vez, con el primer Detalle; cada
     Detalle registra su propio PROC-REP-075 (Multi-Detalle). Solo AGREGA:
@@ -386,7 +393,7 @@ def definir_reparacion_detail_luego_revision(
     exactamente uno se usa ese; con mas de uno hay que indicarlo. No hay
     relacion 1:1: un Detalle origen puede originar mas de un Detalle.
     """
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    validar_actor(usuario, RolUsuario.TECNICO)
 
     if orden.estado_workflow is not EstadoWorkflow.EN_REVISION:
         raise PrecondicionInvalidaError(

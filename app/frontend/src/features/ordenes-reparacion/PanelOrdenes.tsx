@@ -74,7 +74,7 @@ import {
   CUSTODIA,
   ESTADO_PAGO,
   ESTADO_TRABAJO,
-  NOMBRE_ACCION,
+  nombreDeAccion,
   ROL,
   etiqueta,
   mensajeLegible,
@@ -424,6 +424,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
       insumosUtilizados,
       motivo,
       observaciones,
+      resultado,
     ) =>
       void ejecutarComando(() =>
         api.interrumpirEjecucion(
@@ -433,6 +434,8 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
           insumosUtilizados,
           motivo,
           observaciones || null,
+          resultado?.estadoTrabajo ?? null,
+          resultado ? resultado.reversible : null,
         ),
       ),
     requerirRedefinicion: (
@@ -498,9 +501,14 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
         ),
       ),
     // Devuelve la NUEVA Orden de garantía: queda abierta en pantalla.
-    iniciarGarantiaRma: (detalleOrigenIds) =>
+    iniciarGarantiaRma: (detalleOrigenIds, motivoExcepcion) =>
       void ejecutarComando(() =>
-        api.iniciarGarantiaRma(idOrden, idActor, detalleOrigenIds),
+        api.iniciarGarantiaRma(
+          idOrden,
+          idActor,
+          detalleOrigenIds,
+          motivoExcepcion,
+        ),
       ),
     rechazarControl: (detalleId, motivo) =>
       void ejecutarComando(() =>
@@ -568,8 +576,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
         )
       : { visibles: [], menu: [] };
   const accionAbierta = abierta ? (registradas.get(abierta) ?? null) : null;
-  const nombreAccion = (accion: Accion) =>
-    NOMBRE_ACCION[accion.codigo] ?? accion.etiqueta;
+  const nombreAccion = (accion: Accion) => nombreDeAccion(accion);
 
   // Con sesión real, mientras llegan los catálogos (o si fallaron).
   if (actor === null && sesion) {
@@ -972,9 +979,16 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                       api.devolverDinero(idOrden, idActor, datos),
                     )
                   }
-                  onDescontar={(tipo, valor, motivo) =>
+                  onDescontar={(tipo, valor, motivo, clase) =>
                     void ejecutarComando(() =>
-                      api.aplicarDescuento(idOrden, idActor, tipo, valor, motivo),
+                      api.aplicarDescuento(
+                        idOrden,
+                        idActor,
+                        tipo,
+                        valor,
+                        motivo,
+                        clase,
+                      ),
                     )
                   }
                 />

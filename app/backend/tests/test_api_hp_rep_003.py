@@ -184,7 +184,8 @@ def test_hp_rep_003_end_to_end_por_http(cliente):
 
     foto_origen = cliente.get(f"/api/orders/{origen_id}").json()
 
-    # PROC-REP-035 -> 040 -> 045 (No) -> 055 -> 050 -> 060, y se detiene.
+    # PROC-REP-035 -> 036 (Vigente) -> 040 -> 045 (No) -> 055 -> 050 ->
+    # 060, y se detiene.
     respuesta = _iniciar_garantia(cliente, origen_id, ["DET-001"])
     assert respuesta.status_code == 201, respuesta.text
     orden = respuesta.json()
@@ -204,13 +205,15 @@ def test_hp_rep_003_end_to_end_por_http(cliente):
     assert orden["documentos"]["comprobante_recepcion"]["generado"] is True
     assert _ids(orden) == [
         "PROC-REP-035",
+        "PROC-REP-036",
         "PROC-REP-040",
         "PROC-REP-045",
         "PROC-REP-055",
         "PROC-REP-050",
         "PROC-REP-060",
     ]
-    assert orden["historial"][2]["observacion"] == "No"
+    assert orden["historial"][1]["observacion"] == "Vigente"
+    assert orden["historial"][3]["observacion"] == "No"
     assert _codigos(orden) == ["REALIZAR_REVISION"]
 
     # PROC-REP-065 (Tecnico): revision obligatoria.
@@ -223,7 +226,7 @@ def test_hp_rep_003_end_to_end_por_http(cliente):
     # 068 Si -> 075: el Detalle nuevo queda vinculado al unico origen.
     orden = cliente.post(
         f"/api/orders/{orden_id}/review/details",
-        json={"usuario_id": RECEPCION, "tipo_reparacion_id": TIPO},
+        json={"usuario_id": TECNICO, "tipo_reparacion_id": TIPO},
     ).json()
     (detalle,) = orden["reparaciones_detail"]
     assert detalle["detalle_origen_id"] == "DET-001"
@@ -235,7 +238,7 @@ def test_hp_rep_003_end_to_end_por_http(cliente):
     ]
 
     # Finalizar: 080 -> 090 -> 140, sin repetir el comprobante.
-    orden = finalizar_definicion(cliente, orden_id, RECEPCION).json()
+    orden = finalizar_definicion(cliente, orden_id, TECNICO).json()
     assert orden["estado_workflow"] == "HABILITADA"
     assert _ids(orden)[-3:] == ["PROC-REP-080", "PROC-REP-090", "PROC-REP-140"]
     assert _ids(orden).count("PROC-REP-060") == 1
@@ -667,7 +670,7 @@ def _entregada_con_dos_detalles(cliente: TestClient) -> dict:
 
 
 def _agregar_desde_revision(cliente, orden_id, tipo, detalle_origen_id=None):
-    cuerpo = {"usuario_id": multi.RECEPCION, "tipo_reparacion_id": tipo}
+    cuerpo = {"usuario_id": multi.TECNICO, "tipo_reparacion_id": tipo}
     if detalle_origen_id is not None:
         cuerpo["detalle_origen_id"] = detalle_origen_id
     return cliente.post(f"/api/orders/{orden_id}/review/details", json=cuerpo)
@@ -721,7 +724,7 @@ def test_garantia_de_varios_detalles_crea_una_unica_orden(cliente_multi):
         respuesta = _agregar_desde_revision(cliente, orden_id, tipo, "DET-001")
         assert respuesta.status_code == 200, respuesta.text
 
-    orden = finalizar_definicion(cliente, orden_id, multi.RECEPCION).json()
+    orden = finalizar_definicion(cliente, orden_id, multi.TECNICO).json()
     assert orden["estado_workflow"] == "HABILITADA"
     assert [
         (d["id"], d["tipo_reparacion_id"], d["detalle_origen_id"])

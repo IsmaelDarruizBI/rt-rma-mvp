@@ -1,0 +1,1059 @@
+# Trazabilidad de la iteracion 1: alineacion con la baseline V1.4.
+#
+# Archivo propio (ver traceability/README.md): una unidad de implementacion
+# que toca cuatro Features (FEAT-REP-001, 002, 007 y 009) desde las decisiones
+# DC06, DC07/DC07B, DC11 y DC15B. Es el primer grafo armado directamente sobre
+# Scenarios V1.4 (VAR-REP-038, 039, 041 y 042).
+#
+# La garantia vigente (036 "Si") es el camino de HP-REP-003 y queda en
+# hp-rep-003.yaml. DC06 no tiene Scenario propio: cambia el actor de 075 y 127
+# en los recorridos ya trazados.
+#
+# Permisos provisionales (pendientes de decision): excepcion de garantia por
+# Coordinacion RMA o Administracion (ABI-04); cortesia por Administracion
+# (ABI-09). Los UAT quedan PENDING: los tests internos no son aceptacion.
+#
+# Continua la numeracion global: US-REP-039, ACC-REP-061, FR-REP-145,
+# TR-REP-143, TASK-REP-215, CODE-REP-248, TEST-REP-542, UAT-REP-045.
+#
+# Generado desde los nombres de business/ (mismos nombres que la fuente).
+# Validacion: npx tsx scripts/validate-traceability.ts traceability/iteracion-1-v14.yaml
+
+meta:
+  id: TRACE-IT1-V14
+  name: 'Trazabilidad de la iteracion 1: alineacion con la baseline V1.4 (DC06, DC07, DC11, DC15B)'
+  generated_from: rama feat/iteracion-1-alineacion-v14 sobre mvp-v2 (fa4f24d)
+  date: '2026-11-11'
+  business_domain: DOM-RMA
+  business_process: PROC-REP
+  business_process_version: '1.4'
+  implemented_scenario:
+  - VAR-REP-038
+  - VAR-REP-039
+  - VAR-REP-041
+  - VAR-REP-042
+  active_features:
+  - FEAT-REP-001
+  - FEAT-REP-002
+  - FEAT-REP-007
+  - FEAT-REP-009
+  related_trace_files:
+  - traceability/hp-rep-003.yaml (la garantia vigente sigue HP-REP-003; no se modifica)
+  - traceability/var-rep-001-002.yaml y exc-rep-004.yaml (DC06 cambia el actor de 075 y 127; no se modifican)
+  - traceability/discrepancias-baseline-v1.4.md (seccion G)
+  sources:
+    process: business/processes/repair-management-v1.4.yaml
+    rules: business/rules/business-rules-v1.4.yaml
+    features: business/features/repair-management-features-v1.4.yaml
+    scenarios: business/scenarios/repair-management-scenarios-v1.4.yaml
+    decisions: business/decisions/decision-log-v1.4.yaml
+    convention: traceability/README.md
+    backend: app/backend/
+    frontend: app/frontend/
+    migration: supabase/migrations/20261111000100_it1_alineacion_v14.sql
+  relationship_vocabulary:
+    belongs_to: el origen pertenece al destino (jerarquia)
+    activates: el Scenario activa la Feature
+    realizes: la System Action realiza la User Story
+    covers: la System Action cubre el nodo del Business Process
+    governed_by: el item esta gobernado por la Business Rule
+    derives_from: el Functional Requirement deriva de la System Action
+    satisfies: el Technical Requirement satisface el Functional Requirement
+    implements: la Task o el Code implementa un Technical Requirement
+    produced_by: el Code fue producido por la Task
+    exercises: el Internal Test ejercita el Code
+    verifies: el Internal Test verifica un FR o un TR
+    accepts: el UAT acepta una User Story o un Functional Requirement
+items:
+- id: DOM-RMA
+  type: business_domain
+  name: Area funcional RMA
+  status: active
+  source: traceability/README.md
+- id: PROC-REP
+  type: business_process
+  name: Gestion de Ordenes de Reparacion
+  status: approved
+  version: '1.4'
+  source: business/processes/repair-management-v1.4.yaml
+- id: VAR-REP-038
+  type: scenario
+  name: Garantia RMA con la garantia de origen vencida, sin excepcion, ingreso no admitido
+  status: draft
+  scenario_type: VARIANT
+  scope: FEATURE
+  source: business/scenarios/repair-management-scenarios-v1.4.yaml
+- id: VAR-REP-039
+  type: scenario
+  name: Garantia RMA con la garantia de origen vencida y excepcion autorizada
+  status: draft
+  scenario_type: VARIANT
+  scope: FEATURE
+  source: business/scenarios/repair-management-scenarios-v1.4.yaml
+- id: VAR-REP-041
+  type: scenario
+  name: Cortesia total con Pagos previos, saldo a favor y devolucion antes de entregar
+  status: draft
+  scenario_type: VARIANT
+  scope: FEATURE
+  source: business/scenarios/repair-management-scenarios-v1.4.yaml
+- id: VAR-REP-042
+  type: scenario
+  name: El cliente desiste de un Detalle que se esta ejecutando, se interrumpe y luego se cancela
+  status: draft
+  scenario_type: VARIANT
+  scope: FEATURE
+  source: business/scenarios/repair-management-scenarios-v1.4.yaml
+- id: FEAT-REP-001
+  type: feature
+  name: Ingreso y creacion de Orden de Reparacion
+  status: draft
+  feature_status: draft
+  implemented_slice_status: IMPLEMENTED
+  implemented_scenario:
+  - VAR-REP-038
+  - VAR-REP-039
+- id: FEAT-REP-002
+  type: feature
+  name: Diagnostico y gestion de Detalles de Reparacion
+  status: draft
+  feature_status: draft
+  implemented_slice_status: IMPLEMENTED
+  implemented_scenario:
+  - HP-REP-003
+  - VAR-REP-001
+  - VAR-REP-002
+  - EXC-REP-004
+  note: 'DC06: cambia el actor de 075 y 127 en los recorridos ya implementados.'
+- id: FEAT-REP-007
+  type: feature
+  name: Gestion comercial y pagos de la Orden
+  status: draft
+  feature_status: draft
+  implemented_slice_status: IMPLEMENTED
+  implemented_scenario:
+  - VAR-REP-041
+- id: FEAT-REP-009
+  type: feature
+  name: Cancelacion de Detalles y Orden
+  status: draft
+  feature_status: draft
+  implemented_slice_status: IMPLEMENTED
+  implemented_scenario:
+  - VAR-REP-042
+- id: PROC-REP-035
+  type: process_node
+  name: Identificar reparacion original en garantia
+  node_type: activity
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-036
+  type: process_node
+  name: ¿Garantia de origen vigente?
+  node_type: decision
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-040
+  type: process_node
+  name: Crear Orden de Reparacion
+  node_type: activity
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: EVT-REP-998
+  type: business_event
+  name: Ingreso en garantia no admitido
+  status: draft
+  in_scenario: true
+- id: PROC-REP-075
+  type: process_node
+  name: Definir Detalles de reparacion luego de revision
+  node_type: activity
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-127
+  type: process_node
+  name: Definir/actualizar reparacion del Detalle
+  node_type: activity
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-046
+  type: process_node
+  name: Registrar decision del cliente por Detalle
+  node_type: activity
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-200
+  type: process_node
+  name: Registrar ejecucion real del Detalle
+  node_type: activity
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-211
+  type: process_node
+  name: Evaluar situacion de la Orden
+  node_type: decision
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-300
+  type: process_node
+  name: Cancelar Detalle
+  node_type: activity
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-265
+  type: process_node
+  name: Completar cobro - validar condicion de entrega
+  node_type: decision
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-267
+  type: process_node
+  name: Registrar devolucion de dinero al cliente
+  node_type: activity
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-268
+  type: process_node
+  name: Hay saldo a favor del cliente pendiente de devolver
+  node_type: decision
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: BR-REP-016
+  type: business_rule
+  name: Ajustes Comerciales y Cortesia
+  status: draft
+  coverage: PARTIAL
+- id: BR-REP-019
+  type: business_rule
+  name: Garantia RMA - Orden nueva vinculada y Detalle origen
+  status: draft
+  coverage: PARTIAL
+- id: BR-REP-030
+  type: business_rule
+  name: Desistimiento por Detalle, masivo y sin Detalles
+  status: draft
+  coverage: PARTIAL
+- id: BR-REP-038
+  type: business_rule
+  name: Devolucion de dinero y saldo a favor del cliente
+  status: draft
+  coverage: PARTIAL
+- id: BR-REP-039
+  type: business_rule
+  name: Permisos configurables por accion y contexto
+  status: draft
+  coverage: PARTIAL
+- id: BR-REP-041
+  type: business_rule
+  name: Politica de garantia configurable y garantia por Detalle
+  status: draft
+  coverage: PARTIAL
+- id: US-REP-039
+  type: user_story
+  name: Como Recepcion quiero ver si la garantia de cada trabajo sigue vigente e iniciar la garantia RMA
+    solo si corresponde, para no admitir reclamos vencidos
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-RECEP
+- id: ACC-REP-061
+  type: system_action
+  name: Validar la vigencia de la garantia de origen al iniciar la garantia RMA
+  status: IMPLEMENTED
+  actor: ACT-SYSTEM
+- id: TR-REP-143
+  type: technical_requirement
+  name: evaluar_vigencia_garantia y crear_orden_garantia_rma; columnas garantia_dias, garantia_vence y
+    garantia_vigente en rma.orden_detalle_origen (migracion 20261111000100)
+  status: IMPLEMENTED
+- id: FR-REP-145
+  type: functional_requirement
+  name: La vigencia de cada Detalle origen es entrega de la Orden origen + dias de garantia del Detalle,
+    en la zona horaria del negocio; vigente hasta el ultimo dia inclusive
+  status: IMPLEMENTED
+- id: FR-REP-146
+  type: functional_requirement
+  name: 'Vencida sin excepcion: se rechaza (GARANTIA_VENCIDA), no se crea la Orden de garantia y la Orden
+    origen no cambia'
+  status: IMPLEMENTED
+- id: FR-REP-147
+  type: functional_requirement
+  name: 'Vigente: se registra PROC-REP-036 ''Vigente'' entre 035 y 040 y la vigencia evaluada queda en
+    la Orden de garantia'
+  status: IMPLEMENTED
+- id: TASK-REP-215
+  type: task
+  name: Implementar Validar la vigencia de la garantia de origen al iniciar la garantia RMA (iteracion
+    1)
+  status: DONE
+- id: CODE-REP-248
+  type: code_artifact
+  name: crear_orden_garantia_rma
+  status: IMPLEMENTED
+  source: app/backend/app/services/ordenes.py::crear_orden_garantia_rma
+- id: CODE-REP-249
+  type: code_artifact
+  name: vencimiento_garantia
+  status: IMPLEMENTED
+  source: app/backend/app/domain/garantia.py::vencimiento_garantia
+- id: CODE-REP-250
+  type: code_artifact
+  name: FormularioGarantiaRma
+  status: IMPLEMENTED
+  source: app/frontend/src/features/ordenes-reparacion/AccionesOrden.tsx::FormularioGarantiaRma
+- id: TEST-REP-542
+  type: internal_test
+  name: test_var_rep_038_vencida_sin_excepcion_no_crea_la_orden
+  status: PASSING
+  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_038_vencida_sin_excepcion_no_crea_la_orden
+- id: TEST-REP-543
+  type: internal_test
+  name: test_hp_rep_003_garantia_vigente
+  status: PASSING
+  source: app/backend/tests/test_iteracion1_v14.py::test_hp_rep_003_garantia_vigente
+- id: TEST-REP-544
+  type: internal_test
+  name: test_it1_las_columnas_nuevas_y_el_historial
+  status: PASSING
+  source: app/backend/tests/postgres/test_iteracion1_postgres.py::test_it1_las_columnas_nuevas_y_el_historial
+- id: UAT-REP-045
+  type: uat
+  name: 'Aceptacion de negocio: Como Recepcion quiero ver si la garantia de cada trabajo sigue vigente
+    e iniciar la garant'
+  status: PENDING
+- id: US-REP-040
+  type: user_story
+  name: Como Coordinacion RMA o Administracion quiero admitir una garantia vencida como excepcion, con
+    motivo, para atender un caso justificado dejando auditoria
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-COORD
+- id: ACC-REP-062
+  type: system_action
+  name: Autorizar la excepcion de garantia vencida
+  status: IMPLEMENTED
+  actor: ACT-COORD
+- id: TR-REP-144
+  type: technical_requirement
+  name: excepcion_garantia en OrdenReparacion; columnas excepcion_garantia_por/en/motivo en rma.orden;
+    tipo de evento EV-REP-052; roles del inicio ampliados en la API cuando hay un trabajo vencido
+  status: IMPLEMENTED
+- id: FR-REP-148
+  type: functional_requirement
+  name: 'La excepcion exige motivo y un usuario autorizado (provisional: Coordinacion RMA o Administracion);
+    sin motivo o con otro rol se rechaza sin crear nada'
+  status: IMPLEMENTED
+- id: FR-REP-149
+  type: functional_requirement
+  name: 'La excepcion queda auditada en la Orden de garantia y en el historial (036 AUTORIZAR_EXCEPCION_GARANTIA,
+    EV-REP-052): usuario, fecha, motivo, Detalle origen y vencimiento'
+  status: IMPLEMENTED
+- id: TASK-REP-216
+  type: task
+  name: Implementar Autorizar la excepcion de garantia vencida (iteracion 1)
+  status: DONE
+- id: CODE-REP-251
+  type: code_artifact
+  name: ROLES_EXCEPCION_GARANTIA
+  status: IMPLEMENTED
+  source: app/backend/app/services/ordenes.py::ROLES_EXCEPCION_GARANTIA
+- id: CODE-REP-252
+  type: code_artifact
+  name: _con_excepcion_de_garantia
+  status: IMPLEMENTED
+  source: app/backend/app/api/ordenes.py::_con_excepcion_de_garantia
+- id: CODE-REP-253
+  type: code_artifact
+  name: 20261111000100_it1_alineacion_v14.sql
+  status: IMPLEMENTED
+  source: supabase/migrations/20261111000100_it1_alineacion_v14.sql
+- id: TEST-REP-545
+  type: internal_test
+  name: test_var_rep_039_excepcion_autorizada_y_auditada
+  status: PASSING
+  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_039_excepcion_autorizada_y_auditada
+- id: TEST-REP-546
+  type: internal_test
+  name: test_var_rep_039_la_excepcion_exige_un_usuario_autorizado
+  status: PASSING
+  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_039_la_excepcion_exige_un_usuario_autorizado
+- id: TEST-REP-547
+  type: internal_test
+  name: test_it1_la_validacion_de_la_garantia_no_cambia
+  status: PASSING
+  source: app/backend/tests/postgres/test_iteracion1_postgres.py::test_it1_la_validacion_de_la_garantia_no_cambia
+- id: UAT-REP-046
+  type: uat
+  name: 'Aceptacion de negocio: Como Coordinacion RMA o Administracion quiero admitir una garantia vencida
+    como excepcion,'
+  status: PENDING
+- id: US-REP-041
+  type: user_story
+  name: Como Administracion quiero otorgar una cortesia total aunque haya pagos, para que el cliente no
+    pague y se le devuelva lo cobrado antes de entregar
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-ADMIN
+- id: ACC-REP-063
+  type: system_action
+  name: Otorgar o quitar la cortesia total de la Orden
+  status: IMPLEMENTED
+  actor: ACT-ADMIN
+- id: TR-REP-145
+  type: technical_requirement
+  name: ClaseAjuste en RegistroDescuento y columna clase en rma.descuento; accion OTORGAR_CORTESIA
+  status: IMPLEMENTED
+- id: FR-REP-150
+  type: functional_requirement
+  name: La cortesia es un Ajuste Comercial de clase CORTESIA por el total; conserva los Pagos y, si los
+    hay, deja saldo a favor del cliente
+  status: IMPLEMENTED
+- id: FR-REP-151
+  type: functional_requirement
+  name: Con saldo a favor la entrega se bloquea hasta registrar la devolucion; sin devoluciones ni pagos
+    duplicados
+  status: IMPLEMENTED
+- id: FR-REP-152
+  type: functional_requirement
+  name: 'Otorgarla o quitarla exige el permiso de cortesia (provisional: Administracion); una cortesia
+    parcial se rechaza'
+  status: IMPLEMENTED
+- id: TASK-REP-217
+  type: task
+  name: Implementar Otorgar o quitar la cortesia total de la Orden (iteracion 1)
+  status: DONE
+- id: CODE-REP-254
+  type: code_artifact
+  name: aplicar_descuento
+  status: IMPLEMENTED
+  source: app/backend/app/services/descuentos.py::aplicar_descuento
+- id: CODE-REP-255
+  type: code_artifact
+  name: FormularioCortesia
+  status: IMPLEMENTED
+  source: app/frontend/src/features/ordenes-reparacion/PagosOrden.tsx::FormularioCortesia
+- id: TEST-REP-548
+  type: internal_test
+  name: test_var_rep_041_cortesia_total_con_pagos_previos
+  status: PASSING
+  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_041_cortesia_total_con_pagos_previos
+- id: TEST-REP-549
+  type: internal_test
+  name: test_var_rep_041_la_cortesia_solo_la_otorga_administracion
+  status: PASSING
+  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_041_la_cortesia_solo_la_otorga_administracion
+- id: TEST-REP-550
+  type: internal_test
+  name: la cortesía total tiene nombre propio (DC11)
+  status: PASSING
+  source: app/frontend/tests/iteracion1.test.ts::la cortesía total tiene nombre propio (DC11)
+- id: UAT-REP-047
+  type: uat
+  name: 'Aceptacion de negocio: Como Administracion quiero otorgar una cortesia total aunque haya pagos,
+    para que el clien'
+  status: PENDING
+- id: US-REP-042
+  type: user_story
+  name: Como Recepcion quiero registrar que el cliente desiste de un trabajo que se esta reparando, para
+    que el tecnico lo interrumpa y recien ahi se cancele
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-RECEP
+- id: ACC-REP-064
+  type: system_action
+  name: Registrar la solicitud de desistimiento de un Detalle en ejecucion y cancelarlo al interrumpir
+  status: IMPLEMENTED
+  actor: ACT-RECEP
+- id: TR-REP-146
+  type: technical_requirement
+  name: solicitud_desistimiento en ReparacionDetail y estado_trabajo/reversible en EjecucionReparacion;
+    columnas en rma.detalle y rma.ejecucion
+  status: IMPLEMENTED
+- id: FR-REP-153
+  type: functional_requirement
+  name: La solicitud (046 SOLICITAR_DESISTIMIENTO_CLIENTE, EV-REP-046) registra usuario, fecha, motivo
+    y canal; no cancela ni toca la Ejecucion y no se duplica
+  status: IMPLEMENTED
+- id: FR-REP-154
+  type: functional_requirement
+  name: Con la solicitud pendiente el tecnico solo puede interrumpir, informando el estado del trabajo
+    y si es reversible (DC07B)
+  status: IMPLEMENTED
+- id: FR-REP-155
+  type: functional_requirement
+  name: Al interrumpir se cancela el Detalle (300, DESISTIMIENTO_CLIENTE) con la solicitud conservada;
+    la Orden no se cancela (DC31)
+  status: IMPLEMENTED
+- id: TASK-REP-218
+  type: task
+  name: Implementar Registrar la solicitud de desistimiento de un Detalle en ejecucion y cancelarlo al
+    interrumpir (iteracion 1)
+  status: DONE
+- id: CODE-REP-256
+  type: code_artifact
+  name: _solicitar_desistimiento_en_ejecucion
+  status: IMPLEMENTED
+  source: app/backend/app/services/decision_cliente.py::_solicitar_desistimiento_en_ejecucion
+- id: CODE-REP-257
+  type: code_artifact
+  name: resolver_desistimiento_solicitado
+  status: IMPLEMENTED
+  source: app/backend/app/services/cancelaciones.py::resolver_desistimiento_solicitado
+- id: CODE-REP-258
+  type: code_artifact
+  name: FormularioEjecucion
+  status: IMPLEMENTED
+  source: app/frontend/src/features/ordenes-reparacion/AccionesOrden.tsx::FormularioEjecucion
+- id: TEST-REP-551
+  type: internal_test
+  name: test_var_rep_042_solicitud_interrupcion_y_cancelacion
+  status: PASSING
+  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_042_solicitud_interrupcion_y_cancelacion
+- id: TEST-REP-552
+  type: internal_test
+  name: test_var_rep_042_luego_sigue_el_circuito_dc31
+  status: PASSING
+  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_042_luego_sigue_el_circuito_dc31
+- id: TEST-REP-553
+  type: internal_test
+  name: con el desistimiento pendiente, interrumpir es la acción de la tarea
+  status: PASSING
+  source: app/frontend/tests/iteracion1.test.ts::con el desistimiento pendiente, interrumpir es la acción
+    de la tarea
+- id: UAT-REP-048
+  type: uat
+  name: 'Aceptacion de negocio: Como Recepcion quiero registrar que el cliente desiste de un trabajo que
+    se esta reparando'
+  status: PENDING
+- id: US-REP-043
+  type: user_story
+  name: Como Tecnico quiero definir y redefinir los trabajos despues de la revision, mientras Recepcion
+    gestiona la decision del cliente
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-TECH
+- id: ACC-REP-065
+  type: system_action
+  name: Definir luego de la revision y redefinir por el Tecnico (DC06)
+  status: IMPLEMENTED
+  actor: ACT-TECH
+- id: TR-REP-147
+  type: technical_requirement
+  name: validar_actor TECNICO en reparaciones y redefinicion; roles de las acciones AGREGAR_DETALLE_DESDE_REVISION,
+    FINALIZAR_DEFINICION (EN_REVISION) y REDEFINIR_DETALLE
+  status: IMPLEMENTED
+- id: FR-REP-156
+  type: functional_requirement
+  name: 075 (definir luego de la revision y cerrar esa carga) y 127 (redefinir) exigen el rol TECNICO;
+    Recepcion los recibe rechazados
+  status: IMPLEMENTED
+- id: FR-REP-157
+  type: functional_requirement
+  name: La decision y el desistimiento del cliente (046) siguen en Recepcion; 069 (sin reparacion) sigue
+    en Recepcion
+  status: IMPLEMENTED
+- id: TASK-REP-219
+  type: task
+  name: Implementar Definir luego de la revision y redefinir por el Tecnico (DC06) (iteracion 1)
+  status: DONE
+- id: CODE-REP-259
+  type: code_artifact
+  name: definir_reparacion_detail_luego_revision
+  status: IMPLEMENTED
+  source: app/backend/app/services/reparaciones.py::definir_reparacion_detail_luego_revision
+- id: CODE-REP-260
+  type: code_artifact
+  name: redefinir_detalle
+  status: IMPLEMENTED
+  source: app/backend/app/services/redefinicion.py::redefinir_detalle
+- id: TEST-REP-554
+  type: internal_test
+  name: test_definir_desde_revision_solo_tecnico
+  status: PASSING
+  source: app/backend/tests/test_api_var_rep_001_002.py::test_definir_desde_revision_solo_tecnico
+- id: TEST-REP-555
+  type: internal_test
+  name: test_dc06_el_tecnico_define_y_recepcion_registra_la_decision
+  status: PASSING
+  source: app/backend/tests/test_iteracion1_v14.py::test_dc06_el_tecnico_define_y_recepcion_registra_la_decision
+- id: TEST-REP-556
+  type: internal_test
+  name: app/backend/tests/test_exc_rep_004.py
+  status: PASSING
+  source: app/backend/tests/test_exc_rep_004.py
+- id: UAT-REP-049
+  type: uat
+  name: 'Aceptacion de negocio: Como Tecnico quiero definir y redefinir los trabajos despues de la revision,
+    mientras Rece'
+  status: PENDING
+links:
+- from: PROC-REP
+  to: DOM-RMA
+  relationship: belongs_to
+- from: VAR-REP-038
+  to: PROC-REP
+  relationship: belongs_to
+- from: VAR-REP-039
+  to: PROC-REP
+  relationship: belongs_to
+- from: VAR-REP-041
+  to: PROC-REP
+  relationship: belongs_to
+- from: VAR-REP-042
+  to: PROC-REP
+  relationship: belongs_to
+- from: FEAT-REP-001
+  to: PROC-REP
+  relationship: belongs_to
+- from: VAR-REP-038
+  to: FEAT-REP-001
+  relationship: activates
+- from: VAR-REP-039
+  to: FEAT-REP-001
+  relationship: activates
+- from: FEAT-REP-002
+  to: PROC-REP
+  relationship: belongs_to
+- from: FEAT-REP-007
+  to: PROC-REP
+  relationship: belongs_to
+- from: VAR-REP-041
+  to: FEAT-REP-007
+  relationship: activates
+- from: FEAT-REP-009
+  to: PROC-REP
+  relationship: belongs_to
+- from: VAR-REP-042
+  to: FEAT-REP-009
+  relationship: activates
+- from: PROC-REP-035
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-036
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-040
+  to: PROC-REP
+  relationship: belongs_to
+- from: EVT-REP-998
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-075
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-127
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-046
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-200
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-211
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-300
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-265
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-267
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-268
+  to: PROC-REP
+  relationship: belongs_to
+- from: US-REP-039
+  to: FEAT-REP-001
+  relationship: belongs_to
+- from: ACC-REP-061
+  to: US-REP-039
+  relationship: realizes
+- from: ACC-REP-061
+  to: PROC-REP-035
+  relationship: covers
+- from: ACC-REP-061
+  to: PROC-REP-036
+  relationship: covers
+- from: ACC-REP-061
+  to: PROC-REP-040
+  relationship: covers
+- from: ACC-REP-061
+  to: EVT-REP-998
+  relationship: covers
+- from: ACC-REP-061
+  to: BR-REP-019
+  relationship: governed_by
+- from: ACC-REP-061
+  to: BR-REP-041
+  relationship: governed_by
+- from: FR-REP-145
+  to: ACC-REP-061
+  relationship: derives_from
+- from: TR-REP-143
+  to: FR-REP-145
+  relationship: satisfies
+- from: FR-REP-146
+  to: ACC-REP-061
+  relationship: derives_from
+- from: TR-REP-143
+  to: FR-REP-146
+  relationship: satisfies
+- from: FR-REP-147
+  to: ACC-REP-061
+  relationship: derives_from
+- from: TR-REP-143
+  to: FR-REP-147
+  relationship: satisfies
+- from: TASK-REP-215
+  to: TR-REP-143
+  relationship: implements
+- from: CODE-REP-248
+  to: TASK-REP-215
+  relationship: produced_by
+- from: CODE-REP-248
+  to: TR-REP-143
+  relationship: implements
+- from: CODE-REP-249
+  to: TASK-REP-215
+  relationship: produced_by
+- from: CODE-REP-249
+  to: TR-REP-143
+  relationship: implements
+- from: CODE-REP-250
+  to: TASK-REP-215
+  relationship: produced_by
+- from: CODE-REP-250
+  to: TR-REP-143
+  relationship: implements
+- from: TEST-REP-542
+  to: CODE-REP-248
+  relationship: exercises
+- from: TEST-REP-542
+  to: FR-REP-145
+  relationship: verifies
+- from: TEST-REP-543
+  to: CODE-REP-248
+  relationship: exercises
+- from: TEST-REP-543
+  to: FR-REP-145
+  relationship: verifies
+- from: TEST-REP-544
+  to: CODE-REP-248
+  relationship: exercises
+- from: TEST-REP-544
+  to: FR-REP-145
+  relationship: verifies
+- from: UAT-REP-045
+  to: US-REP-039
+  relationship: accepts
+- from: US-REP-040
+  to: FEAT-REP-001
+  relationship: belongs_to
+- from: ACC-REP-062
+  to: US-REP-040
+  relationship: realizes
+- from: ACC-REP-062
+  to: PROC-REP-036
+  relationship: covers
+- from: ACC-REP-062
+  to: PROC-REP-040
+  relationship: covers
+- from: ACC-REP-062
+  to: BR-REP-019
+  relationship: governed_by
+- from: ACC-REP-062
+  to: BR-REP-039
+  relationship: governed_by
+- from: ACC-REP-062
+  to: BR-REP-041
+  relationship: governed_by
+- from: FR-REP-148
+  to: ACC-REP-062
+  relationship: derives_from
+- from: TR-REP-144
+  to: FR-REP-148
+  relationship: satisfies
+- from: FR-REP-149
+  to: ACC-REP-062
+  relationship: derives_from
+- from: TR-REP-144
+  to: FR-REP-149
+  relationship: satisfies
+- from: TASK-REP-216
+  to: TR-REP-144
+  relationship: implements
+- from: CODE-REP-251
+  to: TASK-REP-216
+  relationship: produced_by
+- from: CODE-REP-251
+  to: TR-REP-144
+  relationship: implements
+- from: CODE-REP-252
+  to: TASK-REP-216
+  relationship: produced_by
+- from: CODE-REP-252
+  to: TR-REP-144
+  relationship: implements
+- from: CODE-REP-253
+  to: TASK-REP-216
+  relationship: produced_by
+- from: CODE-REP-253
+  to: TR-REP-144
+  relationship: implements
+- from: TEST-REP-545
+  to: CODE-REP-251
+  relationship: exercises
+- from: TEST-REP-545
+  to: FR-REP-148
+  relationship: verifies
+- from: TEST-REP-546
+  to: CODE-REP-251
+  relationship: exercises
+- from: TEST-REP-546
+  to: FR-REP-148
+  relationship: verifies
+- from: TEST-REP-547
+  to: CODE-REP-251
+  relationship: exercises
+- from: TEST-REP-547
+  to: FR-REP-148
+  relationship: verifies
+- from: UAT-REP-046
+  to: US-REP-040
+  relationship: accepts
+- from: US-REP-041
+  to: FEAT-REP-007
+  relationship: belongs_to
+- from: ACC-REP-063
+  to: US-REP-041
+  relationship: realizes
+- from: ACC-REP-063
+  to: PROC-REP-265
+  relationship: covers
+- from: ACC-REP-063
+  to: PROC-REP-267
+  relationship: covers
+- from: ACC-REP-063
+  to: PROC-REP-268
+  relationship: covers
+- from: ACC-REP-063
+  to: BR-REP-016
+  relationship: governed_by
+- from: ACC-REP-063
+  to: BR-REP-038
+  relationship: governed_by
+- from: FR-REP-150
+  to: ACC-REP-063
+  relationship: derives_from
+- from: TR-REP-145
+  to: FR-REP-150
+  relationship: satisfies
+- from: FR-REP-151
+  to: ACC-REP-063
+  relationship: derives_from
+- from: TR-REP-145
+  to: FR-REP-151
+  relationship: satisfies
+- from: FR-REP-152
+  to: ACC-REP-063
+  relationship: derives_from
+- from: TR-REP-145
+  to: FR-REP-152
+  relationship: satisfies
+- from: TASK-REP-217
+  to: TR-REP-145
+  relationship: implements
+- from: CODE-REP-254
+  to: TASK-REP-217
+  relationship: produced_by
+- from: CODE-REP-254
+  to: TR-REP-145
+  relationship: implements
+- from: CODE-REP-255
+  to: TASK-REP-217
+  relationship: produced_by
+- from: CODE-REP-255
+  to: TR-REP-145
+  relationship: implements
+- from: TEST-REP-548
+  to: CODE-REP-254
+  relationship: exercises
+- from: TEST-REP-548
+  to: FR-REP-150
+  relationship: verifies
+- from: TEST-REP-549
+  to: CODE-REP-254
+  relationship: exercises
+- from: TEST-REP-549
+  to: FR-REP-150
+  relationship: verifies
+- from: TEST-REP-550
+  to: CODE-REP-254
+  relationship: exercises
+- from: TEST-REP-550
+  to: FR-REP-150
+  relationship: verifies
+- from: UAT-REP-047
+  to: US-REP-041
+  relationship: accepts
+- from: US-REP-042
+  to: FEAT-REP-009
+  relationship: belongs_to
+- from: ACC-REP-064
+  to: US-REP-042
+  relationship: realizes
+- from: ACC-REP-064
+  to: PROC-REP-046
+  relationship: covers
+- from: ACC-REP-064
+  to: PROC-REP-200
+  relationship: covers
+- from: ACC-REP-064
+  to: PROC-REP-211
+  relationship: covers
+- from: ACC-REP-064
+  to: PROC-REP-300
+  relationship: covers
+- from: ACC-REP-064
+  to: BR-REP-030
+  relationship: governed_by
+- from: FR-REP-153
+  to: ACC-REP-064
+  relationship: derives_from
+- from: TR-REP-146
+  to: FR-REP-153
+  relationship: satisfies
+- from: FR-REP-154
+  to: ACC-REP-064
+  relationship: derives_from
+- from: TR-REP-146
+  to: FR-REP-154
+  relationship: satisfies
+- from: FR-REP-155
+  to: ACC-REP-064
+  relationship: derives_from
+- from: TR-REP-146
+  to: FR-REP-155
+  relationship: satisfies
+- from: TASK-REP-218
+  to: TR-REP-146
+  relationship: implements
+- from: CODE-REP-256
+  to: TASK-REP-218
+  relationship: produced_by
+- from: CODE-REP-256
+  to: TR-REP-146
+  relationship: implements
+- from: CODE-REP-257
+  to: TASK-REP-218
+  relationship: produced_by
+- from: CODE-REP-257
+  to: TR-REP-146
+  relationship: implements
+- from: CODE-REP-258
+  to: TASK-REP-218
+  relationship: produced_by
+- from: CODE-REP-258
+  to: TR-REP-146
+  relationship: implements
+- from: TEST-REP-551
+  to: CODE-REP-256
+  relationship: exercises
+- from: TEST-REP-551
+  to: FR-REP-153
+  relationship: verifies
+- from: TEST-REP-552
+  to: CODE-REP-256
+  relationship: exercises
+- from: TEST-REP-552
+  to: FR-REP-153
+  relationship: verifies
+- from: TEST-REP-553
+  to: CODE-REP-256
+  relationship: exercises
+- from: TEST-REP-553
+  to: FR-REP-153
+  relationship: verifies
+- from: UAT-REP-048
+  to: US-REP-042
+  relationship: accepts
+- from: US-REP-043
+  to: FEAT-REP-002
+  relationship: belongs_to
+- from: ACC-REP-065
+  to: US-REP-043
+  relationship: realizes
+- from: ACC-REP-065
+  to: PROC-REP-075
+  relationship: covers
+- from: ACC-REP-065
+  to: PROC-REP-127
+  relationship: covers
+- from: ACC-REP-065
+  to: PROC-REP-046
+  relationship: covers
+- from: ACC-REP-065
+  to: BR-REP-039
+  relationship: governed_by
+- from: FR-REP-156
+  to: ACC-REP-065
+  relationship: derives_from
+- from: TR-REP-147
+  to: FR-REP-156
+  relationship: satisfies
+- from: FR-REP-157
+  to: ACC-REP-065
+  relationship: derives_from
+- from: TR-REP-147
+  to: FR-REP-157
+  relationship: satisfies
+- from: TASK-REP-219
+  to: TR-REP-147
+  relationship: implements
+- from: CODE-REP-259
+  to: TASK-REP-219
+  relationship: produced_by
+- from: CODE-REP-259
+  to: TR-REP-147
+  relationship: implements
+- from: CODE-REP-260
+  to: TASK-REP-219
+  relationship: produced_by
+- from: CODE-REP-260
+  to: TR-REP-147
+  relationship: implements
+- from: TEST-REP-554
+  to: CODE-REP-259
+  relationship: exercises
+- from: TEST-REP-554
+  to: FR-REP-156
+  relationship: verifies
+- from: TEST-REP-555
+  to: CODE-REP-259
+  relationship: exercises
+- from: TEST-REP-555
+  to: FR-REP-156
+  relationship: verifies
+- from: TEST-REP-556
+  to: CODE-REP-259
+  relationship: exercises
+- from: TEST-REP-556
+  to: FR-REP-156
+  relationship: verifies
+- from: UAT-REP-049
+  to: US-REP-043
+  relationship: accepts

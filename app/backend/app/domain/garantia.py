@@ -12,6 +12,8 @@ Sin check-in registrado (todavia no se hizo, RT interno o garantia RMA)
 rige el plazo del Tipo de Reparacion, como hasta ahora.
 """
 
+from datetime import date, datetime, timedelta, tzinfo
+
 GARANTIA_CON_CHECKIN_DIAS = 90
 GARANTIA_SIN_CHECKIN_DIAS = 30
 # Tope de un ajuste manual: evita un plazo cargado por error (dias de mas).
@@ -25,3 +27,20 @@ def garantia_sugerida(checkin: bool | None, dias_del_tipo: int) -> int:
     if checkin is False:
         return GARANTIA_SIN_CHECKIN_DIAS
     return dias_del_tipo
+
+
+def vencimiento_garantia(
+    fecha_inicio: datetime | None,
+    garantia_dias: int,
+    zona_horaria: tzinfo,
+) -> date | None:
+    """Ultimo dia de garantia: el dia (local) de la entrega + el plazo.
+
+    ``None`` sin entrega todavia o con un plazo de 0 dias (sin garantia).
+    Es el mismo calculo del comprobante de garantia y de la validacion de
+    vigencia de una garantia RMA (PROC-REP-036, BR-REP-041).
+    """
+    if fecha_inicio is None or garantia_dias <= 0:
+        return None
+    dia_entrega = fecha_inicio.astimezone(zona_horaria).date()
+    return dia_entrega + timedelta(days=garantia_dias)

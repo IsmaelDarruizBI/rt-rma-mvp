@@ -17,7 +17,6 @@ from tests.fixtures.api_salidas import (
     ESTACION,
     INSUMO_BATERIA,
     PANTALLA,
-    RECEPCION,
     TECNICO,
     agregar,
     archivo,
@@ -414,7 +413,7 @@ def _rt_en_revision(cliente) -> str:
 def _redefinir(cliente, orden_id):
     return cliente.post(
         f"/api/orders/{orden_id}/details/DET-001/redefine",
-        json={"usuario_id": RECEPCION, "tipo_reparacion_id": PANTALLA},
+        json={"usuario_id": TECNICO, "tipo_reparacion_id": PANTALLA},
     )
 
 

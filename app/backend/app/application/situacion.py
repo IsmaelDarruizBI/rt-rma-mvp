@@ -716,13 +716,35 @@ def _control(datos: _Datos) -> _Principal | None:
 def _en_reparacion(datos: _Datos) -> _Principal | None:
     completar = datos.flujo("COMPLETAR_EJECUCION")
     ejecucion = ejecucion_activa(datos.orden)
-    if not completar or ejecucion is None:
+    if ejecucion is None:
         return None
     trabajo = datos.nombre(ejecucion.reparacion_detail_id)
     # Interrumpir es la otra salida de la misma Ejecucion (VAR-REP-003):
     # va junto a completar, como opcion secundaria. Pedir la redefinicion
     # sigue siendo una situacion especial.
     interrumpir = datos.flujo("INTERRUMPIR_EJECUCION")
+    if not completar:
+        # DC07 / VAR-REP-042: el cliente pidio desistir de este trabajo;
+        # al tecnico solo le queda interrumpirlo.
+        if not interrumpir:
+            return None
+        return _Principal(
+            codigo=CodigoSituacion.EN_REPARACION,
+            titulo="En reparación · el cliente pidió desistir",
+            descripcion=(
+                f"El cliente pidió desistir de «{trabajo}» mientras se "
+                "reparaba."
+            ),
+            desde=ejecucion.inicio,
+            tareas=(
+                _tarea(
+                    "Interrumpir el trabajo",
+                    "Indicar cómo queda el trabajo y si se puede revertir; "
+                    "al interrumpir, el trabajo se cancela y no se cobra.",
+                    interrumpir,
+                ),
+            ),
+        )
     return _Principal(
         codigo=CodigoSituacion.EN_REPARACION,
         titulo="En reparación",
@@ -757,7 +779,7 @@ def _revision(datos: _Datos) -> _Principal | None:
         tareas.append(
             _tarea(
                 "Redefinir el trabajo",
-                "Con la revisión hecha, Recepción define el trabajo que "
+                "Con la revisión hecha, el técnico redefine el trabajo que "
                 "corresponde.",
                 redefinir,
             )

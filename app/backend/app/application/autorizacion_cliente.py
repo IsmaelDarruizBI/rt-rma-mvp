@@ -170,10 +170,24 @@ def desistimiento_total_ofrecible(orden: OrdenReparacion) -> bool:
 
 
 def detalles_desistibles(orden: OrdenReparacion) -> tuple[str, ...]:
-    """Detalles autorizados de los que el cliente puede desistir ahora."""
+    """Detalles autorizados de los que el cliente puede desistir ahora.
+
+    Incluye los que se estan ejecutando (DC07, VAR-REP-042): alli se
+    registra la solicitud y la cancelacion espera a que el tecnico
+    interrumpa. No repite uno que ya tiene la solicitud pendiente y sigue
+    en ejecucion.
+    """
     if not _admite_cancelaciones_del_cliente(orden):
         return ()
-    return analizar_desistimiento(orden).desistibles
+    desistibles = list(analizar_desistimiento(orden).desistibles)
+    for detalle in orden.reparaciones_detail:
+        if (
+            detalle.estado is EstadoReparacionDetail.EN_PROGRESO
+            and detalle.solicitud_desistimiento is None
+            and not pendiente_de_autorizacion(orden, detalle)
+        ):
+            desistibles.append(detalle.id)
+    return tuple(desistibles)
 
 
 @dataclass(frozen=True)

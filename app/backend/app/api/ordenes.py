@@ -11,11 +11,13 @@ atrapa excepciones -de eso se ocupa ``errores.py``-.
 """
 
 import hashlib
+from dataclasses import replace
 
 from fastapi import APIRouter, Request, Response, status
 from starlette.concurrency import run_in_threadpool
 
 from app.application import (
+    AccionDisponible,
     ApplicationContext,
     acciones_complementarias,
     acciones_de_autorizacion,
@@ -87,13 +89,22 @@ from app.application import (
     tomar_orden_en_estacion,
     vista_previa_documento,
 )
-from app.domain.models import OrdenReparacion, TipoDocumento
+from app.application.acciones import ACCION_INICIAR_GARANTIA_RMA
+from app.domain.models import (
+    EstadoReparacionDetail,
+    EstadoWorkflow,
+    OrdenReparacion,
+    TipoDocumento,
+    VigenciaGarantiaOrigen,
+)
 from app.domain.prioridad import clave_de_prioridad
 from app.services import (
     MAX_BYTES_FOTO,
+    ROLES_EXCEPCION_GARANTIA,
     ROLES_FOTOS,
     DecisionDetalle,
     PrecondicionInvalidaError,
+    evaluar_vigencia_garantia,
 )
 
 from .dependencias import ContextoDep
@@ -176,7 +187,10 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
         nombres = nombres_de_tipo_por_detalle(contexto, orden)
         previstos = insumos_previstos_por_detalle(contexto, orden)
         origen = detalles_origen_de(contexto, orden)
-    acciones = acciones_disponibles(orden)
+    garantia = _garantia_por_detalle(orden, contexto)
+    acciones = _con_excepcion_de_garantia(
+        acciones_disponibles(orden), garantia
+    )
     autorizacion = acciones_de_autorizacion(orden)
     financieras = acciones_financieras(orden)
     custodia = acciones_de_custodia(orden)
@@ -201,6 +215,55 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
             nombres_de_detalle=nombres,
         ),
         fotos_habilitadas=contexto.fotos is not None,
+        garantia_por_detalle=garantia,
+    )
+
+
+def _con_excepcion_de_garantia(
+    acciones: list[AccionDisponible],
+    garantia: list[VigenciaGarantiaOrigen],
+) -> list[AccionDisponible]:
+    """VAR-REP-039: con algun trabajo de garantia vencida, iniciar la
+    garantia RMA tambien lo puede quien autoriza la excepcion. La vigencia
+    depende del dia: por eso se resuelve aca y no en el dominio."""
+    if all(vigencia.vigente for vigencia in garantia):
+        return acciones
+    return [
+        replace(
+            accion,
+            roles=tuple(
+                dict.fromkeys((*accion.roles, *ROLES_EXCEPCION_GARANTIA))
+            ),
+        )
+        if accion.codigo == ACCION_INICIAR_GARANTIA_RMA
+        else accion
+        for accion in acciones
+    ]
+
+
+def _garantia_por_detalle(
+    orden: OrdenReparacion, contexto: ApplicationContext
+) -> list[VigenciaGarantiaOrigen]:
+    """Vigencia hoy de la garantia de cada trabajo de una Orden ENTREGADA.
+
+    La misma evaluacion de PROC-REP-036 (DC15B), para que Recepcion vea
+    antes de iniciar una garantia RMA que Detalles siguen cubiertos.
+    """
+    if (
+        orden.estado_workflow is not EstadoWorkflow.ENTREGADA
+        or orden.cliente is None
+    ):
+        return []
+    realizados = [
+        detalle.id
+        for detalle in orden.reparaciones_detail
+        if detalle.estado is EstadoReparacionDetail.COMPLETO
+    ]
+    return evaluar_vigencia_garantia(
+        orden,
+        realizados,
+        fecha=contexto.ahora(),
+        zona_horaria=contexto.zona_horaria,
     )
 
 
@@ -531,6 +594,7 @@ def post_iniciar_garantia_rma(
         datos_recepcion=(
             cuerpo.recepcion.a_dominio() if cuerpo.recepcion else None
         ),
+        motivo_excepcion=cuerpo.motivo_excepcion,
     )
     return _salida(orden, contexto)
 
@@ -785,6 +849,8 @@ def post_interrumpir_ejecucion(
         ],
         motivo=cuerpo.motivo,
         observaciones=cuerpo.observaciones,
+        estado_trabajo=cuerpo.estado_trabajo,
+        reversible=cuerpo.reversible,
     )
     return _salida(orden, contexto)
 
@@ -1256,6 +1322,7 @@ def post_aplicar_descuento(
         tipo=cuerpo.tipo,
         valor=cuerpo.valor,
         motivo=cuerpo.motivo,
+        clase=cuerpo.clase,
     )
     return _salida_con_entrega(orden, contexto, puede_entregar)
 

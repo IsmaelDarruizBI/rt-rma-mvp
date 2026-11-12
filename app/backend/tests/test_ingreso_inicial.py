@@ -490,10 +490,10 @@ def test_los_otros_origenes_y_la_revision_siguen_igual(cliente):
     ok(
         cliente.post(
             f"/api/orders/{revisada}/review/details",
-            json={"usuario_id": RECEPCION, "tipo_reparacion_id": BATERIA},
+            json={"usuario_id": TECNICO, "tipo_reparacion_id": BATERIA},
         )
     )
-    ok(_finalizar(cliente, revisada))
+    ok(_finalizar(cliente, revisada, TECNICO))
     orden = ok(_autorizar(cliente, revisada))
     assert orden["estado_workflow"] == "HABILITADA"
     assert "ENCOLAR" in codigos(orden)
@@ -626,7 +626,7 @@ def test_una_autorizacion_posterior_no_es_la_del_ingreso(cliente):
     orden = ok(
         cliente.post(
             f"/api/orders/{orden_id}/details/DET-001/redefine",
-            json={"usuario_id": RECEPCION, "tipo_reparacion_id": PANTALLA},
+            json={"usuario_id": TECNICO, "tipo_reparacion_id": PANTALLA},
         )
     )
 

@@ -63,7 +63,7 @@ def _revisada(cliente, *tipos) -> str:
         ok(
             cliente.post(
                 f"/api/orders/{orden_id}/review/details",
-                json={"usuario_id": RECEPCION, "tipo_reparacion_id": tipo},
+                json={"usuario_id": TECNICO, "tipo_reparacion_id": tipo},
             )
         )
     finalizar(cliente, orden_id, confirmar_recepcion=False)
@@ -357,7 +357,7 @@ def test_requiere_revision_tecnica_y_redefinicion(tmp_path):
         )
         (redefinir,) = _situacion(cliente, orden_id)["tareas"]
         assert _codigos(redefinir) == ["REDEFINIR_DETALLE"]
-        assert redefinir["responsable"] == "Recepción"
+        assert redefinir["responsable"] == "Técnico"
 
 
 def test_control_de_la_reparacion_aprobar_o_rechazar(tmp_path):

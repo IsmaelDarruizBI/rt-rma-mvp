@@ -76,7 +76,7 @@ $$;
 do $$
 begin
   perform rma_pruebas.debe_ser((select count(*)::int from rma.rol), 4, 'cuatro roles');
-  perform rma_pruebas.debe_ser((select count(*)::int from rma.tipo_evento where es_negocio), 51, '51 tipos de evento de negocio');
+  perform rma_pruebas.debe_ser((select count(*)::int from rma.tipo_evento where es_negocio), 52, '52 tipos de evento de negocio (51 de la base y EV-REP-052, iteracion 1)');
   perform rma_pruebas.debe_ser((select count(*)::int from rma.tipo_evento where not es_negocio), 1, 'un tipo técnico');
   perform rma_pruebas.debe_ser(
     (select count(*)::int from rma.tipo_evento where codigo like 'ACC-REP-%'), 0, 'ningún tipo reutiliza ACC-REP');

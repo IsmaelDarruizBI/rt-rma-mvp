@@ -717,6 +717,11 @@ export interface Detalle {
   pendiente_de_retrabajo: boolean;
   /** Solo en un Detalle CANCELADO. */
   cancelacion: Cancelacion | null;
+  /**
+   * DC07 (VAR-REP-042): el cliente pidió desistir con el trabajo en
+   * ejecución. Se conserva aunque después se cancele.
+   */
+  solicitud_desistimiento?: SolicitudDesistimiento | null;
   /** Resuelto por la API contra el catálogo; no vive en el dominio. */
   insumos_previstos: InsumoPrevisto[];
   /** Definición vigente: 1 + las reemplazadas por PROC-REP-127. */
@@ -788,6 +793,34 @@ export interface Ejecucion {
   motivo_interrupcion: string | null;
   /** PROC-REP-200 "Requiere redefinicion" (EXC-REP-004). */
   motivo_redefinicion: string | null;
+  /** DC07B: interrumpida por un desistimiento, cómo quedó el trabajo. */
+  estado_trabajo?: string | null;
+  /** DC07B: si lo hecho puede revertirse. */
+  reversible?: boolean | null;
+}
+
+/** DC07: pedido de desistimiento sobre un trabajo en ejecución. */
+export interface SolicitudDesistimiento {
+  usuario_id: string;
+  fecha: string;
+  motivo: string;
+  canal: CanalComunicacion;
+}
+
+/** DC15B: vigencia de la garantía de un trabajo de la Orden origen. */
+export interface VigenciaGarantia {
+  detalle_id: string;
+  garantia_dias: number;
+  /** Último día cubierto (AAAA-MM-DD); `null` sin fecha de entrega. */
+  vence: string | null;
+  vigente: boolean;
+}
+
+/** VAR-REP-039: garantía vencida admitida como excepción. */
+export interface ExcepcionGarantia {
+  usuario_id: string;
+  fecha: string;
+  motivo: string;
 }
 
 /**
@@ -852,6 +885,9 @@ export interface ResumenComercial {
 
 export type TipoDescuento = "PORCENTAJE" | "IMPORTE";
 
+/** DC11: un descuento o una cortesía total (la Orden no se cobra). */
+export type ClaseAjuste = "DESCUENTO" | "CORTESIA";
+
 /** El descuento comercial que rige hoy. */
 export interface DescuentoVigente {
   tipo: TipoDescuento;
@@ -870,6 +906,7 @@ export interface RegistroDescuento {
   motivo: string;
   usuario_id: string;
   fecha: string;
+  clase?: ClaseAjuste;
 }
 
 /**
@@ -1031,6 +1068,12 @@ export interface Orden {
   detalles_origen_ids: string[];
   /** Los mismos Detalles origen, con el nombre de su Tipo (presentación). */
   detalles_origen: DetalleOrigen[];
+  /** PROC-REP-036: la vigencia evaluada al iniciar la garantía RMA. */
+  vigencia_garantia_origen?: VigenciaGarantia[];
+  /** VAR-REP-039: quién admitió la garantía vencida, cuándo y por qué. */
+  excepcion_garantia?: ExcepcionGarantia | null;
+  /** Orden ENTREGADA: vigencia HOY de la garantía de cada trabajo. */
+  garantia_por_detalle?: VigenciaGarantia[];
   /**
    * PROC-REP-069: la revisión concluyó SIN_REPARACION. Lo deriva el backend
    * del historial; no es un estado de workflow.

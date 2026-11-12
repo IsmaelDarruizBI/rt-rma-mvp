@@ -227,10 +227,14 @@ def finalizar(cliente, orden_id, confirmar_recepcion=True) -> dict:
     orden = ok(cliente.get(f"/api/orders/{orden_id}"))
     if custodia.en_ingreso_inicial(orden):
         return generar_ingreso(cliente, orden_id)
+    # V1.4 (DC06): la carga luego de la revision (075) la cierra el Tecnico.
+    actor = (
+        TECNICO if orden["estado_workflow"] == "EN_REVISION" else RECEPCION
+    )
     respuesta = ok(
         cliente.post(
             f"/api/orders/{orden_id}/definition/finalize",
-            json={"usuario_id": RECEPCION},
+            json={"usuario_id": actor},
         )
     )
     if confirmar_recepcion:
@@ -344,13 +348,15 @@ def por_revision(cliente, *tipos) -> str:
         ok(
             cliente.post(
                 f"/api/orders/{orden_id}/review/details",
-                json={"usuario_id": RECEPCION, "tipo_reparacion_id": tipo},
+                json={"usuario_id": TECNICO, "tipo_reparacion_id": tipo},
             )
         )
+    # V1.4 (DC06): definir luego de la revision (075) y cerrar esa carga
+    # es del Tecnico.
     ok(
         cliente.post(
             f"/api/orders/{orden_id}/definition/finalize",
-            json={"usuario_id": RECEPCION},
+            json={"usuario_id": TECNICO},
         )
     )
     return orden_id

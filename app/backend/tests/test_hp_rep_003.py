@@ -107,10 +107,10 @@ def _garantia_habilitada(
         _garantia_revisada(origen),
         detalle_id="DET-001",
         tipo_reparacion=TIPO_BATERIA,
-        usuario=RECEPCION,
+        usuario=TECNICO,
         fecha=t(304),
     )
-    exigir_definicion_finalizable(orden, usuario=RECEPCION)
+    exigir_definicion_finalizable(orden, usuario=TECNICO)
     orden, factible = validar_factibilidad_detalles(
         orden,
         insumos=INSUMOS,
@@ -220,13 +220,16 @@ def test_no_copia_historia_tecnica_de_la_orden_origen():
     assert orden.reparaciones_detail == []
 
 
-def test_historial_inicial_es_035_y_040_sin_010_ni_030():
+def test_historial_inicial_es_035_036_y_040_sin_010_ni_030():
+    """V1.4 (DC15B): 035 -> 036 (Vigente) -> 040."""
     orden = _garantia_creada()
 
     assert [(p.referencia_id, p.accion) for p in orden.historial] == [
         ("PROC-REP-035", "IDENTIFICAR_REPARACION_ORIGINAL_GARANTIA"),
+        ("PROC-REP-036", "VALIDAR_VIGENCIA_GARANTIA"),
         ("PROC-REP-040", "CREAR_ORDEN"),
     ]
+    assert orden.historial[1].observacion == "Vigente"
     assert f"orden_origen_id={ORIGEN_ID}" in orden.historial[0].observacion
     assert (
         f"detalles_origen_ids={DETALLE_ORIGEN_ID}"
@@ -250,6 +253,7 @@ def test_recorrido_inicial_035_a_140_con_revision_obligatoria():
 
     assert [p.referencia_id for p in orden.historial] == [
         "PROC-REP-035",
+        "PROC-REP-036",
         "PROC-REP-040",
         "PROC-REP-045",
         "PROC-REP-055",
@@ -262,7 +266,7 @@ def test_recorrido_inicial_035_a_140_con_revision_obligatoria():
         "PROC-REP-090",
         "PROC-REP-140",
     ]
-    assert orden.historial[2].observacion == "No"
+    assert orden.historial[3].observacion == "No"
     assert orden.estado_workflow is EstadoWorkflow.HABILITADA
     assert orden.documentos.comprobante_recepcion.generado
 

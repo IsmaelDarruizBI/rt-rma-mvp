@@ -147,6 +147,16 @@ def definir_y_finalizar(
     return autorizar_pendientes(cliente, orden_id, finalizada)
 
 
+def _actor_075(json: dict[str, Any]) -> dict[str, Any]:
+    """V1.4 (DC06): definir luego de la revision (075) y cerrar esa carga
+    es del Tecnico. Si el llamador pide "el actor normal" (Recepcion, como
+    antes de V1.4) se usa el Tecnico; otro usuario se respeta, para probar
+    los rechazos por rol."""
+    if json.get("usuario_id") == RECEPCION_ID:
+        return {**json, "usuario_id": TECNICO_ID}
+    return json
+
+
 def _por_revision(
     cliente: TestClient, orden_id: str, json: dict[str, Any]
 ) -> Response:
@@ -165,6 +175,7 @@ def _por_revision(
     )
     if revisada.status_code != 200:
         return revisada
+    json = _actor_075(json)
     agregado = cliente.post(
         f"/api/orders/{orden_id}/review/details", json=json
     )
@@ -185,6 +196,7 @@ def definir_desde_revision_y_finalizar(
     Si agregar el Detalle falla, devuelve esa respuesta sin finalizar.
     """
     confirmar_recepcion(cliente, orden_id)
+    json = _actor_075(json)
     agregado = cliente.post(
         f"/api/orders/{orden_id}/review/details", json=json
     )

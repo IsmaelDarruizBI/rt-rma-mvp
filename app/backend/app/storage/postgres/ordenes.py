@@ -311,9 +311,10 @@ _INSERTAR_DESCUENTO = consulta(
     "ordenes.insertar_descuento",
     """
     INSERT INTO rma.descuento
-        (orden_id, tipo, valor, motivo, usuario_id, registrado_en, posicion)
+        (orden_id, tipo, valor, motivo, usuario_id, registrado_en, posicion,
+         clase)
     VALUES (%(orden)s, %(tipo)s, %(valor)s, %(motivo)s, %(usuario)s,
-            %(fecha)s, %(posicion)s)
+            %(fecha)s, %(posicion)s, %(clase)s)
     """,
     modo=ESCRITURA,
 )
@@ -468,7 +469,8 @@ _INSERTAR_ORDEN = consulta(
          equipo_variante, equipo_capacidad_texto, equipo_color, equipo_imei,
          equipo_numero_serie, equipo_tipo_producto_id, falla_reportada,
          comprobante_recepcion_generado_en, comprobante_final_generado_en,
-         garantia_generada_en, actualizado_en)
+         garantia_generada_en, actualizado_en, excepcion_garantia_por,
+         excepcion_garantia_en, excepcion_garantia_motivo)
     VALUES
         (%(codigo)s, %(origen)s, %(orden_origen_id)s, %(creada_en)s,
          %(estado_workflow)s, %(posicion_proceso)s, %(prioridad)s,
@@ -482,7 +484,8 @@ _INSERTAR_ORDEN = consulta(
          %(equipo_tipo_producto_id)s, %(falla_reportada)s,
          %(comprobante_recepcion_generado_en)s,
          %(comprobante_final_generado_en)s, %(garantia_generada_en)s,
-         %(actualizado_en)s)
+         %(actualizado_en)s, %(excepcion_garantia_por)s,
+         %(excepcion_garantia_en)s, %(excepcion_garantia_motivo)s)
     RETURNING id, version
     """,
     modo=ESCRITURA,
@@ -525,8 +528,10 @@ _INSERTAR_DETALLE_ORIGEN = consulta(
     "ordenes.insertar_detalle_origen",
     """
     INSERT INTO rma.orden_detalle_origen
-        (orden_id, orden_origen_id, detalle_id, posicion)
-    VALUES (%(orden)s, %(origen)s, %(detalle)s, %(posicion)s)
+        (orden_id, orden_origen_id, detalle_id, posicion, garantia_dias,
+         garantia_vence, garantia_vigente)
+    VALUES (%(orden)s, %(origen)s, %(detalle)s, %(posicion)s,
+            %(garantia_dias)s, %(garantia_vence)s, %(garantia_vigente)s)
     """,
     modo=ESCRITURA,
 )
@@ -574,14 +579,18 @@ _INSERTAR_DETALLE = consulta(
          control_usuario_id, control_en, control_observaciones,
          garantia_dias, garantia_dias_sugerida, detalle_origen_id,
          observaciones, cancelacion_origen, cancelacion_motivo,
-         cancelado_por, cancelado_en)
+         cancelado_por, cancelado_en, desistimiento_solicitado_por,
+         desistimiento_solicitado_en, desistimiento_motivo,
+         desistimiento_canal)
     VALUES
         (%(orden)s, %(codigo)s, %(estado)s, %(condicion)s,
          %(control_estado)s, %(control_usuario_id)s, %(control_en)s,
          %(control_observaciones)s, %(garantia_dias)s,
          %(garantia_dias_sugerida)s, %(detalle_origen_id)s,
          %(observaciones)s, %(cancelacion_origen)s, %(cancelacion_motivo)s,
-         %(cancelado_por)s, %(cancelado_en)s)
+         %(cancelado_por)s, %(cancelado_en)s,
+         %(desistimiento_solicitado_por)s, %(desistimiento_solicitado_en)s,
+         %(desistimiento_motivo)s, %(desistimiento_canal)s)
     RETURNING id
     """,
     modo=ESCRITURA,
@@ -601,7 +610,11 @@ _ACTUALIZAR_DETALLE = consulta(
         observaciones = %(observaciones)s,
         cancelacion_origen = %(cancelacion_origen)s,
         cancelacion_motivo = %(cancelacion_motivo)s,
-        cancelado_por = %(cancelado_por)s, cancelado_en = %(cancelado_en)s
+        cancelado_por = %(cancelado_por)s, cancelado_en = %(cancelado_en)s,
+        desistimiento_solicitado_por = %(desistimiento_solicitado_por)s,
+        desistimiento_solicitado_en = %(desistimiento_solicitado_en)s,
+        desistimiento_motivo = %(desistimiento_motivo)s,
+        desistimiento_canal = %(desistimiento_canal)s
     WHERE id = %(id)s
     """,
     modo=ESCRITURA,
@@ -681,10 +694,11 @@ _INSERTAR_EJECUCION = consulta(
     INSERT INTO rma.ejecucion
         (codigo, orden_id, detalle_id, detalle_version_id, toma_id,
          usuario_id, estado, inicio, fin, observaciones, motivo_interrupcion,
-         motivo_redefinicion, posicion)
+         motivo_redefinicion, posicion, estado_trabajo, reversible)
     VALUES (%(codigo)s, %(orden)s, %(detalle)s, %(version)s, %(toma)s,
             %(usuario)s, %(estado)s, %(inicio)s, %(fin)s, %(observaciones)s,
-            %(motivo_interrupcion)s, %(motivo_redefinicion)s, %(posicion)s)
+            %(motivo_interrupcion)s, %(motivo_redefinicion)s, %(posicion)s,
+            %(estado_trabajo)s, %(reversible)s)
     RETURNING id
     """,
     modo=ESCRITURA,
@@ -695,7 +709,8 @@ _ACTUALIZAR_EJECUCION = consulta(
     UPDATE rma.ejecucion SET estado = %(estado)s, fin = %(fin)s,
         observaciones = %(observaciones)s,
         motivo_interrupcion = %(motivo_interrupcion)s,
-        motivo_redefinicion = %(motivo_redefinicion)s
+        motivo_redefinicion = %(motivo_redefinicion)s,
+        estado_trabajo = %(estado_trabajo)s, reversible = %(reversible)s
     WHERE id = %(id)s
     """,
     modo=ESCRITURA,
@@ -1152,6 +1167,7 @@ class _Guardado:
                     "origen": orden.origen.value,
                     "orden_origen_id": self._id_orden_origen(),
                     "creada_en": orden.created_at,
+                    **self._excepcion_garantia(),
                 },
             )
             orden_id, version = fila.id, fila.version
@@ -1164,6 +1180,13 @@ class _Guardado:
                 self._inmutable("el origen de la Orden")
             if orden.detalles_origen_ids != previa.orden.detalles_origen_ids:
                 self._inmutable("los Detalles de origen")
+            if (
+                orden.vigencia_garantia_origen
+                != previa.orden.vigencia_garantia_origen
+                or orden.excepcion_garantia
+                != previa.orden.excepcion_garantia
+            ):
+                self._inmutable("la validacion de la garantia")
             if orden.created_at != previa.orden.created_at:
                 self._inmutable("la fecha de alta")
         self._recepcion(orden_id)
@@ -1291,6 +1314,8 @@ class _Guardado:
                 usuarios.add(detalle.control_usuario_id)
             if detalle.cancelacion:
                 usuarios.add(detalle.cancelacion.usuario_id)
+            if detalle.solicitud_desistimiento:
+                usuarios.add(detalle.solicitud_desistimiento.usuario_id)
             usuarios.update(a.usuario_id for a in detalle.autorizaciones)
             usuarios.update(a.usuario_id for a in detalle.ajustes_garantia)
             usuarios.update(c.usuario_id for c in detalle.controles)
@@ -1315,6 +1340,8 @@ class _Guardado:
                 usuarios.add(pago.anulacion.usuario_id)
         usuarios.update(d.usuario_id for d in resumen.devoluciones)
         usuarios.update(d.usuario_id for d in orden.descuentos)
+        if orden.excepcion_garantia:
+            usuarios.add(orden.excepcion_garantia.usuario_id)
         pedidos = {
             "usuario": usuarios,
             "tipo_reparacion": tipos,
@@ -1514,7 +1541,14 @@ class _Guardado:
                 f"La Orden {orden.id} tiene Detalles de origen sin Orden de "
                 "origen."
             )
+        vigencias = {v.detalle_id: v for v in orden.vigencia_garantia_origen}
+        if set(vigencias) - set(orden.detalles_origen_ids):
+            raise PersistenciaError(
+                f"La Orden {orden.id} evalua la garantia de Detalles que no "
+                "reclama."
+            )
         for posicion, codigo in enumerate(orden.detalles_origen_ids, 1):
+            vigencia = vigencias.get(codigo)
             self._ej.ejecutar(
                 _INSERTAR_DETALLE_ORIGEN,
                 {
@@ -1522,8 +1556,27 @@ class _Guardado:
                     "origen": origen,
                     "detalle": self._detalle_de_origen(codigo),
                     "posicion": posicion,
+                    "garantia_dias": (
+                        vigencia.garantia_dias if vigencia else None
+                    ),
+                    "garantia_vence": vigencia.vence if vigencia else None,
+                    "garantia_vigente": (
+                        vigencia.vigente if vigencia else None
+                    ),
                 },
             )
+
+    def _excepcion_garantia(self) -> dict[str, Any]:
+        excepcion = self._orden.excepcion_garantia
+        return {
+            "excepcion_garantia_por": self._id(
+                "usuario", excepcion.usuario_id if excepcion else None
+            ),
+            "excepcion_garantia_en": excepcion.fecha if excepcion else None,
+            "excepcion_garantia_motivo": (
+                excepcion.motivo if excepcion else None
+            ),
+        }
 
     def _detalle_de_origen(self, codigo: str | None) -> UUID | None:
         if codigo is None:
@@ -1896,6 +1949,7 @@ class _Guardado:
                     "usuario": self._id("usuario", registro.usuario_id),
                     "fecha": registro.fecha,
                     "posicion": posicion,
+                    "clase": registro.clase.value,
                 },
             )
 
@@ -1944,12 +1998,14 @@ class _Guardado:
             detalle.detalle_origen_id,
             detalle.observaciones,
             detalle.cancelacion,
+            detalle.solicitud_desistimiento,
         )
 
     def _fila_detalle(
         self, detalle: ReparacionDetail, orden_id: UUID
     ) -> dict[str, Any]:
         cancelacion = detalle.cancelacion
+        solicitud = detalle.solicitud_desistimiento
         return {
             "orden": orden_id,
             "codigo": detalle.id,
@@ -1975,6 +2031,16 @@ class _Guardado:
                 "usuario", cancelacion.usuario_id if cancelacion else None
             ),
             "cancelado_en": cancelacion.fecha if cancelacion else None,
+            "desistimiento_solicitado_por": self._id(
+                "usuario", solicitud.usuario_id if solicitud else None
+            ),
+            "desistimiento_solicitado_en": (
+                solicitud.fecha if solicitud else None
+            ),
+            "desistimiento_motivo": solicitud.motivo if solicitud else None,
+            "desistimiento_canal": (
+                solicitud.canal.value if solicitud else None
+            ),
         }
 
     def _versiones_de(
@@ -2192,6 +2258,8 @@ class _Guardado:
                 "observaciones": ejecucion.observaciones,
                 "motivo_interrupcion": ejecucion.motivo_interrupcion,
                 "motivo_redefinicion": ejecucion.motivo_redefinicion,
+                "estado_trabajo": ejecucion.estado_trabajo,
+                "reversible": ejecucion.reversible,
             }
             if anterior is None:
                 detalle = ejecucion.reparacion_detail_id
@@ -2229,6 +2297,8 @@ class _Guardado:
                     "observaciones": anterior.observaciones,
                     "motivo_interrupcion": anterior.motivo_interrupcion,
                     "motivo_redefinicion": anterior.motivo_redefinicion,
+                    "estado_trabajo": anterior.estado_trabajo,
+                    "reversible": anterior.reversible,
                 }
                 if cambio:
                     if anterior.estado.value != "EN_PROGRESO":

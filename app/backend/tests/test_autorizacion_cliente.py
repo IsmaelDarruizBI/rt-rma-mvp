@@ -133,7 +133,7 @@ def _redefinido(cliente, orden_id) -> dict:
     return ok(
         cliente.post(
             f"/api/orders/{orden_id}/details/DET-001/redefine",
-            json={"usuario_id": RECEPCION, "tipo_reparacion_id": PANTALLA},
+            json={"usuario_id": TECNICO, "tipo_reparacion_id": PANTALLA},
         )
     )
 
