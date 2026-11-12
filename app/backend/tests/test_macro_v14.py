@@ -196,6 +196,143 @@ def test_detalle_anterior_sin_origen_no_requiere_evaluacion(cliente):
     f.ok(_iniciar(cliente, orden_id))
 
 
+# --- A1. La transicion no deja omitir la evaluacion -------------------------
+#
+# El modo de transicion (Detalle sin origen del diagnostico) existe solo para
+# los datos anteriores a BR-REP-035. Una Orden nueva nunca lo genera: todo
+# camino de alta fija el origen, el cliente no puede elegirlo y sin
+# evaluacion no hay Ejecucion en ningun Origen.
+
+
+def _crear_rt(cliente) -> str:
+    orden_id = f.ok(
+        cliente.post(
+            "/api/orders/rt-interno",
+            json={
+                "usuario_id": f.RECEPCION,
+                "equipo": {
+                    "marca": "Apple",
+                    "modelo": "iPhone 13",
+                    "falla_reportada": "No enciende.",
+                },
+                "referencia_rt": "RT-INGRESO-0010",
+            },
+        )
+    )["id"]
+    f.ok(
+        definir_y_finalizar(
+            cliente,
+            orden_id,
+            json={"usuario_id": f.RECEPCION, "tipo_reparacion_id": f.BATERIA},
+        )
+    )
+    return orden_id
+
+
+@pytest.mark.v14_evaluacion
+def test_toda_alta_de_una_orden_nueva_fija_el_origen(cliente):
+    externa = f.definida(cliente, f.BATERIA)  # 070, Recepcion
+    revisada = f.por_revision(cliente, f.BATERIA)  # 075, Tecnico
+    interna = _crear_rt(cliente)  # 070 en RT_INTERNO
+    f.tomada(cliente, externa)
+    f.ok(_adicional(cliente, externa))  # 128, Tecnico
+    f.ok(  # 183 REQUIERE_REDEFINICION -> 127
+        _evaluar(
+            cliente,
+            externa,
+            "REQUIERE_REDEFINICION",
+            observaciones="Es la pantalla.",
+            tipo_reparacion_id=f.PANTALLA,
+        )
+    )
+
+    origenes = {
+        (orden_id, d["id"]): d["origen_diagnostico"]
+        for orden_id in (externa, revisada, interna)
+        for d in _orden(cliente, orden_id)["reparaciones_detail"]
+    }
+    assert None not in origenes.values()
+    assert origenes == {
+        (externa, "DET-001"): "REVISION_TECNICA",  # redefinido por el tecnico
+        (externa, "DET-002"): "REVISION_TECNICA",  # adicional
+        (revisada, "DET-001"): "REVISION_TECNICA",
+        (interna, "DET-001"): "RECEPCION",
+    }
+
+
+@pytest.mark.v14_evaluacion
+def test_el_origen_no_se_elige_desde_la_api(cliente):
+    orden_id = f.crear(cliente)
+    orden = f.ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/details",
+            json={
+                "usuario_id": f.RECEPCION,
+                "tipo_reparacion_id": f.BATERIA,
+                "origen_diagnostico": "REVISION_TECNICA",
+                "evaluaciones": [
+                    {
+                        "version_definicion": 1,
+                        "resultado": "CONFIRMADO",
+                        "usuario_id": f.TECNICO,
+                        "fecha": "2026-11-12T00:00:00Z",
+                    }
+                ],
+            },
+        )
+    )
+    detalle = f.detalle(orden, "DET-001")
+    assert detalle["origen_diagnostico"] == "RECEPCION"
+    assert detalle["evaluaciones"] == []
+    assert detalle["requiere_evaluacion"] is True
+
+
+@pytest.mark.v14_evaluacion
+def test_rt_interno_tambien_exige_la_evaluacion(cliente):
+    orden_id = _crear_rt(cliente)
+    f.tomada(cliente, orden_id)
+    assert "evaluacion tecnica" in f.conflicto(_iniciar(cliente, orden_id))
+    f.ok(_evaluar(cliente, orden_id, "CONFIRMADO"))
+    f.ok(_iniciar(cliente, orden_id))
+
+
+def test_un_detalle_de_transicion_que_se_redefine_entra_al_circuito_v14(
+    cliente,
+):
+    """Sin la marca: el Detalle nace sin origen (dato anterior). Si el
+    tecnico lo redefine, la definicion nueva es suya (REVISION_TECNICA):
+    ya no es un dato de transicion."""
+    orden_id = f.definida(cliente)
+    f.tomada(cliente, orden_id)
+    ejecucion_id = f.iniciar(cliente, orden_id)
+    f.ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/executions/{ejecucion_id}"
+            "/requires-redefinition",
+            json={
+                "usuario_id": f.TECNICO,
+                "insumos_utilizados": [],
+                "motivo": "No es la bateria.",
+            },
+        )
+    )
+    f.ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/details/DET-001/technical-review",
+            json={"usuario_id": f.TECNICO, "resultado": "Es la pantalla."},
+        )
+    )
+    orden = f.ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/details/DET-001/redefine",
+            json={"usuario_id": f.TECNICO, "tipo_reparacion_id": f.PANTALLA},
+        )
+    )
+    assert f.detalle(orden, "DET-001")["origen_diagnostico"] == (
+        "REVISION_TECNICA"
+    )
+
+
 # --- A2. Reparaciones adicionales (PROC-REP-184 -> 128, BR-REP-037) ----------
 
 
@@ -494,6 +631,19 @@ def test_antecedentes_del_equipo_por_imei_y_serie(cliente):
     assert otra not in [o["orden_id"] for o in resultado["ordenes"]]
     vacio = f.ok(cliente.get("/api/equipment/history"))
     assert vacio["sin_identificacion"] is True and vacio["ordenes"] == []
+    # Sin datos del cliente: quien consulta ve el equipo y sus trabajos.
+    assert set(resultado["ordenes"][0]) == {
+        "orden_id",
+        "origen",
+        "estado_workflow",
+        "creada_en",
+        "entregada_en",
+        "falla_reportada",
+        "orden_origen_id",
+        "trabajos",
+        "coincide_por",
+    }
+    assert "Cliente" not in str(resultado) and "341-1" not in str(resultado)
 
 
 # --- K. Reporte operativo ---------------------------------------------------
@@ -520,6 +670,12 @@ def test_reporte_operativo(cliente):
         {"insumo_id": f.INSUMO_BATERIA, "cantidad": "1"}
     ]
     assert Decimal(reporte["cobros"]["cobrado"]) == Decimal("90000")
+    # Solo agregados: ningun dato personal del cliente.
+    texto = str(reporte)
+    for orden_id in (entregada, abierta):
+        cliente_orden = _orden(cliente, orden_id)["cliente"]
+        assert cliente_orden["nombre_apellido"] not in texto
+        assert cliente_orden["telefono"] not in texto
     assert Decimal(reporte["cobros"]["saldo_pendiente_ordenes_abiertas"]) == (
         Decimal("70000")
     )

@@ -135,6 +135,11 @@ def test_health_es_publico_y_el_resto_exige_sesion(cliente):
         "/api/inventory",
         f"/api/work/inbox?usuario_id={RECEPCION}",
         "/api/me",
+        # Macroiteracion V1.4: consultas y administracion nuevas.
+        "/api/reports/operational",
+        "/api/equipment/history?imei=356938035643809",
+        "/api/admin/catalog",
+        "/api/admin/config-changes",
     ):
         respuesta = cliente.get(ruta)
         _error(respuesta, 401, "NO_AUTENTICADO")
@@ -301,6 +306,9 @@ def test_inventario_solo_gestion_de_stock(cliente):
         ("post", "/api/maintenance/photos/cleanup", ADMINISTRADOR),
         ("post", "/api/catalogs/equipment/sync", COORDINADOR),
         ("get", "/api/clients/lookup?dni=30111222", RECEPCION),
+        # DC23/DC23AUD: la configuracion y su auditoria, solo Administracion.
+        ("get", "/api/admin/catalog", ADMINISTRADOR),
+        ("get", "/api/admin/config-changes", ADMINISTRADOR),
     ],
 )
 def test_rutas_administrativas_rechazan_otros_roles(

@@ -88,6 +88,7 @@ El backend no interpreta los YAML: registra en el historial los nodos que recorr
 
 - **Grafos de `traceability/`:** citan V1.4 como fuente y sus identidades validan contra V1.4 (`npm run validate:traceability:global`). Los campos de contexto (`in_scenario`, `implemented`, `coverage` y el `status` de los ítems que no son PROC-REP) describen los slices tal como se construyeron sobre V1.3. Su revisión contra los Scenarios V1.4 queda pendiente.
 - **`traceability/iteracion-1-v14.yaml`:** primer grafo construido directamente sobre Scenarios V1.4 (VAR-REP-038, 039, 041 y 042, y DC06).
+- **`traceability/macro-v14.yaml`:** grafo de la macroiteración (VAR-REP-019 y VAR-REP-043, evaluación técnica, reparaciones adicionales, configuración auditada y antecedentes del equipo), con la misma convención. El reporte operativo v1 no tiene Scenario ni regla propios (DC29, ABI-15).
 - **`specs/001` a `019`:** son el registro histórico de slices especificados sobre V1.3. No se reescriben.
 - **`traceability/IMPLEMENTATION.md`:** sus secciones anteriores al 24/10/2026 describen divergencias respecto de V1.3. Las que V1.4 formalizó figuran en las incorporaciones de UAT del registro (DC16).
 

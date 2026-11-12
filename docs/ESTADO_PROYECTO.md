@@ -56,7 +56,8 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - las variantes `EN_REVISION` (`VAR-REP-001/002`) y de ejecución interrumpida (`VAR-REP-003`);
   - las excepciones `EXC-REP-001` a `004`;
   - las reglas que cambiaron en la iteración 1 del UAT;
-  - en la rama de la iteración funcional 1: `VAR-REP-038`, `039`, `041` y `042`, y DC06 ([`traceability/iteracion-1-v14.yaml`](../traceability/iteracion-1-v14.yaml)).
+  - en la rama de la iteración funcional 1: `VAR-REP-038`, `039`, `041` y `042`, y DC06 ([`traceability/iteracion-1-v14.yaml`](../traceability/iteracion-1-v14.yaml));
+  - en la macroiteración: `VAR-REP-019` y `VAR-REP-043`, evaluación técnica, reparaciones adicionales, configuración auditada y antecedentes del equipo ([`traceability/macro-v14.yaml`](../traceability/macro-v14.yaml)).
 
   Las specs de `mvp-v2` son las 009 a 019 de `specs/`. Los Scenarios tienen su grafo en `traceability/*.yaml`. Las reglas del UAT se describen en [`traceability/IMPLEMENTATION.md`](../traceability/IMPLEMENTATION.md).
 - **Alcance real:** son slices, no Features completas. Las Features siguen en `draft` y ningún UAT está aprobado por negocio (constitución, principios IX y XI).
@@ -82,6 +83,8 @@ Commits locales sobre `mvp-v2` (`6e6bf0b`), sin push ni merge. Especificación: 
 - **Interfaz:** botones por trabajo con el nombre del trabajo cuando hay varios. Recorridos verificados en el navegador sobre datos locales: evaluación con adicional, inicio, adicional durante la ejecución, antecedentes, reportes y configuración.
 - **Migraciones aditivas, sin aplicar en ninguna base remota:** `20261112000100_evaluacion_tecnica.sql` y `20261112000200_configuracion_auditada.sql`.
 - **Pruebas:** JSON 1777 pasan, 0 fallan (397 omitidas, las de PostgreSQL); `tests/postgres`: suite completa 400 pasan y 1 falla (la prueba que cuenta tablas y vistas: 47 y 7 por la adición prevista; ajustada, su archivo pasa 18 de 18); compatibilidad hacia atrás: las de `14108ef` sobre el esquema migrado, 387 pasan y 2 fallan, ambas pruebas de inventario del esquema; `ruff` sin errores; frontend: typecheck, 124 tests y build; `npm run validate:all` y `validate:v1.4` en verde; búsqueda de secretos limpia.
+- **Cierre de QA (12/11/2026):** la transición no deja omitir la evaluación (toda alta nueva fija el origen, el cliente no puede elegirlo y RT_INTERNO también la exige); Configuración probada en el navegador contra PostgreSQL local (alta, edición, Mesas, auditoría y persistencia tras recargar); reportes, antecedentes y administración exigen sesión, la administración da 403 a los demás roles y las consultas no devuelven datos personales del cliente; rendimiento del reporte medido y con umbral de reemplazo ([`DEUDA_TECNICA.md`](DEUDA_TECNICA.md), P1-12); trazabilidad en [`traceability/macro-v14.yaml`](../traceability/macro-v14.yaml); README del backend al día con PostgreSQL.
+- **Regresión final del cierre:** JSON 1783 pasan, 0 fallan (397 omitidas, las de PostgreSQL); `tests/postgres` 401 pasan, 0 fallan; `ruff`, typecheck, 124 tests y build del frontend; `validate:all`, copia de `business/` contra `420feb9`, búsqueda de secretos y `git diff --check` en verde.
 
 ### Despliegue de la iteración 1 en UAT (12/11/2026)
 

@@ -1,0 +1,1068 @@
+# Trazabilidad de la macroiteracion V1.4 (12/11/2026).
+#
+# Archivo propio (ver traceability/README.md), con el formato de
+# iteracion-1-v14.yaml. Cadena: Decision -> Regla (governed_by) -> Scenario
+# (activates) -> Code (implements) -> Internal Test (exercises/verifies).
+# Los UAT quedan PENDING: los tests internos no son aceptacion.
+#
+# Continua la numeracion global: US-REP-044, ACC-REP-066, FR-REP-159,
+# TR-REP-148, TASK-REP-220, CODE-REP-261, TEST-REP-564, UAT-REP-050.
+# Generado desde los nombres de business/ (mismos nombres que la fuente).
+# Validacion: npx tsx scripts/validate-traceability.ts traceability/macro-v14.yaml
+
+meta:
+  id: TRACE-MACRO-V14
+  name: 'Trazabilidad de la macroiteracion V1.4: evaluacion tecnica, reparaciones adicionales, desistimiento
+    total, configuracion auditada y antecedentes del equipo'
+  generated_from: rama feat/macro-v14 sobre mvp-v2 (6e6bf0b); business/ de rt-rma-app 420feb9
+  date: '2026-11-12'
+  business_domain: DOM-RMA
+  business_process: PROC-REP
+  business_process_version: '1.4'
+  implemented_scenario:
+  - VAR-REP-019
+  - VAR-REP-043
+  decisions:
+    DC06: El tecnico define y redefine (VAR-REP-019, PROC-REP-128)
+    DC07: Solicitud de desistimiento y cancelacion efectiva por separado
+    DC07C: Desistimiento total guiado con una Ejecucion activa (VAR-REP-043)
+    DC08: 'Tres tipos de cancelacion: descarte tecnico'
+    DC20: Antecedentes del Equipo por IMEI o numero de serie (solo consulta)
+    DC21: Evaluacion tecnica y altas del tecnico (BR-REP-035/036)
+    DC23: Administracion de catalogos
+    DC23AUD: Auditoria de la configuracion e historial de precios
+  active_features:
+  - FEAT-REP-002
+  - FEAT-REP-005
+  - FEAT-REP-009
+  - FEAT-REP-010
+  - FEAT-REP-001
+  related_trace_files:
+  - traceability/hp-rep-001.yaml y hp-rep-002.yaml (los Happy Paths V1.4 suman 182 -> 183 -> 184; no se
+    modifican)
+  - traceability/iteracion-1-v14.yaml (VAR-REP-042, base de DC07C)
+  - traceability/discrepancias-baseline-v1.4.md (seccion H)
+  - 'El reporte operativo v1 no tiene Scenario ni regla (DC29, ABI-15): sin cadena propia'
+  sources:
+    process: business/processes/repair-management-v1.4.yaml
+    rules: business/rules/business-rules-v1.4.yaml
+    features: business/features/repair-management-features-v1.4.yaml
+    scenarios: business/scenarios/repair-management-scenarios-v1.4.yaml
+    decisions: business/decisions/decision-log-v1.4.yaml
+    convention: traceability/README.md
+    backend: app/backend/
+    frontend: app/frontend/
+    migration: supabase/migrations/20261112000100_evaluacion_tecnica.sql y 20261112000200_configuracion_auditada.sql
+  relationship_vocabulary:
+    belongs_to: el origen pertenece al destino (jerarquia)
+    activates: el Scenario activa la Feature
+    realizes: la System Action realiza la User Story
+    covers: la System Action cubre el nodo del Business Process
+    governed_by: el item esta gobernado por la Business Rule
+    derives_from: el Functional Requirement deriva de la System Action
+    satisfies: el Technical Requirement satisface el Functional Requirement
+    implements: la Task o el Code implementa un Technical Requirement
+    produced_by: el Code fue producido por la Task
+    exercises: el Internal Test ejercita el Code
+    verifies: el Internal Test verifica un FR o un TR
+    accepts: el UAT acepta una User Story o un Functional Requirement
+items:
+- id: DOM-RMA
+  type: business_domain
+  name: Area funcional RMA
+  status: active
+  source: traceability/README.md
+- id: PROC-REP
+  type: business_process
+  name: Gestion de Ordenes de Reparacion
+  status: approved
+  version: '1.4'
+  source: business/processes/repair-management-v1.4.yaml
+- id: VAR-REP-019
+  type: scenario
+  name: El tecnico redefine un Detalle antes de ejecutarlo
+  status: draft
+  scenario_type: VARIANT
+  scope: FEATURE
+  source: business/scenarios/repair-management-scenarios-v1.4.yaml
+- id: VAR-REP-043
+  type: scenario
+  name: Desistimiento total guiado con una Ejecucion activa y el equipo en custodia
+  status: draft
+  scenario_type: VARIANT
+  scope: FEATURE
+  source: business/scenarios/repair-management-scenarios-v1.4.yaml
+- id: FEAT-REP-002
+  type: feature
+  name: Diagnostico y gestion de Detalles de Reparacion
+  status: draft
+  feature_status: draft
+  implemented_slice_status: PARTIAL
+- id: FEAT-REP-005
+  type: feature
+  name: Ejecucion de Detalles y gestion de insumos
+  status: draft
+  feature_status: draft
+  implemented_slice_status: IMPLEMENTED
+  implemented_scenario:
+  - VAR-REP-019
+- id: FEAT-REP-009
+  type: feature
+  name: Cancelacion de Detalles y Orden
+  status: draft
+  feature_status: draft
+  implemented_slice_status: IMPLEMENTED
+  implemented_scenario:
+  - VAR-REP-043
+- id: FEAT-REP-010
+  type: feature
+  name: Administracion de configuracion
+  status: draft
+  feature_status: draft
+  implemented_slice_status: PARTIAL
+- id: FEAT-REP-001
+  type: feature
+  name: Ingreso y creacion de Orden de Reparacion
+  status: draft
+  feature_status: draft
+  implemented_slice_status: PARTIAL
+- id: BR-REP-035
+  type: business_rule
+  name: Evaluacion tecnica obligatoria de Detalles diagnosticados por Recepcion
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-036
+  type: business_rule
+  name: Resultado principal de la evaluacion tecnica y reparaciones adicionales
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-037
+  type: business_rule
+  name: Independencia operativa entre Detalles y autorizacion diferida
+  status: draft
+  coverage: PARTIAL
+- id: BR-REP-030
+  type: business_rule
+  name: Desistimiento por Detalle, masivo y sin Detalles
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-014
+  type: business_rule
+  name: Cancelacion de Detalle y de Orden
+  status: draft
+  coverage: PARTIAL
+- id: BR-REP-040
+  type: business_rule
+  name: Administracion de configuracion y auditoria de cambios
+  status: draft
+  coverage: PARTIAL
+- id: BR-REP-022
+  type: business_rule
+  name: Identidad fisica del Equipo y reutilizacion confirmada por IMEI
+  status: draft
+  coverage: PARTIAL
+- id: PROC-REP-182
+  type: process_node
+  name: Evaluacion tecnica previa del Detalle seleccionado
+  node_type: decision
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-183
+  type: process_node
+  name: Evaluar tecnicamente Detalle diagnosticado por Recepcion
+  node_type: activity
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-184
+  type: process_node
+  name: Hay reparaciones adicionales detectadas por registrar
+  node_type: decision
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-128
+  type: process_node
+  name: Agregar Detalle detectado durante la ejecucion
+  node_type: activity
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-127
+  type: process_node
+  name: Definir/actualizar reparacion del Detalle
+  node_type: activity
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-300
+  type: process_node
+  name: Cancelar Detalle
+  node_type: activity
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-046
+  type: process_node
+  name: Registrar decision del cliente por Detalle
+  node_type: activity
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-211
+  type: process_node
+  name: Evaluar situacion de la Orden
+  node_type: decision
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: PROC-REP-305
+  type: process_node
+  name: Cancelar trabajos pendientes
+  node_type: activity
+  status: draft
+  in_scenario: true
+  implemented: true
+- id: US-REP-044
+  type: user_story
+  name: Como Tecnico quiero evaluar cada trabajo que diagnostico Recepcion antes de empezarlo, para confirmarlo,
+    descartarlo o redefinirlo
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-TECH
+- id: ACC-REP-066
+  type: system_action
+  name: Evaluar tecnicamente un Detalle diagnosticado por Recepcion
+  status: IMPLEMENTED
+  actor: ACT-TECH
+  decisions: &id001
+  - DC06
+  - DC08
+  - DC21
+- id: TR-REP-148
+  type: technical_requirement
+  name: services/evaluacion_tecnica.py, application/evaluacion.py y POST /details/{id}/evaluation; detalle.origen_diagnostico
+    y rma.evaluacion_tecnica (migracion 20261112000100)
+  status: IMPLEMENTED
+- id: FR-REP-159
+  type: functional_requirement
+  name: Un Detalle de origen RECEPCION sin evaluacion CONFIRMADO sobre su definicion vigente no reserva
+    insumos ni inicia una Ejecucion
+  status: IMPLEMENTED
+  decisions: *id001
+- id: FR-REP-160
+  type: functional_requirement
+  name: La evaluacion la registra el tecnico titular de la toma con un resultado principal (CONFIRMADO,
+    DESCARTADO o REQUIERE_REDEFINICION), version evaluada, fecha y motivo obligatorio salvo CONFIRMADO
+  status: IMPLEMENTED
+  decisions: *id001
+- id: FR-REP-161
+  type: functional_requirement
+  name: DESCARTADO cancela el Detalle con origen DESCARTE_TECNICO a nombre del tecnico (300); la Orden
+    no se cancela (DC31)
+  status: IMPLEMENTED
+  decisions: *id001
+- id: FR-REP-162
+  type: functional_requirement
+  name: REQUIERE_REDEFINICION registra la nueva definicion en el mismo acto (127), validada por el tecnico;
+    la autorizacion anterior deja de valer
+  status: IMPLEMENTED
+  decisions: *id001
+- id: FR-REP-163
+  type: functional_requirement
+  name: Una Orden nueva siempre fija el origen del diagnostico; solo los Detalles anteriores a la evaluacion
+    (sin origen) no la exigen
+  status: IMPLEMENTED
+  decisions: *id001
+- id: TASK-REP-220
+  type: task
+  name: Implementar Evaluar tecnicamente un Detalle diagnosticado por Recepcion (macroiteracion V1.4)
+  status: DONE
+- id: CODE-REP-261
+  type: code_artifact
+  name: evaluar_detalle
+  status: IMPLEMENTED
+  source: app/backend/app/services/evaluacion_tecnica.py::evaluar_detalle
+- id: CODE-REP-262
+  type: code_artifact
+  name: exigir_evaluacion_vigente
+  status: IMPLEMENTED
+  source: app/backend/app/services/evaluacion_tecnica.py::exigir_evaluacion_vigente
+- id: CODE-REP-263
+  type: code_artifact
+  name: PostgresOrdenReparacionRepository
+  status: IMPLEMENTED
+  source: app/backend/app/storage/postgres/ordenes.py::PostgresOrdenReparacionRepository
+- id: TEST-REP-564
+  type: internal_test
+  name: test_hp_rep_001_v14_evalua_antes_de_iniciar
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_hp_rep_001_v14_evalua_antes_de_iniciar
+- id: TEST-REP-565
+  type: internal_test
+  name: test_evaluacion_solo_la_hace_el_tecnico
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_evaluacion_solo_la_hace_el_tecnico
+- id: TEST-REP-566
+  type: internal_test
+  name: test_evaluacion_descartado_cancela_por_descarte_tecnico
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_evaluacion_descartado_cancela_por_descarte_tecnico
+- id: TEST-REP-567
+  type: internal_test
+  name: test_var_rep_019_evaluacion_requiere_redefinicion
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_var_rep_019_evaluacion_requiere_redefinicion
+- id: TEST-REP-568
+  type: internal_test
+  name: test_toda_alta_de_una_orden_nueva_fija_el_origen
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_toda_alta_de_una_orden_nueva_fija_el_origen
+- id: TEST-REP-569
+  type: internal_test
+  name: test_el_origen_no_se_elige_desde_la_api
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_el_origen_no_se_elige_desde_la_api
+- id: TEST-REP-570
+  type: internal_test
+  name: test_rt_interno_tambien_exige_la_evaluacion
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_rt_interno_tambien_exige_la_evaluacion
+- id: TEST-REP-571
+  type: internal_test
+  name: test_v14_evaluacion_confirmada_se_guarda_y_se_relee
+  status: PASSING
+  source: app/backend/tests/postgres/test_macro_v14_postgres.py::test_v14_evaluacion_confirmada_se_guarda_y_se_relee
+- id: TEST-REP-572
+  type: internal_test
+  name: test_v14_descarte_tecnico_se_guarda
+  status: PASSING
+  source: app/backend/tests/postgres/test_macro_v14_postgres.py::test_v14_descarte_tecnico_se_guarda
+- id: TEST-REP-573
+  type: internal_test
+  name: test_v14_redefinicion_en_la_evaluacion_se_guarda
+  status: PASSING
+  source: app/backend/tests/postgres/test_macro_v14_postgres.py::test_v14_redefinicion_en_la_evaluacion_se_guarda
+- id: UAT-REP-050
+  type: uat
+  name: 'Aceptacion de negocio: Como Tecnico quiero evaluar cada trabajo que diagnostico Recepcion antes
+    de empezarlo, par'
+  status: PENDING
+- id: US-REP-045
+  type: user_story
+  name: Como Tecnico quiero registrar una reparacion adicional que detecte, para que Recepcion la consulte
+    sin frenar el trabajo en curso
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-TECH
+- id: ACC-REP-067
+  type: system_action
+  name: Registrar una reparacion adicional detectada por el tecnico
+  status: IMPLEMENTED
+  actor: ACT-TECH
+  decisions: &id002
+  - DC06
+- id: TR-REP-149
+  type: technical_requirement
+  name: reparaciones.agregar_detalle_adicional, adicionales en la evaluacion y POST /details/additional
+  status: IMPLEMENTED
+- id: FR-REP-164
+  type: functional_requirement
+  name: La reparacion adicional es un Detalle nuevo de origen REVISION_TECNICA, del catalogo, registrado
+    por el titular de la toma; en CLIENTE_EXTERNO nace pendiente del cliente
+  status: IMPLEMENTED
+  decisions: *id002
+- id: FR-REP-165
+  type: functional_requirement
+  name: 'Registrarla no interrumpe la Ejecucion en curso ni la toma y, desde la evaluacion, ocurre antes
+    del resolver: un descarte no deja la Orden sin trabajos'
+  status: IMPLEMENTED
+  decisions: *id002
+- id: FR-REP-166
+  type: functional_requirement
+  name: En los demas origenes pasa por la factibilidad (080) sin decision del cliente
+  status: IMPLEMENTED
+  decisions: *id002
+- id: TASK-REP-221
+  type: task
+  name: Implementar Registrar una reparacion adicional detectada por el tecnico (macroiteracion V1.4)
+  status: DONE
+- id: CODE-REP-264
+  type: code_artifact
+  name: agregar_detalle_adicional
+  status: IMPLEMENTED
+  source: app/backend/app/services/reparaciones.py::agregar_detalle_adicional
+- id: TEST-REP-574
+  type: internal_test
+  name: test_evaluacion_confirmada_con_reparaciones_adicionales
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_evaluacion_confirmada_con_reparaciones_adicionales
+- id: TEST-REP-575
+  type: internal_test
+  name: test_adicional_durante_la_ejecucion_no_la_interrumpe
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_adicional_durante_la_ejecucion_no_la_interrumpe
+- id: TEST-REP-576
+  type: internal_test
+  name: test_descarte_del_unico_detalle_con_una_adicional_no_deja_la_orden_vacia
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_descarte_del_unico_detalle_con_una_adicional_no_deja_la_orden_vacia
+- id: TEST-REP-577
+  type: internal_test
+  name: test_adicional_solo_la_registra_el_tecnico
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_adicional_solo_la_registra_el_tecnico
+- id: TEST-REP-578
+  type: internal_test
+  name: test_adicional_en_rt_interno_pasa_por_la_factibilidad
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_adicional_en_rt_interno_pasa_por_la_factibilidad
+- id: TEST-REP-579
+  type: internal_test
+  name: test_v14_reparaciones_adicionales_se_guardan
+  status: PASSING
+  source: app/backend/tests/postgres/test_macro_v14_postgres.py::test_v14_reparaciones_adicionales_se_guardan
+- id: UAT-REP-051
+  type: uat
+  name: 'Aceptacion de negocio: Como Tecnico quiero registrar una reparacion adicional que detecte, para
+    que Recepcion la '
+  status: PENDING
+- id: US-REP-046
+  type: user_story
+  name: Como Recepcion quiero registrar que el cliente desiste de todo aunque un trabajo se este ejecutando,
+    para que el tecnico lo cierre sin perder lo hecho
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-RECEP
+- id: ACC-REP-068
+  type: system_action
+  name: Registrar el desistimiento total con una Ejecucion activa
+  status: IMPLEMENTED
+  actor: ACT-RECEP
+  decisions: &id003
+  - DC07
+  - DC07C
+- id: TR-REP-150
+  type: technical_requirement
+  name: decision_cliente._solicitar_desistimiento_total y cancelaciones.resolver_desistimientos_pendientes
+  status: IMPLEMENTED
+- id: FR-REP-167
+  type: functional_requirement
+  name: Con una Ejecucion activa, desistir de todo registra la solicitud en cada trabajo afectado sin
+    cancelar nada; un segundo pedido se rechaza
+  status: IMPLEMENTED
+  decisions: *id003
+- id: FR-REP-168
+  type: functional_requirement
+  name: Al interrumpir, el tecnico cancela juntos los trabajos con desistimiento pendiente (211 -> 305)
+    a su nombre; lo COMPLETO se conserva y la Orden sigue abierta (DC31)
+  status: IMPLEMENTED
+  decisions: *id003
+- id: TASK-REP-222
+  type: task
+  name: Implementar Registrar el desistimiento total con una Ejecucion activa (macroiteracion V1.4)
+  status: DONE
+- id: CODE-REP-265
+  type: code_artifact
+  name: registrar_desistimiento_cliente
+  status: IMPLEMENTED
+  source: app/backend/app/services/decision_cliente.py::registrar_desistimiento_cliente
+- id: CODE-REP-266
+  type: code_artifact
+  name: resolver_desistimientos_pendientes
+  status: IMPLEMENTED
+  source: app/backend/app/services/cancelaciones.py::resolver_desistimientos_pendientes
+- id: TEST-REP-580
+  type: internal_test
+  name: test_6_13_con_una_ejecucion_activa_desistir_de_todo_queda_solicitado
+  status: PASSING
+  source: app/backend/tests/test_desistimiento_cliente.py::test_6_13_con_una_ejecucion_activa_desistir_de_todo_queda_solicitado
+- id: TEST-REP-581
+  type: internal_test
+  name: test_var_rep_043_desistimiento_total_guiado
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_var_rep_043_desistimiento_total_guiado
+- id: TEST-REP-582
+  type: internal_test
+  name: test_desistimiento_total_conserva_lo_completo
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_desistimiento_total_conserva_lo_completo
+- id: UAT-REP-052
+  type: uat
+  name: 'Aceptacion de negocio: Como Recepcion quiero registrar que el cliente desiste de todo aunque
+    un trabajo se este e'
+  status: PENDING
+- id: US-REP-047
+  type: user_story
+  name: Como Administracion quiero administrar los Tipos de Reparacion y las Mesas de trabajo con auditoria,
+    para cambiar precios sin alterar lo registrado
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-ADMIN
+- id: ACC-REP-069
+  type: system_action
+  name: Administrar Tipos de Reparacion y Mesas de trabajo con auditoria
+  status: IMPLEMENTED
+  actor: ACT-ADMIN
+  decisions: &id004
+  - DC23
+  - DC23AUD
+- id: TR-REP-151
+  type: technical_requirement
+  name: application/configuracion.py, api/configuracion.py, rma.cambio_configuracion y vista rma.historial_precio
+    (migracion 20261112000200)
+  status: IMPLEMENTED
+- id: FR-REP-169
+  type: functional_requirement
+  name: Solo Administracion da de alta, edita o desactiva un Tipo de Reparacion y define los Tipos habilitados
+    de cada Mesa; sin borrados
+  status: IMPLEMENTED
+  decisions: *id004
+- id: FR-REP-170
+  type: functional_requirement
+  name: Cada cambio queda auditado (entidad, clave, campo, valor anterior y nuevo, usuario y fecha) en
+    la misma transaccion, con historial de precios; lo ya registrado conserva su snapshot
+  status: IMPLEMENTED
+  decisions: *id004
+- id: TASK-REP-223
+  type: task
+  name: Implementar Administrar Tipos de Reparacion y Mesas de trabajo con auditoria (macroiteracion V1.4)
+  status: DONE
+- id: CODE-REP-267
+  type: code_artifact
+  name: cambios_de_tipo
+  status: IMPLEMENTED
+  source: app/backend/app/services/configuracion.py::cambios_de_tipo
+- id: CODE-REP-268
+  type: code_artifact
+  name: PostgresConfiguracionRepository
+  status: IMPLEMENTED
+  source: app/backend/app/storage/postgres/configuracion.py::PostgresConfiguracionRepository
+- id: TEST-REP-583
+  type: internal_test
+  name: test_solo_administracion_y_otros_reservado
+  status: PASSING
+  source: app/backend/tests/test_configuracion.py::test_solo_administracion_y_otros_reservado
+- id: TEST-REP-584
+  type: internal_test
+  name: test_solo_administracion_cambia_la_configuracion
+  status: PASSING
+  source: app/backend/tests/postgres/test_configuracion_postgres.py::test_solo_administracion_cambia_la_configuracion
+- id: TEST-REP-585
+  type: internal_test
+  name: test_alta_y_edicion_de_un_tipo_con_su_auditoria
+  status: PASSING
+  source: app/backend/tests/postgres/test_configuracion_postgres.py::test_alta_y_edicion_de_un_tipo_con_su_auditoria
+- id: TEST-REP-586
+  type: internal_test
+  name: test_un_cambio_de_precio_no_altera_lo_registrado
+  status: PASSING
+  source: app/backend/tests/postgres/test_configuracion_postgres.py::test_un_cambio_de_precio_no_altera_lo_registrado
+- id: UAT-REP-053
+  type: uat
+  name: 'Aceptacion de negocio: Como Administracion quiero administrar los Tipos de Reparacion y las Mesas
+    de trabajo con '
+  status: PENDING
+- id: US-REP-048
+  type: user_story
+  name: Como Recepcion quiero ver las Ordenes anteriores del mismo equipo por IMEI o numero de serie,
+    para conocer sus antecedentes
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-RECEP
+- id: ACC-REP-070
+  type: system_action
+  name: Consultar los antecedentes del equipo por IMEI o numero de serie
+  status: IMPLEMENTED
+  actor: ACT-RECEP
+  decisions: &id005
+  - DC20
+- id: TR-REP-152
+  type: technical_requirement
+  name: application/consultas_operativas.antecedentes_del_equipo y GET /api/equipment/history
+  status: IMPLEMENTED
+- id: FR-REP-171
+  type: functional_requirement
+  name: Muestra las otras Ordenes con el mismo IMEI o numero de serie normalizados, sin datos del cliente
+    y sin decidir que sea el mismo equipo fisico (ABI-05)
+  status: IMPLEMENTED
+  decisions: *id005
+- id: TASK-REP-224
+  type: task
+  name: Implementar Consultar los antecedentes del equipo por IMEI o numero de serie (macroiteracion V1.4)
+  status: DONE
+- id: CODE-REP-269
+  type: code_artifact
+  name: antecedentes_del_equipo
+  status: IMPLEMENTED
+  source: app/backend/app/application/consultas_operativas.py::antecedentes_del_equipo
+- id: TEST-REP-587
+  type: internal_test
+  name: test_antecedentes_del_equipo_por_imei_y_serie
+  status: PASSING
+  source: app/backend/tests/test_macro_v14.py::test_antecedentes_del_equipo_por_imei_y_serie
+- id: TEST-REP-588
+  type: internal_test
+  name: test_v14_antecedentes_y_reporte_en_postgres
+  status: PASSING
+  source: app/backend/tests/postgres/test_macro_v14_postgres.py::test_v14_antecedentes_y_reporte_en_postgres
+- id: UAT-REP-054
+  type: uat
+  name: 'Aceptacion de negocio: Como Recepcion quiero ver las Ordenes anteriores del mismo equipo por
+    IMEI o numero de ser'
+  status: PENDING
+links:
+- from: PROC-REP
+  to: DOM-RMA
+  relationship: belongs_to
+- from: VAR-REP-019
+  to: PROC-REP
+  relationship: belongs_to
+- from: VAR-REP-043
+  to: PROC-REP
+  relationship: belongs_to
+- from: FEAT-REP-002
+  to: PROC-REP
+  relationship: belongs_to
+- from: FEAT-REP-005
+  to: PROC-REP
+  relationship: belongs_to
+- from: FEAT-REP-009
+  to: PROC-REP
+  relationship: belongs_to
+- from: FEAT-REP-010
+  to: PROC-REP
+  relationship: belongs_to
+- from: FEAT-REP-001
+  to: PROC-REP
+  relationship: belongs_to
+- from: VAR-REP-019
+  to: FEAT-REP-005
+  relationship: activates
+- from: VAR-REP-043
+  to: FEAT-REP-009
+  relationship: activates
+- from: PROC-REP-182
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-183
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-184
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-128
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-127
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-300
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-046
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-211
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-305
+  to: PROC-REP
+  relationship: belongs_to
+- from: US-REP-044
+  to: FEAT-REP-005
+  relationship: belongs_to
+- from: ACC-REP-066
+  to: US-REP-044
+  relationship: realizes
+- from: ACC-REP-066
+  to: PROC-REP-182
+  relationship: covers
+- from: ACC-REP-066
+  to: PROC-REP-183
+  relationship: covers
+- from: ACC-REP-066
+  to: PROC-REP-184
+  relationship: covers
+- from: ACC-REP-066
+  to: PROC-REP-127
+  relationship: covers
+- from: ACC-REP-066
+  to: PROC-REP-300
+  relationship: covers
+- from: ACC-REP-066
+  to: BR-REP-035
+  relationship: governed_by
+- from: ACC-REP-066
+  to: BR-REP-036
+  relationship: governed_by
+- from: FR-REP-159
+  to: ACC-REP-066
+  relationship: derives_from
+- from: TR-REP-148
+  to: FR-REP-159
+  relationship: satisfies
+- from: FR-REP-160
+  to: ACC-REP-066
+  relationship: derives_from
+- from: TR-REP-148
+  to: FR-REP-160
+  relationship: satisfies
+- from: FR-REP-161
+  to: ACC-REP-066
+  relationship: derives_from
+- from: TR-REP-148
+  to: FR-REP-161
+  relationship: satisfies
+- from: FR-REP-162
+  to: ACC-REP-066
+  relationship: derives_from
+- from: TR-REP-148
+  to: FR-REP-162
+  relationship: satisfies
+- from: FR-REP-163
+  to: ACC-REP-066
+  relationship: derives_from
+- from: TR-REP-148
+  to: FR-REP-163
+  relationship: satisfies
+- from: TASK-REP-220
+  to: TR-REP-148
+  relationship: implements
+- from: CODE-REP-261
+  to: TR-REP-148
+  relationship: implements
+- from: CODE-REP-261
+  to: TASK-REP-220
+  relationship: produced_by
+- from: CODE-REP-262
+  to: TR-REP-148
+  relationship: implements
+- from: CODE-REP-262
+  to: TASK-REP-220
+  relationship: produced_by
+- from: CODE-REP-263
+  to: TR-REP-148
+  relationship: implements
+- from: CODE-REP-263
+  to: TASK-REP-220
+  relationship: produced_by
+- from: TEST-REP-564
+  to: CODE-REP-262
+  relationship: exercises
+- from: TEST-REP-564
+  to: FR-REP-159
+  relationship: verifies
+- from: TEST-REP-565
+  to: CODE-REP-261
+  relationship: exercises
+- from: TEST-REP-565
+  to: FR-REP-160
+  relationship: verifies
+- from: TEST-REP-566
+  to: CODE-REP-261
+  relationship: exercises
+- from: TEST-REP-566
+  to: FR-REP-161
+  relationship: verifies
+- from: TEST-REP-567
+  to: CODE-REP-261
+  relationship: exercises
+- from: TEST-REP-567
+  to: FR-REP-162
+  relationship: verifies
+- from: TEST-REP-568
+  to: CODE-REP-262
+  relationship: exercises
+- from: TEST-REP-568
+  to: FR-REP-163
+  relationship: verifies
+- from: TEST-REP-569
+  to: CODE-REP-262
+  relationship: exercises
+- from: TEST-REP-569
+  to: FR-REP-163
+  relationship: verifies
+- from: TEST-REP-570
+  to: CODE-REP-262
+  relationship: exercises
+- from: TEST-REP-570
+  to: FR-REP-159
+  relationship: verifies
+- from: TEST-REP-571
+  to: CODE-REP-263
+  relationship: exercises
+- from: TEST-REP-571
+  to: FR-REP-160
+  relationship: verifies
+- from: TEST-REP-572
+  to: CODE-REP-263
+  relationship: exercises
+- from: TEST-REP-572
+  to: FR-REP-161
+  relationship: verifies
+- from: TEST-REP-573
+  to: CODE-REP-263
+  relationship: exercises
+- from: TEST-REP-573
+  to: FR-REP-162
+  relationship: verifies
+- from: UAT-REP-050
+  to: US-REP-044
+  relationship: accepts
+- from: US-REP-045
+  to: FEAT-REP-002
+  relationship: belongs_to
+- from: ACC-REP-067
+  to: US-REP-045
+  relationship: realizes
+- from: ACC-REP-067
+  to: PROC-REP-128
+  relationship: covers
+- from: ACC-REP-067
+  to: PROC-REP-184
+  relationship: covers
+- from: ACC-REP-067
+  to: BR-REP-037
+  relationship: governed_by
+- from: ACC-REP-067
+  to: BR-REP-036
+  relationship: governed_by
+- from: FR-REP-164
+  to: ACC-REP-067
+  relationship: derives_from
+- from: TR-REP-149
+  to: FR-REP-164
+  relationship: satisfies
+- from: FR-REP-165
+  to: ACC-REP-067
+  relationship: derives_from
+- from: TR-REP-149
+  to: FR-REP-165
+  relationship: satisfies
+- from: FR-REP-166
+  to: ACC-REP-067
+  relationship: derives_from
+- from: TR-REP-149
+  to: FR-REP-166
+  relationship: satisfies
+- from: TASK-REP-221
+  to: TR-REP-149
+  relationship: implements
+- from: CODE-REP-264
+  to: TR-REP-149
+  relationship: implements
+- from: CODE-REP-264
+  to: TASK-REP-221
+  relationship: produced_by
+- from: TEST-REP-574
+  to: CODE-REP-264
+  relationship: exercises
+- from: TEST-REP-574
+  to: FR-REP-164
+  relationship: verifies
+- from: TEST-REP-575
+  to: CODE-REP-264
+  relationship: exercises
+- from: TEST-REP-575
+  to: FR-REP-165
+  relationship: verifies
+- from: TEST-REP-576
+  to: CODE-REP-264
+  relationship: exercises
+- from: TEST-REP-576
+  to: FR-REP-165
+  relationship: verifies
+- from: TEST-REP-577
+  to: CODE-REP-264
+  relationship: exercises
+- from: TEST-REP-577
+  to: FR-REP-164
+  relationship: verifies
+- from: TEST-REP-578
+  to: CODE-REP-264
+  relationship: exercises
+- from: TEST-REP-578
+  to: FR-REP-166
+  relationship: verifies
+- from: TEST-REP-579
+  to: CODE-REP-264
+  relationship: exercises
+- from: TEST-REP-579
+  to: FR-REP-164
+  relationship: verifies
+- from: UAT-REP-051
+  to: US-REP-045
+  relationship: accepts
+- from: US-REP-046
+  to: FEAT-REP-009
+  relationship: belongs_to
+- from: ACC-REP-068
+  to: US-REP-046
+  relationship: realizes
+- from: ACC-REP-068
+  to: PROC-REP-046
+  relationship: covers
+- from: ACC-REP-068
+  to: PROC-REP-211
+  relationship: covers
+- from: ACC-REP-068
+  to: PROC-REP-305
+  relationship: covers
+- from: ACC-REP-068
+  to: BR-REP-030
+  relationship: governed_by
+- from: ACC-REP-068
+  to: BR-REP-014
+  relationship: governed_by
+- from: FR-REP-167
+  to: ACC-REP-068
+  relationship: derives_from
+- from: TR-REP-150
+  to: FR-REP-167
+  relationship: satisfies
+- from: FR-REP-168
+  to: ACC-REP-068
+  relationship: derives_from
+- from: TR-REP-150
+  to: FR-REP-168
+  relationship: satisfies
+- from: TASK-REP-222
+  to: TR-REP-150
+  relationship: implements
+- from: CODE-REP-265
+  to: TR-REP-150
+  relationship: implements
+- from: CODE-REP-265
+  to: TASK-REP-222
+  relationship: produced_by
+- from: CODE-REP-266
+  to: TR-REP-150
+  relationship: implements
+- from: CODE-REP-266
+  to: TASK-REP-222
+  relationship: produced_by
+- from: TEST-REP-580
+  to: CODE-REP-265
+  relationship: exercises
+- from: TEST-REP-580
+  to: FR-REP-167
+  relationship: verifies
+- from: TEST-REP-581
+  to: CODE-REP-266
+  relationship: exercises
+- from: TEST-REP-581
+  to: FR-REP-168
+  relationship: verifies
+- from: TEST-REP-582
+  to: CODE-REP-266
+  relationship: exercises
+- from: TEST-REP-582
+  to: FR-REP-168
+  relationship: verifies
+- from: UAT-REP-052
+  to: US-REP-046
+  relationship: accepts
+- from: US-REP-047
+  to: FEAT-REP-010
+  relationship: belongs_to
+- from: ACC-REP-069
+  to: US-REP-047
+  relationship: realizes
+- from: ACC-REP-069
+  to: BR-REP-040
+  relationship: governed_by
+- from: FR-REP-169
+  to: ACC-REP-069
+  relationship: derives_from
+- from: TR-REP-151
+  to: FR-REP-169
+  relationship: satisfies
+- from: FR-REP-170
+  to: ACC-REP-069
+  relationship: derives_from
+- from: TR-REP-151
+  to: FR-REP-170
+  relationship: satisfies
+- from: TASK-REP-223
+  to: TR-REP-151
+  relationship: implements
+- from: CODE-REP-267
+  to: TR-REP-151
+  relationship: implements
+- from: CODE-REP-267
+  to: TASK-REP-223
+  relationship: produced_by
+- from: CODE-REP-268
+  to: TR-REP-151
+  relationship: implements
+- from: CODE-REP-268
+  to: TASK-REP-223
+  relationship: produced_by
+- from: TEST-REP-583
+  to: CODE-REP-267
+  relationship: exercises
+- from: TEST-REP-583
+  to: FR-REP-169
+  relationship: verifies
+- from: TEST-REP-584
+  to: CODE-REP-268
+  relationship: exercises
+- from: TEST-REP-584
+  to: FR-REP-169
+  relationship: verifies
+- from: TEST-REP-585
+  to: CODE-REP-268
+  relationship: exercises
+- from: TEST-REP-585
+  to: FR-REP-170
+  relationship: verifies
+- from: TEST-REP-586
+  to: CODE-REP-268
+  relationship: exercises
+- from: TEST-REP-586
+  to: FR-REP-170
+  relationship: verifies
+- from: UAT-REP-053
+  to: US-REP-047
+  relationship: accepts
+- from: US-REP-048
+  to: FEAT-REP-001
+  relationship: belongs_to
+- from: ACC-REP-070
+  to: US-REP-048
+  relationship: realizes
+- from: ACC-REP-070
+  to: BR-REP-022
+  relationship: governed_by
+- from: FR-REP-171
+  to: ACC-REP-070
+  relationship: derives_from
+- from: TR-REP-152
+  to: FR-REP-171
+  relationship: satisfies
+- from: TASK-REP-224
+  to: TR-REP-152
+  relationship: implements
+- from: CODE-REP-269
+  to: TR-REP-152
+  relationship: implements
+- from: CODE-REP-269
+  to: TASK-REP-224
+  relationship: produced_by
+- from: TEST-REP-587
+  to: CODE-REP-269
+  relationship: exercises
+- from: TEST-REP-587
+  to: FR-REP-171
+  relationship: verifies
+- from: TEST-REP-588
+  to: CODE-REP-269
+  relationship: exercises
+- from: TEST-REP-588
+  to: FR-REP-171
+  relationship: verifies
+- from: UAT-REP-054
+  to: US-REP-048
+  relationship: accepts

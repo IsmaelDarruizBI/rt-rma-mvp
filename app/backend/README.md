@@ -415,7 +415,7 @@ Variables de entorno con prefijo `RMA_` (ver `app/core/config.py`):
 | `RMA_DATA_DIR` | `app/backend/data` |
 | `RMA_CORS_ALLOW_ORIGINS` | `["http://localhost:5173","http://127.0.0.1:5173"]` |
 | `RMA_UTC_OFFSET_HORAS` | `-3` (dia local de los vencimientos de garantia) |
-| `RMA_PERSISTENCIA` | `json` (`postgres` esta en preparacion) |
+| `RMA_PERSISTENCIA` | `json` (por defecto local y en los tests). `postgres`: la app entera sobre PostgreSQL; es la persistencia del UAT |
 | `RMA_DATABASE_URL` | sin valor; solo con `postgres` |
 | `RMA_DB_SSLROOTCERT` | `app/datos/supabase-ca.crt` |
 | `RMA_DB_POOL_MIN` / `RMA_DB_POOL_MAX` | `1` / `4` conexiones (maximo 20) |
@@ -441,13 +441,24 @@ instancia), pero no hace atomica una operacion que escribe varios
 archivos: el consumo de insumos escribe el stock y despues la Orden, y
 si falla a mitad depende de su compensacion manual.
 
-**PostgreSQL** (esquema en `supabase/`) se integra por etapas. Hoy
-existen la configuracion, la unidad de trabajo, el ejecutor SQL
-restringido y los repositories de catalogos (E3), probados contra una
-base local, pero la aplicacion todavia no los usa: con
-`RMA_PERSISTENCIA=postgres` el arranque valida la conexion y los ajustes
-del pool y se detiene con un error explicito, porque faltan los
-repositories de Ordenes e inventario. No hay modo mixto.
+**PostgreSQL** (esquema y migraciones en `supabase/`) es la persistencia
+del UAT desde la migracion E0 a E8: con `RMA_PERSISTENCIA=postgres` la app
+entera (Ordenes, inventario, catalogos, acciones e idempotencia, modelos
+tecnicos) usa la base; la copia del catalogo de Ventas y las fotos tienen
+su almacenamiento propio. No hay modo mixto ni vuelta a JSON: si la base
+no responde, la app no arranca. Estado y etapas:
+[`docs/ESTADO_PROYECTO.md`](../../docs/ESTADO_PROYECTO.md), seccion C.
+
+Diferencias de funcionalidad entre los modos:
+
+- La idempotencia (`Idempotency-Key`) solo actua con PostgreSQL.
+- La administracion de catalogos con auditoria (DC23, pantalla
+  «Configuracion») solo escribe con PostgreSQL; en JSON los catalogos son
+  de solo lectura.
+- Las pruebas `tests/postgres` piden `RMA_TEST_DATABASE_URL` (una base
+  local descartable); sin ella se omiten. Entorno local completo:
+  [`docs/CHECKPOINT_PRE_DEPLOY.md`](../../docs/CHECKPOINT_PRE_DEPLOY.md),
+  seccion 7.
 
 - Dependencias opcionales: `pip install -e ".[postgres]"` (psycopg 3 y
   psycopg-pool). El modo JSON no las necesita.

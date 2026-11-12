@@ -26,6 +26,14 @@ const CAMPOS: Record<string, string> = {
   tipos_habilitados: "Tipos habilitados",
 };
 
+/** Los booleanos se guardan como true/false: en pantalla, Sí o No. */
+function valor(texto: string | null): string {
+  if (texto === null) return "—";
+  if (texto === "true") return "Sí";
+  if (texto === "false") return "No";
+  return texto;
+}
+
 function fecha(valor: string): string {
   return new Date(valor).toLocaleString("es-AR");
 }
@@ -43,8 +51,8 @@ function Auditoria({ cambios }: { cambios: CambioConfiguracion[] }) {
       {cambios.map((c, i) => (
         <li key={i}>
           {fecha(c.fecha)} · {c.usuario_id} · {c.clave} ·{" "}
-          {CAMPOS[c.campo] ?? c.campo}: {c.valor_anterior ?? "—"} →{" "}
-          {c.valor_nuevo ?? "—"}
+          {CAMPOS[c.campo] ?? c.campo}: {valor(c.valor_anterior)} →{" "}
+          {valor(c.valor_nuevo)}
         </li>
       ))}
     </ul>
