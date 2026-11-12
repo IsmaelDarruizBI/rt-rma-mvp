@@ -9,6 +9,7 @@
 import type {
   CanalComunicacion,
   ClaseAjuste,
+  ExcepcionPedida,
   DatosRecepcion,
   DecisionDetalle,
   DocumentoEmitido,
@@ -553,14 +554,15 @@ export function iniciarGarantiaRma(
   ordenOrigenId: string,
   usuarioId: string,
   detalleOrigenIds: string[],
-  motivoExcepcion: string | null = null,
+  excepciones: ExcepcionPedida[] = [],
 ): Promise<Orden> {
-  // PROC-REP-036 (DC15B): con algún trabajo vencido solo se admite como
-  // excepción, con motivo, por un usuario autorizado (VAR-REP-039).
+  // PROC-REP-036 (DC15B): cada trabajo vencido solo se admite con su
+  // excepción y su motivo; la autorizan Recepción, Coordinación RMA o
+  // Administración (DEC-IT1-01/03). El backend lo valida.
   return post<Orden>(`/api/orders/${ordenOrigenId}/warranty-rma`, {
     usuario_id: usuarioId,
     detalle_origen_ids: detalleOrigenIds,
-    ...(motivoExcepcion ? { motivo_excepcion: motivoExcepcion } : {}),
+    excepciones,
   });
 }
 

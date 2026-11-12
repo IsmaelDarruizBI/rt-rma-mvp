@@ -24,6 +24,20 @@ from .reparacion import EjecucionReparacion, ReparacionDetail, TomaOrden
 from .workflow import HistorialWorkflow
 
 
+class ExcepcionGarantia(BaseModel):
+    """Un Detalle origen vencido admitido en garantia como excepcion.
+
+    VAR-REP-039 (DEC-IT1-01): un usuario autorizado lo admite con motivo
+    obligatorio; queda auditado quien, cuando y por que. Es de UN Detalle
+    (DEC-IT1-03): el Detalle y su vencimiento estan en la
+    ``VigenciaGarantiaOrigen`` que la contiene.
+    """
+
+    usuario_id: str
+    fecha: datetime
+    motivo: str
+
+
 class VigenciaGarantiaOrigen(BaseModel):
     """Resultado de PROC-REP-036 para UN Detalle origen (DC15B).
 
@@ -31,27 +45,15 @@ class VigenciaGarantiaOrigen(BaseModel):
     su ultimo dia, contado desde la entrega de la Orden origen
     (BR-REP-041). ``vence`` en ``None``: el Detalle no tenia garantia
     (0 dias) o la Orden origen no registra la fecha de entrega; en ambos
-    casos no esta vigente.
+    casos no esta vigente. Un Detalle vencido solo se admite con su
+    ``excepcion`` (DEC-IT1-03: la vigencia y la excepcion son por Detalle).
     """
 
     detalle_id: str
     garantia_dias: int = Field(ge=0)
     vence: date | None = None
     vigente: bool
-
-
-class ExcepcionGarantia(BaseModel):
-    """Ingreso en garantia admitido con la garantia de origen vencida.
-
-    VAR-REP-039: un usuario autorizado lo admite con motivo obligatorio;
-    queda auditado quien, cuando y por que. Los Detalles origen y sus
-    vencimientos estan en ``OrdenReparacion.vigencia_garantia_origen`` y la
-    condicion aplicada es la de la Orden (NO_COBRABLE, por su origen).
-    """
-
-    usuario_id: str
-    fecha: datetime
-    motivo: str
+    excepcion: ExcepcionGarantia | None = None
 
 
 class OrdenReparacion(BaseModel):
@@ -100,12 +102,12 @@ class OrdenReparacion(BaseModel):
     detalles_origen_ids: list[str] = Field(default_factory=list)
 
     # DC15B / PROC-REP-036: vigencia de la garantia de cada Detalle origen
-    # al crear la garantia RMA, y la excepcion si alguno estaba vencido.
-    # Vacios en los demas Origenes y en las garantias anteriores.
+    # al crear la garantia RMA, con la excepcion de cada uno que estaba
+    # vencido (DEC-IT1-03). Vacia en los demas Origenes y en las garantias
+    # anteriores.
     vigencia_garantia_origen: list[VigenciaGarantiaOrigen] = Field(
         default_factory=list
     )
-    excepcion_garantia: ExcepcionGarantia | None = None
 
     prioridad: int = Field(default=0, ge=0)
 

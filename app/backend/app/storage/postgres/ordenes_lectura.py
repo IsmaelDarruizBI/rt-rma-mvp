@@ -133,15 +133,12 @@ _ORDENES = consulta(
            o.equipo_tipo_producto_id, me.codigo AS modelo_tecnico,
            o.falla_reportada, o.comprobante_recepcion_generado_en,
            o.comprobante_final_generado_en, o.garantia_generada_en,
-           o.version, o.creada_en, o.actualizado_en,
-           ue.codigo AS excepcion_garantia_por, o.excepcion_garantia_en,
-           o.excepcion_garantia_motivo
+           o.version, o.creada_en, o.actualizado_en
     FROM rma.orden o
     JOIN rma.equipo e ON e.id = o.equipo_id
     LEFT JOIN rma.orden oo ON oo.id = o.orden_origen_id
     LEFT JOIN rma.cliente c ON c.id = o.cliente_id
     LEFT JOIN rma.modelo_equipo me ON me.id = o.equipo_modelo_equipo_id
-    LEFT JOIN rma.usuario ue ON ue.id = o.excepcion_garantia_por
     WHERE o.codigo = ANY(%(codigos)s)
     ORDER BY o.codigo COLLATE "C"
     """,
@@ -224,9 +221,11 @@ _ORIGEN = consulta(
     "ordenes.detalles_origen",
     """
     SELECT x.orden_id, d.codigo, x.garantia_dias, x.garantia_vence,
-           x.garantia_vigente
+           x.garantia_vigente, ue.codigo AS excepcion_por, x.excepcion_en,
+           x.excepcion_motivo
     FROM rma.orden_detalle_origen x
     JOIN rma.detalle d ON d.id = x.detalle_id
+    LEFT JOIN rma.usuario ue ON ue.id = x.excepcion_por
     WHERE x.orden_id = ANY(ARRAY(
         SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
     ))
@@ -734,19 +733,19 @@ def _armar(raiz: Any, hijas: dict[str, Any]) -> Instantanea:
                 garantia_dias=fila.garantia_dias,
                 vence=fila.garantia_vence,
                 vigente=fila.garantia_vigente,
+                excepcion=(
+                    None
+                    if fila.excepcion_en is None
+                    else ExcepcionGarantia(
+                        usuario_id=fila.excepcion_por,
+                        fecha=utc(fila.excepcion_en),
+                        motivo=fila.excepcion_motivo,
+                    )
+                ),
             )
             for fila in hijas["origen"].get(raiz.id, [])
             if fila.garantia_vigente is not None
         ],
-        excepcion_garantia=(
-            None
-            if raiz.excepcion_garantia_en is None
-            else ExcepcionGarantia(
-                usuario_id=raiz.excepcion_garantia_por,
-                fecha=utc(raiz.excepcion_garantia_en),
-                motivo=raiz.excepcion_garantia_motivo,
-            )
-        ),
         prioridad=raiz.prioridad,
         reparaciones_detail=detalles,
         tomas=tomas,

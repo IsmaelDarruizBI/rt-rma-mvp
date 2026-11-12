@@ -2,7 +2,7 @@
 
 La baseline funcional vigente es PROC-REP V1.4, aprobada en DC01 y sincronizada desde `rt-rma-app` (DC02):
 
-- Commit de origen: `ab928b6e33203257c26427cbb9af7875bd38693b` (rama `dc31/cancelacion-explicita`: V1.4 con la revisión DC31, sobre la etiqueta `v1.4-baseline`).
+- Commit de origen: `708d81b0dab03605c70e5264e2662093126496b9` (rama `spec/iteracion-1-decisiones`: V1.4 con DC31 y las decisiones DEC-IT1-01 a 05, sobre `dc31/cancelacion-explicita` y la etiqueta `v1.4-baseline`).
 - Contenido funcional aprobado en `b6cc3a5`.
 - Manifiesto de procedencia: `business/FUNCTIONAL_SOURCE.json`.
 
@@ -48,7 +48,7 @@ Las tres que figuraban (DC06, DC07 y DC11) se alinearon en la iteración 1: ver 
 | DC15A | Política de garantía configurable por tipo de reparación y check-in | `domain/garantia.py:15-18`: 90/30 fijo, garantía sugerida y definitiva por Detalle | Política configurable y precedencias; criterio de garantía aplicable | ABI-03, ABI-37 |
 | DC23AUD | Auditoría de cambios de configuración; historial de precios | Snapshots en Detalles y documentos; el catálogo guarda solo el precio vigente | Auditoría e historial de precios | - |
 | GLO-01 | Estación = Mesa de trabajo, con «Mesa de trabajo» como nombre visible | Una sola entidad; la interfaz dice «Estación de trabajo» | Texto visible | - |
-| DC09 | Ajuste Comercial (CORTESIA o DESCUENTO) por Orden o por Detalle | `services/descuentos.py`: un ajuste por Orden con clase DESCUENTO (RECEP o ADMIN) o CORTESIA total (ADMIN, provisional, iteración 1) | Ajuste por Detalle; cortesía parcial; permisos por tipo de ajuste | ABI-09, ABI-10, ABI-26 |
+| DC09 | Ajuste Comercial (CORTESIA o DESCUENTO) por Orden o por Detalle | `services/descuentos.py`: un Ajuste Comercial vigente por Orden, clase DESCUENTO (Recepción o Administración, como en el UAT) o CORTESIA total o parcial (Recepción, Coordinación RMA o Administración, DEC-IT1-02) | Ajuste por Detalle; permiso inicial del DESCUENTO | ABI-09, ABI-10 |
 | DC10 | Anulación de Pagos por Administración, delegable, con motivo, sin borrar el Pago | `services/pagos.py:386-416` | Delegación configurable (depende de DC08) | - |
 | DC25 | WhatsApp asistido con plantillas e historial (etapa 1) | `app/frontend/src/features/ordenes-reparacion/whatsapp.ts`: comparte sin plantillas ni historial | Plantillas e historial de envíos | ABI-13 |
 | DC07C | Desistimiento total como proceso guiado | `services/decision_cliente.py:337-376`: análisis previo sin circuito guiado | Circuito guiado | - |
@@ -60,7 +60,7 @@ El backend no interpreta los YAML: registra en el historial los nodos que recorr
 | Recorrido | Grafo V1.4 | Producto | Decisión |
 |---|---|---|---|
 | Check-in de entrega | 265 → 269 → 265 con la acción «Registrar check-in» | Acción en la recepción (`registros_checkin`, temporal), sin nodo 269 en el historial; la entrega se bloquea igual | UAT-I01, ABI-32 |
-| Ingreso en garantía no admitido | 036 → EVT-REP-998 | El rechazo (409 `GARANTIA_VENCIDA`) no crea la Orden ni cambia la origen; no se registra el intento, porque la baseline deja pendiente qué se registra | DC15B (abierto en la baseline) |
+| Ingreso en garantía no admitido | 036 → EVT-REP-998 | El rechazo (409 `GARANTIA_VENCIDA`) no crea la Orden ni cambia la origen e informa los trabajos elegibles; no se registra el intento, porque la baseline deja pendiente qué se registra | DC15B, DEC-IT1-03 (ABI-35 abierto) |
 | Desistimiento solicitado, Ejecución con desperdicio | 211 → 300 o 305 | Solo 300 (cancelar el Detalle); el 305 de cancelar trabajos pendientes no se usa desde este camino | DC07 |
 
 ## E. Lo que el producto hace sin que la baseline lo defina como regla
@@ -77,11 +77,8 @@ El backend no interpreta los YAML: registra en el historial los nodos que recorr
 | Entrada automática a la cola solo para el ingreso inicial de CLIENTE_EXTERNO | Extensión a otros orígenes pendiente | ABI-21 |
 | Tipo de movimiento DEVOLUCION de insumos | Frente a DESPERDICIO de BR-REP-005 | ABI-22 |
 | Roles predeterminados de inventario, catálogo, ajuste de garantía y fotografías | Provisionales | ABI-23 |
-| Descuento por Recepción o Administración que no deja el total bajo lo cobrado (la cortesía total sí puede, DC11) | Permisos por tipo y tratamiento pendientes | ABI-09, ABI-10 |
-| Excepción de garantía autorizada por Coordinación RMA o Administración (iteración 1) | BR-REP-039 deja el permiso predeterminado pendiente | ABI-04 |
-| Cortesía total otorgada y quitada solo por Administración (iteración 1) | BR-REP-016 deja el permiso pendiente | ABI-09 |
-| Reclamo de garantía con algún Detalle vencido y otros vigentes: exige la excepción para todo el reclamo | La baseline no trata el reclamo mixto | ABI-33 |
-| Reversibilidad de lo hecho al interrumpir por desistimiento: sí o no | La baseline no fija los valores | ABI-18 |
+| Descuento por Recepción o Administración que no deja el total bajo lo cobrado (la cortesía sí puede, DC11 y DEC-IT1-02) | Permiso del DESCUENTO y su tratamiento bajo lo cobrado pendientes | ABI-09, ABI-10 |
+| La idempotencia del ajuste comercial (`Idempotency-Key`) solo actúa con PostgreSQL, como la de los demás comandos (E6) | Diseño técnico vigente; con JSON no hay registro de acciones | - |
 | Motivo de la interrupción en una liberación ajena («Liberada por …») | Interpretación provisional | ABI-36 |
 | Mantenimiento: limpieza de fotografías huérfanas por ADMINISTRADOR (UAT-011) | Solo implementación técnica (UAT-I02) | - |
 
@@ -94,12 +91,12 @@ El backend no interpreta los YAML: registra en el historial los nodos que recorr
 
 ## G. Alineadas en la iteración 1 (rama `feat/iteracion-1-alineacion-v14`)
 
-El registro de origen (`business/decisions/decision-log-v1.4.yaml`) todavía las marca como pendientes porque se evaluó antes; corresponde actualizarlo en `rt-rma-app` y resincronizar (DC02). Detalle de pruebas y decisiones provisionales: `docs/ESTADO_PROYECTO.md`.
+Con las decisiones DEC-IT1-01 a 05 (11/11/2026) el registro de origen ya refleja este estado: DC07B, DC11 y DC15B IMPLEMENTADO; DC06, DC07 y DC09 PARCIAL. Detalle de pruebas: `docs/ESTADO_PROYECTO.md`.
 
 | Decisión | Qué dice la baseline | Qué hace el producto ahora | Qué sigue pendiente | Pendientes |
 |---|---|---|---|---|
 | DC06 | El técnico define y redefine; Recepción gestiona las autorizaciones del cliente | 075 (definir luego de la revisión y cerrar esa carga) y 127 (redefinir) exigen TECNICO; las decisiones y los desistimientos del cliente siguen en Recepción; 069 (sin reparación) sigue en Recepción | VAR-REP-019 (el técnico redefine antes de ejecutar, desde PROC-REP-183) depende de la evaluación técnica obligatoria de BR-REP-035, que el producto no tiene | - |
-| DC07 | Solicitud de desistimiento y cancelación efectiva registradas por separado, con usuario y fecha | Desistir de un Detalle en ejecución registra la solicitud (046, EV-REP-046) sin cancelar; el técnico solo puede interrumpir; al interrumpir se cancela (300) con la solicitud conservada. Lo que no se está ejecutando se sigue cancelando en el acto. DC31 sin cambios: cancelar trabajos no cancela la Orden | Desistir de todo con una Ejecución activa sigue bloqueado (DC07C, circuito guiado) | - |
-| DC07B | Interrumpir para cancelar registra estado, materiales y reversibilidad | Con desistimiento pendiente, la interrupción exige el estado del trabajo y si es reversible; los insumos ya se registraban | Catálogo de estados y valores de reversibilidad | ABI-18 |
-| DC11 | Una cortesía total con Pagos previos deja saldo a favor y exige devolución antes del cierre | Ajuste de clase CORTESIA total: conserva los Pagos, deja saldo a favor y la entrega se bloquea hasta devolverlo (PROC-REP-265/267/268); sin pagos ni devoluciones duplicados | Cortesía parcial; permisos por tipo de ajuste | ABI-10 |
-| DC15B | Validar la vigencia de la garantía de origen (PROC-REP-036); vencida bloquea salvo excepción autorizada | 035 → 036 → 040 con la vigencia por Detalle (entrega + días); vencida sin excepción: 409, no se crea la Orden (VAR-REP-038); con motivo y un usuario autorizado: se crea y se audita quién, cuándo, por qué, vencimiento y Detalle (VAR-REP-039, EV-REP-052) | Registro del intento rechazado (ABI-35); reparación paga vinculada (ABI-34); quién autoriza por defecto (ABI-04); reclamo parcialmente vigente (ABI-33) | ABI-03, ABI-04, ABI-33, ABI-34, ABI-35 |
+| DC07 | Solicitud de desistimiento y cancelación efectiva registradas por separado, con usuario y fecha | Desistir de un Detalle en ejecución registra la solicitud (046, EV-REP-046: usuario, fecha, motivo, canal) sin cancelar; el técnico solo puede interrumpir; al interrumpir se cancela (300) a nombre del técnico, con la solicitud conservada (DEC-IT1-05). Lo que no se está ejecutando se sigue cancelando en el acto. DC31 sin cambios | Desistir de todo con una Ejecución activa sigue bloqueado (DC07C, VAR-REP-043, circuito guiado) | - |
+| DC07B | Interrumpir para cancelar registra estado, materiales y reversibilidad | Con desistimiento pendiente, la interrupción exige reversibilidad Sí o No y la descripción del estado del trabajo (DEC-IT1-04); los insumos ya se registraban | - | - |
+| DC11 | Una cortesía con Pagos previos deja saldo a favor y exige devolución antes del cierre | Ajuste de clase CORTESIA, total o parcial (DEC-IT1-02): conserva los Pagos, deja saldo a favor y la entrega se bloquea hasta devolverlo (PROC-REP-265/267/268); sin ajustes ni devoluciones duplicados | - | - |
+| DC15B | Validar la vigencia de la garantía de origen (PROC-REP-036); vencida bloquea salvo excepción autorizada | Vigencia y excepción por cada trabajo reclamado (DEC-IT1-03): un vencido sin excepción rechaza el pedido sin crear nada e informa los elegibles (VAR-REP-038); la excepción de cada vencido la autorizan Recepción, Coordinación RMA o Administración (DEC-IT1-01) y queda auditada con quién, cuándo, por qué y el vencimiento original (VAR-REP-039, EV-REP-052) | Registro del intento rechazado; reparación paga vinculada; precedencias de garantía | ABI-03, ABI-34, ABI-35 |

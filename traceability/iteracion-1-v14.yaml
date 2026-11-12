@@ -9,20 +9,24 @@
 # hp-rep-003.yaml. DC06 no tiene Scenario propio: cambia el actor de 075 y 127
 # en los recorridos ya trazados.
 #
-# Permisos provisionales (pendientes de decision): excepcion de garantia por
-# Coordinacion RMA o Administracion (ABI-04); cortesia por Administracion
-# (ABI-09). Los UAT quedan PENDING: los tests internos no son aceptacion.
+# Cadena de cada decision: Decision (campo decisions de la System Action y
+# de sus FR) -> Regla (governed_by) -> Scenario (activates) -> Code
+# (implements) -> Internal Test (exercises/verifies). Las decisiones
+# DEC-IT1-01 a 05 estan en business/decisions/decision-log-v1.4.yaml. Los UAT
+# quedan PENDING: los tests internos no son aceptacion.
 #
-# Continua la numeracion global: US-REP-039, ACC-REP-061, FR-REP-145,
-# TR-REP-143, TASK-REP-215, CODE-REP-248, TEST-REP-542, UAT-REP-045.
+# Continua la numeracion global: US-REP-039, ACC-REP-061, FR-REP-145 a 158,
+# TR-REP-143, TASK-REP-215, CODE-REP-248, TEST-REP-542 a 563, UAT-REP-045.
 #
 # Generado desde los nombres de business/ (mismos nombres que la fuente).
 # Validacion: npx tsx scripts/validate-traceability.ts traceability/iteracion-1-v14.yaml
 
 meta:
   id: TRACE-IT1-V14
-  name: 'Trazabilidad de la iteracion 1: alineacion con la baseline V1.4 (DC06, DC07, DC11, DC15B)'
-  generated_from: rama feat/iteracion-1-alineacion-v14 sobre mvp-v2 (fa4f24d)
+  name: 'Trazabilidad de la iteracion 1: alineacion con la baseline V1.4 (DC06, DC07, DC11, DC15B y DEC-IT1-01
+    a 05)'
+  generated_from: rama feat/iteracion-1-alineacion-v14 sobre mvp-v2 (fa4f24d); business/ de rt-rma-app
+    708d81b
   date: '2026-11-11'
   business_domain: DOM-RMA
   business_process: PROC-REP
@@ -32,6 +36,16 @@ meta:
   - VAR-REP-039
   - VAR-REP-041
   - VAR-REP-042
+  decisions:
+    DEC-IT1-01: 'Excepcion de garantia: Recepcion, Coordinacion RMA o Administracion; el Tecnico no (BR-REP-019,
+      BR-REP-039; VAR-REP-039)'
+    DEC-IT1-02: Cortesia total o parcial; la otorgan, modifican o quitan esos tres roles (BR-REP-016,
+      BR-REP-038, BR-REP-039; VAR-REP-041)
+    DEC-IT1-03: Vigencia y excepcion por Detalle reclamado (BR-REP-019, BR-REP-041; VAR-REP-038, VAR-REP-039)
+    DEC-IT1-04: 'Interrumpir para cancelar: reversibilidad Si o No y descripcion obligatoria (BR-REP-004;
+      VAR-REP-042)'
+    DEC-IT1-05: Solicitud y cancelacion efectiva con su responsable; la efectiva, del tecnico (BR-REP-030,
+      BR-REP-014; VAR-REP-042)
   active_features:
   - FEAT-REP-001
   - FEAT-REP-002
@@ -46,7 +60,7 @@ meta:
     rules: business/rules/business-rules-v1.4.yaml
     features: business/features/repair-management-features-v1.4.yaml
     scenarios: business/scenarios/repair-management-scenarios-v1.4.yaml
-    decisions: business/decisions/decision-log-v1.4.yaml
+    decisions: business/decisions/decision-log-v1.4.yaml (DEC-IT1-01 a 05)
     convention: traceability/README.md
     backend: app/backend/
     frontend: app/frontend/
@@ -230,6 +244,16 @@ items:
   status: draft
   in_scenario: true
   implemented: true
+- id: BR-REP-004
+  type: business_rule
+  name: Registro de ejecucion real
+  status: draft
+  coverage: PARTIAL
+- id: BR-REP-014
+  type: business_rule
+  name: Cancelacion de Detalle y de Orden
+  status: draft
+  coverage: PARTIAL
 - id: BR-REP-016
   type: business_rule
   name: Ajustes Comerciales y Cortesia
@@ -263,15 +287,18 @@ items:
 - id: US-REP-039
   type: user_story
   name: Como Recepcion quiero ver si la garantia de cada trabajo sigue vigente e iniciar la garantia RMA
-    solo si corresponde, para no admitir reclamos vencidos
+    solo con lo cubierto, para no admitir reclamos vencidos
   status: IMPLEMENTED
   priority: P1
   actor: ACT-RECEP
 - id: ACC-REP-061
   type: system_action
-  name: Validar la vigencia de la garantia de origen al iniciar la garantia RMA
+  name: Validar la vigencia de la garantia de origen de cada Detalle reclamado al iniciar la garantia
+    RMA
   status: IMPLEMENTED
   actor: ACT-SYSTEM
+  decisions: &id001
+  - DEC-IT1-03
 - id: TR-REP-143
   type: technical_requirement
   name: evaluar_vigencia_garantia y crear_orden_garantia_rma; columnas garantia_dias, garantia_vence y
@@ -280,22 +307,33 @@ items:
 - id: FR-REP-145
   type: functional_requirement
   name: La vigencia de cada Detalle origen es entrega de la Orden origen + dias de garantia del Detalle,
-    en la zona horaria del negocio; vigente hasta el ultimo dia inclusive
+    en la zona horaria del negocio; vigente hasta el ultimo dia inclusive; se evalua por Detalle, nunca
+    para toda la Orden
   status: IMPLEMENTED
+  decisions: *id001
 - id: FR-REP-146
   type: functional_requirement
-  name: 'Vencida sin excepcion: se rechaza (GARANTIA_VENCIDA), no se crea la Orden de garantia y la Orden
-    origen no cambia'
+  name: 'Un Detalle vencido sin excepcion no se admite: el pedido se rechaza (GARANTIA_VENCIDA) sin crear
+    la Orden de garantia ni cambiar la Orden origen, e informa los Detalles que siguen siendo elegibles'
   status: IMPLEMENTED
+  decisions: *id001
 - id: FR-REP-147
   type: functional_requirement
-  name: 'Vigente: se registra PROC-REP-036 ''Vigente'' entre 035 y 040 y la vigencia evaluada queda en
-    la Orden de garantia'
+  name: 'Vigente: se registra PROC-REP-036 ''Vigente'' entre 035 y 040 y la vigencia evaluada de cada
+    Detalle queda en la Orden de garantia'
   status: IMPLEMENTED
+  decisions: *id001
+- id: FR-REP-158
+  type: functional_requirement
+  name: En un reclamo de varios Detalles, los vigentes se admiten sin excepcion y la excepcion aplica
+    solo al Detalle vencido identificado, con su propia trazabilidad; una excepcion sobre un Detalle vigente
+    o no reclamado se rechaza
+  status: IMPLEMENTED
+  decisions: *id001
 - id: TASK-REP-215
   type: task
-  name: Implementar Validar la vigencia de la garantia de origen al iniciar la garantia RMA (iteracion
-    1)
+  name: Implementar Validar la vigencia de la garantia de origen de cada Detalle reclamado al iniciar
+    la garantia RMA (iteracion 1)
   status: DONE
 - id: CODE-REP-248
   type: code_artifact
@@ -327,6 +365,16 @@ items:
   name: test_it1_las_columnas_nuevas_y_el_historial
   status: PASSING
   source: app/backend/tests/postgres/test_iteracion1_postgres.py::test_it1_las_columnas_nuevas_y_el_historial
+- id: TEST-REP-557
+  type: internal_test
+  name: test_dec_it1_03_vigencia_individual_por_trabajo
+  status: PASSING
+  source: app/backend/tests/test_iteracion1_v14.py::test_dec_it1_03_vigencia_individual_por_trabajo
+- id: TEST-REP-558
+  type: internal_test
+  name: test_it1_garantia_por_trabajo_se_guarda_y_se_relee
+  status: PASSING
+  source: app/backend/tests/postgres/test_iteracion1_postgres.py::test_it1_garantia_por_trabajo_se_guarda_y_se_relee
 - id: UAT-REP-045
   type: uat
   name: 'Aceptacion de negocio: Como Recepcion quiero ver si la garantia de cada trabajo sigue vigente
@@ -334,34 +382,40 @@ items:
   status: PENDING
 - id: US-REP-040
   type: user_story
-  name: Como Coordinacion RMA o Administracion quiero admitir una garantia vencida como excepcion, con
-    motivo, para atender un caso justificado dejando auditoria
+  name: Como Recepcion, Coordinacion RMA o Administracion quiero admitir un trabajo con la garantia vencida
+    como excepcion, con motivo, para atender un caso justificado dejando auditoria
   status: IMPLEMENTED
   priority: P1
-  actor: ACT-COORD
+  actor: ACT-RECEP
 - id: ACC-REP-062
   type: system_action
-  name: Autorizar la excepcion de garantia vencida
+  name: Autorizar la excepcion de garantia vencida de un Detalle reclamado
   status: IMPLEMENTED
-  actor: ACT-COORD
+  actor: ACT-RECEP
+  decisions: &id002
+  - DEC-IT1-01
+  - DEC-IT1-03
 - id: TR-REP-144
   type: technical_requirement
-  name: excepcion_garantia en OrdenReparacion; columnas excepcion_garantia_por/en/motivo en rma.orden;
-    tipo de evento EV-REP-052; roles del inicio ampliados en la API cuando hay un trabajo vencido
+  name: ExcepcionGarantia dentro de VigenciaGarantiaOrigen; columnas excepcion_por, excepcion_en y excepcion_motivo
+    en rma.orden_detalle_origen; tipo de evento EV-REP-052; roles del inicio ampliados en la API cuando
+    hay un trabajo vencido
   status: IMPLEMENTED
 - id: FR-REP-148
   type: functional_requirement
-  name: 'La excepcion exige motivo y un usuario autorizado (provisional: Coordinacion RMA o Administracion);
-    sin motivo o con otro rol se rechaza sin crear nada'
+  name: La excepcion exige motivo y la autorizan Recepcion, Coordinacion RMA o Administracion (DEC-IT1-01);
+    el Tecnico no; sin motivo o con otro rol se rechaza sin crear nada; el backend valida el permiso
   status: IMPLEMENTED
+  decisions: *id002
 - id: FR-REP-149
   type: functional_requirement
-  name: 'La excepcion queda auditada en la Orden de garantia y en el historial (036 AUTORIZAR_EXCEPCION_GARANTIA,
-    EV-REP-052): usuario, fecha, motivo, Detalle origen y vencimiento'
+  name: 'La excepcion de cada Detalle queda auditada en su evaluacion y en el historial (036 AUTORIZAR_EXCEPCION_GARANTIA,
+    EV-REP-052): usuario, fecha, motivo, Detalle origen y vencimiento original'
   status: IMPLEMENTED
+  decisions: *id002
 - id: TASK-REP-216
   type: task
-  name: Implementar Autorizar la excepcion de garantia vencida (iteracion 1)
+  name: Implementar Autorizar la excepcion de garantia vencida de un Detalle reclamado (iteracion 1)
   status: DONE
 - id: CODE-REP-251
   type: code_artifact
@@ -385,53 +439,65 @@ items:
   source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_039_excepcion_autorizada_y_auditada
 - id: TEST-REP-546
   type: internal_test
-  name: test_var_rep_039_la_excepcion_exige_un_usuario_autorizado
+  name: test_var_rep_039_el_tecnico_no_autoriza_la_excepcion
   status: PASSING
-  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_039_la_excepcion_exige_un_usuario_autorizado
+  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_039_el_tecnico_no_autoriza_la_excepcion
 - id: TEST-REP-547
   type: internal_test
   name: test_it1_la_validacion_de_la_garantia_no_cambia
   status: PASSING
   source: app/backend/tests/postgres/test_iteracion1_postgres.py::test_it1_la_validacion_de_la_garantia_no_cambia
+- id: TEST-REP-559
+  type: internal_test
+  name: test_var_rep_039_sin_motivo_no_hay_excepcion
+  status: PASSING
+  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_039_sin_motivo_no_hay_excepcion
 - id: UAT-REP-046
   type: uat
-  name: 'Aceptacion de negocio: Como Coordinacion RMA o Administracion quiero admitir una garantia vencida
-    como excepcion,'
+  name: 'Aceptacion de negocio: Como Recepcion, Coordinacion RMA o Administracion quiero admitir un trabajo
+    con la garanti'
   status: PENDING
 - id: US-REP-041
   type: user_story
-  name: Como Administracion quiero otorgar una cortesia total aunque haya pagos, para que el cliente no
-    pague y se le devuelva lo cobrado antes de entregar
+  name: Como Recepcion, Coordinacion RMA o Administracion quiero otorgar, modificar o quitar una cortesia
+    total o parcial aunque haya pagos, para bonificar al cliente y devolverle lo cobrado de mas antes
+    de entregar
   status: IMPLEMENTED
   priority: P1
-  actor: ACT-ADMIN
+  actor: ACT-RECEP
 - id: ACC-REP-063
   type: system_action
-  name: Otorgar o quitar la cortesia total de la Orden
+  name: Otorgar, modificar o quitar la cortesia de la Orden
   status: IMPLEMENTED
-  actor: ACT-ADMIN
+  actor: ACT-RECEP
+  decisions: &id003
+  - DEC-IT1-02
 - id: TR-REP-145
   type: technical_requirement
-  name: ClaseAjuste en RegistroDescuento y columna clase en rma.descuento; accion OTORGAR_CORTESIA
+  name: ClaseAjuste en RegistroDescuento y columna clase en rma.descuento; accion OTORGAR_CORTESIA; endpoint
+    idempotente APLICAR_AJUSTE_COMERCIAL
   status: IMPLEMENTED
 - id: FR-REP-150
   type: functional_requirement
-  name: La cortesia es un Ajuste Comercial de clase CORTESIA por el total; conserva los Pagos y, si los
-    hay, deja saldo a favor del cliente
+  name: La cortesia es el mismo Ajuste Comercial (clase CORTESIA), total o parcial, por porcentaje o importe;
+    un solo ajuste vigente; conserva los Pagos y, si deja el total bajo lo cobrado, deja saldo a favor
   status: IMPLEMENTED
+  decisions: *id003
 - id: FR-REP-151
   type: functional_requirement
-  name: Con saldo a favor la entrega se bloquea hasta registrar la devolucion; sin devoluciones ni pagos
-    duplicados
+  name: Con saldo a favor la entrega se bloquea hasta registrar la devolucion; un envio duplicado no genera
+    otro ajuste ni otra devolucion
   status: IMPLEMENTED
+  decisions: *id003
 - id: FR-REP-152
   type: functional_requirement
-  name: 'Otorgarla o quitarla exige el permiso de cortesia (provisional: Administracion); una cortesia
-    parcial se rechaza'
+  name: 'Otorgar, modificar o quitar la cortesia exige el mismo permiso: Recepcion, Coordinacion RMA o
+    Administracion (DEC-IT1-02); el Tecnico no'
   status: IMPLEMENTED
+  decisions: *id003
 - id: TASK-REP-217
   type: task
-  name: Implementar Otorgar o quitar la cortesia total de la Orden (iteracion 1)
+  name: Implementar Otorgar, modificar o quitar la cortesia de la Orden (iteracion 1)
   status: DONE
 - id: CODE-REP-254
   type: code_artifact
@@ -450,23 +516,38 @@ items:
   source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_041_cortesia_total_con_pagos_previos
 - id: TEST-REP-549
   type: internal_test
-  name: test_var_rep_041_la_cortesia_solo_la_otorga_administracion
+  name: test_var_rep_041_otorgan_la_cortesia_los_tres_roles
   status: PASSING
-  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_041_la_cortesia_solo_la_otorga_administracion
+  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_041_otorgan_la_cortesia_los_tres_roles
 - id: TEST-REP-550
   type: internal_test
-  name: la cortesía total tiene nombre propio (DC11)
+  name: la cortesía tiene nombre propio (DC11, DEC-IT1-02)
   status: PASSING
-  source: app/frontend/tests/iteracion1.test.ts::la cortesía total tiene nombre propio (DC11)
+  source: app/frontend/tests/iteracion1.test.ts::la cortesía tiene nombre propio (DC11, DEC-IT1-02)
+- id: TEST-REP-560
+  type: internal_test
+  name: test_var_rep_041_cortesia_parcial_con_saldo_a_favor
+  status: PASSING
+  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_041_cortesia_parcial_con_saldo_a_favor
+- id: TEST-REP-561
+  type: internal_test
+  name: test_it1_un_ajuste_reintentado_se_registra_una_vez
+  status: PASSING
+  source: app/backend/tests/postgres/test_iteracion1_postgres.py::test_it1_un_ajuste_reintentado_se_registra_una_vez
+- id: TEST-REP-562
+  type: internal_test
+  name: test_var_rep_041_el_tecnico_no_otorga_ni_quita_cortesias
+  status: PASSING
+  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_041_el_tecnico_no_otorga_ni_quita_cortesias
 - id: UAT-REP-047
   type: uat
-  name: 'Aceptacion de negocio: Como Administracion quiero otorgar una cortesia total aunque haya pagos,
-    para que el clien'
+  name: 'Aceptacion de negocio: Como Recepcion, Coordinacion RMA o Administracion quiero otorgar, modificar
+    o quitar una c'
   status: PENDING
 - id: US-REP-042
   type: user_story
   name: Como Recepcion quiero registrar que el cliente desiste de un trabajo que se esta reparando, para
-    que el tecnico lo interrumpa y recien ahi se cancele
+    que el tecnico lo interrumpa y recien ahi se cancele a su nombre
   status: IMPLEMENTED
   priority: P1
   actor: ACT-RECEP
@@ -475,6 +556,9 @@ items:
   name: Registrar la solicitud de desistimiento de un Detalle en ejecucion y cancelarlo al interrumpir
   status: IMPLEMENTED
   actor: ACT-RECEP
+  decisions: &id004
+  - DEC-IT1-04
+  - DEC-IT1-05
 - id: TR-REP-146
   type: technical_requirement
   name: solicitud_desistimiento en ReparacionDetail y estado_trabajo/reversible en EjecucionReparacion;
@@ -485,16 +569,19 @@ items:
   name: La solicitud (046 SOLICITAR_DESISTIMIENTO_CLIENTE, EV-REP-046) registra usuario, fecha, motivo
     y canal; no cancela ni toca la Ejecucion y no se duplica
   status: IMPLEMENTED
+  decisions: *id004
 - id: FR-REP-154
   type: functional_requirement
-  name: Con la solicitud pendiente el tecnico solo puede interrumpir, informando el estado del trabajo
-    y si es reversible (DC07B)
+  name: Con la solicitud pendiente el tecnico solo puede interrumpir, informando la reversibilidad (Si
+    o No) y una descripcion obligatoria del estado del trabajo (DEC-IT1-04)
   status: IMPLEMENTED
+  decisions: *id004
 - id: FR-REP-155
   type: functional_requirement
-  name: Al interrumpir se cancela el Detalle (300, DESISTIMIENTO_CLIENTE) con la solicitud conservada;
-    la Orden no se cancela (DC31)
+  name: Al interrumpir se cancela el Detalle (300, DESISTIMIENTO_CLIENTE) a nombre del tecnico que interrumpio,
+    no de Recepcion, con la solicitud conservada; la Orden no se cancela (DC31, DEC-IT1-05)
   status: IMPLEMENTED
+  decisions: *id004
 - id: TASK-REP-218
   type: task
   name: Implementar Registrar la solicitud de desistimiento de un Detalle en ejecucion y cancelarlo al
@@ -531,6 +618,11 @@ items:
   status: PASSING
   source: app/frontend/tests/iteracion1.test.ts::con el desistimiento pendiente, interrumpir es la acción
     de la tarea
+- id: TEST-REP-563
+  type: internal_test
+  name: test_var_rep_042_interrupcion_no_reversible
+  status: PASSING
+  source: app/backend/tests/test_iteracion1_v14.py::test_var_rep_042_interrupcion_no_reversible
 - id: UAT-REP-048
   type: uat
   name: 'Aceptacion de negocio: Como Recepcion quiero registrar que el cliente desiste de un trabajo que
@@ -718,6 +810,12 @@ links:
 - from: TR-REP-143
   to: FR-REP-147
   relationship: satisfies
+- from: FR-REP-158
+  to: ACC-REP-061
+  relationship: derives_from
+- from: TR-REP-143
+  to: FR-REP-158
+  relationship: satisfies
 - from: TASK-REP-215
   to: TR-REP-143
   relationship: implements
@@ -755,6 +853,18 @@ links:
   to: CODE-REP-248
   relationship: exercises
 - from: TEST-REP-544
+  to: FR-REP-145
+  relationship: verifies
+- from: TEST-REP-557
+  to: CODE-REP-248
+  relationship: exercises
+- from: TEST-REP-557
+  to: FR-REP-145
+  relationship: verifies
+- from: TEST-REP-558
+  to: CODE-REP-248
+  relationship: exercises
+- from: TEST-REP-558
   to: FR-REP-145
   relationship: verifies
 - from: UAT-REP-045
@@ -832,6 +942,12 @@ links:
 - from: TEST-REP-547
   to: FR-REP-148
   relationship: verifies
+- from: TEST-REP-559
+  to: CODE-REP-251
+  relationship: exercises
+- from: TEST-REP-559
+  to: FR-REP-148
+  relationship: verifies
 - from: UAT-REP-046
   to: US-REP-040
   relationship: accepts
@@ -855,6 +971,9 @@ links:
   relationship: governed_by
 - from: ACC-REP-063
   to: BR-REP-038
+  relationship: governed_by
+- from: ACC-REP-063
+  to: BR-REP-039
   relationship: governed_by
 - from: FR-REP-150
   to: ACC-REP-063
@@ -907,6 +1026,24 @@ links:
 - from: TEST-REP-550
   to: FR-REP-150
   relationship: verifies
+- from: TEST-REP-560
+  to: CODE-REP-254
+  relationship: exercises
+- from: TEST-REP-560
+  to: FR-REP-150
+  relationship: verifies
+- from: TEST-REP-561
+  to: CODE-REP-254
+  relationship: exercises
+- from: TEST-REP-561
+  to: FR-REP-150
+  relationship: verifies
+- from: TEST-REP-562
+  to: CODE-REP-254
+  relationship: exercises
+- from: TEST-REP-562
+  to: FR-REP-150
+  relationship: verifies
 - from: UAT-REP-047
   to: US-REP-041
   relationship: accepts
@@ -928,6 +1065,12 @@ links:
 - from: ACC-REP-064
   to: PROC-REP-300
   relationship: covers
+- from: ACC-REP-064
+  to: BR-REP-004
+  relationship: governed_by
+- from: ACC-REP-064
+  to: BR-REP-014
+  relationship: governed_by
 - from: ACC-REP-064
   to: BR-REP-030
   relationship: governed_by
@@ -986,6 +1129,12 @@ links:
   to: CODE-REP-256
   relationship: exercises
 - from: TEST-REP-553
+  to: FR-REP-153
+  relationship: verifies
+- from: TEST-REP-563
+  to: CODE-REP-256
+  relationship: exercises
+- from: TEST-REP-563
   to: FR-REP-153
   relationship: verifies
 - from: UAT-REP-048

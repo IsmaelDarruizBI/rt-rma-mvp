@@ -165,7 +165,7 @@ export const NOMBRE_ACCION: Record<string, string> = {
   EMITIR_COMPROBANTE_RECEPCION: "Emitir otra versión del comprobante",
   GENERAR_COMPROBANTE_INGRESO: "Generar el comprobante de ingreso y autorización",
   APLICAR_DESCUENTO: "Aplicar un descuento",
-  OTORGAR_CORTESIA: "Otorgar una cortesía total",
+  OTORGAR_CORTESIA: "Otorgar una cortesía",
   CAMBIAR_PRIORIDAD: "Cambiar la prioridad",
   LIBERAR_ORDEN_AJENA: "Liberar la Orden de otro técnico",
   AJUSTAR_GARANTIA: "Ajustar el plazo de garantía",
@@ -219,15 +219,15 @@ export function etiquetaAutorizacion(
 }
 
 /**
- * El nombre de una acción, sin el trabajo. Con la cortesía total vigente
- * (DC11) el ajuste comercial ya no aplica un descuento: la quita.
+ * El nombre de una acción, sin el trabajo. Con una cortesía vigente (DC11)
+ * su acción ya no la otorga: la modifica o la quita.
  */
 export function nombreDeAccion(accion: Accion): string {
   if (
-    accion.codigo === "APLICAR_DESCUENTO" &&
-    accion.etiqueta.toLowerCase().includes("cortesia")
+    accion.codigo === "OTORGAR_CORTESIA" &&
+    accion.etiqueta.toLowerCase().startsWith("modificar")
   ) {
-    return "Quitar la cortesía";
+    return "Modificar o quitar la cortesía";
   }
   return NOMBRE_ACCION[accion.codigo] ?? accion.etiqueta;
 }

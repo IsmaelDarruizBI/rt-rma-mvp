@@ -28,23 +28,30 @@ function accion(codigo: string, etiqueta: string): Accion {
   } as Accion;
 }
 
-test("la cortesía total tiene nombre propio (DC11)", () => {
-  assert.equal(NOMBRE_ACCION.OTORGAR_CORTESIA, "Otorgar una cortesía total");
+test("la cortesía tiene nombre propio (DC11, DEC-IT1-02)", () => {
+  assert.equal(NOMBRE_ACCION.OTORGAR_CORTESIA, "Otorgar una cortesía");
   assert.equal(
-    nombreDeAccion(accion("OTORGAR_CORTESIA", "Otorgar una cortesia total")),
-    "Otorgar una cortesía total",
-  );
-});
-
-test("con la cortesía vigente, el ajuste comercial la quita", () => {
-  assert.equal(
-    nombreDeAccion(accion("APLICAR_DESCUENTO", "Quitar la cortesia")),
-    "Quitar la cortesía",
+    nombreDeAccion(accion("OTORGAR_CORTESIA", "Otorgar una cortesia")),
+    "Otorgar una cortesía",
   );
   assert.equal(
     nombreDeAccion(accion("APLICAR_DESCUENTO", "Aplicar un descuento")),
     "Aplicar un descuento",
   );
+});
+
+test("con la cortesía vigente, su acción la modifica o la quita", () => {
+  assert.equal(
+    nombreDeAccion(
+      accion("OTORGAR_CORTESIA", "Modificar o quitar la cortesia"),
+    ),
+    "Modificar o quitar la cortesía",
+  );
+});
+
+test("un ajuste comercial reintentado lleva su clave (no se duplica)", async () => {
+  const { llevaClave } = await import("../src/api/idempotencia.ts");
+  assert.equal(llevaClave("/api/orders/OR-000001/discount"), true);
 });
 
 test("con el desistimiento pendiente, interrumpir es la acción de la tarea", async () => {

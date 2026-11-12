@@ -69,19 +69,51 @@ def entregada_hace(
         reloj.desplazamiento = timedelta(0)
 
 
+def entregada_con_vigencias_distintas(
+    cliente: TestClient, reloj: RelojDesplazado, tipo: str = f.BATERIA
+) -> str:
+    """DEC-IT1-03: tres trabajos entregados hace 75 dias. DET-001 y DET-003
+    con 90 dias (vigentes); DET-002 ajustado a 30 dias (vencido)."""
+    reloj.desplazamiento = -timedelta(days=75)
+    try:
+        origen = f.definida(cliente, tipo, tipo, tipo)
+        f.ok(
+            cliente.post(
+                f"/api/orders/{origen}/details/DET-002/warranty",
+                json={
+                    "usuario_id": f.RECEPCION,
+                    "dias": 30,
+                    "motivo": "Garantia reducida del repuesto.",
+                },
+            )
+        )
+        f.tomada(cliente, origen)
+        for numero in (1, 2, 3):
+            f.ejecutar(cliente, origen, f"DET-00{numero}", tipo)
+        for numero in (1, 2, 3):
+            f.ok(f.aprobar(cliente, origen, f"DET-00{numero}"))
+        f.notificar_pagar_entregar(cliente, origen)
+        return origen
+    finally:
+        reloj.desplazamiento = timedelta(0)
+
+
 def iniciar_garantia(
     cliente: TestClient,
     origen_id: str,
     detalle_origen_ids=("DET-001",),
     usuario: str = f.RECEPCION,
-    motivo_excepcion: str | None = None,
+    excepciones: dict[str, str] | None = None,
 ):
+    """``excepciones``: el motivo de cada Detalle vencido que se admite."""
     cuerpo = {
         "usuario_id": usuario,
         "detalle_origen_ids": list(detalle_origen_ids),
+        "excepciones": [
+            {"detalle_id": detalle_id, "motivo": motivo}
+            for detalle_id, motivo in (excepciones or {}).items()
+        ],
     }
-    if motivo_excepcion is not None:
-        cuerpo["motivo_excepcion"] = motivo_excepcion
     return cliente.post(f"/api/orders/{origen_id}/warranty-rma", json=cuerpo)
 
 
@@ -94,7 +126,9 @@ def ajuste_comercial(
     valor: str | None = "100",
     usuario: str = f.ADMINISTRADOR,
     motivo: str = MOTIVO_CORTESIA,
+    clave: str | None = None,
 ):
+    """Ajuste Comercial; ``clave``: Idempotency-Key del envio."""
     return cliente.post(
         f"/api/orders/{orden_id}/discount",
         json={
@@ -104,6 +138,7 @@ def ajuste_comercial(
             "valor": valor,
             "motivo": motivo,
         },
+        headers={"Idempotency-Key": clave} if clave else None,
     )
 
 
@@ -200,7 +235,23 @@ def recorrido_garantia_con_excepcion(
             cliente,
             origen,
             usuario=COORDINADOR,
-            motivo_excepcion=MOTIVO_EXCEPCION,
+            excepciones={"DET-001": MOTIVO_EXCEPCION},
+        )
+    )["id"]
+
+
+def recorrido_garantia_por_trabajo(
+    cliente: TestClient, reloj: RelojDesplazado, tipo: str = f.BATERIA
+) -> str:
+    """DEC-IT1-03: tres trabajos reclamados; solo DET-002 esta vencido y
+    Recepcion admite unicamente ese con su excepcion."""
+    origen = entregada_con_vigencias_distintas(cliente, reloj, tipo)
+    return f.ok(
+        iniciar_garantia(
+            cliente,
+            origen,
+            ("DET-001", "DET-002", "DET-003"),
+            excepciones={"DET-002": MOTIVO_EXCEPCION},
         )
     )["id"]
 
@@ -208,11 +259,17 @@ def recorrido_garantia_con_excepcion(
 def recorrido_cortesia_con_pagos(
     cliente: TestClient, tipo: str = f.BATERIA
 ) -> str:
-    """VAR-REP-041: anticipo, cortesia total, reparacion, devolucion del
-    saldo a favor y entrega."""
+    """VAR-REP-041: anticipo, cortesia parcial (Recepcion) que despues
+    pasa a total (Administracion), reparacion, devolucion del saldo a favor
+    y entrega."""
     orden_id = f.definida(cliente, tipo)
     orden = pagar(cliente, orden_id, "30000")
     pago_id = orden["pagos"][-1]["id"]
+    f.ok(
+        ajuste_comercial(
+            cliente, orden_id, valor="50", usuario=f.RECEPCION
+        )
+    )
     f.ok(ajuste_comercial(cliente, orden_id))
     f.tomada(cliente, orden_id)
     f.ejecutar(cliente, orden_id, "DET-001", tipo)

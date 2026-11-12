@@ -287,10 +287,8 @@ def resolver_desistimiento_solicitado(
         orden,
         detalle_id=detalle_id,
         usuario=usuario,
-        motivo=(
-            f"Desistimiento del cliente solicitado por {solicitud.usuario_id} "
-            f"el {solicitud.fecha:%Y-%m-%d %H:%M}: {solicitud.motivo}"
-        ),
+        # Quien y cuando lo pidio quedan en la solicitud; aca, el motivo.
+        motivo=f"Desistimiento solicitado por el cliente: {solicitud.motivo}",
         fecha=fecha,
         origen=OrigenCancelacion.DESISTIMIENTO_CLIENTE,
         exigir_rol=False,

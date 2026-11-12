@@ -30,6 +30,7 @@ import type {
   ImpactoOverride,
   InsumoPrevisto,
   InsumoUtilizado,
+  ExcepcionPedida,
   Orden,
   Prioridad,
   SolicitudDesistimiento,
@@ -99,7 +100,7 @@ export interface EjecutorAcciones {
   devolverRt: () => void;
   iniciarGarantiaRma: (
     detalleOrigenIds: string[],
-    motivoExcepcion: string | null,
+    excepciones: ExcepcionPedida[],
   ) => void;
   enviarARevision: () => void;
   realizarRevision: (resultado: string) => void;
@@ -1392,9 +1393,10 @@ function FormularioSinReparacion({
  */
 /**
  * HP-REP-003 / DC15B: elegir los trabajos reclamados viendo si su garantía
- * sigue vigente. Con alguno vencido solo se admite como excepción, con
- * motivo, por Coordinación o Administración (VAR-REP-039); el backend
- * valida el permiso y la vigencia.
+ * sigue vigente. Cada trabajo vencido solo se admite con su propia
+ * excepción y motivo (DEC-IT1-03); la autorizan Recepción, Coordinación
+ * RMA o Administración (DEC-IT1-01). Si no se autoriza, se lo desmarca: los
+ * vigentes siguen cubiertos. El backend valida el permiso y la vigencia.
  */
 function FormularioGarantiaRma({
   orden,
@@ -1405,16 +1407,20 @@ function FormularioGarantiaRma({
   deshabilitado: boolean;
   onConfirmar: (
     detalleOrigenIds: string[],
-    motivoExcepcion: string | null,
+    excepciones: ExcepcionPedida[],
   ) => void;
 }) {
   const [elegidos, setElegidos] = useState<string[]>([]);
-  const [motivo, setMotivo] = useState("");
+  const [motivos, setMotivos] = useState<Record<string, string>>({});
   const vigencias = orden.garantia_por_detalle ?? [];
   const vigenciaDe = (detalleId: string) =>
     vigencias.find((vigencia) => vigencia.detalle_id === detalleId);
   const vencidos = elegidos.filter((id) => vigenciaDe(id)?.vigente === false);
   const conExcepcion = vencidos.length > 0;
+  const faltaMotivo = vencidos.some((id) => !(motivos[id] ?? "").trim());
+  const nombreDe = (detalleId: string) =>
+    orden.reparaciones_detail.find((d) => d.id === detalleId)
+      ?.tipo_reparacion_nombre ?? "";
 
   const alternar = (detalleId: string, marcado: boolean) =>
     setElegidos((actuales) =>
@@ -1461,38 +1467,60 @@ function FormularioGarantiaRma({
           }}
         >
           <p style={{ margin: "0 0 0.4rem" }}>
-            La garantía de {vencidos.join(", ")} está vencida. Solo se admite
-            como excepción: la autoriza Coordinación o Administración y el
-            motivo queda registrado.
+            Un trabajo con la garantía vencida solo se admite como excepción,
+            con su motivo; queda registrado quién la autorizó y cuándo. Si no
+            corresponde, desmarcalo: los trabajos vigentes siguen cubiertos.
           </p>
-          <Campo etiqueta="Motivo de la excepción (obligatorio)">
-            <input
-              value={motivo}
-              onChange={(evento) => setMotivo(evento.target.value)}
-              disabled={deshabilitado}
-              style={estiloInput}
-            />
-          </Campo>
+          {vencidos.map((detalleId) => (
+            <Campo
+              key={detalleId}
+              etiqueta={`Motivo de la excepción para ${detalleId} · ${nombreDe(detalleId)} (obligatorio)`}
+            >
+              <input
+                value={motivos[detalleId] ?? ""}
+                onChange={(evento) =>
+                  setMotivos((actuales) => ({
+                    ...actuales,
+                    [detalleId]: evento.target.value,
+                  }))
+                }
+                disabled={deshabilitado}
+                style={estiloInput}
+              />
+            </Campo>
+          ))}
+          <Boton
+            variante="secundario"
+            disabled={deshabilitado}
+            onClick={() =>
+              setElegidos((actuales) =>
+                actuales.filter((id) => !vencidos.includes(id)),
+              )
+            }
+          >
+            Desmarcar los vencidos
+          </Boton>
         </div>
       )}
       <div style={{ marginTop: "0.4rem" }}>
         <Boton
-          disabled={
-            deshabilitado ||
-            elegidos.length === 0 ||
-            (conExcepcion && motivo.trim() === "")
-          }
+          disabled={deshabilitado || elegidos.length === 0 || faltaMotivo}
           onClick={() =>
             onConfirmar(
               orden.reparaciones_detail
                 .map((detalle) => detalle.id)
                 .filter((id) => elegidos.includes(id)),
-              conExcepcion ? motivo.trim() : null,
+              vencidos.map((detalleId) => ({
+                detalle_id: detalleId,
+                motivo: (motivos[detalleId] ?? "").trim(),
+              })),
             )
           }
         >
           {conExcepcion
-            ? "Autorizar la excepción e iniciar la garantía"
+            ? vencidos.length === 1
+              ? "Autorizar la excepción e iniciar la garantía"
+              : `Autorizar ${vencidos.length} excepciones e iniciar la garantía`
             : "Iniciar garantía RMA"}
         </Boton>
       </div>

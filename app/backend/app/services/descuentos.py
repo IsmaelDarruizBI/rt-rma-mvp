@@ -37,19 +37,14 @@ from .exceptions import PrecondicionInvalidaError
 from .pagos import es_cobrable
 
 ROLES_DESCUENTO = (RolUsuario.RECEPCION, RolUsuario.ADMINISTRADOR)
-# BR-REP-016: el permiso inicial de cada tipo de ajuste sigue pendiente de
-# decision. PROVISIONAL: la cortesia autorizada por Administracion de V1.3,
-# que la regla documenta. Cambiarlo es cambiar esta tupla.
-ROLES_CORTESIA = (RolUsuario.ADMINISTRADOR,)
-
-
-def es_cortesia_total(
-    subtotal: Decimal, tipo: TipoDescuento, valor: Decimal
-) -> bool:
-    """La cortesia cubre todo el subtotal de los trabajos."""
-    if tipo is TipoDescuento.PORCENTAJE:
-        return valor == 100
-    return valor == subtotal
+# DEC-IT1-02 (11/11/2026, BR-REP-016/039): otorgan, modifican y quitan la
+# CORTESIA Recepcion, Coordinacion RMA y Administracion. El permiso del
+# DESCUENTO no cambia (sigue la implementacion del UAT).
+ROLES_CORTESIA = (
+    RolUsuario.RECEPCION,
+    RolUsuario.COORDINADOR_RMA,
+    RolUsuario.ADMINISTRADOR,
+)
 
 
 def descripcion_de_descuento(registro: RegistroDescuento) -> str:
@@ -83,12 +78,14 @@ def aplicar_descuento(
 ) -> OrdenReparacion:
     """Aplica, cambia o quita (``tipo`` en ``None``) el Ajuste Comercial.
 
-    Porcentaje entre 0 y 100; importe fijo hasta el subtotal de los
-    trabajos. Un DESCUENTO se rechaza si el nuevo total quedaria por
-    debajo de lo ya cobrado (pagos validos menos devoluciones). Una
-    CORTESIA solo puede ser total y si queda por debajo de lo cobrado deja
-    saldo a favor del cliente, a devolver antes de entregar (DC11). Quitar
-    una cortesia exige el mismo permiso que otorgarla.
+    Un solo Ajuste Comercial vigente por Orden (el ultimo registro), sin
+    acumular. Porcentaje entre 0 y 100; importe fijo hasta el subtotal de
+    los trabajos. Un DESCUENTO se rechaza si el nuevo total quedaria por
+    debajo de lo ya cobrado (pagos validos menos devoluciones; ABI-10 sigue
+    abierto). Una CORTESIA, total o parcial (DEC-IT1-02), si deja el total
+    por debajo de lo cobrado genera saldo a favor del cliente, a devolver
+    antes de entregar (DC11, BR-REP-038). Otorgar, modificar o quitar una
+    cortesia exige el mismo permiso (``ROLES_CORTESIA``).
     """
     vigente = orden.descuento_vigente
     otorga_o_quita_cortesia = clase is ClaseAjuste.CORTESIA or (
@@ -133,14 +130,6 @@ def aplicar_descuento(
             raise PrecondicionInvalidaError(
                 f"El descuento ({valor}) no puede superar el subtotal de los "
                 f"trabajos ({orden.subtotal})."
-            )
-        if clase is ClaseAjuste.CORTESIA and not es_cortesia_total(
-            orden.subtotal, tipo, valor
-        ):
-            raise PrecondicionInvalidaError(
-                "La cortesia es por el total de la Orden (100 % o el "
-                f"subtotal, {orden.subtotal}); una cortesia parcial sigue "
-                "pendiente de definicion: para una rebaja usa un descuento."
             )
         registro = RegistroDescuento(
             tipo=tipo,

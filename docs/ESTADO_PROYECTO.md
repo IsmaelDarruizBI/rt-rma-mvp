@@ -10,10 +10,10 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - Supabase de São Paulo migrado, validado y en cero Órdenes, con la revisión de corte `00023-zus` sin tráfico (11/11);
   - consolidación técnica (11/11): CI, respaldo cifrado probado, checklist de seguridad, despliegue y deuda técnica ([`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md));
   - corte del UAT a São Paulo y respaldo diario activo (11/11);
-  - **iteración funcional 1** (11/11, rama `feat/iteracion-1-alineacion-v14`, sin publicar): DC06, DC07, DC11 y DC15B alineadas con V1.4 (sección B).
+  - **iteración funcional 1 cerrada** (11/11, rama `feat/iteracion-1-alineacion-v14`, sin publicar): DC06, DC07, DC11 y DC15B alineadas con V1.4 y las cinco decisiones DEC-IT1-01 a 05 incorporadas en `rt-rma-app` (`708d81b`) e implementadas (sección B).
 - **Falta:**
   - revisar la iteración 1 e integrarla en `mvp-v2` (push y merge con autorización);
-  - decidir los permisos provisionales de la iteración 1 (sección E);
+  - publicar la rama de especificación `spec/iteracion-1-decisiones` de `rt-rma-app` (también con autorización);
   - integrar en `main` (P0-2).
 
 **Para retomar el trabajo: [`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md)**: estado, pendientes con autorización y criterios para el desarrollo funcional. Corte y vuelta atrás: [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16. Entorno local: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 5. En otra computadora: [`CONTINUIDAD.md`](CONTINUIDAD.md).
@@ -34,7 +34,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | Persistencia en uso | UAT: PostgreSQL en Supabase (`RMA_PERSISTENCIA=postgres`). JSON sigue siendo el valor por defecto local |
 | UAT publicado | Desde el 11/11/2026, sobre Supabase São Paulo: backend en Cloud Run (`00024-top`, código `d226fd2`) y frontend en Vercel (`dpl_6vsL…`). Oregón queda como vuelta atrás hasta el 25/11/2026 ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16) |
 
-**Rama de trabajo:** `feat/iteracion-1-alineacion-v14`, salida de `mvp-v2` (`fa4f24d`); commit local, sin push ni merge. `mvp-v2` sigue en `fa4f24d`. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
+**Rama de trabajo:** `feat/iteracion-1-alineacion-v14`, salida de `mvp-v2` (`fa4f24d`); commits locales, sin push ni merge. `mvp-v2` sigue en `fa4f24d`. `business/` viene de `rt-rma-app` `708d81b` (rama local `spec/iteracion-1-decisiones`, sin publicar). Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
 
 **Últimos commits de código:** `61e2a14` (inicio de sesión con usuario y contraseña), `50170e4` (DC31) y `d60c124` (autenticación). Desplegado: `d226fd2`, que incluye la corrección de DC31 (`ac619ed`) y el cierre de `/docs`. Ver `git log`.
 
@@ -77,7 +77,16 @@ Commit local sobre `mvp-v2`, sin push ni merge. Diferencias con la baseline: [`d
 - **Interfaz:** los cuatro recorridos y DC06 se completaron en el navegador sobre datos locales (formulario de garantía con vigencia y excepción, cortesía, solicitud de desistimiento, interrupción con estado y reversibilidad).
 - **Migración aditiva** `20261111000100_it1_alineacion_v14.sql`: columnas que admiten vacío, `descuento.clase` con valor por defecto, EV-REP-052 y tres equivalencias del historial. No se aplicó en ninguna base remota.
 - **Pruebas:** JSON 1717 pasan y 29 se saltean; `tests/postgres` 387 pasan; `ruff` sin errores; frontend: typecheck, 123 tests y build; `npm run validate:all` en verde.
-- **Permisos provisionales** (sección E): excepción de garantía por Coordinación RMA o Administración; cortesía por Administración.
+- **Pruebas** de la primera entrega: JSON 1717, `tests/postgres` 387 y frontend 123.
+
+**Cierre funcional (11/11/2026): decisiones DEC-IT1-01 a 05.** Especificadas en `rt-rma-app` (`708d81b`, rama `spec/iteracion-1-decisiones`: reglas, PROC-REP-036, VAR-REP-038/039/041/042, Features, registro con ABI-04, 18, 26 y 33 cerrados, matriz, diseño lógico y vistas) y sincronizadas en `business/`.
+
+- **DEC-IT1-01:** la excepción de garantía la autorizan Recepción, Coordinación RMA o Administración; el Técnico no. Lo valida el backend.
+- **DEC-IT1-03:** vigencia y excepción **por trabajo**. Un pedido con un vencido sin excepción no crea nada e informa los elegibles; la pantalla pide un motivo por cada vencido o permite desmarcarlos. La excepción vive en cada fila de `orden_detalle_origen` (la migración `20261111000100` se ajustó en el lugar: no estaba publicada ni aplicada).
+- **DEC-IT1-02:** cortesía total o parcial (porcentaje o importe) con el mismo Ajuste Comercial; la otorgan, modifican o quitan los tres roles. Con saldo a favor la entrega se bloquea hasta devolver. El ajuste es idempotente (`Idempotency-Key`, efectivo con PostgreSQL).
+- **DEC-IT1-04 y 05:** reversibilidad Sí o No y descripción obligatoria al interrumpir para cancelar; la cancelación efectiva queda a nombre del técnico que interrumpió, separada de la solicitud de Recepción.
+- **Interfaz:** recorridos verificados en el navegador con los roles de cada decisión (excepción de un trabajo entre tres, desmarcar vencidos, cortesía parcial con devolución y entrega, modificar o quitar, desistimiento e interrupción no reversible).
+- **Pruebas finales:** sección F.
 
 ### Preparación para el cambio de computadora (11/11/2026)
 
@@ -455,12 +464,14 @@ El detalle, asignado por etapa, está en [`postgresql/integracion-pendientes.md`
 | F-05 | La búsqueda por DNI usa la copia de la Orden (A5). Sigue abierto qué hacer con el documento de un cliente reutilizado sin DNI (QA-A2-L1) | B4 |
 | F-03, QA-E2-10 | Evidencias de faltante por subcadena de texto; criterio de reserva pendiente con `DESPERDICIO` | E5 |
 | L1 a L10 y el resto de E2 y E3 | Observaciones menores de E1, F-07, F-08, QA-E2-4, QA-E2-6, QA-E2-7, QA-E2-9 y QA-E3-L | Por etapa |
-| IT1-1 | Permiso provisional de la excepción de garantía: Coordinación RMA o Administración (`ROLES_EXCEPCION_GARANTIA`). Decisión pendiente en la baseline (ABI-04) | Iteración 1 |
-| IT1-2 | Permiso provisional de la cortesía: solo Administración (`ROLES_CORTESIA`), y solo total (ABI-09, ABI-10) | Iteración 1 |
-| IT1-3 | Reclamo de garantía con Detalles vigentes y vencidos: hoy exige la excepción para todo el reclamo (ABI-33) | Iteración 1 |
-| IT1-4 | El intento de garantía rechazado no se registra (ABI-35, pendiente en la baseline) | Iteración 1 |
-| IT1-5 | VAR-REP-019 (el técnico redefine antes de ejecutar) no se implementó: depende de la evaluación técnica de BR-REP-035, que el producto no tiene | Iteración 1 |
-| IT1-6 | La migración 21 tiene que aplicarse en São Paulo antes de desplegar la iteración 1; el registro de decisiones de `rt-rma-app` sigue marcando DC06/07/11/15B como pendientes | Iteración 1 |
+| IT1-1 | Resuelto (DEC-IT1-01): la excepción de garantía la autorizan Recepción, Coordinación RMA o Administración | Cerrado |
+| IT1-2 | Resuelto (DEC-IT1-02): cortesía total o parcial, por los tres roles. Sigue abierto el permiso del DESCUENTO y su tratamiento bajo lo cobrado (ABI-09, ABI-10) | Cerrado |
+| IT1-3 | Resuelto (DEC-IT1-03): vigencia y excepción por trabajo | Cerrado |
+| IT1-4 | El intento de garantía rechazado no se registra (ABI-35, pendiente en la baseline) | Posterior |
+| IT1-5 | VAR-REP-019 (el técnico redefine antes de ejecutar) no se implementó: depende de la evaluación técnica de BR-REP-035, que el producto no tiene | Posterior |
+| IT1-6 | La migración `20261111000100` tiene que aplicarse en São Paulo antes de desplegar la iteración 1 | Despliegue |
+| IT1-7 | `rt-rma-app` `spec/iteracion-1-decisiones` no está publicada: `verify:functional-copy:source` solo funciona con el clon local hasta publicarla | Integración |
+| IT1-8 | DC07C: desistir de todo con una reparación en curso sigue bloqueado (circuito guiado pendiente) | Posterior |
 
 Otros riesgos registrados:
 - **Latencia entre regiones:** resuelta con el corte a São Paulo (11/11/2026). La medición previa está en [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 8.
@@ -471,7 +482,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso:** revisar la iteración funcional 1 (rama `feat/iteracion-1-alineacion-v14`) y decidir los permisos provisionales IT1-1 a IT1-3. Con eso, publicar la rama e integrarla en `mvp-v2`, ambas con autorización; desplegar después, aplicando antes la migración 21 en São Paulo. Quedan además los pendientes operativos con fecha y `main`:
+**Próximo paso:** la iteración funcional 1 está cerrada y lista para integrar. Con autorización: publicar `rt-rma-app` `spec/iteracion-1-decisiones` y `rt-rma-mvp` `feat/iteracion-1-alineacion-v14`, e integrar esta en `mvp-v2`. Desplegar después, aplicando antes la migración `20261111000100` en São Paulo. Pruebas del cierre (11/11/2026): JSON 1720 pasan y 29 se saltean; `tests/postgres` 389 pasan; frontend: typecheck, 124 tests y build; `npm run validate:all` en verde. Quedan además los pendientes operativos con fecha y `main`:
 
 1. **Hecho (11/11/2026):** inicio de sesión manual en `rt-rma-uat.vercel.app`, verificado en los registros.
 2. **Hecho (11/11/2026):** limpieza (P2-4) y respaldo diario (P0-1).

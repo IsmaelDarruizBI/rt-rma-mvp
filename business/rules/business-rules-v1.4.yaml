@@ -110,26 +110,28 @@ rules:
   - id: BR-REP-004
     name: Registro de ejecucion real
     description: >
-      Una Ejecucion finaliza con uno de tres resultados (PROC-REP-200),
-      todos conservados historicamente sin sobrescribirse: Completado
-      (Ejecucion COMPLETADA, Detalle COMPLETO); Interrumpido (Ejecucion
-      INTERRUMPIDA, Detalle vuelve a DEFINIDO y su definicion vigente
-      sigue siendo valida); Requiere redefinicion (Ejecucion INTERRUMPIDA,
-      Detalle DEFINIDO + REQUIERE_DEFINICION, motivo obligatorio: la
-      definicion actual dejo de ser valida o suficiente). Los tres
-      continuan a PROC-REP-210. Detalle del registro:
-      El tecnico debe registrar, por cada Ejecucion de un Detalle, lo
-      efectivamente realizado, los repuestos realmente utilizados, y si
-      su resultado. Una Ejecucion interrumpida (con o sin redefinicion) no
-      completa el Detalle -que vuelve a DEFINIDO-, pero
-      queda conservada integramente en el historial: nunca se sobrescribe
-      una Ejecucion anterior. Consolidacion V1.4: el resultado Interrumpido
-      tambien exige motivo (mejoras UAT del 16/10/2026). Cuando la interrupcion
-      resuelve una cancelacion solicitada sobre ese Detalle (DC07B), el tecnico
-      registra ademas el estado en que queda el trabajo, los materiales
-      utilizados y si el trabajo puede revertirse, antes de que se resuelva la
-      cancelacion (BR-REP-014). Que opciones admite la reversibilidad y como
-      se usa despues siguen pendientes de definicion.
+      Una Ejecucion finaliza con uno de tres resultados (PROC-REP-200), todos
+      conservados historicamente sin sobrescribirse: Completado (Ejecucion
+      COMPLETADA, Detalle COMPLETO); Interrumpido (Ejecucion INTERRUMPIDA,
+      Detalle vuelve a DEFINIDO y su definicion vigente sigue siendo valida);
+      Requiere redefinicion (Ejecucion INTERRUMPIDA, Detalle DEFINIDO +
+      REQUIERE_DEFINICION, motivo obligatorio: la definicion actual dejo de ser
+      valida o suficiente). Los tres continuan a PROC-REP-210. Detalle del
+      registro: El tecnico debe registrar, por cada Ejecucion de un Detalle, lo
+      efectivamente realizado, los repuestos realmente utilizados, y si su
+      resultado. Una Ejecucion interrumpida (con o sin redefinicion) no
+      completa el Detalle -que vuelve a DEFINIDO-, pero queda conservada
+      integramente en el historial: nunca se sobrescribe una Ejecucion
+      anterior. Consolidacion V1.4: el resultado Interrumpido tambien exige
+      motivo (mejoras UAT del 16/10/2026). Cuando la interrupcion resuelve una
+      cancelacion solicitada sobre ese Detalle (DC07B), el tecnico registra
+      ademas el estado en que queda el trabajo, los materiales utilizados y si
+      el trabajo puede revertirse, antes de que se resuelva la cancelacion
+      (BR-REP-014). Reversibilidad (DEC-IT1-04, 11/11/2026): se registra como
+      Si o No, junto con una descripcion obligatoria del estado actual del
+      trabajo; ambos datos quedan en la Ejecucion y en su historial. No se
+      define por ahora una clasificacion mas detallada ni consecuencias
+      automaticas de la reversibilidad.
     status: approved
 
   - id: BR-REP-005
@@ -425,82 +427,79 @@ rules:
   - id: BR-REP-014
     name: Cancelacion de Detalle y de Orden
     description: >
-      Un Detalle no terminal (DEFINIDO, sin Ejecucion activa) puede
-      pasar a CANCELADO, conservando su Tipo, precio snapshot y todo su
-      historial previo. Cancelar una Orden completa NO implica
-      necesariamente que su resultado final sea CANCELADA: la accion
-      cancela los Detalles NO TERMINALES (DEFINIDO -> CANCELADO,
-      preservando los ya COMPLETO) y a continuacion se recalcula el
-      estado agregado mediante el resolver (BR-REP-012), cuyo resultado
-      determina el desenlace: (A) si, tras la cascada, TODOS los Detalles
-      quedan CANCELADO, la Orden pasa a CANCELADA, sin pasar por control
-      tecnico ni por REPARACION_LISTA; (B) si existe al menos un Detalle
-      COMPLETO y todos los restantes quedaron CANCELADO, la Orden queda
-      tecnicamente COMPLETA y continua el flujo normal (Control Tecnico
-      -> REPARACION_LISTA -> cierre comercial -> entrega cuando
+      Un Detalle no terminal (DEFINIDO, sin Ejecucion activa) puede pasar a
+      CANCELADO, conservando su Tipo, precio snapshot y todo su historial
+      previo. Cancelar una Orden completa NO implica necesariamente que su
+      resultado final sea CANCELADA: la accion cancela los Detalles NO
+      TERMINALES (DEFINIDO -> CANCELADO, preservando los ya COMPLETO) y a
+      continuacion se recalcula el estado agregado mediante el resolver
+      (BR-REP-012), cuyo resultado determina el desenlace: (A) si, tras la
+      cascada, TODOS los Detalles quedan CANCELADO, la Orden pasa a CANCELADA,
+      sin pasar por control tecnico ni por REPARACION_LISTA; (B) si existe al
+      menos un Detalle COMPLETO y todos los restantes quedaron CANCELADO, la
+      Orden queda tecnicamente COMPLETA y continua el flujo normal (Control
+      Tecnico -> REPARACION_LISTA -> cierre comercial -> entrega cuando
       corresponda), porque ese Detalle representa trabajo efectivamente
-      realizado que debe poder controlarse, cobrarse y cerrarse.
-      Consolidacion V1.4 (DC07A a DC07D, reemplaza la restriccion a nivel
-      Orden de la version anterior). Un Detalle DEFINIDO puede cancelarse
-      aunque otro Detalle de la Orden se este ejecutando: se liberan solo los
-      recursos de ese Detalle y la Ejecucion del otro continua (DC07A). Un
-      Detalle EN_PROGRESO no se cancela directamente: primero se interrumpe su
-      Ejecucion y el tecnico registra el estado del trabajo, los materiales
-      utilizados y si puede revertirse; despues se resuelve la cancelacion
-      (DC07B, BR-REP-004). El desistimiento total con una Ejecucion activa es un
-      proceso guiado de interrupcion y desistimiento que registra los Detalles
-      afectados, el motivo y la resolucion de cada uno, y resuelve las
-      Ejecuciones antes del cierre (DC07C, BR-REP-030). Un Detalle COMPLETO nunca
-      se cancela retroactivamente: lo que corresponda se resuelve con Ajustes
-      Comerciales o devoluciones (DC07D, BR-REP-016, BR-REP-038). La solicitud de
+      realizado que debe poder controlarse, cobrarse y cerrarse. Consolidacion
+      V1.4 (DC07A a DC07D, reemplaza la restriccion a nivel Orden de la version
+      anterior). Un Detalle DEFINIDO puede cancelarse aunque otro Detalle de la
+      Orden se este ejecutando: se liberan solo los recursos de ese Detalle y
+      la Ejecucion del otro continua (DC07A). Un Detalle EN_PROGRESO no se
+      cancela directamente: primero se interrumpe su Ejecucion y el tecnico
+      registra el estado del trabajo, los materiales utilizados y si puede
+      revertirse; despues se resuelve la cancelacion (DC07B, BR-REP-004). El
+      desistimiento total con una Ejecucion activa es un proceso guiado de
+      interrupcion y desistimiento que registra los Detalles afectados, el
+      motivo y la resolucion de cada uno, y resuelve las Ejecuciones antes del
+      cierre (DC07C, BR-REP-030). Un Detalle COMPLETO nunca se cancela
+      retroactivamente: lo que corresponda se resuelve con Ajustes Comerciales
+      o devoluciones (DC07D, BR-REP-016, BR-REP-038). La solicitud de
       desistimiento y la cancelacion efectiva se registran por separado, cada
-      una con usuario y fecha/hora. Invariante: un Detalle
-      CANCELADO no puede conservar reservas activas de inventario. Esto
-      no requiere un mecanismo nuevo: se garantiza reutilizando el
-      mecanismo de generacion de movimientos ya existente (PROC-REP-210,
-      BR-REP-005), que en cada finalizacion de Ejecucion -Completada o
-      Interrumpida-
-      consume lo efectivamente utilizado y libera toda reserva no
-      utilizada de ese Detalle. Como un Detalle solo puede cancelarse
-      estando DEFINIDO y sin Ejecucion activa (nunca EN_PROGRESO), para
-      llegar a ese estado ya paso, si tuvo alguna Ejecucion, por
+      una con usuario y fecha/hora; la efectiva, con el tecnico que interrumpio
+      cuando el Detalle estaba en ejecucion (BR-REP-030, DEC-IT1-05).
+      Invariante: un Detalle CANCELADO no puede conservar reservas activas de
+      inventario. Esto no requiere un mecanismo nuevo: se garantiza
+      reutilizando el mecanismo de generacion de movimientos ya existente
+      (PROC-REP-210, BR-REP-005), que en cada finalizacion de Ejecucion
+      -Completada o Interrumpida- consume lo efectivamente utilizado y libera
+      toda reserva no utilizada de ese Detalle. Como un Detalle solo puede
+      cancelarse estando DEFINIDO y sin Ejecucion activa (nunca EN_PROGRESO),
+      para llegar a ese estado ya paso, si tuvo alguna Ejecucion, por
       PROC-REP-210 -que ya dejo sus insumos en CONSUMIDO, LIBERADO o
-      DESPERDICIO, nunca en RESERVADO-; por lo tanto al momento de
-      cancelar no quedan reservas pendientes de reconciliar. Todos los
-      movimientos, incluyendo los de un Detalle luego cancelado,
-      conservan su trazabilidad historica al Detalle que los origino.
-      Nunca se reescribe historia tecnica real (Ejecuciones, insumos,
-      movimientos, precios, pagos, auditoria). Los reembolsos de pagos ya
-      realizados cuando la Orden termina CANCELADA son saldo a favor del
-      cliente y se devuelven antes del cierre (BR-REP-038); otras
-      consecuencias comerciales (por ejemplo penalidades) siguen pendientes.
-      Tipos y permisos (DC08): cancelacion administrativa (por defecto
-      Recepcion y Coordinacion), descarte tecnico (el Tecnico, PROC-REP-183,
-      BR-REP-036) y desistimiento solicitado por el cliente (lo registra
-      Recepcion), cada uno con permiso configurable (BR-REP-039); por eso
-      PROC-REP-300/305/306 no declaran un unico actor. El catalogo de motivos de
-      cancelacion sigue pendiente.
-      Revision DC31 (09/11/2026; reemplaza los desenlaces (A) y (B) en lo que
-      se refiere a cancelar la Orden): cancelar un Detalle solo cancela ese
-      Detalle y NUNCA cancela la Orden, aunque todos queden CANCELADO; en ese
-      caso la Orden sigue abierta con la situacion derivada
-      SIN_TRABAJOS_VIGENTES (PROC-REP-307), que no habilita trabajo tecnico.
-      Cancelar la Orden es una accion EXPLICITA y TERMINAL (PROC-REP-308, o
-      PROC-REP-306 sin Detalles) que solo se permite si, a la vez: no hay
-      Ejecucion activa ni toma tecnica abierta, no quedan reservas de insumos
-      por conciliar, no hay deuda del cliente ni dinero a favor del cliente
-      por devolver, la custodia esta resuelta y, si el equipo ingreso
-      fisicamente, su devolucion ya se registro, y ningun Detalle esta
+      DESPERDICIO, nunca en RESERVADO-; por lo tanto al momento de cancelar no
+      quedan reservas pendientes de reconciliar. Todos los movimientos,
+      incluyendo los de un Detalle luego cancelado, conservan su trazabilidad
+      historica al Detalle que los origino. Nunca se reescribe historia tecnica
+      real (Ejecuciones, insumos, movimientos, precios, pagos, auditoria). Los
+      reembolsos de pagos ya realizados cuando la Orden termina CANCELADA son
+      saldo a favor del cliente y se devuelven antes del cierre (BR-REP-038);
+      otras consecuencias comerciales (por ejemplo penalidades) siguen
+      pendientes. Tipos y permisos (DC08): cancelacion administrativa (por
+      defecto Recepcion y Coordinacion), descarte tecnico (el Tecnico,
+      PROC-REP-183, BR-REP-036) y desistimiento solicitado por el cliente (lo
+      registra Recepcion), cada uno con permiso configurable (BR-REP-039); por
+      eso PROC-REP-300/305/306 no declaran un unico actor. El catalogo de
+      motivos de cancelacion sigue pendiente. Revision DC31 (09/11/2026;
+      reemplaza los desenlaces (A) y (B) en lo que se refiere a cancelar la
+      Orden): cancelar un Detalle solo cancela ese Detalle y NUNCA cancela la
+      Orden, aunque todos queden CANCELADO; en ese caso la Orden sigue abierta
+      con la situacion derivada SIN_TRABAJOS_VIGENTES (PROC-REP-307), que no
+      habilita trabajo tecnico. Cancelar la Orden es una accion EXPLICITA y
+      TERMINAL (PROC-REP-308, o PROC-REP-306 sin Detalles) que solo se permite
+      si, a la vez: no hay Ejecucion activa ni toma tecnica abierta, no quedan
+      reservas de insumos por conciliar, no hay deuda del cliente ni dinero a
+      favor del cliente por devolver, la custodia esta resuelta y, si el equipo
+      ingreso fisicamente, su devolucion ya se registro, y ningun Detalle esta
       COMPLETO (el trabajo realizado sigue el cierre normal: control, cobro y
-      entrega). Si alguna condicion falla no se cancela nada. Si se cumplen,
-      en una sola operacion cancela los Detalles pendientes cancelables,
-      registra usuario, fecha/hora, motivo y trazabilidad, fija la Orden en
-      CANCELADA y la cierra (EVT-REP-999); despues no admite acciones
-      operativas, solo consulta. Lo COMPLETO, las Ejecuciones, los
-      movimientos y el historial nunca se alteran retroactivamente. Las
-      Ordenes que quedaron CANCELADA y abiertas por la regla anterior
-      completan el circuito anterior de custodia, devolucion y saldo
-      (PROC-REP-271/270/267/268) y despues quedan cerradas.
+      entrega). Si alguna condicion falla no se cancela nada. Si se cumplen, en
+      una sola operacion cancela los Detalles pendientes cancelables, registra
+      usuario, fecha/hora, motivo y trazabilidad, fija la Orden en CANCELADA y
+      la cierra (EVT-REP-999); despues no admite acciones operativas, solo
+      consulta. Lo COMPLETO, las Ejecuciones, los movimientos y el historial
+      nunca se alteran retroactivamente. Las Ordenes que quedaron CANCELADA y
+      abiertas por la regla anterior completan el circuito anterior de
+      custodia, devolucion y saldo (PROC-REP-271/270/267/268) y despues quedan
+      cerradas.
     status: approved
 
   - id: BR-REP-015
@@ -540,42 +539,47 @@ rules:
   - id: BR-REP-016
     name: Ajustes Comerciales y Cortesia
     description: >
-      El calculo comercial de la Orden sigue el esquema extensible
-      Subtotal + Ajustes Comerciales Previos = Base Comercial (y, fuera
-      de alcance de V1.3, Base Comercial + impuestos/recargos/otros
-      conceptos = Total Cobrable). Consolidacion V1.4 (DC09, reemplaza el
-      modelo de cortesias de V1.3): CORTESIA y DESCUENTO se unifican en un
-      unico Ajuste Comercial con tipo (CORTESIA o DESCUENTO), aplicable a la
-      Orden o a un Detalle, expresado como porcentaje o importe fijo, con motivo
-      obligatorio, usuario y fecha/hora, y con historial de cada alta, cambio o
-      retiro. Un ajuste no modifica ni elimina el precio original del Detalle
-      ni el precio de catalogo (que permanecen como dato historico dentro del
-      Subtotal): se resta como concepto independiente y se refleja en los
-      comprobantes, y no puede superar el importe al que se aplica (UAT,
-      iteracion 1). Cada tipo de ajuste tiene su propio permiso (BR-REP-039).
-      Los permisos iniciales por tipo siguen pendientes de decision: hasta
-      decidirlos se documentan, sin convertirlos en regla, la cortesia
-      autorizada por ACT-ADMIN de V1.3 y el descuento de Recepcion o
-      Administracion de la implementacion del UAT. Una cortesia total con Pagos
-      ya recibidos deja saldo a favor del cliente, que se devuelve antes del
-      cierre (DC11, BR-REP-038). Pendientes: si una CORTESIA puede ser parcial, y
-      como se trata un DESCUENTO que deja el total por debajo de lo ya cobrado
-      (la implementacion lo rechaza; DC11 solo define la cortesia total).
-      Condicion comercial distinta de cortesia: el origen de la Orden
-      determina si es COBRABLE (CLIENTE_EXTERNO, salvo cortesia),
-      NO_COBRABLE (RT_GARANTIA_VENTA, RMA_GARANTIA_REPARACION) o
-      NO_COBRABLE_AL_CLIENTE (RT_INTERNO); esta condicion de origen nunca
-      se trata como una cortesia. RMA_GARANTIA_REPARACION (garantia de una
-      reparacion RMA anterior) es NO_COBRABLE como consecuencia de su
-      origen, no por un override ni una cortesia comercial: no registra
-      pago, anticipo ni pago posterior, no requiere Saldo = 0 mediante
-      pagos ni bloquea la entrega por deuda, y sigue existiendo entrega (y
-      notificacion) al cliente. Igual que todo origen con entrega a cliente
-      recorre PROC-REP-265 (validacion de condicion de entrega), pero la
-      aprueba directamente por su condicion NO_COBRABLE, sin entrar en
-      PROC-REP-266. El precio snapshot de sus Detalles
-      existe igual (dato historico, de costo y de valoracion del trabajo):
-      precio registrado no implica pago requerido.
+      El calculo comercial de la Orden sigue el esquema extensible Subtotal +
+      Ajustes Comerciales Previos = Base Comercial (y, fuera de alcance de
+      V1.3, Base Comercial + impuestos/recargos/otros conceptos = Total
+      Cobrable). Consolidacion V1.4 (DC09, reemplaza el modelo de cortesias de
+      V1.3): CORTESIA y DESCUENTO se unifican en un unico Ajuste Comercial con
+      tipo (CORTESIA o DESCUENTO), aplicable a la Orden o a un Detalle,
+      expresado como porcentaje o importe fijo, con motivo obligatorio, usuario
+      y fecha/hora, y con historial de cada alta, cambio o retiro. Un ajuste no
+      modifica ni elimina el precio original del Detalle ni el precio de
+      catalogo (que permanecen como dato historico dentro del Subtotal): se
+      resta como concepto independiente y se refleja en los comprobantes, y no
+      puede superar el importe al que se aplica (UAT, iteracion 1). Cada tipo
+      de ajuste tiene su propio permiso (BR-REP-039). Permisos por tipo
+      (DEC-IT1-02, 11/11/2026): la CORTESIA la otorgan, modifican y quitan por
+      defecto Recepcion, Coordinacion RMA y Administracion, con el mismo
+      permiso para las tres operaciones; el permiso inicial del DESCUENTO sigue
+      pendiente (hasta decidirlo se documenta, sin convertirlo en regla, el
+      descuento de Recepcion o Administracion de la implementacion del UAT). La
+      CORTESIA puede ser total o parcial (DEC-IT1-02), como porcentaje o
+      importe, con el mismo Ajuste Comercial que el DESCUENTO (no hay un modelo
+      paralelo). Una cortesia, total o parcial, que deja el total por debajo de
+      lo ya cobrado genera saldo a favor del cliente, que se devuelve antes de
+      entregar (DC11, BR-REP-038); los Pagos no se modifican. Un envio
+      duplicado de la misma operacion no registra un segundo ajuste. Esta
+      decision no agrega reglas de acumulacion, limites comerciales ni
+      autorizacion de devoluciones. Pendiente: como se trata un DESCUENTO que
+      deja el total por debajo de lo ya cobrado (la implementacion lo rechaza).
+      Condicion comercial distinta de cortesia: el origen de la Orden determina
+      si es COBRABLE (CLIENTE_EXTERNO, salvo cortesia), NO_COBRABLE
+      (RT_GARANTIA_VENTA, RMA_GARANTIA_REPARACION) o NO_COBRABLE_AL_CLIENTE
+      (RT_INTERNO); esta condicion de origen nunca se trata como una cortesia.
+      RMA_GARANTIA_REPARACION (garantia de una reparacion RMA anterior) es
+      NO_COBRABLE como consecuencia de su origen, no por un override ni una
+      cortesia comercial: no registra pago, anticipo ni pago posterior, no
+      requiere Saldo = 0 mediante pagos ni bloquea la entrega por deuda, y
+      sigue existiendo entrega (y notificacion) al cliente. Igual que todo
+      origen con entrega a cliente recorre PROC-REP-265 (validacion de
+      condicion de entrega), pero la aprueba directamente por su condicion
+      NO_COBRABLE, sin entrar en PROC-REP-266. El precio snapshot de sus
+      Detalles existe igual (dato historico, de costo y de valoracion del
+      trabajo): precio registrado no implica pago requerido.
     status: approved
 
   - id: BR-REP-017
@@ -719,28 +723,38 @@ rules:
       estado; la relacion entre ambas Ordenes resuelve la trazabilidad sin
       modificarla (no se crean estados como REABIERTA_POR_GARANTIA). Cada
       Detalle de garantia debe poder identificar el Detalle original que
-      origina el reproceso: la trazabilidad es en ambos niveles (Orden nueva
-      -> Orden origen; Detalle nuevo -> Detalle origen), y resuelve el
-      pendiente de vinculacion Orden vs. Detalle. Cliente y equipo se
-      recuperan de la Orden origen (no es un alta nueva). La condicion
-      comercial de la Orden es NO_COBRABLE (BR-REP-016). Vigencia
-      (consolidacion V1.4, DC15B): antes de crear la Orden de garantia se valida
-      automaticamente la garantia de cada Detalle origen, con su plazo
-      definitivo contado desde la entrega (BR-REP-041); si esta vencida, se
-      advierte y se bloquea el ingreso en garantia, salvo una excepcion
-      autorizada, con motivo obligatorio y auditada (PROC-REP-036). La politica
-      configurable de garantia es BR-REP-041; sus precedencias concretas siguen
-      pendientes.
-      Revision obligatoria y multi-Detalle (MVP v2): toda garantia RMA pasa
-      por revision tecnica antes de definir que reparacion se realiza
-      (PROC-REP-045 = No -> 055 -> 065 -> 068). La nueva Orden nace
-      EN_REVISION y sin Detalles propios; tras la revision, el tecnico define
-      y registra uno o mas Detalles nuevos (PROC-REP-075) o finaliza SIN_REPARACION
-      (PROC-REP-069). Una unica Orden de garantia puede originarse en uno o
-      mas Detalles de la misma Orden origen (no se crea una Orden de garantia
-      por Detalle). Cada Detalle nuevo referencia uno de los Detalles origen
-      identificados; no se impone una relacion 1:1 (un Detalle origen puede
-      originar mas de un Detalle nuevo).
+      origina el reproceso: la trazabilidad es en ambos niveles (Orden nueva ->
+      Orden origen; Detalle nuevo -> Detalle origen), y resuelve el pendiente
+      de vinculacion Orden vs. Detalle. Cliente y equipo se recuperan de la
+      Orden origen (no es un alta nueva). La condicion comercial de la Orden es
+      NO_COBRABLE (BR-REP-016). Vigencia (consolidacion V1.4, DC15B): antes de
+      crear la Orden de garantia se valida automaticamente la garantia de cada
+      Detalle origen, con su plazo definitivo contado desde la entrega
+      (BR-REP-041); si esta vencida, se advierte y se bloquea el ingreso en
+      garantia, salvo una excepcion autorizada, con motivo obligatorio y
+      auditada (PROC-REP-036). Evaluacion por Detalle (DEC-IT1-03, 11/11/2026):
+      la vigencia se evalua individualmente por cada Detalle origen reclamado,
+      nunca de forma global para la Orden. Un Detalle vigente se admite sin
+      excepcion; uno vencido solo con su propia excepcion, que aplica
+      unicamente a ese Detalle y conserva su vencimiento original, quien la
+      autorizo, cuando y por que; un Detalle vencido sin excepcion no se admite
+      como reclamo cubierto. Un pedido que incluye un Detalle vencido sin
+      excepcion no crea la Orden de garantia (no se registra una Orden con
+      parte de lo pedido) e informa los Detalles que siguen siendo elegibles,
+      que pueden reclamarse sin el vencido. La excepcion la autorizan por
+      defecto Recepcion, Coordinacion RMA y Administracion (DEC-IT1-01,
+      BR-REP-039); el Tecnico no, y el permiso se valida en el sistema, no solo
+      en la interfaz. La politica configurable de garantia es BR-REP-041; sus
+      precedencias concretas siguen pendientes. Revision obligatoria y
+      multi-Detalle (MVP v2): toda garantia RMA pasa por revision tecnica antes
+      de definir que reparacion se realiza (PROC-REP-045 = No -> 055 -> 065 ->
+      068). La nueva Orden nace EN_REVISION y sin Detalles propios; tras la
+      revision, el tecnico define y registra uno o mas Detalles nuevos
+      (PROC-REP-075) o finaliza SIN_REPARACION (PROC-REP-069). Una unica Orden
+      de garantia puede originarse en uno o mas Detalles de la misma Orden
+      origen (no se crea una Orden de garantia por Detalle). Cada Detalle nuevo
+      referencia uno de los Detalles origen identificados; no se impone una
+      relacion 1:1 (un Detalle origen puede originar mas de un Detalle nuevo).
     status: approved
 
   - id: BR-REP-020
@@ -1042,13 +1056,13 @@ rules:
       cancela unicamente ese Detalle (PROC-REP-300) conservando los demas, su
       historial, precio snapshot y referencias, y se recalcula el estado
       agregado con el resolver (PROC-REP-211). DESISTIR DE TODO: es una opcion
-      de UI/UX -no un estado ni una entidad- que cancela en una sola
-      operacion todos los Detalles pendientes y cancelables (PROC-REP-305);
-      internamente se aplican las reglas de cada Detalle: los Detalles COMPLETO
-      no pasan a CANCELADO, no se eliminan trabajos ni movimientos historicos,
-      se respetan las restricciones de ejecucion activa y conciliacion de
-      insumos (BR-REP-014), y el resolver determina el estado resultante de la
-      Orden; la trazabilidad se conserva por cada Detalle. SIN DETALLES:
+      de UI/UX -no un estado ni una entidad- que cancela en una sola operacion
+      todos los Detalles pendientes y cancelables (PROC-REP-305); internamente
+      se aplican las reglas de cada Detalle: los Detalles COMPLETO no pasan a
+      CANCELADO, no se eliminan trabajos ni movimientos historicos, se respetan
+      las restricciones de ejecucion activa y conciliacion de insumos
+      (BR-REP-014), y el resolver determina el estado resultante de la Orden;
+      la trazabilidad se conserva por cada Detalle. SIN DETALLES:
       cantidad_detalles = 0 se cancela con la transicion explicita de
       BR-REP-027 (PROC-REP-306) y no se invoca el resolver. FEAT-REP-002
       administra la DECISION y FEAT-REP-009 ejecuta las CANCELACIONES. El
@@ -1060,32 +1074,39 @@ rules:
       tecnico, cierre comercial y entrega, sin omitir las obligaciones por
       trabajos realizados. Requerimiento funcional de UI: ver PROC-REP-046.
       Desistir de los trabajos pendientes NO cancela ni borra trabajos ya
-      completados.
-      Iteracion 10: el desistimiento SIN Detalles se registra en PROC-REP-056
-      ("Desiste sin Detalles", propio de la etapa en que todavia no hay trabajos) y
-      no en PROC-REP-047; la decision por Detalle (PROC-REP-047) ofrece solo tres
-      resultados: acepta trabajos, rechaza algunos Detalles y rechaza todos los
-      trabajos. Rechazar todos cancela los Detalles pendientes elegibles mediante
-      PROC-REP-305 sin tocar los COMPLETO ni las Ejecuciones activas, y el desenlace
-      (custodia, saldo y devolucion) lo determina PROC-REP-211.
-      Consolidacion V1.4 (DC07 y DC07C). La SOLICITUD de desistimiento (lo que
-      pide el cliente, registrada por Recepcion) y la CANCELACION EFECTIVA son
-      registros distintos, cada uno con usuario y fecha/hora. Cuando un Detalle
-      solicitado esta en ejecucion, o cuando se pide desistir de todo con una
-      Ejecucion activa, la solicitud queda pendiente, el tecnico interrumpe la
-      Ejecucion (PROC-REP-200) y despues PROC-REP-211 deriva a la cancelacion
-      efectiva ("Desistimiento solicitado de un Detalle ya interrumpido" ->
+      completados. Iteracion 10: el desistimiento SIN Detalles se registra en
+      PROC-REP-056 ("Desiste sin Detalles", propio de la etapa en que todavia
+      no hay trabajos) y no en PROC-REP-047; la decision por Detalle
+      (PROC-REP-047) ofrece solo tres resultados: acepta trabajos, rechaza
+      algunos Detalles y rechaza todos los trabajos. Rechazar todos cancela los
+      Detalles pendientes elegibles mediante PROC-REP-305 sin tocar los
+      COMPLETO ni las Ejecuciones activas, y el desenlace (custodia, saldo y
+      devolucion) lo determina PROC-REP-211. Consolidacion V1.4 (DC07 y DC07C).
+      La SOLICITUD de desistimiento (lo que pide el cliente, registrada por
+      Recepcion) y la CANCELACION EFECTIVA son registros distintos, cada uno
+      con usuario y fecha/hora. Responsables (DEC-IT1-05, 11/11/2026): la
+      solicitud registra el usuario que la cargo, la fecha/hora, el motivo y el
+      canal cuando corresponde; la interrupcion y la cancelacion efectiva de un
+      Detalle en ejecucion registran el tecnico que las ejecuto, la fecha/hora,
+      el estado en que quedo la reparacion y su reversibilidad. La cancelacion
+      efectiva no se atribuye a Recepcion por haber registrado la solicitud. Se
+      distinguen el desistimiento de un Detalle, la cancelacion efectiva del
+      Detalle y la cancelacion de la Orden (DC31). Cuando un Detalle solicitado
+      esta en ejecucion, o cuando se pide desistir de todo con una Ejecucion
+      activa, la solicitud queda pendiente, el tecnico interrumpe la Ejecucion
+      (PROC-REP-200) y despues PROC-REP-211 deriva a la cancelacion efectiva
+      ("Desistimiento solicitado de un Detalle ya interrumpido" ->
       PROC-REP-300; "Desistimiento total solicitado, sin Ejecucion activa" ->
       PROC-REP-305). El desistimiento total es un proceso guiado: registra los
       Detalles afectados, el motivo y la resolucion de cada uno, y no se cierra
-      la Orden con Ejecuciones sin resolver. Los Detalles completos conservan su
-      resultado.
-      Revision DC31 (09/11/2026): rechazar todos los trabajos, desistir de
-      todo o desistir sin Detalles cancela los Detalles que correspondan, pero
-      NO cancela la Orden: queda abierta sin trabajos vigentes (PROC-REP-307)
-      y la cancelacion definitiva es la accion explicita "Cancelar Orden"
-      (BR-REP-014, PROC-REP-308/306). Donde este texto dice que con todos los
-      Detalles CANCELADO la Orden queda CANCELADA, rige esta revision.
+      la Orden con Ejecuciones sin resolver. Los Detalles completos conservan
+      su resultado. Revision DC31 (09/11/2026): rechazar todos los trabajos,
+      desistir de todo o desistir sin Detalles cancela los Detalles que
+      correspondan, pero NO cancela la Orden: queda abierta sin trabajos
+      vigentes (PROC-REP-307) y la cancelacion definitiva es la accion
+      explicita "Cancelar Orden" (BR-REP-014, PROC-REP-308/306). Donde este
+      texto dice que con todos los Detalles CANCELADO la Orden queda CANCELADA,
+      rige esta revision.
     status: approved
 
   - id: BR-REP-031
@@ -1516,58 +1537,59 @@ rules:
       negativo -el cliente pago mas que el Total final-, es OBLIGATORIO
       registrar la devolucion de dinero correspondiente antes de permitir la
       entrega o el cierre comercial; haber identificado el saldo a favor no
-      habilita por si solo ninguna de las dos cosas. Formula: Saldo = Total final
-      de la OR - Pagos recibidos + Devoluciones realizadas. Total final, Pagos
-      recibidos y Devoluciones realizadas se mantienen separados: no se borran ni
-      modifican retroactivamente los Pagos originales y una devolucion NO se
-      representa como un Pago de importe negativo, sino como un movimiento
-      financiero distinto, para preservar la trazabilidad y los reportes.
-      Tratamiento: Saldo > 0, cobro pendiente (BR-REP-017, PROC-REP-266); Saldo =
-      0, se puede continuar si se cumplen las demas condiciones; Saldo < 0, se
-      registra una devolucion (PROC-REP-267); una devolucion parcial mantiene el
-      saldo a favor remanente pendiente y la Orden no se entrega; una devolucion
-      total deja Saldo = 0 y se revalida la condicion de entrega. Ejemplo: Total
-      $0, anticipo $5.000, devolucion $0 -> Saldo -5.000; tras devolver $3.000 ->
-      -2.000 (no entregable); tras otros $2.000 -> 0 (puede continuar). Registro
-      minimo de cada devolucion: identificador unico del movimiento, OR
-      relacionada, importe positivo devuelto, medio de devolucion, usuario
-      responsable, fecha/hora, referencia de la operacion y motivo; se conserva
-      el historial completo de devoluciones parciales y totales. Solo una
-      devolucion registrada y efectivamente realizada modifica el Saldo; una
-      intencion o solicitud pendiente no. No se admite una devolucion superior
-      al saldo a favor pendiente (salvo una regla adicional expresamente
-      aprobada) y una devolucion no se computa dos veces por reintentos o
-      reingresos al circuito (la referencia de la operacion identifica el
-      movimiento). No hay ciclos sin accion financiera: PROC-REP-265 y
-      PROC-REP-268 solo vuelven a evaluarse tras un movimiento real (Pago o
-      devolucion). Verificacion antes del fin: ninguna Orden finaliza
-      operativamente (EVT-REP-999) con saldo a favor pendiente; todos los cierres
-      (entrega, devolucion a Gestion RT, SIN_REPARACION, cancelaciones y
-      desistimientos) pasan por PROC-REP-268, y la verificacion previa a la
-      entrega esta en PROC-REP-265. Cortesia total (BR-REP-016): reduce el Total
-      final; si ya hay Pagos recibidos deja un saldo a favor que se devuelve
-      como cualquier otro, no habilita la entrega por si sola. Casos: revision
-      sin reparacion con anticipo
-      (Total $0, PROC-REP-069 -> 250 -> 260 -> 265 -> 267); cancelacion de
-      trabajos con anticipos (Total final menor que lo pagado, 211/305/306 ->
-      268 -> 267); varios Detalles con algunos completos y otros cancelados (se
-      devuelve unicamente el excedente, 265 -> 267). Independencia: la devolucion
-      de dinero no es la devolucion fisica del equipo ni la custodia
-      (BR-REP-033, PROC-REP-270/271); son dimensiones distintas y una no
-      sustituye a la otra. Responsabilidad (consolidacion V1.4, DC12C): registran
-      devoluciones por defecto Administracion o Recepcion, con permiso
-      configurable (PROC-REP-267, BR-REP-039); el catalogo de medios de
-      devolucion sigue pendiente. Origenes sin circuito comercial
-      (RT_INTERNO, RMA_GARANTIA_REPARACION, RT_GARANTIA_VENTA): no registran
-      pagos ni devoluciones; un saldo a favor en ellos no esta definido y se
-      documenta como pendiente funcional (la respuesta de PROC-REP-268 es siempre
-      "sin saldo a favor"). Relacion con BR-REP-014: los reembolsos de pagos ya
-      realizados cuando la Orden termina CANCELADA se tratan como saldo a favor
-      del cliente con esta regla; las demas consecuencias comerciales de una
-      cancelacion (por ejemplo penalidades) siguen pendientes. Una cortesia
-      total con Pagos recibidos tambien genera saldo a favor (DC11). Pendientes:
-      plazo o abandono si el cliente no retira el dinero y devoluciones
-      posteriores a ENTREGADA.
+      habilita por si solo ninguna de las dos cosas. Formula: Saldo = Total
+      final de la OR - Pagos recibidos + Devoluciones realizadas. Total final,
+      Pagos recibidos y Devoluciones realizadas se mantienen separados: no se
+      borran ni modifican retroactivamente los Pagos originales y una
+      devolucion NO se representa como un Pago de importe negativo, sino como
+      un movimiento financiero distinto, para preservar la trazabilidad y los
+      reportes. Tratamiento: Saldo > 0, cobro pendiente (BR-REP-017,
+      PROC-REP-266); Saldo = 0, se puede continuar si se cumplen las demas
+      condiciones; Saldo < 0, se registra una devolucion (PROC-REP-267); una
+      devolucion parcial mantiene el saldo a favor remanente pendiente y la
+      Orden no se entrega; una devolucion total deja Saldo = 0 y se revalida la
+      condicion de entrega. Ejemplo: Total $0, anticipo $5.000, devolucion $0
+      -> Saldo -5.000; tras devolver $3.000 -> -2.000 (no entregable); tras
+      otros $2.000 -> 0 (puede continuar). Registro minimo de cada devolucion:
+      identificador unico del movimiento, OR relacionada, importe positivo
+      devuelto, medio de devolucion, usuario responsable, fecha/hora,
+      referencia de la operacion y motivo; se conserva el historial completo de
+      devoluciones parciales y totales. Solo una devolucion registrada y
+      efectivamente realizada modifica el Saldo; una intencion o solicitud
+      pendiente no. No se admite una devolucion superior al saldo a favor
+      pendiente (salvo una regla adicional expresamente aprobada) y una
+      devolucion no se computa dos veces por reintentos o reingresos al
+      circuito (la referencia de la operacion identifica el movimiento). No hay
+      ciclos sin accion financiera: PROC-REP-265 y PROC-REP-268 solo vuelven a
+      evaluarse tras un movimiento real (Pago o devolucion). Verificacion antes
+      del fin: ninguna Orden finaliza operativamente (EVT-REP-999) con saldo a
+      favor pendiente; todos los cierres (entrega, devolucion a Gestion RT,
+      SIN_REPARACION, cancelaciones y desistimientos) pasan por PROC-REP-268, y
+      la verificacion previa a la entrega esta en PROC-REP-265. Cortesia total
+      o parcial (BR-REP-016, DEC-IT1-02): reduce el Total final; si ya hay
+      Pagos recibidos deja un saldo a favor que se devuelve como cualquier
+      otro, no habilita la entrega por si sola. Casos: revision sin reparacion
+      con anticipo (Total $0, PROC-REP-069 -> 250 -> 260 -> 265 -> 267);
+      cancelacion de trabajos con anticipos (Total final menor que lo pagado,
+      211/305/306 -> 268 -> 267); varios Detalles con algunos completos y otros
+      cancelados (se devuelve unicamente el excedente, 265 -> 267).
+      Independencia: la devolucion de dinero no es la devolucion fisica del
+      equipo ni la custodia (BR-REP-033, PROC-REP-270/271); son dimensiones
+      distintas y una no sustituye a la otra. Responsabilidad (consolidacion
+      V1.4, DC12C): registran devoluciones por defecto Administracion o
+      Recepcion, con permiso configurable (PROC-REP-267, BR-REP-039); el
+      catalogo de medios de devolucion sigue pendiente. Origenes sin circuito
+      comercial (RT_INTERNO, RMA_GARANTIA_REPARACION, RT_GARANTIA_VENTA): no
+      registran pagos ni devoluciones; un saldo a favor en ellos no esta
+      definido y se documenta como pendiente funcional (la respuesta de
+      PROC-REP-268 es siempre "sin saldo a favor"). Relacion con BR-REP-014:
+      los reembolsos de pagos ya realizados cuando la Orden termina CANCELADA
+      se tratan como saldo a favor del cliente con esta regla; las demas
+      consecuencias comerciales de una cancelacion (por ejemplo penalidades)
+      siguen pendientes. Una cortesia, total o parcial, que deja el Total final
+      por debajo de los Pagos recibidos tambien genera saldo a favor (DC11,
+      DEC-IT1-02). Pendientes: plazo o abandono si el cliente no retira el
+      dinero y devoluciones posteriores a ENTREGADA.
     status: approved
 
   - id: BR-REP-039
@@ -1578,32 +1600,32 @@ rules:
       permiso. Los responsables declarados en el proceso (actor y
       actores_alternativos de cada nodo, y los de cada capacidad transversal)
       son los responsables PREDETERMINADOS; Administracion puede modificarlos,
-      delegarlos o restringirlos, y todo cambio queda auditado (BR-REP-040).
-      Un permiso es necesario pero no suficiente: se conservan las
-      restricciones de contexto de cada regla (por ejemplo, el titular de la
-      toma, el tecnico de la Ejecucion en curso, el estado de la Orden o su
-      origen) y ningun permiso habilita a saltear una regla de negocio (por
-      ejemplo, entregar con saldo distinto de cero). Excepcion especifica: la
-      liberacion de una Orden tomada por otro tecnico incluye la interrupcion
-      de su Ejecucion en curso (BR-REP-018); el permiso de liberar no concede
-      un permiso general para interrumpir Ejecuciones ajenas. Un usuario puede
-      tener varios roles: sus permisos efectivos son la union de los permisos de
-      sus roles, siempre sujeta a esas restricciones de contexto (DC27A). Tambien
-      son configurables los permisos de consulta de Ordenes, Clientes,
-      fotografias, documentos, pagos y reportes (DC27B). La cancelacion se
-      distingue en tres tipos con permiso propio (DC08): cancelacion
-      administrativa (predeterminado: Recepcion y Coordinacion, los
-      responsables vigentes), descarte tecnico (Tecnico, PROC-REP-183) y
-      desistimiento solicitado por el cliente, que registra Recepcion
-      (PROC-REP-046/047 y 056). Predeterminados confirmados: definir prioridad
-      (PROC-REP-150) Coordinacion o Recepcion (DC03); cambiar la prioridad
-      Tecnico, Recepcion y Coordinacion; liberar la Orden tomada por otro
-      tecnico, incluida la interrupcion de una Ejecucion en curso dentro de esa
-      operacion, Tecnico y Coordinacion (BR-REP-018); entregar (PROC-REP-270)
-      Administracion o Recepcion (DC03); anular pagos Administracion, delegable (DC10, BR-REP-017);
-      registrar devoluciones de dinero Administracion o Recepcion (DC12C,
-      BR-REP-038); definir y redefinir Detalles el Tecnico y gestionar las
-      autorizaciones del cliente Recepcion (DC06); registrar el check-in
+      delegarlos o restringirlos, y todo cambio queda auditado (BR-REP-040). Un
+      permiso es necesario pero no suficiente: se conservan las restricciones
+      de contexto de cada regla (por ejemplo, el titular de la toma, el tecnico
+      de la Ejecucion en curso, el estado de la Orden o su origen) y ningun
+      permiso habilita a saltear una regla de negocio (por ejemplo, entregar
+      con saldo distinto de cero). Excepcion especifica: la liberacion de una
+      Orden tomada por otro tecnico incluye la interrupcion de su Ejecucion en
+      curso (BR-REP-018); el permiso de liberar no concede un permiso general
+      para interrumpir Ejecuciones ajenas. Un usuario puede tener varios roles:
+      sus permisos efectivos son la union de los permisos de sus roles, siempre
+      sujeta a esas restricciones de contexto (DC27A). Tambien son
+      configurables los permisos de consulta de Ordenes, Clientes, fotografias,
+      documentos, pagos y reportes (DC27B). La cancelacion se distingue en tres
+      tipos con permiso propio (DC08): cancelacion administrativa
+      (predeterminado: Recepcion y Coordinacion, los responsables vigentes),
+      descarte tecnico (Tecnico, PROC-REP-183) y desistimiento solicitado por
+      el cliente, que registra Recepcion (PROC-REP-046/047 y 056).
+      Predeterminados confirmados: definir prioridad (PROC-REP-150)
+      Coordinacion o Recepcion (DC03); cambiar la prioridad Tecnico, Recepcion
+      y Coordinacion; liberar la Orden tomada por otro tecnico, incluida la
+      interrupcion de una Ejecucion en curso dentro de esa operacion, Tecnico y
+      Coordinacion (BR-REP-018); entregar (PROC-REP-270) Administracion o
+      Recepcion (DC03); anular pagos Administracion, delegable (DC10,
+      BR-REP-017); registrar devoluciones de dinero Administracion o Recepcion
+      (DC12C, BR-REP-038); definir y redefinir Detalles el Tecnico y gestionar
+      las autorizaciones del cliente Recepcion (DC06); registrar el check-in
       Recepcion o Administracion (UAT-009, BR-REP-045); registrar pagos todo
       usuario activo salvo Tecnico (BR-REP-017); override de recursos y de
       estacion Coordinacion (BR-REP-003, PROC-REP-179). Predeterminados
@@ -1613,11 +1635,15 @@ rules:
       (BR-REP-049); sincronizar el catalogo de equipos Administracion y
       Coordinacion (BR-REP-048); ajustar la garantia de un Detalle Recepcion y
       Coordinacion (BR-REP-041); cargar fotografias Recepcion, Tecnico,
-      Coordinacion y Administracion (BR-REP-024). Pendientes, sin
-      predeterminado definido: los responsables de cada evento de custodia
-      (BR-REP-033) y los permisos iniciales por tipo de Ajuste Comercial
-      (BR-REP-016). La autenticacion y el almacenamiento de usuarios, roles y
-      permisos son una decision de arquitectura (DC27C), no de esta regla.
+      Coordinacion y Administracion (BR-REP-024). Predeterminados de la
+      iteracion 1 (DEC-IT1-01 y DEC-IT1-02, 11/11/2026): autorizar la excepcion
+      de garantia vencida de un Detalle origen (PROC-REP-036) Recepcion,
+      Coordinacion RMA y Administracion, no el Tecnico; otorgar, modificar o
+      quitar una CORTESIA Recepcion, Coordinacion RMA y Administracion.
+      Pendientes, sin predeterminado definido: los responsables de cada evento
+      de custodia (BR-REP-033) y el permiso inicial del DESCUENTO (BR-REP-016).
+      La autenticacion y el almacenamiento de usuarios, roles y permisos son
+      una decision de arquitectura (DC27C), no de esta regla.
     status: approved
 
   - id: BR-REP-040

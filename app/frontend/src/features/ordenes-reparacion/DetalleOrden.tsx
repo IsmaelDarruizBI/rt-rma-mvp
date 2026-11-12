@@ -162,14 +162,23 @@ export function CabeceraOrden({
             " · garantía vigente al ingresar"}
         </p>
       )}
-      {orden.excepcion_garantia && (
-        <p style={{ margin: "0.15rem 0 0", color: colores.alerta }}>
-          Garantía vencida admitida como excepción por{" "}
-          {nombreDeUsuario(usuarios, orden.excepcion_garantia.usuario_id)} ·{" "}
-          {fechaCorta(orden.excepcion_garantia.fecha)} ·{" "}
-          {orden.excepcion_garantia.motivo}
-        </p>
-      )}
+      {(orden.vigencia_garantia_origen ?? [])
+        .filter((vigencia) => vigencia.excepcion)
+        .map((vigencia) => (
+          <p
+            key={vigencia.detalle_id}
+            style={{ margin: "0.15rem 0 0", color: colores.alerta }}
+          >
+            {vigencia.detalle_id}: garantía vencida
+            {vigencia.vence
+              ? ` el ${vigencia.vence.split("-").reverse().join("/")}`
+              : ""}
+            , admitida como excepción por{" "}
+            {nombreDeUsuario(usuarios, vigencia.excepcion!.usuario_id)} ·{" "}
+            {fechaCorta(vigencia.excepcion!.fecha)} ·{" "}
+            {vigencia.excepcion!.motivo}
+          </p>
+        ))}
       <p
         style={{
           margin: "0.5rem 0 0",
@@ -446,9 +455,12 @@ function Trabajo({
             {detalle.cancelacion.origen === "RECHAZO_CLIENTE"
               ? "El cliente lo rechazó"
               : detalle.cancelacion.origen === "DESISTIMIENTO_CLIENTE"
-                ? "El cliente desistió después de autorizarlo"
+                ? detalle.solicitud_desistimiento
+                  ? "Cancelado al interrumpir el trabajo, por el desistimiento"
+                  : "El cliente desistió después de autorizarlo"
                 : "Cancelado"}{" "}
-            · registró {nombreDeUsuario(usuarios, detalle.cancelacion.usuario_id)}{" "}
+            · {detalle.solicitud_desistimiento ? "lo ejecutó" : "registró"}{" "}
+            {nombreDeUsuario(usuarios, detalle.cancelacion.usuario_id)}{" "}
             · {fechaCorta(detalle.cancelacion.fecha)} ·{" "}
             {detalle.cancelacion.motivo} (no se cobra)
           </span>

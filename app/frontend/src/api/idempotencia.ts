@@ -28,6 +28,7 @@ const RUTAS_CON_CLAVE: readonly RegExp[] = [
   /^\/api\/orders\/[^/]+\/notify$/,
   /^\/api\/orders\/[^/]+\/payments$/,
   /^\/api\/orders\/[^/]+\/refunds$/,
+  /^\/api\/orders\/[^/]+\/discount$/,
   /^\/api\/orders\/[^/]+\/photos$/,
   /^\/api\/inventory\/[^/]+\/(receipts|adjustments)$/,
   /^\/api\/catalogs\/equipment\/sync$/,

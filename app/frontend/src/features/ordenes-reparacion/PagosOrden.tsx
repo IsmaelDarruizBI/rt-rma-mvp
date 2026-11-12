@@ -229,18 +229,8 @@ function FormularioDescuento({
   onDescontar,
   accion,
 }: Props & { accion: Accion }) {
-  const vigente = orden.resumen.descuento;
-  if (esCortesiaVigente(orden)) {
-    return (
-      <QuitarCortesia
-        orden={orden}
-        actor={actor}
-        ocupado={ocupado}
-        onDescontar={onDescontar}
-        accion={accion}
-      />
-    );
-  }
+  // Con una cortesía vigente el backend no ofrece el descuento: se la
+  // modifica o se la quita desde su propio formulario.
   return (
     <FormularioDescuentoComun
       orden={orden}
@@ -248,7 +238,7 @@ function FormularioDescuento({
       ocupado={ocupado}
       onDescontar={onDescontar}
       accion={accion}
-      vigente={vigente}
+      vigente={orden.resumen.descuento}
     />
   );
 }
@@ -362,17 +352,20 @@ function FormularioDescuentoComun({
   );
 }
 
-/** El ajuste vigente es una cortesía total (DC11). */
-function esCortesiaVigente(orden: Orden): boolean {
+/** La cortesía vigente (DC11), si el ajuste vigente es una cortesía. */
+function cortesiaVigente(orden: Orden) {
   const registros = orden.descuentos ?? [];
   const ultimo = registros[registros.length - 1];
-  return ultimo?.clase === "CORTESIA" && ultimo.tipo !== null;
+  return ultimo?.clase === "CORTESIA" && ultimo.tipo !== null ? ultimo : null;
 }
 
 /**
- * DC11 (VAR-REP-041): la cortesía total. La otorga Administración
- * (provisional, BR-REP-016). Si ya hubo pagos, queda saldo a favor del
- * cliente: hay que devolverlo antes de entregar. Los pagos se conservan.
+ * DC11 / DEC-IT1-02 (VAR-REP-041): la cortesía, total o parcial, como
+ * porcentaje o importe. La otorgan, modifican o quitan Recepción,
+ * Coordinación RMA o Administración. Si deja el total por debajo de lo
+ * cobrado, queda saldo a favor del cliente y hay que devolverlo antes de
+ * entregar. Los pagos se conservan. Es el mismo Ajuste Comercial que el
+ * descuento: uno solo vigente por Orden.
  */
 function FormularioCortesia({
   orden,
@@ -381,17 +374,67 @@ function FormularioCortesia({
   onDescontar,
   accion,
 }: Props & { accion: Accion }) {
+  const vigente = cortesiaVigente(orden);
+  const [tipo, setTipo] = useState<TipoDescuento>(
+    vigente?.tipo ?? "PORCENTAJE",
+  );
+  const [valor, setValor] = useState(
+    vigente?.valor ? String(Number(vigente.valor)) : "100",
+  );
   const [motivo, setMotivo] = useState("");
   const deshabilitado = !habilitada(accion, actor) || ocupado;
+  const base = Number(orden.resumen.subtotal);
+  const numero = Number(valor.replace(",", "."));
+  const valido =
+    /^\d+(?:[.,]\d{1,2})?$/.test(valor.trim()) &&
+    numero > 0 &&
+    (tipo === "IMPORTE" ? numero <= base : numero <= 100);
+  const bonificado = valido
+    ? tipo === "PORCENTAJE"
+      ? Math.round(base * numero) / 100
+      : numero
+    : 0;
+  const total = base - bonificado;
   const cobrado =
     Number(orden.resumen.pagado) - Number(orden.resumen.devuelto);
+  const total100 = valido && bonificado === base;
   return (
-    <Seccion titulo="Otorgar una cortesía total" accion={accion} actor={actor}>
+    <Seccion
+      titulo={vigente ? "Modificar o quitar la cortesía" : "Otorgar una cortesía"}
+      accion={accion}
+      actor={actor}
+    >
       <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
-        La Orden no se cobra: el total pasa a {importe("0")}.
-        {cobrado > 0 &&
-          ` Ya se cobraron ${importe(String(cobrado))}: quedan a favor del cliente y hay que devolverlos antes de entregar el equipo.`}
+        Total (100 %) o parcial, sobre el subtotal de los trabajos (
+        {importe(orden.resumen.subtotal)}). Reemplaza al descuento o la
+        cortesía vigente; queda registrado quién, cuándo y por qué.
       </p>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <div style={{ width: 170, maxWidth: "100%" }}>
+          <Campo etiqueta="Tipo">
+            <select
+              value={tipo}
+              disabled={deshabilitado}
+              onChange={(evento) => setTipo(evento.target.value as TipoDescuento)}
+              style={estiloInput}
+            >
+              <option value="PORCENTAJE">Porcentaje (%)</option>
+              <option value="IMPORTE">Importe fijo ($)</option>
+            </select>
+          </Campo>
+        </div>
+        <div style={{ width: 140 }}>
+          <Campo etiqueta={tipo === "PORCENTAJE" ? "Porcentaje" : "Importe"}>
+            <input
+              value={valor}
+              disabled={deshabilitado}
+              inputMode="decimal"
+              onChange={(evento) => setValor(evento.target.value)}
+              style={estiloInput}
+            />
+          </Campo>
+        </div>
+      </div>
       <Campo etiqueta="Motivo (obligatorio)">
         <input
           value={motivo}
@@ -400,50 +443,39 @@ function FormularioCortesia({
           style={estiloInput}
         />
       </Campo>
-      <Boton
-        disabled={deshabilitado || !motivo.trim()}
-        onClick={() =>
-          onDescontar("PORCENTAJE", "100", motivo.trim(), "CORTESIA")
-        }
-      >
-        Otorgar la cortesía total
-      </Boton>
-    </Seccion>
-  );
-}
-
-/** Quitar la cortesía vigente: el mismo permiso que otorgarla. */
-function QuitarCortesia({
-  orden,
-  actor,
-  ocupado,
-  onDescontar,
-  accion,
-}: Pick<Props, "orden" | "actor" | "ocupado" | "onDescontar"> & {
-  accion: Accion;
-}) {
-  const [motivo, setMotivo] = useState("");
-  const deshabilitado = !habilitada(accion, actor) || ocupado;
-  return (
-    <Seccion titulo="Quitar la cortesía" accion={accion} actor={actor}>
-      <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
-        La Orden vuelve a cobrarse por {importe(orden.resumen.subtotal)}.
-      </p>
-      <Campo etiqueta="Motivo (obligatorio)">
-        <input
-          value={motivo}
-          disabled={deshabilitado}
-          onChange={(evento) => setMotivo(evento.target.value)}
-          style={estiloInput}
-        />
-      </Campo>
-      <Boton
-        variante="secundario"
-        disabled={deshabilitado || !motivo.trim()}
-        onClick={() => onDescontar(null, null, motivo.trim(), "CORTESIA")}
-      >
-        Quitar la cortesía
-      </Boton>
+      {valido && (
+        <p style={{ margin: "0 0 0.5rem", fontSize: "0.85rem" }}>
+          {total100 ? "Cortesía total" : "Cortesía parcial"} ·{" "}
+          {importe(String(bonificado))} · Total{" "}
+          <strong>{importe(String(total))}</strong>
+          {cobrado > total &&
+            ` · quedan ${importe(String(cobrado - total))} a favor del cliente: hay que devolverlos antes de entregar el equipo.`}
+        </p>
+      )}
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <Boton
+          disabled={deshabilitado || !valido || !motivo.trim()}
+          onClick={() =>
+            onDescontar(
+              tipo,
+              valor.trim().replace(",", "."),
+              motivo.trim(),
+              "CORTESIA",
+            )
+          }
+        >
+          {vigente ? "Modificar la cortesía" : "Otorgar la cortesía"}
+        </Boton>
+        {vigente && (
+          <Boton
+            variante="secundario"
+            disabled={deshabilitado || !motivo.trim()}
+            onClick={() => onDescontar(null, null, motivo.trim(), "CORTESIA")}
+          >
+            Quitar la cortesía
+          </Boton>
+        )}
+      </div>
     </Seccion>
   );
 }
@@ -483,8 +515,8 @@ function HistorialDescuentos({
         {registros.map((registro) => (
           <li key={registro.fecha + registro.motivo}>
             {registro.clase === "CORTESIA"
-              ? registro.tipo
-                ? "Cortesía total"
+              ? registro.tipo && registro.valor
+                ? `Cortesía ${textoDescuento(registro.tipo, registro.valor)}`
                 : "Cortesía quitada"
               : registro.tipo && registro.valor
                 ? `Descuento ${textoDescuento(registro.tipo, registro.valor)}`

@@ -910,29 +910,33 @@ def acciones_financieras(orden: OrdenReparacion) -> list[AccionDisponible]:
         cortesia = (
             vigente is not None and vigente.clase is ClaseAjuste.CORTESIA
         )
-        acciones.append(
-            AccionDisponible(
-                codigo=ACCION_APLICAR_DESCUENTO,
-                etiqueta=(
-                    "Quitar la cortesia"
-                    if cortesia
-                    else "Cambiar o quitar el descuento"
-                    if vigente
-                    else "Aplicar un descuento"
-                ),
-                roles=ROLES_CORTESIA if cortesia else ROLES_DESCUENTO,
-            )
-        )
-        # DC11 (VAR-REP-041): cortesia total, aunque haya Pagos previos: el
-        # saldo a favor se devuelve antes de entregar.
+        # Un solo Ajuste Comercial vigente: con una cortesia vigente se la
+        # modifica o se la quita; el descuento se ofrece cuando no la hay.
         if not cortesia:
             acciones.append(
                 AccionDisponible(
-                    codigo=ACCION_OTORGAR_CORTESIA,
-                    etiqueta="Otorgar una cortesia total",
-                    roles=ROLES_CORTESIA,
+                    codigo=ACCION_APLICAR_DESCUENTO,
+                    etiqueta=(
+                        "Cambiar o quitar el descuento"
+                        if vigente
+                        else "Aplicar un descuento"
+                    ),
+                    roles=ROLES_DESCUENTO,
                 )
             )
+        # DC11 / DEC-IT1-02 (VAR-REP-041): cortesia total o parcial, aunque
+        # haya Pagos previos: el saldo a favor se devuelve antes de entregar.
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_OTORGAR_CORTESIA,
+                etiqueta=(
+                    "Modificar o quitar la cortesia"
+                    if cortesia
+                    else "Otorgar una cortesia"
+                ),
+                roles=ROLES_CORTESIA,
+            )
+        )
     acciones.extend(
         AccionDisponible(
             codigo=ACCION_ANULAR_PAGO,

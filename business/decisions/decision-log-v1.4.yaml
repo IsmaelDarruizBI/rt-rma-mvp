@@ -144,9 +144,9 @@ decisions:
     features: [FEAT-REP-002]
     scenarios: [VAR-REP-019]
     implementation:
-      status: CONTRARIO
-      evidence: services/reparaciones.py:389 y services/redefinicion.py:207 exigen RECEPCION para definir despues de la revision y para redefinir
-      gap: cambiar el actor de 075 y 127 al tecnico (iteracion 1 del plan).
+      status: PARCIAL
+      evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/reparaciones.py y services/redefinicion.py exigen TECNICO en 075 y 127; application/acciones.py)
+      gap: VAR-REP-019 (el tecnico redefine antes de ejecutar, PROC-REP-183) depende de la evaluacion tecnica de BR-REP-035, que el producto no tiene.
 
   - id: DC08
     block: 1
@@ -272,9 +272,9 @@ decisions:
     features: [FEAT-REP-001]
     scenarios: [HP-REP-003, VAR-REP-038, VAR-REP-039]
     implementation:
-      status: NO_IMPLEMENTADO
-      evidence: services/ordenes.py:400-401 (la garantia RMA no valida vigencia)
-    open: [ABI-03, ABI-04, ABI-33, ABI-34, ABI-35]
+      status: IMPLEMENTADO
+      evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/ordenes.py evaluar_vigencia_garantia y crear_orden_garantia_rma; vigencia y excepcion por Detalle origen; migracion 20261111000100_it1_alineacion_v14.sql)
+    open: [ABI-03, ABI-34, ABI-35]
 
   - id: DC14
     block: 3
@@ -346,8 +346,9 @@ decisions:
     scenarios: [VAR-REP-041]
     implementation:
       status: PARCIAL
-      evidence: services/descuentos.py:54-123 (un descuento por Orden, porcentaje o importe, RECEP o ADMIN; sin cortesia ni ajuste por Detalle)
-    open: [ABI-09, ABI-10, ABI-26]
+      evidence: "rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/descuentos.py: un Ajuste Comercial vigente por Orden, clase DESCUENTO o CORTESIA, porcentaje o importe)"
+      gap: el ajuste por Detalle; el permiso inicial del DESCUENTO.
+    open: [ABI-09, ABI-10]
 
   - id: DC10
     block: 5
@@ -371,9 +372,8 @@ decisions:
     features: [FEAT-REP-007]
     scenarios: [VAR-REP-041]
     implementation:
-      status: CONTRARIO
-      evidence: services/descuentos.py:112 (rechaza un total por debajo de lo ya cobrado)
-      gap: admitir el saldo a favor por cortesia total y exigir la devolucion.
+      status: IMPLEMENTADO
+      evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/descuentos.py aplicar_descuento con clase CORTESIA; la entrega se bloquea con saldo a favor hasta la devolucion, PROC-REP-265/267)
     open: [ABI-10]
 
   - id: DC12C
@@ -538,9 +538,8 @@ decisions:
     features: [FEAT-REP-005, FEAT-REP-009]
     scenarios: [VAR-REP-042]
     implementation:
-      status: PARCIAL
-      evidence: exige interrumpir y registra insumos y motivo; no registra estado del trabajo ni reversibilidad
-    open: [ABI-18]
+      status: IMPLEMENTADO
+      evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/ejecuciones.py registrar_ejecucion_interrumpida exige el estado del trabajo y la reversibilidad con un desistimiento pendiente)
 
   - id: DC07C
     block: DC07
@@ -575,8 +574,9 @@ decisions:
     features: [FEAT-REP-002, FEAT-REP-009]
     scenarios: [VAR-REP-042, VAR-REP-043]
     implementation:
-      status: CONTRARIO
-      evidence: la decision del cliente cancela en el mismo acto (services/decision_cliente.py)
+      status: PARCIAL
+      evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/decision_cliente.py registra la solicitud sobre un Detalle en ejecucion; services/cancelaciones.py resolver_desistimiento_solicitado aplica la cancelacion efectiva al interrumpir)
+      gap: el desistimiento total con una Ejecucion activa sigue bloqueado (DC07C, VAR-REP-043).
 
   - id: DC31
     block: DC07
@@ -599,6 +599,99 @@ decisions:
     implementation:
       status: IMPLEMENTADO
       evidence: rt-rma-mvp feat/postgresql-esquema (services/cancelaciones.py, services/ordenes.py evaluar_situacion_orden, application/situacion.py SIN_TRABAJOS_VIGENTES, application/acciones.py y bandejas.py; migracion 20261110000100_dc31_cancelacion.sql)
+
+  # ------------------------------------------------------------------ Iteracion 1 del producto (11/11/2026)
+  - id: DEC-IT1-01
+    block: IT1
+    title: La excepcion de garantia vencida la autorizan Recepcion, Coordinacion RMA o Administracion; el Tecnico no
+    status: CONFIRMADA
+    rules: [BR-REP-019, BR-REP-039]
+    nodes: [PROC-REP-036]
+    features: [FEAT-REP-001, FEAT-REP-011]
+    scenarios: [VAR-REP-039]
+    notes: >
+      Aprobada por el responsable de producto el 11/11/2026 (cierre funcional
+      de la iteracion 1 de rt-rma-mvp). Cierra ABI-04. Se registra quien
+      autorizo, cuando y por que, con el vencimiento original y el Detalle
+      reclamado; el permiso se valida en el backend, no solo en la interfaz.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/ordenes.py ROLES_EXCEPCION_GARANTIA y crear_orden_garantia_rma; api/ordenes.py amplia los roles de iniciar la garantia cuando hay un Detalle vencido)
+
+  - id: DEC-IT1-02
+    block: IT1
+    title: Cortesia total o parcial; la otorgan, modifican o quitan Recepcion, Coordinacion RMA o Administracion
+    status: CONFIRMADA
+    rules: [BR-REP-016, BR-REP-038, BR-REP-039]
+    nodes: [PROC-REP-265, PROC-REP-267]
+    features: [FEAT-REP-007, FEAT-REP-011]
+    scenarios: [VAR-REP-041]
+    notes: >
+      Aprobada el 11/11/2026. Cierra ABI-26 y la parte de la CORTESIA de
+      ABI-09 (el permiso del DESCUENTO sigue abierto). Reutiliza el Ajuste
+      Comercial unico: un ajuste vigente por Orden, porcentaje o importe. Una
+      cortesia que deja el total por debajo de lo cobrado genera saldo a favor
+      que se devuelve antes de entregar; un envio duplicado no genera otro
+      ajuste ni otra devolucion. No agrega reglas de acumulacion, limites ni
+      autorizacion de devoluciones.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/descuentos.py ROLES_CORTESIA y aplicar_descuento; api/ordenes.py idempotente APLICAR_AJUSTE_COMERCIAL)
+
+  - id: DEC-IT1-03
+    block: IT1
+    title: La vigencia de la garantia RMA se evalua por cada Detalle reclamado; la excepcion es de cada Detalle vencido
+    status: CONFIRMADA
+    rules: [BR-REP-019, BR-REP-041]
+    nodes: [PROC-REP-036, EVT-REP-998]
+    features: [FEAT-REP-001]
+    scenarios: [VAR-REP-038, VAR-REP-039]
+    notes: >
+      Aprobada el 11/11/2026. Cierra ABI-33. Un Detalle vigente se admite sin
+      excepcion; uno vencido solo con su excepcion; uno vencido sin excepcion
+      no se admite como reclamo cubierto. Un pedido con un Detalle vencido sin
+      excepcion no crea la Orden (nunca una Orden con parte de lo pedido) e
+      informa los Detalles elegibles, que pueden reclamarse sin el vencido.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (VigenciaGarantiaOrigen con su excepcion por Detalle; columnas excepcion_por, excepcion_en y excepcion_motivo de rma.orden_detalle_origen)
+
+  - id: DEC-IT1-04
+    block: IT1
+    title: Al interrumpir para cancelar, el Tecnico registra la reversibilidad (Si o No) y una descripcion obligatoria del estado del trabajo
+    status: CONFIRMADA
+    rules: [BR-REP-004]
+    nodes: [PROC-REP-200]
+    features: [FEAT-REP-005]
+    scenarios: [VAR-REP-042]
+    notes: >
+      Aprobada el 11/11/2026. Cierra ABI-18: sin una clasificacion mas
+      compleja por ahora. Ambos datos se conservan en la Ejecucion y en su
+      historial. Aplica a la interrupcion que resuelve una cancelacion
+      solicitada (DC07B, BR-REP-004); la interrupcion ordinaria (VAR-REP-003)
+      no cambia.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/ejecuciones.py registrar_ejecucion_interrumpida; columnas estado_trabajo y reversible de rma.ejecucion)
+
+  - id: DEC-IT1-05
+    block: IT1
+    title: La solicitud de desistimiento y la interrupcion con cancelacion efectiva registran cada una su responsable
+    status: CONFIRMADA
+    rules: [BR-REP-030, BR-REP-014]
+    nodes: [PROC-REP-046, PROC-REP-200, PROC-REP-300]
+    features: [FEAT-REP-009]
+    scenarios: [VAR-REP-042]
+    notes: >
+      Aprobada el 11/11/2026. La solicitud registra usuario, fecha/hora,
+      motivo y canal; la interrupcion y la cancelacion efectiva, el tecnico que
+      las ejecuto, la fecha/hora, el estado de la reparacion y su
+      reversibilidad. La cancelacion efectiva no se atribuye a Recepcion. Se
+      distinguen desistimiento de un Detalle, cancelacion efectiva del Detalle
+      y cancelacion de la Orden; se conservan las reglas de DC31.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/decision_cliente.py solicitud de desistimiento; services/cancelaciones.py resolver_desistimiento_solicitado con el usuario que interrumpio)
 
   # ------------------------------------------------------------------ Baseline y sincronizacion
   - id: DC01
@@ -921,6 +1014,12 @@ open_items:
 
   - id: ABI-04
     title: Quien autoriza por defecto la excepcion de garantia vencida
+    status: CERRADO
+    closed_by: DEC-IT1-01
+    closed_on: "2026-11-11"
+    resolution: >
+      Recepcion, Coordinacion RMA y Administracion autorizan la excepcion de
+      garantia vencida; el Tecnico no. El permiso se valida en el sistema.
     impact: BLOQUEA_IMPLEMENTACION
     decisions: [DC15B]
     needed: Responsable predeterminado del permiso de PROC-REP-036.
@@ -955,7 +1054,8 @@ open_items:
     decisions: [DC09]
     rules: [BR-REP-016]
     needed: >
-      Quien registra CORTESIA y quien DESCUENTO por defecto. Evidencia
+      Quien registra el DESCUENTO por defecto (la CORTESIA la decidio
+      DEC-IT1-02: Recepcion, Coordinacion RMA y Administracion). Evidencia
       disponible: la iteracion 1 del UAT (19/10/2026, cambio 4) aprobo aplicar
       descuentos desde Recepcion (porcentaje o importe, con motivo e
       historial), y la implementacion lo habilita a Recepcion y Administracion.
@@ -1012,6 +1112,12 @@ open_items:
 
   - id: ABI-18
     title: Opciones de reversibilidad al interrumpir para cancelar y su uso
+    status: CERRADO
+    closed_by: DEC-IT1-04
+    closed_on: "2026-11-11"
+    resolution: >
+      Reversibilidad Si o No, con una descripcion obligatoria del estado actual
+      del trabajo; sin clasificacion mas compleja por ahora.
     impact: BLOQUEA_IMPLEMENTACION
     decisions: [DC07B]
     needed: Valores posibles y consecuencias.
@@ -1060,6 +1166,12 @@ open_items:
 
   - id: ABI-26
     title: Si una CORTESIA puede ser parcial
+    status: CERRADO
+    closed_by: DEC-IT1-02
+    closed_on: "2026-11-11"
+    resolution: >
+      La CORTESIA puede ser total o parcial, como porcentaje o importe, con el
+      mismo Ajuste Comercial.
     impact: POSTERIOR
     decisions: [DC09]
     needed: Definir si la cortesia admite porcentaje o importe parcial.
@@ -1111,6 +1223,14 @@ open_items:
 
   - id: ABI-33
     title: Garantia parcialmente vigente - Detalles origen con situaciones distintas
+    status: CERRADO
+    closed_by: DEC-IT1-03
+    closed_on: "2026-11-11"
+    resolution: >
+      La vigencia se evalua por cada Detalle reclamado; un vencido solo se
+      admite con su excepcion, que aplica unicamente a ese Detalle. Un pedido
+      con un vencido sin excepcion no crea la Orden e informa los Detalles
+      elegibles.
     impact: BLOQUEA_IMPLEMENTACION
     decisions: [DC15B]
     rules: [BR-REP-019, BR-REP-041]

@@ -255,17 +255,17 @@ features:
         Recepcion hasta que FEAT-REP-002 cree los Detalles (BR-REP-026): a
         definir.
       - >
-        Precedencias concretas entre politicas de garantia y responsable
-        predeterminado de la excepcion de garantia vencida (BR-REP-041,
-        PROC-REP-036): pendientes de decision.
+        Precedencias concretas entre politicas de garantia (BR-REP-041,
+        PROC-REP-036): pendientes de decision. El responsable predeterminado
+        de la excepcion de garantia vencida lo decidio DEC-IT1-01.
       - >
         Garantia RMA vencida (PROC-REP-036, EVT-REP-998), pendientes de
-        decision que bloquean la implementacion completa de la validacion de
-        vigencia: el resultado cuando los Detalles origen tienen situaciones
-        distintas (garantia parcialmente vigente); la continuacion como
-        reparacion paga, conservando la relacion con el reclamo rechazado; y la
-        persistencia y auditoria del intento de reclamo rechazado. No se
-        modelan transiciones ni estados nuevos hasta decidirlos.
+        decision: la continuacion como reparacion paga, conservando la
+        relacion con el reclamo rechazado, y la persistencia y auditoria del
+        intento de reclamo rechazado. No se modelan transiciones ni estados
+        nuevos hasta decidirlos. La garantia parcialmente vigente (Detalles
+        origen con situaciones distintas) la resolvio DEC-IT1-03: evaluacion
+        y excepcion por Detalle.
 
   - id: FEAT-REP-002
     name: Diagnostico y gestion de Detalles de Reparacion
@@ -1083,16 +1083,13 @@ features:
         - Registrar Pago como si ocurriera unicamente al final de la Orden (es transversal, no secuencial)
 
     open_questions:
-      - >
-        Si la cortesia puede ser parcial o siempre equivale al 100% del
-        precio del Detalle/Orden.
       - Multi-moneda en precios y pagos.
       - >
         Impuestos, recargos y otros conceptos comerciales futuros entre Base
         Comercial y Total Cobrable.
       - >
-        Permisos iniciales por tipo de Ajuste Comercial (BR-REP-016): pendiente
-        de decision.
+        Permiso inicial del DESCUENTO (BR-REP-016): pendiente de decision. La
+        CORTESIA, total o parcial, la decidio DEC-IT1-02.
       - >
         Tratamiento de un DESCUENTO que deja el total por debajo de lo ya
         cobrado (BR-REP-016): la implementacion lo rechaza; pendiente de
@@ -1385,9 +1382,6 @@ features:
         descarte tecnico el Tecnico, desistimiento registrado por Recepcion);
         PROC-REP-300/305/306 no declaran un unico actor porque depende del tipo.
       - >
-        Opciones de "reversibilidad" que registra el tecnico al interrumpir para
-        cancelar (DC07B) y como se usan despues: pendientes.
-      - >
         Cancelacion temprana (V1.4): hoy solo se contempla para CLIENTE_EXTERNO,
         desde la decision del cliente sobre la revision tecnica (PROC-REP-056); queda
         pendiente si debe
@@ -1556,8 +1550,9 @@ features:
         Responsables predeterminados de cada evento de custodia (BR-REP-033):
         pendiente de decision.
       - >
-        Permisos iniciales por tipo de Ajuste Comercial (BR-REP-016): pendiente
-        de decision.
+        Permiso inicial del DESCUENTO (BR-REP-016): pendiente de decision. Los
+        de la excepcion de garantia y de la CORTESIA los decidieron DEC-IT1-01
+        y DEC-IT1-02.
       - >
         Predeterminados provisionales tomados de la implementacion
         (inventario, catalogo de equipos, ajuste de garantia, fotografias):

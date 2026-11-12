@@ -2,9 +2,9 @@
   "notice": "Copia GENERADA de la definicion funcional. No editar a mano: los cambios se hacen en el repositorio de origen y se vuelve a generar la copia (DC02).",
   "generated_by": "rt-rma-app/scripts/export-functional-copy.ts",
   "source_repository": "https://github.com/IsmaelDarruizBI/rt-rma-app.git",
-  "source_commit": "ab928b6e33203257c26427cbb9af7875bd38693b",
-  "source_ref": "ab928b6e33203257c26427cbb9af7875bd38693b",
-  "generated_at": "2026-11-10T14:27:46.676Z",
+  "source_commit": "708d81b0dab03605c70e5264e2662093126496b9",
+  "source_ref": "708d81b0dab03605c70e5264e2662093126496b9",
+  "generated_at": "2026-11-12T02:39:13.460Z",
   "files": [
     {
       "path": "actors/actors.yaml",
@@ -13,8 +13,8 @@
     },
     {
       "path": "decisions/decision-log-v1.4.yaml",
-      "bytes": 52017,
-      "sha256": "7d321908964a6795959b1139d50359e2421779255393555c1c11691084cfabb4"
+      "bytes": 58679,
+      "sha256": "1001a0f1364395c9bd684dc70f5fb48349bd7e4c1a262a6829d5ec35a72cc556"
     },
     {
       "path": "features/repair-management-features-v1.3.yaml",
@@ -23,8 +23,8 @@
     },
     {
       "path": "features/repair-management-features-v1.4.yaml",
-      "bytes": 73949,
-      "sha256": "1e0c99c8450401d4a5f96f2e369e97096113b71655c0b7b70dc87fbf0870f272"
+      "bytes": 73785,
+      "sha256": "75ac52a3fbb3ee86496ae108f10105458108755bb4d5e4cdf9b27eb735c3a60e"
     },
     {
       "path": "features/repair-management-features.yaml",
@@ -38,8 +38,8 @@
     },
     {
       "path": "processes/repair-management-v1.4.yaml",
-      "bytes": 155546,
-      "sha256": "116089529a8d093130d7156617684387761d3c0b2f62eef0e9e0e6bceb7a9129"
+      "bytes": 155957,
+      "sha256": "c8f3d6ae944223468791d7db2629d71462937f205f4a383b00b44ffe20363c96"
     },
     {
       "path": "processes/repair-management.yaml",
@@ -53,8 +53,8 @@
     },
     {
       "path": "rules/business-rules-v1.4.yaml",
-      "bytes": 122308,
-      "sha256": "4757508f3564728f841e7f3d165bba4dcb7c3f2f5ef384c8a75647dff2ac284e"
+      "bytes": 124949,
+      "sha256": "099896b82d9ce895c8bead97d4d83b3b34b276883d374d745f7ba7896bf3d437"
     },
     {
       "path": "rules/business-rules.yaml",
@@ -68,8 +68,8 @@
     },
     {
       "path": "scenarios/repair-management-scenarios-v1.4.yaml",
-      "bytes": 228830,
-      "sha256": "6972fd406fdf2438c3778423c3e34839eefc705274907a0f72273223b063dee4"
+      "bytes": 230223,
+      "sha256": "8d025eeb5d3c24656bf02e56104aa75c410a943b5586dcceb4aa2e1745cb7957"
     },
     {
       "path": "schemas/feature.schema.json",

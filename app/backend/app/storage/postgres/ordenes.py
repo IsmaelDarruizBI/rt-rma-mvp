@@ -112,6 +112,7 @@ from app.domain.models import (
     EstadoWorkflow,
     OrdenReparacion,
     TipoMovimientoInsumo,
+    VigenciaGarantiaOrigen,
 )
 from app.domain.models.pagos import Pago
 from app.domain.models.recepcion import RecepcionEquipo
@@ -469,8 +470,7 @@ _INSERTAR_ORDEN = consulta(
          equipo_variante, equipo_capacidad_texto, equipo_color, equipo_imei,
          equipo_numero_serie, equipo_tipo_producto_id, falla_reportada,
          comprobante_recepcion_generado_en, comprobante_final_generado_en,
-         garantia_generada_en, actualizado_en, excepcion_garantia_por,
-         excepcion_garantia_en, excepcion_garantia_motivo)
+         garantia_generada_en, actualizado_en)
     VALUES
         (%(codigo)s, %(origen)s, %(orden_origen_id)s, %(creada_en)s,
          %(estado_workflow)s, %(posicion_proceso)s, %(prioridad)s,
@@ -484,8 +484,7 @@ _INSERTAR_ORDEN = consulta(
          %(equipo_tipo_producto_id)s, %(falla_reportada)s,
          %(comprobante_recepcion_generado_en)s,
          %(comprobante_final_generado_en)s, %(garantia_generada_en)s,
-         %(actualizado_en)s, %(excepcion_garantia_por)s,
-         %(excepcion_garantia_en)s, %(excepcion_garantia_motivo)s)
+         %(actualizado_en)s)
     RETURNING id, version
     """,
     modo=ESCRITURA,
@@ -529,9 +528,11 @@ _INSERTAR_DETALLE_ORIGEN = consulta(
     """
     INSERT INTO rma.orden_detalle_origen
         (orden_id, orden_origen_id, detalle_id, posicion, garantia_dias,
-         garantia_vence, garantia_vigente)
+         garantia_vence, garantia_vigente, excepcion_por, excepcion_en,
+         excepcion_motivo)
     VALUES (%(orden)s, %(origen)s, %(detalle)s, %(posicion)s,
-            %(garantia_dias)s, %(garantia_vence)s, %(garantia_vigente)s)
+            %(garantia_dias)s, %(garantia_vence)s, %(garantia_vigente)s,
+            %(excepcion_por)s, %(excepcion_en)s, %(excepcion_motivo)s)
     """,
     modo=ESCRITURA,
 )
@@ -1167,7 +1168,6 @@ class _Guardado:
                     "origen": orden.origen.value,
                     "orden_origen_id": self._id_orden_origen(),
                     "creada_en": orden.created_at,
-                    **self._excepcion_garantia(),
                 },
             )
             orden_id, version = fila.id, fila.version
@@ -1183,8 +1183,6 @@ class _Guardado:
             if (
                 orden.vigencia_garantia_origen
                 != previa.orden.vigencia_garantia_origen
-                or orden.excepcion_garantia
-                != previa.orden.excepcion_garantia
             ):
                 self._inmutable("la validacion de la garantia")
             if orden.created_at != previa.orden.created_at:
@@ -1340,8 +1338,11 @@ class _Guardado:
                 usuarios.add(pago.anulacion.usuario_id)
         usuarios.update(d.usuario_id for d in resumen.devoluciones)
         usuarios.update(d.usuario_id for d in orden.descuentos)
-        if orden.excepcion_garantia:
-            usuarios.add(orden.excepcion_garantia.usuario_id)
+        usuarios.update(
+            v.excepcion.usuario_id
+            for v in orden.vigencia_garantia_origen
+            if v.excepcion
+        )
         pedidos = {
             "usuario": usuarios,
             "tipo_reparacion": tipos,
@@ -1563,19 +1564,21 @@ class _Guardado:
                     "garantia_vigente": (
                         vigencia.vigente if vigencia else None
                     ),
+                    **self._excepcion_de(vigencia),
                 },
             )
 
-    def _excepcion_garantia(self) -> dict[str, Any]:
-        excepcion = self._orden.excepcion_garantia
+    def _excepcion_de(
+        self, vigencia: VigenciaGarantiaOrigen | None
+    ) -> dict[str, Any]:
+        """La excepcion de UN Detalle origen vencido (DEC-IT1-03)."""
+        excepcion = vigencia.excepcion if vigencia else None
         return {
-            "excepcion_garantia_por": self._id(
+            "excepcion_por": self._id(
                 "usuario", excepcion.usuario_id if excepcion else None
             ),
-            "excepcion_garantia_en": excepcion.fecha if excepcion else None,
-            "excepcion_garantia_motivo": (
-                excepcion.motivo if excepcion else None
-            ),
+            "excepcion_en": excepcion.fecha if excepcion else None,
+            "excepcion_motivo": excepcion.motivo if excepcion else None,
         }
 
     def _detalle_de_origen(self, codigo: str | None) -> UUID | None:

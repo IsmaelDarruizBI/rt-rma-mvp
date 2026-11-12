@@ -19,7 +19,13 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import AliasChoices, BaseModel, Field, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.application import (
     AccionDisponible,
@@ -58,7 +64,6 @@ from app.domain.models import (
     EstadoReparacionDetail,
     EstadoTomaOrden,
     EstadoWorkflow,
-    ExcepcionGarantia,
     HistorialWorkflow,
     InsumoUtilizado,
     MedioPago,
@@ -623,6 +628,13 @@ class EntregarIn(BaseModel):
     observaciones: str | None = None
 
 
+class ExcepcionGarantiaIn(BaseModel):
+    """La excepcion de UN Detalle origen vencido (VAR-REP-039)."""
+
+    detalle_id: str = Field(min_length=1)
+    motivo: str = Field(min_length=1)
+
+
 class IniciarGarantiaRmaIn(BaseModel):
     """``POST /api/orders/{orden_origen_id}/warranty-rma`` (ACT-RECEP).
 
@@ -634,10 +646,26 @@ class IniciarGarantiaRmaIn(BaseModel):
     usuario_id: str = Field(min_length=1)
     detalle_origen_ids: list[str] = Field(min_length=1)
     recepcion: DatosRecepcionIn | None = None
-    # VAR-REP-039 (DC15B): solo si la garantia de origen esta vencida y
-    # quien inicia puede admitir el ingreso como excepcion. Obligatorio en
-    # ese caso; sin el, una garantia vencida se rechaza (GARANTIA_VENCIDA).
-    motivo_excepcion: str | None = None
+    # VAR-REP-039 (DC15B, DEC-IT1-01/03): una excepcion por cada Detalle
+    # origen vencido que se admite, con su motivo. Sin ella, un Detalle
+    # vencido rechaza el pedido (GARANTIA_VENCIDA).
+    excepciones: list[ExcepcionGarantiaIn] = Field(default_factory=list)
+
+    @field_validator("excepciones")
+    @classmethod
+    def _una_excepcion_por_detalle(
+        cls, excepciones: list[ExcepcionGarantiaIn]
+    ) -> list[ExcepcionGarantiaIn]:
+        ids = [e.detalle_id for e in excepciones]
+        repetidos = sorted({i for i in ids if ids.count(i) > 1})
+        if repetidos:
+            raise ValueError(
+                f"Una sola excepcion por Detalle: {', '.join(repetidos)}."
+            )
+        return excepciones
+
+    def motivos_de_excepcion(self) -> dict[str, str]:
+        return {e.detalle_id: e.motivo for e in self.excepciones}
 
 
 class OverrideRecursosIn(BaseModel):
@@ -1889,11 +1917,10 @@ class OrdenOut(BaseModel):
     orden_origen_id: str | None
     detalles_origen_ids: list[str]
     # DC15B: en una garantia RMA, PROC-REP-036 tal como se evaluo al
-    # crearla, y la excepcion si la garantia de origen estaba vencida.
+    # crearla, con la excepcion de cada Detalle vencido admitido.
     vigencia_garantia_origen: list[VigenciaGarantiaOrigen] = Field(
         default_factory=list
     )
-    excepcion_garantia: ExcepcionGarantia | None = None
     # En una Orden ENTREGADA: la vigencia HOY de la garantia de cada
     # Detalle realizado, para iniciar una garantia RMA (PROC-REP-036).
     garantia_por_detalle: list[VigenciaGarantiaOrigen] = Field(
@@ -2009,7 +2036,6 @@ class OrdenOut(BaseModel):
             orden_origen_id=orden.orden_origen_id,
             detalles_origen_ids=list(orden.detalles_origen_ids),
             vigencia_garantia_origen=list(orden.vigencia_garantia_origen),
-            excepcion_garantia=orden.excepcion_garantia,
             garantia_por_detalle=list(garantia_por_detalle),
             detalles_origen=[
                 DetalleOrigenOut(

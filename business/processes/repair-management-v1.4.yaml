@@ -435,14 +435,20 @@ nodes:
       auditoria (usuario, fecha/hora, Detalle origen, vencimiento y condicion
       aplicada). "Vencida, sin excepcion" -> EVT-REP-998: el sistema advierte y
       bloquea el ingreso en garantia; no se crea la Orden de garantia ni se
-      modifica la Orden origen. Siguen pendientes de decision, sin transiciones
-      ni estados nuevos: el resultado cuando los Detalles origen tienen
-      situaciones distintas (garantia parcialmente vigente); si la atencion
-      puede continuar como una reparacion paga que conserve la relacion con el
-      reclamo rechazado; y si se persiste y como se audita el intento de
-      reclamo rechazado. Mientras no se decidan, no se asume ninguna ruta. Las
-      precedencias concretas entre politicas de garantia y quien autoriza la
-      excepcion por defecto siguen pendientes de decision (DC15A, BR-REP-039).
+      modifica la Orden origen. Evaluacion por Detalle (DEC-IT1-03): cada
+      Detalle origen se evalua y se admite por separado; uno vigente sin
+      excepcion y uno vencido solo con su propia excepcion. Si el pedido
+      incluye un Detalle vencido sin excepcion, ese pedido termina en
+      EVT-REP-998 (no se crea la Orden de garantia con parte de lo pedido) y se
+      informan los Detalles que siguen siendo elegibles, que pueden reclamarse
+      en un pedido nuevo. La excepcion la autorizan por defecto Recepcion,
+      Coordinacion RMA y Administracion, no el Tecnico (DEC-IT1-01,
+      BR-REP-039). Siguen pendientes de decision, sin transiciones ni estados
+      nuevos: si la atencion puede continuar como una reparacion paga que
+      conserve la relacion con el reclamo rechazado, y si se persiste y como se
+      audita el intento de reclamo rechazado. Mientras no se decidan, no se
+      asume ninguna ruta. Las precedencias concretas entre politicas de
+      garantia siguen pendientes de decision (DC15A).
     inputs:
       - Orden de Reparacion origen y Detalle(s) origen identificados
     outputs:

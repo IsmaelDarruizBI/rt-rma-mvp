@@ -12,7 +12,7 @@ Todos los services devuelven una Orden nueva; la recibida nunca se
 modifica.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime, tzinfo
 
 from app.domain.garantia import vencimiento_garantia
@@ -379,12 +379,11 @@ def crear_orden_rt_interno(
     )
 
 
-# DC15B / BR-REP-039: quien admite un ingreso en garantia con la garantia
-# de origen vencida. PROVISIONAL: el responsable predeterminado sigue
-# pendiente de decision (VAR-REP-039); se toman Coordinacion (la que
-# autoriza los overrides de esta capa) y Administracion. Cambiarlo es
-# cambiar esta tupla.
+# DC15B / BR-REP-039: quien admite un Detalle origen vencido en garantia
+# como excepcion. DEC-IT1-01 (11/11/2026, cierra ABI-04): Recepcion,
+# Coordinacion RMA y Administracion; el Tecnico no.
 ROLES_EXCEPCION_GARANTIA = (
+    RolUsuario.RECEPCION,
     RolUsuario.COORDINADOR_RMA,
     RolUsuario.ADMINISTRADOR,
 )
@@ -440,14 +439,19 @@ def evaluar_vigencia_garantia(
     return resultado
 
 
+def describir_vigencia(vigencia: VigenciaGarantiaOrigen) -> str:
+    """"DET-001 vigente hasta el 01/02/2026" o "DET-002 vencio el ..."."""
+    if vigencia.vence is None:
+        return f"{vigencia.detalle_id} sin garantia vigente registrada"
+    vence = f"{vigencia.vence:%d/%m/%Y}"
+    if vigencia.vigente:
+        return f"{vigencia.detalle_id} vigente hasta el {vence}"
+    return f"{vigencia.detalle_id} vencio el {vence}"
+
+
 def describir_vencidos(vencidos: Sequence[VigenciaGarantiaOrigen]) -> str:
     """"DET-001 vencio el 01/02/2026; DET-002 sin garantia vigente"."""
-    return "; ".join(
-        f"{v.detalle_id} vencio el {v.vence:%d/%m/%Y}"
-        if v.vence is not None
-        else f"{v.detalle_id} sin garantia vigente registrada"
-        for v in vencidos
-    )
+    return "; ".join(describir_vigencia(v) for v in vencidos)
 
 
 def crear_orden_garantia_rma(
@@ -459,7 +463,7 @@ def crear_orden_garantia_rma(
     fecha: datetime,
     datos_recepcion: DatosRecepcion | None = None,
     zona_horaria: tzinfo | None = None,
-    motivo_excepcion: str | None = None,
+    excepciones: Mapping[str, str] | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-035 -> PROC-REP-040 (HP-REP-003, BR-REP-019).
 
@@ -476,23 +480,28 @@ def crear_orden_garantia_rma(
     No registra PROC-REP-010 ni PROC-REP-030: no es un alta nueva.
 
     PROC-REP-036 (DC15B): antes de crear la Orden se valida la vigencia
-    de la garantia de cada Detalle origen. Todos vigentes: la crea
-    Recepcion. Alguno vencido: sin ``motivo_excepcion`` se rechaza con
-    ``GarantiaVencidaError`` (EVT-REP-998: no se crea nada y la Orden
-    origen no cambia); con motivo, un usuario de
-    ``ROLES_EXCEPCION_GARANTIA`` admite el ingreso como excepcion y queda
-    auditada. Un Detalle vencido entre varios vigentes tambien exige la
-    excepcion: la garantia parcialmente vigente sigue pendiente de
-    decision y no se asume otra ruta.
+    de la garantia de CADA Detalle origen (DEC-IT1-03). Un Detalle vigente
+    se admite sin excepcion. Uno vencido se admite solo con su excepcion:
+    ``excepciones`` lleva el motivo por Detalle y la autoriza un usuario de
+    ``ROLES_EXCEPCION_GARANTIA`` (DEC-IT1-01); queda auditada en ese
+    Detalle. Si algun Detalle pedido esta vencido sin excepcion, la
+    solicitud se rechaza entera con ``GarantiaVencidaError`` y el mensaje
+    nombra los Detalles que si son elegibles (EVT-REP-998 para ese pedido):
+    no se crea una Orden con parte de lo pedido ni la Orden origen cambia.
+    Una excepcion sobre un Detalle vigente o no pedido se rechaza.
 
     Siguen fuera de alcance (BR-REP-019): motivo valido, cantidad maxima de
     garantias y que se registra de un intento rechazado.
     """
-    motivo_excepcion = (motivo_excepcion or "").strip() or None
-    if motivo_excepcion is None:
-        validar_actor(usuario, RolUsuario.RECEPCION)
-    else:
+    motivos = {
+        detalle_id: motivo.strip()
+        for detalle_id, motivo in (excepciones or {}).items()
+        if motivo and motivo.strip()
+    }
+    if motivos:
         validar_alguno_de(usuario, ROLES_EXCEPCION_GARANTIA)
+    else:
+        validar_actor(usuario, RolUsuario.RECEPCION)
 
     if orden_origen.estado_workflow is not EstadoWorkflow.ENTREGADA:
         raise PrecondicionInvalidaError(
@@ -521,30 +530,57 @@ def crear_orden_garantia_rma(
             f"{', '.join(ajenos)}."
         )
 
-    vigencia = evaluar_vigencia_garantia(
+    no_pedidos = sorted(set(motivos) - set(detalle_origen_ids))
+    if no_pedidos:
+        raise PrecondicionInvalidaError(
+            "La excepcion es de un Detalle reclamado: "
+            f"{', '.join(no_pedidos)} no esta en el pedido."
+        )
+    evaluada = evaluar_vigencia_garantia(
         orden_origen,
         detalle_origen_ids,
         fecha=fecha,
         zona_horaria=zona_horaria or fecha.tzinfo,
     )
-    vencidos = [v for v in vigencia if not v.vigente]
-    if vencidos and motivo_excepcion is None:
+    vigentes_con_excepcion = [
+        v.detalle_id for v in evaluada if v.vigente and v.detalle_id in motivos
+    ]
+    if vigentes_con_excepcion:
+        raise PrecondicionInvalidaError(
+            "La garantia de "
+            f"{', '.join(vigentes_con_excepcion)} esta vigente: no hace "
+            "falta una excepcion."
+        )
+    sin_excepcion = [
+        v for v in evaluada if not v.vigente and v.detalle_id not in motivos
+    ]
+    if sin_excepcion:
+        elegibles = [v.detalle_id for v in evaluada if v not in sin_excepcion]
         raise GarantiaVencidaError(
             "La garantia de la reparacion original esta vencida: "
-            f"{describir_vencidos(vencidos)}. No se crea la Orden de "
-            "garantia: solo un usuario autorizado puede admitir el ingreso "
-            "como excepcion, con motivo."
-        )
-    excepcion = None
-    if motivo_excepcion is not None:
-        if not vencidos:
-            raise PrecondicionInvalidaError(
-                "La garantia de origen esta vigente: no hace falta una "
-                "excepcion."
+            f"{describir_vencidos(sin_excepcion)}. Sin una excepcion "
+            "autorizada ese trabajo no se admite como reclamo cubierto y no "
+            "se crea la Orden de garantia. "
+            + (
+                f"Siguen siendo elegibles: {', '.join(elegibles)}."
+                if elegibles
+                else "No hay otros trabajos elegibles en el pedido."
             )
-        excepcion = ExcepcionGarantia(
-            usuario_id=usuario.id, fecha=fecha, motivo=motivo_excepcion
         )
+    vigencia = [
+        v.model_copy(
+            update={
+                "excepcion": ExcepcionGarantia(
+                    usuario_id=usuario.id,
+                    fecha=fecha,
+                    motivo=motivos[v.detalle_id],
+                )
+            }
+        )
+        if v.detalle_id in motivos
+        else v
+        for v in evaluada
+    ]
 
     orden = OrdenReparacion(
         id=orden_id,
@@ -556,7 +592,6 @@ def crear_orden_garantia_rma(
         orden_origen_id=orden_origen.id,
         detalles_origen_ids=list(detalle_origen_ids),
         vigencia_garantia_origen=vigencia,
-        excepcion_garantia=excepcion,
         resumen_pago=ResumenPago(),
         documentos=DocumentosOrden(),
         recepcion=recepcion_inicial(
@@ -577,23 +612,34 @@ def crear_orden_garantia_rma(
             f"detalles_origen_ids={','.join(detalle_origen_ids)}"
         ),
     )
+    # PROC-REP-036: la evaluacion de todos los Detalles y, por cada Detalle
+    # vencido admitido, su excepcion (trazabilidad individual, DEC-IT1-03).
     orden = registrar_paso(
         orden,
         process_id="PROC-REP-036",
-        accion=(
-            "AUTORIZAR_EXCEPCION_GARANTIA"
-            if excepcion is not None
-            else "VALIDAR_VIGENCIA_GARANTIA"
-        ),
+        accion="VALIDAR_VIGENCIA_GARANTIA",
         fecha=fecha,
         usuario_id=usuario.id,
         observacion=(
-            "Vencida, excepcion autorizada "
-            f"({describir_vencidos(vencidos)}): {excepcion.motivo}"
-            if excepcion is not None
-            else "Vigente"
+            "Vigente"
+            if all(v.vigente for v in vigencia)
+            else "; ".join(describir_vigencia(v) for v in vigencia)
         ),
     )
+    for v in vigencia:
+        if v.excepcion is None:
+            continue
+        orden = registrar_paso(
+            orden,
+            process_id="PROC-REP-036",
+            accion="AUTORIZAR_EXCEPCION_GARANTIA",
+            fecha=fecha,
+            usuario_id=usuario.id,
+            observacion=(
+                f"{describir_vigencia(v)}: excepcion autorizada. "
+                f"{v.excepcion.motivo}"
+            ),
+        )
     return registrar_paso(
         orden,
         process_id="PROC-REP-040",

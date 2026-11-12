@@ -807,19 +807,29 @@ export interface SolicitudDesistimiento {
   canal: CanalComunicacion;
 }
 
-/** DC15B: vigencia de la garantía de un trabajo de la Orden origen. */
+/** VAR-REP-039: un trabajo vencido admitido como excepción. */
+export interface ExcepcionGarantia {
+  usuario_id: string;
+  fecha: string;
+  motivo: string;
+}
+
+/**
+ * DC15B: vigencia de la garantía de un trabajo de la Orden origen, con su
+ * excepción si estaba vencido y se admitió (DEC-IT1-03: por trabajo).
+ */
 export interface VigenciaGarantia {
   detalle_id: string;
   garantia_dias: number;
   /** Último día cubierto (AAAA-MM-DD); `null` sin fecha de entrega. */
   vence: string | null;
   vigente: boolean;
+  excepcion?: ExcepcionGarantia | null;
 }
 
-/** VAR-REP-039: garantía vencida admitida como excepción. */
-export interface ExcepcionGarantia {
-  usuario_id: string;
-  fecha: string;
+/** La excepción que se pide para un trabajo vencido al iniciar la garantía. */
+export interface ExcepcionPedida {
+  detalle_id: string;
   motivo: string;
 }
 
@@ -1068,10 +1078,11 @@ export interface Orden {
   detalles_origen_ids: string[];
   /** Los mismos Detalles origen, con el nombre de su Tipo (presentación). */
   detalles_origen: DetalleOrigen[];
-  /** PROC-REP-036: la vigencia evaluada al iniciar la garantía RMA. */
+  /**
+   * PROC-REP-036: la vigencia evaluada al iniciar la garantía RMA, con la
+   * excepción de cada trabajo vencido admitido.
+   */
   vigencia_garantia_origen?: VigenciaGarantia[];
-  /** VAR-REP-039: quién admitió la garantía vencida, cuándo y por qué. */
-  excepcion_garantia?: ExcepcionGarantia | null;
   /** Orden ENTREGADA: vigencia HOY de la garantía de cada trabajo. */
   garantia_por_detalle?: VigenciaGarantia[];
   /**

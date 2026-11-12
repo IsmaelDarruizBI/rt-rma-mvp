@@ -24,7 +24,7 @@ de cada comando, los nodos ACT-SYSTEM y las decisiones que siguen se
 encadenan sin volver a preguntar.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from decimal import Decimal
 
@@ -348,14 +348,15 @@ def iniciar_garantia_rma(
     detalle_origen_ids: Sequence[str],
     usuario_id: str,
     datos_recepcion: DatosRecepcion | None = None,
-    motivo_excepcion: str | None = None,
+    excepciones: Mapping[str, str] | None = None,
 ) -> OrdenReparacion:
     """Recepcion inicia la garantia RMA de una Orden ENTREGADA (HP-REP-003).
 
-    Antes valida la vigencia de la garantia de origen (PROC-REP-036,
-    DC15B): vencida y sin ``motivo_excepcion`` no se crea nada
-    (``GarantiaVencidaError``); con motivo, un usuario autorizado admite el
-    ingreso como excepcion (VAR-REP-039).
+    Antes valida la vigencia de la garantia de cada Detalle origen
+    (PROC-REP-036, DC15B): uno vencido sin su excepcion rechaza el pedido
+    sin crear nada (``GarantiaVencidaError``); ``excepciones`` lleva el
+    motivo de cada Detalle vencido que un usuario autorizado admite
+    (VAR-REP-039, DEC-IT1-01/03).
 
     Una unica entrada canonica: PROC-REP-035 (1..N Detalles origen) ->
     040 -> 045 (No) -> 055 (EN_REVISION) -> 050 -> 060, y se detiene a
@@ -382,7 +383,7 @@ def iniciar_garantia_rma(
             fecha=fecha,
             datos_recepcion=datos_recepcion,
             zona_horaria=contexto.zona_horaria,
-            motivo_excepcion=motivo_excepcion,
+            excepciones=excepciones,
         )
         # VAR-REP-039: con excepcion la admite el usuario autorizado; el paso
         # automatico 055 que sigue no le exige ademas ser Recepcion.
@@ -392,7 +393,7 @@ def iniciar_garantia_rma(
             fecha=fecha,
             roles=(
                 ROLES_EXCEPCION_GARANTIA
-                if orden.excepcion_garantia is not None
+                if any(v.excepcion for v in orden.vigencia_garantia_origen)
                 else (RolUsuario.RECEPCION,)
             ),
         )

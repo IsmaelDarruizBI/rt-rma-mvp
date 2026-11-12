@@ -536,7 +536,8 @@ check("VAR-REP-041 (DC11): cortesia total con un anticipo deja saldo a favor; se
   const order = r.path;
   assert.ok(order.indexOf("PROC-REP-265>PROC-REP-267") < order.indexOf("PROC-REP-265>PROC-REP-280"), "la devolucion precede a la entrega");
   assert.equal(expectedOf(s, "delivery_allowed_before_refund"), false);
-  assert.match(rule("BR-REP-016"), /Una cortesia total con Pagos\s*ya recibidos deja saldo a favor del cliente/);
+  // DEC-IT1-02: la cortesia, total o parcial, que deja el total por debajo de lo cobrado genera saldo a favor.
+  assert.match(rule("BR-REP-016"), /Una cortesia, total o parcial, que deja el total\s*por debajo de lo ya cobrado genera saldo a favor del cliente/);
 });
 
 check("los Scenarios con dinero respetan la formula y quedan consistentes con sus facts (sin saldo ni importes contradictorios)", () => {

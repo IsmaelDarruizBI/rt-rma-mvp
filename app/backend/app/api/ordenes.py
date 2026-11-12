@@ -594,7 +594,7 @@ def post_iniciar_garantia_rma(
         datos_recepcion=(
             cuerpo.recepcion.a_dominio() if cuerpo.recepcion else None
         ),
-        motivo_excepcion=cuerpo.motivo_excepcion,
+        excepciones=cuerpo.motivos_de_excepcion(),
     )
     return _salida(orden, contexto)
 
@@ -1304,6 +1304,7 @@ def post_cambiar_prioridad(
 
 
 @router.post("/{orden_id}/discount")
+@idempotente("APLICAR_AJUSTE_COMERCIAL")
 def post_aplicar_descuento(
     orden_id: str,
     cuerpo: DescuentoIn,

@@ -501,13 +501,13 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
         ),
       ),
     // Devuelve la NUEVA Orden de garantía: queda abierta en pantalla.
-    iniciarGarantiaRma: (detalleOrigenIds, motivoExcepcion) =>
+    iniciarGarantiaRma: (detalleOrigenIds, excepciones) =>
       void ejecutarComando(() =>
         api.iniciarGarantiaRma(
           idOrden,
           idActor,
           detalleOrigenIds,
-          motivoExcepcion,
+          excepciones,
         ),
       ),
     rechazarControl: (detalleId, motivo) =>

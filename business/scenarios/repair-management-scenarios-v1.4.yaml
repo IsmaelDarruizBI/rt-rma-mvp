@@ -6355,16 +6355,20 @@ scenarios:
 
     description: >
       Consolidacion V1.4 (DC15B). El cliente vuelve por una reparacion
-      anterior, pero el plazo definitivo de garantia del Detalle origen, contado
-      desde la entrega de la Orden origen, ya vencio (BR-REP-041). Al validar la
-      vigencia (PROC-REP-036) el sistema advierte el vencimiento y nadie
-      autoriza una excepcion: se bloquea el ingreso en garantia. No se crea la
-      Orden de garantia, la Orden origen no cambia y el recorrido termina en
-      EVT-REP-998, que no es el fin de una Orden (no hay pagos ni custodia que
-      verificar). Si la atencion puede continuar como una reparacion paga que
-      conserve la relacion con el reclamo rechazado, y que queda registrado de
-      ese intento, siguen pendientes de decision: este Scenario no asume
-      ninguna ruta ni que pase a otro origen.
+      anterior, pero el plazo definitivo de garantia del Detalle origen,
+      contado desde la entrega de la Orden origen, ya vencio (BR-REP-041). Al
+      validar la vigencia (PROC-REP-036) el sistema advierte el vencimiento y
+      nadie autoriza una excepcion: se bloquea el ingreso en garantia. No se
+      crea la Orden de garantia, la Orden origen no cambia y el recorrido
+      termina en EVT-REP-998, que no es el fin de una Orden (no hay pagos ni
+      custodia que verificar). Si la atencion puede continuar como una
+      reparacion paga que conserve la relacion con el reclamo rechazado, y que
+      queda registrado de ese intento, siguen pendientes de decision: este
+      Scenario no asume ninguna ruta ni que pase a otro origen. La vigencia se
+      evalua por cada Detalle origen (DEC-IT1-03): si el pedido cita varios
+      Detalles y alguno vencido no tiene excepcion, el pedido no crea la Orden
+      de garantia e informa los Detalles que siguen siendo elegibles, que
+      pueden reclamarse sin el vencido.
 
     trigger:
       node: PROC-REP-036
@@ -6437,14 +6441,18 @@ scenarios:
       - HP-REP-003
 
     description: >
-      Consolidacion V1.4 (DC15B). Igual que VAR-REP-038, la garantia del Detalle
-      origen esta vencida, pero un usuario autorizado admite el ingreso en
-      garantia como excepcion: registra el motivo, que es obligatorio, y la
+      Consolidacion V1.4 (DC15B). Igual que VAR-REP-038, la garantia del
+      Detalle origen esta vencida, pero un usuario autorizado admite el ingreso
+      en garantia como excepcion: registra el motivo, que es obligatorio, y la
       excepcion queda auditada con usuario, fecha/hora, Detalle origen,
-      vencimiento y condicion aplicada. Se crea la Orden de garantia vinculada a
-      la Orden y al Detalle origen y el recorrido sigue como HP-REP-003 (revision
-      tecnica obligatoria). Quien autoriza la excepcion por defecto sigue
-      pendiente de decision; el permiso es configurable (BR-REP-039).
+      vencimiento y condicion aplicada. Se crea la Orden de garantia vinculada
+      a la Orden y al Detalle origen y el recorrido sigue como HP-REP-003
+      (revision tecnica obligatoria). La excepcion la autorizan por defecto
+      Recepcion, Coordinacion RMA o Administracion, no el Tecnico, y el permiso
+      es configurable (DEC-IT1-01, BR-REP-039). Es de cada Detalle vencido
+      (DEC-IT1-03): en un reclamo de varios Detalles, los vigentes se admiten
+      sin excepcion y la excepcion aplica unicamente al vencido identificado,
+      con su propia trazabilidad.
 
     trigger:
       node: PROC-REP-036
@@ -6498,6 +6506,12 @@ scenarios:
       - key: exception_audited
         label: Excepcion auditada (usuario, fecha/hora, Detalle origen, vencimiento y motivo)
         value: true
+      - key: exception_scope_single_detail
+        label: La excepcion aplica solo al Detalle vencido identificado
+        value: true
+      - key: technician_can_authorize
+        label: El Tecnico autoriza la excepcion por su rol
+        value: false
       - key: warranty_order_created
         label: Se crea la Orden de garantia vinculada a la Orden y al Detalle origen
         value: true
@@ -6671,15 +6685,19 @@ scenarios:
       - HP-REP-001
 
     description: >
-      Consolidacion V1.4 (DC09 y DC11). El cliente dejo un anticipo de $5.000 y,
-      con la reparacion terminada, se le otorga una cortesia total de la Orden:
-      un Ajuste Comercial de tipo CORTESIA por el total (con motivo, usuario y
-      fecha/hora) deja el Total final en $0. Los Pagos y el Ajuste originales se
-      conservan. El Saldo queda en -5.000: hay saldo a favor del cliente, que no
-      habilita la entrega por si solo y debe devolverse (PROC-REP-267) antes del
-      cierre. Tras la devolucion el Saldo queda en 0, se registra el check-in y
-      se aprueba la condicion de entrega. Quien puede otorgar una cortesia por
-      defecto sigue pendiente de decision (BR-REP-016).
+      Consolidacion V1.4 (DC09 y DC11). El cliente dejo un anticipo de $5.000
+      y, con la reparacion terminada, se le otorga una cortesia total de la
+      Orden: un Ajuste Comercial de tipo CORTESIA por el total (con motivo,
+      usuario y fecha/hora) deja el Total final en $0. Los Pagos y el Ajuste
+      originales se conservan. El Saldo queda en -5.000: hay saldo a favor del
+      cliente, que no habilita la entrega por si solo y debe devolverse
+      (PROC-REP-267) antes del cierre. Tras la devolucion el Saldo queda en 0,
+      se registra el check-in y se aprueba la condicion de entrega. La cortesia
+      la otorgan, modifican o quitan por defecto Recepcion, Coordinacion RMA o
+      Administracion (DEC-IT1-02). Una cortesia parcial que deja el Total final
+      por debajo de lo pagado sigue el mismo circuito: el saldo a favor
+      remanente se devuelve antes de entregar. Un envio duplicado no registra
+      un segundo ajuste ni una segunda devolucion.
 
     trigger:
       node: PROC-REP-265
@@ -6825,16 +6843,18 @@ scenarios:
 
     description: >
       Consolidacion V1.4 (DC07B y DC07). El tecnico ejecuta DET-001 y DET-002
-      sigue DEFINIDO y trabajable. El cliente pide desistir de DET-001: Recepcion
-      registra la SOLICITUD de desistimiento (usuario y fecha/hora), que todavia
-      no cancela nada porque DET-001 esta EN_PROGRESO. El tecnico interrumpe la
-      Ejecucion (PROC-REP-200, Interrumpido) con motivo y registra el estado en
-      que queda el trabajo, los materiales utilizados y si puede revertirse;
+      sigue DEFINIDO y trabajable. El cliente pide desistir de DET-001:
+      Recepcion registra la SOLICITUD de desistimiento (usuario y fecha/hora),
+      que todavia no cancela nada porque DET-001 esta EN_PROGRESO. El tecnico
+      interrumpe la Ejecucion (PROC-REP-200, Interrumpido) con motivo y
+      registra los materiales utilizados, si el trabajo puede revertirse (Si o
+      No) y una descripcion obligatoria del estado en que queda (DEC-IT1-04);
       PROC-REP-210 consume lo utilizado y libera lo reservado sin usar. Con la
       Ejecucion resuelta, el resolver deriva a la cancelacion efectiva
       (PROC-REP-211 -> PROC-REP-300), que se registra aparte de la solicitud,
-      con su propio usuario y fecha/hora y el tipo desistimiento del cliente.
-      DET-002 no se cancela y la Orden sigue con el.
+      con el tecnico que ejecuto la interrupcion como responsable (no
+      Recepcion), su fecha/hora y el tipo desistimiento del cliente
+      (DEC-IT1-05). DET-002 no se cancela y la Orden sigue con el.
 
     trigger:
       node: PROC-REP-211
@@ -6911,6 +6931,9 @@ scenarios:
       - key: request_and_cancellation_recorded_separately
         label: Solicitud y cancelacion efectiva registradas por separado, con usuario y fecha/hora
         value: true
+      - key: effective_cancellation_attributed_to_reception
+        label: La cancelacion efectiva se atribuye a Recepcion por haber registrado la solicitud
+        value: false
       - key: requested_detail_final_state
         label: Estado final de DET-001
         value: CANCELADO

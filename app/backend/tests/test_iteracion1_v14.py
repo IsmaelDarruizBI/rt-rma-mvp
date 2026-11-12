@@ -4,7 +4,10 @@
   (PROC-REP-036): vigente sigue HP-REP-003; VAR-REP-038, vencida sin
   excepcion, termina en EVT-REP-998 sin crear la Orden; VAR-REP-039,
   vencida con excepcion autorizada y auditada.
-* VAR-REP-041 (DC11): cortesia total con pagos previos.
+* VAR-REP-041 (DC11, DEC-IT1-02): cortesia total o parcial con pagos
+  previos; la otorgan Recepcion, Coordinacion RMA o Administracion.
+* DEC-IT1-01/03: la excepcion de garantia la autorizan esos tres roles y es
+  de cada trabajo vencido.
 * VAR-REP-042 (DC07): desistimiento con el Detalle en ejecucion.
 * DC06: definir y redefinir luego de la revision es del Tecnico; las
   decisiones del cliente siguen en Recepcion.
@@ -13,7 +16,6 @@ Los mismos recorridos se guardan y releen en PostgreSQL desde el corpus
 (``tests/postgres/corpus_ordenes.py``).
 """
 
-from datetime import timedelta
 from decimal import Decimal
 
 import pytest
@@ -68,7 +70,7 @@ def test_hp_rep_003_garantia_vigente(cliente):
     assert vigencia["vigente"] is True
     assert vigencia["garantia_dias"] == 90
     assert vigencia["vence"] == disponible[0]["vence"]
-    assert garantia["excepcion_garantia"] is None
+    assert vigencia["excepcion"] is None
     # 035 -> 036 (Vigente) -> 040; sigue como HP-REP-003.
     pasos = _pasos(garantia)
     assert pasos[:3] == [
@@ -86,10 +88,7 @@ def test_hp_rep_003_no_se_pide_excepcion_si_esta_vigente(cliente, tmp_path):
 
     mensaje = f.conflicto(
         it.iniciar_garantia(
-            cliente,
-            origen,
-            usuario=it.COORDINADOR,
-            motivo_excepcion=it.MOTIVO_EXCEPCION,
+            cliente, origen, excepciones={"DET-001": it.MOTIVO_EXCEPCION}
         )
     )
 
@@ -106,7 +105,8 @@ def test_var_rep_038_vencida_sin_excepcion_no_crea_la_orden(
     origen = it.entregada_hace(cliente, reloj, 200)
     (disponible,) = _orden(cliente, origen)["garantia_por_detalle"]
     assert disponible["vigente"] is False
-    # Vencida: iniciar la garantia tambien lo ve quien autoriza la excepcion.
+    # Vencida: iniciar la garantia lo ven los que autorizan la excepcion
+    # (DEC-IT1-01), no el Tecnico.
     (iniciar,) = _orden(cliente, origen)["acciones_disponibles"]
     assert iniciar["codigo"] == "INICIAR_GARANTIA_RMA"
     assert iniciar["roles"] == [
@@ -122,13 +122,54 @@ def test_var_rep_038_vencida_sin_excepcion_no_crea_la_orden(
     )
 
     assert "DET-001" in mensaje
+    assert "No hay otros trabajos elegibles" in mensaje
     assert _cantidad_de_ordenes(tmp_path) == antes
     assert f.archivo(tmp_path, origen) == origen_antes
 
 
-@pytest.mark.parametrize("usuario", [f.RECEPCION, f.TECNICO])
-def test_var_rep_039_la_excepcion_exige_un_usuario_autorizado(
-    cliente, reloj, tmp_path, usuario
+@pytest.mark.parametrize(
+    "usuario", [f.RECEPCION, it.COORDINADOR, f.ADMINISTRADOR]
+)
+def test_var_rep_039_excepcion_autorizada_y_auditada(cliente, reloj, usuario):
+    """DEC-IT1-01: los tres roles autorizan; queda quien, cuando y por que,
+    con el vencimiento original y el trabajo reclamado."""
+    origen = it.entregada_hace(cliente, reloj, 200)
+    (disponible,) = _orden(cliente, origen)["garantia_por_detalle"]
+
+    garantia = f.ok(
+        it.iniciar_garantia(
+            cliente,
+            origen,
+            usuario=usuario,
+            excepciones={"DET-001": it.MOTIVO_EXCEPCION},
+        )
+    )
+
+    (vigencia,) = garantia["vigencia_garantia_origen"]
+    assert vigencia["detalle_id"] == "DET-001"
+    assert vigencia["vigente"] is False
+    assert vigencia["vence"] == disponible["vence"]
+    excepcion = vigencia["excepcion"]
+    assert excepcion["usuario_id"] == usuario
+    assert excepcion["motivo"] == it.MOTIVO_EXCEPCION
+    assert excepcion["fecha"]
+    assert garantia["orden_origen_id"] == origen
+    assert garantia["detalles_origen_ids"] == ["DET-001"]
+    validacion, autorizacion = garantia["historial"][1:3]
+    assert validacion["accion"] == "VALIDAR_VIGENCIA_GARANTIA"
+    assert "DET-001 vencio el" in validacion["observacion"]
+    assert autorizacion["referencia_id"] == "PROC-REP-036"
+    assert autorizacion["accion"] == "AUTORIZAR_EXCEPCION_GARANTIA"
+    assert autorizacion["usuario_id"] == usuario
+    assert it.MOTIVO_EXCEPCION in autorizacion["observacion"]
+    assert "DET-001" in autorizacion["observacion"]
+    # Sigue como HP-REP-003: revision tecnica obligatoria.
+    assert garantia["estado_workflow"] == "EN_REVISION"
+    assert "REALIZAR_REVISION" in f.codigos(garantia)
+
+
+def test_var_rep_039_el_tecnico_no_autoriza_la_excepcion(
+    cliente, reloj, tmp_path
 ):
     origen = it.entregada_hace(cliente, reloj, 200)
     antes = _cantidad_de_ordenes(tmp_path)
@@ -137,8 +178,8 @@ def test_var_rep_039_la_excepcion_exige_un_usuario_autorizado(
         it.iniciar_garantia(
             cliente,
             origen,
-            usuario=usuario,
-            motivo_excepcion=it.MOTIVO_EXCEPCION,
+            usuario=f.TECNICO,
+            excepciones={"DET-001": it.MOTIVO_EXCEPCION},
         )
     )
 
@@ -146,95 +187,122 @@ def test_var_rep_039_la_excepcion_exige_un_usuario_autorizado(
     assert _cantidad_de_ordenes(tmp_path) == antes
 
 
-@pytest.mark.parametrize("motivo", [None, "   "])
-def test_var_rep_039_el_autorizado_sin_motivo_tampoco(
-    cliente, reloj, tmp_path, motivo
-):
-    """Sin motivo no hay excepcion: el inicio comun es de Recepcion."""
+def test_var_rep_039_sin_motivo_no_hay_excepcion(cliente, reloj, tmp_path):
     origen = it.entregada_hace(cliente, reloj, 200)
     antes = _cantidad_de_ordenes(tmp_path)
-    mensaje = f.conflicto(
-        it.iniciar_garantia(
-            cliente, origen, usuario=it.COORDINADOR, motivo_excepcion=motivo
-        )
+    # Vacio: el contrato lo rechaza.
+    vacio = it.iniciar_garantia(
+        cliente, origen, excepciones={"DET-001": ""}
     )
-    assert "RECEPCION" in mensaje
+    assert vacio.status_code == 422
+    # Solo espacios: no hay excepcion, el trabajo sigue vencido.
+    f.conflicto(
+        it.iniciar_garantia(cliente, origen, excepciones={"DET-001": "  "}),
+        codigo="GARANTIA_VENCIDA",
+    )
     assert _cantidad_de_ordenes(tmp_path) == antes
 
 
-@pytest.mark.parametrize("usuario", [it.COORDINADOR, f.ADMINISTRADOR])
-def test_var_rep_039_excepcion_autorizada_y_auditada(cliente, reloj, usuario):
+def test_var_rep_039_una_excepcion_por_trabajo_y_solo_de_lo_pedido(
+    cliente, reloj, tmp_path
+):
     origen = it.entregada_hace(cliente, reloj, 200)
-
-    garantia = f.ok(
+    antes = _cantidad_de_ordenes(tmp_path)
+    repetida = cliente.post(
+        f"/api/orders/{origen}/warranty-rma",
+        json={
+            "usuario_id": f.RECEPCION,
+            "detalle_origen_ids": ["DET-001"],
+            "excepciones": [
+                {"detalle_id": "DET-001", "motivo": "Uno."},
+                {"detalle_id": "DET-001", "motivo": "Dos."},
+            ],
+        },
+    )
+    assert repetida.status_code == 422
+    mensaje = f.conflicto(
         it.iniciar_garantia(
             cliente,
             origen,
-            usuario=usuario,
-            motivo_excepcion=it.MOTIVO_EXCEPCION,
+            excepciones={"DET-001": "Uno.", "DET-009": "Otro."},
         )
     )
-
-    excepcion = garantia["excepcion_garantia"]
-    assert excepcion["usuario_id"] == usuario
-    assert excepcion["motivo"] == it.MOTIVO_EXCEPCION
-    assert excepcion["fecha"]
-    (vigencia,) = garantia["vigencia_garantia_origen"]
-    assert vigencia["vigente"] is False
-    assert vigencia["vence"]
-    assert garantia["orden_origen_id"] == origen
-    paso_036 = garantia["historial"][1]
-    assert paso_036["referencia_id"] == "PROC-REP-036"
-    assert paso_036["accion"] == "AUTORIZAR_EXCEPCION_GARANTIA"
-    assert paso_036["usuario_id"] == usuario
-    assert it.MOTIVO_EXCEPCION in paso_036["observacion"]
-    assert "DET-001" in paso_036["observacion"]
-    # Sigue como HP-REP-003: revision tecnica obligatoria.
-    assert garantia["estado_workflow"] == "EN_REVISION"
-    assert "REALIZAR_REVISION" in f.codigos(garantia)
+    assert "DET-009" in mensaje
+    assert _cantidad_de_ordenes(tmp_path) == antes
 
 
-def test_var_rep_039_mezcla_de_vigentes_y_vencidos_exige_la_excepcion(
-    cliente, reloj
-):
-    """Un reclamo con algun Detalle vencido exige la excepcion (provisional:
-    no se separa en dos Ordenes)."""
-    reloj.desplazamiento = -timedelta(days=75)
-    origen = f.definida(cliente, f.BATERIA, f.PANTALLA)
-    # Bateria: 90 dias (vigente). Pantalla: 30 dias (vencida).
-    f.ok(
-        cliente.post(
-            f"/api/orders/{origen}/details/DET-002/warranty",
-            json={
-                "usuario_id": f.RECEPCION,
-                "dias": 30,
-                "motivo": "Garantia reducida del repuesto.",
-            },
-        )
-    )
-    f.tomada(cliente, origen)
-    f.ejecutar(cliente, origen, "DET-001", f.BATERIA)
-    f.ejecutar(cliente, origen, "DET-002", f.PANTALLA)
-    f.ok(f.aprobar(cliente, origen, "DET-001"))
-    f.ok(f.aprobar(cliente, origen, "DET-002"))
-    f.notificar_pagar_entregar(cliente, origen)
-    reloj.desplazamiento = timedelta(0)
+# --- DEC-IT1-03: vigencia y excepcion por trabajo --------------------------
+
+
+def test_dec_it1_03_vigencia_individual_por_trabajo(cliente, reloj, tmp_path):
+    origen = it.entregada_con_vigencias_distintas(cliente, reloj)
     disponibles = {
         g["detalle_id"]: g["vigente"]
         for g in _orden(cliente, origen)["garantia_por_detalle"]
     }
-    assert disponibles == {"DET-001": True, "DET-002": False}
+    assert disponibles == {"DET-001": True, "DET-002": False, "DET-003": True}
+    todos = ("DET-001", "DET-002", "DET-003")
+    antes = _cantidad_de_ordenes(tmp_path)
 
+    # DET-002 vencido sin excepcion: no se admite, y el pedido no crea una
+    # Orden con parte de lo pedido; los vigentes siguen elegibles.
     mensaje = f.conflicto(
-        it.iniciar_garantia(cliente, origen, ("DET-001", "DET-002")),
+        it.iniciar_garantia(cliente, origen, todos),
         codigo="GARANTIA_VENCIDA",
     )
-    assert "DET-002" in mensaje and "DET-001" not in mensaje
-    # Solo el vigente pasa sin excepcion.
-    f.ok(it.iniciar_garantia(cliente, origen, ("DET-001",)))
+    assert "DET-002 vencio el" in mensaje
+    assert "Siguen siendo elegibles: DET-001, DET-003" in mensaje
+    assert _cantidad_de_ordenes(tmp_path) == antes
+    # La excepcion es solo de lo vencido: sobre un vigente se rechaza.
+    f.conflicto(
+        it.iniciar_garantia(
+            cliente,
+            origen,
+            todos,
+            excepciones={"DET-001": "No hace falta.", "DET-002": "Si."},
+        )
+    )
+    assert _cantidad_de_ordenes(tmp_path) == antes
+
+    # Los vigentes solos, sin excepcion.
+    vigentes = f.ok(
+        it.iniciar_garantia(cliente, origen, ("DET-001", "DET-003"))
+    )
+    assert [v["excepcion"] for v in vigentes["vigencia_garantia_origen"]] == [
+        None,
+        None,
+    ]
+
+    # Los tres, con la excepcion solo de DET-002.
+    garantia = f.ok(
+        it.iniciar_garantia(
+            cliente,
+            origen,
+            todos,
+            excepciones={"DET-002": it.MOTIVO_EXCEPCION},
+        )
+    )
+    vigencias = {
+        v["detalle_id"]: v for v in garantia["vigencia_garantia_origen"]
+    }
+    assert vigencias["DET-001"]["excepcion"] is None
+    assert vigencias["DET-003"]["excepcion"] is None
+    assert vigencias["DET-002"]["vigente"] is False
+    assert vigencias["DET-002"]["excepcion"]["usuario_id"] == f.RECEPCION
+    autorizaciones = [
+        p
+        for p in garantia["historial"]
+        if p["accion"] == "AUTORIZAR_EXCEPCION_GARANTIA"
+    ]
+    assert len(autorizaciones) == 1
+    assert autorizaciones[0]["observacion"].startswith("DET-002 vencio el")
+    validacion = garantia["historial"][1]["observacion"]
+    assert "DET-001 vigente hasta el" in validacion
+    assert "DET-002 vencio el" in validacion
+    assert "DET-003 vigente hasta el" in validacion
 
 
-# --- VAR-REP-041: cortesia total con pagos previos ---------------------------
+# --- VAR-REP-041: cortesia total o parcial con pagos previos -----------------
 
 
 def test_var_rep_041_cortesia_total_con_pagos_previos(cliente):
@@ -254,10 +322,18 @@ def test_var_rep_041_cortesia_total_con_pagos_previos(cliente):
     assert Decimal(orden["resumen"]["total"]) == 0
     assert Decimal(orden["resumen"]["saldo"]) == Decimal("-30000")
     assert Decimal(orden["resumen"]["credito_a_favor"]) == Decimal("30000")
-    # No se otorga dos veces: con la cortesia vigente solo se ofrece quitarla.
+    # Un solo ajuste vigente: con la cortesia se la modifica o se la quita;
+    # el descuento no se ofrece encima.
     financieras = {a["codigo"]: a for a in orden["acciones_financieras"]}
-    assert "OTORGAR_CORTESIA" not in financieras
-    assert financieras["APLICAR_DESCUENTO"]["roles"] == ["ADMINISTRADOR"]
+    assert "APLICAR_DESCUENTO" not in financieras
+    assert financieras["OTORGAR_CORTESIA"]["etiqueta"] == (
+        "Modificar o quitar la cortesia"
+    )
+    assert financieras["OTORGAR_CORTESIA"]["roles"] == [
+        "RECEPCION",
+        "COORDINADOR_RMA",
+        "ADMINISTRADOR",
+    ]
 
     f.tomada(cliente, orden_id)
     f.ejecutar(cliente, orden_id)
@@ -290,59 +366,117 @@ def test_var_rep_041_cortesia_total_con_pagos_previos(cliente):
     assert [p["id"] for p in orden["pagos"]] == [pago_id]
 
 
-@pytest.mark.parametrize("usuario", [f.RECEPCION, it.COORDINADOR, f.TECNICO])
-def test_var_rep_041_la_cortesia_solo_la_otorga_administracion(
-    cliente, tmp_path, usuario
-):
+@pytest.mark.parametrize(
+    "usuario", [f.RECEPCION, it.COORDINADOR, f.ADMINISTRADOR]
+)
+def test_var_rep_041_otorgan_la_cortesia_los_tres_roles(cliente, usuario):
     orden_id = f.definida(cliente)
-    antes = f.archivo(tmp_path, orden_id)
-    f.conflicto(it.ajuste_comercial(cliente, orden_id, usuario=usuario))
-    assert f.archivo(tmp_path, orden_id) == antes
-
-
-def test_var_rep_041_la_cortesia_es_total(cliente, tmp_path):
-    orden_id = f.definida(cliente)
-    antes = f.archivo(tmp_path, orden_id)
-    mensaje = f.conflicto(
-        it.ajuste_comercial(cliente, orden_id, valor="50")
+    orden = f.ok(it.ajuste_comercial(cliente, orden_id, usuario=usuario))
+    assert orden["descuentos"][-1]["usuario_id"] == usuario
+    # Modificarla y quitarla, con el mismo permiso.
+    orden = f.ok(
+        it.ajuste_comercial(cliente, orden_id, valor="40", usuario=usuario)
     )
-    assert "total" in mensaje
-    assert f.archivo(tmp_path, orden_id) == antes
-
-
-def test_var_rep_041_quitar_la_cortesia_tambien_es_de_administracion(
-    cliente,
-):
-    orden_id = f.definida(cliente)
-    f.ok(it.ajuste_comercial(cliente, orden_id))
-    f.conflicto(
-        it.ajuste_comercial(
-            cliente,
-            orden_id,
-            clase="DESCUENTO",
-            tipo=None,
-            valor=None,
-            usuario=f.RECEPCION,
-            motivo="Se quita.",
-        )
-    )
+    assert Decimal(orden["resumen"]["total"]) == Decimal("48000")
     orden = f.ok(
         it.ajuste_comercial(
             cliente,
             orden_id,
-            clase="DESCUENTO",
             tipo=None,
             valor=None,
+            usuario=usuario,
             motivo="Se quita la cortesia.",
         )
     )
     assert orden["descuentos"][-1]["clase"] == "CORTESIA"
     assert orden["descuentos"][-1]["tipo"] is None
     assert Decimal(orden["resumen"]["total"]) == Decimal("80000")
+    assert len(orden["descuentos"]) == 3
+
+
+def test_var_rep_041_el_tecnico_no_otorga_ni_quita_cortesias(
+    cliente, tmp_path
+):
+    orden_id = f.definida(cliente)
+    antes = f.archivo(tmp_path, orden_id)
+    f.conflicto(it.ajuste_comercial(cliente, orden_id, usuario=f.TECNICO))
+    assert f.archivo(tmp_path, orden_id) == antes
+    f.ok(it.ajuste_comercial(cliente, orden_id))
+    con_cortesia = f.archivo(tmp_path, orden_id)
+    f.conflicto(
+        it.ajuste_comercial(
+            cliente,
+            orden_id,
+            tipo=None,
+            valor=None,
+            usuario=f.TECNICO,
+            motivo="Se quita.",
+        )
+    )
+    assert f.archivo(tmp_path, orden_id) == con_cortesia
+
+
+@pytest.mark.parametrize(
+    ("tipo", "valor", "total"),
+    [("PORCENTAJE", "50", "40000"), ("IMPORTE", "50000", "30000")],
+)
+def test_var_rep_041_cortesia_parcial_con_saldo_a_favor(
+    cliente, tipo, valor, total
+):
+    """DEC-IT1-02: la cortesia parcial (porcentaje o importe) que deja el
+    total por debajo de lo cobrado genera saldo a favor y exige devolverlo
+    antes de entregar."""
+    orden_id = f.definida(cliente)
+    orden = it.pagar(cliente, orden_id, "70000")
+    pago_id = orden["pagos"][-1]["id"]
+
+    orden = f.ok(
+        it.ajuste_comercial(
+            cliente, orden_id, tipo=tipo, valor=valor, usuario=f.RECEPCION
+        )
+    )
+
+    resumen = orden["resumen"]
+    assert Decimal(resumen["total"]) == Decimal(total)
+    credito = Decimal("70000") - Decimal(total)
+    assert Decimal(resumen["credito_a_favor"]) == credito
+    assert orden["descuentos"][-1]["clase"] == "CORTESIA"
+    assert [p["id"] for p in orden["pagos"]] == [pago_id]
+
+    f.tomada(cliente, orden_id)
+    f.ejecutar(cliente, orden_id)
+    f.ok(f.aprobar(cliente, orden_id, "DET-001"))
+    f.ok(
+        cliente.post(
+            f"/api/orders/{orden_id}/notify",
+            json={"usuario_id": f.RECEPCION},
+        )
+    )
+    f.conflicto(f.entregar(cliente, orden_id, f.ADMINISTRADOR))
+    f.ok(it.devolver_dinero(cliente, orden_id, pago_id, f"{credito:f}"))
+    orden = f.ok(f.entregar(cliente, orden_id, f.ADMINISTRADOR))
+    assert orden["estado_workflow"] == "ENTREGADA"
+
+
+def test_var_rep_041_cortesia_parcial_sin_pagos_deja_saldo_pendiente(
+    cliente,
+):
+    orden_id = f.definida(cliente)
+    orden = f.ok(
+        it.ajuste_comercial(cliente, orden_id, valor="25", usuario=f.RECEPCION)
+    )
+    assert Decimal(orden["resumen"]["total"]) == Decimal("60000")
+    assert Decimal(orden["resumen"]["saldo"]) == Decimal("60000")
+    assert Decimal(orden["resumen"]["credito_a_favor"]) == 0
+
+
+# La idempotencia del ajuste (Idempotency-Key) solo actua con PostgreSQL:
+# tests/postgres/test_iteracion1_postgres.py.
 
 
 def test_un_descuento_sigue_sin_dejar_el_total_bajo_lo_cobrado(cliente):
-    """El descuento comun conserva su regla anterior (BR-REP-016)."""
+    """El descuento comun conserva su regla anterior (BR-REP-016; ABI-10
+    sigue abierto)."""
     orden_id = f.definida(cliente)
     it.pagar(cliente, orden_id, "70000")
     f.conflicto(
@@ -407,8 +541,22 @@ def test_var_rep_042_solicitud_interrupcion_y_cancelacion(cliente):
             cliente, orden_id, ejecucion_id, "requires-redefinition"
         )
     )
-    # Sin el estado del trabajo y si es reversible, no.
+    # Sin el estado del trabajo y si es reversible, no (DEC-IT1-04).
     f.conflicto(it.interrumpir(cliente, orden_id, ejecucion_id))
+    f.conflicto(
+        it.interrumpir(
+            cliente, orden_id, ejecucion_id, estado_trabajo="Abierto."
+        )
+    )
+    f.conflicto(
+        it.interrumpir(
+            cliente,
+            orden_id,
+            ejecucion_id,
+            estado_trabajo="   ",
+            reversible=True,
+        )
+    )
 
     # 3. Interrupcion y cancelacion efectiva, separadas de la solicitud.
     orden = f.ok(
@@ -424,10 +572,27 @@ def test_var_rep_042_solicitud_interrupcion_y_cancelacion(cliente):
     assert ejecucion["estado"] == "INTERRUMPIDO"
     assert ejecucion["estado_trabajo"].startswith("Equipo abierto")
     assert ejecucion["reversible"] is True
+    assert ejecucion["usuario_id"] == f.TECNICO
+    assert ejecucion["fin"]
     detalle = f.detalle(orden, "DET-001")
     assert detalle["estado"] == "CANCELADO"
     assert detalle["cancelacion"]["origen"] == "DESISTIMIENTO_CLIENTE"
     assert detalle["solicitud_desistimiento"] == solicitud
+    # DEC-IT1-05: la solicitud es de Recepcion; la cancelacion efectiva, del
+    # tecnico que interrumpio (no se atribuye a Recepcion).
+    assert detalle["cancelacion"]["usuario_id"] == f.TECNICO
+    assert detalle["cancelacion"]["fecha"] >= solicitud["fecha"]
+    usuarios_de = {
+        (p["referencia_id"], p["accion"]): p["usuario_id"]
+        for p in orden["historial"]
+        if p["referencia_id"] in ("PROC-REP-046", "PROC-REP-300")
+    }
+    assert usuarios_de[
+        ("PROC-REP-046", "SOLICITAR_DESISTIMIENTO_CLIENTE")
+    ] == f.RECEPCION
+    assert [
+        u for (ref, _), u in usuarios_de.items() if ref == "PROC-REP-300"
+    ] == [f.TECNICO]
     pasos = _pasos(orden)
     solicitado = pasos.index(
         ("PROC-REP-046", "SOLICITAR_DESISTIMIENTO_CLIENTE")
@@ -443,6 +608,26 @@ def test_var_rep_042_solicitud_interrupcion_y_cancelacion(cliente):
     # DC31: cancelar el unico trabajo no cancela la Orden.
     assert orden["estado_workflow"] != "CANCELADA"
     assert orden["current_process"] == "PROC-REP-307"
+
+
+def test_var_rep_042_interrupcion_no_reversible(cliente):
+    orden_id = f.definida(cliente)
+    f.tomada(cliente, orden_id)
+    ejecucion_id = f.iniciar(cliente, orden_id)
+    f.ok(it.desistir_detalle(cliente, orden_id, "DET-001"))
+    orden = f.ok(
+        it.interrumpir(
+            cliente,
+            orden_id,
+            ejecucion_id,
+            estado_trabajo="Bateria vieja descartada; no hay vuelta atras.",
+            reversible=False,
+        )
+    )
+    (ejecucion,) = orden["ejecuciones"]
+    assert ejecucion["reversible"] is False
+    assert ejecucion["estado_trabajo"].startswith("Bateria vieja")
+    assert f.detalle(orden, "DET-001")["estado"] == "CANCELADO"
 
 
 def test_var_rep_042_luego_sigue_el_circuito_dc31(cliente):

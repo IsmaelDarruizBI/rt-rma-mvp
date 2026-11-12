@@ -136,7 +136,7 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 | `20261102001100_acceso.sql` | Rol `rma_backend` y permisos |
 | `20261102001200_datos_referencia.sql` | Roles, DNI, 52 tipos de evento, 84 equivalencias |
 
-**Iteración funcional 1 (`20261111000100_it1_alineacion_v14.sql`, aditiva):** columnas que admiten vacío en `orden` (excepción de garantía: usuario, fecha y motivo), `orden_detalle_origen` (días, vencimiento y vigencia evaluados en PROC-REP-036), `detalle` (solicitud de desistimiento: usuario, fecha, motivo y canal) y `ejecucion` (estado del trabajo y reversibilidad, solo si está INTERRUMPIDO); `descuento.clase` (DESCUENTO por defecto o CORTESIA); el tipo de evento EV-REP-052 «Excepción de garantía autorizada» (52 de negocio desde entonces) y tres equivalencias del historial (036 sin acción, 036 con la excepción y 046 con la solicitud de desistimiento).
+**Iteración funcional 1 (`20261111000100_it1_alineacion_v14.sql`, aditiva):** columnas que admiten vacío en `orden_detalle_origen` (días, vencimiento y vigencia evaluados en PROC-REP-036 y, si el Detalle estaba vencido, su excepción: usuario, fecha y motivo; DEC-IT1-03), `detalle` (solicitud de desistimiento: usuario, fecha, motivo y canal) y `ejecucion` (estado del trabajo y reversibilidad, solo si está INTERRUMPIDO); `descuento.clase` (DESCUENTO por defecto o CORTESIA, total o parcial); el tipo de evento EV-REP-052 «Excepción de garantía autorizada» (52 de negocio desde entonces) y tres equivalencias del historial (036 sin acción, 036 con la excepción y 046 con la solicitud de desistimiento).
 
 **Datos de referencia (en las migraciones):** iguales en todos los entornos.
 

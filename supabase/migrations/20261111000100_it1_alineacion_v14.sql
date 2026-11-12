@@ -4,42 +4,37 @@
 -- igual al comportamiento anterior), restricciones que las filas existentes
 -- ya cumplen y datos de referencia. No cambia ni borra columnas, filas ni
 -- equivalencias existentes; el historial ya guardado conserva sus tipos.
---   * DC15B: vigencia de la garantía de cada Detalle reclamado y la
---     excepción autorizada (quién, cuándo y por qué) en la Orden RMA.
+--   * DC15B: vigencia de la garantía de cada Detalle reclamado y, por cada
+--     Detalle vencido admitido, la excepción (quién, cuándo y por qué).
 --   * DC07: solicitud de desistimiento del cliente sobre un Detalle en
 --     ejecución, separada de la cancelación efectiva; estado del trabajo y
 --     reversibilidad al interrumpir esa Ejecución.
---   * DC11: clase del ajuste comercial (DESCUENTO o CORTESIA).
+--   * DC11: clase del ajuste comercial (DESCUENTO o CORTESIA, total o
+--     parcial).
 -- Idempotente: se puede ejecutar otra vez sin duplicar nada.
 
--- --- DC15B: vigencia y excepción de la garantía RMA -------------------------
-
-alter table rma.orden
-  add column if not exists excepcion_garantia_por uuid references rma.usuario (id),
-  add column if not exists excepcion_garantia_en timestamptz,
-  add column if not exists excepcion_garantia_motivo text;
-
-alter table rma.orden drop constraint if exists orden_excepcion_garantia_completa;
-alter table rma.orden add constraint orden_excepcion_garantia_completa check (
-  (excepcion_garantia_por is null and excepcion_garantia_en is null and excepcion_garantia_motivo is null)
-  or (
-    excepcion_garantia_por is not null and excepcion_garantia_en is not null
-    and btrim(coalesce(excepcion_garantia_motivo, '')) <> ''
-    and origen = 'RMA_GARANTIA_REPARACION'
-  )
-);
-
-comment on column rma.orden.excepcion_garantia_por is
-  'Garantía RMA con algún Detalle vencido: usuario que autorizó la excepción (referencia a usuario). Vacío si no hubo excepción.';
-comment on column rma.orden.excepcion_garantia_en is
-  'Fecha y hora en que se autorizó la excepción de garantía.';
-comment on column rma.orden.excepcion_garantia_motivo is
-  'Motivo de la excepción de garantía autorizada.';
+-- --- DC15B: vigencia y excepción de la garantía RMA, por Detalle ------------
+-- DEC-IT1-03: la vigencia se evalúa por cada Detalle reclamado y la
+-- excepción es de ese Detalle vencido (DEC-IT1-01: la autoriza Recepción,
+-- Coordinación RMA o Administración; lo valida el backend).
 
 alter table rma.orden_detalle_origen
   add column if not exists garantia_dias integer check (garantia_dias >= 0),
   add column if not exists garantia_vence date,
-  add column if not exists garantia_vigente boolean;
+  add column if not exists garantia_vigente boolean,
+  add column if not exists excepcion_por uuid references rma.usuario (id),
+  add column if not exists excepcion_en timestamptz,
+  add column if not exists excepcion_motivo text;
+
+alter table rma.orden_detalle_origen drop constraint if exists orden_detalle_origen_excepcion;
+alter table rma.orden_detalle_origen add constraint orden_detalle_origen_excepcion check (
+  (excepcion_por is null and excepcion_en is null and excepcion_motivo is null)
+  or (
+    excepcion_por is not null and excepcion_en is not null
+    and btrim(coalesce(excepcion_motivo, '')) <> ''
+    and garantia_vigente is false
+  )
+);
 
 comment on column rma.orden_detalle_origen.garantia_dias is
   'Días de garantía del Detalle reclamado, evaluados al iniciar la garantía RMA (PROC-REP-036). Vacío en garantías anteriores a la validación.';
@@ -47,6 +42,12 @@ comment on column rma.orden_detalle_origen.garantia_vence is
   'Último día de garantía del Detalle reclamado (entrega más los días).';
 comment on column rma.orden_detalle_origen.garantia_vigente is
   'Si la garantía del Detalle reclamado estaba vigente al iniciar la garantía RMA.';
+comment on column rma.orden_detalle_origen.excepcion_por is
+  'Detalle reclamado con la garantía vencida: usuario que autorizó la excepción (referencia a usuario). Vacío si estaba vigente.';
+comment on column rma.orden_detalle_origen.excepcion_en is
+  'Fecha y hora en que se autorizó la excepción de ese Detalle.';
+comment on column rma.orden_detalle_origen.excepcion_motivo is
+  'Motivo de la excepción de garantía de ese Detalle.';
 
 -- --- DC07: desistimiento solicitado y resultado de la interrupción -------------
 
