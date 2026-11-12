@@ -17,7 +17,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - **UAT validada** (12/11): inicio de sesión de las cuatro cuentas, aislamiento de tokens, lecturas y E2E de la macroiteración con datos ficticios (67 de 67), limpiados después; el UAT volvió a su estado inicial (sección B).
 - **Falta:**
   - las decisiones abiertas que bloquean el resto de la macroiteración (`rt-rma-app`, `docs/consolidation/README.md`, sección I);
-  - repetir `medir_api.py` (falló el inicio de sesión, HTTP 400, probablemente por la contraseña tipeada; solo mide tiempos);
+  - opcional: repetir `medir_api.py` (falló el inicio de sesión, HTTP 400, probablemente por la contraseña tipeada; solo mide tiempos);
   - integrar en `main` (P0-2).
 
 **Para retomar el trabajo: [`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md)**: estado, pendientes con autorización y criterios para el desarrollo funcional. Corte y vuelta atrás: [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16. Entorno local: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 5. En otra computadora: [`CONTINUIDAD.md`](CONTINUIDAD.md).
@@ -131,7 +131,13 @@ Procedimiento y scripts: [`supabase/scripts/validacion_uat/`](../supabase/script
   - integridad sin problemas (en la limpieza y en el ensayo de restauración en la nube `rt-rma-respaldo-db-r92bz`, con 23 migraciones y 47 tablas);
   - respaldo `uat/20261112T170800Z` (`x8qt8`).
 - **Auth:** las 4 cuentas siguen, creadas antes del 12/11, activas, con su identidad sin cambios y vinculadas. Solo cambió `updated_at`, igual al último inicio de sesión.
-- **Queda en la base** `rma_respaldo_reinicio`, con las 7 Órdenes ficticias y sin acceso para la API. Mientras exista, el próximo reinicio no corre: se elimina con `04_eliminar_respaldo.sql`, con autorización.
+- **Esquema temporal `rma_respaldo_reinicio`: eliminado** (12/11/2026, 17:19 UTC, `04_eliminar_respaldo.sql` con autorización).
+  - Antes de borrarlo se comprobó que tenía solo las 34 tablas de la limpieza de las 17:07 UTC, con las 7 Órdenes y los 7 clientes ficticios, sin eventos ajenos.
+  - Lo único que dependía de él fuera del esquema eran sus tablas TOAST: ninguna vista, regla ni clave foránea.
+  - La copia cifrada `uat/20261112T170800Z` está íntegra (`SHA256SUMS` correcto, volcados cifrados con `age`) y su manifiesto muestra el estado limpio.
+  - Después: 0 Órdenes, BAT-IP14 10/0 conciliado, catálogos y Mesas iguales al estado inicial, 23 migraciones, y las 4 cuentas previas con sus identidades sin cambios y vinculadas.
+  - Cloud Run (`00029-kay` al 100 %) y Vercel (`dpl_CRXZ…`, sin conexión a Git) sin cambios. Respaldo diario activo.
+  - El próximo reinicio ya puede correr.
 
 ### Despliegue de la macroiteración V1.4 en UAT (12/11/2026)
 
@@ -587,7 +593,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (12/11/2026):** la macroiteración está desplegada y validada en UAT, con los datos de prueba limpiados (sección B). Quedan repetir `medir_api.py` y eliminar `rma_respaldo_reinicio` antes del próximo reinicio, cada uno con su autorización. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
+**Próximo paso (12/11/2026):** la macroiteración está desplegada y validada en UAT, con los datos de prueba limpiados (sección B). Queda, opcional, repetir `medir_api.py`: solo mide tiempos y pide la contraseña de `administracion`. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
 
 **Paso anterior:** la iteración 1 está desplegada en UAT (12/11/2026). Falta la validación autenticada con una cuenta real: `probar_entornos.py` y `medir_api.py` (solo lectura, contraseña pedida sin eco) y una pasada manual por los recorridos de la iteración 1 con Órdenes ficticias. Después, la iteración 2. Pruebas del cierre (11/11/2026): JSON 1720 pasan y 29 se saltean; `tests/postgres` 389 pasan; frontend: typecheck, 124 tests y build; `npm run validate:all` en verde; los cinco workflows de CI en verde en la rama y en `mvp-v2`. Quedan además los pendientes operativos con fecha y `main`:
 
