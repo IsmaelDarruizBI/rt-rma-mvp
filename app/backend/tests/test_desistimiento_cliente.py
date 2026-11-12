@@ -228,6 +228,7 @@ def test_3_desistir_de_todo_mezcla_autorizados_y_pendientes(cliente):
         "desistibles": ["DET-001", "DET-003"],
         "conservados": [],
         "bloqueantes": [],
+        "en_ejecucion": [],
     }
 
     orden = ok(desistir(cliente, orden_id))
@@ -297,31 +298,41 @@ def test_10_11_todo_cancelado_sin_trabajos_vigentes_y_cancelacion_explicita(
     assert cerrada["estado_workflow"] == "CANCELADA"
 
 
-# --- 6/13. Ejecucion activa: no se aplica nada -------------------------------
+# --- 6/13. Ejecucion activa: nada se cancela todavia ------------------------
 
 
-def test_6_13_con_una_ejecucion_activa_no_se_desiste_de_todo(
+def test_6_13_con_una_ejecucion_activa_desistir_de_todo_queda_solicitado(
     cliente, tmp_path
 ):
+    """V1.4 (DC07C, VAR-REP-043): la Ejecucion activa ya no bloquea el
+    desistimiento total. Se registra la solicitud en cada Detalle afectado
+    y nada se cancela hasta que el tecnico interrumpe (la cancelacion
+    conjunta la cubre ``test_macro_v14``)."""
     orden_id = _mixta(cliente)
     tomada(cliente, orden_id)
     ejecucion_id = iniciar(cliente, orden_id, "DET-001")
     orden = _orden(cliente, orden_id)
     assert ("DESISTIR_TODO", None) in _ofrecidas(orden)
-    assert orden["desistimiento"]["bloqueantes"] == [
-        {
-            "detalle_id": "DET-001",
-            "motivo": "tiene una Ejecucion activa: hay que completarla o "
-            "interrumpirla (PROC-REP-200)",
-        }
-    ]
-    antes = archivo(tmp_path, orden_id)
+    assert orden["desistimiento"]["bloqueantes"] == []
+    assert orden["desistimiento"]["en_ejecucion"] == ["DET-001"]
 
-    mensaje = conflicto(desistir(cliente, orden_id))
+    orden = ok(desistir(cliente, orden_id))
 
-    assert "DET-001" in mensaje and "Ejecucion activa" in mensaje
-    assert "no se cancelo nada" in mensaje
-    assert archivo(tmp_path, orden_id) == antes
+    for detalle_id in ("DET-001", "DET-002", "DET-003"):
+        assert detalle(orden, detalle_id)["cancelacion"] is None
+        assert detalle(orden, detalle_id)["solicitud_desistimiento"]
+    assert [e["id"] for e in orden["ejecuciones"]] == [ejecucion_id]
+    assert orden["ejecuciones"][0]["estado"] == "EN_PROGRESO"
+    con_solicitud = archivo(tmp_path, orden_id)
+    conflicto(desistir(cliente, orden_id))
+    conflicto(desistir(cliente, orden_id, "DET-001"))
+    assert archivo(tmp_path, orden_id) == con_solicitud
+
+
+def test_6_13_desistir_solo_del_detalle_en_ejecucion(cliente, tmp_path):
+    orden_id = _mixta(cliente)
+    tomada(cliente, orden_id)
+    ejecucion_id = iniciar(cliente, orden_id, "DET-001")
     # V1.4 (DC07, VAR-REP-042): desistir SOLO del Detalle en ejecucion
     # registra la solicitud; la cancelacion espera a que el tecnico
     # interrumpa. La Ejecucion sigue en curso y el pedido no se duplica.
@@ -583,12 +594,13 @@ def test_circuito_desistimiento_posterior_a_la_autorizacion(cliente, tmp_path):
 
     La Ejecucion interrumpida y sus movimientos se conservan; el
     desistimiento total no se aplica mientras haya una Ejecucion activa y
-    si despues de interrumpirla.
+    si despues de interrumpirla. (Con la Ejecucion activa el pedido total
+    queda solicitado, DC07C; aca se interrumpe antes de que el cliente
+    desista.)
     """
     orden_id = _mixta(cliente)
     tomada(cliente, orden_id)
     ejecucion_id = iniciar(cliente, orden_id, "DET-001")
-    conflicto(desistir(cliente, orden_id))
     ok(
         cliente.post(
             f"/api/orders/{orden_id}/executions/{ejecucion_id}/interrupt",

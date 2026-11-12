@@ -49,6 +49,7 @@ from app.domain.models import (
     DocumentosOrden,
     Equipo,
     EstadoWorkflow,
+    EvaluacionTecnica,
     ExcepcionGarantia,
     HistorialWorkflow,
     InsumoUtilizado,
@@ -179,6 +180,18 @@ FILTRO_DNI = consulta(
     """,
     modo=LECTURA,
 )
+FILTRO_EQUIPO = consulta(
+    "ordenes.filtro_equipo",
+    """
+    SELECT codigo, version FROM rma.orden
+    WHERE (%(imei)s::text IS NOT NULL
+           AND upper(regexp_replace(equipo_imei, '\\s', '', 'g')) = %(imei)s)
+       OR (%(serie)s::text IS NOT NULL
+           AND upper(regexp_replace(equipo_numero_serie, '\\s', '', 'g'))
+               = %(serie)s)
+    """,
+    modo=LECTURA,
+)
 # ``claves`` nulo: cualquier insumo. Toda Orden con alguna RESERVA, como
 # JSON (el contrato admite tambien las ya consumidas o liberadas).
 FILTRO_RESERVAS = consulta(
@@ -264,7 +277,7 @@ _DETALLES = consulta(
            ux.codigo AS cancelado_por, d.cancelado_en,
            us.codigo AS desistimiento_solicitado_por,
            d.desistimiento_solicitado_en, d.desistimiento_motivo,
-           d.desistimiento_canal
+           d.desistimiento_canal, d.origen_diagnostico
     FROM rma.detalle d
     LEFT JOIN rma.usuario uc ON uc.id = d.control_usuario_id
     LEFT JOIN rma.usuario ux ON ux.id = d.cancelado_por
@@ -323,6 +336,21 @@ _AJUSTES = consulta(
         SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
     ))
     ORDER BY a.detalle_id, a.posicion, a.registrado_en, a.id
+    """,
+    modo=LECTURA,
+)
+_EVALUACIONES = consulta(
+    "ordenes.evaluaciones",
+    """
+    SELECT e.detalle_id, e.version_definicion, e.resultado,
+           u.codigo AS usuario, e.registrado_en, e.observaciones
+    FROM rma.evaluacion_tecnica e
+    JOIN rma.detalle d ON d.id = e.detalle_id
+    JOIN rma.usuario u ON u.id = e.usuario_id
+    WHERE d.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
+    ORDER BY e.detalle_id, e.posicion
     """,
     modo=LECTURA,
 )
@@ -593,6 +621,7 @@ _HIJAS = (
     _Hija("decisiones", _DECISIONES, columna="detalle_id"),
     _Hija("ajustes", _AJUSTES, columna="detalle_id"),
     _Hija("controles", _CONTROLES, columna="detalle_id"),
+    _Hija("evaluaciones", _EVALUACIONES, columna="detalle_id"),
     _Hija("tomas", _TOMAS),
     _Hija("ejecuciones", _EJECUCIONES),
     _Hija("insumos", _INSUMOS_UTILIZADOS, columna="ejecucion_id"),
@@ -1062,6 +1091,17 @@ def _detalles(
                     for control in hijas["controles"].get(fila.id, [])
                 ],
                 cancelacion=cancelacion,
+                origen_diagnostico=fila.origen_diagnostico,
+                evaluaciones=[
+                    EvaluacionTecnica(
+                        version_definicion=e.version_definicion,
+                        resultado=e.resultado,
+                        usuario_id=e.usuario,
+                        fecha=utc(e.registrado_en),
+                        observaciones=e.observaciones,
+                    )
+                    for e in hijas["evaluaciones"].get(fila.id, [])
+                ],
                 solicitud_desistimiento=(
                     None
                     if fila.desistimiento_solicitado_en is None

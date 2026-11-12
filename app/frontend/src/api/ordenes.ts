@@ -9,6 +9,7 @@
 import type {
   CanalComunicacion,
   ClaseAjuste,
+  ResultadoEvaluacionTecnica,
   ExcepcionPedida,
   DatosRecepcion,
   DecisionDetalle,
@@ -347,6 +348,48 @@ export function revisarDetalle(
  * PROC-REP-127 -> 080 -> 090 [-> 140 | -> 100]: el Técnico redefine el
  * mismo Detalle y se revalida la factibilidad.
  */
+/**
+ * PROC-REP-183 (BR-REP-035/036): evaluación técnica de un trabajo de
+ * Recepción, por el técnico titular. `observaciones` es el motivo
+ * (obligatorio salvo CONFIRMADO); `tipoReparacionId`, la nueva definición
+ * (solo en REQUIERE_REDEFINICION, VAR-REP-019).
+ */
+export function evaluarDetalle(
+  ordenId: string,
+  detalleId: string,
+  usuarioId: string,
+  resultado: ResultadoEvaluacionTecnica,
+  observaciones: string | null,
+  tipoReparacionId: string | null,
+  adicionales: string[] = [],
+): Promise<Orden> {
+  return post<Orden>(
+    `/api/orders/${ordenId}/details/${detalleId}/evaluation`,
+    {
+      usuario_id: usuarioId,
+      resultado,
+      observaciones,
+      tipo_reparacion_id: tipoReparacionId,
+      // 184 -> 128: reparaciones adicionales detectadas en la evaluación.
+      adicionales: adicionales.map((tipo) => ({ tipo_reparacion_id: tipo })),
+    },
+  );
+}
+
+/** PROC-REP-128: el técnico registra una reparación adicional detectada. */
+export function agregarTrabajoAdicional(
+  ordenId: string,
+  usuarioId: string,
+  tipoReparacionId: string,
+  observaciones: string | null,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/details/additional`, {
+    usuario_id: usuarioId,
+    tipo_reparacion_id: tipoReparacionId,
+    observaciones,
+  });
+}
+
 export function redefinirDetalle(
   ordenId: string,
   detalleId: string,

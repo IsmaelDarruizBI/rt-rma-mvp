@@ -64,11 +64,13 @@ from app.domain.models import (
     EstadoReparacionDetail,
     EstadoTomaOrden,
     EstadoWorkflow,
+    EvaluacionTecnica,
     HistorialWorkflow,
     InsumoUtilizado,
     MedioPago,
     OrdenReparacion,
     OrigenCancelacion,
+    OrigenDiagnostico,
     OrigenOrden,
     RecepcionEquipo,
     RegistroAutorizacionCliente,
@@ -77,6 +79,7 @@ from app.domain.models import (
     ReparacionDetail,
     ResultadoAutorizacion,
     ResultadoControl,
+    ResultadoEvaluacionTecnica,
     RolUsuario,
     SolicitudDesistimiento,
     TipoDescuento,
@@ -118,6 +121,7 @@ from app.services import (
     requiere_autorizacion_cliente,
     toma_activa,
 )
+from app.services.evaluacion_tecnica import requiere_evaluacion
 
 # --- Catalogos ---------------------------------------------------------------
 
@@ -391,6 +395,37 @@ class TomarIn(BaseModel):
 
     usuario_id: str = Field(min_length=1)
     estacion_id: str = Field(min_length=1)
+
+
+class EvaluarDetalleIn(BaseModel):
+    """``POST /api/orders/{id}/details/{detalle_id}/evaluation`` (ACT-TECH).
+
+    PROC-REP-183 (BR-REP-035/036): un resultado principal. ``observaciones``
+    es el motivo, obligatorio en DESCARTADO y REQUIERE_REDEFINICION;
+    ``tipo_reparacion_id`` es la nueva definicion, solo y obligatoria en
+    REQUIERE_REDEFINICION (VAR-REP-019).
+    """
+
+    usuario_id: str = Field(min_length=1)
+    resultado: ResultadoEvaluacionTecnica
+    observaciones: str | None = None
+    tipo_reparacion_id: str | None = None
+    # 184 -> 128: reparaciones adicionales detectadas en la evaluacion.
+    adicionales: list["TrabajoAdicionalIn"] = Field(default_factory=list)
+
+
+class TrabajoAdicionalIn(BaseModel):
+    """Una reparacion adicional detectada por el tecnico (PROC-REP-128)."""
+
+    tipo_reparacion_id: str = Field(min_length=1)
+    observaciones: str | None = None
+    detalle_origen_id: str | None = None
+
+
+class AgregarTrabajoAdicionalIn(TrabajoAdicionalIn):
+    """``POST /api/orders/{id}/details/additional`` (ACT-TECH, 128)."""
+
+    usuario_id: str = Field(min_length=1)
 
 
 class IniciarDetalleIn(BaseModel):
@@ -1093,6 +1128,11 @@ class DetalleOut(BaseModel):
     # DC07: solicitud de desistimiento, aparte de la cancelacion efectiva.
     # Con el Detalle todavia no CANCELADO, esta pendiente de resolverse.
     solicitud_desistimiento: SolicitudDesistimiento | None = None
+    # BR-REP-035/036: quien diagnostico la definicion vigente, sus
+    # evaluaciones tecnicas y si falta la evaluacion para poder iniciarlo.
+    origen_diagnostico: OrigenDiagnostico | None = None
+    evaluaciones: list[EvaluacionTecnica] = Field(default_factory=list)
+    requiere_evaluacion: bool = False
     insumos_previstos: list[InsumoPrevistoOut] = Field(default_factory=list)
     version_definicion: int = 1
     autorizaciones: list[AutorizacionClienteOut] = Field(default_factory=list)
@@ -1136,6 +1176,7 @@ class DetalleOut(BaseModel):
             pendiente_comprobante_ingreso=pendiente_comprobante_ingreso,
             autorizado_en_ingreso=autorizado_en_ingreso,
             pendiente_de_retrabajo=pendiente_de_retrabajo(detalle),
+            requiere_evaluacion=requiere_evaluacion(detalle),
             tipo_reparacion_nombre=(
                 tipo_reparacion_nombre or detalle.tipo_reparacion_id
             ),
@@ -1853,12 +1894,16 @@ class DesistimientoOut(BaseModel):
     desistibles: list[str]
     conservados: list[str]
     bloqueantes: list[BloqueoDesistimientoOut]
+    # DC07C: trabajos que se estan reparando. No impiden pedir el
+    # desistimiento total: se cancela todo cuando el tecnico interrumpa.
+    en_ejecucion: list[str] = Field(default_factory=list)
 
     @classmethod
     def desde_servicio(
         cls, analisis: AnalisisDesistimiento
     ) -> "DesistimientoOut":
         return cls(
+            en_ejecucion=list(analisis.en_ejecucion),
             rechazables=list(analisis.rechazables),
             desistibles=list(analisis.desistibles),
             conservados=list(analisis.conservados),

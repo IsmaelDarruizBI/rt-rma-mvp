@@ -295,6 +295,58 @@ def resolver_desistimiento_solicitado(
     )
 
 
+def resolver_desistimientos_pendientes(
+    orden: OrdenReparacion,
+    *,
+    usuario: Usuario,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """PROC-REP-211 -> 300/305 (VAR-REP-042/043): cancelacion efectiva de
+    todo lo que el cliente pidio desistir, ya sin Ejecucion activa.
+
+    Se registra aparte de las solicitudes, con el usuario que resolvio la
+    Ejecucion (DEC-IT1-05). Si lo pedido son todos los trabajos pendientes
+    es 305 (desistimiento total, DC07C); si no, 300 por Detalle. Origen por
+    Detalle: RECHAZO_CLIENTE si estaba pendiente de autorizacion,
+    DESISTIMIENTO_CLIENTE si estaba autorizado. Sin solicitudes pendientes
+    no hace nada. DC31: nunca cancela la Orden.
+    """
+    from .autorizacion_cliente import pendiente_de_autorizacion
+
+    pedidos = [
+        d for d in orden.reparaciones_detail if desistimiento_pendiente(d)
+    ]
+    if not pedidos or hay_ejecucion_activa(orden):
+        return orden
+    origenes = {
+        d.id: (
+            OrigenCancelacion.RECHAZO_CLIENTE
+            if pendiente_de_autorizacion(orden, d)
+            else OrigenCancelacion.DESISTIMIENTO_CLIENTE
+        )
+        for d in pedidos
+    }
+    if len(pedidos) > 1 and set(origenes) == set(_pendientes(orden)):
+        solicitud = pedidos[0].solicitud_desistimiento
+        return cancelar_trabajos_pendientes(
+            orden,
+            usuario=usuario,
+            motivo=(
+                "Desistimiento total solicitado por el cliente: "
+                f"{solicitud.motivo}"
+            ),
+            fecha=fecha,
+            origenes=origenes,
+            exigir_rol=False,
+        )
+    nueva_orden = orden
+    for detalle in pedidos:
+        nueva_orden = resolver_desistimiento_solicitado(
+            nueva_orden, detalle_id=detalle.id, usuario=usuario, fecha=fecha
+        )
+    return nueva_orden
+
+
 def sin_trabajos_vigentes(orden: OrdenReparacion) -> bool:
     """DC31: la Orden sigue abierta pero no le queda trabajo (PROC-REP-307).
 
@@ -418,6 +470,7 @@ def cancelar_trabajos_pendientes(
     fecha: datetime,
     origen: OrigenCancelacion = OrigenCancelacion.INTERNA,
     origenes: Mapping[str, OrigenCancelacion] | None = None,
+    exigir_rol: bool = True,
 ) -> OrdenReparacion:
     """PROC-REP-305: cancela los Detalles PENDIENTE; NO cancela la Orden.
 
@@ -427,8 +480,12 @@ def cancelar_trabajos_pendientes(
     resolver (PROC-REP-211): con trabajo realizado sigue el cierre normal y
     con todo CANCELADO la Orden queda abierta sin trabajos vigentes
     (PROC-REP-307). Cancelar la Orden es ``cancelar_orden``.
+
+    ``exigir_rol=False``: la cancelacion efectiva de un desistimiento total
+    ya solicitado (DC07C), que aplica el tecnico al interrumpir.
     """
-    validar_alguno_de(usuario, ROLES_CANCELACION)
+    if exigir_rol:
+        validar_alguno_de(usuario, ROLES_CANCELACION)
     motivo = _motivo_obligatorio(motivo, "Cancelar los trabajos pendientes")
     exigir_orden_cancelable(orden)
     if hay_ejecucion_activa(orden):

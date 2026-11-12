@@ -108,6 +108,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel
 
+from app.domain.equipos import coincide_identificacion
 from app.domain.models import (
     EstadoWorkflow,
     OrdenReparacion,
@@ -130,6 +131,7 @@ from .ejecutor import EjecutorSql
 from .ordenes_lectura import (
     FILTRO_ABIERTAS,
     FILTRO_DNI,
+    FILTRO_EQUIPO,
     FILTRO_MOVIMIENTOS,
     FILTRO_RESERVAS,
     FILTRO_TODAS,
@@ -582,7 +584,7 @@ _INSERTAR_DETALLE = consulta(
          observaciones, cancelacion_origen, cancelacion_motivo,
          cancelado_por, cancelado_en, desistimiento_solicitado_por,
          desistimiento_solicitado_en, desistimiento_motivo,
-         desistimiento_canal)
+         desistimiento_canal, origen_diagnostico)
     VALUES
         (%(orden)s, %(codigo)s, %(estado)s, %(condicion)s,
          %(control_estado)s, %(control_usuario_id)s, %(control_en)s,
@@ -591,7 +593,8 @@ _INSERTAR_DETALLE = consulta(
          %(observaciones)s, %(cancelacion_origen)s, %(cancelacion_motivo)s,
          %(cancelado_por)s, %(cancelado_en)s,
          %(desistimiento_solicitado_por)s, %(desistimiento_solicitado_en)s,
-         %(desistimiento_motivo)s, %(desistimiento_canal)s)
+         %(desistimiento_motivo)s, %(desistimiento_canal)s,
+         %(origen_diagnostico)s)
     RETURNING id
     """,
     modo=ESCRITURA,
@@ -615,7 +618,8 @@ _ACTUALIZAR_DETALLE = consulta(
         desistimiento_solicitado_por = %(desistimiento_solicitado_por)s,
         desistimiento_solicitado_en = %(desistimiento_solicitado_en)s,
         desistimiento_motivo = %(desistimiento_motivo)s,
-        desistimiento_canal = %(desistimiento_canal)s
+        desistimiento_canal = %(desistimiento_canal)s,
+        origen_diagnostico = %(origen_diagnostico)s
     WHERE id = %(id)s
     """,
     modo=ESCRITURA,
@@ -654,6 +658,17 @@ _INSERTAR_AJUSTE = consulta(
          registrado_en, posicion)
     VALUES (%(detalle)s, %(dias_anteriores)s, %(dias_nuevos)s, %(motivo)s,
             %(usuario)s, %(fecha)s, %(posicion)s)
+    """,
+    modo=ESCRITURA,
+)
+_INSERTAR_EVALUACION = consulta(
+    "ordenes.insertar_evaluacion",
+    """
+    INSERT INTO rma.evaluacion_tecnica
+        (detalle_id, version_definicion, resultado, usuario_id,
+         registrado_en, observaciones, posicion)
+    VALUES (%(detalle)s, %(version)s, %(resultado)s, %(usuario)s,
+            %(fecha)s, %(observaciones)s, %(posicion)s)
     """,
     modo=ESCRITURA,
 )
@@ -833,6 +848,22 @@ class PostgresOrdenReparacionRepository:
             FILTRO_DNI,
             {"dni": dni},
             lambda o: o.cliente is not None and o.cliente.dni == dni,
+        )
+
+    def listar_por_identificacion_equipo(
+        self, *, imei: str | None, numero_serie: str | None
+    ) -> list[OrdenReparacion]:
+        if not imei and not numero_serie:
+            raise ValueError("Hace falta el IMEI o el numero de serie.")
+
+        def limpio(valor: str | None) -> str | None:
+            texto = "".join((valor or "").split()).upper()
+            return texto or None
+
+        return self._leer(
+            FILTRO_EQUIPO,
+            {"imei": limpio(imei), "serie": limpio(numero_serie)},
+            lambda o: coincide_identificacion(o, imei, numero_serie),
         )
 
     def listar_con_reservas(
@@ -1192,6 +1223,7 @@ class _Guardado:
         self._todas_las_tomas(orden_id)
         self._todas_las_ejecuciones(orden_id)
         self._todos_los_controles()
+        self._todas_las_evaluaciones()
         self._movimientos_de(orden_id)
         verificar_stock_esperado(self._unidad, self._ej)
         self._fotos(orden_id)
@@ -1317,6 +1349,7 @@ class _Guardado:
             usuarios.update(a.usuario_id for a in detalle.autorizaciones)
             usuarios.update(a.usuario_id for a in detalle.ajustes_garantia)
             usuarios.update(c.usuario_id for c in detalle.controles)
+            usuarios.update(e.usuario_id for e in detalle.evaluaciones)
         for toma in orden.tomas:
             usuarios.add(toma.usuario_id)
             if toma.liberada_por:
@@ -2002,6 +2035,7 @@ class _Guardado:
             detalle.observaciones,
             detalle.cancelacion,
             detalle.solicitud_desistimiento,
+            detalle.origen_diagnostico,
         )
 
     def _fila_detalle(
@@ -2043,6 +2077,11 @@ class _Guardado:
             "desistimiento_motivo": solicitud.motivo if solicitud else None,
             "desistimiento_canal": (
                 solicitud.canal.value if solicitud else None
+            ),
+            "origen_diagnostico": (
+                detalle.origen_diagnostico.value
+                if detalle.origen_diagnostico
+                else None
             ),
         }
 
@@ -2175,6 +2214,39 @@ class _Guardado:
                     "posicion": posicion,
                 },
             )
+
+    def _todas_las_evaluaciones(self) -> None:
+        """BR-REP-035: las evaluaciones tecnicas solo crecen."""
+        previos = (
+            {
+                d.id: d.evaluaciones
+                for d in self._previa.orden.reparaciones_detail
+            }
+            if self._previa
+            else {}
+        )
+        for detalle in self._orden.reparaciones_detail:
+            anteriores = previos.get(detalle.id, [])
+            nuevas = self._exigir_prefijo(
+                f"las evaluaciones de {detalle.id}",
+                anteriores,
+                detalle.evaluaciones,
+            )
+            for posicion, evaluacion in enumerate(
+                nuevas, len(anteriores) + 1
+            ):
+                self._ej.ejecutar(
+                    _INSERTAR_EVALUACION,
+                    {
+                        "detalle": self._detalles[detalle.id],
+                        "version": evaluacion.version_definicion,
+                        "resultado": evaluacion.resultado.value,
+                        "usuario": self._id("usuario", evaluacion.usuario_id),
+                        "fecha": evaluacion.fecha,
+                        "observaciones": evaluacion.observaciones,
+                        "posicion": posicion,
+                    },
+                )
 
     def _todos_los_controles(self) -> None:
         previos = (

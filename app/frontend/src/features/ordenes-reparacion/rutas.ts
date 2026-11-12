@@ -13,7 +13,9 @@ export type Ruta =
   | { pantalla: "nueva" }
   | { pantalla: "orden"; ordenId: string }
   | { pantalla: "taller" }
-  | { pantalla: "inventario" };
+  | { pantalla: "inventario" }
+  | { pantalla: "reportes" }
+  | { pantalla: "configuracion" };
 
 /** Al entrar: las tareas del usuario. */
 export const RUTA_INICIAL: Ruta = { pantalla: "inicio" };
@@ -36,6 +38,8 @@ export function parsearRuta(hash: string): Ruta {
     if (partes[0] === "inicio") return { pantalla: "inicio" };
     if (partes[0] === "taller") return { pantalla: "taller" };
     if (partes[0] === "inventario") return { pantalla: "inventario" };
+    if (partes[0] === "reportes") return { pantalla: "reportes" };
+    if (partes[0] === "configuracion") return { pantalla: "configuracion" };
   }
   if (partes[0] === "ordenes") {
     if (partes.length === 1) return { pantalla: "ordenes" };
@@ -64,6 +68,10 @@ export function hashDe(ruta: Ruta): string {
       return `#/ordenes/${encodeURIComponent(ruta.ordenId)}`;
     case "inventario":
       return "#/inventario";
+    case "reportes":
+      return "#/reportes";
+    case "configuracion":
+      return "#/configuracion";
   }
 }
 

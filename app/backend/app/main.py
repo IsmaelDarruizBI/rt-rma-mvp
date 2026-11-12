@@ -19,6 +19,8 @@ from app.api import (
     catalogo_equipos,
     catalogos,
     clientes,
+    configuracion,
+    consultas_operativas,
     health,
     inventario,
     mantenimiento,
@@ -108,6 +110,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         inventario,
         trabajo,
         mantenimiento,
+        consultas_operativas,
+        configuracion,
     ):
         application.include_router(modulo.router, dependencies=protegido)
 

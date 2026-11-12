@@ -31,6 +31,7 @@ import type {
   InsumoPrevisto,
   InsumoUtilizado,
   ExcepcionPedida,
+  ResultadoEvaluacionTecnica,
   Orden,
   Prioridad,
   SolicitudDesistimiento,
@@ -91,6 +92,17 @@ export interface EjecutorAcciones {
   ) => void;
   revisarDetalle: (detalleId: string, resultado: string) => void;
   redefinirDetalle: (detalleId: string, tipoReparacionId: string) => void;
+  evaluarDetalle: (
+    detalleId: string,
+    resultado: ResultadoEvaluacionTecnica,
+    observaciones: string | null,
+    tipoReparacionId: string | null,
+    adicionales: string[],
+  ) => void;
+  agregarTrabajoAdicional: (
+    tipoReparacionId: string,
+    observaciones: string | null,
+  ) => void;
   aprobarControl: (detalleId: string | null, observaciones: string) => void;
   liberarOrden: () => void;
   notificar: () => void;
@@ -545,6 +557,36 @@ function FormularioAccion({
             accion.detalle_id &&
             ejecutar.revisarDetalle(accion.detalle_id, resultado)
           }
+        />
+      );
+
+    case "EVALUAR_DETALLE":
+      return (
+        <FormularioEvaluacionTecnica
+          tipos={tipos}
+          detalle={orden.reparaciones_detail.find(
+            (candidato) => candidato.id === accion.detalle_id,
+          )}
+          deshabilitado={deshabilitado || !accion.detalle_id}
+          onConfirmar={(resultado, observaciones, tipoId, adicionales) =>
+            accion.detalle_id &&
+            ejecutar.evaluarDetalle(
+              accion.detalle_id,
+              resultado,
+              observaciones,
+              tipoId,
+              adicionales,
+            )
+          }
+        />
+      );
+
+    case "AGREGAR_TRABAJO_ADICIONAL":
+      return (
+        <FormularioTrabajoAdicional
+          tipos={tipos}
+          deshabilitado={deshabilitado}
+          onConfirmar={ejecutar.agregarTrabajoAdicional}
         />
       );
 
@@ -2381,6 +2423,218 @@ function FormularioResultadoRevision({
  * MISMO Detalle. Muestra el Tipo vigente; confirmar el mismo Tipo también
  * es una redefinición (nuevo snapshot, override previo invalidado).
  */
+/**
+ * BR-REP-035/036 (PROC-REP-183): el técnico evalúa un trabajo que
+ * diagnosticó Recepción antes de iniciarlo. CONFIRMADO lo deja listo;
+ * DESCARTADO lo cancela (motivo obligatorio); REQUIERE_REDEFINICION
+ * registra en el mismo acto la nueva definición (motivo obligatorio) y,
+ * si el cliente autoriza, Recepción le consulta otra vez.
+ */
+function FormularioEvaluacionTecnica({
+  tipos,
+  detalle,
+  deshabilitado,
+  onConfirmar,
+}: {
+  tipos: TipoReparacion[];
+  detalle: Orden["reparaciones_detail"][number] | undefined;
+  deshabilitado: boolean;
+  onConfirmar: (
+    resultado: ResultadoEvaluacionTecnica,
+    observaciones: string | null,
+    tipoReparacionId: string | null,
+    adicionales: string[],
+  ) => void;
+}) {
+  const [resultado, setResultado] =
+    useState<ResultadoEvaluacionTecnica>("CONFIRMADO");
+  const [adicionales, setAdicionales] = useState<string[]>([]);
+  const [adicional, setAdicional] = useState(tipos[0]?.id ?? "");
+  const nombreTipo = (id: string) =>
+    tipos.find((tipo) => tipo.id === id)?.nombre ?? id;
+  const [observaciones, setObservaciones] = useState("");
+  const [tipoId, setTipoId] = useState(
+    detalle?.tipo_reparacion_id ?? tipos[0]?.id ?? "",
+  );
+  const pideMotivo = resultado !== "CONFIRMADO";
+  const redefine = resultado === "REQUIERE_REDEFINICION";
+  const listo =
+    (!pideMotivo || observaciones.trim() !== "") && (!redefine || !!tipoId);
+
+  return (
+    <div>
+      <p style={{ margin: "0 0 0.5rem", fontSize: "0.85rem" }}>
+        {detalle?.id ?? "—"} · <strong>{detalle?.tipo_reparacion_nombre ?? "—"}</strong>{" "}
+        · lo diagnosticó Recepción: hay que evaluarlo antes de iniciarlo.
+      </p>
+      <Campo etiqueta="Resultado de la evaluación">
+        <select
+          value={resultado}
+          onChange={(evento) =>
+            setResultado(evento.target.value as ResultadoEvaluacionTecnica)
+          }
+          disabled={deshabilitado}
+          style={estiloInput}
+        >
+          <option value="CONFIRMADO">Confirmado: el trabajo es el correcto</option>
+          <option value="REQUIERE_REDEFINICION">
+            Requiere otra definición
+          </option>
+          <option value="DESCARTADO">Descartado: no corresponde hacerlo</option>
+        </select>
+      </Campo>
+      {redefine && (
+        <Campo etiqueta="Nueva definición">
+          <select
+            value={tipoId}
+            onChange={(evento) => setTipoId(evento.target.value)}
+            disabled={deshabilitado}
+            style={estiloInput}
+          >
+            {tipos.map((tipo) => (
+              <option key={tipo.id} value={tipo.id}>
+                {tipo.nombre} — {tipo.precio}
+              </option>
+            ))}
+          </select>
+        </Campo>
+      )}
+      <Campo
+        etiqueta={
+          pideMotivo ? "Motivo (obligatorio)" : "Observaciones (opcional)"
+        }
+      >
+        <input
+          value={observaciones}
+          onChange={(evento) => setObservaciones(evento.target.value)}
+          disabled={deshabilitado}
+          style={estiloInput}
+        />
+      </Campo>
+      {redefine && (
+        <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
+          La definición anterior queda en el historial y no se ejecuta. Si el
+          cliente autoriza los trabajos, Recepción le consulta la nueva.
+        </p>
+      )}
+      {resultado === "DESCARTADO" && (
+        <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
+          El trabajo se cancela (descarte técnico) y no se cobra.
+        </p>
+      )}
+      <Campo etiqueta="Reparaciones adicionales detectadas (opcional)">
+        <div style={{ display: "flex", gap: "0.4rem" }}>
+          <select
+            value={adicional}
+            onChange={(evento) => setAdicional(evento.target.value)}
+            disabled={deshabilitado}
+            style={estiloInput}
+          >
+            {tipos.map((tipo) => (
+              <option key={tipo.id} value={tipo.id}>
+                {tipo.nombre} — {tipo.precio}
+              </option>
+            ))}
+          </select>
+          <Boton
+            disabled={deshabilitado || !adicional}
+            onClick={() => setAdicionales([...adicionales, adicional])}
+          >
+            Sumar
+          </Boton>
+        </div>
+      </Campo>
+      {adicionales.length > 0 && (
+        <ul style={{ margin: "0 0 0.5rem", paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
+          {adicionales.map((id, indice) => (
+            <li key={`${id}-${indice}`}>
+              {nombreTipo(id)}{" "}
+              <button
+                type="button"
+                disabled={deshabilitado}
+                onClick={() =>
+                  setAdicionales(adicionales.filter((_, i) => i !== indice))
+                }
+              >
+                Quitar
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {adicionales.length > 0 && (
+        <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
+          Cada una queda como un trabajo nuevo. Si el cliente autoriza los
+          trabajos, Recepción le consulta; no hace falta esperar su respuesta.
+        </p>
+      )}
+      <Boton
+        disabled={deshabilitado || !listo}
+        onClick={() =>
+          onConfirmar(
+            resultado,
+            observaciones.trim() || null,
+            redefine ? tipoId : null,
+            adicionales,
+          )
+        }
+      >
+        Registrar la evaluación
+      </Boton>
+    </div>
+  );
+}
+
+function FormularioTrabajoAdicional({
+  tipos,
+  deshabilitado,
+  onConfirmar,
+}: {
+  tipos: TipoReparacion[];
+  deshabilitado: boolean;
+  onConfirmar: (tipoReparacionId: string, observaciones: string | null) => void;
+}) {
+  const [tipoId, setTipoId] = useState(tipos[0]?.id ?? "");
+  const [observaciones, setObservaciones] = useState("");
+  return (
+    <div>
+      <p style={{ margin: "0 0 0.5rem", fontSize: "0.85rem" }}>
+        Un trabajo nuevo que descubriste en el equipo. El que estás haciendo
+        sigue igual; si el cliente autoriza los trabajos, Recepción le
+        consulta el nuevo.
+      </p>
+      <Campo etiqueta="Tipo de reparación">
+        <select
+          value={tipoId}
+          onChange={(evento) => setTipoId(evento.target.value)}
+          disabled={deshabilitado}
+          style={estiloInput}
+        >
+          {tipos.map((tipo) => (
+            <option key={tipo.id} value={tipo.id}>
+              {tipo.nombre} — {tipo.precio}
+            </option>
+          ))}
+        </select>
+      </Campo>
+      <Campo etiqueta="Observaciones (opcional)">
+        <input
+          value={observaciones}
+          onChange={(evento) => setObservaciones(evento.target.value)}
+          disabled={deshabilitado}
+          style={estiloInput}
+        />
+      </Campo>
+      <Boton
+        disabled={deshabilitado || !tipoId}
+        onClick={() => onConfirmar(tipoId, observaciones.trim() || null)}
+      >
+        Registrar la reparación adicional
+      </Boton>
+    </div>
+  );
+}
+
 function FormularioRedefinirDetalle({
   tipos,
   detalle,

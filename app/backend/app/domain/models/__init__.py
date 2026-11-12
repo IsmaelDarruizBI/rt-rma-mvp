@@ -28,6 +28,7 @@ from .catalogos import (
     TipoReparacionEstacion,
     TipoReparacionInsumos,
 )
+from .configuracion import CambioConfiguracion, EntidadConfiguracion
 from .descuentos import RegistroDescuento, importe_de_descuento
 from .documentos import (
     CoberturaGarantia,
@@ -61,10 +62,12 @@ from .enums import (
     EstadoTomaOrden,
     EstadoWorkflow,
     OrigenCancelacion,
+    OrigenDiagnostico,
     OrigenOrden,
     RegistroRecepcion,
     ResultadoAutorizacion,
     ResultadoControl,
+    ResultadoEvaluacionTecnica,
     RolUsuario,
     TipoDescuento,
     TipoDocumento,
@@ -97,6 +100,7 @@ from .reparacion import (
     AjusteGarantia,
     DefinicionAnteriorDetalle,
     EjecucionReparacion,
+    EvaluacionTecnica,
     RegistroAutorizacionCliente,
     RegistroCancelacion,
     RegistroControlTecnico,
@@ -107,6 +111,8 @@ from .reparacion import (
 from .workflow import HistorialWorkflow
 
 __all__ = [
+    "CambioConfiguracion",
+    "EntidadConfiguracion",
     # Enums
     "CanalComunicacion",
     "CondicionReparacionDetail",
@@ -119,10 +125,12 @@ __all__ = [
     "EstadoTomaOrden",
     "EstadoWorkflow",
     "OrigenCancelacion",
+    "OrigenDiagnostico",
     "OrigenOrden",
     "RegistroRecepcion",
     "ResultadoAutorizacion",
     "ResultadoControl",
+    "ResultadoEvaluacionTecnica",
     "RolUsuario",
     "TipoDocumento",
     "TipoEntrega",
@@ -167,6 +175,7 @@ __all__ = [
     "RegistroAutorizacionCliente",
     "RegistroCancelacion",
     "SolicitudDesistimiento",
+    "EvaluacionTecnica",
     "ExcepcionGarantia",
     "VigenciaGarantiaOrigen",
     "ClaseAjuste",

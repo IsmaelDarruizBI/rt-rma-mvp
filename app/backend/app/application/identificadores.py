@@ -38,3 +38,12 @@ def siguiente_detalle_id(orden: OrdenReparacion) -> str:
         if encontrado:
             maximo = max(maximo, int(encontrado.group(1)))
     return f"{PREFIJO_DETALLE}-{maximo + 1:03d}"
+
+
+def siguientes_detalle_ids(orden: OrdenReparacion, cantidad: int) -> list[str]:
+    """Los ``cantidad`` proximos numeros de Detalle, consecutivos."""
+    primero = int(siguiente_detalle_id(orden).rsplit("-", 1)[1])
+    return [
+        f"{PREFIJO_DETALLE}-{numero:03d}"
+        for numero in range(primero, primero + cantidad)
+    ]

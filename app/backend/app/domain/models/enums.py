@@ -174,6 +174,30 @@ class OrigenCancelacion(str, Enum):
     INTERNA = "INTERNA"
     RECHAZO_CLIENTE = "RECHAZO_CLIENTE"
     DESISTIMIENTO_CLIENTE = "DESISTIMIENTO_CLIENTE"
+    # DC08 / BR-REP-036: el tecnico descarta el Detalle en la evaluacion
+    # tecnica (PROC-REP-183 -> 300).
+    DESCARTE_TECNICO = "DESCARTE_TECNICO"
+
+
+class OrigenDiagnostico(str, Enum):
+    """Quien diagnostico la definicion vigente del Detalle (BR-REP-026).
+
+    ``RECEPCION``: la definio Recepcion (PROC-REP-070); exige evaluacion
+    tecnica antes de la primera Ejecucion (BR-REP-035). ``REVISION_TECNICA``:
+    la definio el tecnico (075, 127 o 128); no la exige. Sin valor: Detalle
+    anterior a la evaluacion tecnica, que no la exige (transicion de datos).
+    """
+
+    RECEPCION = "RECEPCION"
+    REVISION_TECNICA = "REVISION_TECNICA"
+
+
+class ResultadoEvaluacionTecnica(str, Enum):
+    """Resultado principal de PROC-REP-183 (BR-REP-035/036)."""
+
+    CONFIRMADO = "CONFIRMADO"
+    DESCARTADO = "DESCARTADO"
+    REQUIERE_REDEFINICION = "REQUIERE_REDEFINICION"
 
 
 class TipoMovimientoInsumo(str, Enum):

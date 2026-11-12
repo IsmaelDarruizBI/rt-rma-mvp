@@ -203,6 +203,7 @@ function FormularioDesistimiento({
     );
   const vista = orden.desistimiento;
   const bloqueantes = alcance === TODOS ? (vista?.bloqueantes ?? []) : [];
+  const enReparacion = alcance === TODOS ? (vista?.en_ejecucion ?? []) : [];
   const deshabilitado = !rolHabilitado || ocupado;
   const listo =
     alcance !== "" && motivo.trim() !== "" && bloqueantes.length === 0;
@@ -280,6 +281,17 @@ function FormularioDesistimiento({
             </li>
           )}
         </ul>
+      )}
+      {enReparacion.length > 0 && bloqueantes.length === 0 && (
+        <p
+          role="status"
+          style={{ margin: "0 0 0.6rem", fontSize: "0.85rem", color: colores.alerta }}
+        >
+          {enReparacion.map(nombre).join(", ")} se está reparando: se registra
+          el pedido del cliente sobre todos los trabajos y nada se cancela
+          hasta que el técnico interrumpa la reparación; recién ahí se
+          cancelan juntos.
+        </p>
       )}
       {bloqueantes.length > 0 && (
         <div

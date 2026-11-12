@@ -32,6 +32,7 @@ from app.domain.models import (
     EstadoWorkflow,
     Insumo,
     OrdenReparacion,
+    OrigenDiagnostico,
     OrigenOrden,
     RegistroControlTecnico,
     ReparacionDetail,
@@ -316,6 +317,7 @@ def _detalle_con_snapshot(
     detalle_origen_id: str | None,
     checkin: bool | None = None,
     descripcion: str | None = None,
+    origen_diagnostico: OrigenDiagnostico = OrigenDiagnostico.RECEPCION,
 ) -> ReparacionDetail:
     """Detalle DEFINIDO con el snapshot del Tipo (BR-REP-015).
 
@@ -338,6 +340,7 @@ def _detalle_con_snapshot(
         control_estado=EstadoControl.PENDIENTE,
         observaciones=observaciones,
         detalle_origen_id=detalle_origen_id,
+        origen_diagnostico=origen_diagnostico,
     )
 
 
@@ -449,6 +452,89 @@ def definir_reparacion_detail_luego_revision(
             detalle_origen_id=origen_del_detalle,
             checkin=checkin_de(orden),
             descripcion=descripcion,
+            # 075: lo diagnostico el tecnico en la revision (BR-REP-035).
+            origen_diagnostico=OrigenDiagnostico.REVISION_TECNICA,
+        )
+    )
+    return nueva_orden
+
+
+def agregar_detalle_adicional(
+    orden: OrdenReparacion,
+    *,
+    detalle_id: str,
+    tipo_reparacion: TipoReparacion,
+    usuario: Usuario,
+    fecha: datetime,
+    observaciones: str | None = None,
+    detalle_origen_id: str | None = None,
+    detectado_en: str | None = None,
+) -> OrdenReparacion:
+    """PROC-REP-128: el tecnico agrega una reparacion adicional detectada.
+
+    V1.4 (BR-REP-037): el titular de la toma registra un Detalle NUEVO
+    durante su participacion -en la ejecucion (desde 190) o en la
+    evaluacion tecnica de otro Detalle (184, ``detectado_en``)-. Lo define
+    el tecnico: origen del diagnostico REVISION_TECNICA (BR-REP-026,
+    BR-REP-035) y snapshot del Tipo (BR-REP-015). En CLIENTE_EXTERNO nace
+    pendiente de autorizacion y la resolucion la gestiona Recepcion por su
+    carril (046/047), sin espera del tecnico; en los demas origenes sigue a
+    la factibilidad (080, la compone el caller). No inicia ejecucion, no
+    reserva insumos, no toca la Ejecucion activa ni la toma y no invalida la
+    autorizacion ni la definicion de los demas Detalles.
+
+    Solo Tipos del catalogo: el precio manual de «Otros» lo carga Recepcion
+    (``tipo_reparacion_otros``); el tecnico no fija precios.
+    """
+    from .tomas import buscar_detalle, validar_titular_de_la_toma
+
+    validar_actor(usuario, RolUsuario.TECNICO)
+    validar_titular_de_la_toma(
+        orden,
+        usuario,
+        sin_toma=(
+            "Una reparacion adicional se registra con la Orden tomada "
+            "(PROC-REP-128)."
+        ),
+    )
+    if tipo_reparacion.id == TIPO_REPARACION_OTROS:
+        raise PrecondicionInvalidaError(
+            "El tecnico registra reparaciones adicionales del catalogo; una "
+            "reparacion «Otros» lleva un precio manual que carga Recepcion."
+        )
+    if not tipo_reparacion.activo:
+        raise PrecondicionInvalidaError(
+            f"El Tipo de Reparacion {tipo_reparacion.id} no esta activo."
+        )
+    if any(detalle.id == detalle_id for detalle in orden.reparaciones_detail):
+        raise PrecondicionInvalidaError(
+            f"La Orden ya tiene un Detalle con id {detalle_id}."
+        )
+    if detectado_en is not None:
+        buscar_detalle(orden, detectado_en)
+    origen_del_detalle = _detalle_origen_para(orden, detalle_origen_id)
+
+    nueva_orden = registrar_paso(
+        orden,
+        process_id="PROC-REP-128",
+        accion="AGREGAR_DETALLE_DETECTADO",
+        fecha=fecha,
+        usuario_id=usuario.id,
+        reparacion_detail_id=detalle_id,
+        observacion=(
+            f"Detectado en la evaluacion tecnica de {detectado_en}"
+            if detectado_en
+            else "Detectado durante la ejecucion"
+        ),
+    )
+    nueva_orden.reparaciones_detail.append(
+        _detalle_con_snapshot(
+            detalle_id=detalle_id,
+            tipo_reparacion=tipo_reparacion,
+            observaciones=observaciones,
+            detalle_origen_id=origen_del_detalle,
+            checkin=checkin_de(orden),
+            origen_diagnostico=OrigenDiagnostico.REVISION_TECNICA,
         )
     )
     return nueva_orden

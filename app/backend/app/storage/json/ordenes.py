@@ -38,6 +38,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from app.domain.equipos import coincide_identificacion
 from app.domain.models import OrdenReparacion, TipoMovimientoInsumo
 from app.repositories.exceptions import (
     ConflictoDeEscrituraError,
@@ -175,6 +176,17 @@ class JsonOrdenReparacionRepository:
             orden
             for orden in self.listar()
             if orden.cliente is not None and orden.cliente.dni == dni
+        ]
+
+    def listar_por_identificacion_equipo(
+        self, *, imei: str | None, numero_serie: str | None
+    ) -> list[OrdenReparacion]:
+        if not imei and not numero_serie:
+            raise ValueError("Hace falta el IMEI o el numero de serie.")
+        return [
+            orden
+            for orden in self.listar()
+            if coincide_identificacion(orden, imei, numero_serie)
         ]
 
     def listar_con_reservas(

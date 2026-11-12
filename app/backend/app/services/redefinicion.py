@@ -34,6 +34,7 @@ from app.domain.models import (
     DefinicionAnteriorDetalle,
     EstadoReparacionDetail,
     OrdenReparacion,
+    OrigenDiagnostico,
     ReparacionDetail,
     RolUsuario,
     TipoReparacion,
@@ -210,7 +211,7 @@ def redefinir_detalle(
     """
     validar_actor(usuario, RolUsuario.TECNICO)
     _exigir_circuito_de_revision(orden)
-    detalle = _detalle_pendiente(orden, detalle_id)
+    _detalle_pendiente(orden, detalle_id)
     if not revision_vigente(orden, detalle_id):
         raise PrecondicionInvalidaError(
             f"Falta la revision tecnica (PROC-REP-126) del Detalle "
@@ -220,7 +221,31 @@ def redefinir_detalle(
         raise PrecondicionInvalidaError(
             f"El Tipo de Reparacion {tipo_reparacion.id} no esta activo."
         )
+    return aplicar_redefinicion(
+        orden,
+        detalle_id=detalle_id,
+        tipo_reparacion=tipo_reparacion,
+        usuario=usuario,
+        fecha=fecha,
+    )
 
+
+def aplicar_redefinicion(
+    orden: OrdenReparacion,
+    *,
+    detalle_id: str,
+    tipo_reparacion: TipoReparacion,
+    usuario: Usuario,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """El nucleo de PROC-REP-127, ya validado por el caller.
+
+    Lo usan la redefinicion tras la revision (126 -> 127) y la evaluacion
+    tecnica (183 REQUIERE_REDEFINICION -> 127, VAR-REP-019). La definicion
+    nueva la diagnostico el tecnico (REVISION_TECNICA): queda validada por
+    el mismo acto y no exige otra evaluacion (BR-REP-035).
+    """
+    detalle = next(d for d in orden.reparaciones_detail if d.id == detalle_id)
     nueva_orden = registrar_paso(
         orden,
         process_id=NODO_REDEFINICION,
@@ -259,4 +284,5 @@ def redefinir_detalle(
         redefinido.garantia_dias = dias
         redefinido.garantia_dias_sugerida = dias
     redefinido.condicion = CondicionReparacionDetail.SIN_BLOQUEO
+    redefinido.origen_diagnostico = OrigenDiagnostico.REVISION_TECNICA
     return nueva_orden

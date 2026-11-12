@@ -7,17 +7,17 @@ declare
   v_esperadas text[] := array[
     'cliente', 'documento_cliente', 'modelo_equipo', 'equipo',
     'orden', 'orden_detalle_origen', 'recepcion', 'recepcion_version', 'recepcion_nota', 'checkin', 'salida', 'foto',
-    'detalle', 'detalle_version', 'decision_cliente', 'ajuste_garantia', 'toma', 'ejecucion', 'ejecucion_insumo', 'control_tecnico',
+    'detalle', 'detalle_version', 'decision_cliente', 'ajuste_garantia', 'toma', 'ejecucion', 'ejecucion_insumo', 'control_tecnico', 'evaluacion_tecnica',
     'insumo', 'movimiento_inventario', 'override_recursos', 'override_insumo',
     'pago', 'devolucion_dinero', 'descuento', 'documento_emitido',
-    'accion_usuario', 'evento_negocio', 'tipo_evento', 'equivalencia_historial', 'auditoria_tecnica',
+    'accion_usuario', 'evento_negocio', 'tipo_evento', 'equivalencia_historial', 'auditoria_tecnica', 'cambio_configuracion',
     'usuario', 'rol', 'usuario_rol', 'mesa_trabajo', 'mesa_tipo_reparacion', 'tipo_reparacion',
     'tipo_reparacion_insumo', 'medio_pago', 'tipo_documento', 'motivo_ajuste', 'empresa', 'texto_legal'
   ];
   v_faltan text[];
   v_sobran text[];
 begin
-  perform rma_pruebas.debe_ser(cardinality(v_esperadas), 45, 'el diseño lógico tiene 45 entidades');
+  perform rma_pruebas.debe_ser(cardinality(v_esperadas), 47, 'el diseño lógico tiene 47 entidades');
   select array_agg(t) into v_faltan from unnest(v_esperadas) t
    where not exists (select 1 from information_schema.tables
                       where table_schema = 'rma' and table_name = t and table_type = 'BASE TABLE');

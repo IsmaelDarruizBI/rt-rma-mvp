@@ -230,6 +230,10 @@ def _validar_precondiciones_de_la_reserva(
             f"El cliente pidio desistir del Detalle {detalle_id}: no se "
             "inicia otra Ejecucion (DC07)."
         )
+    # BR-REP-035: sin evaluacion tecnica vigente no se reserva.
+    from .evaluacion_tecnica import exigir_evaluacion_vigente
+
+    exigir_evaluacion_vigente(detalle)
 
     toma = validar_titular_de_la_toma(
         orden,

@@ -397,7 +397,21 @@ def tomar(cliente, orden_id, tecnico=TECNICO) -> dict:
     )
 
 
+def evaluar_si_hace_falta(cliente, orden_id, detalle_id, tecnico=TECNICO):
+    """V1.4 (BR-REP-035): un Detalle de Recepcion se evalua (CONFIRMADO)
+    antes de su primera Ejecucion. Si ya no hace falta, no hace nada."""
+    orden = ok(cliente.get(f"/api/orders/{orden_id}"))
+    if detalle(orden, detalle_id).get("requiere_evaluacion"):
+        ok(
+            cliente.post(
+                f"/api/orders/{orden_id}/details/{detalle_id}/evaluation",
+                json={"usuario_id": tecnico, "resultado": "CONFIRMADO"},
+            )
+        )
+
+
 def iniciar(cliente, orden_id, detalle_id="DET-001", tecnico=TECNICO) -> str:
+    evaluar_si_hace_falta(cliente, orden_id, detalle_id, tecnico)
     orden = ok(
         cliente.post(
             f"/api/orders/{orden_id}/details/{detalle_id}/start",

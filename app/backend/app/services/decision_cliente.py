@@ -323,6 +323,8 @@ class AnalisisDesistimiento:
     ``rechazables``: pendientes de autorizacion (se registra su rechazo).
     ``desistibles``: ya autorizados y todavia cancelables (desistimiento).
     ``bloqueantes``: lo que impide el desistimiento total, con el motivo.
+    ``en_ejecucion``: Detalles con una Ejecucion activa; no impiden pedir el
+    desistimiento total, que espera a que el tecnico interrumpa (DC07C).
     ``conservados``: lo COMPLETO, que nunca se cancela.
     """
 
@@ -330,6 +332,7 @@ class AnalisisDesistimiento:
     desistibles: tuple[str, ...]
     bloqueantes: tuple[tuple[str, str], ...]
     conservados: tuple[str, ...]
+    en_ejecucion: tuple[str, ...] = ()
 
     @property
     def cancelables(self) -> tuple[str, ...]:
@@ -346,6 +349,7 @@ def analizar_desistimiento(orden: OrdenReparacion) -> AnalisisDesistimiento:
     rechazables: list[str] = []
     desistibles: list[str] = []
     bloqueantes: list[tuple[str, str]] = []
+    en_ejecucion: list[str] = []
     conservados: list[str] = []
     for detalle in orden.reparaciones_detail:
         if detalle.estado is EstadoReparacionDetail.CANCELADO:
@@ -353,13 +357,7 @@ def analizar_desistimiento(orden: OrdenReparacion) -> AnalisisDesistimiento:
         if detalle.estado is EstadoReparacionDetail.COMPLETO:
             conservados.append(detalle.id)
         elif tiene_ejecucion_activa(orden, detalle.id):
-            bloqueantes.append(
-                (
-                    detalle.id,
-                    "tiene una Ejecucion activa: hay que completarla o "
-                    "interrumpirla (PROC-REP-200)",
-                )
-            )
+            en_ejecucion.append(detalle.id)
         elif tiene_reservas_sin_conciliar(orden, detalle.id):
             bloqueantes.append(
                 (detalle.id, "tiene reservas de insumos sin conciliar")
@@ -373,6 +371,7 @@ def analizar_desistimiento(orden: OrdenReparacion) -> AnalisisDesistimiento:
         desistibles=tuple(desistibles),
         bloqueantes=tuple(bloqueantes),
         conservados=tuple(conservados),
+        en_ejecucion=tuple(en_ejecucion),
     )
 
 
@@ -485,6 +484,59 @@ def _registrar_desistimiento(
     return nueva_orden
 
 
+def _solicitar_desistimiento_total(
+    orden: OrdenReparacion,
+    analisis: "AnalisisDesistimiento",
+    *,
+    usuario: Usuario,
+    canal: CanalComunicacion,
+    motivo: str,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """DC07C: la solicitud de desistimiento de todos los trabajos con una
+    Ejecucion activa. Un PROC-REP-046 por Detalle afectado (usuario,
+    fecha/hora, motivo y canal); nada se cancela ni se interrumpe aca. Lo
+    COMPLETO se conserva. El tecnico solo puede interrumpir; al hacerlo,
+    ``resolver_desistimientos_pendientes`` aplica la cancelacion efectiva.
+    """
+    afectados = [
+        *analisis.en_ejecucion,
+        *analisis.rechazables,
+        *analisis.desistibles,
+    ]
+    if any(
+        d.solicitud_desistimiento is not None
+        for d in orden.reparaciones_detail
+        if d.id in afectados
+    ):
+        raise PrecondicionInvalidaError(
+            "Ya hay un desistimiento pendiente sobre estos trabajos: se "
+            "resuelve cuando el tecnico interrumpa la Ejecucion."
+        )
+    nueva_orden = orden
+    for detalle_id in afectados:
+        nueva_orden = registrar_paso(
+            nueva_orden,
+            process_id=NODO_DECISION_CLIENTE,
+            accion="SOLICITAR_DESISTIMIENTO_CLIENTE",
+            fecha=fecha,
+            usuario_id=usuario.id,
+            reparacion_detail_id=detalle_id,
+            observacion=(
+                f"SOLICITA DESISTIR DE TODO ({canal.value}; se cancela al "
+                f"interrumpir {', '.join(analisis.en_ejecucion)}): {motivo}"
+            ),
+        )
+        detalle = next(
+            d for d in nueva_orden.reparaciones_detail if d.id == detalle_id
+        )
+        detalle.solicitud_desistimiento = SolicitudDesistimiento(
+            usuario_id=usuario.id, fecha=fecha, motivo=motivo, canal=canal
+        )
+    nueva_orden.updated_at = fecha
+    return nueva_orden
+
+
 def _solicitar_desistimiento_en_ejecucion(
     orden: OrdenReparacion,
     detalle: ReparacionDetail,
@@ -555,6 +607,18 @@ def registrar_desistimiento_cliente(
 
     if detalle_id is None:
         analisis = analizar_desistimiento(orden)
+        if analisis.en_ejecucion and not analisis.bloqueantes:
+            # DC07C (VAR-REP-043): proceso guiado. Se registra la solicitud
+            # de cada trabajo afectado; nada se cancela hasta que el tecnico
+            # interrumpa la Ejecucion (211 -> 305).
+            return _solicitar_desistimiento_total(
+                orden,
+                analisis,
+                usuario=usuario,
+                canal=canal,
+                motivo=motivo,
+                fecha=fecha,
+            )
         if analisis.bloqueantes:
             impedimentos = "; ".join(
                 f"{bloqueado} {razon}"

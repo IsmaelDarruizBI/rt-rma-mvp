@@ -41,6 +41,7 @@ app = ["datos/*.json", "datos/*.crt"]
 testpaths = ["tests"]
 markers = [
     "postgres: usa un PostgreSQL local descartable (RMA_TEST_DATABASE_URL)",
+    "v14_evaluacion: crea los Detalles de Recepcion con su origen (BR-REP-035); sin la marca, los tests anteriores usan Detalles sin origen, como los datos existentes",
 ]
 
 [tool.ruff]

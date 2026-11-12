@@ -32,7 +32,6 @@ from app.services import (
     ResultadoEvaluacionOrden,
     aplicar_movimientos_inventario,
     cargar_reservas_externas,
-    desistimiento_pendiente,
     ejecucion_activa,
     ejecutar_detalle,
     evaluar_situacion_orden,
@@ -42,7 +41,6 @@ from app.services import (
     registrar_ejecucion_interrumpida,
     registrar_ejecucion_requiere_redefinicion,
     registrar_interrupcion_por_liberacion,
-    resolver_desistimiento_solicitado,
     seleccionar_detalle,
     toma_activa,
     tomar_orden,
@@ -53,6 +51,8 @@ from app.services import (
 from app.services import (
     liberar_orden as liberar_orden_servicio,
 )
+from app.services.cancelaciones import resolver_desistimientos_pendientes
+from app.services.evaluacion_tecnica import registrar_no_requiere
 from app.services.tomas import buscar_detalle
 
 from .contexto import ApplicationContext
@@ -154,6 +154,11 @@ def iniciar_detalle(
         orden_para_modificar(contexto, orden_id) as orden,
     ):
         orden = seleccionar_detalle(
+            orden, detalle_id=detalle_id, usuario=usuario, fecha=fecha
+        )
+        # BR-REP-035: 182 "No requiere evaluacion tecnica"; sin evaluacion
+        # vigente, cuando el origen la exige, no se sigue (no se reserva).
+        orden = registrar_no_requiere(
             orden, detalle_id=detalle_id, usuario=usuario, fecha=fecha
         )
         orden, compatible = validar_compatibilidad_detalle(
@@ -475,15 +480,10 @@ def _cerrar_ejecucion(
         # DC07 / VAR-REP-042: con la Ejecucion resuelta (210 ya consumio lo
         # usado y libero lo reservado), un desistimiento solicitado sobre
         # ese Detalle se cancela (211 -> 300), aparte de la solicitud.
-        detalle = next(
-            d
-            for d in orden.reparaciones_detail
-            if d.id == ejecucion.reparacion_detail_id
+        # DC07C: tambien los demas trabajos de un desistimiento total.
+        orden = resolver_desistimientos_pendientes(
+            orden, usuario=usuario, fecha=fecha
         )
-        if desistimiento_pendiente(detalle):
-            orden = resolver_desistimiento_solicitado(
-                orden, detalle_id=detalle.id, usuario=usuario, fecha=fecha
-            )
         orden, resultado = evaluar_situacion_orden(orden, fecha=fecha)
 
         contexto.ordenes.guardar(orden)

@@ -74,6 +74,7 @@ from app.services.cancelaciones import (
     impedimentos_cancelacion,
     sin_trabajos_vigentes,
 )
+from app.services.evaluacion_tecnica import requiere_evaluacion
 from app.services.ordenes import ROLES_ENTREGA, ROLES_PRIORIZACION
 from app.services.pagos import (
     ROLES_ANULACION_PAGO,
@@ -105,6 +106,8 @@ ACCION_FINALIZAR_DEFINICION = "FINALIZAR_DEFINICION"
 ACCION_ENCOLAR = "ENCOLAR"
 ACCION_TOMAR = "TOMAR"
 ACCION_INICIAR_DETALLE = "INICIAR_DETALLE"
+ACCION_EVALUAR_DETALLE = "EVALUAR_DETALLE"
+ACCION_AGREGAR_TRABAJO_ADICIONAL = "AGREGAR_TRABAJO_ADICIONAL"
 ACCION_COMPLETAR_EJECUCION = "COMPLETAR_EJECUCION"
 ACCION_INTERRUMPIR_EJECUCION = "INTERRUMPIR_EJECUCION"
 ACCION_APROBAR_CONTROL = "APROBAR_CONTROL"
@@ -567,14 +570,29 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
     if toma is not None and en_curso is None:
         bloqueo = motivo_bloqueo_ejecucion(orden)
         for trabajable in detalles_trabajables(orden):
+            # BR-REP-035 (PROC-REP-182): un Detalle de Recepcion sin
+            # evaluacion vigente se evalua antes de poder iniciarse.
+            evaluar = requiere_evaluacion(
+                next(
+                    d for d in orden.reparaciones_detail if d.id == trabajable
+                )
+            )
             acciones.append(
                 AccionDisponible(
-                    codigo=ACCION_INICIAR_DETALLE,
-                    etiqueta="Iniciar el Detalle",
+                    codigo=(
+                        ACCION_EVALUAR_DETALLE
+                        if evaluar
+                        else ACCION_INICIAR_DETALLE
+                    ),
+                    etiqueta=(
+                        "Evaluar tecnicamente el Detalle"
+                        if evaluar
+                        else "Iniciar el Detalle"
+                    ),
                     roles=(RolUsuario.TECNICO,),
                     detalle_id=trabajable,
                     usuario_id=titular,
-                    bloqueo=bloqueo,
+                    bloqueo=None if evaluar else bloqueo,
                 )
             )
         acciones.append(
@@ -980,6 +998,16 @@ def acciones_complementarias(
         )
     toma = toma_activa(orden)
     if toma is not None:
+        # PROC-REP-128 (BR-REP-036/037): accion complementaria del titular
+        # de la toma; no toca la Ejecucion en curso ni la toma.
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_AGREGAR_TRABAJO_ADICIONAL,
+                etiqueta="Agregar una reparacion adicional detectada",
+                roles=(RolUsuario.TECNICO,),
+                usuario_id=toma.usuario_id,
+            )
+        )
         acciones.append(
             AccionDisponible(
                 codigo=ACCION_LIBERAR_ORDEN_AJENA,

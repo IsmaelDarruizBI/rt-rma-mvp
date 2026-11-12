@@ -800,11 +800,13 @@ def _revision(datos: _Datos) -> _Principal | None:
 
 def _tomada(datos: _Datos) -> _Principal | None:
     iniciar = datos.flujo("INICIAR_DETALLE")
+    # BR-REP-035: un trabajo de Recepcion se evalua antes de iniciarse.
+    evaluar = datos.flujo("EVALUAR_DETALLE")
     toma = toma_activa(datos.orden)
-    if not iniciar or toma is None:
+    if (not iniciar and not evaluar) or toma is None:
         return None
     confirmar = datos.equipo("CONFIRMAR_RECEPCION")
-    if confirmar and all(accion.bloqueo for accion in iniciar):
+    if confirmar and iniciar and all(accion.bloqueo for accion in iniciar):
         return _Principal(
             codigo=CodigoSituacion.PENDIENTE_RECEPCION,
             titulo="Pendiente de recepción",
@@ -825,12 +827,29 @@ def _tomada(datos: _Datos) -> _Principal | None:
         titulo="Tomada por el técnico",
         descripcion="El técnico tomó la Orden y puede empezar un trabajo.",
         desde=toma.inicio,
-        tareas=(
-            _tarea(
-                "Iniciar la reparación",
-                "Elegir el trabajo; al iniciarlo se reservan los insumos.",
-                iniciar,
-            ),
+        tareas=tuple(
+            tarea
+            for tarea, acciones in (
+                (
+                    _tarea(
+                        "Evaluar el trabajo antes de empezar",
+                        "Lo diagnosticó Recepción: confirmarlo, descartarlo "
+                        "o redefinirlo antes de reservar insumos.",
+                        evaluar,
+                    ),
+                    evaluar,
+                ),
+                (
+                    _tarea(
+                        "Iniciar la reparación",
+                        "Elegir el trabajo; al iniciarlo se reservan los "
+                        "insumos.",
+                        iniciar,
+                    ),
+                    iniciar,
+                ),
+            )
+            if acciones
         ),
     )
 

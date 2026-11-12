@@ -138,6 +138,8 @@ export const NOMBRE_ACCION: Record<string, string> = {
   REQUIERE_REDEFINICION: "El trabajo requiere redefinición",
   REVISAR_DETALLE: "Revisar el trabajo",
   REDEFINIR_DETALLE: "Redefinir el trabajo",
+  EVALUAR_DETALLE: "Evaluar el trabajo",
+  AGREGAR_TRABAJO_ADICIONAL: "Agregar una reparación adicional",
   APROBAR_CONTROL: "Aprobar el control",
   RECHAZAR_CONTROL: "Rechazar el control (retrabajo)",
   LIBERAR_ORDEN: "Liberar la Orden",

@@ -24,6 +24,8 @@ describe("rutas", () => {
       [{ pantalla: "orden", ordenId: "OR-000001" }, "#/ordenes/OR-000001"],
       [{ pantalla: "taller" }, "#/taller"],
       [{ pantalla: "inventario" }, "#/inventario"],
+      [{ pantalla: "reportes" }, "#/reportes"],
+      [{ pantalla: "configuracion" }, "#/configuracion"],
     ];
     for (const [ruta, hash] of rutas) {
       assert.equal(hashDe(ruta), hash);
@@ -33,7 +35,7 @@ describe("rutas", () => {
   });
 
   test("lo vacío o desconocido va al inicio", () => {
-    for (const hash of ["", "#", "#/", "#/otra", "#/ordenes/a/b", "#/inventario/x"]) {
+    for (const hash of ["", "#", "#/", "#/otra", "#/ordenes/a/b", "#/inventario/x", "#/reportes/x"]) {
       assert.deepEqual(parsearRuta(hash), { pantalla: "inicio" }, hash);
     }
   });

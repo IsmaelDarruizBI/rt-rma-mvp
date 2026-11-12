@@ -51,6 +51,9 @@ import {
   type EjecutorAcciones,
 } from "./AccionesOrden";
 import { InventarioPanel } from "../inventario/Inventario";
+import { ReportesPanel } from "../reportes/Reportes";
+import { ConfiguracionPanel } from "../configuracion/Configuracion";
+import { AntecedentesEquipo } from "./AntecedentesEquipo";
 import { AutorizacionClienteOrden } from "./AutorizacionCliente";
 import {
   PantallaInicio,
@@ -74,6 +77,7 @@ import {
   CUSTODIA,
   ESTADO_PAGO,
   ESTADO_TRABAJO,
+  nombreAccion as nombreAccionConTrabajo,
   nombreDeAccion,
   ROL,
   etiqueta,
@@ -458,6 +462,22 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
       void ejecutarComando(() =>
         api.revisarDetalle(idOrden, detalleId, idActor, resultado),
       ),
+    evaluarDetalle: (detalleId, resultado, observaciones, tipoId, adicionales) =>
+      void ejecutarComando(() =>
+        api.evaluarDetalle(
+          idOrden,
+          detalleId,
+          idActor,
+          resultado,
+          observaciones,
+          tipoId,
+          adicionales,
+        ),
+      ),
+    agregarTrabajoAdicional: (tipoId, observaciones) =>
+      void ejecutarComando(() =>
+        api.agregarTrabajoAdicional(idOrden, idActor, tipoId, observaciones),
+      ),
     redefinirDetalle: (detalleId, tipoId) =>
       void ejecutarComando(() =>
         api.redefinirDetalle(idOrden, detalleId, idActor, tipoId),
@@ -576,7 +596,17 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
         )
       : { visibles: [], menu: [] };
   const accionAbierta = abierta ? (registradas.get(abierta) ?? null) : null;
-  const nombreAccion = (accion: Accion) => nombreDeAccion(accion);
+  // Con varios trabajos, la misma acción aparece una vez por Detalle
+  // («Evaluar el trabajo», «Iniciar el trabajo»): el botón dice cuál.
+  const repetidas = new Set(
+    (orden?.acciones_disponibles ?? [])
+      .map((accion) => accion.codigo)
+      .filter((codigo, i, todos) => todos.indexOf(codigo) !== i),
+  );
+  const nombreAccion = (accion: Accion) =>
+    orden && accion.detalle_id && repetidas.has(accion.codigo)
+      ? nombreAccionConTrabajo(orden, accion)
+      : nombreDeAccion(accion);
 
   // Con sesión real, mientras llegan los catálogos (o si fallaron).
   if (actor === null && sesion) {
@@ -624,6 +654,13 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
         ? { titulo: "Taller", subtitulo: "Cola de trabajo y órdenes en reparación" }
         : ruta.pantalla === "inventario"
           ? { titulo: "Inventario", subtitulo: "Stock, reservas y movimientos" }
+          : ruta.pantalla === "reportes"
+          ? { titulo: "Reportes", subtitulo: "Indicadores operativos" }
+          : ruta.pantalla === "configuracion"
+          ? {
+              titulo: "Configuración",
+              subtitulo: "Tipos de reparación, Mesas de trabajo y auditoría",
+            }
           : ruta.pantalla === "orden"
             ? {
                 titulo: `Orden ${ruta.ordenId}`,
@@ -682,7 +719,11 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
         setError(null);
         navegar({ pantalla: destino });
       }}
-      usuario={{ nombre: actor.nombre, rol: ROL[actor.rol] ?? actor.rol }}
+      usuario={{
+        nombre: actor.nombre,
+        rol: ROL[actor.rol] ?? actor.rol,
+        esAdministracion: actor.rol === "ADMINISTRADOR",
+      }}
       onCerrarSesion={cerrarSesion}
       barra={barra}
     >
@@ -706,6 +747,10 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
         />
       ) : ruta.pantalla === "inventario" ? (
         <InventarioPanel actor={actor} usuarios={usuarios} />
+      ) : ruta.pantalla === "reportes" ? (
+        <ReportesPanel />
+      ) : ruta.pantalla === "configuracion" ? (
+        <ConfiguracionPanel actor={actor} />
       ) : ruta.pantalla === "ordenes" || ruta.pantalla === "nueva" ? (
         <>
           <PantallaOrdenes
@@ -819,6 +864,14 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                 abierta
               >
                 <TrabajosOrden orden={orden} usuarios={usuarios} />
+              </SeccionPlegable>
+
+              <SeccionPlegable
+                key={`${orden.id}-antecedentes`}
+                titulo="Antecedentes del equipo"
+                resumen="Otras Órdenes con el mismo IMEI o número de serie"
+              >
+                <AntecedentesEquipo orden={orden} />
               </SeccionPlegable>
 
               <SeccionPlegable

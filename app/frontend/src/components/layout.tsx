@@ -21,6 +21,8 @@ import {
   IconoExpandir,
   IconoInicio,
   IconoInventario,
+  IconoReportes,
+  IconoConfiguracion,
   IconoMas,
   IconoMenu,
   IconoOrdenes,
@@ -28,13 +30,32 @@ import {
   IconoTaller,
 } from "./iconos";
 
-export type Seccion = "inicio" | "ordenes" | "taller" | "inventario";
+export type Seccion =
+  | "inicio"
+  | "ordenes"
+  | "taller"
+  | "inventario"
+  | "reportes"
+  | "configuracion";
 
-const SECCIONES: readonly { clave: Seccion; nombre: string; icono: () => ReactNode }[] = [
+const SECCIONES: readonly {
+  clave: Seccion;
+  nombre: string;
+  icono: () => ReactNode;
+  /** Solo para Administración (DC23); el backend lo valida igual. */
+  soloAdministracion?: boolean;
+}[] = [
   { clave: "inicio", nombre: "Inicio", icono: IconoInicio },
   { clave: "ordenes", nombre: "Órdenes", icono: IconoOrdenes },
   { clave: "taller", nombre: "Taller", icono: IconoTaller },
   { clave: "inventario", nombre: "Inventario", icono: IconoInventario },
+  { clave: "reportes", nombre: "Reportes", icono: IconoReportes },
+  {
+    clave: "configuracion",
+    nombre: "Configuración",
+    icono: IconoConfiguracion,
+    soloAdministracion: true,
+  },
 ];
 
 const CLAVE_CONTRAIDA = "rt-rma.sidebarContraida";
@@ -64,7 +85,7 @@ export function Layout({
 }: {
   seccion: Seccion;
   onNavegar: (seccion: Seccion) => void;
-  usuario: { nombre: string; rol: string };
+  usuario: { nombre: string; rol: string; esAdministracion?: boolean };
   onCerrarSesion: () => void;
   barra: Barra;
   children: ReactNode;
@@ -98,7 +119,9 @@ export function Layout({
           <span className="rt-sidebar__texto">Rosario Tecno RMA</span>
         </div>
         <nav className="rt-sidebar__nav">
-          {SECCIONES.map(({ clave, nombre, icono: Icono }) => (
+          {SECCIONES.filter(
+            (s) => !s.soloAdministracion || usuario.esAdministracion,
+          ).map(({ clave, nombre, icono: Icono }) => (
             <button
               key={clave}
               type="button"

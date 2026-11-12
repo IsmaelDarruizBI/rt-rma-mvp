@@ -161,6 +161,8 @@ export interface Desistimiento {
   desistibles: string[];
   conservados: string[];
   bloqueantes: { detalle_id: string; motivo: string }[];
+  /** DC07C: trabajos en reparación; el pedido total los espera. */
+  en_ejecucion?: string[];
 }
 
 /** Lo que Recepción envía por cada Detalle con respuesta del cliente. */
@@ -722,6 +724,12 @@ export interface Detalle {
    * ejecución. Se conserva aunque después se cancele.
    */
   solicitud_desistimiento?: SolicitudDesistimiento | null;
+  /** BR-REP-026: quién diagnosticó la definición vigente. */
+  origen_diagnostico?: "RECEPCION" | "REVISION_TECNICA" | null;
+  /** BR-REP-035: evaluaciones técnicas, de la más antigua a la última. */
+  evaluaciones?: EvaluacionTecnica[];
+  /** Falta la evaluación técnica para poder iniciarlo. */
+  requiere_evaluacion?: boolean;
   /** Resuelto por la API contra el catálogo; no vive en el dominio. */
   insumos_previstos: InsumoPrevisto[];
   /** Definición vigente: 1 + las reemplazadas por PROC-REP-127. */
@@ -797,6 +805,21 @@ export interface Ejecucion {
   estado_trabajo?: string | null;
   /** DC07B: si lo hecho puede revertirse. */
   reversible?: boolean | null;
+}
+
+/** BR-REP-035/036: resultado de la evaluación técnica (PROC-REP-183). */
+export type ResultadoEvaluacionTecnica =
+  | "CONFIRMADO"
+  | "DESCARTADO"
+  | "REQUIERE_REDEFINICION";
+
+/** Una evaluación técnica de un trabajo diagnosticado por Recepción. */
+export interface EvaluacionTecnica {
+  version_definicion: number;
+  resultado: ResultadoEvaluacionTecnica;
+  usuario_id: string;
+  fecha: string;
+  observaciones: string | null;
 }
 
 /** DC07: pedido de desistimiento sobre un trabajo en ejecución. */

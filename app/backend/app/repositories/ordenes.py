@@ -93,6 +93,16 @@ class OrdenReparacionRepository(Protocol):
         """
         ...
 
+    def listar_por_identificacion_equipo(
+        self, *, imei: str | None, numero_serie: str | None
+    ) -> list[OrdenReparacion]:
+        """Las Ordenes cuyo Equipo tiene exactamente ese IMEI o ese numero
+        de serie (BR-REP-022). Solo consulta: no decide si es el mismo
+        Equipo fisico (la reutilizacion confirmada sigue pendiente, ABI-05).
+        Con los dos en ``None``: ``ValueError``.
+        """
+        ...
+
     def listar_con_reservas(
         self, insumo_ids: Collection[str] | None = None
     ) -> list[OrdenReparacion]:

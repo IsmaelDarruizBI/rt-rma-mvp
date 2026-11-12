@@ -19,10 +19,28 @@ from .enums import (
     EstadoReparacionDetail,
     EstadoTomaOrden,
     OrigenCancelacion,
+    OrigenDiagnostico,
     ResultadoAutorizacion,
     ResultadoControl,
+    ResultadoEvaluacionTecnica,
 )
 from .inventario import InsumoUtilizado
+
+
+class EvaluacionTecnica(BaseModel):
+    """Una evaluacion tecnica de un Detalle (PROC-REP-183, BR-REP-035).
+
+    Sobre la definicion vigente (``version_definicion``), con el tecnico,
+    la fecha/hora, el resultado principal y las observaciones (obligatorias
+    en DESCARTADO y REQUIERE_REDEFINICION). Append-only: una redefinicion
+    deja la anterior en el historial y no la reemplaza.
+    """
+
+    version_definicion: int = Field(ge=1)
+    resultado: ResultadoEvaluacionTecnica
+    usuario_id: str
+    fecha: datetime
+    observaciones: str | None = None
 
 
 class RegistroControlTecnico(BaseModel):
@@ -161,6 +179,12 @@ class ReparacionDetail(BaseModel):
     # E14: todos los controles registrados, del mas antiguo al mas
     # reciente. Default vacio: un JSON anterior sigue cargando.
     controles: list[RegistroControlTecnico] = Field(default_factory=list)
+
+    # BR-REP-026/035: quien diagnostico la definicion vigente y sus
+    # evaluaciones tecnicas. Sin origen: Detalle anterior, que no exige
+    # evaluacion (los datos existentes no se bloquean).
+    origen_diagnostico: OrigenDiagnostico | None = None
+    evaluaciones: list[EvaluacionTecnica] = Field(default_factory=list)
 
     # PROC-REP-300/305: solo en un Detalle CANCELADO.
     cancelacion: RegistroCancelacion | None = None

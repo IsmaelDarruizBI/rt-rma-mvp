@@ -388,10 +388,13 @@ def test_q01_q03_alta_valida_igual(corpus, tmp_path, dni):
 # --- Control estatico -------------------------------------------------------
 
 # Unicos recorridos completos autorizados (diseno E2, seccion C):
-# el listado general (Q04) y las evidencias de faltante (F-03).
+# el listado general (Q04), las evidencias de faltante (F-03) y el reporte
+# operativo v1 (macroiteracion V1.4, modulo K: agrega sobre todas las
+# Ordenes por definicion; su costo figura en los riesgos del reporte).
 LISTAR_AUTORIZADO = {
     ("application/consultas.py", "listar_ordenes"),
     ("application/inventario.py", "detalle_de_insumo"),
+    ("application/consultas_operativas.py", "reporte_operativo"),
 }
 
 

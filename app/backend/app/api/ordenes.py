@@ -90,6 +90,11 @@ from app.application import (
     vista_previa_documento,
 )
 from app.application.acciones import ACCION_INICIAR_GARANTIA_RMA
+from app.application.evaluacion import (
+    PedidoAdicional,
+    agregar_trabajo_adicional,
+    evaluar_detalle,
+)
 from app.domain.models import (
     EstadoReparacionDetail,
     EstadoWorkflow,
@@ -110,6 +115,7 @@ from app.services import (
 from .dependencias import ContextoDep
 from .idempotencia import ClaveDep, con_clave, id_de_foto, idempotente
 from .schemas import (
+    AgregarTrabajoAdicionalIn,
     AjustarGarantiaIn,
     AnularPagoIn,
     AprobarControlIn,
@@ -137,6 +143,7 @@ from .schemas import (
     EntregarIn,
     EnviarARevisionIn,
     EquipoNoRecibidoIn,
+    EvaluarDetalleIn,
     FinalizarDefinicionIn,
     FinalizarSinReparacionIn,
     FinanzasOrdenOut,
@@ -775,6 +782,58 @@ def post_tomar(
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
         estacion_id=cuerpo.estacion_id,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/details/{detalle_id}/evaluation")
+def post_evaluar_detalle(
+    orden_id: str,
+    detalle_id: str,
+    cuerpo: EvaluarDetalleIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Evaluacion tecnica de un Detalle de Recepcion (ACT-TECH, PROC-REP-183).
+
+    BR-REP-035/036: CONFIRMADO, DESCARTADO o REQUIERE_REDEFINICION, sobre la
+    definicion vigente, por el tecnico titular de la toma.
+    """
+    orden = evaluar_detalle(
+        contexto,
+        orden_id=orden_id,
+        detalle_id=detalle_id,
+        usuario_id=cuerpo.usuario_id,
+        resultado=cuerpo.resultado,
+        observaciones=cuerpo.observaciones,
+        tipo_reparacion_id=cuerpo.tipo_reparacion_id,
+        adicionales=[
+            PedidoAdicional(**adicional.model_dump())
+            for adicional in cuerpo.adicionales
+        ],
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/details/additional")
+@idempotente("AGREGAR_TRABAJO_ADICIONAL")
+def post_agregar_trabajo_adicional(
+    orden_id: str,
+    cuerpo: AgregarTrabajoAdicionalIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Reparacion adicional detectada por el tecnico (ACT-TECH, PROC-REP-128).
+
+    BR-REP-037: el titular de la toma registra un Detalle nuevo; en
+    CLIENTE_EXTERNO queda pendiente de la decision del cliente, que gestiona
+    Recepcion, y la Ejecucion en curso continua.
+    """
+    orden = agregar_trabajo_adicional(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        tipo_reparacion_id=cuerpo.tipo_reparacion_id,
+        observaciones=cuerpo.observaciones,
+        detalle_origen_id=cuerpo.detalle_origen_id,
     )
     return _salida(orden, contexto)
 

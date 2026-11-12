@@ -40,6 +40,7 @@ from app.repositories import (
     RegistroDeAcciones,
     UnidadDeTrabajo,
 )
+from app.repositories.configuracion import ConfiguracionRepository
 from app.storage import (
     AlmacenFotos,
     AlmacenFotosDirectorio,
@@ -91,6 +92,8 @@ class ApplicationContext:
     # Idempotencia (E6, B1): solo PostgreSQL registra acciones con clave.
     # En JSON es ``None`` y la clave del encabezado se ignora.
     acciones: RegistroDeAcciones | None = None
+    # Administracion de catalogos con auditoria (DC23): solo PostgreSQL.
+    configuracion: ConfiguracionRepository | None = None
     # Cierre de los recursos de la persistencia (el pool de PostgreSQL).
     cerrar: Callable[[], None] | None = None
 
@@ -138,6 +141,9 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
     from app.storage.postgres.acciones import PostgresRegistroDeAcciones
     from app.storage.postgres.catalogos import PostgresCatalogosRepository
     from app.storage.postgres.conexion import HOSTS_LOCALES, servidor_unico
+    from app.storage.postgres.configuracion import (
+        PostgresConfiguracionRepository,
+    )
     from app.storage.postgres.modelos_equipo import (
         PostgresModelosEquipoRepository,
     )
@@ -187,6 +193,7 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
         modelos_equipo=PostgresModelosEquipoRepository(unidad),
         unidad_de_trabajo=unidad,
         acciones=PostgresRegistroDeAcciones(unidad),
+        configuracion=PostgresConfiguracionRepository(unidad),
         cerrar=lambda: cerrar_pool(pool),
     )
 
