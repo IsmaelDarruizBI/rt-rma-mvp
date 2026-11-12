@@ -12,8 +12,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - corte del UAT a São Paulo y respaldo diario activo (11/11);
   - **iteración funcional 1 cerrada** (11/11, rama `feat/iteracion-1-alineacion-v14`, sin publicar): DC06, DC07, DC11 y DC15B alineadas con V1.4 y las cinco decisiones DEC-IT1-01 a 05 incorporadas en `rt-rma-app` (`708d81b`) e implementadas (sección B).
 - **Falta:**
-  - revisar la iteración 1 e integrarla en `mvp-v2` (push y merge con autorización);
-  - publicar la rama de especificación `spec/iteracion-1-decisiones` de `rt-rma-app` (también con autorización);
+  - desplegar la iteración 1 en UAT (con autorización): primero la migración `20261111000100` en São Paulo, después Cloud Run y Vercel;
   - integrar en `main` (P0-2).
 
 **Para retomar el trabajo: [`CIERRE_CONSOLIDACION_TECNICA.md`](CIERRE_CONSOLIDACION_TECNICA.md)**: estado, pendientes con autorización y criterios para el desarrollo funcional. Corte y vuelta atrás: [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16. Entorno local: [`CHECKPOINT_UAT_OPTIMIZADO.md`](CHECKPOINT_UAT_OPTIMIZADO.md), sección 5. En otra computadora: [`CONTINUIDAD.md`](CONTINUIDAD.md).
@@ -34,7 +33,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | Persistencia en uso | UAT: PostgreSQL en Supabase (`RMA_PERSISTENCIA=postgres`). JSON sigue siendo el valor por defecto local |
 | UAT publicado | Desde el 11/11/2026, sobre Supabase São Paulo: backend en Cloud Run (`00024-top`, código `d226fd2`) y frontend en Vercel (`dpl_6vsL…`). Oregón queda como vuelta atrás hasta el 25/11/2026 ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16) |
 
-**Rama de trabajo:** `feat/iteracion-1-alineacion-v14`, salida de `mvp-v2` (`fa4f24d`); commits locales, sin push ni merge. `mvp-v2` sigue en `fa4f24d`. `business/` viene de `rt-rma-app` `708d81b` (rama local `spec/iteracion-1-decisiones`, sin publicar). Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
+**Rama de trabajo:** `mvp-v2`, con la iteración 1 integrada por avance rápido el 12/11/2026 (`feat/iteracion-1-alineacion-v14`, publicada). CI en verde en la rama y en `mvp-v2`. `business/` viene de `rt-rma-app` `708d81b` (rama `spec/iteracion-1-decisiones`, publicada). `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
 
 **Últimos commits de código:** `61e2a14` (inicio de sesión con usuario y contraseña), `50170e4` (DC31) y `d60c124` (autenticación). Desplegado: `d226fd2`, que incluye la corrección de DC31 (`ac619ed`) y el cierre de `/docs`. Ver `git log`.
 
@@ -470,7 +469,7 @@ El detalle, asignado por etapa, está en [`postgresql/integracion-pendientes.md`
 | IT1-4 | El intento de garantía rechazado no se registra (ABI-35, pendiente en la baseline) | Posterior |
 | IT1-5 | VAR-REP-019 (el técnico redefine antes de ejecutar) no se implementó: depende de la evaluación técnica de BR-REP-035, que el producto no tiene | Posterior |
 | IT1-6 | La migración `20261111000100` tiene que aplicarse en São Paulo antes de desplegar la iteración 1 | Despliegue |
-| IT1-7 | `rt-rma-app` `spec/iteracion-1-decisiones` no está publicada: `verify:functional-copy:source` solo funciona con el clon local hasta publicarla | Integración |
+| IT1-7 | Resuelto (12/11/2026): `spec/iteracion-1-decisiones` publicada; la copia funcional se verifica contra `708d81b` | Cerrado |
 | IT1-8 | DC07C: desistir de todo con una reparación en curso sigue bloqueado (circuito guiado pendiente) | Posterior |
 
 Otros riesgos registrados:
@@ -482,7 +481,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso:** la iteración funcional 1 está cerrada y lista para integrar. Con autorización: publicar `rt-rma-app` `spec/iteracion-1-decisiones` y `rt-rma-mvp` `feat/iteracion-1-alineacion-v14`, e integrar esta en `mvp-v2`. Desplegar después, aplicando antes la migración `20261111000100` en São Paulo. Pruebas del cierre (11/11/2026): JSON 1720 pasan y 29 se saltean; `tests/postgres` 389 pasan; frontend: typecheck, 124 tests y build; `npm run validate:all` en verde. Quedan además los pendientes operativos con fecha y `main`:
+**Próximo paso:** la iteración 1 está integrada en `mvp-v2` (12/11/2026) y lista para un despliegue controlado a UAT, con autorización: aplicar la migración `20261111000100` en São Paulo (`supabase migration list` la muestra pendiente) y después desplegar Cloud Run y Vercel con el checklist de seguridad. Pruebas del cierre (11/11/2026): JSON 1720 pasan y 29 se saltean; `tests/postgres` 389 pasan; frontend: typecheck, 124 tests y build; `npm run validate:all` en verde; los cinco workflows de CI en verde en la rama y en `mvp-v2`. Quedan además los pendientes operativos con fecha y `main`:
 
 1. **Hecho (11/11/2026):** inicio de sesión manual en `rt-rma-uat.vercel.app`, verificado en los registros.
 2. **Hecho (11/11/2026):** limpieza (P2-4) y respaldo diario (P0-1).
