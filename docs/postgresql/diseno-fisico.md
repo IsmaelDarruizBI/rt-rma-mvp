@@ -140,6 +140,13 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 
 **Iteración funcional 1 (`20261111000100_it1_alineacion_v14.sql`, aditiva):** columnas que admiten vacío en `orden_detalle_origen` (días, vencimiento y vigencia evaluados en PROC-REP-036 y, si el Detalle estaba vencido, su excepción: usuario, fecha y motivo; DEC-IT1-03), `detalle` (solicitud de desistimiento: usuario, fecha, motivo y canal) y `ejecucion` (estado del trabajo y reversibilidad, solo si está INTERRUMPIDO); `descuento.clase` (DESCUENTO por defecto o CORTESIA, total o parcial); el tipo de evento EV-REP-052 «Excepción de garantía autorizada» (52 de negocio desde entonces) y tres equivalencias del historial (036 sin acción, 036 con la excepción y 046 con la solicitud de desistimiento).
 
+**Macroiteración V1.4 (aditivas):**
+
+- **`20261112000100_evaluacion_tecnica.sql`:** `detalle.origen_diagnostico`, que admite vacío (RECEPCION o REVISION_TECNICA; vacío en los Detalles anteriores); DESCARTE_TECNICO en `cancelacion_origen`; la tabla inmutable `evaluacion_tecnica`; equivalencias de 182, 183, 184 y 128.
+- **`20261112000200_configuracion_auditada.sql`:** la tabla inmutable `cambio_configuracion`, con `secuencia` identity; la vista `historial_precio`; DELETE en `mesa_tipo_reparacion` para `rma_backend`.
+
+Las dos se aplicaron en São Paulo el 12/11/2026, con 23 migraciones y 47 tablas ([`ESTADO_PROYECTO.md`](../ESTADO_PROYECTO.md), sección B).
+
 **Datos de referencia (en las migraciones):** iguales en todos los entornos.
 
 **Datos operativos iniciales (`supabase/seeds/referencia_operativa/`), válidos para producción:**

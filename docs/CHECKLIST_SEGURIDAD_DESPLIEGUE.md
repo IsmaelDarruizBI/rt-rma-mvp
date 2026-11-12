@@ -56,6 +56,16 @@ Controles críticos para revisar antes y después de publicar. No es una auditor
 - **Hallazgo corregido en código (sin desplegar):** `/docs`, `/redoc` y `/openapi.json` eran públicos y mostraban 78 rutas; se corrige en `4af9854`. Queda pendiente para el próximo despliegue.
 - **Pendiente de confirmar en el panel:** el largo mínimo 10 en los dos proyectos.
 
+## Resultado de la revisión del 12/11/2026 (`00029-kay`, macroiteración V1.4, São Paulo)
+
+- **Correcto:**
+  - repositorio: escaneo de secretos sin hallazgos y migraciones aditivas con el workflow `postgres` en verde;
+  - backend: la plantilla de `00027-sas` sin cambios (14 variables, `RMA_AUTH_MODO=supabase` con el Auth de São Paulo, `RMA_DATABASE_URL` desde `rma-uat-sp-database-url:1`, CORS solo del frontend); 401 sin token y con token inválido, también en reportes, antecedentes, administración, evaluación y adicionales; `/docs`, `/redoc` y `/openapi.json` 404; registros sin errores, 5xx ni credenciales;
+  - base: las tablas nuevas solo con SELECT e INSERT para `rma_backend` y con triggers de inmutabilidad; `anon` y `authenticated` sin acceso; `rma_respaldo` solo lee; las pruebas de la macroiteración pasan con un rol miembro de `rma_backend`; la migración no cambia roles; integridad sin problemas en el ensayo de restauración;
+  - Supabase Auth: registro deshabilitado, solo `email`, JWKS `ES256`;
+  - frontend: solo la clave publicable, sin JWT ni claves secretas; mismo ref que el backend y la URL pública de la API.
+- **No verificado en esta revisión:** con una sesión real, que la administración dé 403 a los demás roles y que reportes y antecedentes no muestren datos personales (cubierto por las pruebas automáticas); token de otro proyecto y suplantación; el largo mínimo de contraseña en el panel.
+
 ## Resultado de la revisión del 12/11/2026 (`00027-sas`, iteración 1, São Paulo)
 
 - **Correcto:**

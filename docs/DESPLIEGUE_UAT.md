@@ -84,18 +84,26 @@ Ninguno despliega ni usa secretos. Se activan al publicar la rama en GitHub. Com
 
 | Uso | Backend | Frontend | Supabase |
 |---|---|---|---|
-| Público (iteración 1, desde el 12/11/2026) | `rt-rma-uat-api-00027-sas` (etiqueta `it1-14108ef`, código `14108ef`) | `rt-rma-j00dbv3fc…` (`dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2`) | São Paulo `pcdnmhzwhzymznojndrn` |
-| Vuelta atrás de la iteración 1 | `rt-rma-uat-api-00024-top` (etiqueta `sp-d226fd2`, código `d226fd2`) | `rt-rma-pktu8ktbq…` (`dpl_6vsLwpAzxE2yS5K7RLHBMNVvETN8`) | São Paulo `pcdnmhzwhzymznojndrn` (con la migración 21, compatible) |
+| Público (macroiteración V1.4, desde el 12/11/2026 a las 15:14 UTC) | `rt-rma-uat-api-00029-kay` (etiqueta `v14-5c6137e`, código `5c6137e`) | `rt-rma-62sdml5sb…` (`dpl_CRXZubTCVE1ALhZmLe2wHhoZhbWR`) | São Paulo `pcdnmhzwhzymznojndrn` (23 migraciones) |
+| Vuelta atrás de la macroiteración | `rt-rma-uat-api-00027-sas` (etiqueta `it1-14108ef`, código `14108ef`) | `rt-rma-j00dbv3fc…` (`dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2`) | São Paulo `pcdnmhzwhzymznojndrn` (con las migraciones 22 y 23, compatible) |
+| Vuelta atrás de la iteración 1 | `rt-rma-uat-api-00024-top` (etiqueta `sp-d226fd2`, código `d226fd2`) | `rt-rma-pktu8ktbq…` (`dpl_6vsLwpAzxE2yS5K7RLHBMNVvETN8`) | São Paulo `pcdnmhzwhzymznojndrn` (con la migración 21, compatible; sobre la 22 y la 23 no se probó) |
 | Vuelta atrás de la migración, hasta el 25/11/2026 | `rt-rma-uat-api-00020-tux` (etiqueta `auth`, código `61e2a14`) | `rt-rma-n49rz9qgv…` (`dpl_F1M6Msv1FUHo3ghNYPVviYQtmztb`) | Oregón `okcscsglnujnxtgobjfw` |
 
-**Vuelta atrás de la iteración 1** (coordinada, sin tocar la base: la migración 21 es aditiva y `d226fd2` funciona sobre ella, 383 de 384 pruebas; la que falla solo cuenta los tipos de evento):
+**Vuelta atrás de la macroiteración** (coordinada, sin tocar la base: las migraciones 22 y 23 son aditivas y las pruebas `tests/postgres` de `14108ef` pasan sobre ellas, salvo las 2 que cuentan las tablas del esquema):
 
 ```bash
-gcloud run services update-traffic rt-rma-uat-api --region southamerica-east1 --project rosariotecno-460217 --to-revisions rt-rma-uat-api-00024-top=100
-vercel promote dpl_6vsLwpAzxE2yS5K7RLHBMNVvETN8 --scope ismaeldarruizbis-projects
+gcloud run services update-traffic rt-rma-uat-api --region southamerica-east1 --project rosariotecno-460217 --to-revisions rt-rma-uat-api-00027-sas=100
+vercel promote dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2 --scope ismaeldarruizbis-projects
 ```
 
-No se revierten columnas ni se borran datos. Los datos que la iteración 1 haya escrito en las columnas nuevas quedan en la base y la versión anterior los ignora.
+No se revierten columnas ni se borran tablas o datos. Lo que la macroiteración haya escrito queda en la base y la versión anterior lo ignora, con dos efectos que hay que conocer antes de volver:
+
+- un Detalle cancelado por descarte técnico conserva `DESCARTE_TECNICO`, valor que el enum `OrigenCancelacion` de `14108ef` no tiene: con la versión anterior esa Orden no se puede leer. Antes de volver, buscar `select count(*) from rma.detalle where cancelacion_origen = 'DESCARTE_TECNICO'`; si hay filas, la vuelta atrás deja esas Órdenes inaccesibles hasta volver a la macroiteración;
+- un Detalle que esperaba la evaluación técnica puede ejecutarse sin ella con la versión anterior.
+
+Con 0 Órdenes en UAT (12/11/2026, 15:16 UTC), hoy ninguno de los dos aplica.
+
+**Vuelta atrás de la iteración 1** (`00024-top` y `dpl_6vsL…`): mismos comandos con esos identificadores.
 
 **Despliegue de producción sin dominio:** `vercel deploy --prod --skip-domain` construye el despliegue de producción sin publicarlo; `vercel promote <id>` lo publica. Así el corte con el backend dura segundos (12/11/2026: 12 s).
 
