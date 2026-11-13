@@ -12,6 +12,7 @@ atrapa excepciones -de eso se ocupa ``errores.py``-.
 
 import hashlib
 from dataclasses import replace
+from decimal import Decimal
 
 from fastapi import APIRouter, Request, Response, status
 from pydantic import BaseModel, Field
@@ -96,6 +97,7 @@ from app.application.evaluacion import (
     agregar_trabajo_adicional,
     evaluar_detalle,
 )
+from app.application.lotes import registrar_devolucion_insumo
 from app.application.operativa import (
     plazo_retiro_dias,
     registrar_seguimiento,
@@ -1696,5 +1698,31 @@ def post_seguimiento_retiro(
         usuario_id=cuerpo.usuario_id,
         nota=cuerpo.nota,
         canal=cuerpo.canal,
+    )
+    return _salida(orden, contexto)
+
+
+class DevolucionInsumoIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+    cantidad: Decimal = Field(gt=0)
+    motivo: str = Field(min_length=1)
+
+
+@router.post("/{orden_id}/consumptions/{consumo_id}/return")
+def post_devolucion_insumo(
+    orden_id: str,
+    consumo_id: str,
+    cuerpo: DevolucionInsumoIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """El insumo utilizable vuelve al stock, al lote de donde salio
+    (DEC-MI-10). Referencia el consumo; no supera lo consumido."""
+    orden = registrar_devolucion_insumo(
+        contexto,
+        orden_id=orden_id,
+        consumo_id=consumo_id,
+        cantidad=cuerpo.cantidad,
+        motivo=cuerpo.motivo,
+        usuario_id=cuerpo.usuario_id,
     )
     return _salida(orden, contexto)

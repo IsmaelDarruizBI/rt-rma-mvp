@@ -696,8 +696,14 @@ def test_completar_con_los_insumos_previstos_recibidos(cliente):
 
     assert respuesta.status_code == 200
     ejecucion = respuesta.json()["ejecuciones"][0]
+    # DEC-MI-10: la linea tambien informa el desperdicio y el lote.
     assert ejecucion["insumos_utilizados"] == [
-        {"insumo_id": INSUMO, "cantidad": "1"}
+        {
+            "insumo_id": INSUMO,
+            "cantidad": "1",
+            "desperdicio": "0",
+            "lote_id": None,
+        }
     ]
 
 

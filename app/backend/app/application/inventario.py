@@ -25,6 +25,7 @@ from app.domain.models import (
     OrdenReparacion,
     TipoMovimientoInsumo,
 )
+from app.domain.models.lotes import ControlInsumo, OrigenLote
 from app.repositories import RepositoryError
 from app.services import (
     ACCION_REVALIDAR_RECURSOS,
@@ -52,9 +53,15 @@ from app.services import (
     tipo_de_ajuste,
     validar_alguno_de,
 )
+from app.services.lotes import (
+    lote_para_ingreso,
+    validar_ingreso,
+    validar_salidas,
+)
 
 from .contexto import ApplicationContext
 from .ingreso import _validar_y_habilitar
+from .lotes import estado_de_lotes
 from .modificacion import orden_para_modificar
 
 NODOS_ESPERANDO_RECURSOS = ("PROC-REP-100", "PROC-REP-120")
@@ -160,7 +167,13 @@ def _registrar_movimiento(
     referencia: str | None,
     operacion_id: str | None,
     confirmado: bool,
+    lote: str | None = None,
+    lote_id: str | None = None,
+    origen_lote: OrigenLote = OrigenLote.INGRESO_MANUAL,
+    roles=None,
 ) -> ResultadoMovimientoStock:
+    """``lote``: numero del lote o serie de un ingreso (se crea si no
+    existe); ``lote_id``: el lote existente de un ajuste (DEC-MI-10)."""
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
@@ -172,6 +185,18 @@ def _registrar_movimiento(
         insumo = contexto.catalogos.obtener_insumo(insumo_id)
         ordenes = contexto.ordenes.listar_con_reservas([insumo_id])
         (situacion,) = situacion_inventario([insumo], ordenes)
+        lote_id = _lote_del_movimiento(
+            contexto,
+            insumo,
+            tipo=tipo,
+            cantidad=cantidad,
+            lote=lote,
+            lote_id=lote_id,
+            origen=origen_lote,
+            referencia=referencia,
+            usuario=usuario,
+            fecha=fecha,
+        )
         movimiento = registrar_movimiento_operativo(
             situacion,
             tipo=tipo,
@@ -183,6 +208,8 @@ def _registrar_movimiento(
             referencia=referencia,
             operacion_id=operacion_id,
             confirmado=confirmado,
+            lote_id=lote_id,
+            roles=roles,
         )
         insumo = contexto.catalogos.registrar_movimiento_stock(movimiento)
         (situacion,) = situacion_inventario([insumo], ordenes)
@@ -198,8 +225,10 @@ def registrar_ingreso_stock(
     motivo: str,
     referencia: str | None = None,
     operacion_id: str | None = None,
+    lote: str | None = None,
 ) -> ResultadoMovimientoStock:
-    """Entrada de existencias: suma al fisico, no toca reservas."""
+    """Entrada de existencias: suma al fisico, no toca reservas. En un
+    insumo controlado por lote o serie, ``lote`` es obligatorio."""
     return _registrar_movimiento(
         contexto,
         insumo_id=insumo_id,
@@ -210,6 +239,7 @@ def registrar_ingreso_stock(
         referencia=referencia,
         operacion_id=operacion_id,
         confirmado=True,
+        lote=lote,
     )
 
 
@@ -223,8 +253,10 @@ def registrar_ajuste_stock(
     referencia: str | None = None,
     operacion_id: str | None = None,
     confirmado: bool = False,
+    lote_id: str | None = None,
 ) -> ResultadoMovimientoStock:
     """Ajuste expresado como diferencia de unidades (+ suma, - resta).
+    ``lote_id``: el lote ajustado (sin lote: stock sin lote identificado).
 
     Todo ajuste negativo exige ``confirmado``; las reservas nunca se
     modifican.
@@ -240,7 +272,71 @@ def registrar_ajuste_stock(
         referencia=referencia,
         operacion_id=operacion_id,
         confirmado=confirmado,
+        lote_id=lote_id,
     )
+
+
+def _lote_del_movimiento(
+    contexto: ApplicationContext,
+    insumo,
+    *,
+    tipo: TipoMovimientoInsumo,
+    cantidad: Decimal,
+    lote: str | None,
+    lote_id: str | None,
+    origen: OrigenLote,
+    referencia: str | None,
+    usuario,
+    fecha: datetime,
+) -> str | None:
+    """DEC-MI-10: el lote de un ingreso (se crea si es nuevo) o de un
+    ajuste (existente); valida saldos con el insumo ya bloqueado."""
+    if insumo.control is ControlInsumo.SIN_LOTE and not lote and not lote_id:
+        return None
+    estado = estado_de_lotes(contexto, insumo)
+    if tipo is TipoMovimientoInsumo.INGRESO:
+        validar_ingreso(insumo, estado, numero=lote, cantidad=cantidad)
+        existentes = [s.lote for s in estado.lotes]
+        nuevo_lote, es_nuevo = lote_para_ingreso(
+            insumo,
+            existentes,
+            numero=lote,
+            origen=origen,
+            referencia=referencia,
+            usuario=usuario,
+            fecha=fecha,
+        )
+        if nuevo_lote is None:
+            return None
+        if es_nuevo:
+            if contexto.lotes is None:
+                raise PrecondicionInvalidaError(
+                    "Esta persistencia no registra lotes."
+                )
+            contexto.lotes.agregar(nuevo_lote)
+        return nuevo_lote.id
+    if lote:
+        raise PrecondicionInvalidaError(
+            "Un ajuste nombra un lote existente, no un numero nuevo."
+        )
+    if tipo is TipoMovimientoInsumo.AJUSTE_NEGATIVO:
+        validar_salidas(insumo, estado, [(lote_id, cantidad)])
+    elif lote_id is not None:
+        if insumo.control is ControlInsumo.SIN_LOTE:
+            raise PrecondicionInvalidaError(
+                f"El insumo {insumo.id} no se controla por lote."
+            )
+        saldo = next((s for s in estado.lotes if s.lote.id == lote_id), None)
+        if saldo is None:
+            raise PrecondicionInvalidaError(
+                f"El lote {lote_id} no es del insumo {insumo.id}."
+            )
+        if saldo.lote.serie and saldo.saldo + cantidad > 1:
+            raise PrecondicionInvalidaError(
+                "Una unidad serializada no puede estar mas de una vez en "
+                "stock."
+            )
+    return lote_id
 
 
 # --- Revalidacion masiva de recursos -----------------------------------------

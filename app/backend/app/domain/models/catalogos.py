@@ -10,6 +10,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 from .enums import PoliticaGarantiaRma
+from .lotes import ControlInsumo
 
 # Reparacion no tipificada: un tipo del sistema, no una fila del catalogo.
 # El Detalle lleva su descripcion y su precio manual; asi se distingue en
@@ -59,6 +60,10 @@ class Insumo(BaseModel):
     # llevarlo a negativo), no en el tipo.
     stock_fisico: Decimal
     activo: bool = True
+    # DEC-MI-10: control por lote o por numero de serie (Administracion).
+    control: ControlInsumo = ControlInsumo.SIN_LOTE
+    # DEC-MI-09: precio que configura Administracion (sin uso automatico).
+    precio: Decimal | None = None
 
 
 class TipoReparacionInsumos(BaseModel):

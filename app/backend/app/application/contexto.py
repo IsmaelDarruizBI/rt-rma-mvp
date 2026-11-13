@@ -41,6 +41,7 @@ from app.repositories import (
     UnidadDeTrabajo,
 )
 from app.repositories.configuracion import ConfiguracionRepository
+from app.repositories.lotes import LotesRepository
 from app.repositories.operativa import (
     ConfiguracionOperativaRepository,
     ConsentimientosRepository,
@@ -58,6 +59,7 @@ from app.storage import (
 )
 from app.storage.json.consentimientos import JsonConsentimientosRepository
 from app.storage.json.firmas import JsonFirmasRepository
+from app.storage.json.lotes import JsonLotesRepository
 from app.storage.json.operativa import JsonConfiguracionOperativa
 from app.storage.json.reclamos import JsonReclamosRepository
 from app.storage.postgres import (
@@ -114,6 +116,8 @@ class ApplicationContext:
     consentimientos: ConsentimientosRepository | None = None
     # Firmas de los documentos emitidos (DEC-MI-06).
     firmas: FirmasRepository | None = None
+    # Lotes de insumo (DEC-MI-10).
+    lotes: LotesRepository | None = None
     # Cierre de los recursos de la persistencia (el pool de PostgreSQL).
     cerrar: Callable[[], None] | None = None
 
@@ -168,6 +172,7 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
         PostgresConsentimientosRepository,
     )
     from app.storage.postgres.firmas import PostgresFirmasRepository
+    from app.storage.postgres.lotes import PostgresLotesRepository
     from app.storage.postgres.modelos_equipo import (
         PostgresModelosEquipoRepository,
     )
@@ -226,6 +231,7 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
         operativa=PostgresConfiguracionOperativa(unidad),
         consentimientos=PostgresConsentimientosRepository(unidad),
         firmas=PostgresFirmasRepository(unidad),
+        lotes=PostgresLotesRepository(unidad),
         cerrar=lambda: cerrar_pool(pool),
     )
 
@@ -260,4 +266,5 @@ def construir_contexto(settings: Settings) -> ApplicationContext:
             settings.data_dir / "consentimientos"
         ),
         firmas=JsonFirmasRepository(settings.data_dir / "firmas"),
+        lotes=JsonLotesRepository(settings.data_dir / "lotes"),
     )

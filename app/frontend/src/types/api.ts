@@ -802,6 +802,10 @@ export interface Toma {
 export interface InsumoUtilizado {
   insumo_id: string;
   cantidad: string;
+  /** DEC-MI-10: material inutilizado. */
+  desperdicio?: string;
+  /** DEC-MI-10: lote de donde sale; sin lote, stock sin lote identificado. */
+  lote_id?: string | null;
 }
 
 export interface Ejecucion {
@@ -1293,6 +1297,7 @@ export type TipoMovimientoInsumo =
   | "CONSUMO"
   | "LIBERACION_RESERVA"
   | "DEVOLUCION"
+  | "DESPERDICIO"
   | "INGRESO"
   | "AJUSTE_POSITIVO"
   | "AJUSTE_NEGATIVO";

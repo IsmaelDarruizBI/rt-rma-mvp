@@ -86,6 +86,7 @@ from app.domain.models import (
     TipoDescuento,
     TipoDocumento,
     TipoEntrega,
+    TipoMovimientoInsumo,
     TipoPago,
     TipoReferenciaHistorial,
     TipoReparacion,
@@ -460,11 +461,25 @@ class InsumoUtilizadoIn(BaseModel):
     """Insumo realmente usado, confirmado por el tecnico."""
 
     insumo_id: str = Field(min_length=1)
-    cantidad: Decimal = Field(gt=0)
+    cantidad: Decimal = Field(ge=0)
+    # DEC-MI-10: material inutilizado y lote de donde sale.
+    desperdicio: Decimal = Field(default=Decimal("0"), ge=0)
+    lote_id: str | None = None
+
+    @model_validator(mode="after")
+    def _algo_salio(self):
+        if self.cantidad + self.desperdicio <= 0:
+            raise ValueError(
+                "Indica lo utilizado o lo desperdiciado (mayor que cero)."
+            )
+        return self
 
     def a_dominio(self) -> InsumoUtilizado:
         return InsumoUtilizado(
-            insumo_id=self.insumo_id, cantidad=self.cantidad
+            insumo_id=self.insumo_id,
+            cantidad=self.cantidad,
+            desperdicio=self.desperdicio,
+            lote_id=self.lote_id,
         )
 
 
@@ -1264,6 +1279,8 @@ class TomaOut(BaseModel):
 class InsumoUtilizadoOut(BaseModel):
     insumo_id: str
     cantidad: Decimal
+    desperdicio: Decimal = Decimal("0")
+    lote_id: str | None = None
 
 
 class EjecucionOut(BaseModel):
@@ -2040,6 +2057,45 @@ def _resumen_comercial(orden: OrdenReparacion) -> "ResumenComercialOut":
     )
 
 
+class ConsumoInsumoOut(BaseModel):
+    """Un CONSUMO de la Orden y lo que se devolvio de el (DEC-MI-10)."""
+
+    id: str
+    insumo_id: str
+    detalle_id: str
+    ejecucion_id: str | None = None
+    cantidad: Decimal
+    devuelto: Decimal
+    lote_id: str | None = None
+    fecha: datetime
+
+
+def _consumos(orden: OrdenReparacion) -> list[ConsumoInsumoOut]:
+    devuelto: dict[str, Decimal] = {}
+    for m in orden.movimientos_insumo:
+        if (
+            m.tipo is TipoMovimientoInsumo.DEVOLUCION
+            and m.movimiento_origen_id
+        ):
+            devuelto[m.movimiento_origen_id] = (
+                devuelto.get(m.movimiento_origen_id, Decimal("0")) + m.cantidad
+            )
+    return [
+        ConsumoInsumoOut(
+            id=m.id,
+            insumo_id=m.insumo_id,
+            detalle_id=m.reparacion_detail_id,
+            ejecucion_id=m.ejecucion_id,
+            cantidad=m.cantidad,
+            devuelto=devuelto.get(m.id, Decimal("0")),
+            lote_id=m.lote_id,
+            fecha=m.fecha,
+        )
+        for m in orden.movimientos_insumo
+        if m.tipo is TipoMovimientoInsumo.CONSUMO
+    ]
+
+
 class OrdenOut(BaseModel):
     """La Orden completa tal como la consume el frontend."""
 
@@ -2141,6 +2197,8 @@ class OrdenOut(BaseModel):
     correcciones_equipo: list[CorreccionVinculoEquipo] = Field(
         default_factory=list
     )
+    # DEC-MI-10: consumos de la Orden con lo ya devuelto al stock.
+    consumos_insumo: list[ConsumoInsumoOut] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -2311,6 +2369,7 @@ class OrdenOut(BaseModel):
             seguimientos_retiro=list(orden.seguimientos_retiro),
             comunicaciones=list(orden.comunicaciones),
             correcciones_equipo=list(orden.correcciones_equipo),
+            consumos_insumo=_consumos(orden),
             created_at=orden.created_at,
             updated_at=orden.updated_at,
         )

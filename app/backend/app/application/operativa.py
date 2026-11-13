@@ -5,7 +5,10 @@ Administracion y sobre PostgreSQL, con auditoria. La consulta de motivos y
 el plazo vigente valen en los dos modos (en JSON, los valores iniciales).
 """
 
+from decimal import Decimal
+
 from app.domain.models import Insumo, OrdenReparacion
+from app.domain.models.lotes import ControlInsumo
 from app.domain.models.operativa import (
     PARAMETRO_PLAZO_RETIRO,
     PARAMETROS_INICIALES,
@@ -16,6 +19,7 @@ from app.services.exceptions import (
     EntidadNoEncontradaError,
     PrecondicionInvalidaError,
 )
+from app.services.lotes import cambio_de_control
 from app.services.operativa import (
     cambio_de_parametro,
     cambios_de_insumo,
@@ -25,6 +29,7 @@ from app.services.operativa import (
 )
 
 from .contexto import ApplicationContext
+from .lotes import estado_de_lotes
 from .modificacion import orden_para_modificar
 
 
@@ -137,6 +142,8 @@ def guardar_insumo(
     unidad: str | None,
     activo: bool,
     nuevo: bool,
+    control: ControlInsumo | None = None,
+    precio: Decimal | None = None,
 ) -> Insumo:
     """Alta o edicion de un insumo (DEC-MI-13), con auditoria. El stock de
     un insumo nuevo empieza en cero: entra con movimientos de inventario."""
@@ -171,7 +178,16 @@ def guardar_insumo(
             unidad=(unidad or "").strip() or None,
             stock_fisico=anterior.stock_fisico if anterior else 0,
             activo=activo,
+            control=control
+            or (anterior.control if anterior else ControlInsumo.SIN_LOTE),
+            precio=precio,
         )
+        if anterior is not None and insumo.control is not anterior.control:
+            # DEC-MI-10: transicion controlada del stock existente.
+            contexto.catalogos.bloquear_insumos([anterior.id])
+            cambio_de_control(
+                anterior, insumo.control, estado_de_lotes(contexto, anterior)
+            )
         cambios = cambios_de_insumo(
             anterior, insumo, usuario=usuario, fecha=fecha
         )

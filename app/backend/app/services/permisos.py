@@ -373,6 +373,14 @@ RECURSOS_REVALIDAR = _definir(
     (ADMIN, COORD),
     INVENTARIO,
 )
+# DEC-MI-10: devolver al stock lo consumido; por defecto, quienes
+# gestionan el stock (no se concede acceso nuevo).
+DEVOLUCION_STOCK = _definir(
+    "DEVOLUCION_STOCK",
+    "Devolver al stock un insumo consumido",
+    (ADMIN, COORD),
+    INVENTARIO,
+)
 CATALOGO_EQUIPOS_SINCRONIZAR = _definir(
     "CATALOGO_EQUIPOS_SINCRONIZAR",
     "Sincronizar el catálogo de equipos de Ventas",

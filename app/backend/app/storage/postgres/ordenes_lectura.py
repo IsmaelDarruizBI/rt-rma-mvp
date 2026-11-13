@@ -424,8 +424,10 @@ _EJECUCIONES = consulta(
 _INSUMOS_UTILIZADOS = consulta(
     "ordenes.insumos_utilizados",
     """
-    SELECT ei.ejecucion_id, i.clave AS insumo, ei.cantidad_utilizada
+    SELECT ei.ejecucion_id, i.clave AS insumo, ei.cantidad_utilizada,
+           ei.desperdicio, l.codigo AS lote
     FROM rma.ejecucion_insumo ei
+    LEFT JOIN rma.lote_insumo l ON l.id = ei.lote_id
     JOIN rma.ejecucion x ON x.id = ei.ejecucion_id
     JOIN rma.insumo i ON i.id = ei.insumo_id
     WHERE x.orden_id = ANY(ARRAY(
@@ -626,8 +628,10 @@ _MOVIMIENTOS = consulta(
     """
     SELECT m.orden_id, m.id, m.codigo, m.tipo, i.clave AS insumo,
            d.codigo AS detalle, x.codigo AS ejecucion, o.codigo AS origen,
-           m.cantidad, u.codigo AS usuario, m.registrado_en, m.observacion
+           m.cantidad, u.codigo AS usuario, m.registrado_en, m.observacion,
+           l.codigo AS lote
     FROM rma.movimiento_inventario m
+    LEFT JOIN rma.lote_insumo l ON l.id = m.lote_id
     JOIN rma.insumo i ON i.id = m.insumo_id
     JOIN rma.detalle d ON d.id = m.detalle_id
     LEFT JOIN rma.ejecucion x ON x.id = m.ejecucion_id
@@ -1096,6 +1100,7 @@ def _movimiento(fila: Any) -> MovimientoInsumo:
         usuario_id=fila.usuario,
         fecha=utc(fila.registrado_en),
         observacion=fila.observacion,
+        lote_id=fila.lote,
     )
 
 
@@ -1254,6 +1259,8 @@ def _ejecucion(fila: Any, insumos: list[Any]) -> EjecucionReparacion:
             InsumoUtilizado(
                 insumo_id=insumo.insumo,
                 cantidad=decimal_sin_ceros(insumo.cantidad_utilizada),
+                desperdicio=decimal_sin_ceros(insumo.desperdicio),
+                lote_id=insumo.lote,
             )
             for insumo in insumos
         ],

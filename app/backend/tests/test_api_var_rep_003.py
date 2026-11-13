@@ -174,8 +174,14 @@ def test_var_rep_003_interrupcion_de_punta_a_punta(cliente, tmp_path):
     assert ejecucion["fin"] is not None
     assert ejecucion["motivo_interrupcion"] == "Falta una herramienta."
     assert ejecucion["observaciones"] == "Vuelve el lunes."
+    # DEC-MI-10: la linea tambien informa el desperdicio y el lote.
     assert ejecucion["insumos_utilizados"] == [
-        {"insumo_id": INSUMO, "cantidad": "1"}
+        {
+            "insumo_id": INSUMO,
+            "cantidad": "1",
+            "desperdicio": "0",
+            "lote_id": None,
+        }
     ]
     (toma,) = orden["tomas"]
     assert toma["estado"] == "ACTIVA"

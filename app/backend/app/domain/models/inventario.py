@@ -3,7 +3,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .enums import TipoMovimientoInsumo
 
@@ -12,12 +12,26 @@ class InsumoUtilizado(BaseModel):
     """Insumo realmente usado en una Ejecucion, con su cantidad.
 
     Es lo que el tecnico confirma en PROC-REP-200, y la fuente de verdad
-    a partir de la cual PROC-REP-210 genera los movimientos. No modela
-    costo, lote, proveedor ni desperdicio.
+    a partir de la cual PROC-REP-210 genera los movimientos.
+
+    DEC-MI-10: ``desperdicio`` es el material inutilizado (sale del stock
+    como DESPERDICIO, no como CONSUMO); ``lote_id`` el lote o la unidad
+    serializada de donde sale (sin lote: el stock sin lote identificado).
+    Una linea por insumo y lote.
     """
 
     insumo_id: str
-    cantidad: Decimal = Field(gt=0)
+    cantidad: Decimal = Field(ge=0)
+    desperdicio: Decimal = Field(default=Decimal("0"), ge=0)
+    lote_id: str | None = None
+
+    @model_validator(mode="after")
+    def _algo_salio(self) -> "InsumoUtilizado":
+        if self.cantidad + self.desperdicio <= 0:
+            raise ValueError(
+                "Indica lo utilizado o lo desperdiciado (mayor que cero)."
+            )
+        return self
 
 
 class MovimientoInsumo(BaseModel):
@@ -54,6 +68,9 @@ class MovimientoInsumo(BaseModel):
     usuario_id: str | None = None
     fecha: datetime
     observacion: str | None = None
+    # DEC-MI-10: lote o unidad serializada; sin lote, el stock sin lote
+    # identificado.
+    lote_id: str | None = None
 
 
 class MovimientoStock(BaseModel):
@@ -85,3 +102,5 @@ class MovimientoStock(BaseModel):
     motivo: str
     referencia: str | None = None
     operacion_id: str | None = None
+    # DEC-MI-10: lote o unidad serializada del ingreso o ajuste.
+    lote_id: str | None = None

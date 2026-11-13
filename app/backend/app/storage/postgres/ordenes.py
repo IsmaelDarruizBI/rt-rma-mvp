@@ -93,8 +93,8 @@ Consumos y liberaciones (A7): cierran su RESERVA de origen, que el trigger
 verifica. Despues de insertarlos, ``guardar`` verifica el stock que espera
 el service (DI-1, ``verificar_stock_esperado``).
 
-Fuera de alcance: DEVOLUCION y DESPERDICIO no tienen operacion habilitada
-(DI-5) y se rechazan con ``PersistenciaError``.
+DEVOLUCION y DESPERDICIO (DEC-MI-10, antes DI-5) se guardan como los demas;
+el trigger del libro valida su origen y sus lotes.
 
 Diseno: ``docs/postgresql/e4-e7-diseno-integrado.md`` (secciones 3 y 4).
 """
@@ -152,12 +152,16 @@ _LEIDAS = "ordenes.leidas"
 _PRECARGADAS = "ordenes.precargadas"
 # Cargas que un comando que confirma en el medio puede invalidar seguidas.
 _INTENTOS_DE_LECTURA = 3
-# Los que el libro admite en una Orden: DEVOLUCION y DESPERDICIO no (DI-5).
+# Los que el libro admite en una Orden (DEC-MI-10 habilito DEVOLUCION y
+# DESPERDICIO).
 _TIPOS_DE_MOVIMIENTO = frozenset(
     {
         TipoMovimientoInsumo.RESERVA,
         TipoMovimientoInsumo.CONSUMO,
         TipoMovimientoInsumo.LIBERACION_RESERVA,
+        # DEC-MI-10.
+        TipoMovimientoInsumo.DESPERDICIO,
+        TipoMovimientoInsumo.DEVOLUCION,
     }
 )
 # Atributo de la Orden entregada por ``obtener_para_modificar`` (QA-A2-H1).
@@ -373,10 +377,11 @@ _INSERTAR_MOVIMIENTO = consulta(
     INSERT INTO rma.movimiento_inventario
         (codigo, tipo, insumo_id, cantidad, orden_id, detalle_id,
          ejecucion_id, movimiento_origen_id, observacion, usuario_id,
-         accion_id, registrado_en, posicion)
+         accion_id, registrado_en, posicion, lote_id)
     VALUES (%(codigo)s, %(tipo)s, %(insumo)s, %(cantidad)s, %(orden)s,
             %(detalle)s, %(ejecucion)s, %(origen)s, %(observacion)s,
-            %(usuario)s, %(accion)s, %(fecha)s, %(posicion)s)
+            %(usuario)s, %(accion)s, %(fecha)s, %(posicion)s,
+            (SELECT id FROM rma.lote_insumo WHERE codigo = %(lote)s))
     RETURNING id
     """,
     modo=ESCRITURA,
@@ -786,8 +791,11 @@ _INSERTAR_INSUMO_UTILIZADO = consulta(
     "ordenes.insertar_insumo_utilizado",
     """
     INSERT INTO rma.ejecucion_insumo
-        (ejecucion_id, insumo_id, cantidad_utilizada, posicion)
-    VALUES (%(ejecucion)s, %(insumo)s, %(cantidad)s, %(posicion)s)
+        (ejecucion_id, insumo_id, cantidad_utilizada, posicion,
+         desperdicio, lote_id)
+    VALUES (%(ejecucion)s, %(insumo)s, %(cantidad)s, %(posicion)s,
+            %(desperdicio)s,
+            (SELECT id FROM rma.lote_insumo WHERE codigo = %(lote)s))
     """,
     modo=ESCRITURA,
 )
@@ -1928,6 +1936,7 @@ class _Guardado:
                     "usuario": self._id("usuario", movimiento.usuario_id),
                     "accion": accion,
                     "fecha": movimiento.fecha,
+                    "lote": movimiento.lote_id,
                     "posicion": posicion,
                 },
             ).id
@@ -2579,6 +2588,10 @@ class _Guardado:
                             insumo.cantidad, _TRES_DECIMALES, "cantidad"
                         ),
                         "posicion": orden_insumo,
+                        "desperdicio": _escala(
+                            insumo.desperdicio, _TRES_DECIMALES, "desperdicio"
+                        ),
+                        "lote": insumo.lote_id,
                     },
                 )
 

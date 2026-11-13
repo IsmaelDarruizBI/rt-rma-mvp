@@ -208,7 +208,10 @@ class TipoMovimientoInsumo(str, Enum):
         RESERVA             compromete stock, no toca el fisico (185)
         CONSUMO             baja el fisico y cierra la reserva (210)
         LIBERACION_RESERVA  cierra la reserva sin tocar el fisico (210)
-        DEVOLUCION          valor del modelo, sin flujo operativo todavia
+        DESPERDICIO         baja el fisico y cierra la reserva: material
+                            inutilizado (DEC-MI-10)
+        DEVOLUCION          insumo utilizable que vuelve al stock; referencia
+                            un CONSUMO (DEC-MI-10)
 
     Operativos, fuera de una Orden (``MovimientoStock``): cambian el stock
     fisico y nunca tocan reservas.
@@ -222,6 +225,7 @@ class TipoMovimientoInsumo(str, Enum):
     CONSUMO = "CONSUMO"
     LIBERACION_RESERVA = "LIBERACION_RESERVA"
     DEVOLUCION = "DEVOLUCION"
+    DESPERDICIO = "DESPERDICIO"
     INGRESO = "INGRESO"
     AJUSTE_POSITIVO = "AJUSTE_POSITIVO"
     AJUSTE_NEGATIVO = "AJUSTE_NEGATIVO"

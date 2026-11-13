@@ -36,6 +36,7 @@ PREFIJO_SIN_RESPALDO = "Utilizado sin respaldo de stock"
 _CIERRAN_RESERVA = (
     TipoMovimientoInsumo.CONSUMO,
     TipoMovimientoInsumo.LIBERACION_RESERVA,
+    TipoMovimientoInsumo.DESPERDICIO,
 )
 
 
@@ -357,8 +358,8 @@ def generar_movimientos_inventario(
     movimientos la referencian por ``movimiento_origen_id``. Todos se
     generan con ``usuario_id=None`` porque el nodo es ACT-SYSTEM.
 
-    El desperdicio que V1.3 tambien contempla en este nodo queda fuera
-    del alcance del MVP.
+    DEC-MI-10: el desperdicio declarado sale como DESPERDICIO (tambien
+    cierra la reserva) y cada movimiento lleva el lote de su linea.
 
     Es IDEMPOTENTE: si esa Ejecucion ya aplico su inventario, devuelve la
     Orden tal cual esta -sin movimientos nuevos y sin registrar el paso
@@ -395,6 +396,28 @@ def generar_movimientos_inventario(
         utilizado.insumo_id for utilizado in ejecucion.insumos_utilizados
     )
 
+    # DEC-MI-10: lo que sale de cada insumo, en el orden de las lineas:
+    # (tipo, lote, cantidad). El desperdicio sale como DESPERDICIO, no
+    # como CONSUMO; los dos cierran la reserva.
+    porciones: dict[
+        str, list[tuple[TipoMovimientoInsumo, str | None, Decimal]]
+    ]
+    porciones = {}
+    for linea in ejecucion.insumos_utilizados:
+        lista = porciones.setdefault(linea.insumo_id, [])
+        if linea.cantidad > CERO:
+            lista.append(
+                (TipoMovimientoInsumo.CONSUMO, linea.lote_id, linea.cantidad)
+            )
+        if linea.desperdicio > CERO:
+            lista.append(
+                (
+                    TipoMovimientoInsumo.DESPERDICIO,
+                    linea.lote_id,
+                    linea.desperdicio,
+                )
+            )
+
     a_descontar: dict[str, Decimal] = {}
     sin_respaldo: list[str] = []
     for insumo_id in sorted(insumos_involucrados):
@@ -406,15 +429,16 @@ def generar_movimientos_inventario(
             ),
             CERO,
         )
-        utilizado = _cantidad_utilizada(
-            insumo_id, ejecucion.insumos_utilizados
+        utilizado = sum(
+            (cantidad for _, _, cantidad in porciones.get(insumo_id, [])),
+            CERO,
         )
         if tope_override is None:
             if utilizado > reservado:
                 raise PrecondicionInvalidaError(
-                    f"El insumo {insumo_id} se utilizo por {utilizado} pero "
-                    f"solo habia {reservado} reservado: el MVP no modela "
-                    "desperdicio ni consumo sin reserva."
+                    f"El insumo {insumo_id} se utilizo o desperdicio por "
+                    f"{utilizado} pero solo habia {reservado} reservado: no "
+                    "se consume sin reserva."
                 )
             a_descontar[insumo_id] = utilizado
             continue
@@ -430,31 +454,41 @@ def generar_movimientos_inventario(
     nuevos: list[MovimientoInsumo] = []
 
     for insumo_id in sorted(insumos_involucrados):
+        # Las porciones, recortadas a lo que efectivamente se descuenta.
         restante = a_descontar[insumo_id]
+        partes: list[list] = []
+        for tipo, lote_id, cantidad in porciones.get(insumo_id, []):
+            tomada = min(cantidad, restante)
+            if tomada > CERO:
+                partes.append([tipo, lote_id, tomada])
+            restante -= tomada
         reservas_del_insumo = [
             reserva for reserva in pendientes if reserva.insumo_id == insumo_id
         ]
 
         for reserva in reservas_del_insumo:
             pendiente = cantidad_pendiente(reserva, orden.movimientos_insumo)
-            consumido = min(restante, pendiente)
-            liberado = pendiente - consumido
-            restante -= consumido
-
-            if consumido > CERO:
+            while pendiente > CERO and partes:
+                tipo, lote_id, cantidad = partes[0]
+                usada = min(cantidad, pendiente)
                 nuevos.append(
                     MovimientoInsumo(
                         id=nuevo_id("MOV"),
-                        tipo=TipoMovimientoInsumo.CONSUMO,
+                        tipo=tipo,
                         insumo_id=insumo_id,
                         reparacion_detail_id=detalle_id,
                         ejecucion_id=ejecucion.id,
-                        cantidad=consumido,
+                        cantidad=usada,
                         movimiento_origen_id=reserva.id,
                         fecha=fecha,
+                        lote_id=lote_id,
                     )
                 )
-            if liberado > CERO:
+                pendiente -= usada
+                partes[0][2] = cantidad - usada
+                if partes[0][2] <= CERO:
+                    partes.pop(0)
+            if pendiente > CERO:
                 nuevos.append(
                     MovimientoInsumo(
                         id=nuevo_id("MOV"),
@@ -462,7 +496,7 @@ def generar_movimientos_inventario(
                         insumo_id=insumo_id,
                         reparacion_detail_id=detalle_id,
                         ejecucion_id=ejecucion.id,
-                        cantidad=liberado,
+                        cantidad=pendiente,
                         movimiento_origen_id=reserva.id,
                         fecha=fecha,
                     )

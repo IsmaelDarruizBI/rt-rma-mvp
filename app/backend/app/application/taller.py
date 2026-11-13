@@ -57,6 +57,7 @@ from app.services.evaluacion_tecnica import registrar_no_requiere
 from app.services.tomas import buscar_detalle
 
 from .contexto import ApplicationContext
+from .lotes import validar_lotes_de_la_ejecucion
 from .modificacion import orden_para_modificar
 from .operativa import resolver_motivo
 
@@ -303,6 +304,9 @@ def _bloquear_insumos_de_la_ejecucion(
     }
     insumo_ids.update(u.insumo_id for u in ejecucion.insumos_utilizados)
     contexto.catalogos.bloquear_insumos(insumo_ids)
+    # DEC-MI-10: con los insumos bloqueados, cada linea sale de un lote con
+    # saldo o del stock sin lote identificado.
+    validar_lotes_de_la_ejecucion(contexto, ejecucion)
 
 
 def _buscar_ejecucion(

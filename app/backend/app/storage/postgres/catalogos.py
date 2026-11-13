@@ -87,7 +87,8 @@ _TIPO = consulta(
 _INSUMOS = consulta(
     "catalogos.insumos",
     """
-    SELECT clave, codigo, nombre, unidad, stock_fisico, activo
+    SELECT clave, codigo, nombre, unidad, stock_fisico, activo,
+           control, precio
     FROM rma.insumo
     ORDER BY clave COLLATE "C"
     """,
@@ -96,7 +97,8 @@ _INSUMOS = consulta(
 _INSUMO = consulta(
     "catalogos.insumo",
     """
-    SELECT clave, codigo, nombre, unidad, stock_fisico, activo
+    SELECT clave, codigo, nombre, unidad, stock_fisico, activo,
+           control, precio
     FROM rma.insumo
     WHERE clave = %(clave)s
     """,
@@ -267,10 +269,12 @@ _MOVIMIENTOS_STOCK = consulta(
     SELECT m.codigo, m.tipo, i.clave AS insumo, m.cantidad,
            m.stock_fisico_anterior, m.stock_fisico_resultante,
            m.stock_reservado_resultante, u.codigo AS usuario,
-           m.registrado_en, m.motivo_texto, m.referencia, m.operacion_id
+           m.registrado_en, m.motivo_texto, m.referencia, m.operacion_id,
+           l.codigo AS lote
     FROM rma.movimiento_inventario m
     JOIN rma.insumo i ON i.id = m.insumo_id
     JOIN rma.usuario u ON u.id = m.usuario_id
+    LEFT JOIN rma.lote_insumo l ON l.id = m.lote_id
     WHERE m.orden_id IS NULL
       AND m.tipo IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO')
     ORDER BY m.secuencia NULLS FIRST, m.registrado_en, m.codigo COLLATE "C"
@@ -282,9 +286,10 @@ _INSERTAR_MOVIMIENTO_STOCK = consulta(
     """
     INSERT INTO rma.movimiento_inventario
         (codigo, tipo, insumo_id, cantidad, motivo_texto, referencia,
-         operacion_id, usuario_id, accion_id, registrado_en)
+         operacion_id, usuario_id, accion_id, registrado_en, lote_id)
     SELECT %(codigo)s, %(tipo)s, i.id, %(cantidad)s, %(motivo)s,
-           %(referencia)s, %(operacion)s, u.id, %(accion)s, %(fecha)s
+           %(referencia)s, %(operacion)s, u.id, %(accion)s, %(fecha)s,
+           (SELECT id FROM rma.lote_insumo WHERE codigo = %(lote)s)
     FROM rma.insumo i, rma.usuario u
     WHERE i.clave = %(insumo)s AND u.codigo = %(usuario)s
     RETURNING stock_fisico_anterior, stock_fisico_resultante,
@@ -396,6 +401,7 @@ class PostgresCatalogosRepository:
                 "referencia": movimiento.referencia,
                 "operacion": movimiento.operacion_id,
                 "usuario": movimiento.usuario_id,
+                "lote": movimiento.lote_id,
                 "accion": accion_del_comando(
                     self._unidad,
                     ejecutor,
@@ -560,6 +566,8 @@ def _insumo(f) -> Insumo:
         unidad=f.unidad,
         stock_fisico=decimal_sin_ceros(f.stock_fisico),
         activo=f.activo,
+        control=f.control,
+        precio=None if f.precio is None else decimal_sin_ceros(f.precio),
     )
 
 
@@ -598,4 +606,5 @@ def _movimiento_stock(f) -> MovimientoStock:
         motivo=f.motivo_texto,
         referencia=f.referencia,
         operacion_id=f.operacion_id,
+        lote_id=f.lote,
     )

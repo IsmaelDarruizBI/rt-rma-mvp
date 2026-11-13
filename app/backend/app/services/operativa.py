@@ -163,7 +163,7 @@ def registrar_seguimiento_retiro(
     return nueva
 
 
-CAMPOS_INSUMO = ("codigo", "nombre", "unidad", "activo")
+CAMPOS_INSUMO = ("codigo", "nombre", "unidad", "activo", "control", "precio")
 
 
 def cambios_de_insumo(

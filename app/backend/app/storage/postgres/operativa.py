@@ -96,8 +96,10 @@ _ACTUALIZAR_PLANTILLA = consulta(
 _INSERTAR_INSUMO = consulta(
     "operativa.insertar_insumo",
     """
-    INSERT INTO rma.insumo (clave, codigo, nombre, unidad, activo)
-    VALUES (%(clave)s, %(codigo)s, %(nombre)s, %(unidad)s, %(activo)s)
+    INSERT INTO rma.insumo
+        (clave, codigo, nombre, unidad, activo, control, precio)
+    VALUES (%(clave)s, %(codigo)s, %(nombre)s, %(unidad)s, %(activo)s,
+            %(control)s, %(precio)s)
     ON CONFLICT DO NOTHING
     """,
     modo=ESCRITURA,
@@ -106,7 +108,8 @@ _ACTUALIZAR_INSUMO = consulta(
     "operativa.actualizar_insumo",
     """
     UPDATE rma.insumo
-       SET nombre = %(nombre)s, unidad = %(unidad)s, activo = %(activo)s
+       SET nombre = %(nombre)s, unidad = %(unidad)s, activo = %(activo)s,
+           control = %(control)s, precio = %(precio)s
      WHERE clave = %(clave)s
     """,
     modo=ESCRITURA,
@@ -200,6 +203,8 @@ class PostgresConfiguracionOperativa:
             "nombre": insumo.nombre,
             "unidad": insumo.unidad,
             "activo": insumo.activo,
+            "control": insumo.control.value,
+            "precio": insumo.precio,
         }
         consulta_sql = _INSERTAR_INSUMO if nuevo else _ACTUALIZAR_INSUMO
         if ejecutor.ejecutar(consulta_sql, parametros) != 1:

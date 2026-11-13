@@ -305,7 +305,11 @@ def _consumos_de_la_ejecucion(
     consumos: dict[str, Decimal] = {}
 
     for movimiento in orden.movimientos_insumo:
-        if movimiento.tipo is not TipoMovimientoInsumo.CONSUMO:
+        # DEC-MI-10: el desperdicio tambien baja el fisico.
+        if movimiento.tipo not in (
+            TipoMovimientoInsumo.CONSUMO,
+            TipoMovimientoInsumo.DESPERDICIO,
+        ):
             continue
         if movimiento.ejecucion_id != ejecucion_id:
             continue

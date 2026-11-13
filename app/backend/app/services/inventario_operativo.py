@@ -196,6 +196,7 @@ class MovimientoHistorial:
     stock_anterior: Decimal | None = None
     stock_resultante: Decimal | None = None
     disponible_resultante: Decimal | None = None
+    lote_id: str | None = None
 
 
 def historial_movimientos(
@@ -227,6 +228,7 @@ def historial_movimientos(
                     ejecucion_id=movimiento.ejecucion_id,
                     movimiento_origen_id=movimiento.movimiento_origen_id,
                     observacion=movimiento.observacion,
+                    lote_id=movimiento.lote_id,
                 )
             )
     for movimiento in movimientos_stock:
@@ -244,6 +246,7 @@ def historial_movimientos(
                 stock_anterior=movimiento.stock_anterior,
                 stock_resultante=movimiento.stock_resultante,
                 disponible_resultante=movimiento.disponible_resultante,
+                lote_id=movimiento.lote_id,
             )
         )
     return sorted(
@@ -350,8 +353,14 @@ def registrar_movimiento_operativo(
     referencia: str | None = None,
     operacion_id: str | None = None,
     confirmado: bool = False,
+    lote_id: str | None = None,
+    roles=None,
 ) -> MovimientoStock:
     """Arma un ingreso o ajuste valido; quien lo persiste es el caller.
+
+    ``lote_id``: el lote del movimiento (DEC-MI-10; lo valida el caller).
+    ``roles``: quienes pueden registrarlo (por defecto, la gestion de
+    stock; una recepcion de compra usa el permiso de compras).
 
     Reglas:
 
@@ -368,7 +377,7 @@ def registrar_movimiento_operativo(
       ingreso o un ajuste positivo solo suman al fisico: no pueden
       producir ninguna condicion excepcional y no piden confirmacion.
     """
-    validar_alguno_de(usuario, ROLES_GESTION_STOCK)
+    validar_alguno_de(usuario, ROLES_GESTION_STOCK if roles is None else roles)
     if tipo not in TIPOS_OPERATIVOS:
         raise PrecondicionInvalidaError(
             f"{tipo.value} no es un movimiento operativo de inventario."
@@ -445,6 +454,7 @@ def registrar_movimiento_operativo(
         motivo=motivo,
         referencia=referencia,
         operacion_id=_texto(operacion_id),
+        lote_id=lote_id,
     )
 
 

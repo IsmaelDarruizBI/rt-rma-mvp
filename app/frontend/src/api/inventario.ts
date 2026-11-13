@@ -52,6 +52,10 @@ export interface DatosMovimientoStock {
   referencia: string | null;
   /** Clave del envío: un reintento no se aplica dos veces. */
   operacion_id: string;
+  /** DEC-MI-10: número de lote o serie de un ingreso. */
+  lote?: string | null;
+  /** DEC-MI-10: lote existente de un ajuste ("" o null: sin lote). */
+  lote_id?: string | null;
 }
 
 /** Ingreso de existencias (Administración o Coordinación). */

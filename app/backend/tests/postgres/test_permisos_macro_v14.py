@@ -56,6 +56,13 @@ from tests.postgres.test_insumos_admin_postgres import (  # noqa: E402,F401
     cliente_insumos,
     test_alta_y_edicion_de_un_insumo_auditadas,
 )
+from tests.postgres.test_lotes_postgres import (  # noqa: E402,F401
+    lotes,
+    taller,
+    test_desperdicio_y_devolucion_sin_lote,
+    test_lotes_ingreso_consumo_devolucion_y_transicion,
+    test_series_de_a_una_y_nunca_dos_veces,
+)
 from tests.postgres.test_macro_v14_postgres import (  # noqa: E402,F401
     test_v14_antecedentes_y_reporte_en_postgres,
     test_v14_descarte_tecnico_se_guarda,

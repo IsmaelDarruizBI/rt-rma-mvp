@@ -44,6 +44,7 @@ from app.domain.models import (
     PoliticaGarantiaRma,
     RolUsuario,
 )
+from app.domain.models.lotes import ControlInsumo
 from app.domain.models.operativa import MotivoOperativo, TipoMotivo
 from app.services.configuracion import ROLES_ADMINISTRACION_CONFIGURACION
 
@@ -267,6 +268,9 @@ class InsumoIn(BaseModel):
     nombre: str = Field(min_length=1)
     unidad: str | None = None
     activo: bool = True
+    # DEC-MI-10 y DEC-MI-09: control por lote o serie y precio.
+    control: ControlInsumo | None = None
+    precio: Decimal | None = Field(default=None, ge=0)
 
 
 class AltaInsumoIn(InsumoIn):
@@ -295,6 +299,8 @@ def post_insumo(cuerpo: AltaInsumoIn, contexto: ContextoDep) -> dict:
         unidad=cuerpo.unidad,
         activo=cuerpo.activo,
         nuevo=True,
+        control=cuerpo.control,
+        precio=cuerpo.precio,
     ).model_dump(mode="json")
 
 
@@ -309,4 +315,6 @@ def put_insumo(clave: str, cuerpo: InsumoIn, contexto: ContextoDep) -> dict:
         unidad=cuerpo.unidad,
         activo=cuerpo.activo,
         nuevo=False,
+        control=cuerpo.control,
+        precio=cuerpo.precio,
     ).model_dump(mode="json")

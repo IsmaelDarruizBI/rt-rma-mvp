@@ -33,6 +33,12 @@ import type {
 import { nombreDeUsuario } from "../ordenes-reparacion/DetalleOrden";
 import { Confirmacion } from "../ordenes-reparacion/PagosOrden";
 import { puede } from "../../lib/roles";
+import {
+  LotesDelInsumo,
+  type SaldosDeInsumo,
+  SelectorLote,
+  useSaldosLotes,
+} from "./lotes";
 
 /** Provisorio, a validar con Rosario Tecno (el backend lo exige igual). */
 const ROLES_GESTION: RolUsuario[] = ["ADMINISTRADOR", "COORDINADOR_RMA"];
@@ -242,29 +248,35 @@ export function InventarioPanel({
             setDetalle(null);
           }}
           error={error}
-          onIngreso={(valor, motivo, referencia) =>
+          onIngreso={(valor, motivo, referencia, lote) =>
             operar(async () => {
               const alcance = `ingreso:${seleccionado}`;
-              const datos = { valor, motivo, referencia };
+              const datos = { valor, motivo, referencia, lote };
               const r = await api.registrarIngreso(seleccionado, actor?.id ?? "", valor, {
                 motivo,
                 referencia,
+                lote,
                 operacion_id: operaciones.id(alcance, datos),
               });
               operaciones.olvidar(alcance, datos);
               return `Ingreso registrado (${r.movimiento.id}): físico ${r.insumo.stock_fisico}.`;
             })
           }
-          onAjuste={(diferencia, motivo, referencia, confirmado) =>
+          onAjuste={(diferencia, motivo, referencia, confirmado, loteId) =>
             operar(async () => {
               // Sin `confirmado`: el ajuste que se confirma es el mismo.
               const alcance = `ajuste:${seleccionado}`;
-              const datos = { diferencia, motivo, referencia };
+              const datos = { diferencia, motivo, referencia, loteId };
               const r = await api.registrarAjuste(
                 seleccionado,
                 actor?.id ?? "",
                 diferencia,
-                { motivo, referencia, operacion_id: operaciones.id(alcance, datos) },
+                {
+                  motivo,
+                  referencia,
+                  lote_id: loteId,
+                  operacion_id: operaciones.id(alcance, datos),
+                },
                 confirmado,
               );
               operaciones.olvidar(alcance, datos);
@@ -430,18 +442,22 @@ function DetalleDeInsumo({
     cantidad: string,
     motivo: string,
     referencia: string | null,
+    lote: string | null,
   ) => Promise<boolean>;
   onAjuste: (
     diferencia: string,
     motivo: string,
     referencia: string | null,
     confirmado: boolean,
+    loteId: string | null,
   ) => Promise<boolean>;
   /** El error de la última operación: se muestra en su ventana. */
   error: string | null;
 }) {
   const { insumo } = detalle;
   const [ventana, setVentana] = useState<"ingreso" | "ajuste" | null>(null);
+  // DEC-MI-10: se releen al cambiar el detalle (después de operar).
+  const saldos = useSaldosLotes(insumo.id, detalle.movimientos.length);
   return (
     <Panel titulo={`Insumo ${insumo.codigo} · ${insumo.nombre}`}>
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
@@ -470,6 +486,8 @@ function DetalleDeInsumo({
           positivo.
         </p>
       )}
+
+      <LotesDelInsumo saldos={saldos} />
 
       <Subtitulo>Reservas vigentes</Subtitulo>
       {detalle.reservas.length === 0 ? (
@@ -516,6 +534,7 @@ function DetalleDeInsumo({
           >
             <FormularioIngreso
               insumo={insumo}
+              saldos={saldos}
               ocupado={ocupado}
               onConfirmar={async (...datos) => {
                 if (await onIngreso(...datos)) setVentana(null);
@@ -530,6 +549,7 @@ function DetalleDeInsumo({
           >
             <FormularioAjuste
               insumo={insumo}
+              saldos={saldos}
               ocupado={ocupado}
               onConfirmar={async (...datos) => {
                 if (await onAjuste(...datos)) setVentana(null);
@@ -626,18 +646,33 @@ function TablaMovimientos({
 
 function FormularioIngreso({
   insumo,
+  saldos,
   ocupado,
   onConfirmar,
 }: {
   insumo: SituacionInsumo;
+  saldos: SaldosDeInsumo | null;
   ocupado: boolean;
-  onConfirmar: (cantidad: string, motivo: string, referencia: string | null) => void;
+  onConfirmar: (
+    cantidad: string,
+    motivo: string,
+    referencia: string | null,
+    lote: string | null,
+  ) => void;
 }) {
   const [valor, setValor] = useState("");
   const [motivo, setMotivo] = useState("");
   const [referencia, setReferencia] = useState("");
+  const [lote, setLote] = useState("");
   const numero = Number(valor);
-  const valido = valor.trim() !== "" && Number.isFinite(numero) && numero > 0;
+  const controlado = saldos !== null && saldos.control !== "SIN_LOTE";
+  const serie = saldos?.control === "SERIE";
+  const valido =
+    valor.trim() !== "" &&
+    Number.isFinite(numero) &&
+    numero > 0 &&
+    (!controlado || lote.trim() !== "") &&
+    (!serie || numero === 1);
   return (
     <div style={{ border: `1px solid ${colores.borde}`, borderRadius: 6, padding: "0.7rem" }}>
       <p style={{ margin: "0 0 0.5rem", fontWeight: 600 }}>Registrar ingreso</p>
@@ -650,13 +685,30 @@ function FormularioIngreso({
       <Campo etiqueta="Referencia (opcional)">
         <input value={referencia} onChange={(e) => setReferencia(e.target.value)} style={estiloInput} placeholder="N.º de remito" />
       </Campo>
+      {controlado && (
+        <Campo
+          etiqueta={
+            serie
+              ? "Número de serie (obligatorio; de a una unidad)"
+              : "Número de lote (obligatorio)"
+          }
+        >
+          <input value={lote} onChange={(e) => setLote(e.target.value)} style={estiloInput} />
+        </Campo>
+      )}
       <Boton
         disabled={ocupado || !valido || !motivo.trim()}
         onClick={() => {
-          onConfirmar(valor.trim(), motivo.trim(), referencia.trim() || null);
+          onConfirmar(
+            valor.trim(),
+            motivo.trim(),
+            referencia.trim() || null,
+            lote.trim() || null,
+          );
           setValor("");
           setMotivo("");
           setReferencia("");
+          setLote("");
         }}
       >
         Registrar ingreso
@@ -670,21 +722,25 @@ function FormularioIngreso({
 
 function FormularioAjuste({
   insumo,
+  saldos,
   ocupado,
   onConfirmar,
 }: {
   insumo: SituacionInsumo;
+  saldos: SaldosDeInsumo | null;
   ocupado: boolean;
   onConfirmar: (
     diferencia: string,
     motivo: string,
     referencia: string | null,
     confirmado: boolean,
+    loteId: string | null,
   ) => void;
 }) {
   const [valor, setValor] = useState("");
   const [motivo, setMotivo] = useState("");
   const [referencia, setReferencia] = useState("");
+  const [loteId, setLoteId] = useState("");
   const [confirmando, setConfirmando] = useState(false);
   useEffect(() => setConfirmando(false), [valor, motivo, referencia]);
 
@@ -696,10 +752,17 @@ function FormularioAjuste({
   const dejaFaltante = disponibleResultante < 0;
 
   const enviar = () => {
-    onConfirmar(valor.trim(), motivo.trim(), referencia.trim() || null, riesgoso);
+    onConfirmar(
+      valor.trim(),
+      motivo.trim(),
+      referencia.trim() || null,
+      riesgoso,
+      loteId || null,
+    );
     setValor("");
     setMotivo("");
     setReferencia("");
+    setLoteId("");
   };
 
   return (
@@ -714,6 +777,14 @@ function FormularioAjuste({
       <Campo etiqueta="Referencia (opcional)">
         <input value={referencia} onChange={(e) => setReferencia(e.target.value)} style={estiloInput} />
       </Campo>
+      {saldos && saldos.control !== "SIN_LOTE" && (
+        <SelectorLote
+          saldos={saldos}
+          valor={loteId}
+          onCambio={setLoteId}
+          etiqueta="Lote ajustado"
+        />
+      )}
       {valido && (
         <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: dejaFaltante ? colores.error : colores.suave }}>
           Físico {insumo.stock_fisico} → {fisicoResultante} · disponible{" "}

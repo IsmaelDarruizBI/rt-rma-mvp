@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { get, post, put } from "../../api/client";
 import { Boton, Campo, colores, estiloInput } from "../../components/ui";
 import type { Usuario } from "../../types/api";
+import { type ControlInsumo, NOMBRE_CONTROL } from "../inventario/lotes";
 
 interface InsumoAdmin {
   id: string;
@@ -18,6 +19,8 @@ interface InsumoAdmin {
   unidad: string | null;
   stock_fisico: string;
   activo: boolean;
+  control: ControlInsumo;
+  precio: string | null;
 }
 
 const mensaje = (causa: unknown) =>
@@ -65,6 +68,8 @@ export function InsumosAdmin({ actor }: { actor: Usuario }) {
           nombre: editado.nombre,
           unidad: editado.unidad,
           activo: editado.activo,
+          control: editado.control,
+          precio: editado.precio,
         }),
       `Se guardó el insumo ${insumo.codigo}.`,
     );
@@ -75,7 +80,9 @@ export function InsumosAdmin({ actor }: { actor: Usuario }) {
       <h3 style={{ margin: "0 0 0.5rem" }}>Insumos</h3>
       <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
         El stock cambia solo con movimientos del inventario. Un insumo nuevo
-        empieza sin stock.
+        empieza sin stock. Pasar un insumo a control por lote o serie deja su
+        stock actual como «sin lote identificado»; volver atrás exige que sus
+        lotes estén en cero.
       </p>
       {error && (
         <p role="alert" style={{ color: colores.error, fontSize: "0.85rem" }}>
@@ -95,6 +102,8 @@ export function InsumosAdmin({ actor }: { actor: Usuario }) {
               <th style={{ textAlign: "left", paddingRight: "0.8rem" }}>Nombre</th>
               <th style={{ textAlign: "left", paddingRight: "0.8rem" }}>Unidad</th>
               <th style={{ paddingRight: "0.8rem" }}>Stock</th>
+              <th style={{ paddingRight: "0.8rem" }}>Control</th>
+              <th style={{ paddingRight: "0.8rem" }}>Precio</th>
               <th>Vigente</th>
             </tr>
           </thead>
@@ -117,6 +126,36 @@ export function InsumosAdmin({ actor }: { actor: Usuario }) {
                 <td style={{ paddingRight: "0.8rem" }}>{insumo.unidad ?? "—"}</td>
                 <td style={{ paddingRight: "0.8rem", textAlign: "right" }}>
                   {insumo.stock_fisico}
+                </td>
+                <td style={{ paddingRight: "0.8rem" }}>
+                  <select
+                    value={insumo.control}
+                    aria-label={`Control de ${insumo.codigo}`}
+                    disabled={bloqueado}
+                    onChange={(e) =>
+                      editar(insumo, { control: e.target.value as ControlInsumo })
+                    }
+                    style={estiloInput}
+                  >
+                    {(Object.keys(NOMBRE_CONTROL) as ControlInsumo[]).map((c) => (
+                      <option key={c} value={c}>
+                        {NOMBRE_CONTROL[c]}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td style={{ paddingRight: "0.8rem" }}>
+                  <input
+                    defaultValue={insumo.precio ?? ""}
+                    aria-label={`Precio de ${insumo.codigo}`}
+                    inputMode="decimal"
+                    disabled={bloqueado}
+                    onBlur={(e) => {
+                      const precio = e.target.value.trim() || null;
+                      if (precio !== (insumo.precio ?? null)) editar(insumo, { precio });
+                    }}
+                    style={{ ...estiloInput, width: 110 }}
+                  />
                 </td>
                 <td style={{ textAlign: "center" }}>
                   <input

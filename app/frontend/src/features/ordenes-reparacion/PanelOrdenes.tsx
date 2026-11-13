@@ -56,6 +56,7 @@ import { ReclamoRechazado } from "./ReclamoRechazado";
 import { RetiroDemorado } from "./RetiroDemorado";
 import { ComunicacionesOrden } from "./ComunicacionesOrden";
 import { FirmasDocumentos } from "./FirmasDocumentos";
+import { DevolucionesInsumo } from "./DevolucionesInsumo";
 import { IdentidadDeLaOrden } from "./IdentidadEquipo";
 import { registrarSeguimientoRetiro } from "../../api/operativa";
 import { ConfiguracionPanel } from "../configuracion/Configuracion";
@@ -1080,6 +1081,12 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                 abierta={abiertaPara("ejecuciones")}
               >
                 <EjecucionesEInsumos orden={orden} usuarios={usuarios} />
+                <DevolucionesInsumo
+                  orden={orden}
+                  actor={actor}
+                  ocupado={ocupado}
+                  ejecutarComando={ejecutarComando}
+                />
               </SeccionPlegable>
 
               <SeccionPlegable

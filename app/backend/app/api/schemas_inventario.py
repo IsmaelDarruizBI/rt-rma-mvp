@@ -38,6 +38,9 @@ class IngresoStockIn(BaseModel):
     motivo: str = Field(min_length=1)
     referencia: str | None = None
     operacion_id: str | None = None
+    # DEC-MI-10: numero de lote o de serie (obligatorio si el insumo se
+    # controla por lote o serie).
+    lote: str | None = None
 
 
 class AjusteStockIn(BaseModel):
@@ -54,6 +57,8 @@ class AjusteStockIn(BaseModel):
     referencia: str | None = None
     operacion_id: str | None = None
     confirmado: bool = False
+    # DEC-MI-10: lote ajustado; sin lote, el stock sin lote identificado.
+    lote_id: str | None = None
 
 
 class RevalidacionIn(BaseModel):
@@ -146,6 +151,9 @@ class MovimientoInventarioOut(BaseModel):
     stock_anterior: Decimal | None = None
     stock_resultante: Decimal | None = None
     disponible_resultante: Decimal | None = None
+    # DEC-MI-10: lote o unidad serializada; sin lote, el stock sin lote
+    # identificado.
+    lote_id: str | None = None
 
     @classmethod
     def desde_servicio(
@@ -220,6 +228,7 @@ class MovimientoStockOut(BaseModel):
                 stock_anterior=movimiento.stock_anterior,
                 stock_resultante=movimiento.stock_resultante,
                 disponible_resultante=movimiento.disponible_resultante,
+                lote_id=movimiento.lote_id,
             ),
             insumo=SituacionInsumoOut.desde_servicio(resultado.situacion),
         )

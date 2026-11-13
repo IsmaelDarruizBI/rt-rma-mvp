@@ -48,6 +48,7 @@ import {
   trabajosACancelar,
 } from "./cancelacion";
 import { CampoMotivo, useMotivos } from "./CampoMotivo";
+import { SelectorLote, useSaldosLotes } from "../inventario/lotes";
 import { type MotivoElegido, motivoCompleto, SIN_MOTIVO } from "./motivos";
 import {
   nombreDeAccion,
@@ -2052,13 +2053,20 @@ function FormularioEjecucion({
   );
   const [observaciones, setObservaciones] = useState("");
 
+  // DEC-MI-10: desperdicio y lote por insumo.
+  const [desperdicios, setDesperdicios] = useState<Record<string, string>>({});
+  const [lotes, setLotes] = useState<Record<string, string>>({});
   const utilizados = (): InsumoUtilizado[] =>
     previstos
       .map((previsto) => ({
         insumo_id: previsto.insumo_id,
         cantidad: cantidades[previsto.insumo_id] ?? "0",
+        desperdicio: desperdicios[previsto.insumo_id] || "0",
+        lote_id: lotes[previsto.insumo_id] || null,
       }))
-      .filter((insumo) => Number(insumo.cantidad) > 0);
+      .filter(
+        (insumo) => Number(insumo.cantidad) + Number(insumo.desperdicio) > 0,
+      );
 
   return (
     <div>
@@ -2074,28 +2082,30 @@ function FormularioEjecucion({
         </p>
       ) : (
         previstos.map((previsto) => (
-          <Campo
+          <FilaInsumoUtilizado
             key={previsto.insumo_id}
-            etiqueta={
-              previsto.nombre +
-              " (" +
-              previsto.codigo +
-              ") — previsto: " +
-              previsto.cantidad_prevista
+            previsto={previsto}
+            cantidad={cantidades[previsto.insumo_id] ?? ""}
+            desperdicio={desperdicios[previsto.insumo_id] ?? ""}
+            lote={lotes[previsto.insumo_id] ?? ""}
+            conDesperdicio
+            deshabilitado={deshabilitado}
+            onCantidad={(valor) =>
+              setCantidades((actual) => ({
+                ...actual,
+                [previsto.insumo_id]: valor,
+              }))
             }
-          >
-            <input
-              value={cantidades[previsto.insumo_id] ?? ""}
-              onChange={(evento) =>
-                setCantidades((actual) => ({
-                  ...actual,
-                  [previsto.insumo_id]: evento.target.value,
-                }))
-              }
-              disabled={deshabilitado}
-              style={estiloInput}
-            />
-          </Campo>
+            onDesperdicio={(valor) =>
+              setDesperdicios((actual) => ({
+                ...actual,
+                [previsto.insumo_id]: valor,
+              }))
+            }
+            onLote={(valor) =>
+              setLotes((actual) => ({ ...actual, [previsto.insumo_id]: valor }))
+            }
+          />
         ))
       )}
       {etiquetaMotivo && (
@@ -2177,6 +2187,75 @@ function FormularioEjecucion({
       >
         {textoBoton}
       </Boton>
+    </div>
+  );
+}
+
+/**
+ * Un insumo previsto al cerrar la Ejecución: lo utilizado, lo desperdiciado
+ * (material inutilizado, DEC-MI-10) y, si el insumo se controla por lote o
+ * serie, de dónde sale.
+ */
+function FilaInsumoUtilizado({
+  previsto,
+  cantidad,
+  desperdicio,
+  lote,
+  conDesperdicio,
+  deshabilitado,
+  onCantidad,
+  onDesperdicio,
+  onLote,
+}: {
+  previsto: InsumoPrevisto;
+  cantidad: string;
+  desperdicio: string;
+  lote: string;
+  conDesperdicio: boolean;
+  deshabilitado: boolean;
+  onCantidad: (valor: string) => void;
+  onDesperdicio: (valor: string) => void;
+  onLote: (valor: string) => void;
+}) {
+  const saldos = useSaldosLotes(previsto.insumo_id);
+  return (
+    <div style={{ margin: "0 0 0.4rem" }}>
+      <Campo
+        etiqueta={
+          previsto.nombre +
+          " (" +
+          previsto.codigo +
+          ") — previsto: " +
+          previsto.cantidad_prevista
+        }
+      >
+        <input
+          value={cantidad}
+          onChange={(evento) => onCantidad(evento.target.value)}
+          disabled={deshabilitado}
+          style={estiloInput}
+        />
+      </Campo>
+      {conDesperdicio && (
+        <Campo etiqueta={`Desperdicio de ${previsto.codigo} (material inutilizado)`}>
+          <input
+            value={desperdicio}
+            onChange={(evento) => onDesperdicio(evento.target.value)}
+            disabled={deshabilitado}
+            style={estiloInput}
+            placeholder="0"
+          />
+        </Campo>
+      )}
+      {saldos && saldos.control !== "SIN_LOTE" && (
+        <SelectorLote
+          saldos={saldos}
+          valor={lote}
+          onCambio={onLote}
+          etiqueta={`Lote o serie de ${previsto.codigo}`}
+          deshabilitado={deshabilitado}
+        />
+      )}
     </div>
   );
 }

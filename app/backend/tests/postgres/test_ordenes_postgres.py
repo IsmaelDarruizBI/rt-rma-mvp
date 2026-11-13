@@ -307,7 +307,9 @@ def test_lo_que_todavia_no_se_guarda_se_rechaza_sin_escribir(
         )
     )
     antes = _cuentas(base)
-    with pytest.raises(PersistenciaError, match="DI-5"):
+    # DEC-MI-10 habilito DEVOLUCION y DESPERDICIO (antes DI-5): este sigue
+    # rechazado, ahora porque su Detalle no es de la Orden, y sin escribir.
+    with pytest.raises(PersistenciaError, match="no tiene: DET-001"):
         repo.guardar(orden)
     assert _cuentas(base) == antes
 

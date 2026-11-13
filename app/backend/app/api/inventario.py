@@ -16,7 +16,9 @@ from app.application import (
     registrar_ingreso_stock,
     revalidar_ordenes_pendientes,
 )
+from app.application.lotes import saldos_de_insumo
 from app.domain.models import TipoMovimientoInsumo
+from app.domain.models.lotes import SaldosDeInsumo
 from app.services import ROLES_GESTION_STOCK, ROLES_REVALIDACION_RECURSOS
 
 from .dependencias import ContextoDep
@@ -116,6 +118,7 @@ def post_ingreso(
             motivo=cuerpo.motivo,
             referencia=cuerpo.referencia,
             operacion_id=cuerpo.operacion_id,
+            lote=cuerpo.lote,
         )
     )
 
@@ -140,5 +143,13 @@ def post_ajuste(
             referencia=cuerpo.referencia,
             operacion_id=cuerpo.operacion_id,
             confirmado=cuerpo.confirmado,
+            lote_id=cuerpo.lote_id,
         )
     )
+
+
+@router.get("/{insumo_id}/lots")
+def get_lotes(insumo_id: str, contexto: ContextoDep) -> SaldosDeInsumo:
+    """Lotes del insumo con su saldo y el stock sin lote identificado
+    (DEC-MI-10)."""
+    return saldos_de_insumo(contexto, insumo_id)
