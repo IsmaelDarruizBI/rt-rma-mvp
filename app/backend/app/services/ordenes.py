@@ -547,7 +547,7 @@ def crear_orden_garantia_rma(
     ]
     if sin_excepcion:
         elegibles = [v.detalle_id for v in evaluada if v not in sin_excepcion]
-        raise GarantiaVencidaError(
+        rechazo = GarantiaVencidaError(
             "La garantia de la reparacion original esta vencida: "
             f"{describir_vencidos(sin_excepcion)}. Sin una excepcion "
             "autorizada ese trabajo no se admite como reclamo cubierto y no "
@@ -558,6 +558,23 @@ def crear_orden_garantia_rma(
                 else "No hay otros trabajos elegibles en el pedido."
             )
         )
+        # DEC-MI-02: lo evaluado viaja con el rechazo para registrar el
+        # reclamo (la excepcion de los admitidos, si la habia).
+        rechazo.vigencias = [
+            v.model_copy(
+                update={
+                    "excepcion": ExcepcionGarantia(
+                        usuario_id=usuario.id,
+                        fecha=fecha,
+                        motivo=motivos[v.detalle_id],
+                    )
+                }
+            )
+            if v.detalle_id in motivos
+            else v
+            for v in evaluada
+        ]
+        raise rechazo
     vigencia = [
         v.model_copy(
             update={

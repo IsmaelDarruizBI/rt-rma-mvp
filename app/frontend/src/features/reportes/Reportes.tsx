@@ -11,6 +11,9 @@
 import { useEffect, useState } from "react";
 
 import { obtenerReporteOperativo } from "../../api/consultas";
+import { type ReclamoGarantia, listarReclamos } from "../../api/reclamos";
+import { puede } from "../../lib/roles";
+import type { Usuario } from "../../types/api";
 import type { ReporteOperativo } from "../../api/consultas";
 import { colores, importe } from "../../components/ui";
 import { ESTADO_WORKFLOW, ORIGEN } from "../ordenes-reparacion/etiquetas";
@@ -68,9 +71,22 @@ function Tabla({
   );
 }
 
-export function ReportesPanel() {
+export function ReportesPanel({ actor }: { actor?: Usuario | null }) {
   const [reporte, setReporte] = useState<ReporteOperativo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reclamos, setReclamos] = useState<ReclamoGarantia[] | null>(null);
+  const verReclamos = puede(actor ?? null, "RECLAMOS_CONSULTAR", [
+    "RECEPCION",
+    "COORDINADOR_RMA",
+    "ADMINISTRADOR",
+  ]);
+
+  useEffect(() => {
+    if (!verReclamos) return;
+    listarReclamos()
+      .then(setReclamos)
+      .catch(() => setReclamos([]));
+  }, [verReclamos]);
 
   useEffect(() => {
     obtenerReporteOperativo()
@@ -171,6 +187,31 @@ export function ReportesPanel() {
           ],
         ]}
       />
+      {reclamos && (
+        <section style={{ marginTop: "1.2rem" }}>
+          <h3 style={{ margin: "0 0 0.4rem" }}>
+            Reclamos de garantía rechazados
+          </h3>
+          {reclamos.length === 0 ? (
+            <p style={{ margin: 0, fontSize: "0.85rem", color: colores.suave }}>
+              No hay reclamos rechazados.
+            </p>
+          ) : (
+            <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
+              {reclamos.map((r) => (
+                <li key={r.id}>
+                  {r.id} · {new Date(r.fecha).toLocaleString("es-AR")} · Orden{" "}
+                  {r.orden_origen_id} ({r.detalles_reclamados.join(", ")}) ·{" "}
+                  {r.equipo.marca} {r.equipo.modelo} · {r.usuario_id}
+                  {r.orden_continuacion_id
+                    ? ` · continuado en ${r.orden_continuacion_id}`
+                    : " · sin continuar"}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
 }

@@ -26,6 +26,7 @@ from app.api import (
     mantenimiento,
     modelos_equipo,
     ordenes,
+    reclamos,
     seguridad,
     trabajo,
 )
@@ -131,6 +132,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         mantenimiento,
         consultas_operativas,
         configuracion,
+        reclamos,
     ):
         application.include_router(modulo.router, dependencies=protegido)
 

@@ -52,6 +52,7 @@ import {
 } from "./AccionesOrden";
 import { InventarioPanel } from "../inventario/Inventario";
 import { ReportesPanel } from "../reportes/Reportes";
+import { ReclamoRechazado } from "./ReclamoRechazado";
 import { ConfiguracionPanel } from "../configuracion/Configuracion";
 import { AntecedentesEquipo } from "./AntecedentesEquipo";
 import { AutorizacionClienteOrden } from "./AutorizacionCliente";
@@ -169,6 +170,10 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
 
   const [error, setError] = useState<ErrorDeComando | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // DEC-MI-02: el reclamo de garantia rechazado que se acaba de registrar.
+  const [reclamoRechazado, setReclamoRechazado] = useState<string | null>(
+    null,
+  );
   const [ruta, navegar] = useRuta();
   const rutaActual = useRef<Ruta>(ruta);
   rutaActual.current = ruta;
@@ -522,15 +527,28 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
         ),
       ),
     // Devuelve la NUEVA Orden de garantía: queda abierta en pantalla.
-    iniciarGarantiaRma: (detalleOrigenIds, excepciones) =>
-      void ejecutarComando(() =>
-        api.iniciarGarantiaRma(
-          idOrden,
-          idActor,
-          detalleOrigenIds,
-          excepciones,
-        ),
-      ),
+    iniciarGarantiaRma: (detalleOrigenIds, excepciones) => {
+      setReclamoRechazado(null);
+      void ejecutarComando(async () => {
+        try {
+          return await api.iniciarGarantiaRma(
+            idOrden,
+            idActor,
+            detalleOrigenIds,
+            excepciones,
+          );
+        } catch (fallo) {
+          if (
+            fallo instanceof ApiError &&
+            fallo.codigo === "GARANTIA_VENCIDA" &&
+            typeof fallo.datos.reclamo_id === "string"
+          ) {
+            setReclamoRechazado(fallo.datos.reclamo_id);
+          }
+          throw fallo;
+        }
+      });
+    },
     rechazarControl: (detalleId, motivo) =>
       void ejecutarComando(() =>
         api.rechazarControl(idOrden, idActor, detalleId, motivo),
@@ -732,6 +750,18 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
       barra={barra}
     >
       {error && !enDetalle && <MensajeDeComando error={error} />}
+      {reclamoRechazado && (
+        <ReclamoRechazado
+          reclamoId={reclamoRechazado}
+          origen={orden}
+          actor={actor}
+          onCerrar={() => setReclamoRechazado(null)}
+          onContinuada={(ordenId) => {
+            setReclamoRechazado(null);
+            navegar({ pantalla: "orden", ordenId });
+          }}
+        />
+      )}
 
       {ruta.pantalla === "inicio" ? (
         <PantallaInicio
@@ -752,7 +782,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
       ) : ruta.pantalla === "inventario" ? (
         <InventarioPanel actor={actor} usuarios={usuarios} />
       ) : ruta.pantalla === "reportes" ? (
-        <ReportesPanel />
+        <ReportesPanel actor={actor} />
       ) : ruta.pantalla === "configuracion" ? (
         <ConfiguracionPanel actor={actor} />
       ) : ruta.pantalla === "ordenes" || ruta.pantalla === "nueva" ? (

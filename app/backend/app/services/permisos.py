@@ -162,6 +162,12 @@ INGRESO_CORREGIR = _definir(
     (RECEP, COORD, ADMIN),
     INGRESO,
 )
+RECLAMO_CONTINUAR = _definir(
+    "RECLAMO_CONTINUAR",
+    "Continuar un reclamo de garantía rechazado como reparación paga",
+    (RECEP,),
+    INGRESO,
+)
 CLIENTE_BUSCAR = _definir(
     "CLIENTE_BUSCAR",
     "Buscar clientes por DNI",
@@ -347,6 +353,13 @@ REPORTES_CONSULTAR = _definir(
     "REPORTES_CONSULTAR",
     "Consultar los reportes",
     TODOS,
+    CONSULTAS,
+    consulta=True,
+)
+RECLAMOS_CONSULTAR = _definir(
+    "RECLAMOS_CONSULTAR",
+    "Consultar los reclamos de garantía rechazados",
+    (RECEP, COORD, ADMIN),
     CONSULTAS,
     consulta=True,
 )

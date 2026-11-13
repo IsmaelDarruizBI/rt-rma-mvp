@@ -17,17 +17,25 @@ const API_BASE_URL =
 export class ApiError extends Error {
   readonly status: number;
   readonly codigo: string;
+  /** Datos adicionales del error (por ejemplo `reclamo_id`, DEC-MI-02). */
+  readonly datos: Record<string, unknown>;
 
-  constructor(status: number, codigo: string, mensaje: string) {
+  constructor(
+    status: number,
+    codigo: string,
+    mensaje: string,
+    datos: Record<string, unknown> = {},
+  ) {
     super(mensaje);
     this.name = "ApiError";
     this.status = status;
     this.codigo = codigo;
+    this.datos = datos;
   }
 }
 
 interface CuerpoError {
-  error?: { codigo?: string; mensaje?: string };
+  error?: { codigo?: string; mensaje?: string; [clave: string]: unknown };
 }
 
 /** Lo que la barra de actividad del layout observa. */
@@ -91,14 +99,16 @@ async function enviar<T>(ruta: string, init?: RequestInit): Promise<T> {
     avisarSiVencio(respuesta);
     let codigo = "ERROR";
     let mensaje = `La operación falló (HTTP ${respuesta.status}).`;
+    let datos: Record<string, unknown> = {};
     try {
       const cuerpo: CuerpoError = await respuesta.json();
       codigo = cuerpo.error?.codigo ?? codigo;
       mensaje = cuerpo.error?.mensaje ?? mensaje;
+      datos = { ...(cuerpo.error ?? {}) };
     } catch {
       // La respuesta no traía el cuerpo de error esperado.
     }
-    throw new ApiError(respuesta.status, codigo, mensaje);
+    throw new ApiError(respuesta.status, codigo, mensaje, datos);
   }
 
   return (await respuesta.json()) as T;

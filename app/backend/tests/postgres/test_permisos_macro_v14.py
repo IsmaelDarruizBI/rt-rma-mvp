@@ -46,6 +46,9 @@ from tests.postgres.test_macro_v14_postgres import (  # noqa: E402,F401
     test_v14_redefinicion_en_la_evaluacion_se_guarda,
     test_v14_reparaciones_adicionales_se_guardan,
 )
+from tests.postgres.test_reclamos_garantia_postgres import (  # noqa: E402,F401
+    test_reclamo_rechazado_y_continuacion_en_postgres,
+)
 from tests.postgres.test_roles_permisos_postgres import (  # noqa: E402,F401
     test_asignar_un_segundo_rol_y_actuar_con_el,
     test_nunca_sin_administrador,

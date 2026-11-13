@@ -53,6 +53,7 @@ from app.repositories import (
 from app.services import (
     DomainError,
     EntidadNoEncontradaError,
+    GarantiaVencidaError,
     PrecondicionInvalidaError,
     RecursoNoDisponibleError,
 )
@@ -91,6 +92,21 @@ def registrar_manejadores_de_error(application: FastAPI) -> None:
     ) -> JSONResponse:
         return _respuesta(
             "NO_ENCONTRADO", str(error), status.HTTP_404_NOT_FOUND
+        )
+
+    @application.exception_handler(GarantiaVencidaError)
+    async def _garantia_vencida(
+        _: Request,
+        error: GarantiaVencidaError,
+    ) -> JSONResponse:
+        """409 con el codigo del reclamo registrado (DEC-MI-02)."""
+        contenido = {"codigo": error.codigo, "mensaje": str(error)}
+        reclamo_id = getattr(error, "reclamo_id", None)
+        if reclamo_id:
+            contenido["reclamo_id"] = reclamo_id
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error": contenido},
         )
 
     @application.exception_handler(PrecondicionInvalidaError)

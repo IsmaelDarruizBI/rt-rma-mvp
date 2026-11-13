@@ -61,6 +61,7 @@ from app.services import (
     tipo_reparacion_otros,
     validar_factibilidad_detalles,
 )
+from app.services.exceptions import GarantiaVencidaError
 
 from .catalogo_equipos import equipo_desde_catalogo
 from .cola import encolar_si_ingreso_automatico
@@ -374,17 +375,34 @@ def iniciar_garantia_rma(
 
     orden_origen = contexto.ordenes.obtener(orden_origen_id)
 
-    with contexto.transaccion():
-        orden = crear_orden_garantia_rma(
-            orden_id=siguiente_orden_id(contexto.ordenes),
+    try:
+        with contexto.transaccion():
+            orden = crear_orden_garantia_rma(
+                orden_id=siguiente_orden_id(contexto.ordenes),
+                orden_origen=orden_origen,
+                detalle_origen_ids=list(detalle_origen_ids),
+                usuario=usuario,
+                fecha=fecha,
+                datos_recepcion=datos_recepcion,
+                zona_horaria=contexto.zona_horaria,
+                excepciones=excepciones,
+            )
+    except GarantiaVencidaError as rechazo:
+        # DEC-MI-02: el reclamo rechazado queda registrado aparte.
+        from .reclamos import registrar_reclamo_rechazado
+
+        reclamo = registrar_reclamo_rechazado(
+            contexto,
+            rechazo,
             orden_origen=orden_origen,
-            detalle_origen_ids=list(detalle_origen_ids),
-            usuario=usuario,
-            fecha=fecha,
-            datos_recepcion=datos_recepcion,
-            zona_horaria=contexto.zona_horaria,
+            detalle_origen_ids=detalle_origen_ids,
+            usuario_id=usuario.id,
             excepciones=excepciones,
         )
+        rechazo.reclamo_id = reclamo.id if reclamo else None
+        raise
+
+    with contexto.transaccion():
         # VAR-REP-039: con excepcion la admite el usuario autorizado; el paso
         # automatico 055 que sigue no le exige ademas ser Recepcion.
         orden = marcar_orden_en_revision(
