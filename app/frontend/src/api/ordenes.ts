@@ -188,6 +188,7 @@ export function aplicarDescuento(
   valor: string | null,
   motivo: string,
   clase: ClaseAjuste = "DESCUENTO",
+  detalleId: string | null = null,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/discount`, {
     usuario_id: usuarioId,
@@ -195,6 +196,7 @@ export function aplicarDescuento(
     valor,
     motivo,
     clase,
+    detalle_id: detalleId,
   });
 }
 

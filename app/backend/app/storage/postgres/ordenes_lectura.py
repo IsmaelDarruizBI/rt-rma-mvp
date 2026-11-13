@@ -549,9 +549,10 @@ _DESCUENTOS = consulta(
     "ordenes.descuentos",
     """
     SELECT d.orden_id, d.tipo, d.valor, d.motivo, u.codigo AS usuario,
-           d.registrado_en, d.clase
+           d.registrado_en, d.clase, x.codigo AS detalle
     FROM rma.descuento d
     JOIN rma.usuario u ON u.id = d.usuario_id
+    LEFT JOIN rma.detalle x ON x.id = d.detalle_id
     WHERE d.orden_id = ANY(ARRAY(
         SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
     ))
@@ -989,6 +990,7 @@ def _descuento(fila: Any) -> RegistroDescuento:
         usuario_id=fila.usuario,
         fecha=utc(fila.registrado_en),
         clase=fila.clase,
+        detalle_id=fila.detalle,
     )
 
 

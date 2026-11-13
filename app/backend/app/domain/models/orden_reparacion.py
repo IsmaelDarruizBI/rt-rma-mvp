@@ -166,11 +166,51 @@ class OrdenReparacion(BaseModel):
             or self.current_process == "EVT-REP-999"
         )
 
+    def _ajuste_vigente(
+        self, detalle_id: str | None
+    ) -> RegistroDescuento | None:
+        """El ultimo registro de ese destino, si no quita el ajuste."""
+        ultimo = next(
+            (
+                d
+                for d in reversed(self.descuentos)
+                if d.detalle_id == detalle_id
+            ),
+            None,
+        )
+        return ultimo if ultimo is not None and ultimo.tipo else None
+
     @property
     def descuento_vigente(self) -> RegistroDescuento | None:
-        """El descuento en vigor: el ultimo registro, si no lo quita."""
-        ultimo = self.descuentos[-1] if self.descuentos else None
-        return ultimo if ultimo is not None and ultimo.tipo else None
+        """El Ajuste Comercial de la Orden en vigor (no el de un Detalle)."""
+        return self._ajuste_vigente(None)
+
+    def ajuste_de_detalle(self, detalle_id: str) -> RegistroDescuento | None:
+        """El Ajuste Comercial vigente de ese Detalle (DC09, DEC-MI-03)."""
+        return self._ajuste_vigente(detalle_id)
+
+    @property
+    def descuento_detalles(self) -> Decimal:
+        """Lo que descuentan los ajustes de cada Detalle no cancelado, cada
+        uno sobre el precio de su Detalle."""
+        return sum(
+            (
+                importe_de_descuento(
+                    detalle.precio, self.ajuste_de_detalle(detalle.id)
+                )
+                for detalle in self.reparaciones_detail
+                if detalle.estado is not EstadoReparacionDetail.CANCELADO
+            ),
+            Decimal("0"),
+        )
+
+    @property
+    def descuento_orden(self) -> Decimal:
+        """Lo que descuenta el ajuste de la Orden, sobre lo que queda
+        despues de los ajustes de los Detalles. No se prorratea."""
+        return importe_de_descuento(
+            self.subtotal - self.descuento_detalles, self.descuento_vigente
+        )
 
     @computed_field
     @property
@@ -192,8 +232,9 @@ class OrdenReparacion(BaseModel):
     @computed_field
     @property
     def descuento_aplicado(self) -> Decimal:
-        """Lo que descuenta el descuento vigente sobre el subtotal."""
-        return importe_de_descuento(self.subtotal, self.descuento_vigente)
+        """Todos los Ajustes Comerciales vigentes: los de cada Detalle mas
+        el de la Orden (sobre el neto de los Detalles)."""
+        return self.descuento_detalles + self.descuento_orden
 
     @computed_field
     @property

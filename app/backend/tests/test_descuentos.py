@@ -2,8 +2,8 @@
 
 Porcentaje o importe fijo, con motivo. Total = Subtotal - descuento; el
 precio de cada trabajo (snapshot del catalogo) no cambia. Queda quien,
-cuando y por que. No supera su base ni deja el total por debajo de lo ya
-cobrado. Se refleja en los comprobantes y no altera los Pagos.
+cuando y por que. No supera su base; por debajo de lo ya cobrado deja saldo
+a favor (DEC-MI-03). Se refleja en los comprobantes y no altera los Pagos.
 """
 
 from decimal import Decimal
@@ -169,11 +169,13 @@ def test_saldo_con_pagos_parciales_y_bloqueo(cliente, tmp_path):
     assert _resumen(orden)["saldo"] == Decimal("22000")
     # Los Pagos no se tocan.
     assert orden["pagos"] == pagos_antes
-    # Un descuento que dejaria el total debajo de lo cobrado se rechaza.
-    antes = archivo(tmp_path, orden_id)
-    mensaje = conflicto(_descontar(cliente, orden_id, "IMPORTE", "40000"))
-    assert "ya cobrado" in mensaje
-    assert archivo(tmp_path, orden_id) == antes
+    # DEC-MI-03 (cierra ABI-10): un descuento que deja el total debajo de
+    # lo cobrado ya no se rechaza: deja saldo a favor del cliente, que se
+    # devuelve antes de entregar. Los Pagos no cambian.
+    a_favor = ok(_descontar(cliente, orden_id, "IMPORTE", "40000"))
+    assert _resumen(a_favor)["total"] == Decimal("40000")
+    assert _resumen(a_favor)["saldo"] == Decimal("-10000")
+    assert a_favor["pagos"] == pagos_antes
     # Hasta igualar lo cobrado si se puede.
     saldado = ok(_descontar(cliente, orden_id, "IMPORTE", "30000"))
     assert _resumen(saldado)["saldo"] == Decimal("0")
@@ -263,7 +265,12 @@ def test_se_ofrece_a_recepcion_en_una_orden_cobrable(cliente):
         for a in orden["acciones_financieras"]
         if a["codigo"] == "APLICAR_DESCUENTO"
     ]
-    assert set(accion["roles"]) == {"RECEPCION", "ADMINISTRADOR"}
+    # DEC-MI-03 (cierra ABI-09): Recepcion, Coordinacion y Administracion.
+    assert set(accion["roles"]) == {
+        "RECEPCION",
+        "COORDINADOR_RMA",
+        "ADMINISTRADOR",
+    }
 
 
 def test_cuentas_documentos_e_historia_consistentes(cliente):

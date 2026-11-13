@@ -35,6 +35,9 @@ class RegistroDescuento(BaseModel):
     # DC09/DC11: DESCUENTO o CORTESIA. Default DESCUENTO: un JSON anterior
     # solo pudo registrar descuentos.
     clase: ClaseAjuste = ClaseAjuste.DESCUENTO
+    # DC09, DEC-MI-03: el ajuste es de un Detalle (su id) o de la Orden
+    # (``None``, como todos los anteriores). El de la Orden no se prorratea.
+    detalle_id: str | None = None
 
 
 def importe_de_descuento(

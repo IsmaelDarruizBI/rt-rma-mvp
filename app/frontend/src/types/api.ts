@@ -919,6 +919,8 @@ export interface ResumenComercial {
   subtotal: string;
   descuento_aplicado: string;
   descuento: DescuentoVigente | null;
+  /** DC09, DEC-MI-03: los ajustes vigentes de cada trabajo. */
+  ajustes_detalle?: DescuentoVigente[];
 }
 
 export type TipoDescuento = "PORCENTAJE" | "IMPORTE";
@@ -935,6 +937,9 @@ export interface DescuentoVigente {
   motivo: string;
   usuario_id: string;
   fecha: string;
+  clase?: ClaseAjuste;
+  /** Vacío: de la Orden; con valor, de ese trabajo. */
+  detalle_id?: string | null;
 }
 
 /** Cada aplicación, cambio o retiro (sin `tipo`) de un descuento. */
@@ -945,6 +950,8 @@ export interface RegistroDescuento {
   usuario_id: string;
   fecha: string;
   clase?: ClaseAjuste;
+  /** Vacío: de la Orden; con valor, de ese trabajo (DEC-MI-03). */
+  detalle_id?: string | null;
 }
 
 /**

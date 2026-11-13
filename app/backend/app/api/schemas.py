@@ -91,6 +91,7 @@ from app.domain.models import (
     TomaOrden,
     Usuario,
     VigenciaGarantiaOrigen,
+    importe_de_descuento,
 )
 from app.domain.politicas import CondicionComercial, politica_de
 from app.domain.prioridad import (
@@ -595,6 +596,8 @@ class DescuentoIn(BaseModel):
     motivo: str = Field(min_length=1)
     # DC11: DESCUENTO (default) o CORTESIA total (Administracion).
     clase: ClaseAjuste = ClaseAjuste.DESCUENTO
+    # DC09, DEC-MI-03: un trabajo (su id) o la Orden (sin valor).
+    detalle_id: str | None = None
 
 
 class AjustarGarantiaIn(BaseModel):
@@ -1467,7 +1470,10 @@ def _vigentes(orden: OrdenReparacion) -> set[str]:
 
 
 class DescuentoVigenteOut(BaseModel):
-    """El descuento que rige hoy: como se expreso, cuanto y por que."""
+    """Un Ajuste Comercial que rige hoy: como se expreso, cuanto y por que.
+
+    ``detalle_id`` vacio: el de la Orden; con valor, el de ese trabajo.
+    """
 
     tipo: TipoDescuento
     valor: Decimal
@@ -1476,6 +1482,8 @@ class DescuentoVigenteOut(BaseModel):
     motivo: str
     usuario_id: str
     fecha: datetime
+    clase: ClaseAjuste = ClaseAjuste.DESCUENTO
+    detalle_id: str | None = None
 
 
 class ResumenComercialOut(BaseModel):
@@ -1502,6 +1510,8 @@ class ResumenComercialOut(BaseModel):
     subtotal: Decimal = Decimal("0")
     descuento_aplicado: Decimal = Decimal("0")
     descuento: DescuentoVigenteOut | None = None
+    # DC09, DEC-MI-03: los ajustes vigentes de cada trabajo.
+    ajustes_detalle: list[DescuentoVigenteOut] = Field(default_factory=list)
 
 
 class HistorialOut(BaseModel):
@@ -1933,19 +1943,39 @@ class DesistimientoOut(BaseModel):
         )
 
 
-def _descuento_vigente(orden: OrdenReparacion) -> DescuentoVigenteOut | None:
-    registro = orden.descuento_vigente
-    if registro is None:
-        return None
+def _ajuste_out(registro, importe: Decimal) -> DescuentoVigenteOut:
     return DescuentoVigenteOut(
         tipo=registro.tipo,
         valor=registro.valor,
         descripcion=descripcion_de_descuento(registro),
-        importe=orden.descuento_aplicado,
+        importe=importe,
         motivo=registro.motivo,
         usuario_id=registro.usuario_id,
         fecha=registro.fecha,
+        clase=registro.clase,
+        detalle_id=registro.detalle_id,
     )
+
+
+def _descuento_vigente(orden: OrdenReparacion) -> DescuentoVigenteOut | None:
+    registro = orden.descuento_vigente
+    if registro is None:
+        return None
+    return _ajuste_out(registro, orden.descuento_orden)
+
+
+def _ajustes_detalle(orden: OrdenReparacion) -> list[DescuentoVigenteOut]:
+    salida = []
+    for detalle in orden.reparaciones_detail:
+        registro = orden.ajuste_de_detalle(detalle.id)
+        if registro is None or detalle.estado.value == "CANCELADO":
+            continue
+        salida.append(
+            _ajuste_out(
+                registro, importe_de_descuento(detalle.precio, registro)
+            )
+        )
+    return salida
 
 
 def _resumen_comercial(orden: OrdenReparacion) -> "ResumenComercialOut":
@@ -1962,6 +1992,7 @@ def _resumen_comercial(orden: OrdenReparacion) -> "ResumenComercialOut":
         subtotal=orden.subtotal,
         descuento_aplicado=orden.descuento_aplicado,
         descuento=_descuento_vigente(orden),
+        ajustes_detalle=_ajustes_detalle(orden),
     )
 
 

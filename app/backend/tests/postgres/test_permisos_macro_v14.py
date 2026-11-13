@@ -31,6 +31,9 @@ from tests.postgres import test_configuracion_postgres as config  # noqa: E402
 from tests.postgres import test_idempotencia_postgres as idem  # noqa: E402
 from tests.postgres import test_ordenes_postgres as ordenes  # noqa: E402
 from tests.postgres import test_permisos_rma_backend as permisos  # noqa: E402
+from tests.postgres.test_ajuste_por_detalle_postgres import (  # noqa: E402,F401
+    test_ajuste_por_detalle_se_guarda_y_la_vista_coincide,
+)
 from tests.postgres.test_configuracion_postgres import (  # noqa: E402,F401
     test_alta_y_edicion_de_un_tipo_con_su_auditoria,
     test_tipos_habilitados_de_una_mesa,

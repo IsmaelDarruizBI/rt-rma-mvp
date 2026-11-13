@@ -1372,8 +1372,9 @@ def post_aplicar_descuento(
     """Aplicar, cambiar o quitar el descuento comercial (Recepcion).
 
     Porcentaje o importe fijo, con motivo. No toca el precio de ningun
-    trabajo ni los Pagos; se rechaza si deja el total por debajo de lo ya
-    pagado. En el cierre comercial se revalida PROC-REP-265.
+    trabajo ni los Pagos. De la Orden o de un trabajo (``detalle_id``).
+    Por debajo de lo ya cobrado deja saldo a favor, a devolver antes de
+    entregar (DEC-MI-03). En el cierre comercial se revalida PROC-REP-265.
     """
     orden, puede_entregar = aplicar_descuento_de_orden(
         contexto,
@@ -1383,6 +1384,7 @@ def post_aplicar_descuento(
         valor=cuerpo.valor,
         motivo=cuerpo.motivo,
         clase=cuerpo.clase,
+        detalle_id=cuerpo.detalle_id,
     )
     return _salida_con_entrega(orden, contexto, puede_entregar)
 

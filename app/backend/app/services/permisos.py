@@ -290,7 +290,7 @@ DEVOLUCION_DINERO = _definir(
 DESCUENTO = _definir(
     "DESCUENTO",
     "Otorgar, modificar o quitar descuentos",
-    (RECEP, ADMIN),
+    (RECEP, COORD, ADMIN),
     COMERCIAL,
 )
 CORTESIA = _definir(

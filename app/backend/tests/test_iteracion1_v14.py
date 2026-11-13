@@ -472,12 +472,13 @@ def test_var_rep_041_cortesia_parcial_sin_pagos_deja_saldo_pendiente(
 # tests/postgres/test_iteracion1_postgres.py.
 
 
-def test_un_descuento_sigue_sin_dejar_el_total_bajo_lo_cobrado(cliente):
-    """El descuento comun conserva su regla anterior (BR-REP-016; ABI-10
-    sigue abierto)."""
+def test_un_descuento_bajo_lo_cobrado_deja_saldo_a_favor(cliente):
+    """DEC-MI-03 (cierra ABI-10): como la cortesia, un descuento que deja
+    el total por debajo de lo cobrado deja saldo a favor, a devolver antes
+    de entregar; los Pagos se conservan."""
     orden_id = f.definida(cliente)
     it.pagar(cliente, orden_id, "70000")
-    f.conflicto(
+    orden = f.ok(
         it.ajuste_comercial(
             cliente,
             orden_id,
@@ -487,6 +488,9 @@ def test_un_descuento_sigue_sin_dejar_el_total_bajo_lo_cobrado(cliente):
             motivo="Rebaja.",
         )
     )
+    assert orden["resumen"]["saldo"] == "-30000.00"
+    assert orden["resumen"]["situacion_financiera"] == "SALDO_A_FAVOR"
+    assert [p["monto"] for p in orden["pagos"]] == ["70000"]
 
 
 # --- VAR-REP-042: desistimiento con el Detalle en ejecucion ------------------

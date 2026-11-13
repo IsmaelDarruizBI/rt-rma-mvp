@@ -315,9 +315,9 @@ _INSERTAR_DESCUENTO = consulta(
     """
     INSERT INTO rma.descuento
         (orden_id, tipo, valor, motivo, usuario_id, registrado_en, posicion,
-         clase)
+         clase, detalle_id)
     VALUES (%(orden)s, %(tipo)s, %(valor)s, %(motivo)s, %(usuario)s,
-            %(fecha)s, %(posicion)s, %(clase)s)
+            %(fecha)s, %(posicion)s, %(clase)s, %(detalle)s)
     """,
     modo=ESCRITURA,
 )
@@ -1987,6 +1987,11 @@ class _Guardado:
                     "fecha": registro.fecha,
                     "posicion": posicion,
                     "clase": registro.clase.value,
+                    "detalle": (
+                        self._detalles[registro.detalle_id]
+                        if registro.detalle_id
+                        else None
+                    ),
                 },
             )
 

@@ -55,6 +55,8 @@ interface Props {
     valor: string | null,
     motivo: string,
     clase: ClaseAjuste,
+    /** DEC-MI-03: el trabajo del ajuste; sin valor, la Orden. */
+    detalleId?: string | null,
   ) => void;
 }
 
@@ -108,13 +110,23 @@ export function PagosYMovimientos(props: Props) {
   const cobrable = resumen.condicion_comercial === "COBRABLE";
   const saldo = Number(resumen.saldo);
   const descuento = resumen.descuento;
+  const ajustesDetalle = resumen.ajustes_detalle ?? [];
   const filas: [string, string][] = [
+    ...(descuento || ajustesDetalle.length > 0
+      ? ([["Subtotal", importe(resumen.subtotal)]] as [string, string][])
+      : []),
+    ...ajustesDetalle.map(
+      (a) =>
+        [
+          `${a.clase === "CORTESIA" ? "Cortesía" : "Descuento"} ${a.detalle_id} (${a.descripcion})`,
+          `−${importe(a.importe)}`,
+        ] as [string, string],
+    ),
     ...(descuento
       ? ([
-          ["Subtotal", importe(resumen.subtotal)],
           [
-            `Descuento (${descuento.descripcion})`,
-            `−${importe(resumen.descuento_aplicado)}`,
+            `${descuento.clase === "CORTESIA" ? "Cortesía" : "Descuento"}${ajustesDetalle.length > 0 ? " de la Orden" : ""} (${descuento.descripcion})`,
+            `−${importe(descuento.importe)}`,
           ],
         ] as [string, string][])
       : []),
@@ -190,6 +202,14 @@ export function PagosYMovimientos(props: Props) {
         <FormularioCortesia
           key={`cortesia-${orden.updated_at}`}
           accion={cortesia}
+          {...props}
+        />
+      )}
+      {(descontar || cortesia) && (
+        <FormularioAjusteTrabajo
+          key={`ajuste-trabajo-${orden.updated_at}`}
+          descontar={descontar ?? null}
+          cortesia={cortesia ?? null}
           {...props}
         />
       )}
@@ -355,7 +375,7 @@ function FormularioDescuentoComun({
 
 /** La cortesía vigente (DC11), si el ajuste vigente es una cortesía. */
 function cortesiaVigente(orden: Orden) {
-  const registros = orden.descuentos ?? [];
+  const registros = (orden.descuentos ?? []).filter((r) => !r.detalle_id);
   const ultimo = registros[registros.length - 1];
   return ultimo?.clase === "CORTESIA" && ultimo.tipo !== null ? ultimo : null;
 }
@@ -522,7 +542,8 @@ function HistorialDescuentos({
               : registro.tipo && registro.valor
                 ? `Descuento ${textoDescuento(registro.tipo, registro.valor)}`
                 : "Descuento quitado"}{" "}
-            · {registro.motivo}{" "}
+            {registro.detalle_id ? `(${registro.detalle_id}) ` : "(Orden) "}·{" "}
+            {registro.motivo}{" "}
             <span style={{ color: colores.suave }}>
               ({nombreDeUsuario(usuarios, registro.usuario_id)},{" "}
               {fechaCorta(registro.fecha)})
@@ -1031,6 +1052,136 @@ export function Confirmacion({
         <Boton variante="secundario" onClick={onVolver}>
           Volver
         </Boton>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Ajuste Comercial de un trabajo (DC09, DEC-MI-03): descuento o cortesía
+ * sobre su precio, en porcentaje o importe, con motivo. El de la Orden se
+ * aplica después, sobre lo que queda, y no se reparte entre los trabajos.
+ * Por debajo de lo cobrado deja saldo a favor, a devolver antes de entregar.
+ */
+function FormularioAjusteTrabajo({
+  orden,
+  actor,
+  ocupado,
+  descontar,
+  cortesia,
+  onDescontar,
+}: Props & { descontar: Accion | null; cortesia: Accion | null }) {
+  const trabajos = orden.reparaciones_detail.filter(
+    (d) => d.estado !== "CANCELADO",
+  );
+  const [detalleId, setDetalleId] = useState(trabajos[0]?.id ?? "");
+  const [clase, setClase] = useState<ClaseAjuste>(
+    descontar ? "DESCUENTO" : "CORTESIA",
+  );
+  const [tipo, setTipo] = useState<TipoDescuento>("PORCENTAJE");
+  const [valor, setValor] = useState("");
+  const [motivo, setMotivo] = useState("");
+  if (trabajos.length === 0) return null;
+  const accion = clase === "CORTESIA" ? cortesia : descontar;
+  const vigente = (orden.resumen.ajustes_detalle ?? []).find(
+    (a) => a.detalle_id === detalleId,
+  );
+  const listo =
+    accion !== null &&
+    habilitada(accion, actor) &&
+    !ocupado &&
+    Number(valor) > 0 &&
+    motivo.trim() !== "";
+  return (
+    <div style={{ marginTop: "0.8rem" }}>
+      <h4 style={{ margin: "0 0 0.4rem" }}>Ajuste de un trabajo</h4>
+      <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
+        Sobre el precio del trabajo elegido. El ajuste de la Orden se aplica
+        después, sobre lo que queda, y no se reparte entre los trabajos.
+      </p>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <Campo etiqueta="Trabajo">
+          <select
+            value={detalleId}
+            onChange={(e) => setDetalleId(e.target.value)}
+            style={estiloInput}
+          >
+            {trabajos.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.id} · {d.tipo_reparacion_nombre ?? d.tipo_reparacion_id} ·{" "}
+                {importe(d.precio)}
+              </option>
+            ))}
+          </select>
+        </Campo>
+        <Campo etiqueta="Clase">
+          <select
+            value={clase}
+            onChange={(e) => setClase(e.target.value as ClaseAjuste)}
+            style={estiloInput}
+          >
+            {descontar && <option value="DESCUENTO">Descuento</option>}
+            {cortesia && <option value="CORTESIA">Cortesía</option>}
+          </select>
+        </Campo>
+        <Campo etiqueta="Tipo">
+          <select
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value as TipoDescuento)}
+            style={estiloInput}
+          >
+            <option value="PORCENTAJE">Porcentaje</option>
+            <option value="IMPORTE">Importe</option>
+          </select>
+        </Campo>
+        <Campo etiqueta={tipo === "PORCENTAJE" ? "Porcentaje" : "Importe"}>
+          <input
+            inputMode="decimal"
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            style={estiloInput}
+          />
+        </Campo>
+      </div>
+      <Campo etiqueta="Motivo">
+        <input
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value)}
+          style={estiloInput}
+        />
+      </Campo>
+      {vigente && (
+        <p style={{ margin: "0.3rem 0", fontSize: "0.82rem" }}>
+          Vigente en {detalleId}: {vigente.descripcion} (−
+          {importe(vigente.importe)})
+        </p>
+      )}
+      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.4rem" }}>
+        <Boton
+          disabled={!listo}
+          onClick={() =>
+            onDescontar(tipo, valor.trim(), motivo.trim(), clase, detalleId)
+          }
+        >
+          {vigente ? "Cambiar el ajuste del trabajo" : "Aplicar al trabajo"}
+        </Boton>
+        {vigente && (
+          <Boton
+            variante="secundario"
+            disabled={ocupado || motivo.trim() === ""}
+            onClick={() =>
+              onDescontar(
+                null,
+                null,
+                motivo.trim(),
+                vigente.clase ?? "DESCUENTO",
+                detalleId,
+              )
+            }
+          >
+            Quitar el ajuste del trabajo
+          </Boton>
+        )}
       </div>
     </div>
   );

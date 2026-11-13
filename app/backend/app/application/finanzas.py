@@ -150,6 +150,7 @@ def aplicar_descuento_de_orden(
     valor: Decimal | None,
     motivo: str,
     clase: ClaseAjuste = ClaseAjuste.DESCUENTO,
+    detalle_id: str | None = None,
 ) -> tuple[OrdenReparacion, bool]:
     """Recepcion o Administracion aplica, cambia o quita el descuento; la
     cortesia total la otorga Administracion (provisional, DC11).
@@ -169,6 +170,7 @@ def aplicar_descuento_de_orden(
             usuario=usuario,
             fecha=fecha,
             clase=clase,
+            detalle_id=detalle_id,
         )
         orden, puede_entregar = reevaluar_tras_movimiento(orden, fecha=fecha)
         contexto.ordenes.guardar(orden)

@@ -1036,7 +1036,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                       api.devolverDinero(idOrden, idActor, datos),
                     )
                   }
-                  onDescontar={(tipo, valor, motivo, clase) =>
+                  onDescontar={(tipo, valor, motivo, clase, detalleId) =>
                     void ejecutarComando(() =>
                       api.aplicarDescuento(
                         idOrden,
@@ -1045,6 +1045,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                         valor,
                         motivo,
                         clase,
+                        detalleId ?? null,
                       ),
                     )
                   }

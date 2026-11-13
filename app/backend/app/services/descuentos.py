@@ -7,9 +7,9 @@ el descuento es un ajuste aparte y el total se deriva (subtotal menos
 descuento). Cada cambio queda registrado en la Orden con quien, cuando y
 por que.
 
-Con pagos registrados, un DESCUENTO que dejaria el total por debajo de lo
-ya cobrado se rechaza: primero se anula o se devuelve el excedente (como
-tratarlo sigue pendiente en BR-REP-016).
+Ajustes por Orden o por Detalle (DC09, DEC-MI-03). Con pagos registrados,
+un ajuste que deja el total por debajo de lo ya cobrado deja saldo a favor
+del cliente, a devolver antes de entregar (DEC-MI-03 cierra ABI-10).
 
 CORTESIA (V1.4, DC11, VAR-REP-041): la Orden no se cobra. Por ahora solo
 la cortesia TOTAL (si puede ser parcial sigue pendiente). Con Pagos previos
@@ -23,12 +23,12 @@ from decimal import Decimal
 
 from app.domain.models import (
     ClaseAjuste,
+    EstadoReparacionDetail,
     EstadoWorkflow,
     OrdenReparacion,
     RegistroDescuento,
     TipoDescuento,
     Usuario,
-    importe_de_descuento,
 )
 
 from . import permisos
@@ -71,19 +71,38 @@ def aplicar_descuento(
     usuario: Usuario,
     fecha: datetime,
     clase: ClaseAjuste = ClaseAjuste.DESCUENTO,
+    detalle_id: str | None = None,
 ) -> OrdenReparacion:
-    """Aplica, cambia o quita (``tipo`` en ``None``) el Ajuste Comercial.
+    """Aplica, cambia o quita (``tipo`` en ``None``) un Ajuste Comercial.
 
-    Un solo Ajuste Comercial vigente por Orden (el ultimo registro), sin
-    acumular. Porcentaje entre 0 y 100; importe fijo hasta el subtotal de
-    los trabajos. Un DESCUENTO se rechaza si el nuevo total quedaria por
-    debajo de lo ya cobrado (pagos validos menos devoluciones; ABI-10 sigue
-    abierto). Una CORTESIA, total o parcial (DEC-IT1-02), si deja el total
-    por debajo de lo cobrado genera saldo a favor del cliente, a devolver
-    antes de entregar (DC11, BR-REP-038). Otorgar, modificar o quitar una
-    cortesia exige el mismo permiso (``ROLES_CORTESIA``).
+    DC09 y DEC-MI-03: el ajuste es de la Orden (``detalle_id`` en ``None``)
+    o de un Detalle no cancelado. Un solo ajuste vigente por destino (el
+    ultimo registro), sin acumular. El de un Detalle descuenta sobre su
+    precio; el de la Orden, sobre lo que queda despues de los ajustes de
+    los Detalles, y no se prorratea entre ellos. Porcentaje entre 0 y 100;
+    importe fijo hasta lo que queda del destino.
+
+    Si un DESCUENTO o una CORTESIA deja el total por debajo de lo ya
+    cobrado, queda saldo a favor del cliente: los Pagos y los ajustes se
+    conservan y la devolucion de dinero (PROC-REP-267) es obligatoria antes
+    de entregar (DC11, BR-REP-038, DEC-MI-03); la condicion de entrega ya lo
+    exige (``saldo == 0``). Cada clase tiene su permiso (``ROLES_DESCUENTO``
+    y ``ROLES_CORTESIA``).
     """
-    vigente = orden.descuento_vigente
+    detalle = None
+    if detalle_id is not None:
+        detalle = next(
+            (d for d in orden.reparaciones_detail if d.id == detalle_id), None
+        )
+        if detalle is None:
+            raise PrecondicionInvalidaError(
+                f"La Orden no tiene el trabajo {detalle_id}."
+            )
+    vigente = (
+        orden.ajuste_de_detalle(detalle_id)
+        if detalle_id is not None
+        else orden.descuento_vigente
+    )
     otorga_o_quita_cortesia = clase is ClaseAjuste.CORTESIA or (
         tipo is None
         and vigente is not None
@@ -98,20 +117,37 @@ def aplicar_descuento(
             "El descuento solo se aplica en una Orden cobrable, abierta, no "
             "cancelada, con trabajos y antes de entregar el equipo."
         )
+    if (
+        detalle is not None
+        and detalle.estado is EstadoReparacionDetail.CANCELADO
+    ):
+        raise PrecondicionInvalidaError(
+            f"El trabajo {detalle_id} esta cancelado: no se cobra."
+        )
     motivo = (motivo or "").strip()
     if not motivo:
         raise PrecondicionInvalidaError(
             "El descuento exige indicar el motivo (promocion, convenio o "
             "acuerdo comercial)."
         )
+    base = (
+        detalle.precio
+        if detalle is not None
+        else orden.subtotal - orden.descuento_detalles
+    )
     if tipo is None:
-        if orden.descuento_vigente is None:
-            raise PrecondicionInvalidaError("La Orden no tiene descuento.")
+        if vigente is None:
+            raise PrecondicionInvalidaError(
+                "El trabajo no tiene descuento."
+                if detalle_id
+                else "La Orden no tiene descuento."
+            )
         registro = RegistroDescuento(
             motivo=motivo,
             usuario_id=usuario.id,
             fecha=fecha,
             clase=vigente.clase,
+            detalle_id=detalle_id,
         )
     else:
         if valor is None or valor <= 0:
@@ -122,10 +158,14 @@ def aplicar_descuento(
             raise PrecondicionInvalidaError(
                 "Un descuento porcentual no puede superar el 100 %."
             )
-        if tipo is TipoDescuento.IMPORTE and valor > orden.subtotal:
+        if tipo is TipoDescuento.IMPORTE and valor > base:
+            destino = (
+                f"el precio del trabajo ({base})"
+                if detalle_id
+                else f"el subtotal de los trabajos ({base})"
+            )
             raise PrecondicionInvalidaError(
-                f"El descuento ({valor}) no puede superar el subtotal de los "
-                f"trabajos ({orden.subtotal})."
+                f"El descuento ({valor}) no puede superar {destino}."
             )
         registro = RegistroDescuento(
             tipo=tipo,
@@ -134,17 +174,7 @@ def aplicar_descuento(
             usuario_id=usuario.id,
             fecha=fecha,
             clase=clase,
-        )
-
-    nuevo_total = orden.subtotal - importe_de_descuento(
-        orden.subtotal, registro
-    )
-    cobrado = orden.resumen_pago.pagado - orden.resumen_pago.devuelto
-    if registro.clase is ClaseAjuste.DESCUENTO and nuevo_total < cobrado:
-        raise PrecondicionInvalidaError(
-            f"Con ese descuento el total ({nuevo_total}) quedaria por debajo "
-            f"de lo ya cobrado ({cobrado}). Anula o devolve el excedente "
-            "antes de cambiar el descuento."
+            detalle_id=detalle_id,
         )
 
     nueva_orden = orden.model_copy(deep=True)

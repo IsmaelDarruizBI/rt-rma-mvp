@@ -23,7 +23,7 @@ anterior. Volver a emitir el mismo contenido (un reintento) devuelve el
 documento existente: nunca se duplica.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, tzinfo
 from decimal import Decimal
@@ -349,17 +349,42 @@ def _notas_visibles(recepcion) -> list[str]:
 
 
 def _descuento_en_documento(
-    orden: OrdenReparacion, subtotal: Decimal
+    orden: OrdenReparacion, trabajos: Iterable[tuple[str, Decimal]]
 ) -> DescuentoEnDocumento | None:
-    """El descuento vigente sobre ``subtotal``, si descuenta algo."""
+    """Los Ajustes Comerciales vigentes sobre esos trabajos (id, precio).
+
+    Los de cada trabajo descuentan sobre su precio y el de la Orden sobre
+    lo que queda (DC09, DEC-MI-03: no se prorratea). Un solo renglon con
+    todos, si descuentan algo.
+    """
+    partes: list[str] = []
+    motivos: list[str] = []
+    subtotal = Decimal("0")
+    de_trabajos = Decimal("0")
+    for detalle_id, precio in trabajos:
+        subtotal += precio
+        registro = orden.ajuste_de_detalle(detalle_id)
+        importe = importe_de_descuento(precio, registro)
+        if registro is not None and importe > 0:
+            de_trabajos += importe
+            partes.append(
+                f"{descripcion_de_descuento(registro)} ({detalle_id})"
+            )
+            motivos.append(registro.motivo)
     vigente = orden.descuento_vigente
-    importe = importe_de_descuento(subtotal, vigente)
-    if vigente is None or importe == 0:
+    de_orden = importe_de_descuento(subtotal - de_trabajos, vigente)
+    if vigente is not None and de_orden > 0:
+        partes.append(
+            descripcion_de_descuento(vigente)
+            + (" sobre la Orden" if partes else "")
+        )
+        motivos.append(vigente.motivo)
+    if not partes:
         return None
     return DescuentoEnDocumento(
-        descripcion=descripcion_de_descuento(vigente),
-        motivo=vigente.motivo,
-        importe=importe,
+        descripcion="; ".join(partes),
+        motivo="; ".join(dict.fromkeys(motivos)),
+        importe=de_trabajos + de_orden,
     )
 
 
@@ -462,10 +487,17 @@ def contenido_comprobante_entrega(
         ],
         cobrable=cobrable,
         subtotal=(
-            orden.subtotal if cobrable and orden.descuento_vigente else None
+            orden.subtotal if cobrable and orden.descuento_aplicado else None
         ),
         descuento=(
-            _descuento_en_documento(orden, orden.subtotal)
+            _descuento_en_documento(
+                orden,
+                (
+                    (d.id, d.precio)
+                    for d in orden.reparaciones_detail
+                    if d.estado is not EstadoReparacionDetail.CANCELADO
+                ),
+            )
             if cobrable
             else None
         ),
@@ -592,7 +624,9 @@ def contenido_comprobante_autorizacion(
     """
     trabajos = _trabajos_autorizados(orden, contexto)
     subtotal = sum((trabajo.precio for trabajo in trabajos), Decimal("0"))
-    descuento = _descuento_en_documento(orden, subtotal)
+    descuento = _descuento_en_documento(
+        orden, ((t.detalle_id, t.precio) for t in trabajos)
+    )
     return ContenidoComprobanteAutorizacion(
         **_datos_comunes(orden, contexto),
         trabajos=trabajos,
@@ -620,7 +654,9 @@ def contenido_comprobante_ingreso(
     confirmacion = recepcion.confirmacion if recepcion else None
     trabajos = _trabajos_autorizados(orden, contexto)
     subtotal = sum((trabajo.precio for trabajo in trabajos), Decimal("0"))
-    descuento = _descuento_en_documento(orden, subtotal)
+    descuento = _descuento_en_documento(
+        orden, ((t.detalle_id, t.precio) for t in trabajos)
+    )
     return ContenidoComprobanteIngreso(
         **_datos_comunes(orden, contexto),
         estado_fisico=datos.estado_fisico if datos else None,
@@ -664,8 +700,9 @@ def _firma_de(contenido) -> tuple:
 
 def _firma_vigente(orden: OrdenReparacion) -> tuple:
     autorizados = _autorizados(orden)
-    subtotal = sum((detalle.precio for detalle, _ in autorizados), Decimal(0))
-    descuento = _descuento_en_documento(orden, subtotal)
+    descuento = _descuento_en_documento(
+        orden, ((detalle.id, detalle.precio) for detalle, _ in autorizados)
+    )
     return (
         tuple(
             (detalle.id, decision.version_definicion, detalle.precio)
