@@ -234,6 +234,8 @@ def test_el_checkin_antes_de_entregar_asigna_la_garantia(
             "realizado": realizado,
             "usuario_id": RECEPCION,
             "fecha": "2026-10-01T15:00:00Z",
+            # DEC-MI-05: el primer registro no lleva motivo.
+            "motivo": None,
         }
     ]
     # No mueve el proceso.
