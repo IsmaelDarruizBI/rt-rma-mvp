@@ -1010,9 +1010,7 @@ def test_el_lector_rechaza_una_escritura_en_el_lote_sin_enviar_nada(
         with unidad.transaccion():
             with unidad.lectura() as lector:
                 with pytest.raises(TypeError, match="escritura"):
-                    lector.filas_en_lote(
-                        [(_TODOS, ()), (_ACTUALIZAR, ("b",))]
-                    )
+                    lector.filas_en_lote([(_TODOS, ()), (_ACTUALIZAR, ("b",))])
     assert _ids(base) == []
     assert _estable(pool)
 

@@ -305,9 +305,7 @@ def test_devolver_rt_con_recepcion_registra_su_usuario_id():
 
 def test_devolver_rt_rechaza_tecnico():
     with pytest.raises(PrecondicionInvalidaError):
-        devolver_equipo_rt(
-            orden_rt_informada(), usuario=TECNICO, fecha=t(999)
-        )
+        devolver_equipo_rt(orden_rt_informada(), usuario=TECNICO, fecha=t(999))
 
 
 # --- Representacion comercial: snapshot != deuda pendiente ---------------

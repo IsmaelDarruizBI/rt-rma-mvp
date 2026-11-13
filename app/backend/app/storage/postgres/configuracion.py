@@ -10,6 +10,7 @@ from datetime import timezone
 from app.domain.models import (
     CambioConfiguracion,
     EntidadConfiguracion,
+    RolUsuario,
     TipoReparacion,
 )
 from app.repositories.exceptions import (
@@ -80,6 +81,49 @@ _INSERTAR_CAMBIO = consulta(
     """,
     modo=ESCRITURA,
 )
+_QUITAR_ROLES = consulta(
+    "configuracion.quitar_roles",
+    """
+    DELETE FROM rma.usuario_rol ur
+     USING rma.usuario u, rma.rol r
+     WHERE ur.usuario_id = u.id AND ur.rol_id = r.id
+       AND u.codigo = %(usuario)s AND NOT (r.codigo = ANY(%(roles)s))
+    """,
+    modo=ESCRITURA,
+)
+_AGREGAR_ROLES = consulta(
+    "configuracion.agregar_roles",
+    """
+    INSERT INTO rma.usuario_rol (usuario_id, rol_id, otorgado_en, otorgado_por)
+    SELECT u.id, r.id, %(fecha)s, a.id
+      FROM rma.usuario u
+      JOIN rma.rol r ON r.codigo = ANY(%(roles)s)
+      LEFT JOIN rma.usuario a ON a.codigo = %(actor)s
+     WHERE u.codigo = %(usuario)s
+    ON CONFLICT (usuario_id, rol_id) DO NOTHING
+    """,
+    modo=ESCRITURA,
+)
+_EXISTE_USUARIO = consulta(
+    "configuracion.existe_usuario",
+    "SELECT id FROM rma.usuario WHERE codigo = %(usuario)s",
+    modo=LECTURA,
+)
+_GUARDAR_PERMISO = consulta(
+    "configuracion.guardar_permiso",
+    """
+    INSERT INTO rma.permiso (codigo, roles, modificado_en)
+    VALUES (%(codigo)s, %(roles)s, %(fecha)s)
+    ON CONFLICT (codigo) DO UPDATE
+       SET roles = EXCLUDED.roles, modificado_en = EXCLUDED.modificado_en
+    """,
+    modo=ESCRITURA,
+)
+_PERMISOS = consulta(
+    "configuracion.permisos",
+    "SELECT codigo, roles FROM rma.permiso ORDER BY codigo",
+    modo=LECTURA,
+)
 _CAMBIOS = consulta(
     "configuracion.cambios",
     """
@@ -148,6 +192,54 @@ class PostgresConfiguracionRepository:
             _AGREGAR_TIPOS_A_MESA, {"mesa": mesa.id, "tipos": tipos}
         )
         self._auditar(ejecutor, [cambio])
+
+    def guardar_roles_de_usuario(
+        self,
+        usuario_id: str,
+        roles: Sequence[RolUsuario],
+        cambio: CambioConfiguracion,
+    ) -> None:
+        self._exigir_transaccion()
+        ejecutor = self._unidad.ejecutor()
+        if ejecutor.fila(_EXISTE_USUARIO, {"usuario": usuario_id}) is None:
+            raise EntidadPersistidaNoEncontradaError(
+                f"No existe el usuario {usuario_id}"
+            )
+        codigos = [rol.value for rol in roles]
+        parametros = {
+            "usuario": usuario_id,
+            "roles": codigos,
+            "fecha": cambio.fecha,
+            "actor": cambio.usuario_id,
+        }
+        ejecutor.ejecutar(_QUITAR_ROLES, parametros)
+        ejecutor.ejecutar(_AGREGAR_ROLES, parametros)
+        self._auditar(ejecutor, [cambio])
+
+    def guardar_permiso(
+        self,
+        codigo: str,
+        roles: Sequence[RolUsuario],
+        cambio: CambioConfiguracion,
+    ) -> None:
+        self._exigir_transaccion()
+        ejecutor = self._unidad.ejecutor()
+        ejecutor.ejecutar(
+            _GUARDAR_PERMISO,
+            {
+                "codigo": codigo,
+                "roles": [rol.value for rol in roles],
+                "fecha": cambio.fecha,
+            },
+        )
+        self._auditar(ejecutor, [cambio])
+
+    def leer_permisos(self) -> dict[str, tuple[RolUsuario, ...]]:
+        with self._unidad.lectura() as lector:
+            filas = lector.filas(_PERMISOS)
+        return {
+            f.codigo: tuple(RolUsuario(rol) for rol in f.roles) for f in filas
+        }
 
     def listar_cambios(
         self,

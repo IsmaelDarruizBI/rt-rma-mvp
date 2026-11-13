@@ -13,19 +13,14 @@ from datetime import datetime
 from app.domain.models import (
     FotoOrden,
     OrdenReparacion,
-    RolUsuario,
     Usuario,
 )
 
+from . import permisos
 from .autorizacion import validar_alguno_de
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 
-ROLES_FOTOS = (
-    RolUsuario.RECEPCION,
-    RolUsuario.TECNICO,
-    RolUsuario.COORDINADOR_RMA,
-    RolUsuario.ADMINISTRADOR,
-)
+ROLES_FOTOS = permisos.FOTOS_CARGAR
 # El navegador reduce cada foto antes de subirla (unos cientos de KB): el
 # tope solo frena un archivo enorme o equivocado.
 MAX_BYTES_FOTO = 8 * 1024 * 1024

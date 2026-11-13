@@ -144,9 +144,7 @@ def cliente(tmp_path):
         yield test_client
 
 
-def _nuevos_pasos(
-    historial_completo: list[dict], desde: int
-) -> list[dict]:
+def _nuevos_pasos(historial_completo: list[dict], desde: int) -> list[dict]:
     """Los pasos agregados al historial despues del indice ``desde``."""
     return historial_completo[desde:]
 
@@ -449,14 +447,10 @@ def test_multidetalle_dos_detalles_end_to_end_por_http(cliente, tmp_path):
     dominio = obtener_orden(contexto, orden_id)
 
     movimientos_det1 = [
-        m
-        for m in dominio.movimientos_insumo
-        if m.reparacion_detail_id == det1
+        m for m in dominio.movimientos_insumo if m.reparacion_detail_id == det1
     ]
     movimientos_det2 = [
-        m
-        for m in dominio.movimientos_insumo
-        if m.reparacion_detail_id == det2
+        m for m in dominio.movimientos_insumo if m.reparacion_detail_id == det2
     ]
     assert movimientos_det1
     assert all(m.insumo_id == INSUMO_BATERIA for m in movimientos_det1)
@@ -588,9 +582,7 @@ def test_control_tecnico_rechaza_si_algun_detalle_no_es_terminal(cliente):
         json={"usuario_id": RECEPCION, "detalle_id": det1},
     )
     assert respuesta.status_code == 409, respuesta.text
-    assert (
-        respuesta.json()["error"]["codigo"] == "PRECONDICION_INVALIDA"
-    )
+    assert respuesta.json()["error"]["codigo"] == "PRECONDICION_INVALIDA"
 
     # Nada cambio: DET-001 sigue con control PENDIENTE.
     sin_cambios = cliente.get(f"/api/orders/{orden_id}").json()

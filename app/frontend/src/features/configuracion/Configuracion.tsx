@@ -16,6 +16,9 @@ import type {
 } from "../../api/configuracion";
 import { Boton, Campo, colores, estiloInput } from "../../components/ui";
 import type { TipoReparacion, Usuario } from "../../types/api";
+import { tieneRol } from "../../lib/roles";
+import { Permisos } from "./Permisos";
+import { UsuariosRoles } from "./UsuariosRoles";
 
 const CAMPOS: Record<string, string> = {
   nombre: "Nombre",
@@ -24,7 +27,16 @@ const CAMPOS: Record<string, string> = {
   garantia_dias: "Garantía (días)",
   activo: "Vigente",
   tipos_habilitados: "Tipos habilitados",
+  roles: "Roles",
 };
+
+type Pestana = "catalogos" | "usuarios" | "permisos" | "auditoria";
+const PESTANAS: { valor: Pestana; texto: string }[] = [
+  { valor: "catalogos", texto: "Catálogos" },
+  { valor: "usuarios", texto: "Usuarios y roles" },
+  { valor: "permisos", texto: "Permisos" },
+  { valor: "auditoria", texto: "Auditoría" },
+];
 
 /** Los booleanos se guardan como true/false: en pantalla, Sí o No. */
 function valor(texto: string | null): string {
@@ -169,6 +181,7 @@ export function ConfiguracionPanel({ actor }: { actor: Usuario | null }) {
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [pestana, setPestana] = useState<Pestana>("catalogos");
 
   const cargar = useCallback(() => {
     Promise.all([api.obtenerCatalogo(), api.obtenerCambios()])
@@ -200,7 +213,7 @@ export function ConfiguracionPanel({ actor }: { actor: Usuario | null }) {
       .finally(() => setOcupado(false));
   };
 
-  if (actor?.rol !== "ADMINISTRADOR") {
+  if (actor === null || !tieneRol(actor, "ADMINISTRADOR")) {
     return <p role="alert">Solo Administración gestiona la configuración.</p>;
   }
   if (!catalogo) {
@@ -216,9 +229,40 @@ export function ConfiguracionPanel({ actor }: { actor: Usuario | null }) {
           este entorno (modo JSON) son de solo lectura.
         </p>
       )}
+      <nav role="tablist" style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+        {PESTANAS.map((p) => (
+          <button
+            key={p.valor}
+            type="button"
+            role="tab"
+            aria-selected={pestana === p.valor}
+            onClick={() => setPestana(p.valor)}
+            style={{
+              padding: "0.3rem 0.8rem",
+              borderRadius: 999,
+              border: `1px solid ${colores.borde}`,
+              background: pestana === p.valor ? colores.acento : "transparent",
+              color: pestana === p.valor ? "#fff" : colores.texto,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            {p.texto}
+          </button>
+        ))}
+      </nav>
       {error && <p role="alert">{error}</p>}
       {aviso && <p role="status">{aviso}</p>}
 
+      {pestana === "usuarios" && (
+        <UsuariosRoles actor={actor} editable={catalogo.editable} onCambio={cargar} />
+      )}
+      {pestana === "permisos" && (
+        <Permisos actor={actor} editable={catalogo.editable} onCambio={cargar} />
+      )}
+
+      {pestana === "catalogos" && (
+      <>
       <section>
         <h3 style={{ margin: "0 0 0.5rem" }}>Tipos de reparación</h3>
         <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
@@ -337,11 +381,15 @@ export function ConfiguracionPanel({ actor }: { actor: Usuario | null }) {
           </div>
         ))}
       </section>
+      </>
+      )}
 
-      <section>
-        <h3 style={{ margin: "0 0 0.5rem" }}>Auditoría de la configuración</h3>
-        <Auditoria cambios={[...cambios].reverse()} />
-      </section>
+      {pestana === "auditoria" && (
+        <section>
+          <h3 style={{ margin: "0 0 0.5rem" }}>Auditoría de la configuración</h3>
+          <Auditoria cambios={[...cambios].reverse()} />
+        </section>
+      )}
     </div>
   );
 }

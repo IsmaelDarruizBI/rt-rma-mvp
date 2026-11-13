@@ -24,7 +24,6 @@ from app.domain.models import (
     CanalComunicacion,
     OrdenReparacion,
     ResultadoAutorizacion,
-    RolUsuario,
     TipoDocumento,
     Usuario,
 )
@@ -39,6 +38,7 @@ from app.services import (
     exigir_definicion_finalizable,
     faltantes_para_ingreso,
     generar_comprobante_recepcion,
+    permisos,
     ultimo_documento,
     validar_actor,
 )
@@ -54,7 +54,7 @@ OBSERVACION_AUTORIZACION_INICIAL = "Autorizacion inicial en el ingreso"
 
 
 def _exigir_ingreso_inicial(orden: OrdenReparacion, usuario: Usuario) -> None:
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    validar_actor(usuario, permisos.DETALLE_DEFINIR_RECEPCION)
     if not es_ingreso_inicial(orden):
         raise PrecondicionInvalidaError(
             "El comprobante de ingreso y autorizacion es del ingreso inicial "

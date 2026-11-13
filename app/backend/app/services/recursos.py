@@ -34,10 +34,10 @@ from app.domain.models import (
     CondicionReparacionDetail,
     EstadoReparacionDetail,
     OrdenReparacion,
-    RolUsuario,
     Usuario,
 )
 
+from . import permisos
 from .autorizacion import validar_alguno_de
 from .autorizacion_cliente import (
     pendiente_de_autorizacion,
@@ -56,12 +56,7 @@ NODO_REDEFINICION = "PROC-REP-127"
 ACCION_AUTORIZAR_OVERRIDE = "ACC-REP-049"
 # Quien puede autorizar el override (decision del UAT, P-06): cualquier
 # usuario de la aplicacion, no solo el Coordinador RMA de BR-REP-003 V1.4.
-ROLES_OVERRIDE_RECURSOS = (
-    RolUsuario.RECEPCION,
-    RolUsuario.TECNICO,
-    RolUsuario.COORDINADOR_RMA,
-    RolUsuario.ADMINISTRADOR,
-)
+ROLES_OVERRIDE_RECURSOS = permisos.RECURSOS_OVERRIDE
 # Revalidacion de recursos disparada por una persona (ID del MVP).
 ACCION_REVALIDAR_RECURSOS = "ACC-REP-028"
 _NODOS_QUE_LLEVAN_A_120 = ("PROC-REP-110", "PROC-REP-211")

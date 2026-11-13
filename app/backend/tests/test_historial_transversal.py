@@ -151,7 +151,9 @@ def test_un_historial_mixto_sobrevive_el_round_trip(tmp_path):
         observacion="ANTICIPO · EFECTIVO · $20000",
     )
     orden = registrar_paso(
-        orden, process_id="PROC-REP-140", accion="HABILITAR_ORDEN",
+        orden,
+        process_id="PROC-REP-140",
+        accion="HABILITAR_ORDEN",
         fecha=t(35),
     )
 
@@ -197,12 +199,8 @@ def test_la_orden_final_del_happy_path_sigue_siendo_valida(tmp_path):
     ]
 
     # El resto sigue siendo el recorrido de nodos.
-    nodos = [
-        paso for paso in orden.historial if not paso.es_accion_funcional
-    ]
-    assert all(
-        paso.referencia_id.startswith("PROC-REP-") for paso in nodos
-    )
+    nodos = [paso for paso in orden.historial if not paso.es_accion_funcional]
+    assert all(paso.referencia_id.startswith("PROC-REP-") for paso in nodos)
     assert orden.current_process == "EVT-REP-999"
 
 
@@ -244,11 +242,11 @@ def test_la_api_distingue_los_dos_tipos_de_referencia(cliente):  # noqa: F811
     historial = cliente.get(f"/api/orders/{orden_id}").json()["historial"]
 
     nodos = [
-        paso for paso in historial
-        if paso["tipo_referencia"] == "PROCESS_NODE"
+        paso for paso in historial if paso["tipo_referencia"] == "PROCESS_NODE"
     ]
     transversales = [
-        paso for paso in historial
+        paso
+        for paso in historial
         if paso["tipo_referencia"] == "FUNCTIONAL_ACTION"
     ]
 
@@ -258,9 +256,7 @@ def test_la_api_distingue_los_dos_tipos_de_referencia(cliente):  # noqa: F811
     assert transversales[0]["pago_id"] is not None
 
     assert nodos, "el recorrido de nodos sigue presente"
-    assert all(
-        paso["referencia_id"].startswith("PROC-REP-") for paso in nodos
-    )
+    assert all(paso["referencia_id"].startswith("PROC-REP-") for paso in nodos)
     assert all(paso["process_id"] == paso["referencia_id"] for paso in nodos)
 
 

@@ -365,9 +365,11 @@ class UnidadDeTrabajoPostgres:
                     "se anticipan lecturas."
                 )
             if (
-                (registrada, parametros) not in actual.por_enviar
-                and actual.resultado_de(registrada, parametros) is None
-            ):
+                registrada,
+                parametros,
+            ) not in actual.por_enviar and actual.resultado_de(
+                registrada, parametros
+            ) is None:
                 actual.por_enviar.append((registrada, parametros))
 
     @contextmanager

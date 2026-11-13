@@ -191,9 +191,7 @@ def test_var_rep_039_sin_motivo_no_hay_excepcion(cliente, reloj, tmp_path):
     origen = it.entregada_hace(cliente, reloj, 200)
     antes = _cantidad_de_ordenes(tmp_path)
     # Vacio: el contrato lo rechaza.
-    vacio = it.iniciar_garantia(
-        cliente, origen, excepciones={"DET-001": ""}
-    )
+    vacio = it.iniciar_garantia(cliente, origen, excepciones={"DET-001": ""})
     assert vacio.status_code == 422
     # Solo espacios: no hay excepcion, el trabajo sigue vencido.
     f.conflicto(
@@ -513,9 +511,7 @@ def test_var_rep_042_solicitud_interrupcion_y_cancelacion(cliente):
     assert solicitud["usuario_id"] == f.RECEPCION
     assert solicitud["canal"] == "TELEFONO"
     assert orden["ejecuciones"][0]["estado"] == "EN_PROGRESO"
-    assert ("PROC-REP-046", "SOLICITAR_DESISTIMIENTO_CLIENTE") in _pasos(
-        orden
-    )
+    assert ("PROC-REP-046", "SOLICITAR_DESISTIMIENTO_CLIENTE") in _pasos(orden)
     # No se duplica la solicitud.
     f.conflicto(it.desistir_detalle(cliente, orden_id, "DET-001"))
     # Al tecnico solo se le ofrece interrumpir; ya no se ofrece desistir.
@@ -587,9 +583,10 @@ def test_var_rep_042_solicitud_interrupcion_y_cancelacion(cliente):
         for p in orden["historial"]
         if p["referencia_id"] in ("PROC-REP-046", "PROC-REP-300")
     }
-    assert usuarios_de[
-        ("PROC-REP-046", "SOLICITAR_DESISTIMIENTO_CLIENTE")
-    ] == f.RECEPCION
+    assert (
+        usuarios_de[("PROC-REP-046", "SOLICITAR_DESISTIMIENTO_CLIENTE")]
+        == f.RECEPCION
+    )
     assert [
         u for (ref, _), u in usuarios_de.items() if ref == "PROC-REP-300"
     ] == [f.TECNICO]
@@ -666,8 +663,6 @@ def test_dc06_el_tecnico_define_y_recepcion_registra_la_decision(cliente):
     ]
     assert decision["roles"] == ["RECEPCION"]
     (definir,) = [
-        p
-        for p in orden["historial"]
-        if p["referencia_id"] == "PROC-REP-075"
+        p for p in orden["historial"] if p["referencia_id"] == "PROC-REP-075"
     ]
     assert definir["usuario_id"] == f.TECNICO

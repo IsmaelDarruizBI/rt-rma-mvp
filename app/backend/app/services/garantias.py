@@ -20,20 +20,20 @@ from app.domain.models import (
     EstadoWorkflow,
     OrdenReparacion,
     RegistroCheckin,
-    RolUsuario,
     Usuario,
 )
 from app.domain.politicas import politica_de
 
+from . import permisos
 from .autorizacion import validar_alguno_de
 from .custodia import checkin_de
 from .exceptions import PrecondicionInvalidaError
 from .reparaciones import reaplicar_garantia_sugerida
 from .tomas import buscar_detalle
 
-ROLES_AJUSTE_GARANTIA = (RolUsuario.RECEPCION, RolUsuario.COORDINADOR_RMA)
+ROLES_AJUSTE_GARANTIA = permisos.GARANTIA_AJUSTAR
 # Los mismos que entregan el equipo: el check-in es el paso previo.
-ROLES_CHECKIN = (RolUsuario.ADMINISTRADOR, RolUsuario.RECEPCION)
+ROLES_CHECKIN = permisos.CHECKIN
 
 
 def _con_trabajos_realizados(orden: OrdenReparacion) -> bool:

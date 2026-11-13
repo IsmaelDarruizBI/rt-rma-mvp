@@ -38,6 +38,7 @@ import {
 import { ROL, hace } from "./etiquetas";
 import { colorDeSituacion, nombreDe } from "./ListadoOrdenes";
 import { hashDe } from "./rutas";
+import { rolesDe } from "../../lib/roles";
 
 /** A dónde se puede ir desde una bandeja, además de cada Orden. */
 type Destino = "nueva" | "taller" | "inventario";
@@ -117,17 +118,19 @@ export function PantallaInicio({
           <div>
             <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Inicio</h2>
             <p style={{ margin: "0.15rem 0 0", color: colores.suave }}>
-              {actor.nombre} · {ROL[actor.rol]} ·{" "}
+              {actor.nombre} · {rolesDe(actor).map((r) => ROL[r]).join(" · ")} ·{" "}
               {total === 0
                 ? "sin tareas pendientes"
                 : `${total} pendiente${total === 1 ? "" : "s"}`}
             </p>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            {datos.rol === "RECEPCION" && (
+            {(datos.roles ?? [datos.rol]).includes("RECEPCION") && (
               <Boton onClick={() => onIr("nueva")}>+ Nueva orden</Boton>
             )}
-            {(datos.rol === "TECNICO" || datos.rol === "COORDINADOR_RMA") && (
+            {(datos.roles ?? [datos.rol]).some(
+              (r) => r === "TECNICO" || r === "COORDINADOR_RMA",
+            ) && (
               <Boton variante="secundario" onClick={() => onIr("taller")}>
                 Ver el taller
               </Boton>
@@ -210,7 +213,7 @@ export function PantallaTaller({
       <Panel>
         <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Taller</h2>
         <p style={{ margin: "0.15rem 0 0", color: colores.suave }}>
-          {actor.nombre} · {ROL[actor.rol]}
+          {actor.nombre} · {rolesDe(actor).map((r) => ROL[r]).join(" · ")}
         </p>
       </Panel>
       {datos.bandejas.map((bandeja) => (

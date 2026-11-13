@@ -57,11 +57,11 @@ from app.domain.models import (
     OrigenCancelacion,
     RegistroCancelacion,
     ReparacionDetail,
-    RolUsuario,
     TipoEntrega,
     Usuario,
 )
 
+from . import permisos
 from .autorizacion import validar_alguno_de
 from .custodia import (
     EstadoCustodia,
@@ -81,10 +81,7 @@ from .tomas import hay_ejecucion_activa, toma_activa
 from .workflow import registrar_paso
 
 # Pendiente de definicion de negocio (V1.3/V1.4 no declaran actor).
-ROLES_CANCELACION = (
-    RolUsuario.RECEPCION,
-    RolUsuario.COORDINADOR_RMA,
-)
+ROLES_CANCELACION = permisos.CANCELACION
 
 
 def _motivo_obligatorio(motivo: str, que: str) -> str:

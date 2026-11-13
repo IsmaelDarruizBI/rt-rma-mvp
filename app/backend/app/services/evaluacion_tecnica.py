@@ -33,11 +33,11 @@ from app.domain.models import (
     OrigenDiagnostico,
     ReparacionDetail,
     ResultadoEvaluacionTecnica,
-    RolUsuario,
     TipoReparacion,
     Usuario,
 )
 
+from . import permisos
 from .autorizacion import validar_actor
 from .cancelaciones import cancelar_detalle
 from .exceptions import PrecondicionInvalidaError
@@ -145,7 +145,7 @@ def evaluar_detalle(
     resultado principal. Recalcular la Orden (211) y la factibilidad del
     Detalle redefinido (080) es del comando de aplicacion.
     """
-    validar_actor(usuario, RolUsuario.TECNICO)
+    validar_actor(usuario, permisos.EVALUACION_TECNICA)
     if hay_ejecucion_activa(orden):
         raise PrecondicionInvalidaError(
             "La Orden tiene una Ejecucion activa: se evalua antes de "

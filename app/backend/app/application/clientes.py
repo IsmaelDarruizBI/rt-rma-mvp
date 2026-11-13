@@ -12,18 +12,18 @@ crear la Orden, y la carga manual siempre sigue disponible.
 
 from dataclasses import dataclass, field
 
-from app.domain.models import RolUsuario
 from app.integraciones import EstadoFuente, PersonaExterna
 from app.services import (
     ClienteConocido,
     clientes_con_dni,
     normalizar_dni,
+    permisos,
     validar_alguno_de,
 )
 
 from .contexto import ApplicationContext
 
-ROLES_BUSQUEDA_CLIENTE = (RolUsuario.RECEPCION, RolUsuario.ADMINISTRADOR)
+ROLES_BUSQUEDA_CLIENTE = permisos.CLIENTE_BUSCAR
 
 
 class EstadoBusqueda:

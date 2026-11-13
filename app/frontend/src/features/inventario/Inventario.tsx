@@ -32,6 +32,7 @@ import type {
 } from "../../types/api";
 import { nombreDeUsuario } from "../ordenes-reparacion/DetalleOrden";
 import { Confirmacion } from "../ordenes-reparacion/PagosOrden";
+import { puede } from "../../lib/roles";
 
 /** Provisorio, a validar con Rosario Tecno (el backend lo exige igual). */
 const ROLES_GESTION: RolUsuario[] = ["ADMINISTRADOR", "COORDINADOR_RMA"];
@@ -100,7 +101,7 @@ export function InventarioPanel({
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
-  const puedeGestionar = actor !== null && ROLES_GESTION.includes(actor.rol);
+  const puedeGestionar = puede(actor, "STOCK_GESTIONAR", ROLES_GESTION);
 
   useEffect(() => {
     const espera = setTimeout(

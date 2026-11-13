@@ -228,9 +228,7 @@ def finalizar(cliente, orden_id, confirmar_recepcion=True) -> dict:
     if custodia.en_ingreso_inicial(orden):
         return generar_ingreso(cliente, orden_id)
     # V1.4 (DC06): la carga luego de la revision (075) la cierra el Tecnico.
-    actor = (
-        TECNICO if orden["estado_workflow"] == "EN_REVISION" else RECEPCION
-    )
+    actor = TECNICO if orden["estado_workflow"] == "EN_REVISION" else RECEPCION
     respuesta = ok(
         cliente.post(
             f"/api/orders/{orden_id}/definition/finalize",

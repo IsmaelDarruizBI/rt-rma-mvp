@@ -51,6 +51,7 @@ import {
   filtrosActivos,
 } from "./listado";
 import { hashDe } from "./rutas";
+import { puede, rolesDe, tieneRol } from "../../lib/roles";
 
 const ATAJOS: { valor: FiltroRapido; texto: string }[] = [
   { valor: "TODAS", texto: "Todas" },
@@ -121,7 +122,7 @@ export function PantallaOrdenes({
   onNueva: () => void;
   cargado: boolean;
 }) {
-  const rol = actor?.rol ?? null;
+  const rol = actor ? rolesDe(actor) : null;
   const visibles = useMemo(
     () => aplicarListado(ordenes, filtros, rol),
     [ordenes, filtros, rol],
@@ -208,7 +209,9 @@ export function PantallaOrdenes({
             }}
           >
             {atajo.texto}
-            {atajo.valor === "MI_SECTOR" && rol ? ` (${ROL[rol]})` : ""}
+            {atajo.valor === "MI_SECTOR" && rol
+              ? ` (${rol.map((r) => ROL[r]).join(" · ")})`
+              : ""}
           </button>
         ))}
       </div>
@@ -873,7 +876,7 @@ export function FormularioNuevaOrden({
   const [falla, setFalla] = useState("La batería dura poco.");
   const [ingreso, setIngreso] = useState<Ingreso>(ingresoInicial);
 
-  const esRecepcion = actor?.rol === "RECEPCION";
+  const esRecepcion = tieneRol(actor, "RECEPCION");
   const dniNormalizado = normalizarDni(dni);
   const dniInvalido = dni.trim() !== "" && dniNormalizado === null;
   const datosEquipo = datosDelEquipo(catalogo.modelos.length > 0, equipo);
@@ -881,7 +884,7 @@ export function FormularioNuevaOrden({
     nombreApellido.trim() && telefono.trim() && datosEquipo && falla && !dniInvalido;
   const puedeBuscar =
     actor !== null &&
-    (actor.rol === "RECEPCION" || actor.rol === "ADMINISTRADOR") &&
+    puede(actor, "CLIENTE_BUSCAR", ["RECEPCION", "ADMINISTRADOR"]) &&
     dniNormalizado !== null &&
     !buscando;
 
@@ -1039,7 +1042,7 @@ export function FormularioNuevaOrdenRt({
   const [referenciaRt, setReferenciaRt] = useState("RT-INGRESO-0001");
   const [ingreso, setIngreso] = useState<Ingreso>(ingresoInicial);
 
-  const esRecepcion = actor?.rol === "RECEPCION";
+  const esRecepcion = tieneRol(actor, "RECEPCION");
   const completo = marca && modelo && falla && referenciaRt;
 
   return (

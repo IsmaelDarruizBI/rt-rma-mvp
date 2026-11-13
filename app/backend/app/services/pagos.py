@@ -41,12 +41,12 @@ from app.domain.models import (
     MedioPago,
     OrdenReparacion,
     Pago,
-    RolUsuario,
     TipoPago,
     Usuario,
 )
 from app.domain.politicas import CondicionComercial, politica_de
 
+from . import permisos
 from .autorizacion import validar_alguno_de
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .identificadores import nuevo_id
@@ -67,19 +67,12 @@ ACCION_DEVOLVER_DINERO = "ACC-REP-022"
 # consume tanto ``registrar_pago`` (autorizacion en backend) como
 # ``app.application.acciones`` (lo que se publica en
 # ``AccionDisponible.roles``). Un Tecnico nunca puede registrar un Pago.
-ROLES_PAGO = (
-    RolUsuario.ADMINISTRADOR,
-    RolUsuario.RECEPCION,
-    RolUsuario.COORDINADOR_RMA,
-)
+ROLES_PAGO = permisos.PAGO_REGISTRAR
 # Corregir un Pago mal registrado es administrativo.
-ROLES_ANULACION_PAGO = (RolUsuario.ADMINISTRADOR,)
+ROLES_ANULACION_PAGO = permisos.PAGO_ANULAR
 # V1.4 deja pendiente quien devuelve dinero: el MVP sigue los permisos
 # financieros existentes de cobro en mostrador, a confirmar por negocio.
-ROLES_DEVOLUCION_DINERO = (
-    RolUsuario.ADMINISTRADOR,
-    RolUsuario.RECEPCION,
-)
+ROLES_DEVOLUCION_DINERO = permisos.DEVOLUCION_DINERO
 
 _CENTAVO = Decimal("0.01")
 CERO = Decimal("0")

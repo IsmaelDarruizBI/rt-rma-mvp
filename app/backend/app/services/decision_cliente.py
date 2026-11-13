@@ -45,11 +45,11 @@ from app.domain.models import (
     RegistroAutorizacionCliente,
     ReparacionDetail,
     ResultadoAutorizacion,
-    RolUsuario,
     SolicitudDesistimiento,
     Usuario,
 )
 
+from . import permisos
 from .autorizacion import validar_actor
 from .autorizacion_cliente import (
     EstadoAutorizacion,
@@ -201,7 +201,7 @@ def registrar_decision_cliente(
 
     Devuelve la Orden y los IDs autorizados (para su factibilidad).
     """
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    validar_actor(usuario, permisos.DECISION_CLIENTE)
     if not requiere_autorizacion_cliente(orden):
         raise PrecondicionInvalidaError(
             f"Una Orden {orden.origen.value} no requiere la autorizacion del "
@@ -381,7 +381,7 @@ def _exigir_desistimiento_posible(
     usuario: Usuario,
     motivo: str,
 ) -> None:
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    validar_actor(usuario, permisos.DECISION_CLIENTE)
     if not requiere_autorizacion_cliente(orden):
         raise PrecondicionInvalidaError(
             f"Una Orden {orden.origen.value} no tiene decisiones del cliente "

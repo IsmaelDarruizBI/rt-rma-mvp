@@ -160,6 +160,7 @@ class BandejaOut(BaseModel):
 class BandejasOut(BaseModel):
     usuario_id: str
     rol: RolUsuario
+    roles: list[RolUsuario]
     bandejas: list[BandejaOut]
 
     @classmethod
@@ -167,6 +168,7 @@ class BandejasOut(BaseModel):
         return cls(
             usuario_id=vista.usuario.id,
             rol=vista.usuario.rol,
+            roles=list(vista.usuario.roles),
             bandejas=[
                 BandejaOut.desde_aplicacion(bandeja)
                 for bandeja in vista.bandejas

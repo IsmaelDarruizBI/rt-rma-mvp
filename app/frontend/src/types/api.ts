@@ -502,8 +502,13 @@ export type RolUsuario =
 export interface Usuario {
   id: string;
   nombre: string;
+  /** Rol principal (el primero de `roles`). */
   rol: RolUsuario;
+  /** Todos sus roles (DC27A); los datos anteriores no lo traen. */
+  roles?: RolUsuario[];
   activo: boolean;
+  /** Códigos de permiso que hoy tiene (DC08). */
+  permisos?: string[];
 }
 
 export interface TipoReparacion {
@@ -1390,5 +1395,6 @@ export interface Bandeja {
 export interface Bandejas {
   usuario_id: string;
   rol: RolUsuario;
+  roles?: RolUsuario[];
   bandejas: Bandeja[];
 }

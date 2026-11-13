@@ -91,9 +91,7 @@ def leer_json(ruta: Path) -> Any:
                 lambda: ruta.read_text(encoding="utf-8")
             )
     except OSError as error:
-        raise PersistenciaError(
-            f"No se pudo leer {ruta}: {error}"
-        ) from error
+        raise PersistenciaError(f"No se pudo leer {ruta}: {error}") from error
 
     try:
         return json.loads(contenido)

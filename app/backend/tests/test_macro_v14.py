@@ -623,9 +623,7 @@ def test_antecedentes_del_equipo_por_imei_y_serie(cliente):
     assert [o["orden_id"] for o in resultado["ordenes"]] == [primera]
     assert resultado["ordenes"][0]["coincide_por"] == ["IMEI"]
     por_serie = f.ok(
-        cliente.get(
-            "/api/equipment/history", params={"numero_serie": "f2lx1"}
-        )
+        cliente.get("/api/equipment/history", params={"numero_serie": "f2lx1"})
     )
     assert [o["orden_id"] for o in por_serie["ordenes"]] == [primera]
     assert otra not in [o["orden_id"] for o in resultado["ordenes"]]

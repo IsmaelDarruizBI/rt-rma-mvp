@@ -26,16 +26,13 @@ from app.domain.models import (
     MotivoNoSeleccionable,
     ProductoCatalogo,
     ProductoInformado,
-    RolUsuario,
 )
 
+from . import permisos
 from .exceptions import PrecondicionInvalidaError
 
 # Quienes pueden pedir una sincronizacion.
-ROLES_SINCRONIZACION_CATALOGO = (
-    RolUsuario.ADMINISTRADOR,
-    RolUsuario.COORDINADOR_RMA,
-)
+ROLES_SINCRONIZACION_CATALOGO = permisos.CATALOGO_EQUIPOS_SINCRONIZAR
 
 
 class CatalogoRechazadoError(PrecondicionInvalidaError):

@@ -29,11 +29,11 @@ from app.domain.models import (
     Insumo,
     MovimientoStock,
     OrdenReparacion,
-    RolUsuario,
     TipoMovimientoInsumo,
     Usuario,
 )
 
+from . import permisos
 from .autorizacion import validar_alguno_de
 from .exceptions import ConfirmacionRequeridaError, PrecondicionInvalidaError
 from .identificadores import nuevo_id
@@ -42,14 +42,8 @@ from .inventario import cantidad_pendiente
 CERO = Decimal("0")
 
 # Provisorios, a validar con Rosario Tecno.
-ROLES_GESTION_STOCK = (
-    RolUsuario.ADMINISTRADOR,
-    RolUsuario.COORDINADOR_RMA,
-)
-ROLES_REVALIDACION_RECURSOS = (
-    RolUsuario.ADMINISTRADOR,
-    RolUsuario.COORDINADOR_RMA,
-)
+ROLES_GESTION_STOCK = permisos.STOCK_GESTIONAR
+ROLES_REVALIDACION_RECURSOS = permisos.RECURSOS_REVALIDAR
 
 TIPOS_OPERATIVOS = (
     TipoMovimientoInsumo.INGRESO,

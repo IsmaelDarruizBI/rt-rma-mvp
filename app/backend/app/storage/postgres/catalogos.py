@@ -143,7 +143,7 @@ _COMPATIBLES = consulta(
 _COLUMNAS_USUARIO = """
     SELECT u.codigo, u.nombre, u.activo,
            coalesce(
-               array_agg(r.codigo ORDER BY r.codigo)
+               array_agg(r.codigo ORDER BY ur.otorgado_en, r.codigo)
                    FILTER (WHERE r.codigo IS NOT NULL),
                '{}'
            ) AS roles
@@ -563,16 +563,15 @@ def _estacion(f) -> EstacionTrabajo:
 
 
 def _usuario(f) -> Usuario:
-    if len(f.roles) != 1:
-        raise PersistenciaError(
-            f"El usuario {f.codigo} tiene {len(f.roles)} roles: el MVP "
-            "admite exactamente uno (varios roles por usuario, DC27A, no "
-            "esta implementado)."
-        )
+    """Con todos sus roles (DC27A); el principal es el mas antiguo."""
+    if not f.roles:
+        raise PersistenciaError(f"El usuario {f.codigo} no tiene roles.")
+    roles = tuple(RolUsuario(rol) for rol in f.roles)
     return Usuario(
         id=f.codigo,
         nombre=f.nombre,
-        rol=RolUsuario(f.roles[0]),
+        rol=roles[0],
+        roles=roles,
         activo=f.activo,
     )
 

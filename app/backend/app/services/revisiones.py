@@ -21,10 +21,10 @@ from datetime import datetime
 from app.domain.models import (
     EstadoWorkflow,
     OrdenReparacion,
-    RolUsuario,
     Usuario,
 )
 
+from . import permisos
 from .autorizacion import validar_actor
 from .exceptions import PrecondicionInvalidaError
 from .workflow import registrar_paso
@@ -70,7 +70,7 @@ def registrar_revision_tecnica(
     resultados) y queda en ``HistorialWorkflow.observacion`` junto con el
     tecnico y la fecha.
     """
-    validar_actor(usuario, RolUsuario.TECNICO)
+    validar_actor(usuario, permisos.REVISION_TECNICA)
 
     if orden.estado_workflow is not EstadoWorkflow.EN_REVISION:
         raise PrecondicionInvalidaError(
@@ -122,7 +122,7 @@ def registrar_finalizacion_sin_reparacion(
     estado de workflow): la Orden sigue al cierre segun su Origen
     (PROC-REP-250), como despues de REPARACION_LISTA.
     """
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    validar_actor(usuario, permisos.ENVIAR_A_REVISION)
 
     if orden.estado_workflow is not EstadoWorkflow.EN_REVISION:
         raise PrecondicionInvalidaError(

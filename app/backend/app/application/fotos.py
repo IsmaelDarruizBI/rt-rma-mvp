@@ -16,7 +16,7 @@ sin referencia desde ninguna Orden: nunca al reves.
 from dataclasses import dataclass
 from datetime import timedelta
 
-from app.domain.models import OrdenReparacion, RolUsuario
+from app.domain.models import OrdenReparacion
 from app.services import (
     PrecondicionInvalidaError,
     buscar_foto,
@@ -24,6 +24,7 @@ from app.services import (
     exigir_foto_agregable,
     exigir_orden_abierta,
     nuevo_id,
+    permisos,
     registrar_foto,
     validar_alguno_de,
     validar_imagen,
@@ -117,7 +118,7 @@ def limpiar_fotos_huerfanas(
     """
     almacen = _almacen(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    validar_alguno_de(usuario, (RolUsuario.ADMINISTRADOR,))
+    validar_alguno_de(usuario, permisos.FOTOS_ADMINISTRAR)
     ahora = contexto.ahora()
 
     objetos = almacen.listar(PREFIJO_FOTOS)

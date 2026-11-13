@@ -15,13 +15,18 @@ from app.application.consultas_operativas import (
     antecedentes_del_equipo,
     reporte_operativo,
 )
+from app.services import permisos
 
 from .dependencias import ContextoDep
+from .seguridad import exigir_rol
 
 router = APIRouter(tags=["consultas operativas"])
 
 
-@router.get("/api/equipment/history")
+@router.get(
+    "/api/equipment/history",
+    dependencies=[exigir_rol(permisos.ANTECEDENTES_CONSULTAR)],
+)
 def get_antecedentes_equipo(
     contexto: ContextoDep,
     imei: str | None = None,
@@ -41,7 +46,10 @@ def get_antecedentes_equipo(
     return asdict(antecedentes)
 
 
-@router.get("/api/reports/operational")
+@router.get(
+    "/api/reports/operational",
+    dependencies=[exigir_rol(permisos.REPORTES_CONSULTAR)],
+)
 def get_reporte_operativo(contexto: ContextoDep) -> dict:
     """Reporte operativo, primera version (solo metricas del modelo)."""
     return asdict(reporte_operativo(contexto))

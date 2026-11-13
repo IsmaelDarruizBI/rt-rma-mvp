@@ -745,11 +745,12 @@ _INSERTAR_EVENTO = consulta(
     """
     INSERT INTO rma.evento_negocio
         (orden_id, tipo_evento_id, accion_id, ocurrido_en, responsable_tipo,
-         usuario_id, detalle_id, ejecucion_id, pago_id, observacion,
-         historial_tipo_referencia, historial_referencia_id, historial_accion)
+         usuario_id, rol_codigo, detalle_id, ejecucion_id, pago_id,
+         observacion, historial_tipo_referencia, historial_referencia_id,
+         historial_accion)
     VALUES (%(orden)s, %(tipo_evento)s, %(accion)s, %(fecha)s,
-            %(responsable)s, %(usuario)s, %(detalle)s, %(ejecucion)s,
-            %(pago)s, %(observacion)s, %(tipo_referencia)s,
+            %(responsable)s, %(usuario)s, %(rol)s, %(detalle)s,
+            %(ejecucion)s, %(pago)s, %(observacion)s, %(tipo_referencia)s,
             %(referencia_id)s, %(accion_historial)s)
     """,
     modo=ESCRITURA,
@@ -2232,9 +2233,7 @@ class _Guardado:
                 anteriores,
                 detalle.evaluaciones,
             )
-            for posicion, evaluacion in enumerate(
-                nuevas, len(anteriores) + 1
-            ):
+            for posicion, evaluacion in enumerate(nuevas, len(anteriores) + 1):
                 self._ej.ejecutar(
                     _INSERTAR_EVALUACION,
                     {
@@ -2458,6 +2457,7 @@ class _Guardado:
                     "fecha": paso.fecha,
                     "responsable": "USUARIO" if paso.usuario_id else "SISTEMA",
                     "usuario": self._id("usuario", paso.usuario_id),
+                    "rol": paso.rol.value if paso.rol else None,
                     "detalle": self._detalles.get(detalle)
                     if detalle
                     else None,

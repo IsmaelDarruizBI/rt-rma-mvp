@@ -24,6 +24,7 @@ import {
   motivoArchivoInvalido,
   reducirFoto,
 } from "./fotos";
+import { puede } from "../../lib/roles";
 
 const ROLES_FOTOS: RolUsuario[] = [
   "RECEPCION",
@@ -89,9 +90,7 @@ export function FotosOrden({
   const puedeSubir =
     habilitadas &&
     !orden.cerrada &&
-    actor !== null &&
-    actor.activo &&
-    ROLES_FOTOS.includes(actor.rol);
+    puede(actor, "FOTOS_CARGAR", ROLES_FOTOS);
   const lugar = MAX_FOTOS - guardadas.length - pendientes.length;
   const aceptadas = pendientes.filter((pendiente) => pendiente.aceptada);
   const ocupada = ocupado || preparando || subiendo;

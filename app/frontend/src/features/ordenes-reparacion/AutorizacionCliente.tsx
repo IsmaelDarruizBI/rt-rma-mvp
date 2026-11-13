@@ -38,6 +38,7 @@ import type {
 import { nombreDeUsuario } from "./DetalleOrden";
 import { PENDIENTE_COMPROBANTE_INGRESO } from "./etiquetas";
 import { TituloAccion, UbicacionAccion } from "./presentacion";
+import { tieneAlguno } from "../../lib/roles";
 
 type Eleccion = ResultadoAutorizacion | "PENDIENTE";
 
@@ -186,7 +187,7 @@ function FormularioDesistimiento({
 
   const roles = acciones[0]?.roles ?? [];
   const rolHabilitado =
-    actor !== null && (roles.length === 0 || roles.includes(actor.rol));
+    actor !== null && (roles.length === 0 || tieneAlguno(actor, roles));
   const total = acciones.some((accion) => accion.codigo === "DESISTIR_TODO");
   const porDetalle = acciones.filter(
     (accion) => accion.codigo === "DESISTIR_DETALLE" && accion.detalle_id,
@@ -546,7 +547,7 @@ function FormularioDecision({
 
   const rolHabilitado =
     actor !== null &&
-    (rolesPermitidos.length === 0 || rolesPermitidos.includes(actor.rol));
+    (rolesPermitidos.length === 0 || tieneAlguno(actor, rolesPermitidos));
   const con = (resultado: Eleccion) =>
     pendientes.filter((detalle) => elecciones[detalle.id] === resultado);
   const autorizar = con("AUTORIZADO");

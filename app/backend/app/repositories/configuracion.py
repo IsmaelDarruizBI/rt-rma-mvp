@@ -11,6 +11,7 @@ from typing import Protocol
 from app.domain.models import (
     CambioConfiguracion,
     EntidadConfiguracion,
+    RolUsuario,
     TipoReparacion,
 )
 
@@ -33,6 +34,28 @@ class ConfiguracionRepository(Protocol):
         cambio: CambioConfiguracion,
     ) -> None:
         """Reemplaza los Tipos habilitados de la Mesa, con su auditoria."""
+        ...
+
+    def guardar_roles_de_usuario(
+        self,
+        usuario_id: str,
+        roles: Sequence[RolUsuario],
+        cambio: CambioConfiguracion,
+    ) -> None:
+        """Reemplaza los roles del usuario, con su auditoria (DC27A)."""
+        ...
+
+    def guardar_permiso(
+        self,
+        codigo: str,
+        roles: Sequence[RolUsuario],
+        cambio: CambioConfiguracion,
+    ) -> None:
+        """Fija los roles de un permiso configurable, con su auditoria."""
+        ...
+
+    def leer_permisos(self) -> dict[str, tuple[RolUsuario, ...]]:
+        """Los permisos configurados (sin fila rige el predeterminado)."""
         ...
 
     def listar_cambios(

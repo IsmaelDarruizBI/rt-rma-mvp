@@ -38,13 +38,13 @@ from app.domain.models import (
     OrdenReparacion,
     RecepcionEquipo,
     RegistroRecepcion,
-    RolUsuario,
     TipoEntrega,
     Usuario,
     VersionRecepcion,
 )
 from app.domain.politicas import politica_de
 
+from . import permisos
 from .autorizacion import validar_alguno_de
 from .exceptions import PrecondicionInvalidaError
 from .revisiones import finalizada_sin_reparacion
@@ -66,10 +66,7 @@ _NODOS_CON_EQUIPO = (
 
 # Quien registra el ingreso es Recepcion; Administracion puede corregirlo o
 # regularizarlo. Pendiente de validacion del negocio.
-ROLES_RECEPCION_EQUIPO = (
-    RolUsuario.RECEPCION,
-    RolUsuario.ADMINISTRADOR,
-)
+ROLES_RECEPCION_EQUIPO = permisos.CUSTODIA
 
 
 # --- Estado de custodia ------------------------------------------------------

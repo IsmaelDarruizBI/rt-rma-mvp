@@ -14,6 +14,14 @@ from pydantic import BaseModel, Field
 class EntidadConfiguracion(str, Enum):
     TIPO_REPARACION = "TIPO_REPARACION"
     MESA_TRABAJO = "MESA_TRABAJO"
+    USUARIO = "USUARIO"
+    PERMISO = "PERMISO"
+    INSUMO = "INSUMO"
+    MOTIVO = "MOTIVO"
+    PLANTILLA = "PLANTILLA"
+    PARAMETRO = "PARAMETRO"
+    CHECKLIST = "CHECKLIST"
+    PROVEEDOR = "PROVEEDOR"
 
 
 class CambioConfiguracion(BaseModel):

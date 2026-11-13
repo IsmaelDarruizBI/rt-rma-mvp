@@ -5,6 +5,10 @@
     PUT  /api/admin/repair-types/{codigo}            edicion o baja
     PUT  /api/admin/stations/{codigo}/repair-types   habilitados de la Mesa
     GET  /api/admin/config-changes?entidad=&clave=   auditoria y precios
+    GET  /api/admin/users                     usuarios y sus roles (DC27A)
+    PUT  /api/admin/users/{codigo}/roles      roles de un usuario
+    GET  /api/admin/permissions               permisos, predeterminados y hoy
+    PUT  /api/admin/permissions/{codigo}      roles de un permiso (DC08)
 
 Solo Administracion (con sesion real, 403 para los demas roles; el caso de
 uso lo valida igual). Las escrituras exigen PostgreSQL (DC23).
@@ -20,10 +24,22 @@ from app.application.configuracion import (
     habilitar_tipos_en_mesa,
     historial_de_cambios,
 )
-from app.domain.models import CambioConfiguracion, EntidadConfiguracion
+from app.application.roles import (
+    VistaPermiso,
+    asignar_roles,
+    configurar_permiso,
+    listar_permisos,
+    listar_usuarios_con_roles,
+)
+from app.domain.models import (
+    CambioConfiguracion,
+    EntidadConfiguracion,
+    RolUsuario,
+)
 from app.services.configuracion import ROLES_ADMINISTRACION_CONFIGURACION
 
 from .dependencias import ContextoDep
+from .schemas import UsuarioOut
 from .seguridad import exigir_rol
 
 router = APIRouter(
@@ -49,6 +65,11 @@ class AltaTipoReparacionIn(TipoReparacionIn):
 class TiposDeMesaIn(BaseModel):
     usuario_id: str = Field(min_length=1)
     tipos: list[str]
+
+
+class RolesIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+    roles: list[RolUsuario]
 
 
 @router.get("/catalog")
@@ -110,3 +131,42 @@ def get_cambios(
     clave: str | None = None,
 ) -> list[CambioConfiguracion]:
     return historial_de_cambios(contexto, entidad=entidad, clave=clave)
+
+
+@router.get("/users")
+def get_usuarios_y_roles(contexto: ContextoDep) -> list[UsuarioOut]:
+    return [
+        UsuarioOut.desde_dominio(u)
+        for u in listar_usuarios_con_roles(contexto)
+    ]
+
+
+@router.put("/users/{codigo}/roles")
+def put_roles_de_usuario(
+    codigo: str, cuerpo: RolesIn, contexto: ContextoDep
+) -> UsuarioOut:
+    return UsuarioOut.desde_dominio(
+        asignar_roles(
+            contexto,
+            usuario_id=cuerpo.usuario_id,
+            destino_id=codigo,
+            roles=cuerpo.roles,
+        )
+    )
+
+
+@router.get("/permissions")
+def get_permisos(contexto: ContextoDep) -> list[VistaPermiso]:
+    return listar_permisos(contexto)
+
+
+@router.put("/permissions/{codigo}")
+def put_permiso(
+    codigo: str, cuerpo: RolesIn, contexto: ContextoDep
+) -> VistaPermiso:
+    return configurar_permiso(
+        contexto,
+        usuario_id=cuerpo.usuario_id,
+        codigo=codigo,
+        roles=cuerpo.roles,
+    )

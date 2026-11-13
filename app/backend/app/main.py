@@ -43,6 +43,7 @@ from app.core.autenticacion import (
     parametros_de,
 )
 from app.core.config import Settings, get_settings
+from app.services import permisos
 
 
 @asynccontextmanager
@@ -96,6 +97,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     registrar_manejadores_de_error(application)
     registrar_manejadores_de_seguridad(application)
+
+    @application.middleware("http")
+    async def _politica_de_permisos(request, call_next):
+        """Los permisos configurados rigen en todo el pedido (DC08).
+
+        Se leen de la base la primera vez que el pedido evalua un permiso,
+        y una sola vez; sin PostgreSQL rigen los predeterminados.
+        """
+        repositorio = getattr(
+            request.app.state.contexto, "configuracion", None
+        )
+        if repositorio is None:
+            return await call_next(request)
+        token = permisos.fijar_politica(repositorio.leer_permisos)
+        try:
+            return await call_next(request)
+        finally:
+            permisos.restablecer_politica(token)
 
     # ``/health`` es publico; todo lo demas pasa por la sesion.
     application.include_router(health.router)

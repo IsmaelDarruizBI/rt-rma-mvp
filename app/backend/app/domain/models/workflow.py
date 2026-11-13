@@ -15,7 +15,7 @@ from datetime import datetime
 
 from pydantic import AliasChoices, BaseModel, Field
 
-from .enums import TipoReferenciaHistorial
+from .enums import RolUsuario, TipoReferenciaHistorial
 
 
 class HistorialWorkflow(BaseModel):
@@ -45,6 +45,9 @@ class HistorialWorkflow(BaseModel):
     fecha: datetime
 
     usuario_id: str | None = None
+    # Rol con el que el usuario quedo habilitado para la accion (DC27A,
+    # DEC-MI-12). Vacio en lo anterior y en los pasos del sistema.
+    rol: RolUsuario | None = None
     reparacion_detail_id: str | None = None
     ejecucion_id: str | None = None
     pago_id: str | None = None
@@ -61,6 +64,5 @@ class HistorialWorkflow(BaseModel):
     def es_accion_funcional(self) -> bool:
         """True si es una capacidad transversal, no un paso del flujo."""
         return (
-            self.tipo_referencia
-            is TipoReferenciaHistorial.FUNCTIONAL_ACTION
+            self.tipo_referencia is TipoReferenciaHistorial.FUNCTIONAL_ACTION
         )

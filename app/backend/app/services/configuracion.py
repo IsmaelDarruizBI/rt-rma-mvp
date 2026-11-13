@@ -21,15 +21,15 @@ from app.domain.models import (
     TIPO_REPARACION_OTROS,
     CambioConfiguracion,
     EntidadConfiguracion,
-    RolUsuario,
     TipoReparacion,
     Usuario,
 )
 
+from . import permisos
 from .autorizacion import validar_alguno_de
 from .exceptions import PrecondicionInvalidaError
 
-ROLES_ADMINISTRACION_CONFIGURACION = (RolUsuario.ADMINISTRADOR,)
+ROLES_ADMINISTRACION_CONFIGURACION = permisos.CONFIGURACION_ADMINISTRAR
 CAMPOS_TIPO = ("nombre", "precio", "puntaje", "garantia_dias", "activo")
 CAMPO_TIPOS_HABILITADOS = "tipos_habilitados"
 

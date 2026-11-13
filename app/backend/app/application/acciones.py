@@ -63,6 +63,7 @@ from app.services import (
     garantia_ajustable,
     motivo_bloqueo_ejecucion,
     pendiente_de_autorizacion,
+    permisos,
     requiere_definicion,
     revision_vigente,
     toma_activa,
@@ -224,7 +225,7 @@ def puede_ejecutar(accion: AccionDisponible, usuario: Usuario) -> bool:
         return True
     if not usuario.activo:
         return False
-    if accion.roles and usuario.rol not in accion.roles:
+    if accion.roles and not usuario.tiene_alguno(accion.roles):
         return False
     if accion.usuario_excluido_id == usuario.id:
         return False
@@ -341,7 +342,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             AccionDisponible(
                 codigo=ACCION_INICIAR_GARANTIA_RMA,
                 etiqueta="Iniciar garantia RMA",
-                roles=(RolUsuario.RECEPCION,),
+                roles=permisos.GARANTIA_RMA_CREAR,
             )
         ]
 
@@ -423,7 +424,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                     AccionDisponible(
                         codigo=ACCION_REDEFINIR_DETALLE,
                         etiqueta="Redefinir la reparacion del Detalle",
-                        roles=(RolUsuario.TECNICO,),
+                        roles=permisos.DETALLE_DEFINIR_TECNICO,
                         detalle_id=detalle.id,
                     )
                 )
@@ -432,7 +433,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                     AccionDisponible(
                         codigo=ACCION_REVISAR_DETALLE,
                         etiqueta="Realizar la revision tecnica del Detalle",
-                        roles=(RolUsuario.TECNICO,),
+                        roles=permisos.DETALLE_DEFINIR_TECNICO,
                         detalle_id=detalle.id,
                     )
                 )
@@ -452,7 +453,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             AccionDisponible(
                 codigo=ACCION_AGREGAR_DETALLE,
                 etiqueta="Agregar un Detalle de reparacion",
-                roles=(RolUsuario.RECEPCION,),
+                roles=permisos.DETALLE_DEFINIR_RECEPCION,
             )
         )
         # PROC-REP-045 tiene dos ramas: Detalles conocidos o revision. Con
@@ -465,7 +466,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 AccionDisponible(
                     codigo=ACCION_ENVIAR_A_REVISION,
                     etiqueta="Enviar a revision tecnica (sin diagnostico)",
-                    roles=(RolUsuario.RECEPCION,),
+                    roles=permisos.ENVIAR_A_REVISION,
                 )
             )
         elif es_ingreso_inicial(orden):
@@ -476,7 +477,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                     etiqueta=(
                         "Generar el comprobante de ingreso y autorizacion"
                     ),
-                    roles=(RolUsuario.RECEPCION,),
+                    roles=permisos.DETALLE_DEFINIR_RECEPCION,
                     bloqueo=(
                         "Para generarlo falta " + "; ".join(faltan)
                         if faltan
@@ -489,7 +490,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 AccionDisponible(
                     codigo=ACCION_FINALIZAR_DEFINICION,
                     etiqueta="Finalizar la definicion",
-                    roles=(RolUsuario.RECEPCION,),
+                    roles=permisos.DETALLE_DEFINIR_RECEPCION,
                 )
             )
 
@@ -503,7 +504,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 AccionDisponible(
                     codigo=ACCION_REALIZAR_REVISION,
                     etiqueta="Realizar la revision tecnica",
-                    roles=(RolUsuario.TECNICO,),
+                    roles=permisos.REVISION_TECNICA,
                 )
             )
         else:
@@ -511,7 +512,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 AccionDisponible(
                     codigo=ACCION_AGREGAR_DETALLE_DESDE_REVISION,
                     etiqueta="Agregar un Detalle luego de la revision",
-                    roles=(RolUsuario.TECNICO,),
+                    roles=permisos.DETALLE_DEFINIR_TECNICO,
                 )
             )
             # PROC-REP-068: sin Detalles todavia se puede concluir
@@ -531,9 +532,9 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                     # 075 (definir y cerrar la carga) es del Tecnico; 069
                     # (finalizar sin reparacion) sigue en Recepcion.
                     roles=(
-                        (RolUsuario.TECNICO,)
+                        permisos.DETALLE_DEFINIR_TECNICO
                         if orden.reparaciones_detail
-                        else (RolUsuario.RECEPCION,)
+                        else permisos.ENVIAR_A_REVISION
                     ),
                 )
             )
@@ -558,7 +559,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             AccionDisponible(
                 codigo=ACCION_TOMAR,
                 etiqueta="Tomar la Orden",
-                roles=(RolUsuario.TECNICO,),
+                roles=permisos.ORDEN_TOMAR,
             )
         )
 
@@ -589,7 +590,11 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                         if evaluar
                         else "Iniciar el Detalle"
                     ),
-                    roles=(RolUsuario.TECNICO,),
+                    roles=(
+                        permisos.EVALUACION_TECNICA
+                        if evaluar
+                        else permisos.EJECUCION
+                    ),
                     detalle_id=trabajable,
                     usuario_id=titular,
                     bloqueo=None if evaluar else bloqueo,
@@ -599,7 +604,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             AccionDisponible(
                 codigo=ACCION_LIBERAR_ORDEN,
                 etiqueta="Liberar la Orden (PROC-REP-212/213)",
-                roles=(RolUsuario.TECNICO,),
+                roles=permisos.ORDEN_TOMAR,
                 usuario_id=titular,
             )
         )
@@ -620,7 +625,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 AccionDisponible(
                     codigo=ACCION_COMPLETAR_EJECUCION,
                     etiqueta="Registrar la ejecucion realizada",
-                    roles=(RolUsuario.TECNICO,),
+                    roles=permisos.EJECUCION,
                     detalle_id=en_curso.reparacion_detail_id,
                     ejecucion_id=en_curso.id,
                     usuario_id=titular,
@@ -636,7 +641,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                     if desiste
                     else "Interrumpir la ejecucion"
                 ),
-                roles=(RolUsuario.TECNICO,),
+                roles=permisos.EJECUCION,
                 detalle_id=en_curso.reparacion_detail_id,
                 ejecucion_id=en_curso.id,
                 usuario_id=titular,
@@ -649,7 +654,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 AccionDisponible(
                     codigo=ACCION_REQUIERE_REDEFINICION,
                     etiqueta="El Detalle requiere redefinicion",
-                    roles=(RolUsuario.TECNICO,),
+                    roles=permisos.EJECUCION,
                     detalle_id=en_curso.reparacion_detail_id,
                     ejecucion_id=en_curso.id,
                     usuario_id=titular,
@@ -671,7 +676,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 AccionDisponible(
                     codigo=ACCION_APROBAR_CONTROL,
                     etiqueta="Aprobar el control tecnico",
-                    roles=(RolUsuario.RECEPCION,),
+                    roles=permisos.CONTROL_TECNICO,
                     detalle_id=pendiente,
                 )
             )
@@ -680,7 +685,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 AccionDisponible(
                     codigo=ACCION_RECHAZAR_CONTROL,
                     etiqueta="Rechazar el control (retrabajo)",
-                    roles=(RolUsuario.RECEPCION,),
+                    roles=permisos.CONTROL_TECNICO,
                     detalle_id=pendiente,
                 )
             )
@@ -692,7 +697,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             AccionDisponible(
                 codigo=ACCION_NOTIFICAR,
                 etiqueta="Notificar al cliente",
-                roles=(RolUsuario.RECEPCION,),
+                roles=permisos.CLIENTE_NOTIFICAR,
             )
         )
 
@@ -856,14 +861,14 @@ def acciones_de_autorizacion(
             AccionDisponible(
                 codigo=ACCION_REGISTRAR_DECISION_CLIENTE,
                 etiqueta="Registrar la decision del cliente",
-                roles=(RolUsuario.RECEPCION,),
+                roles=permisos.DECISION_CLIENTE,
             )
         )
     acciones.extend(
         AccionDisponible(
             codigo=ACCION_DESISTIR_DETALLE,
             etiqueta="El cliente desiste de este trabajo autorizado",
-            roles=(RolUsuario.RECEPCION,),
+            roles=permisos.DECISION_CLIENTE,
             detalle_id=detalle_id,
         )
         for detalle_id in detalles_desistibles(orden)
@@ -873,7 +878,7 @@ def acciones_de_autorizacion(
             AccionDisponible(
                 codigo=ACCION_DESISTIR_TODO,
                 etiqueta="Cliente desiste de todos los trabajos cancelables",
-                roles=(RolUsuario.RECEPCION,),
+                roles=permisos.DECISION_CLIENTE,
             )
         )
     if comprobante_autorizacion_emitible(orden):
@@ -1004,7 +1009,7 @@ def acciones_complementarias(
             AccionDisponible(
                 codigo=ACCION_AGREGAR_TRABAJO_ADICIONAL,
                 etiqueta="Agregar una reparacion adicional detectada",
-                roles=(RolUsuario.TECNICO,),
+                roles=permisos.DETALLE_ADICIONAL,
                 usuario_id=toma.usuario_id,
             )
         )

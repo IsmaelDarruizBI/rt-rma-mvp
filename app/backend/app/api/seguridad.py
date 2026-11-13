@@ -126,11 +126,12 @@ def exigir_rol(roles: Sequence[RolUsuario]):
     Son los mismos roles que ya valida el caso de uso; aca se corta antes,
     sin ejecutar nada. En modo ``demo`` no hace nada.
     """
-    permitidos = tuple(roles)
 
     def dependencia(request: Request, contexto: ContextoDep) -> None:
         usuario = _usuario_del_token(request, contexto)
-        if usuario is not None and usuario.rol not in permitidos:
+        # ``roles`` puede ser un Permiso configurable: se resuelve en cada
+        # pedido, con la politica vigente.
+        if usuario is not None and not usuario.tiene_alguno(tuple(roles)):
             raise AccesoDenegadoError(
                 "ROL_NO_AUTORIZADO",
                 "Tu rol no puede usar esta funcion.",
@@ -151,7 +152,7 @@ def get_me(request: Request, contexto: ContextoDep) -> UsuarioOut:
             "AUTENTICACION_DEMO",
             "La API corre sin autenticacion (modo demo): no hay sesion.",
         )
-    return UsuarioOut.model_validate(usuario.model_dump())
+    return UsuarioOut.desde_dominio(usuario)
 
 
 def registrar_manejadores_de_seguridad(application: FastAPI) -> None:

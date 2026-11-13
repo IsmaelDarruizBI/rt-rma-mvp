@@ -31,12 +31,12 @@ from app.domain.models import (
     EstadoTomaOrden,
     EstadoWorkflow,
     OrdenReparacion,
-    RolUsuario,
     TipoReparacionEstacion,
     TomaOrden,
     Usuario,
 )
 
+from . import permisos
 from .autorizacion import actor_valido, validar_actor, validar_alguno_de
 from .autorizacion_cliente import es_trabajable, exigir_autorizacion_vigente
 from .exceptions import (
@@ -147,10 +147,11 @@ def validar_estacion_trabajo(
         motivo = f"La Orden no esta EN_COLA ({orden.estado_workflow.value})"
         return _registrar_validacion_estacion(orden, fecha, usuario, motivo)
 
-    if not actor_valido(usuario, RolUsuario.TECNICO):
+    if not actor_valido(usuario, permisos.ORDEN_TOMAR):
+        roles = ", ".join(rol.value for rol in usuario.roles)
         motivo = (
             f"El usuario {usuario.id} no puede operar como ACT-TECH "
-            f"(activo={usuario.activo}, rol={usuario.rol.value})"
+            f"(activo={usuario.activo}, rol={roles})"
         )
         return _registrar_validacion_estacion(orden, fecha, usuario, motivo)
 
@@ -231,7 +232,7 @@ def tomar_orden(
     Como maximo UNA por Orden en simultaneo. Tomar la Orden no inicia
     ninguna Ejecucion: eso ocurre recien en PROC-REP-185.
     """
-    validar_actor(usuario, RolUsuario.TECNICO)
+    validar_actor(usuario, permisos.ORDEN_TOMAR)
 
     if orden.estado_workflow is not EstadoWorkflow.EN_COLA:
         raise PrecondicionInvalidaError(
@@ -332,7 +333,7 @@ def seleccionar_detalle(
 
     Solo el titular de la toma activa selecciona (E2).
     """
-    validar_actor(usuario, RolUsuario.TECNICO)
+    validar_actor(usuario, permisos.ORDEN_TOMAR)
 
     detalle = buscar_detalle(orden, detalle_id)
     if detalle.estado is not EstadoReparacionDetail.DEFINIDO:
@@ -370,7 +371,7 @@ def seleccionar_detalle(
 
 # Liberar una Orden tomada por OTRO tecnico (MVP v2): cualquier tecnico, o
 # Coordinacion, con motivo. El titular libera la suya como siempre.
-ROLES_LIBERACION_AJENA = (RolUsuario.TECNICO, RolUsuario.COORDINADOR_RMA)
+ROLES_LIBERACION_AJENA = permisos.LIBERACION_AJENA
 
 
 def es_liberacion_ajena(orden: OrdenReparacion, usuario: Usuario) -> bool:
@@ -419,7 +420,7 @@ def liberar_orden(
                 f"{toma.estacion_id}): liberarla exige indicar el motivo."
             )
     else:
-        validar_actor(usuario, RolUsuario.TECNICO)
+        validar_actor(usuario, permisos.ORDEN_TOMAR)
     if hay_ejecucion_activa(orden):
         raise PrecondicionInvalidaError(
             "No se puede liberar la Orden con una Ejecucion activa."

@@ -54,7 +54,9 @@ def test_it1_el_corpus_cubre_la_iteracion(corpus):
     assert {v.vigente for v in vigencias} == {True, False}
     assert any(v.excepcion for v in vigencias)
     cortesias = [
-        d for o in ultimas for d in o.descuentos
+        d
+        for o in ultimas
+        for d in o.descuentos
         if d.clase is ClaseAjuste.CORTESIA
     ]
     # DEC-IT1-02: parcial (50 %) y despues modificada a total.

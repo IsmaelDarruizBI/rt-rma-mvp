@@ -562,9 +562,7 @@ def test_inventario_aplicado_reconoce_el_estado_del_ledger():
     ejecucion_id = sin_aplicar.ejecuciones[0].id
 
     assert inventario_aplicado(sin_aplicar, ejecucion_id) is False
-    assert (
-        inventario_aplicado(aplicada, aplicada.ejecuciones[0].id) is True
-    )
+    assert inventario_aplicado(aplicada, aplicada.ejecuciones[0].id) is True
     # Otra Ejecucion cualquiera no esta aplicada.
     assert inventario_aplicado(aplicada, "EJE-INEXISTENTE") is False
 

@@ -395,9 +395,7 @@ def test_hp_rep_001_end_to_end():
     assert orden.documentos.garantia_reparacion.generado is True
 
     # EVT-REP-999 es un evento terminal, no una accion: no va al historial.
-    assert all(
-        paso.process_id != "EVT-REP-999" for paso in orden.historial
-    )
+    assert all(paso.process_id != "EVT-REP-999" for paso in orden.historial)
 
 
 def test_hp_rep_001_recorre_los_nodos_del_scenario():

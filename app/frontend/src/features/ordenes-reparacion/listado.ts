@@ -127,19 +127,18 @@ export function coincide(orden: OrdenResumen, busqueda: string): boolean {
 /** Pendiente de un sector: la situación nombra su rol entre los que actúan. */
 export function pendienteDelSector(
   orden: OrdenResumen,
-  rol: RolUsuario | null,
+  rol: RolUsuario | readonly RolUsuario[] | null,
 ): boolean {
-  return (
-    rol !== null &&
-    !orden.cerrada &&
-    (orden.situacion?.roles ?? []).includes(rol)
-  );
+  if (rol === null) return false;
+  const propios: readonly RolUsuario[] = typeof rol === "string" ? [rol] : rol;
+  const actuan = orden.situacion?.roles ?? [];
+  return !orden.cerrada && propios.some((r) => actuan.includes(r));
 }
 
 export function filtrarOrdenes(
   ordenes: OrdenResumen[],
   filtros: FiltrosListado,
-  rol: RolUsuario | null,
+  rol: RolUsuario | readonly RolUsuario[] | null,
 ): OrdenResumen[] {
   return ordenes.filter((orden) => {
     if (filtros.rapido === "ABIERTAS" && orden.cerrada) return false;
@@ -207,7 +206,7 @@ export function ordenarOrdenes(
 export function aplicarListado(
   ordenes: OrdenResumen[],
   filtros: FiltrosListado,
-  rol: RolUsuario | null,
+  rol: RolUsuario | readonly RolUsuario[] | null,
 ): OrdenResumen[] {
   return ordenarOrdenes(filtrarOrdenes(ordenes, filtros, rol), filtros.orden);
 }

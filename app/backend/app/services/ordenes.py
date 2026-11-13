@@ -40,6 +40,7 @@ from app.domain.prioridad import (
     nombre_de_prioridad,
 )
 
+from . import permisos
 from .autorizacion import validar_actor, validar_alguno_de
 from .autorizacion_cliente import (
     marcar_pendiente_autorizacion,
@@ -75,15 +76,9 @@ from .workflow import registrar_accion_funcional, registrar_paso
 
 # Nodos que PROC-REP V1.3 declara con ``actores_alternativos``:
 # actores equivalentes, sin jerarquia entre ellos.
-ROLES_PRIORIZACION = (
-    RolUsuario.COORDINADOR_RMA,
-    RolUsuario.RECEPCION,
-)
+ROLES_PRIORIZACION = permisos.PRIORIDAD_DEFINIR
 
-ROLES_ENTREGA = (
-    RolUsuario.ADMINISTRADOR,
-    RolUsuario.RECEPCION,
-)
+ROLES_ENTREGA = permisos.ENTREGA
 
 # Resultados de BR-REP-012 que cierran la toma activa (BR-REP-018): no queda
 # ningun Detalle trabajable ni en ejecucion. COMPLETA y TODO_CANCELADO; y
@@ -275,7 +270,7 @@ def crear_orden_cliente_externo(
     EVT-REP-001 es el evento que dispara el proceso, no una accion: no
     se registra en el historial.
     """
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    validar_actor(usuario, permisos.ORDEN_CREAR)
 
     orden = OrdenReparacion(
         id=orden_id,
@@ -336,7 +331,7 @@ def crear_orden_rt_interno(
     PROC-REP-020 es ACT-SYSTEM: no lo ejecuta una persona, asi que no
     recibe Usuario y el historial queda sin actor humano.
     """
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    validar_actor(usuario, permisos.ORDEN_CREAR)
 
     orden = OrdenReparacion(
         id=orden_id,
@@ -382,11 +377,7 @@ def crear_orden_rt_interno(
 # DC15B / BR-REP-039: quien admite un Detalle origen vencido en garantia
 # como excepcion. DEC-IT1-01 (11/11/2026, cierra ABI-04): Recepcion,
 # Coordinacion RMA y Administracion; el Tecnico no.
-ROLES_EXCEPCION_GARANTIA = (
-    RolUsuario.RECEPCION,
-    RolUsuario.COORDINADOR_RMA,
-    RolUsuario.ADMINISTRADOR,
-)
+ROLES_EXCEPCION_GARANTIA = permisos.GARANTIA_EXCEPCION
 
 
 def fecha_de_entrega(orden: OrdenReparacion) -> datetime | None:
@@ -440,7 +431,7 @@ def evaluar_vigencia_garantia(
 
 
 def describir_vigencia(vigencia: VigenciaGarantiaOrigen) -> str:
-    """"DET-001 vigente hasta el 01/02/2026" o "DET-002 vencio el ..."."""
+    """ "DET-001 vigente hasta el 01/02/2026" o "DET-002 vencio el ..."."""
     if vigencia.vence is None:
         return f"{vigencia.detalle_id} sin garantia vigente registrada"
     vence = f"{vigencia.vence:%d/%m/%Y}"
@@ -450,7 +441,7 @@ def describir_vigencia(vigencia: VigenciaGarantiaOrigen) -> str:
 
 
 def describir_vencidos(vencidos: Sequence[VigenciaGarantiaOrigen]) -> str:
-    """"DET-001 vencio el 01/02/2026; DET-002 sin garantia vigente"."""
+    """ "DET-001 vencio el 01/02/2026; DET-002 sin garantia vigente"."""
     return "; ".join(describir_vigencia(v) for v in vencidos)
 
 
@@ -501,7 +492,7 @@ def crear_orden_garantia_rma(
     if motivos:
         validar_alguno_de(usuario, ROLES_EXCEPCION_GARANTIA)
     else:
-        validar_actor(usuario, RolUsuario.RECEPCION)
+        validar_actor(usuario, permisos.GARANTIA_RMA_CREAR)
 
     if orden_origen.estado_workflow is not EstadoWorkflow.ENTREGADA:
         raise PrecondicionInvalidaError(
@@ -875,11 +866,7 @@ def definir_prioridad(
 
 # Cambiar la prioridad de una Orden que ya esta en el taller (MVP v2):
 # los tecnicos segun el diagnostico, y Coordinacion y Recepcion como antes.
-ROLES_CAMBIO_PRIORIDAD = (
-    RolUsuario.TECNICO,
-    RolUsuario.COORDINADOR_RMA,
-    RolUsuario.RECEPCION,
-)
+ROLES_CAMBIO_PRIORIDAD = permisos.PRIORIDAD_CAMBIAR
 # ACC-REP-007 (hp-rep-001.yaml): "Asignar la prioridad de ejecucion de la
 # Orden". La primera asignacion es PROC-REP-150 (una sola vez); los
 # cambios posteriores son esta accion funcional y no repiten el nodo.
@@ -1178,7 +1165,7 @@ def notificar_cliente(
     Se alcanza tanto con la reparacion lista (240) como con una Orden
     finalizada SIN_REPARACION (069): ``lista_para_cierre``.
     """
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    validar_actor(usuario, permisos.CLIENTE_NOTIFICAR)
 
     if not lista_para_cierre(orden):
         raise PrecondicionInvalidaError(

@@ -26,25 +26,21 @@ from app.domain.models import (
     EstadoWorkflow,
     OrdenReparacion,
     RegistroDescuento,
-    RolUsuario,
     TipoDescuento,
     Usuario,
     importe_de_descuento,
 )
 
+from . import permisos
 from .autorizacion import validar_alguno_de
 from .exceptions import PrecondicionInvalidaError
 from .pagos import es_cobrable
 
-ROLES_DESCUENTO = (RolUsuario.RECEPCION, RolUsuario.ADMINISTRADOR)
+ROLES_DESCUENTO = permisos.DESCUENTO
 # DEC-IT1-02 (11/11/2026, BR-REP-016/039): otorgan, modifican y quitan la
 # CORTESIA Recepcion, Coordinacion RMA y Administracion. El permiso del
 # DESCUENTO no cambia (sigue la implementacion del UAT).
-ROLES_CORTESIA = (
-    RolUsuario.RECEPCION,
-    RolUsuario.COORDINADOR_RMA,
-    RolUsuario.ADMINISTRADOR,
-)
+ROLES_CORTESIA = permisos.CORTESIA
 
 
 def descripcion_de_descuento(registro: RegistroDescuento) -> str:

@@ -36,11 +36,11 @@ from app.domain.models import (
     OrdenReparacion,
     OrigenDiagnostico,
     ReparacionDetail,
-    RolUsuario,
     TipoReparacion,
     Usuario,
 )
 
+from . import permisos
 from .autorizacion import validar_actor
 from .autorizacion_cliente import situacion_de_la_orden
 from .custodia import checkin_de
@@ -161,7 +161,7 @@ def revisar_detalle_pendiente(
     Ejecucion activa y un resultado no vacio. Registra usuario, fecha,
     Detalle y resultado; no modifica Tipo, snapshots ni condicion.
     """
-    validar_actor(usuario, RolUsuario.TECNICO)
+    validar_actor(usuario, permisos.DETALLE_DEFINIR_TECNICO)
     _exigir_circuito_de_revision(orden)
     _detalle_pendiente(orden, detalle_id)
     if toma_activa(orden) is not None:
@@ -209,7 +209,7 @@ def redefinir_detalle(
     Deja la condicion en SIN_BLOQUEO: PROC-REP-080 la reevalua. No
     encadena 080: eso es del comando de aplicacion.
     """
-    validar_actor(usuario, RolUsuario.TECNICO)
+    validar_actor(usuario, permisos.DETALLE_DEFINIR_TECNICO)
     _exigir_circuito_de_revision(orden)
     _detalle_pendiente(orden, detalle_id)
     if not revision_vigente(orden, detalle_id):

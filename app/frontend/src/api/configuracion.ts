@@ -4,7 +4,7 @@
  */
 
 import { get, post, put } from "./client";
-import type { TipoReparacion } from "../types/api";
+import type { RolUsuario, TipoReparacion, Usuario } from "../types/api";
 
 export interface MesaConfigurable {
   id: string;
@@ -21,7 +21,17 @@ export interface CatalogoConfigurable {
   mesas: MesaConfigurable[];
 }
 
-export type EntidadConfiguracion = "TIPO_REPARACION" | "MESA_TRABAJO";
+export type EntidadConfiguracion =
+  | "TIPO_REPARACION"
+  | "MESA_TRABAJO"
+  | "USUARIO"
+  | "PERMISO"
+  | "INSUMO"
+  | "MOTIVO"
+  | "PLANTILLA"
+  | "PARAMETRO"
+  | "CHECKLIST"
+  | "PROVEEDOR";
 
 export interface CambioConfiguracion {
   entidad: EntidadConfiguracion;
@@ -89,5 +99,47 @@ export function obtenerCambios(
   const consulta = parametros.toString();
   return get<CambioConfiguracion[]>(
     `/api/admin/config-changes${consulta ? `?${consulta}` : ""}`,
+  );
+}
+
+// --- Usuarios, roles y permisos (DC27A, DC08) ---------------------------
+
+export interface PermisoConfigurable {
+  codigo: string;
+  descripcion: string;
+  grupo: string;
+  consulta: boolean;
+  configurable: boolean;
+  predeterminados: RolUsuario[];
+  vigentes: RolUsuario[];
+}
+
+export function listarUsuarios(): Promise<Usuario[]> {
+  return get<Usuario[]>("/api/admin/users");
+}
+
+export function guardarRoles(
+  usuarioId: string,
+  destinoId: string,
+  roles: RolUsuario[],
+): Promise<Usuario> {
+  return put<Usuario>(`/api/admin/users/${encodeURIComponent(destinoId)}/roles`, {
+    usuario_id: usuarioId,
+    roles,
+  });
+}
+
+export function listarPermisos(): Promise<PermisoConfigurable[]> {
+  return get<PermisoConfigurable[]>("/api/admin/permissions");
+}
+
+export function guardarPermiso(
+  usuarioId: string,
+  codigo: string,
+  roles: RolUsuario[],
+): Promise<PermisoConfigurable> {
+  return put<PermisoConfigurable>(
+    `/api/admin/permissions/${encodeURIComponent(codigo)}`,
+    { usuario_id: usuarioId, roles },
   );
 }

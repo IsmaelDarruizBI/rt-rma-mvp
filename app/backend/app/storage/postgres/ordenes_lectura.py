@@ -585,8 +585,8 @@ _HISTORIAL = consulta(
     SELECT e.orden_id, e.historial_tipo_referencia AS tipo_referencia,
            e.historial_referencia_id AS referencia_id,
            e.historial_accion AS accion, e.ocurrido_en,
-           u.codigo AS usuario, d.codigo AS detalle, x.codigo AS ejecucion,
-           p.codigo AS pago, e.observacion
+           u.codigo AS usuario, e.rol_codigo AS rol, d.codigo AS detalle,
+           x.codigo AS ejecucion, p.codigo AS pago, e.observacion
     FROM rma.evento_negocio e
     LEFT JOIN rma.usuario u ON u.id = e.usuario_id
     LEFT JOIN rma.detalle d ON d.id = e.detalle_id
@@ -1177,6 +1177,7 @@ def _paso(fila: Any) -> HistorialWorkflow:
         accion=fila.accion,
         fecha=utc(fila.ocurrido_en),
         usuario_id=fila.usuario,
+        rol=fila.rol,
         reparacion_detail_id=fila.detalle,
         ejecucion_id=fila.ejecucion,
         pago_id=fila.pago,

@@ -187,16 +187,33 @@ class MedioPagoOut(BaseModel):
 
 
 class UsuarioOut(BaseModel):
-    """Usuario operativo. Alimenta el selector de actor DEMO."""
+    """Usuario operativo, con todos sus roles y sus permisos de hoy.
+
+    ``rol`` es el principal; ``roles`` todos (DC27A). ``permisos`` son los
+    codigos que habilitan sus roles con la politica vigente (DC08): la
+    pantalla los usa para ofrecer funciones; quien autoriza es la API.
+    Alimenta tambien el selector de actor DEMO.
+    """
 
     id: str
     nombre: str
     rol: RolUsuario
+    roles: list[RolUsuario]
     activo: bool
+    permisos: list[str]
 
     @classmethod
     def desde_dominio(cls, usuario: Usuario) -> "UsuarioOut":
-        return cls(**usuario.model_dump())
+        from app.services.roles import permisos_de
+
+        return cls(
+            id=usuario.id,
+            nombre=usuario.nombre,
+            rol=usuario.rol,
+            roles=list(usuario.roles),
+            activo=usuario.activo,
+            permisos=permisos_de(usuario),
+        )
 
 
 # --- Entrada de comandos -----------------------------------------------------
@@ -1506,6 +1523,8 @@ class HistorialOut(BaseModel):
     accion: str
     fecha: datetime
     usuario_id: str | None = None
+    # Rol con el que actuo (DC27A); vacio en lo anterior y en el sistema.
+    rol: RolUsuario | None = None
     reparacion_detail_id: str | None = None
     ejecucion_id: str | None = None
     pago_id: str | None = None

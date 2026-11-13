@@ -115,6 +115,7 @@ import {
 } from "./acciones";
 import { Layout, MenuAcciones, type Seccion } from "../../components/layout";
 import { Modal } from "../../components/Modal";
+import { rolesDe, tieneRol } from "../../lib/roles";
 
 type Informativa =
   | "cliente"
@@ -573,7 +574,8 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
     ejecutarComando(() => api.tomarOrden(ordenId, idActor, estacionId));
 
   const abiertaPara = (seccion: Informativa) =>
-    actor !== null && ABIERTA_POR_ROL[actor.rol] === seccion;
+    actor !== null &&
+    rolesDe(actor).some((rol) => ABIERTA_POR_ROL[rol] === seccion);
 
   // La sección del menú que corresponde a la pantalla actual.
   const seccion: Seccion =
@@ -721,8 +723,10 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
       }}
       usuario={{
         nombre: actor.nombre,
-        rol: ROL[actor.rol] ?? actor.rol,
-        esAdministracion: actor.rol === "ADMINISTRADOR",
+        rol: rolesDe(actor)
+          .map((r) => ROL[r] ?? r)
+          .join(" · "),
+        esAdministracion: tieneRol(actor, "ADMINISTRADOR"),
       }}
       onCerrarSesion={cerrarSesion}
       barra={barra}

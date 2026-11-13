@@ -46,6 +46,7 @@ from app.services import (
     faltantes_de_detalles_bloqueados,
     nombre_del_trabajo,
     pendiente_de_autorizacion,
+    permisos,
     reservas_externas_a,
     situacion_inventario,
     toma_activa,
@@ -769,7 +770,7 @@ def _cola(lectura: _Lectura) -> Bandeja:
         # de los roles la cola es seguimiento.
         (
             TipoBandeja.TAREAS
-            if lectura.usuario.rol is RolUsuario.TECNICO
+            if lectura.usuario.tiene_alguno(permisos.ORDEN_TOMAR)
             else TipoBandeja.SEGUIMIENTO
         ),
         items,
@@ -822,11 +823,17 @@ def _leer_bandejas(
 def bandejas_de_inicio(
     contexto: ApplicationContext, *, usuario_id: str
 ) -> VistaBandejas:
-    """Las bandejas del rol del usuario elegido. Solo lectura."""
+    """Las bandejas de los roles del usuario elegido. Solo lectura.
+
+    Con varios roles (DC27A) suma las bandejas de cada uno, en el orden de
+    sus roles y sin repetir una bandeja que dos roles comparten.
+    """
     usuario, lectura = _leer_bandejas(contexto, usuario_id)
-    return VistaBandejas(
-        usuario=usuario, bandejas=tuple(_INICIO[usuario.rol](lectura))
-    )
+    bandejas: dict[str, Bandeja] = {}
+    for rol in usuario.roles:
+        for bandeja in _INICIO[rol](lectura):
+            bandejas.setdefault(bandeja.codigo, bandeja)
+    return VistaBandejas(usuario=usuario, bandejas=tuple(bandejas.values()))
 
 
 def bandejas_de_taller(
@@ -840,7 +847,7 @@ def bandejas_de_taller(
     esta en el taller. Solo lectura.
     """
     usuario, lectura = _leer_bandejas(contexto, usuario_id)
-    if usuario.rol is RolUsuario.TECNICO:
+    if usuario.tiene_alguno(permisos.ORDEN_TOMAR):
         bandejas = [
             *_tecnico(lectura),
             _en_taller(lectura, excluir_propias=True),

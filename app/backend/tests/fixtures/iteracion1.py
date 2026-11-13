@@ -265,11 +265,7 @@ def recorrido_cortesia_con_pagos(
     orden_id = f.definida(cliente, tipo)
     orden = pagar(cliente, orden_id, "30000")
     pago_id = orden["pagos"][-1]["id"]
-    f.ok(
-        ajuste_comercial(
-            cliente, orden_id, valor="50", usuario=f.RECEPCION
-        )
-    )
+    f.ok(ajuste_comercial(cliente, orden_id, valor="50", usuario=f.RECEPCION))
     f.ok(ajuste_comercial(cliente, orden_id))
     f.tomada(cliente, orden_id)
     f.ejecutar(cliente, orden_id, "DET-001", tipo)

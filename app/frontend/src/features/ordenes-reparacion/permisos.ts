@@ -9,15 +9,19 @@
  */
 
 import type { Accion, Usuario } from "../../types/api";
+import { tieneAlguno } from "../../lib/roles.ts";
 
 export function puedeEjecutar(
   accion: Pick<Accion, "requiere_actor" | "roles" | "usuario_id"> &
     Partial<Pick<Accion, "usuario_excluido_id">>,
-  actor: Pick<Usuario, "id" | "rol" | "activo"> | null,
+  actor:
+    | (Pick<Usuario, "id" | "rol" | "activo"> &
+        Partial<Pick<Usuario, "roles">>)
+    | null,
 ): boolean {
   if (!accion.requiere_actor) return true;
   if (actor === null || !actor.activo) return false;
-  if (accion.roles.length > 0 && !accion.roles.includes(actor.rol)) {
+  if (accion.roles.length > 0 && !tieneAlguno(actor, accion.roles)) {
     return false;
   }
   if (accion.usuario_excluido_id && accion.usuario_excluido_id === actor.id) {

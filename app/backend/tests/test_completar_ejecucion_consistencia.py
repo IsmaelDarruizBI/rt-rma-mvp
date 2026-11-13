@@ -178,12 +178,8 @@ def test_completar_un_detalle_con_otro_pendiente_no_lanza(tmp_path):
 
     assert resultado is ResultadoEvaluacionOrden.ABIERTA_TRABAJABLE
 
-    detalle_1 = next(
-        d for d in orden.reparaciones_detail if d.id == DETALLE_1
-    )
-    detalle_2 = next(
-        d for d in orden.reparaciones_detail if d.id == DETALLE_2
-    )
+    detalle_1 = next(d for d in orden.reparaciones_detail if d.id == DETALLE_1)
+    detalle_2 = next(d for d in orden.reparaciones_detail if d.id == DETALLE_2)
     assert detalle_1.estado is EstadoReparacionDetail.COMPLETO
     assert detalle_2.estado is EstadoReparacionDetail.DEFINIDO
 

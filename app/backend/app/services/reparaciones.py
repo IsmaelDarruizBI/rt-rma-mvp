@@ -37,13 +37,13 @@ from app.domain.models import (
     RegistroControlTecnico,
     ReparacionDetail,
     ResultadoControl,
-    RolUsuario,
     TipoReparacion,
     TipoReparacionInsumos,
     Usuario,
 )
 from app.domain.politicas import politica_de
 
+from . import permisos
 from .autorizacion import validar_actor
 from .autorizacion_cliente import (
     NODO_ESPERA_AUTORIZACION,
@@ -100,9 +100,9 @@ def exigir_definicion_finalizable(
     """
     validar_actor(
         usuario,
-        RolUsuario.TECNICO
+        permisos.DETALLE_DEFINIR_TECNICO
         if orden.estado_workflow is EstadoWorkflow.EN_REVISION
-        else RolUsuario.RECEPCION,
+        else permisos.DETALLE_DEFINIR_RECEPCION,
     )
 
     if orden.estado_workflow not in (
@@ -254,7 +254,7 @@ def definir_reparacion_detail(
     Una garantia RMA nunca pasa por aqui: su revision tecnica es
     obligatoria (BR-REP-019) y define sus Detalles por PROC-REP-075.
     """
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    validar_actor(usuario, permisos.DETALLE_DEFINIR_RECEPCION)
 
     if orden.estado_workflow is not EstadoWorkflow.REQUERIMIENTO:
         raise PrecondicionInvalidaError(
@@ -396,7 +396,7 @@ def definir_reparacion_detail_luego_revision(
     exactamente uno se usa ese; con mas de uno hay que indicarlo. No hay
     relacion 1:1: un Detalle origen puede originar mas de un Detalle.
     """
-    validar_actor(usuario, RolUsuario.TECNICO)
+    validar_actor(usuario, permisos.DETALLE_DEFINIR_TECNICO)
 
     if orden.estado_workflow is not EstadoWorkflow.EN_REVISION:
         raise PrecondicionInvalidaError(
@@ -488,7 +488,7 @@ def agregar_detalle_adicional(
     """
     from .tomas import buscar_detalle, validar_titular_de_la_toma
 
-    validar_actor(usuario, RolUsuario.TECNICO)
+    validar_actor(usuario, permisos.DETALLE_ADICIONAL)
     validar_titular_de_la_toma(
         orden,
         usuario,
@@ -903,7 +903,7 @@ def aprobar_control_tecnico(
     PROC-REP-220 es ACT-RECEP: el control lo hace Recepcion, no el
     tecnico que ejecuto el trabajo.
     """
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    validar_actor(usuario, permisos.CONTROL_TECNICO)
     _exigir_orden_en_control(orden)
 
     if detalle_id is not None:
@@ -989,7 +989,7 @@ def rechazar_control_tecnico(
     se conservan. Que sigue lo decide el resolver (PROC-REP-211), que
     compone el caller (``application.cierre.rechazar_control``).
     """
-    validar_actor(usuario, RolUsuario.RECEPCION)
+    validar_actor(usuario, permisos.CONTROL_TECNICO)
     if not motivo.strip():
         raise PrecondicionInvalidaError(
             "El rechazo del control exige un motivo (BR-REP-008)."

@@ -24,12 +24,12 @@ from app.domain.models import (
     MovimientoInsumo,
     OrdenReparacion,
     ReparacionDetail,
-    RolUsuario,
     TipoReparacionInsumos,
     TomaOrden,
     Usuario,
 )
 
+from . import permisos
 from .autorizacion import validar_actor, validar_alguno_de
 from .autorizacion_cliente import exigir_autorizacion_vigente
 from .cancelaciones import desistimiento_pendiente
@@ -412,7 +412,7 @@ def ejecutar_detalle(
     trabajarla. Si otro tecnico continua el mismo Detalle mas adelante,
     lo hace con una Ejecucion nueva, no tomando la ajena.
     """
-    validar_actor(usuario, RolUsuario.TECNICO)
+    validar_actor(usuario, permisos.EJECUCION)
 
     ejecucion = ejecucion_activa(orden)
     if ejecucion is None:
@@ -675,7 +675,7 @@ def _registrar_fin_ejecucion(
     liberacion ajena: quien la hace ya se valido alli.
     """
     if validar_titular:
-        validar_actor(usuario, RolUsuario.TECNICO)
+        validar_actor(usuario, permisos.EJECUCION)
 
     ejecucion = next(
         (e for e in orden.ejecuciones if e.id == ejecucion_id),

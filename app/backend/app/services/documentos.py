@@ -52,7 +52,6 @@ from app.domain.models import (
     RegistroAutorizacionCliente,
     ReparacionDetail,
     ResultadoAutorizacion,
-    RolUsuario,
     TipoDocumento,
     TipoEntrega,
     TrabajoAutorizadoEnDocumento,
@@ -65,6 +64,7 @@ from app.domain.models import (
 )
 from app.domain.politicas import CondicionComercial, politica_de
 
+from . import permisos
 from .autorizacion import validar_alguno_de
 from .autorizacion_cliente import (
     decision_vigente,
@@ -105,7 +105,7 @@ _CON_TRABAJOS_AUTORIZADOS = (
 )
 
 # Lo emite quien registra la decision del cliente (PROC-REP-046).
-ROLES_COMPROBANTE_AUTORIZACION = (RolUsuario.RECEPCION,)
+ROLES_COMPROBANTE_AUTORIZACION = permisos.COMPROBANTE_AUTORIZACION
 
 LEYENDA_RECEPCION = (
     "Este comprobante acredita la recepcion del equipo en las condiciones "

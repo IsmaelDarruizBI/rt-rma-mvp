@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_serializer, model_validator
 
 from .enums import RolUsuario
 
@@ -43,9 +43,61 @@ class Cliente(BaseModel):
 
 
 class Usuario(BaseModel):
-    """Usuario operativo de RMA. Sin autenticacion en el MVP."""
+    """Usuario operativo de RMA.
+
+    Varios roles por usuario (DC27A, DEC-MI-12): ``roles`` son todos los
+    roles asignados y sus permisos se suman (siempre sujetos a las
+    restricciones de contexto de cada regla). ``rol`` es el rol principal,
+    el primero de ``roles``: lo usan las pantallas que muestran un solo rol
+    y los datos anteriores, que solo traen ``rol`` (se leen como un usuario
+    con ese unico rol, sin migrar nada).
+    """
 
     id: str
     nombre: str
     rol: RolUsuario
+    roles: tuple[RolUsuario, ...] = ()
     activo: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def _rol_y_roles(cls, datos: Any) -> Any:
+        if not isinstance(datos, dict):
+            return datos
+        datos = dict(datos)
+        roles = list(datos.get("roles") or ())
+        rol = datos.get("rol")
+        if rol is None and roles:
+            datos["rol"] = roles[0]
+        elif rol is not None and not roles:
+            datos["roles"] = [rol]
+        return datos
+
+    @model_validator(mode="after")
+    def _principal_entre_los_roles(self) -> "Usuario":
+        roles = tuple(dict.fromkeys(self.roles))
+        if self.rol not in roles:
+            roles = (self.rol, *roles)
+        if roles != self.roles:
+            object.__setattr__(self, "roles", roles)
+        return self
+
+    @model_serializer(mode="wrap")
+    def _sin_roles_si_es_uno(self, handler):
+        """Un usuario de un solo rol se guarda como siempre (solo ``rol``):
+        los catalogos JSON existentes no cambian de forma."""
+        datos = handler(self)
+        if isinstance(datos, dict) and len(self.roles) <= 1:
+            datos.pop("roles", None)
+        return datos
+
+    def tiene_rol(self, rol: RolUsuario) -> bool:
+        return rol in self.roles
+
+    def tiene_alguno(self, roles) -> bool:
+        return any(rol in self.roles for rol in roles)
+
+    def rol_habilitante(self, roles) -> RolUsuario | None:
+        """El primero de sus roles que habilita la accion (o ``None``)."""
+        permitidos = tuple(roles)
+        return next((r for r in self.roles if r in permitidos), None)

@@ -33,6 +33,7 @@ import type {
 import { nombreDeUsuario } from "./DetalleOrden";
 import { ESTADO_PAGO, etiqueta } from "./etiquetas";
 import { TituloAccion, UbicacionAccion } from "./presentacion";
+import { tieneAlguno } from "../../lib/roles";
 
 interface Props {
   orden: Orden;
@@ -97,7 +98,7 @@ function nombreDeMedio(medios: MedioPago[], medioId: string | null): string {
 export function habilitada(accion: Accion, actor: Usuario | null): boolean {
   return (
     actor !== null &&
-    (accion.roles.length === 0 || accion.roles.includes(actor.rol))
+    (accion.roles.length === 0 || tieneAlguno(actor, accion.roles))
   );
 }
 

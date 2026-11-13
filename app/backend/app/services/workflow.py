@@ -21,6 +21,7 @@ from app.domain.models import (
     OrdenReparacion,
     TipoReferenciaHistorial,
 )
+from app.services.permisos import rol_habilitante
 
 
 def registrar_paso(
@@ -58,6 +59,7 @@ def registrar_paso(
             accion=accion,
             fecha=fecha,
             usuario_id=usuario_id,
+            rol=rol_habilitante(usuario_id),
             reparacion_detail_id=reparacion_detail_id,
             ejecucion_id=ejecucion_id,
             observacion=observacion,
@@ -102,6 +104,7 @@ def registrar_accion_funcional(
             accion=accion,
             fecha=fecha,
             usuario_id=usuario_id,
+            rol=rol_habilitante(usuario_id),
             reparacion_detail_id=reparacion_detail_id,
             ejecucion_id=ejecucion_id,
             pago_id=pago_id,
