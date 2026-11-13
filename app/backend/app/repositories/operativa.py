@@ -5,7 +5,7 @@ en PostgreSQL se administra con auditoria."""
 from collections.abc import Sequence
 from typing import Protocol
 
-from app.domain.models import CambioConfiguracion
+from app.domain.models import CambioConfiguracion, Insumo
 from app.domain.models.comunicaciones import (
     ConsentimientoComunicacion,
     PlantillaMensaje,
@@ -33,6 +33,15 @@ class ConfiguracionOperativaRepository(Protocol):
 
     def guardar_parametro(
         self, clave: str, valor: str, cambio: CambioConfiguracion
+    ) -> None: ...
+
+    # DEC-MI-13: alta y edicion de insumos (sin tocar el stock).
+    def guardar_insumo(
+        self,
+        insumo: Insumo,
+        *,
+        nuevo: bool,
+        cambios: Sequence[CambioConfiguracion],
     ) -> None: ...
 
     # DEC-MI-08: plantillas de WhatsApp.

@@ -21,6 +21,7 @@ import type {
   Usuario,
 } from "../../types/api";
 import { tieneRol } from "../../lib/roles";
+import { InsumosAdmin } from "./Insumos";
 import { MotivosOperativos, ParametrosOperativos } from "./Operativa";
 import { Permisos } from "./Permisos";
 import { PlantillasMensaje } from "./Plantillas";
@@ -51,6 +52,7 @@ type Pestana =
   | "motivos"
   | "parametros"
   | "plantillas"
+  | "insumos"
   | "usuarios"
   | "permisos"
   | "auditoria";
@@ -59,6 +61,7 @@ const PESTANAS: { valor: Pestana; texto: string }[] = [
   { valor: "motivos", texto: "Motivos" },
   { valor: "parametros", texto: "Parámetros" },
   { valor: "plantillas", texto: "Plantillas" },
+  { valor: "insumos", texto: "Insumos" },
   { valor: "usuarios", texto: "Usuarios y roles" },
   { valor: "permisos", texto: "Permisos" },
   { valor: "auditoria", texto: "Auditoría" },
@@ -338,6 +341,7 @@ export function ConfiguracionPanel({ actor }: { actor: Usuario | null }) {
       {pestana === "motivos" && <MotivosOperativos actor={actor} />}
       {pestana === "parametros" && <ParametrosOperativos actor={actor} />}
       {pestana === "plantillas" && <PlantillasMensaje actor={actor} />}
+      {pestana === "insumos" && <InsumosAdmin actor={actor} />}
 
       {pestana === "catalogos" && (
       <>

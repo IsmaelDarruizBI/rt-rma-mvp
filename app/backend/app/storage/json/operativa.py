@@ -32,3 +32,6 @@ class JsonConfiguracionOperativa:
 
     def guardar_plantilla(self, plantilla, *, nuevo, cambios) -> None:
         raise NotImplementedError
+
+    def guardar_insumo(self, insumo, *, nuevo, cambios) -> None:
+        raise NotImplementedError

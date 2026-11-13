@@ -5,7 +5,7 @@ Administracion y sobre PostgreSQL, con auditoria. La consulta de motivos y
 el plazo vigente valen en los dos modos (en JSON, los valores iniciales).
 """
 
-from app.domain.models import OrdenReparacion
+from app.domain.models import Insumo, OrdenReparacion
 from app.domain.models.operativa import (
     PARAMETRO_PLAZO_RETIRO,
     PARAMETROS_INICIALES,
@@ -18,6 +18,7 @@ from app.services.exceptions import (
 )
 from app.services.operativa import (
     cambio_de_parametro,
+    cambios_de_insumo,
     cambios_de_motivo,
     registrar_seguimiento_retiro,
     texto_de_motivo,
@@ -124,3 +125,55 @@ def registrar_seguimiento(
         )
         contexto.ordenes.guardar(orden)
     return orden
+
+
+def guardar_insumo(
+    contexto: ApplicationContext,
+    *,
+    usuario_id: str,
+    clave: str,
+    codigo: str,
+    nombre: str,
+    unidad: str | None,
+    activo: bool,
+    nuevo: bool,
+) -> Insumo:
+    """Alta o edicion de un insumo (DEC-MI-13), con auditoria. El stock de
+    un insumo nuevo empieza en cero: entra con movimientos de inventario."""
+    repositorio = _editable(contexto)
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+    with contexto.transaccion():
+        existentes = {i.id: i for i in contexto.catalogos.listar_insumos()}
+        anterior = existentes.get(clave.strip())
+        if nuevo and anterior is not None:
+            raise PrecondicionInvalidaError(f"Ya existe el insumo {clave}.")
+        if not nuevo and anterior is None:
+            raise EntidadNoEncontradaError(f"No existe el insumo {clave}")
+        codigo = codigo.strip()
+        if anterior is not None and codigo != anterior.codigo:
+            # Como en la base (rma_backend solo actualiza nombre, unidad y
+            # activo): el codigo identifica al insumo en lo registrado.
+            raise PrecondicionInvalidaError(
+                "El codigo de un insumo no cambia: da de alta otro."
+            )
+        if any(
+            i.codigo == codigo and i.id != clave.strip()
+            for i in existentes.values()
+        ):
+            raise PrecondicionInvalidaError(
+                f"Otro insumo ya usa el codigo {codigo}."
+            )
+        insumo = Insumo(
+            id=clave.strip(),
+            codigo=codigo,
+            nombre=nombre.strip(),
+            unidad=(unidad or "").strip() or None,
+            stock_fisico=anterior.stock_fisico if anterior else 0,
+            activo=activo,
+        )
+        cambios = cambios_de_insumo(
+            anterior, insumo, usuario=usuario, fecha=fecha
+        )
+        repositorio.guardar_insumo(insumo, nuevo=nuevo, cambios=cambios)
+    return insumo

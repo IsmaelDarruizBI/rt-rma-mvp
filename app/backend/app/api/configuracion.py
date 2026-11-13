@@ -25,6 +25,7 @@ from app.application.configuracion import (
     historial_de_cambios,
 )
 from app.application.operativa import (
+    guardar_insumo,
     guardar_motivo,
     guardar_parametro,
     listar_motivos,
@@ -258,3 +259,54 @@ def put_parametro(
     return guardar_parametro(
         contexto, usuario_id=cuerpo.usuario_id, clave=clave, valor=cuerpo.valor
     )
+
+
+class InsumoIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+    codigo: str = Field(min_length=1)
+    nombre: str = Field(min_length=1)
+    unidad: str | None = None
+    activo: bool = True
+
+
+class AltaInsumoIn(InsumoIn):
+    clave: str = Field(min_length=1)
+
+
+@router.get("/supplies")
+def get_insumos_admin(contexto: ContextoDep) -> dict:
+    return {
+        "editable": contexto.operativa.editable,
+        "insumos": [
+            i.model_dump(mode="json")
+            for i in contexto.catalogos.listar_insumos()
+        ],
+    }
+
+
+@router.post("/supplies")
+def post_insumo(cuerpo: AltaInsumoIn, contexto: ContextoDep) -> dict:
+    return guardar_insumo(
+        contexto,
+        usuario_id=cuerpo.usuario_id,
+        clave=cuerpo.clave,
+        codigo=cuerpo.codigo,
+        nombre=cuerpo.nombre,
+        unidad=cuerpo.unidad,
+        activo=cuerpo.activo,
+        nuevo=True,
+    ).model_dump(mode="json")
+
+
+@router.put("/supplies/{clave}")
+def put_insumo(clave: str, cuerpo: InsumoIn, contexto: ContextoDep) -> dict:
+    return guardar_insumo(
+        contexto,
+        usuario_id=cuerpo.usuario_id,
+        clave=clave,
+        codigo=cuerpo.codigo,
+        nombre=cuerpo.nombre,
+        unidad=cuerpo.unidad,
+        activo=cuerpo.activo,
+        nuevo=False,
+    ).model_dump(mode="json")

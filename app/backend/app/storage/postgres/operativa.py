@@ -3,7 +3,7 @@ auditoria en la misma transaccion (DEC-MI-13, 14 y 15)."""
 
 from collections.abc import Sequence
 
-from app.domain.models import CambioConfiguracion
+from app.domain.models import CambioConfiguracion, Insumo
 from app.domain.models.comunicaciones import PlantillaMensaje
 from app.domain.models.operativa import MotivoOperativo, TipoMotivo
 from app.repositories.exceptions import (
@@ -93,6 +93,25 @@ _ACTUALIZAR_PLANTILLA = consulta(
     modo=ESCRITURA,
 )
 
+_INSERTAR_INSUMO = consulta(
+    "operativa.insertar_insumo",
+    """
+    INSERT INTO rma.insumo (clave, codigo, nombre, unidad, activo)
+    VALUES (%(clave)s, %(codigo)s, %(nombre)s, %(unidad)s, %(activo)s)
+    ON CONFLICT DO NOTHING
+    """,
+    modo=ESCRITURA,
+)
+_ACTUALIZAR_INSUMO = consulta(
+    "operativa.actualizar_insumo",
+    """
+    UPDATE rma.insumo
+       SET nombre = %(nombre)s, unidad = %(unidad)s, activo = %(activo)s
+     WHERE clave = %(clave)s
+    """,
+    modo=ESCRITURA,
+)
+
 
 class PostgresConfiguracionOperativa:
     editable = True
@@ -165,6 +184,30 @@ class PostgresConfiguracionOperativa:
                 f"No existe el parametro {clave}"
             )
         self._auditoria._auditar(ejecutor, [cambio])
+
+    def guardar_insumo(
+        self,
+        insumo: Insumo,
+        *,
+        nuevo: bool,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None:
+        self._exigir_transaccion()
+        ejecutor = self._unidad.ejecutor()
+        parametros = {
+            "clave": insumo.id,
+            "codigo": insumo.codigo,
+            "nombre": insumo.nombre,
+            "unidad": insumo.unidad,
+            "activo": insumo.activo,
+        }
+        consulta_sql = _INSERTAR_INSUMO if nuevo else _ACTUALIZAR_INSUMO
+        if ejecutor.ejecutar(consulta_sql, parametros) != 1:
+            raise PersistenciaError(
+                f"No se pudo guardar el insumo {insumo.id}: el codigo o "
+                "el identificador ya existe."
+            )
+        self._auditoria._auditar(ejecutor, cambios)
 
     def listar_plantillas(self) -> list[PlantillaMensaje]:
         with self._unidad.lectura() as lector:

@@ -16,6 +16,7 @@ from datetime import datetime
 from app.domain.models import (
     CambioConfiguracion,
     EntidadConfiguracion,
+    Insumo,
     OrdenReparacion,
     Usuario,
 )
@@ -160,3 +161,48 @@ def registrar_seguimiento_retiro(
     )
     nueva.updated_at = fecha
     return nueva
+
+
+CAMPOS_INSUMO = ("codigo", "nombre", "unidad", "activo")
+
+
+def cambios_de_insumo(
+    anterior: Insumo | None,
+    nuevo: Insumo,
+    *,
+    usuario: Usuario,
+    fecha: datetime,
+) -> list[CambioConfiguracion]:
+    """Alta o edicion de un insumo (DEC-MI-13). El stock no se edita aca:
+    solo cambia con movimientos del inventario."""
+    validar_alguno_de(usuario, permisos.CONFIGURACION_ADMINISTRAR)
+    if not nuevo.id.strip() or not nuevo.codigo.strip():
+        raise PrecondicionInvalidaError(
+            "El insumo necesita un identificador y un codigo."
+        )
+    if not nuevo.nombre.strip():
+        raise PrecondicionInvalidaError("El insumo necesita un nombre.")
+    cambios = [
+        CambioConfiguracion(
+            entidad=EntidadConfiguracion.INSUMO,
+            clave=nuevo.id,
+            campo=campo,
+            valor_anterior=(
+                texto(getattr(anterior, campo)) if anterior else None
+            ),
+            valor_nuevo=texto(getattr(nuevo, campo)),
+            usuario_id=usuario.id,
+            fecha=fecha,
+        )
+        for campo in CAMPOS_INSUMO
+        if (anterior is None and getattr(nuevo, campo) is not None)
+        or (
+            anterior is not None
+            and texto(getattr(anterior, campo)) != texto(getattr(nuevo, campo))
+        )
+    ]
+    if not cambios:
+        raise PrecondicionInvalidaError(
+            f"El insumo {nuevo.id} ya tiene esos valores: no hay cambios."
+        )
+    return cambios
