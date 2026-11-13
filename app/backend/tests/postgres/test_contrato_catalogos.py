@@ -376,7 +376,9 @@ def test_numeros_enteros_decimales_y_limites(base_vacia, tmp_path):
         pool.close()
 
 
-def test_un_usuario_sin_rol_o_con_dos_roles_es_un_error(base_vacia):
+def test_un_usuario_sin_rol_es_un_error_y_con_dos_tiene_ambos(base_vacia):
+    """DEC-MI-12 (DC27A): un usuario puede tener varios roles; sin ninguno
+    es un error de datos. Antes, dos roles tambien lo eran."""
     _sql(
         base_vacia,
         """
@@ -391,9 +393,11 @@ def test_un_usuario_sin_rol_o_con_dos_roles_es_un_error(base_vacia):
     catalogos, _, pool = _postgres(base_vacia)
     try:
         assert catalogos.obtener_usuario("U-UNO").rol.value == "TECNICO"
-        for codigo, roles in (("U-SIN", 0), ("U-DOS", 2)):
-            with pytest.raises(PersistenciaError, match=f"{roles} roles"):
-                catalogos.obtener_usuario(codigo)
+        dos = catalogos.obtener_usuario("U-DOS")
+        assert {r.value for r in dos.roles} == {"TECNICO", "RECEPCION"}
+        assert dos.rol in dos.roles
+        with pytest.raises(PersistenciaError, match="no tiene roles"):
+            catalogos.obtener_usuario("U-SIN")
         with pytest.raises(PersistenciaError, match="roles"):
             catalogos.listar_usuarios()
     finally:
