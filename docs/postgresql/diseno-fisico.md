@@ -90,6 +90,15 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 | M2 | `ejecucion_insumo`, `control_tecnico` | `ejecucion` (comp.), `insumo`, `detalle` | Solo lo declarado; inmutables |
 | M2 | `evaluacion_tecnica` | `detalle`, `usuario` | Posición única por Detalle; motivo salvo CONFIRMADO; inmutable (macroiteración V1.4) |
 | M5 | `cambio_configuracion` | `usuario` | Inmutable; vista `historial_precio` (macroiteración V1.4) |
+| M5 | `permiso` | — | Roles que habilitan cada permiso configurable; sin fila rige el predeterminado (DEC-MI-12, `20261113000100`) |
+| M2 | `reclamo_garantia` | `orden`, `usuario` | Inmutable salvo su continuación, una sola vez (DEC-MI-02, `20261113000400`) |
+| M6 | `motivo_operativo`, `parametro` | — | Motivos de cancelación e interrupción y parámetros operativos; no se borran (DEC-MI-13/14/15, `20261113000500`) |
+| M2 | `seguimiento_retiro` | `orden`, `usuario` | Posición única por Orden; inmutable (DEC-MI-14) |
+| M6 | `plantilla_mensaje` | — | Plantillas de WhatsApp; no se borran (DEC-MI-08, `20261113000600`) |
+| M2 | `comunicacion_cliente`, `comunicacion_confirmacion` | `orden`, `usuario`, `comunicacion_cliente` | Intento inmutable; una confirmación por intento, inmutable; nunca entregado ni leído (DEC-MI-08) |
+| M1 | `consentimiento_comunicacion` | `cliente`, `usuario` | Historial inmutable por finalidad y canal (DEC-MI-08) |
+| M4 | `firma_documento` | `documento_emitido`, `usuario` | Inmutable; fuera de la Orden, admite la Orden cerrada (DEC-MI-06, `20261113000700`) |
+| M2 | `correccion_vinculo_equipo` | `orden`, `usuario` | Posición única por Orden; inmutable; códigos de Equipo como texto (DEC-MI-11, `20261113000800`) |
 | M3 | `insumo` | — | `stock_fisico >= stock_reservado >= 0`; nace en cero |
 | M3 | `movimiento_inventario` | `insumo`, `orden`, `detalle` y `ejecucion` (comp.), sí mismo (comp.), `motivo_ajuste`, `usuario`, `accion_usuario` | Vínculos por tipo; DESPERDICIO y DEVOLUCION sin operación; inmutable; sin ON CONFLICT |
 | M3 | `override_recursos`, `override_insumo` | `detalle_version` (comp.), `insumo` | Vale para una versión; cálculo del impacto verificado |
@@ -144,6 +153,19 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 
 - **`20261112000100_evaluacion_tecnica.sql`:** `detalle.origen_diagnostico`, que admite vacío (RECEPCION o REVISION_TECNICA; vacío en los Detalles anteriores); DESCARTE_TECNICO en `cancelacion_origen`; la tabla inmutable `evaluacion_tecnica`; equivalencias de 182, 183, 184 y 128.
 - **`20261112000200_configuracion_auditada.sql`:** la tabla inmutable `cambio_configuracion`, con `secuencia` identity; la vista `historial_precio`; DELETE en `mesa_tipo_reparacion` para `rma_backend`.
+
+**Macroiteración integral (rama `feat/macro-integral`, aditivas, aplicadas solo en la base local; ninguna en Supabase):**
+
+- **`20261113000100_roles_permisos.sql`:** tabla `permiso` (roles configurados por permiso) y más entidades admitidas en `cambio_configuracion` (DEC-MI-12).
+- **`20261113000200_ajuste_por_detalle.sql`:** `descuento.detalle_id` y `v_orden_saldo` recalculada con el ajuste por Detalle (DEC-MI-03).
+- **`20261113000300_politica_garantia.sql`:** plazos con y sin check-in y política RMA por Tipo; motivo del check-in; copia en el Detalle (DEC-MI-01, 05).
+- **`20261113000400_reclamos_garantia.sql`:** tabla `reclamo_garantia` y la equivalencia ACC-REP-MI02 → EV-REP-001 (DEC-MI-02).
+- **`20261113000500_motivos_parametros_retiro.sql`:** `motivo_operativo`, `parametro` (PLAZO_RETIRO_DIAS = 30) y `seguimiento_retiro` (DEC-MI-13/14/15).
+- **`20261113000600_comunicaciones.sql`:** `plantilla_mensaje` (cinco iniciales), `comunicacion_cliente`, `comunicacion_confirmacion` y `consentimiento_comunicacion` (DEC-MI-08).
+- **`20261113000700_firmas_documentos.sql`:** `firma_documento` (DEC-MI-06).
+- **`20261113000800_identidad_equipo.sql`:** `correccion_vinculo_equipo` y el comentario de `equipo` (DEC-MI-11).
+
+Con ellas el esquema `rma` tiene 58 tablas y 7 vistas (`tests/postgres/test_base_local.py`, `supabase/tests/10_esquema.sql`).
 
 Las dos se aplicaron en São Paulo el 12/11/2026, con 23 migraciones y 47 tablas ([`ESTADO_PROYECTO.md`](../ESTADO_PROYECTO.md), sección B).
 

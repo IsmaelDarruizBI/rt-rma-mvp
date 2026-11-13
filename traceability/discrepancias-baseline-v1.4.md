@@ -2,13 +2,13 @@
 
 La baseline funcional vigente es PROC-REP V1.4, aprobada en DC01 y sincronizada desde `rt-rma-app` (DC02):
 
-- Commit de origen: `45562633d659a9630c2f9b05a7ffdf1073d2591e` (rama `spec/macro-integral`: las decisiones DEC-MI-01 a 15 de la macroiteración integral, sobre `spec/macro-v14`, con DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
+- Commit de origen: `99c69e827bbb0f82be435f4c33e53b91dec4a44d` (rama `spec/macro-integral`: las decisiones DEC-MI-01 a 15 de la macroiteración integral y su estado de implementación, sobre `spec/macro-v14`, con DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
 - Contenido funcional aprobado en `b6cc3a5`.
 - Manifiesto de procedencia: `business/FUNCTIONAL_SOURCE.json`.
 
 Este documento lista lo que el producto todavía no hace como dice la baseline, y lo que el producto hace sin que la baseline lo defina. **No son fallas de la sincronización documental**: la copia de `business/` es idéntica a la fuente. Son trabajo de implementación o decisiones pendientes.
 
-DC02 no modificó servicios, dominio, endpoints ni frontend. El código evaluado es el de `mvp-v2` en `f270a84`, salvo las decisiones de la sección G, revisadas en la rama `feat/iteracion-1-alineacion-v14` (iteración 1, 11/11/2026), y las de la sección H, revisadas en `feat/macro-v14` (macroiteración, 12/11/2026).
+DC02 no modificó servicios, dominio, endpoints ni frontend. El código evaluado es el de `mvp-v2` en `f270a84`, salvo las decisiones de la sección G, revisadas en la rama `feat/iteracion-1-alineacion-v14` (iteración 1, 11/11/2026), las de la sección H, revisadas en `feat/macro-v14` (macroiteración, 12/11/2026), y las de la sección I, revisadas en `feat/macro-integral` (macroiteración integral, 13/11/2026).
 
 Fuente de los estados de implementación: `business/decisions/decision-log-v1.4.yaml` (`implementation`). Las rutas de evidencia son relativas a `app/backend/app`, salvo que digan otra cosa.
 
@@ -18,54 +18,28 @@ Fuente de los estados de implementación: `business/decisions/decision-log-v1.4.
 
 Las tres que figuraban (DC06, DC07 y DC11) se alinearon en la iteración 1: ver la sección G.
 
-## B. Decisiones no implementadas (26)
+## B. Decisiones no implementadas (8)
 
 | Decisión | Qué dice la baseline | Situación en el producto | Pendientes |
 |---|---|---|---|
-| DC18B | Permisos configurables por evento de custodia | `services/custodia.py:68` (ROLES_RECEPCION_EQUIPO fijo) | ABI-06 |
 | DC19 | Registrar Minorista/Mayorista sin cambios automáticos de precio | `domain/models/personas.py` (Cliente sin clasificación) | - |
-| DC12 | Checklist configurable por tipo de equipo, opcional, con advertencia por información faltante | No existe checklist | - |
-| DEC-MI-01 | Plazo de garantía por Tipo con y sin check-in; política para trabajos en garantía RMA; check-in exigible solo con garantía mayor a cero | `domain/garantia.py` (90/30 fijos; sin check-in, el plazo del Tipo) | ABI-38, ABI-39 |
-| DEC-MI-02 | Registro de reclamos de garantía rechazados y continuación como reparación paga | El rechazo informa los elegibles y no se registra | - |
-| DEC-MI-03 | Descuento y cortesía por Orden o por Detalle, para Recepción, Coordinación y Administración; por debajo de lo cobrado deja saldo a favor | `services/descuentos.py` (un ajuste por Orden; el descuento lo aplican Recepción y Administración y se rechaza por debajo de lo cobrado) | - |
-| DEC-MI-04 | Custodia: Recepción y Administración registran sus eventos | `services/custodia.py` (Recepción y Administración, fijo) | - |
-| DEC-MI-05 | Corrección del check-in antes de entregar, con motivo y versiones | El check-in se vuelve a registrar sin motivo ni versiones | - |
-| DEC-MI-06 | Firma opcional en pantalla o foto del documento firmado | Los documentos no tienen firma | - |
-| DEC-MI-07 | Corrección de los datos del ingreso con motivo y auditoría | Corrección implementada sin motivo obligatorio ni auditoría de valores | ABI-41 |
-| DEC-MI-08 | WhatsApp asistido con plantillas, historial y consentimiento por finalidad | `whatsapp.ts` comparte sin plantillas, historial ni consentimiento | ABI-13 (etapa 2) |
-| DEC-MI-09 | Compras: solicitud, orden de compra, recepciones parciales e ingreso | No existe módulo de Compras | - |
-| DEC-MI-10 | Lotes, número de serie y desperdicio con trazabilidad compra-consumo | Movimientos sin lote; existe devolución, no desperdicio | - |
-| DEC-MI-11 | Identidad propia del Equipo, reutilización confirmada y corrección auditada | El Equipo se copia en cada Orden; antecedentes solo de consulta | - |
-| DEC-MI-12 | Varios roles por usuario y permisos configurables con auditoría | Un rol por usuario; permisos fijos en el código | - |
-| DEC-MI-13 | Administración de los catálogos y parámetros, con auditoría | Solo Tipos de Reparación y Mesas | - |
-| DEC-MI-14 | Retiro demorado: plazo configurable, alertas y seguimientos, sin cierre automático | No existe | ABI-40 |
-| DEC-MI-15 | Catálogos de motivos de cancelación e interrupción con «Otro» | Motivos en texto libre | ABI-29 (medios de devolución) |
-| DC26 | Firma en pantalla o archivo firmado, ligados al documento y su versión | Los documentos no tienen firma | ABI-08 |
+| DC12 | Checklist configurable por tipo de equipo, opcional, con advertencia por información faltante | No existe checklist. **Falta una decisión:** qué es el «tipo de equipo» y de dónde lo toma la Orden (no hay catálogo de tipos de equipo; DEC-MI-13 lo nombra sin definirlo) | - |
+| DEC-MI-09 | Compras: solicitud, orden de compra, recepciones parciales e ingreso | No existe módulo de Compras; el ingreso de stock manual sigue en Inventario. No entró en la macroiteración integral | - |
+| DEC-MI-10 | Lotes, número de serie y desperdicio con trazabilidad compra-consumo | Movimientos sin lote; existe devolución, no desperdicio. No entró en la macroiteración integral: exige la transición controlada del stock existente | - |
 | DC24 | Compras en un proceso propio, después de PostgreSQL | No existe módulo de Compras | ABI-12 |
 | DC24LOT | Movimientos por lote con trazabilidad hasta el Detalle | Movimientos sin lote | ABI-12 |
-| DC30 | Consentimiento y preferencias por finalidad | No existe registro de consentimiento | ABI-31 |
-| DC27A | Varios roles por usuario; permisos como unión | `domain/models/personas.py:45-51` (Usuario.rol único) | - |
-| DC27B | Permisos de consulta configurables | Las consultas GET no están protegidas | - |
 | DC27C | Supabase Auth; usuarios, roles y permisos en PostgreSQL | Sin autenticación | - |
 | DC02 | `rt-rma-mvp/business` es una copia generada y verificada | **Implementada por esta sincronización.** El registro de `rt-rma-app` todavía dice NO_IMPLEMENTADO porque se evaluó antes; corresponde actualizarlo en la fuente | - |
 
-## C. Decisiones implementadas en parte (13)
+## C. Decisiones implementadas en parte (5)
 
 | Decisión | Qué dice la baseline | Qué hay en el producto | Qué falta | Pendientes |
 |---|---|---|---|---|
-| DC03 | Priorizan Coordinación o Recepción; entregan Administración o Recepción; permisos modificables | `services/ordenes.py:74` y `:79`: roles constantes | Configurarlos desde Administración | - |
-| DP-01 | Cambio de prioridad por Técnico, Recepción y Coordinación, configurable y trazado | `services/ordenes.py:694` y la observación «anterior -> nueva» en el historial | Rol configurable | - |
-| DP-02 | Liberación de una Orden ajena por Técnico y Coordinación, con advertencia, motivo y auditoría | `services/tomas.py:373` y `services/ejecuciones.py:523`: la interrupción ocurre solo dentro de la liberación | Rol configurable | ABI-36 |
-| DC08 | Permisos por acción y contexto; tres tipos de cancelación | Roles fijos (`services/cancelaciones.py`); los tres tipos de cancelación, con el descarte técnico de la evaluación (`OrigenCancelacion.DESCARTE_TECNICO`) | Permisos configurables | ABI-06, ABI-23 |
 | DC18 | Cuatro situaciones de custodia con eventos y responsables | `domain/models/enums.py:303-327`: seis valores calculados | Unificar el modelo y registrar cada evento con responsable | - |
-| DC20 | Identidad física propia del Equipo; reutilización por IMEI confirmada; `tp_id` como referencia comercial | El Equipo se copia en cada Orden; «Antecedentes del equipo» consulta las otras Órdenes por IMEI o número de serie (`application/consultas_operativas.py`), sin decidir que sean el mismo equipo | Equipo con historia propia y confirmación de reutilización por Recepción | ABI-05 |
-| DC15A | Política de garantía configurable por tipo de reparación y check-in | `domain/garantia.py:15-18`: 90/30 fijo, garantía sugerida y definitiva por Detalle | Política configurable y precedencias; criterio de garantía aplicable | ABI-03, ABI-37 |
-| DC23 | Administración gestiona catálogos y valores predeterminados; permisos delegables | Pantalla «Configuración» (solo Administración, sobre PostgreSQL): alta, edición y desactivación de Tipos de Reparación y Tipos habilitados por Mesa (`application/configuracion.py`) | Insumos, checklist (DC12), políticas de garantía, plantillas, parámetros y delegación por permisos | ABI-03, ABI-13 |
-| DC23AUD | Auditoría de cambios de configuración; historial de precios | `rma.cambio_configuracion` (inmutable, un registro por campo con valor anterior y nuevo, usuario y fecha) y la vista `rma.historial_precio`; los Detalles conservan su snapshot | La auditoría de los catálogos que todavía no se administran | - |
+| DC23 | Administración gestiona catálogos y valores predeterminados; permisos delegables | Configuración (solo Administración, sobre PostgreSQL; en JSON de solo lectura): Tipos de Reparación con sus políticas de garantía, Mesas, usuarios y roles, permisos, motivos, parámetros, plantillas e insumos, con auditoría | Checklist por tipo de equipo (DC12) y precios y costos de compra (DEC-MI-09) | - |
+| DEC-MI-13 | Catálogos administrados con permisos, auditoría y referencias históricas | Los de DC23, cada uno auditado en `rma.cambio_configuracion`; lo registrado conserva su copia | Checklist (DC12) y precios y costos de compra (DEC-MI-09) | - |
+| DC27B | Permisos de consulta configurables | Reportes, reclamos, antecedentes y búsqueda de clientes con permisos de consulta configurables (`services/permisos.py`) | La consulta de Órdenes y catálogos queda abierta a todo usuario autenticado | - |
 | GLO-01 | Estación = Mesa de trabajo, con «Mesa de trabajo» como nombre visible | Una sola entidad; la interfaz dice «Estación de trabajo» | Texto visible | - |
-| DC09 | Ajuste Comercial (CORTESIA o DESCUENTO) por Orden o por Detalle | `services/descuentos.py`: un Ajuste Comercial vigente por Orden, clase DESCUENTO (Recepción o Administración, como en el UAT) o CORTESIA total o parcial (Recepción, Coordinación RMA o Administración, DEC-IT1-02) | Ajuste por Detalle; permiso inicial del DESCUENTO | ABI-09, ABI-10 |
-| DC10 | Anulación de Pagos por Administración, delegable, con motivo, sin borrar el Pago | `services/pagos.py:386-416` | Delegación configurable (depende de DC08) | - |
-| DC25 | WhatsApp asistido con plantillas e historial (etapa 1) | `app/frontend/src/features/ordenes-reparacion/whatsapp.ts`: comparte sin plantillas ni historial | Plantillas e historial de envíos | ABI-13 |
 
 ## D. Diferencias de recorrido entre el grafo V1.4 y lo que registra el backend
 
@@ -132,3 +106,20 @@ Sin decisiones nuevas (12/11/2026). El registro de origen refleja este estado: D
 | DC07, DC07C, VAR-REP-043 | Desistimiento total con una Ejecución activa como proceso guiado | Se registra la solicitud en cada trabajo afectado; al interrumpir, el técnico los cancela juntos (211 → 305); lo COMPLETO se conserva | - |
 | BR-REP-022 | Antecedentes del Equipo | Consulta por IMEI o número de serie en el detalle de la Orden | ABI-05 |
 | DC23, DC23AUD | Administración de catálogos auditada | Tipos de Reparación y Mesas con auditoría e historial de precios | Ver la sección C |
+
+## I. Alineadas en la macroiteración integral (rama `feat/macro-integral`)
+
+Implementación de DEC-MI-01 a 15 (13/11/2026), sin decisiones nuevas. El registro de origen (`99c69e8`) refleja este estado. Detalle de pruebas: `docs/ESTADO_PROYECTO.md`.
+
+| Decisión | Qué hace el producto ahora | Commit | Qué sigue pendiente |
+|---|---|---|---|
+| DEC-MI-12, DC27A, DC08, DC03, DP-01, DP-02, DC10, DC18B, DEC-MI-04 | Varios roles por usuario; permisos por rol configurables desde Configuración con los predeterminados de antes; el historial guarda el rol habilitante; nunca sin un Administrador | `c47903e` | DC27B (sección C) |
+| DEC-MI-03, DC09 | Ajuste comercial por Orden o por Detalle, sin prorrateo; por debajo de lo cobrado deja saldo a favor y la entrega exige devolverlo | `85f42cf` | - |
+| DEC-MI-01, DC15A | Plazos por Tipo con y sin check-in; política para trabajos en garantía RMA; el ajuste manual prevalece; check-in exigible solo con garantía mayor a cero | `cc46121` | ABI-38, ABI-39 |
+| DEC-MI-05, DEC-MI-07 | Check-in corregido con motivo y registros anteriores conservados; corrección del ingreso con motivo y valores anteriores y nuevos, sin tocar los comprobantes emitidos | `cc46121`, `7a79d97` | ABI-41 |
+| DEC-MI-02 | Reclamo de garantía rechazado como registro propio y continuación paga vinculada, sin duplicados | `75948ac` | - |
+| DEC-MI-15, DEC-MI-14 | Motivos de cancelación e interrupción por catálogo («Otro» con descripción); plazo de retiro configurable, bandeja de retiro demorado y seguimientos, sin cierre automático | `ac7a56d` | ABI-29 (medios de devolución), ABI-40 |
+| DEC-MI-08, DC25, DC30 | WhatsApp asistido con plantillas editables, mensaje editable, intento y confirmación manual (nunca entregado ni leído); consentimiento por finalidad y canal | `b4dd52c` | ABI-13 (etapa 2, fuera de alcance) |
+| DEC-MI-06, DC26 | Firma opcional ligada al documento emitido, en pantalla o foto del papel firmado | `6a199dc` | - |
+| DEC-MI-11, DC20 | Identidad del Equipo por IMEI y después serie, sin similitud; historial por identidad; corrección auditada | `c4ca1fd` | - |
+| DC23AUD | Auditoría de todos los catálogos administrados | `5c0536d` y los anteriores | - |

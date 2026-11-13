@@ -5,7 +5,7 @@
 | Ítem | Valor |
 |---|---|
 | Fuente | `rt-rma-app`, rama `spec/macro-integral` (decisiones DEC-MI-01 a 15 sobre `spec/macro-v14`: V1.4 con DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`) |
-| Commit de origen | `45562633d659a9630c2f9b05a7ffdf1073d2591e` |
+| Commit de origen | `99c69e827bbb0f82be435f4c33e53b91dec4a44d` |
 | Contenido funcional aprobado | `b6cc3a5` (DC01, 24/10/2026) |
 | Manifiesto | `business/FUNCTIONAL_SOURCE.json`: repositorio, commit, etiqueta y SHA-256 de cada archivo |
 | Sincronizado | 13/11/2026 (macroiteración integral: DEC-MI-01 a 15); antes, 12/11/2026 (macroiteración: estado de implementación); antes, 11/11/2026 (iteración 1: DEC-IT1-01 a 05), 10/11/2026 (DC31, `ab928b6`) y 24/10/2026, rama `sync/functional-v1.4` |

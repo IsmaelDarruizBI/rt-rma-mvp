@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 12/11/2026.
+**Última actualización:** 13/11/2026.
 
 - **Hecho:**
   - autenticación real y DC31 desplegadas en UAT (10/11, `00020-tux`);
@@ -14,9 +14,11 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - **iteración 1 en UAT** (12/11): migración `20261111000100` en São Paulo, Cloud Run `00027-sas` (`14108ef`) y Vercel `dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2` (sección B);
   - **macroiteración funcional** (12/11): evaluación técnica, reparaciones adicionales, desistimiento total guiado, antecedentes del equipo, reporte operativo y configuración auditada; integrada en `mvp-v2` (`5c6137e`) con el CI en verde (sección B);
   - **macroiteración en UAT** (12/11): migraciones `20261112000100` y `20261112000200` en São Paulo, Cloud Run `00029-kay` (`5c6137e`) y Vercel `dpl_CRXZubTCVE1ALhZmLe2wHhoZhbWR` (sección B);
-  - **UAT validada** (12/11): inicio de sesión de las cuatro cuentas, aislamiento de tokens, lecturas y E2E de la macroiteración con datos ficticios (67 de 67), limpiados después; el UAT volvió a su estado inicial (sección B).
+  - **UAT validada** (12/11): inicio de sesión de las cuatro cuentas, aislamiento de tokens, lecturas y E2E de la macroiteración con datos ficticios (67 de 67), limpiados después; el UAT volvió a su estado inicial (sección B);
+  - **macroiteración integral** (13/11, rama `feat/macro-integral`, commits locales sin publicar): DEC-MI-01 a 08, 11, 12, 14 y 15 implementadas; DEC-MI-13 en parte (sección B).
 - **Falta:**
-  - las decisiones abiertas que bloquean el resto de la macroiteración (`rt-rma-app`, `docs/consolidation/README.md`, sección I);
+  - de la macroiteración integral: Compras (DEC-MI-09), lotes y desperdicio (DEC-MI-10) y el checklist por tipo de equipo (DC12, falta definir qué es el tipo de equipo);
+  - publicar `feat/macro-integral` y `spec/macro-integral`, aplicar las migraciones `20261113000100` a `0800` en Supabase y desplegar: cada paso con autorización;
   - opcional: repetir `medir_api.py` (falló el inicio de sesión, HTTP 400, probablemente por la contraseña tipeada; solo mide tiempos);
   - integrar en `main` (P0-2).
 
@@ -70,6 +72,25 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Macroiteración integral (13/11/2026), rama `feat/macro-integral`
+
+Commits locales sobre `ce37c78`, **sin publicar** (sin push, PR, merge ni despliegue; `main` sin cambios). Especificación: `rt-rma-app` `spec/macro-integral`, con las decisiones en `4556263` y su estado de implementación en `99c69e8` (commits locales), sincronizada en `business/`. Diferencias con la baseline: [`discrepancias-baseline-v1.4.md`](../traceability/discrepancias-baseline-v1.4.md), sección I.
+
+- **Roles y permisos (DEC-MI-12, DC27A, `c47903e`):** varios roles por usuario; catálogo de permisos con los roles de siempre como predeterminados, configurable desde Configuración (Usuarios y roles, Permisos), con auditoría; el historial registra el rol habilitante; nunca queda el sistema sin un Administrador.
+- **Comercial (DEC-MI-03, DC09, `85f42cf`):** ajuste por Orden o por Detalle, sin prorrateo; por debajo de lo cobrado deja saldo a favor y la entrega exige devolverlo.
+- **Garantías (DEC-MI-01, 05 y 07, `cc46121`, `7a79d97`):** plazos por Tipo con y sin check-in y política RMA; check-in corregible con motivo; corrección del ingreso con motivo y valores anteriores y nuevos.
+- **Reclamos (DEC-MI-02, `75948ac`):** reclamo rechazado como registro propio y continuación paga vinculada, sin duplicados; consulta para Recepción, Coordinación y Administración.
+- **Motivos, parámetros y retiro demorado (DEC-MI-15, 14 y 13, `ac7a56d`):** catálogos de motivos de cancelación e interrupción («Otro» con descripción); PLAZO_RETIRO_DIAS = 30; bandeja y alerta de retiro demorado con seguimientos; nunca cierra.
+- **Comunicaciones (DEC-MI-08, `b4dd52c`, `dc06b0a`):** cinco plantillas editables por Administración; el mensaje se edita antes de abrir WhatsApp; se registran el intento y la confirmación manual, nunca «entregado» ni «leído»; consentimiento por finalidad y canal como historial.
+- **Firmas (DEC-MI-06, `6a199dc`):** opcionales, en pantalla o foto del papel firmado, ligadas al documento emitido; también con la Orden entregada.
+- **Identidad del equipo (DEC-MI-11, `c4ca1fd`):** por IMEI y después serie, sin similitud; Recepción elige o «Ninguno» al ingresar; historial por identidad; corrección con motivo.
+- **Insumos (DEC-MI-13, `5c0536d`):** alta y edición auditadas; el código no cambia y el stock solo con movimientos.
+- **Sin implementar:** Compras (DEC-MI-09), lotes y desperdicio (DEC-MI-10) y el checklist por tipo de equipo (DC12, bloqueado: falta definir el tipo de equipo).
+- **Trazabilidad:** decisión → commit en el registro de `rt-rma-app` (`99c69e8`) y en la sección I de las discrepancias. **Pendiente:** el grafo `traceability/macro-integral.yaml` (como `macro-v14.yaml`), que no se armó en esta macroiteración.
+- **Migraciones aditivas, solo locales:** `20261113000100` a `20261113000800` ([`diseno-fisico.md`](postgresql/diseno-fisico.md), sección 3); el esquema queda en 58 tablas y 7 vistas. Ninguna aplicada en Supabase.
+- **Pruebas:** JSON 1790 pasan, 0 fallan (29 omitidas); `tests/postgres` completa: 433 pasan y 1 falla (la prueba de contrato que esperaba que dos roles fueran un error, anterior a DEC-MI-12; corregida en `19ee96c`, su archivo pasa 35 de 35); las pruebas de PostgreSQL de la macroiteración también corren con el rol mínimo `rma_backend`; `ruff` sin errores; frontend: typecheck, 134 tests y build; `validate:all`, `validate:discrepancies` y `validate:v1.4` de `rt-rma-app` en verde; copia de `business/` verificada contra `99c69e8`; búsqueda de secretos limpia.
+- **Revisión en el navegador** (datos ficticios, JSON local): alta con búsqueda de identidad, identidad e historial en la Orden, mensaje preparado, editado, intento registrado (sin llegar a WhatsApp: el pedido se bloqueó), confirmación manual, revocación del consentimiento operativo que impide preparar otro envío, y las pestañas nuevas de Configuración en solo lectura. Encontró las plantillas sin tildes (corregido en `dc06b0a`). Los clics del navegador automatizado dejaron de responder después de que la máquina se suspendió; se usaron eventos del DOM.
 
 ### Validación autenticada y E2E de la macroiteración en UAT (12/11/2026)
 
@@ -593,7 +614,9 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (12/11/2026):** la macroiteración está desplegada y validada en UAT, con los datos de prueba limpiados (sección B). Queda, opcional, repetir `medir_api.py`: solo mide tiempos y pide la contraseña de `administracion`. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
+**Próximo paso (13/11/2026):** revisar la macroiteración integral (rama `feat/macro-integral` y `spec/macro-integral`, sección B) y decidir, con autorización explícita para cada acción: publicar las ramas, integrar, aplicar las migraciones `20261113000100` a `0800` en Supabase y desplegar en UAT. Después: Compras (DEC-MI-09), lotes (DEC-MI-10) y la definición del tipo de equipo para el checklist (DC12).
+
+**Antes (12/11/2026):** la macroiteración está desplegada y validada en UAT, con los datos de prueba limpiados (sección B). Queda, opcional, repetir `medir_api.py`: solo mide tiempos y pide la contraseña de `administracion`. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
 
 **Paso anterior:** la iteración 1 está desplegada en UAT (12/11/2026). Falta la validación autenticada con una cuenta real: `probar_entornos.py` y `medir_api.py` (solo lectura, contraseña pedida sin eco) y una pasada manual por los recorridos de la iteración 1 con Órdenes ficticias. Después, la iteración 2. Pruebas del cierre (11/11/2026): JSON 1720 pasan y 29 se saltean; `tests/postgres` 389 pasan; frontend: typecheck, 124 tests y build; `npm run validate:all` en verde; los cinco workflows de CI en verde en la rama y en `mvp-v2`. Quedan además los pendientes operativos con fecha y `main`:
 
