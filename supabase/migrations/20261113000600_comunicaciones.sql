@@ -40,14 +40,14 @@ comment on column rma.plantilla_mensaje.modificado_en is 'Fecha y hora del últi
 insert into rma.plantilla_mensaje (codigo, nombre, finalidad, texto, orden) values
   ('INGRESO', 'Ingreso de equipo', 'OPERATIVA',
    'Hola {cliente}! Recibimos tu {equipo} con la orden {orden}. Te avisamos por este medio cuando haya novedades. {empresa}', 1),
-  ('AUTORIZACION_PENDIENTE', 'Autorizacion pendiente', 'OPERATIVA',
-   'Hola {cliente}! Para seguir con la orden {orden} ({equipo}) necesitamos tu autorizacion. Total: {total}. {empresa}', 2),
+  ('AUTORIZACION_PENDIENTE', 'Autorización pendiente', 'OPERATIVA',
+   'Hola {cliente}! Para seguir con la orden {orden} ({equipo}) necesitamos tu autorización. Total: {total}. {empresa}', 2),
   ('LISTO_PARA_RETIRAR', 'Equipo listo para retirar', 'OPERATIVA',
-   'Hola {cliente}! Tu {equipo} (orden {orden}) esta listo para retirar. Saldo pendiente: {saldo}. {empresa}', 3),
+   'Hola {cliente}! Tu {equipo} (orden {orden}) está listo para retirar. Saldo pendiente: {saldo}. {empresa}', 3),
   ('RECORDATORIO_RETIRO', 'Recordatorio de retiro', 'OPERATIVA',
    'Hola {cliente}! Te recordamos que tu {equipo} (orden {orden}) te espera para retirarlo. Saldo pendiente: {saldo}. {empresa}', 4),
-  ('GARANTIA', 'Garantia', 'OPERATIVA',
-   'Hola {cliente}! La reparacion de tu {equipo} (orden {orden}) tiene garantia hasta el {garantia_hasta}. {empresa}', 5)
+  ('GARANTIA', 'Garantía', 'OPERATIVA',
+   'Hola {cliente}! La reparación de tu {equipo} (orden {orden}) tiene garantía hasta el {garantia_hasta}. {empresa}', 5)
 on conflict (codigo) do nothing;
 
 create table if not exists rma.comunicacion_cliente (

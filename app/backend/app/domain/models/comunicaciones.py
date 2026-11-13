@@ -32,12 +32,12 @@ class CanalMensaje(str, Enum):
 #: Variables que una plantilla puede usar, con su descripcion.
 VARIABLES = {
     "cliente": "Nombre y apellido del cliente",
-    "orden": "Numero de la Orden",
+    "orden": "Número de la Orden",
     "equipo": "Marca, modelo y variante del equipo",
     "total": "Total de la Orden",
     "saldo": "Saldo pendiente",
     "empresa": "Nombre de la empresa",
-    "garantia_hasta": "Vencimiento de la garantia mas larga",
+    "garantia_hasta": "Vencimiento de la garantía más larga",
 }
 
 
@@ -60,17 +60,17 @@ PLANTILLAS_INICIALES = (
     ),
     PlantillaMensaje(
         codigo="AUTORIZACION_PENDIENTE",
-        nombre="Autorizacion pendiente",
+        nombre="Autorización pendiente",
         texto=(
             "Hola {cliente}! Para seguir con la orden {orden} ({equipo}) "
-            "necesitamos tu autorizacion. Total: {total}. {empresa}"
+            "necesitamos tu autorización. Total: {total}. {empresa}"
         ),
     ),
     PlantillaMensaje(
         codigo="LISTO_PARA_RETIRAR",
         nombre="Equipo listo para retirar",
         texto=(
-            "Hola {cliente}! Tu {equipo} (orden {orden}) esta listo para "
+            "Hola {cliente}! Tu {equipo} (orden {orden}) está listo para "
             "retirar. Saldo pendiente: {saldo}. {empresa}"
         ),
     ),
@@ -84,10 +84,10 @@ PLANTILLAS_INICIALES = (
     ),
     PlantillaMensaje(
         codigo="GARANTIA",
-        nombre="Garantia",
+        nombre="Garantía",
         texto=(
-            "Hola {cliente}! La reparacion de tu {equipo} (orden {orden}) "
-            "tiene garantia hasta el {garantia_hasta}. {empresa}"
+            "Hola {cliente}! La reparación de tu {equipo} (orden {orden}) "
+            "tiene garantía hasta el {garantia_hasta}. {empresa}"
         ),
     ),
 )
