@@ -45,6 +45,10 @@ from tests.postgres.test_configuracion_postgres import (  # noqa: E402,F401
     test_tipos_habilitados_de_una_mesa,
     test_un_cambio_de_precio_no_altera_lo_registrado,
 )
+from tests.postgres.test_firmas_postgres import (  # noqa: E402,F401
+    cliente_firmas,
+    test_firma_de_un_documento_con_la_orden_entregada,
+)
 from tests.postgres.test_macro_v14_postgres import (  # noqa: E402,F401
     test_v14_antecedentes_y_reporte_en_postgres,
     test_v14_descarte_tecnico_se_guarda,

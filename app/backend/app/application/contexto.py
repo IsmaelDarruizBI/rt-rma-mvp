@@ -44,6 +44,7 @@ from app.repositories.configuracion import ConfiguracionRepository
 from app.repositories.operativa import (
     ConfiguracionOperativaRepository,
     ConsentimientosRepository,
+    FirmasRepository,
 )
 from app.repositories.reclamos import ReclamosRepository
 from app.storage import (
@@ -56,6 +57,7 @@ from app.storage import (
     JsonOrdenReparacionRepository,
 )
 from app.storage.json.consentimientos import JsonConsentimientosRepository
+from app.storage.json.firmas import JsonFirmasRepository
 from app.storage.json.operativa import JsonConfiguracionOperativa
 from app.storage.json.reclamos import JsonReclamosRepository
 from app.storage.postgres import (
@@ -110,6 +112,8 @@ class ApplicationContext:
     )
     # Historial de consentimiento de comunicacion (DEC-MI-08).
     consentimientos: ConsentimientosRepository | None = None
+    # Firmas de los documentos emitidos (DEC-MI-06).
+    firmas: FirmasRepository | None = None
     # Cierre de los recursos de la persistencia (el pool de PostgreSQL).
     cerrar: Callable[[], None] | None = None
 
@@ -163,6 +167,7 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
     from app.storage.postgres.consentimientos import (
         PostgresConsentimientosRepository,
     )
+    from app.storage.postgres.firmas import PostgresFirmasRepository
     from app.storage.postgres.modelos_equipo import (
         PostgresModelosEquipoRepository,
     )
@@ -220,6 +225,7 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
         reclamos=PostgresReclamosRepository(unidad),
         operativa=PostgresConfiguracionOperativa(unidad),
         consentimientos=PostgresConsentimientosRepository(unidad),
+        firmas=PostgresFirmasRepository(unidad),
         cerrar=lambda: cerrar_pool(pool),
     )
 
@@ -253,4 +259,5 @@ def construir_contexto(settings: Settings) -> ApplicationContext:
         consentimientos=JsonConsentimientosRepository(
             settings.data_dir / "consentimientos"
         ),
+        firmas=JsonFirmasRepository(settings.data_dir / "firmas"),
     )

@@ -10,6 +10,7 @@ from app.domain.models.comunicaciones import (
     ConsentimientoComunicacion,
     PlantillaMensaje,
 )
+from app.domain.models.firmas import FirmaDocumento
 from app.domain.models.operativa import MotivoOperativo, TipoMotivo
 
 
@@ -52,3 +53,11 @@ class ConsentimientosRepository(Protocol):
     def listar(self, cliente_id: str) -> list[ConsentimientoComunicacion]: ...
 
     def agregar(self, registro: ConsentimientoComunicacion) -> None: ...
+
+
+class FirmasRepository(Protocol):
+    """Firmas de documentos emitidos (DEC-MI-06): solo crecen."""
+
+    def de_la_orden(self, orden_id: str) -> list[FirmaDocumento]: ...
+
+    def agregar(self, firma: FirmaDocumento) -> None: ...

@@ -55,6 +55,7 @@ import { ReportesPanel } from "../reportes/Reportes";
 import { ReclamoRechazado } from "./ReclamoRechazado";
 import { RetiroDemorado } from "./RetiroDemorado";
 import { ComunicacionesOrden } from "./ComunicacionesOrden";
+import { FirmasDocumentos } from "./FirmasDocumentos";
 import { registrarSeguimientoRetiro } from "../../api/operativa";
 import { ConfiguracionPanel } from "../configuracion/Configuracion";
 import { AntecedentesEquipo } from "./AntecedentesEquipo";
@@ -1149,6 +1150,12 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                       api.generarComprobanteIngreso(idOrden, idActor, canal),
                     )
                   }
+                />
+                <FirmasDocumentos
+                  key={`${orden.id}-${orden.documentos_emitidos.length}`}
+                  orden={orden}
+                  actor={actor}
+                  usuarios={usuarios}
                 />
               </SeccionPlegable>
 

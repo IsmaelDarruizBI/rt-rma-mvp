@@ -227,6 +227,13 @@ COMUNICACION_ENVIAR = _definir(
     (RECEP, COORD, ADMIN),
     CLIENTE,
 )
+# DEC-MI-06: no fija los roles; por defecto, los de atencion al cliente.
+FIRMA_REGISTRAR = _definir(
+    "FIRMA_REGISTRAR",
+    "Registrar la firma de un documento",
+    (RECEP, COORD, ADMIN),
+    CLIENTE,
+)
 CONSENTIMIENTO_REGISTRAR = _definir(
     "CONSENTIMIENTO_REGISTRAR",
     "Registrar o revocar consentimientos de comunicación",
