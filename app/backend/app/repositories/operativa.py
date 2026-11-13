@@ -6,6 +6,10 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from app.domain.models import CambioConfiguracion
+from app.domain.models.comunicaciones import (
+    ConsentimientoComunicacion,
+    PlantillaMensaje,
+)
 from app.domain.models.operativa import MotivoOperativo, TipoMotivo
 
 
@@ -29,3 +33,22 @@ class ConfiguracionOperativaRepository(Protocol):
     def guardar_parametro(
         self, clave: str, valor: str, cambio: CambioConfiguracion
     ) -> None: ...
+
+    # DEC-MI-08: plantillas de WhatsApp.
+    def listar_plantillas(self) -> list[PlantillaMensaje]: ...
+
+    def guardar_plantilla(
+        self,
+        plantilla: PlantillaMensaje,
+        *,
+        nuevo: bool,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None: ...
+
+
+class ConsentimientosRepository(Protocol):
+    """Historial de consentimiento por cliente (DEC-MI-08): solo crece."""
+
+    def listar(self, cliente_id: str) -> list[ConsentimientoComunicacion]: ...
+
+    def agregar(self, registro: ConsentimientoComunicacion) -> None: ...

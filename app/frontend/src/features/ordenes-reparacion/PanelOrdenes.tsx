@@ -54,6 +54,7 @@ import { InventarioPanel } from "../inventario/Inventario";
 import { ReportesPanel } from "../reportes/Reportes";
 import { ReclamoRechazado } from "./ReclamoRechazado";
 import { RetiroDemorado } from "./RetiroDemorado";
+import { ComunicacionesOrden } from "./ComunicacionesOrden";
 import { registrarSeguimientoRetiro } from "../../api/operativa";
 import { ConfiguracionPanel } from "../configuracion/Configuracion";
 import { AntecedentesEquipo } from "./AntecedentesEquipo";
@@ -319,6 +320,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
         if (actual.pantalla !== "orden" || actual.ordenId !== actualizada.id) {
           navegar({ pantalla: "orden", ordenId: actualizada.id });
         }
+        return true;
       } catch (fallo) {
         const ordenId = ordenEnPantalla.current?.id ?? null;
         const conflicto = fallo instanceof ApiError && fallo.status === 409;
@@ -340,6 +342,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
             nombresConocidos.current,
           ),
         );
+        return false;
       } finally {
         setOcupado(false);
       }
@@ -594,8 +597,9 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
 
   // Tomar desde la cola del taller: el mismo comando que en la Orden. Si
   // sale bien, `ejecutarComando` abre la Orden tomada.
-  const tomarDesdeCola = (ordenId: string, estacionId: string) =>
-    ejecutarComando(() => api.tomarOrden(ordenId, idActor, estacionId));
+  const tomarDesdeCola = async (ordenId: string, estacionId: string) => {
+    await ejecutarComando(() => api.tomarOrden(ordenId, idActor, estacionId));
+  };
 
   const abiertaPara = (seccion: Informativa) =>
     actor !== null &&
@@ -923,6 +927,20 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                 resumen="Otras Órdenes con el mismo IMEI o número de serie"
               >
                 <AntecedentesEquipo orden={orden} />
+              </SeccionPlegable>
+
+              <SeccionPlegable
+                key={`${orden.id}-${actorId}-comunicaciones`}
+                titulo="Comunicaciones"
+                resumen={`${(orden.comunicaciones ?? []).length} mensaje(s) por WhatsApp`}
+              >
+                <ComunicacionesOrden
+                  orden={orden}
+                  actor={actor}
+                  usuarios={usuarios}
+                  ocupado={ocupado}
+                  ejecutarComando={ejecutarComando}
+                />
               </SeccionPlegable>
 
               <SeccionPlegable

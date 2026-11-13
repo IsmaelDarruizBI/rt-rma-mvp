@@ -4,6 +4,7 @@ auditoria en la misma transaccion (DEC-MI-13, 14 y 15)."""
 from collections.abc import Sequence
 
 from app.domain.models import CambioConfiguracion
+from app.domain.models.comunicaciones import PlantillaMensaje
 from app.domain.models.operativa import MotivoOperativo, TipoMotivo
 from app.repositories.exceptions import (
     EntidadPersistidaNoEncontradaError,
@@ -56,6 +57,38 @@ _GUARDAR_PARAMETRO = consulta(
     """
     UPDATE rma.parametro SET valor = %(valor)s, modificado_en = now()
      WHERE clave = %(clave)s
+    """,
+    modo=ESCRITURA,
+)
+
+_PLANTILLAS = consulta(
+    "operativa.plantillas",
+    """
+    SELECT codigo, nombre, finalidad, texto, activa
+      FROM rma.plantilla_mensaje
+     ORDER BY orden, codigo COLLATE "C"
+    """,
+    modo=LECTURA,
+)
+_INSERTAR_PLANTILLA = consulta(
+    "operativa.insertar_plantilla",
+    """
+    INSERT INTO rma.plantilla_mensaje
+        (codigo, nombre, finalidad, texto, activa, orden)
+    SELECT %(codigo)s, %(nombre)s, %(finalidad)s, %(texto)s, %(activa)s,
+           coalesce(max(orden), 0) + 1
+      FROM rma.plantilla_mensaje
+    ON CONFLICT (codigo) DO NOTHING
+    """,
+    modo=ESCRITURA,
+)
+_ACTUALIZAR_PLANTILLA = consulta(
+    "operativa.actualizar_plantilla",
+    """
+    UPDATE rma.plantilla_mensaje
+       SET nombre = %(nombre)s, finalidad = %(finalidad)s,
+           texto = %(texto)s, activa = %(activa)s, modificado_en = now()
+     WHERE codigo = %(codigo)s
     """,
     modo=ESCRITURA,
 )
@@ -132,6 +165,43 @@ class PostgresConfiguracionOperativa:
                 f"No existe el parametro {clave}"
             )
         self._auditoria._auditar(ejecutor, [cambio])
+
+    def listar_plantillas(self) -> list[PlantillaMensaje]:
+        with self._unidad.lectura() as lector:
+            filas = lector.filas(_PLANTILLAS)
+        return [
+            PlantillaMensaje(
+                codigo=f.codigo,
+                nombre=f.nombre,
+                finalidad=f.finalidad,
+                texto=f.texto,
+                activa=f.activa,
+            )
+            for f in filas
+        ]
+
+    def guardar_plantilla(
+        self,
+        plantilla: PlantillaMensaje,
+        *,
+        nuevo: bool,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None:
+        self._exigir_transaccion()
+        ejecutor = self._unidad.ejecutor()
+        parametros = {
+            "codigo": plantilla.codigo,
+            "nombre": plantilla.nombre,
+            "finalidad": plantilla.finalidad.value,
+            "texto": plantilla.texto,
+            "activa": plantilla.activa,
+        }
+        consulta_sql = _INSERTAR_PLANTILLA if nuevo else _ACTUALIZAR_PLANTILLA
+        if ejecutor.ejecutar(consulta_sql, parametros) != 1:
+            raise EntidadPersistidaNoEncontradaError(
+                f"No se pudo guardar la plantilla {plantilla.codigo}"
+            )
+        self._auditoria._auditar(ejecutor, cambios)
 
     def _exigir_transaccion(self) -> None:
         if not self._unidad.en_curso():

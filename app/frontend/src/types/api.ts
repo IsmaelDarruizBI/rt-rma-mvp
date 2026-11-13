@@ -1106,6 +1106,24 @@ export interface SituacionResumen {
   desde: string | null;
 }
 
+/** Un intento de envío asistido por WhatsApp (DEC-MI-08). */
+export interface ComunicacionCliente {
+  id: string;
+  plantilla_codigo: string | null;
+  finalidad: "OPERATIVA" | "COMERCIAL";
+  canal: "WHATSAPP";
+  destinatario: string | null;
+  mensaje: string;
+  usuario_id: string;
+  fecha: string;
+  confirmacion: {
+    enviado: boolean;
+    usuario_id: string;
+    fecha: string;
+    nota: string | null;
+  } | null;
+}
+
 /** Un seguimiento de un retiro demorado (DEC-MI-14). */
 export interface SeguimientoRetiro {
   usuario_id: string;
@@ -1201,6 +1219,8 @@ export interface Orden {
   /** DEC-MI-14: seguimientos del retiro y días de demora (si lo está). */
   seguimientos_retiro?: SeguimientoRetiro[];
   retiro_demorado_dias?: number | null;
+  /** DEC-MI-08: intentos de WhatsApp y su confirmación manual. */
+  comunicaciones?: ComunicacionCliente[];
   created_at: string;
   updated_at: string;
   /** Solo lo devuelven notificar y registrar pago (PROC-REP-265). */

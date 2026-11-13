@@ -1,6 +1,7 @@
 """Configuracion operativa en el modo JSON: los valores iniciales, de solo
 lectura (como los demas catalogos administrables, DC23)."""
 
+from app.domain.models.comunicaciones import PLANTILLAS_INICIALES
 from app.domain.models.operativa import (
     MOTIVOS_INICIALES,
     PARAMETROS_INICIALES,
@@ -24,4 +25,10 @@ class JsonConfiguracionOperativa:
         return dict(PARAMETROS_INICIALES)
 
     def guardar_parametro(self, clave, valor, cambio) -> None:
+        raise NotImplementedError
+
+    def listar_plantillas(self):
+        return list(PLANTILLAS_INICIALES)
+
+    def guardar_plantilla(self, plantilla, *, nuevo, cambios) -> None:
         raise NotImplementedError

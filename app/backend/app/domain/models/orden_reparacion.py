@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, computed_field
 
+from .comunicaciones import ComunicacionCliente
 from .descuentos import RegistroDescuento, importe_de_descuento
 from .documentos import DocumentosOrden
 from .enums import (
@@ -135,6 +136,9 @@ class OrdenReparacion(BaseModel):
     descuentos: list[RegistroDescuento] = Field(default_factory=list)
     # DEC-MI-14: seguimientos de un retiro demorado.
     seguimientos_retiro: list[SeguimientoRetiro] = Field(default_factory=list)
+    # DEC-MI-08: mensajes asistidos al cliente (intento y confirmacion
+    # manual); solo crecen.
+    comunicaciones: list[ComunicacionCliente] = Field(default_factory=list)
     # Fotos del equipo (UAT-010): solo sus datos; la imagen esta en el
     # almacenamiento de objetos. Default vacio: un JSON anterior carga.
     fotos: list[FotoOrden] = Field(default_factory=list)

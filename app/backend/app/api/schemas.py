@@ -94,6 +94,7 @@ from app.domain.models import (
     VigenciaGarantiaOrigen,
     importe_de_descuento,
 )
+from app.domain.models.comunicaciones import ComunicacionCliente
 from app.domain.models.operativa import SeguimientoRetiro
 from app.domain.politicas import CondicionComercial, politica_de
 from app.domain.prioridad import (
@@ -2133,6 +2134,8 @@ class OrdenOut(BaseModel):
     # DEC-MI-14: seguimientos y dias de retiro demorado (si lo esta).
     seguimientos_retiro: list[SeguimientoRetiro] = Field(default_factory=list)
     retiro_demorado_dias: int | None = None
+    # DEC-MI-08: intentos de envio asistido y su confirmacion manual.
+    comunicaciones: list[ComunicacionCliente] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -2301,6 +2304,7 @@ class OrdenOut(BaseModel):
             ],
             fotos_habilitadas=fotos_habilitadas,
             seguimientos_retiro=list(orden.seguimientos_retiro),
+            comunicaciones=list(orden.comunicaciones),
             created_at=orden.created_at,
             updated_at=orden.updated_at,
         )

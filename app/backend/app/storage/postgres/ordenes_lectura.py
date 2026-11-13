@@ -58,6 +58,10 @@ from app.domain.models import (
     SolicitudDesistimiento,
     VigenciaGarantiaOrigen,
 )
+from app.domain.models.comunicaciones import (
+    ComunicacionCliente,
+    ConfirmacionEnvio,
+)
 from app.domain.models.descuentos import RegistroDescuento
 from app.domain.models.documentos import Documento, DocumentoEmitido
 from app.domain.models.equipos import EntregaEquipo
@@ -549,6 +553,23 @@ _DEVOLUCIONES = consulta(
     """,
     modo=LECTURA,
 )
+_COMUNICACIONES = consulta(
+    "ordenes.comunicaciones",
+    """
+    SELECT c.orden_id, c.codigo, c.plantilla_codigo, c.finalidad, c.canal,
+           c.destinatario, c.mensaje, u.codigo AS usuario, c.registrado_en,
+           k.enviado, k.nota, uk.codigo AS confirmado_por, k.confirmado_en
+    FROM rma.comunicacion_cliente c
+    JOIN rma.usuario u ON u.id = c.usuario_id
+    LEFT JOIN rma.comunicacion_confirmacion k ON k.comunicacion_id = c.id
+    LEFT JOIN rma.usuario uk ON uk.id = k.usuario_id
+    WHERE c.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
+    ORDER BY c.orden_id, c.posicion
+    """,
+    modo=LECTURA,
+)
 _SEGUIMIENTOS_RETIRO = consulta(
     "ordenes.seguimientos_retiro",
     """
@@ -654,6 +675,7 @@ _HIJAS = (
     _Hija("devoluciones", _DEVOLUCIONES),
     _Hija("descuentos", _DESCUENTOS),
     _Hija("seguimientos_retiro", _SEGUIMIENTOS_RETIRO),
+    _Hija("comunicaciones", _COMUNICACIONES),
     _Hija("movimientos", _MOVIMIENTOS),
 )
 
@@ -835,6 +857,10 @@ def _armar(raiz: Any, hijas: dict[str, Any]) -> Instantanea:
                 canal=fila.canal,
             )
             for fila in hijas["seguimientos_retiro"].get(raiz.id, [])
+        ],
+        comunicaciones=[
+            _comunicacion(fila)
+            for fila in hijas["comunicaciones"].get(raiz.id, [])
         ],
         movimientos_insumo=[_movimiento(fila) for fila in filas_movimiento],
         devolucion=None if entregada else salida,
@@ -1217,4 +1243,27 @@ def _paso(fila: Any) -> HistorialWorkflow:
         ejecucion_id=fila.ejecucion,
         pago_id=fila.pago,
         observacion=fila.observacion,
+    )
+
+
+def _comunicacion(fila) -> ComunicacionCliente:
+    return ComunicacionCliente(
+        id=fila.codigo,
+        plantilla_codigo=fila.plantilla_codigo,
+        finalidad=fila.finalidad,
+        canal=fila.canal,
+        destinatario=fila.destinatario,
+        mensaje=fila.mensaje,
+        usuario_id=fila.usuario,
+        fecha=utc(fila.registrado_en),
+        confirmacion=(
+            ConfirmacionEnvio(
+                enviado=fila.enviado,
+                usuario_id=fila.confirmado_por,
+                fecha=utc(fila.confirmado_en),
+                nota=fila.nota,
+            )
+            if fila.confirmado_en is not None
+            else None
+        ),
     )

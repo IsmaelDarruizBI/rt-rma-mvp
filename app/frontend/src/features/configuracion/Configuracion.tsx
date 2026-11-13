@@ -23,6 +23,7 @@ import type {
 import { tieneRol } from "../../lib/roles";
 import { MotivosOperativos, ParametrosOperativos } from "./Operativa";
 import { Permisos } from "./Permisos";
+import { PlantillasMensaje } from "./Plantillas";
 import { UsuariosRoles } from "./UsuariosRoles";
 
 const CAMPOS: Record<string, string> = {
@@ -49,6 +50,7 @@ type Pestana =
   | "catalogos"
   | "motivos"
   | "parametros"
+  | "plantillas"
   | "usuarios"
   | "permisos"
   | "auditoria";
@@ -56,6 +58,7 @@ const PESTANAS: { valor: Pestana; texto: string }[] = [
   { valor: "catalogos", texto: "Catálogos" },
   { valor: "motivos", texto: "Motivos" },
   { valor: "parametros", texto: "Parámetros" },
+  { valor: "plantillas", texto: "Plantillas" },
   { valor: "usuarios", texto: "Usuarios y roles" },
   { valor: "permisos", texto: "Permisos" },
   { valor: "auditoria", texto: "Auditoría" },
@@ -334,6 +337,7 @@ export function ConfiguracionPanel({ actor }: { actor: Usuario | null }) {
       )}
       {pestana === "motivos" && <MotivosOperativos actor={actor} />}
       {pestana === "parametros" && <ParametrosOperativos actor={actor} />}
+      {pestana === "plantillas" && <PlantillasMensaje actor={actor} />}
 
       {pestana === "catalogos" && (
       <>

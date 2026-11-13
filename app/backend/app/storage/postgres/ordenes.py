@@ -311,6 +311,29 @@ _INSERTAR_DEVOLUCION_DINERO = consulta(
     """,
     modo=ESCRITURA,
 )
+_INSERTAR_COMUNICACION = consulta(
+    "ordenes.insertar_comunicacion",
+    """
+    INSERT INTO rma.comunicacion_cliente
+        (orden_id, codigo, plantilla_codigo, finalidad, canal, destinatario,
+         mensaje, usuario_id, registrado_en, posicion)
+    VALUES (%(orden)s, %(codigo)s, %(plantilla)s, %(finalidad)s, %(canal)s,
+            %(destinatario)s, %(mensaje)s, %(usuario)s, %(fecha)s,
+            %(posicion)s)
+    """,
+    modo=ESCRITURA,
+)
+_INSERTAR_CONFIRMACION_COMUNICACION = consulta(
+    "ordenes.insertar_confirmacion_comunicacion",
+    """
+    INSERT INTO rma.comunicacion_confirmacion
+        (comunicacion_id, enviado, nota, usuario_id, confirmado_en)
+    SELECT c.id, %(enviado)s, %(nota)s, %(usuario)s, %(fecha)s
+      FROM rma.comunicacion_cliente c
+     WHERE c.orden_id = %(orden)s AND c.codigo = %(codigo)s
+    """,
+    modo=ESCRITURA,
+)
 _INSERTAR_SEGUIMIENTO_RETIRO = consulta(
     "ordenes.insertar_seguimiento_retiro",
     """
@@ -1250,6 +1273,7 @@ class _Guardado:
         self._devoluciones(orden_id)
         self._descuentos(orden_id)
         self._seguimientos_retiro(orden_id)
+        self._comunicaciones(orden_id)
         self._historial(orden_id)
         # La raiz va al final: si este guardar cierra la Orden, nada se
         # inserta despues del cierre (diseno fisico, regla 9).
@@ -1390,6 +1414,10 @@ class _Guardado:
         usuarios.update(d.usuario_id for d in resumen.devoluciones)
         usuarios.update(d.usuario_id for d in orden.descuentos)
         usuarios.update(s.usuario_id for s in orden.seguimientos_retiro)
+        for comunicacion in orden.comunicaciones:
+            usuarios.add(comunicacion.usuario_id)
+            if comunicacion.confirmacion:
+                usuarios.add(comunicacion.confirmacion.usuario_id)
         usuarios.update(
             v.excepcion.usuario_id
             for v in orden.vigencia_garantia_origen
@@ -1985,6 +2013,59 @@ class _Guardado:
                     "fecha": devolucion.fecha,
                     "operacion": devolucion.operacion_id,
                     "posicion": posicion,
+                },
+            )
+
+    def _comunicaciones(self, orden_id: UUID) -> None:
+        """DEC-MI-08: los intentos solo crecen; cada uno admite una sola
+        confirmacion manual, que despues no cambia."""
+        previas = self._previa.orden.comunicaciones if self._previa else []
+        nuevas = self._orden.comunicaciones
+
+        def sin_confirmar(comunicacion):
+            return comunicacion.model_copy(update={"confirmacion": None})
+
+        if len(nuevas) < len(previas) or any(
+            sin_confirmar(antes) != sin_confirmar(ahora)
+            or (
+                antes.confirmacion is not None
+                and antes.confirmacion != ahora.confirmacion
+            )
+            for antes, ahora in zip(previas, nuevas, strict=False)
+        ):
+            self._inmutable("las comunicaciones")
+        for posicion, comunicacion in enumerate(
+            nuevas[len(previas) :], len(previas) + 1
+        ):
+            self._ej.ejecutar(
+                _INSERTAR_COMUNICACION,
+                {
+                    "orden": orden_id,
+                    "codigo": comunicacion.id,
+                    "plantilla": comunicacion.plantilla_codigo,
+                    "finalidad": comunicacion.finalidad.value,
+                    "canal": comunicacion.canal.value,
+                    "destinatario": comunicacion.destinatario,
+                    "mensaje": comunicacion.mensaje,
+                    "usuario": self._id("usuario", comunicacion.usuario_id),
+                    "fecha": comunicacion.fecha,
+                    "posicion": posicion,
+                },
+            )
+        for indice, comunicacion in enumerate(nuevas):
+            confirmacion = comunicacion.confirmacion
+            ya = indice < len(previas) and previas[indice].confirmacion
+            if confirmacion is None or ya:
+                continue
+            self._ej.ejecutar(
+                _INSERTAR_CONFIRMACION_COMUNICACION,
+                {
+                    "orden": orden_id,
+                    "codigo": comunicacion.id,
+                    "enviado": confirmacion.enviado,
+                    "nota": confirmacion.nota,
+                    "usuario": self._id("usuario", confirmacion.usuario_id),
+                    "fecha": confirmacion.fecha,
                 },
             )
 

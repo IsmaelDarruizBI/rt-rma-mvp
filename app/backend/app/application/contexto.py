@@ -41,7 +41,10 @@ from app.repositories import (
     UnidadDeTrabajo,
 )
 from app.repositories.configuracion import ConfiguracionRepository
-from app.repositories.operativa import ConfiguracionOperativaRepository
+from app.repositories.operativa import (
+    ConfiguracionOperativaRepository,
+    ConsentimientosRepository,
+)
 from app.repositories.reclamos import ReclamosRepository
 from app.storage import (
     AlmacenFotos,
@@ -52,6 +55,7 @@ from app.storage import (
     JsonModelosEquipoRepository,
     JsonOrdenReparacionRepository,
 )
+from app.storage.json.consentimientos import JsonConsentimientosRepository
 from app.storage.json.operativa import JsonConfiguracionOperativa
 from app.storage.json.reclamos import JsonReclamosRepository
 from app.storage.postgres import (
@@ -104,6 +108,8 @@ class ApplicationContext:
     operativa: ConfiguracionOperativaRepository = field(
         default_factory=JsonConfiguracionOperativa
     )
+    # Historial de consentimiento de comunicacion (DEC-MI-08).
+    consentimientos: ConsentimientosRepository | None = None
     # Cierre de los recursos de la persistencia (el pool de PostgreSQL).
     cerrar: Callable[[], None] | None = None
 
@@ -153,6 +159,9 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
     from app.storage.postgres.conexion import HOSTS_LOCALES, servidor_unico
     from app.storage.postgres.configuracion import (
         PostgresConfiguracionRepository,
+    )
+    from app.storage.postgres.consentimientos import (
+        PostgresConsentimientosRepository,
     )
     from app.storage.postgres.modelos_equipo import (
         PostgresModelosEquipoRepository,
@@ -210,6 +219,7 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
         configuracion=PostgresConfiguracionRepository(unidad),
         reclamos=PostgresReclamosRepository(unidad),
         operativa=PostgresConfiguracionOperativa(unidad),
+        consentimientos=PostgresConsentimientosRepository(unidad),
         cerrar=lambda: cerrar_pool(pool),
     )
 
@@ -240,4 +250,7 @@ def construir_contexto(settings: Settings) -> ApplicationContext:
             settings.modelos_equipo_archivo
         ),
         reclamos=JsonReclamosRepository(settings.data_dir / "reclamos"),
+        consentimientos=JsonConsentimientosRepository(
+            settings.data_dir / "consentimientos"
+        ),
     )

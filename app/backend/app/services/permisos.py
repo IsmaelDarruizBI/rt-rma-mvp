@@ -220,6 +220,19 @@ CLIENTE_NOTIFICAR = _definir(
     (RECEP,),
     CLIENTE,
 )
+# DEC-MI-08: no fija los roles; por defecto, los de atencion al cliente.
+COMUNICACION_ENVIAR = _definir(
+    "COMUNICACION_ENVIAR",
+    "Preparar y registrar mensajes de WhatsApp al cliente",
+    (RECEP, COORD, ADMIN),
+    CLIENTE,
+)
+CONSENTIMIENTO_REGISTRAR = _definir(
+    "CONSENTIMIENTO_REGISTRAR",
+    "Registrar o revocar consentimientos de comunicación",
+    (RECEP, COORD, ADMIN),
+    CLIENTE,
+)
 
 # --- Taller ---
 TALLER = "Taller"
