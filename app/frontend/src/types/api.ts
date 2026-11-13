@@ -1106,6 +1106,14 @@ export interface SituacionResumen {
   desde: string | null;
 }
 
+/** Un seguimiento de un retiro demorado (DEC-MI-14). */
+export interface SeguimientoRetiro {
+  usuario_id: string;
+  fecha: string;
+  nota: string;
+  canal: string | null;
+}
+
 export interface Orden {
   id: string;
   origen: OrigenOrden;
@@ -1190,6 +1198,9 @@ export interface Orden {
   /** Fotos del equipo y si el entorno tiene dónde guardarlas (UAT-010). */
   fotos?: FotoOrden[];
   fotos_habilitadas?: boolean;
+  /** DEC-MI-14: seguimientos del retiro y días de demora (si lo está). */
+  seguimientos_retiro?: SeguimientoRetiro[];
+  retiro_demorado_dias?: number | null;
   created_at: string;
   updated_at: string;
   /** Solo lo devuelven notificar y registrar pago (PROC-REP-265). */

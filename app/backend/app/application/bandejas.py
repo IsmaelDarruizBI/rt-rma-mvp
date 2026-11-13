@@ -38,6 +38,7 @@ from app.domain.models import (
     Usuario,
 )
 from app.domain.prioridad import clave_de_prioridad
+from app.domain.retiro import dias_de_retiro_demorado, fecha_aviso_listo
 from app.services import (
     SituacionInsumo,
     ejecucion_activa,
@@ -64,6 +65,7 @@ from .acciones import (
 )
 from .contexto import ApplicationContext
 from .finanzas import SituacionFinanciera, situacion_financiera
+from .operativa import plazo_retiro_dias
 from .situacion import CodigoSituacion, SituacionOperativa, situacion_operativa
 
 
@@ -188,6 +190,9 @@ class _Lectura:
     def __init__(self, contexto: ApplicationContext, usuario: Usuario):
         self.usuario = usuario
         catalogos = contexto.catalogos
+        # DEC-MI-14: el retiro demorado se calcula con el plazo vigente.
+        self.ahora = contexto.ahora()
+        self.plazo_retiro = plazo_retiro_dias(contexto)
         # Todas las lecturas en un solo instante (QA-E2-1): una escritura
         # no se mete entre ellas, asi que cada Orden se ve en una sola
         # version. Solo lecturas: lo que sigue se calcula afuera.
@@ -382,6 +387,28 @@ class _Lectura:
                     )
                 )
                 break
+        return _por_antiguedad(items)
+
+    def retiro_demorado(self) -> list[ItemBandeja]:
+        """Equipos listos sin retirar despues del plazo (DEC-MI-14)."""
+        items = []
+        for leida in self.leidas:
+            dias = dias_de_retiro_demorado(
+                leida.orden, self.ahora, self.plazo_retiro
+            )
+            if dias is None:
+                continue
+            items.append(
+                self.item(
+                    leida,
+                    tarea=f"Retiro demorado: {dias} dias desde el aviso",
+                    responsable="Recepcion o Administracion",
+                    puede_resolver=self.usuario.tiene_alguno(
+                        permisos.RETIRO_SEGUIMIENTO
+                    ),
+                    desde=fecha_aviso_listo(leida.orden),
+                )
+            )
         return _por_antiguedad(items)
 
     def por_situacion(
@@ -666,6 +693,7 @@ def _recepcion(lectura: _Lectura) -> list[Bandeja]:
             TipoBandeja.SEGUIMIENTO,
             lectura.en_manos_de_otros(),
         ),
+        _retiro_demorado(lectura),
     ]
 
 
@@ -745,7 +773,20 @@ def _administracion(lectura: _Lectura) -> list[Bandeja]:
             lectura.saldos_abiertos(excluir=cobros),
         ),
         _insumos_negativos(lectura),
+        _retiro_demorado(lectura),
     ]
+
+
+def _retiro_demorado(lectura: _Lectura) -> Bandeja:
+    return _bandeja(
+        "RETIRO_DEMORADO",
+        "Retiro demorado",
+        f"Equipos listos que el cliente no retiro en {lectura.plazo_retiro} "
+        "dias desde el aviso. La Orden sigue abierta: registra los "
+        "seguimientos.",
+        TipoBandeja.SEGUIMIENTO,
+        lectura.retiro_demorado(),
+    )
 
 
 def _mis_tomadas(lectura: _Lectura) -> Bandeja:

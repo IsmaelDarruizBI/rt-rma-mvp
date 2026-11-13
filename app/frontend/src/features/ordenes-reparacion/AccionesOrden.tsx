@@ -11,6 +11,8 @@
 
 import { type ReactNode, useEffect, useId, useState } from "react";
 
+import type { TipoMotivo } from "../../api/operativa";
+
 import {
   type DatosRetiro,
   TIPO_REPARACION_OTROS,
@@ -45,6 +47,8 @@ import {
   motivosDeBloqueo,
   trabajosACancelar,
 } from "./cancelacion";
+import { CampoMotivo, useMotivos } from "./CampoMotivo";
+import { type MotivoElegido, motivoCompleto, SIN_MOTIVO } from "./motivos";
 import {
   nombreDeAccion,
   descripcionCheckin,
@@ -83,6 +87,7 @@ export interface EjecutorAcciones {
     motivo: string,
     observaciones: string,
     resultado: ResultadoDesistimiento | null,
+    motivoCodigo: string | null,
   ) => void;
   requerirRedefinicion: (
     ejecucionId: string,
@@ -127,9 +132,13 @@ export interface EjecutorAcciones {
   /** PROC-REP-270 sobre una Orden CANCELADA. */
   registrarDevolucion: (retiro: DatosRetiro) => void;
   /** PROC-REP-300. */
-  cancelarDetalle: (detalleId: string, motivo: string) => void;
+  cancelarDetalle: (
+    detalleId: string,
+    motivo: string,
+    motivoCodigo: string | null,
+  ) => void;
   /** PROC-REP-305 / 306 (pide confirmación antes). */
-  cancelarOrden: (motivo: string) => void;
+  cancelarOrden: (motivo: string, motivoCodigo: string | null) => void;
   /** En cola o en reparación: no vuelve a encolar. */
   cambiarPrioridad: (prioridad: number, motivo: string | null) => void;
   /** La Orden de OTRO técnico: con motivo; ya confirmado en el formulario. */
@@ -515,7 +524,13 @@ function FormularioAccion({
           previstos={insumosPrevistosDe(orden, accion.ejecucion_id)}
           desistimiento={solicitudDesistimientoDe(orden, accion.ejecucion_id)}
           deshabilitado={deshabilitado || !accion.ejecucion_id}
-          onConfirmar={(insumosUtilizados, observaciones, motivo, resultado) =>
+          onConfirmar={(
+            insumosUtilizados,
+            observaciones,
+            motivo,
+            resultado,
+            motivoCodigo,
+          ) =>
             accion.ejecucion_id &&
             ejecutar.interrumpirEjecucion(
               accion.ejecucion_id,
@@ -523,6 +538,7 @@ function FormularioAccion({
               motivo,
               observaciones,
               resultado,
+              motivoCodigo,
             )
           }
         />
@@ -705,10 +721,11 @@ function FormularioAccion({
         <FormularioMotivo
           deshabilitado={deshabilitado || accion.detalle_id === null}
           etiqueta="Motivo de la cancelación (obligatorio)"
+          catalogo="CANCELACION"
           textoBoton={`Cancelar ${nombreTrabajo(orden, accion.detalle_id)}`}
-          onConfirmar={(motivo) =>
+          onConfirmar={(motivo, motivoCodigo) =>
             accion.detalle_id &&
-            ejecutar.cancelarDetalle(accion.detalle_id, motivo)
+            ejecutar.cancelarDetalle(accion.detalle_id, motivo, motivoCodigo)
           }
         />
       );
@@ -773,32 +790,36 @@ function FormularioMotivo({
   deshabilitado,
   etiqueta,
   textoBoton,
+  catalogo = null,
   confirmar,
   onConfirmar,
 }: {
   deshabilitado: boolean;
   etiqueta: string;
   textoBoton: string;
+  /** DEC-MI-15: ofrece los motivos de ese catálogo (o el texto libre). */
+  catalogo?: TipoMotivo | null;
   confirmar?: () => boolean;
-  onConfirmar: (motivo: string) => void;
+  onConfirmar: (motivo: string, motivoCodigo: string | null) => void;
 }) {
-  const [motivo, setMotivo] = useState("");
+  const [elegido, setElegido] = useState<MotivoElegido>(SIN_MOTIVO);
+  const motivos = useMotivos(catalogo ?? "CANCELACION");
+  const disponibles = catalogo ? motivos : [];
 
   return (
     <div>
-      <Campo etiqueta={etiqueta}>
-        <input
-          value={motivo}
-          onChange={(evento) => setMotivo(evento.target.value)}
-          disabled={deshabilitado}
-          style={estiloInput}
-        />
-      </Campo>
+      <CampoMotivo
+        motivos={disponibles}
+        valor={elegido}
+        onCambio={setElegido}
+        etiqueta={etiqueta}
+        deshabilitado={deshabilitado}
+      />
       <Boton
-        disabled={deshabilitado || motivo.trim() === ""}
+        disabled={deshabilitado || !motivoCompleto(disponibles, elegido)}
         onClick={() => {
           if (confirmar && !confirmar()) return;
-          onConfirmar(motivo.trim());
+          onConfirmar(elegido.texto.trim(), elegido.codigo);
         }}
       >
         {textoBoton}
@@ -821,9 +842,10 @@ function FormularioCancelarOrden({
   orden: Orden;
   bloqueo: string | null;
   deshabilitado: boolean;
-  onConfirmar: (motivo: string) => void;
+  onConfirmar: (motivo: string, motivoCodigo: string | null) => void;
 }) {
-  const [motivo, setMotivo] = useState("");
+  const [elegido, setElegido] = useState<MotivoElegido>(SIN_MOTIVO);
+  const catalogo = useMotivos("CANCELACION");
   const [confirmada, setConfirmada] = useState(false);
   const idConfirmacion = useId();
   const motivos = motivosDeBloqueo(bloqueo);
@@ -865,14 +887,13 @@ function FormularioCancelarOrden({
       <p style={{ margin: "0 0 0.6rem", fontSize: "0.85rem" }}>
         {avisoCancelacionOrden(orden)}
       </p>
-      <Campo etiqueta="Motivo de la cancelación de la Orden (obligatorio)">
-        <input
-          value={motivo}
-          onChange={(evento) => setMotivo(evento.target.value)}
-          disabled={deshabilitado || bloqueada}
-          style={estiloInput}
-        />
-      </Campo>
+      <CampoMotivo
+        motivos={catalogo}
+        valor={elegido}
+        onCambio={setElegido}
+        etiqueta="Motivo de la cancelación de la Orden (obligatorio)"
+        deshabilitado={deshabilitado || bloqueada}
+      />
       <label
         htmlFor={idConfirmacion}
         style={{
@@ -893,9 +914,12 @@ function FormularioCancelarOrden({
       </label>
       <Boton
         disabled={
-          deshabilitado || bloqueada || !confirmada || motivo.trim() === ""
+          deshabilitado ||
+          bloqueada ||
+          !confirmada ||
+          !motivoCompleto(catalogo, elegido)
         }
-        onClick={() => onConfirmar(motivo.trim())}
+        onClick={() => onConfirmar(elegido.texto.trim(), elegido.codigo)}
       >
         Cancelar la Orden
       </Boton>
@@ -1994,6 +2018,7 @@ function FormularioEjecucion({
     observaciones: string,
     motivo: string,
     resultado: ResultadoDesistimiento | null,
+    motivoCodigo: string | null,
   ) => void;
 }) {
   const [estadoTrabajo, setEstadoTrabajo] = useState("");
@@ -2007,9 +2032,16 @@ function FormularioEjecucion({
     motivo: etiquetaMotivo,
   } = MODOS_EJECUCION[modo];
   const pideMotivo = etiquetaMotivo !== null;
-  const [motivo, setMotivo] = useState(
-    desistimiento ? `El cliente desistió: ${desistimiento.motivo}` : "",
-  );
+  const [elegido, setElegido] = useState<MotivoElegido>({
+    codigo: null,
+    texto: desistimiento
+      ? `El cliente desistió: ${desistimiento.motivo}`
+      : "",
+  });
+  // DEC-MI-15: solo la interrupción tiene catálogo de motivos.
+  const motivosInterrupcion = useMotivos("INTERRUPCION");
+  const catalogo = modo === "interrumpir" ? motivosInterrupcion : [];
+  const motivo = elegido.texto;
   const [cantidades, setCantidades] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       previstos.map((previsto) => [
@@ -2067,14 +2099,13 @@ function FormularioEjecucion({
         ))
       )}
       {etiquetaMotivo && (
-        <Campo etiqueta={etiquetaMotivo}>
-          <input
-            value={motivo}
-            onChange={(evento) => setMotivo(evento.target.value)}
-            disabled={deshabilitado}
-            style={estiloInput}
-          />
-        </Campo>
+        <CampoMotivo
+          motivos={catalogo}
+          valor={elegido}
+          onCambio={setElegido}
+          etiqueta={etiquetaMotivo}
+          deshabilitado={deshabilitado}
+        />
       )}
       {desistimiento && (
         <div
@@ -2126,7 +2157,7 @@ function FormularioEjecucion({
       <Boton
         disabled={
           deshabilitado ||
-          (pideMotivo && motivo.trim() === "") ||
+          (pideMotivo && !motivoCompleto(catalogo, elegido)) ||
           faltaResultado
         }
         onClick={() =>
@@ -2140,6 +2171,7 @@ function FormularioEjecucion({
                   reversible: reversible === "SI",
                 }
               : null,
+            elegido.codigo,
           )
         }
       >

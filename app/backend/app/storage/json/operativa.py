@@ -1,0 +1,27 @@
+"""Configuracion operativa en el modo JSON: los valores iniciales, de solo
+lectura (como los demas catalogos administrables, DC23)."""
+
+from app.domain.models.operativa import (
+    MOTIVOS_INICIALES,
+    PARAMETROS_INICIALES,
+    MotivoOperativo,
+    TipoMotivo,
+)
+
+
+class JsonConfiguracionOperativa:
+    editable = False
+
+    def listar_motivos(
+        self, tipo: TipoMotivo | None = None
+    ) -> list[MotivoOperativo]:
+        return [m for m in MOTIVOS_INICIALES if tipo is None or m.tipo is tipo]
+
+    def guardar_motivo(self, motivo, *, nuevo, cambios) -> None:
+        raise NotImplementedError
+
+    def parametros(self) -> dict[str, str]:
+        return dict(PARAMETROS_INICIALES)
+
+    def guardar_parametro(self, clave, valor, cambio) -> None:
+        raise NotImplementedError

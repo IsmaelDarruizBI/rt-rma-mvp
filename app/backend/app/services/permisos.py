@@ -324,6 +324,12 @@ CHECKIN = _definir("CHECKIN", "Registrar el check-in", (ADMIN, RECEP), SALIDA)
 GARANTIA_AJUSTAR = _definir(
     "GARANTIA_AJUSTAR", "Ajustar el plazo de garantía", (RECEP, COORD), SALIDA
 )
+RETIRO_SEGUIMIENTO = _definir(
+    "RETIRO_SEGUIMIENTO",
+    "Registrar seguimientos de un retiro demorado",
+    (RECEP, ADMIN),
+    SALIDA,
+)
 ENTREGA = _definir("ENTREGA", "Entregar el equipo", (ADMIN, RECEP), SALIDA)
 
 # --- Inventario y catalogos ---

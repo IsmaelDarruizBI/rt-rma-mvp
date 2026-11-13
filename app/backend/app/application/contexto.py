@@ -41,6 +41,7 @@ from app.repositories import (
     UnidadDeTrabajo,
 )
 from app.repositories.configuracion import ConfiguracionRepository
+from app.repositories.operativa import ConfiguracionOperativaRepository
 from app.repositories.reclamos import ReclamosRepository
 from app.storage import (
     AlmacenFotos,
@@ -51,6 +52,7 @@ from app.storage import (
     JsonModelosEquipoRepository,
     JsonOrdenReparacionRepository,
 )
+from app.storage.json.operativa import JsonConfiguracionOperativa
 from app.storage.json.reclamos import JsonReclamosRepository
 from app.storage.postgres import (
     ConfiguracionPersistenciaError,
@@ -98,6 +100,10 @@ class ApplicationContext:
     configuracion: ConfiguracionRepository | None = None
     # Reclamos de garantia rechazados (DEC-MI-02): JSON y PostgreSQL.
     reclamos: ReclamosRepository | None = None
+    # Motivos y parametros (DEC-MI-13/14/15): en JSON, los iniciales.
+    operativa: ConfiguracionOperativaRepository = field(
+        default_factory=JsonConfiguracionOperativa
+    )
     # Cierre de los recursos de la persistencia (el pool de PostgreSQL).
     cerrar: Callable[[], None] | None = None
 
@@ -151,6 +157,9 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
     from app.storage.postgres.modelos_equipo import (
         PostgresModelosEquipoRepository,
     )
+    from app.storage.postgres.operativa import (
+        PostgresConfiguracionOperativa,
+    )
     from app.storage.postgres.ordenes import PostgresOrdenReparacionRepository
     from app.storage.postgres.reclamos import PostgresReclamosRepository
     from app.storage.postgres.transaccion import (
@@ -200,6 +209,7 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
         acciones=PostgresRegistroDeAcciones(unidad),
         configuracion=PostgresConfiguracionRepository(unidad),
         reclamos=PostgresReclamosRepository(unidad),
+        operativa=PostgresConfiguracionOperativa(unidad),
         cerrar=lambda: cerrar_pool(pool),
     )
 

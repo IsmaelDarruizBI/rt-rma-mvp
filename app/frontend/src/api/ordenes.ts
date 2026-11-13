@@ -294,6 +294,7 @@ export function interrumpirEjecucion(
   observaciones: string | null,
   estadoTrabajo: string | null = null,
   reversible: boolean | null = null,
+  motivoCodigo: string | null = null,
 ): Promise<Orden> {
   // DC07B: si el cliente pidió desistir, el backend exige cómo quedó el
   // trabajo y si se puede revertir.
@@ -306,6 +307,7 @@ export function interrumpirEjecucion(
       observaciones,
       estado_trabajo: estadoTrabajo,
       reversible,
+      motivo_codigo: motivoCodigo,
     },
   );
 }
@@ -749,10 +751,13 @@ export function cancelarDetalle(
   detalleId: string,
   usuarioId: string,
   motivo: string,
+  motivoCodigo: string | null = null,
 ): Promise<Orden> {
+  // DEC-MI-15: `motivoCodigo` del catálogo; `motivo`, su descripción.
   return post<Orden>(`/api/orders/${ordenId}/details/${detalleId}/cancel`, {
     usuario_id: usuarioId,
     motivo,
+    motivo_codigo: motivoCodigo,
   });
 }
 
@@ -764,10 +769,12 @@ export function cancelarOrden(
   ordenId: string,
   usuarioId: string,
   motivo: string,
+  motivoCodigo: string | null = null,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/cancel`, {
     usuario_id: usuarioId,
     motivo,
+    motivo_codigo: motivoCodigo,
   });
 }
 

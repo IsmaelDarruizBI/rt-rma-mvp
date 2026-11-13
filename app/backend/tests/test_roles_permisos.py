@@ -181,7 +181,8 @@ def test_configurar_un_permiso():
     )
     assert nuevos == ()
     assert (cambio.valor_anterior, cambio.valor_nuevo) == (
-        "ADMINISTRADOR, RECEPCION",
+        # DEC-MI-03: Recepcion, Coordinacion RMA y Administracion.
+        "ADMINISTRADOR, COORDINADOR_RMA, RECEPCION",
         "(ninguno)",
     )
     with pytest.raises(PrecondicionInvalidaError, match="no se configura"):

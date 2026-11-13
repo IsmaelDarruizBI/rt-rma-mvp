@@ -6,7 +6,8 @@ mismos permisos: evaluacion tecnica (insert en ``evaluacion_tecnica``),
 reparaciones adicionales, descarte y la administracion de catalogos (alta y
 edicion de Tipos, retiro de un tipo de una Mesa con DELETE en
 ``mesa_tipo_reparacion``, auditoria con columna identity y la vista
-``historial_precio``). Las aserciones sobre la base leen como administrador.
+``historial_precio``), motivos, parametros y seguimientos del retiro. Las
+aserciones sobre la base leen como administrador.
 """
 
 import pytest
@@ -45,6 +46,11 @@ from tests.postgres.test_macro_v14_postgres import (  # noqa: E402,F401
     test_v14_evaluacion_confirmada_se_guarda_y_se_relee,
     test_v14_redefinicion_en_la_evaluacion_se_guarda,
     test_v14_reparaciones_adicionales_se_guardan,
+)
+from tests.postgres.test_motivos_retiro_postgres import (  # noqa: E402,F401
+    cliente,
+    test_motivos_y_parametros_administrados_con_auditoria,
+    test_retiro_demorado_y_seguimientos_en_postgres,
 )
 from tests.postgres.test_reclamos_garantia_postgres import (  # noqa: E402,F401
     test_reclamo_rechazado_y_continuacion_en_postgres,

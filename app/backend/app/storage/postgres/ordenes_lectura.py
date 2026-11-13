@@ -62,6 +62,7 @@ from app.domain.models.descuentos import RegistroDescuento
 from app.domain.models.documentos import Documento, DocumentoEmitido
 from app.domain.models.equipos import EntregaEquipo
 from app.domain.models.fotos import FotoOrden
+from app.domain.models.operativa import SeguimientoRetiro
 from app.domain.models.pagos import (
     AnulacionPago,
     DevolucionDinero,
@@ -548,6 +549,19 @@ _DEVOLUCIONES = consulta(
     """,
     modo=LECTURA,
 )
+_SEGUIMIENTOS_RETIRO = consulta(
+    "ordenes.seguimientos_retiro",
+    """
+    SELECT s.orden_id, s.nota, s.canal, u.codigo AS usuario, s.registrado_en
+    FROM rma.seguimiento_retiro s
+    JOIN rma.usuario u ON u.id = s.usuario_id
+    WHERE s.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
+    ORDER BY s.orden_id, s.posicion
+    """,
+    modo=LECTURA,
+)
 _DESCUENTOS = consulta(
     "ordenes.descuentos",
     """
@@ -639,6 +653,7 @@ _HIJAS = (
     _Hija("pagos", _PAGOS),
     _Hija("devoluciones", _DEVOLUCIONES),
     _Hija("descuentos", _DESCUENTOS),
+    _Hija("seguimientos_retiro", _SEGUIMIENTOS_RETIRO),
     _Hija("movimientos", _MOVIMIENTOS),
 )
 
@@ -811,6 +826,15 @@ def _armar(raiz: Any, hijas: dict[str, Any]) -> Instantanea:
         ),
         descuentos=[
             _descuento(fila) for fila in hijas["descuentos"].get(raiz.id, [])
+        ],
+        seguimientos_retiro=[
+            SeguimientoRetiro(
+                usuario_id=fila.usuario,
+                fecha=utc(fila.registrado_en),
+                nota=fila.nota,
+                canal=fila.canal,
+            )
+            for fila in hijas["seguimientos_retiro"].get(raiz.id, [])
         ],
         movimientos_insumo=[_movimiento(fila) for fila in filas_movimiento],
         devolucion=None if entregada else salida,

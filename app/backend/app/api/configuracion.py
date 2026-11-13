@@ -24,6 +24,12 @@ from app.application.configuracion import (
     habilitar_tipos_en_mesa,
     historial_de_cambios,
 )
+from app.application.operativa import (
+    guardar_motivo,
+    guardar_parametro,
+    listar_motivos,
+    parametros,
+)
 from app.application.roles import (
     VistaPermiso,
     asignar_roles,
@@ -37,6 +43,7 @@ from app.domain.models import (
     PoliticaGarantiaRma,
     RolUsuario,
 )
+from app.domain.models.operativa import MotivoOperativo, TipoMotivo
 from app.services.configuracion import ROLES_ADMINISTRACION_CONFIGURACION
 
 from .dependencias import ContextoDep
@@ -174,4 +181,80 @@ def put_permiso(
         usuario_id=cuerpo.usuario_id,
         codigo=codigo,
         roles=cuerpo.roles,
+    )
+
+
+class MotivoIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+    tipo: TipoMotivo
+    nombre: str = Field(min_length=1)
+    activo: bool = True
+    requiere_descripcion: bool = False
+
+
+class AltaMotivoIn(MotivoIn):
+    codigo: str = Field(min_length=1)
+
+
+class ParametroIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+    valor: str = Field(min_length=1)
+
+
+def _motivo(codigo: str, cuerpo: MotivoIn) -> MotivoOperativo:
+    return MotivoOperativo(
+        codigo=codigo.strip().upper(),
+        tipo=cuerpo.tipo,
+        nombre=cuerpo.nombre.strip(),
+        activo=cuerpo.activo,
+        requiere_descripcion=cuerpo.requiere_descripcion,
+    )
+
+
+@router.get("/reasons")
+def get_motivos_admin(contexto: ContextoDep) -> dict:
+    return {
+        "editable": contexto.operativa.editable,
+        "motivos": listar_motivos(contexto),
+    }
+
+
+@router.post("/reasons")
+def post_motivo(
+    cuerpo: AltaMotivoIn, contexto: ContextoDep
+) -> MotivoOperativo:
+    return guardar_motivo(
+        contexto,
+        usuario_id=cuerpo.usuario_id,
+        motivo=_motivo(cuerpo.codigo, cuerpo),
+        nuevo=True,
+    )
+
+
+@router.put("/reasons/{codigo}")
+def put_motivo(
+    codigo: str, cuerpo: MotivoIn, contexto: ContextoDep
+) -> MotivoOperativo:
+    return guardar_motivo(
+        contexto,
+        usuario_id=cuerpo.usuario_id,
+        motivo=_motivo(codigo, cuerpo),
+        nuevo=False,
+    )
+
+
+@router.get("/parameters")
+def get_parametros(contexto: ContextoDep) -> dict:
+    return {
+        "editable": contexto.operativa.editable,
+        "parametros": parametros(contexto),
+    }
+
+
+@router.put("/parameters/{clave}")
+def put_parametro(
+    clave: str, cuerpo: ParametroIn, contexto: ContextoDep
+) -> dict[str, str]:
+    return guardar_parametro(
+        contexto, usuario_id=cuerpo.usuario_id, clave=clave, valor=cuerpo.valor
     )

@@ -14,6 +14,8 @@ from app.application import (
     listar_tipos_reparacion,
     listar_usuarios,
 )
+from app.application.operativa import listar_motivos
+from app.domain.models.operativa import MotivoOperativo, TipoMotivo
 
 from .dependencias import ContextoDep
 from .schemas import (
@@ -71,3 +73,11 @@ def get_medios_pago(contexto: ContextoDep) -> list[MedioPagoOut]:
         MedioPagoOut.desde_dominio(medio)
         for medio in listar_medios_pago(contexto)
     ]
+
+
+@router.get("/reasons")
+def get_motivos(
+    contexto: ContextoDep, tipo: TipoMotivo | None = None
+) -> list[MotivoOperativo]:
+    """Motivos de cancelacion o interrupcion (DEC-MI-15)."""
+    return listar_motivos(contexto, tipo)

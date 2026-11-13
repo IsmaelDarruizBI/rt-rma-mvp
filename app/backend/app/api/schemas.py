@@ -94,6 +94,7 @@ from app.domain.models import (
     VigenciaGarantiaOrigen,
     importe_de_descuento,
 )
+from app.domain.models.operativa import SeguimientoRetiro
 from app.domain.politicas import CondicionComercial, politica_de
 from app.domain.prioridad import (
     NOMBRES_DE_PRIORIDAD,
@@ -483,13 +484,23 @@ class InterrumpirEjecucionIn(BaseModel):
 
     usuario_id: str = Field(min_length=1)
     insumos_utilizados: list[InsumoUtilizadoIn] = Field(default_factory=list)
-    motivo: str = Field(min_length=1)
+    motivo: str = ""
+    # DEC-MI-15: motivo del catalogo de interrupcion.
+    motivo_codigo: str | None = None
     observaciones: str | None = None
     # DC07B: obligatorios si el cliente pidio desistir de ese trabajo: en
     # que estado queda y si puede revertirse (opciones aun pendientes:
     # por ahora si/no).
     estado_trabajo: str | None = None
     reversible: bool | None = None
+
+    @model_validator(mode="after")
+    def _motivo_o_catalogo(self):
+        # Sin motivo de catalogo, como siempre: vacio -> 422; solo espacios
+        # lo rechaza la regla de cada caso (409, con su mensaje).
+        if self.motivo_codigo is None and self.motivo == "":
+            raise ValueError("El motivo es obligatorio.")
+        return self
 
 
 class RequiereRedefinicionIn(BaseModel):
@@ -805,14 +816,34 @@ class CancelarDetalleIn(BaseModel):
     """``POST /api/orders/{id}/details/{detalle_id}/cancel`` (PROC-REP-300)."""
 
     usuario_id: str = Field(min_length=1)
-    motivo: str = Field(min_length=1)
+    motivo: str = ""
+    # DEC-MI-15: motivo del catalogo de cancelacion (``motivo``, su
+    # descripcion); sin el, ``motivo`` libre y obligatorio.
+    motivo_codigo: str | None = None
+
+    @model_validator(mode="after")
+    def _motivo_o_catalogo(self):
+        # Sin motivo de catalogo, como siempre: vacio -> 422; solo espacios
+        # lo rechaza la regla de cada caso (409, con su mensaje).
+        if self.motivo_codigo is None and self.motivo == "":
+            raise ValueError("El motivo es obligatorio.")
+        return self
 
 
 class CancelarOrdenIn(BaseModel):
     """``POST /api/orders/{id}/cancel`` (PROC-REP-305 / 306)."""
 
     usuario_id: str = Field(min_length=1)
-    motivo: str = Field(min_length=1)
+    motivo: str = ""
+    motivo_codigo: str | None = None
+
+    @model_validator(mode="after")
+    def _motivo_o_catalogo(self):
+        # Sin motivo de catalogo, como siempre: vacio -> 422; solo espacios
+        # lo rechaza la regla de cada caso (409, con su mensaje).
+        if self.motivo_codigo is None and self.motivo == "":
+            raise ValueError("El motivo es obligatorio.")
+        return self
 
 
 class RegistrarDevolucionIn(BaseModel):
@@ -2099,6 +2130,9 @@ class OrdenOut(BaseModel):
     # Fotos del equipo (UAT-010) y si el entorno tiene donde guardarlas.
     fotos: list[FotoOut] = Field(default_factory=list)
     fotos_habilitadas: bool = False
+    # DEC-MI-14: seguimientos y dias de retiro demorado (si lo esta).
+    seguimientos_retiro: list[SeguimientoRetiro] = Field(default_factory=list)
+    retiro_demorado_dias: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -2266,6 +2300,7 @@ class OrdenOut(BaseModel):
                 for foto in orden.fotos
             ],
             fotos_habilitadas=fotos_habilitadas,
+            seguimientos_retiro=list(orden.seguimientos_retiro),
             created_at=orden.created_at,
             updated_at=orden.updated_at,
         )

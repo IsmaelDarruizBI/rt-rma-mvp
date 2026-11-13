@@ -14,6 +14,7 @@ import hashlib
 from dataclasses import replace
 
 from fastapi import APIRouter, Request, Response, status
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.application import (
@@ -95,6 +96,10 @@ from app.application.evaluacion import (
     agregar_trabajo_adicional,
     evaluar_detalle,
 )
+from app.application.operativa import (
+    plazo_retiro_dias,
+    registrar_seguimiento,
+)
 from app.domain.models import (
     EstadoReparacionDetail,
     EstadoWorkflow,
@@ -103,6 +108,7 @@ from app.domain.models import (
     VigenciaGarantiaOrigen,
 )
 from app.domain.prioridad import clave_de_prioridad
+from app.domain.retiro import dias_de_retiro_demorado
 from app.services import (
     MAX_BYTES_FOTO,
     ROLES_EXCEPCION_GARANTIA,
@@ -201,7 +207,7 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
     autorizacion = acciones_de_autorizacion(orden)
     financieras = acciones_financieras(orden)
     custodia = acciones_de_custodia(orden)
-    return OrdenOut.desde_dominio(
+    salida = OrdenOut.desde_dominio(
         orden,
         progreso=progreso(orden),
         acciones=acciones,
@@ -224,6 +230,10 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
         fotos_habilitadas=contexto.fotos is not None,
         garantia_por_detalle=garantia,
     )
+    salida.retiro_demorado_dias = dias_de_retiro_demorado(
+        orden, contexto.ahora(), plazo_retiro_dias(contexto)
+    )
+    return salida
 
 
 def _con_excepcion_de_garantia(
@@ -907,6 +917,7 @@ def post_interrumpir_ejecucion(
             insumo.a_dominio() for insumo in cuerpo.insumos_utilizados
         ],
         motivo=cuerpo.motivo,
+        motivo_codigo=cuerpo.motivo_codigo,
         observaciones=cuerpo.observaciones,
         estado_trabajo=cuerpo.estado_trabajo,
         reversible=cuerpo.reversible,
@@ -1040,6 +1051,7 @@ def post_cancelar_detalle(
         detalle_id=detalle_id,
         usuario_id=cuerpo.usuario_id,
         motivo=cuerpo.motivo,
+        motivo_codigo=cuerpo.motivo_codigo,
     )
     return _salida(orden, contexto)
 
@@ -1061,6 +1073,7 @@ def post_cancelar_orden(
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
         motivo=cuerpo.motivo,
+        motivo_codigo=cuerpo.motivo_codigo,
     )
     return _salida(orden, contexto)
 
@@ -1661,5 +1674,27 @@ def post_devolver_rt(
         contexto,
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
+    )
+    return _salida(orden, contexto)
+
+
+class SeguimientoRetiroIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+    nota: str = Field(min_length=1)
+    canal: str | None = None
+
+
+@router.post("/{orden_id}/pickup-followups")
+def post_seguimiento_retiro(
+    orden_id: str, cuerpo: SeguimientoRetiroIn, contexto: ContextoDep
+) -> OrdenOut:
+    """Seguimiento de un retiro demorado (DEC-MI-14). La Orden sigue
+    abierta: nunca se cierra ni se dispone del equipo por el plazo."""
+    orden = registrar_seguimiento(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        nota=cuerpo.nota,
+        canal=cuerpo.canal,
     )
     return _salida(orden, contexto)

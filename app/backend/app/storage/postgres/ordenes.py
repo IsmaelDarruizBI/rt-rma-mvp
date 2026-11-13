@@ -311,6 +311,16 @@ _INSERTAR_DEVOLUCION_DINERO = consulta(
     """,
     modo=ESCRITURA,
 )
+_INSERTAR_SEGUIMIENTO_RETIRO = consulta(
+    "ordenes.insertar_seguimiento_retiro",
+    """
+    INSERT INTO rma.seguimiento_retiro
+        (orden_id, nota, canal, usuario_id, registrado_en, posicion)
+    VALUES (%(orden)s, %(nota)s, %(canal)s, %(usuario)s, %(fecha)s,
+            %(posicion)s)
+    """,
+    modo=ESCRITURA,
+)
 _INSERTAR_DESCUENTO = consulta(
     "ordenes.insertar_descuento",
     """
@@ -1239,6 +1249,7 @@ class _Guardado:
         self._pagos_de(orden_id)
         self._devoluciones(orden_id)
         self._descuentos(orden_id)
+        self._seguimientos_retiro(orden_id)
         self._historial(orden_id)
         # La raiz va al final: si este guardar cierra la Orden, nada se
         # inserta despues del cierre (diseno fisico, regla 9).
@@ -1378,6 +1389,7 @@ class _Guardado:
                 usuarios.add(pago.anulacion.usuario_id)
         usuarios.update(d.usuario_id for d in resumen.devoluciones)
         usuarios.update(d.usuario_id for d in orden.descuentos)
+        usuarios.update(s.usuario_id for s in orden.seguimientos_retiro)
         usuarios.update(
             v.excepcion.usuario_id
             for v in orden.vigencia_garantia_origen
@@ -1972,6 +1984,25 @@ class _Guardado:
                     "usuario": self._id("usuario", devolucion.usuario_id),
                     "fecha": devolucion.fecha,
                     "operacion": devolucion.operacion_id,
+                    "posicion": posicion,
+                },
+            )
+
+    def _seguimientos_retiro(self, orden_id: UUID) -> None:
+        """DEC-MI-14: los seguimientos del retiro solo crecen."""
+        for posicion, seguimiento in self._con_posicion(
+            "los seguimientos del retiro",
+            self._previa.orden.seguimientos_retiro if self._previa else [],
+            self._orden.seguimientos_retiro,
+        ):
+            self._ej.ejecutar(
+                _INSERTAR_SEGUIMIENTO_RETIRO,
+                {
+                    "orden": orden_id,
+                    "nota": seguimiento.nota,
+                    "canal": seguimiento.canal,
+                    "usuario": self._id("usuario", seguimiento.usuario_id),
+                    "fecha": seguimiento.fecha,
                     "posicion": posicion,
                 },
             )

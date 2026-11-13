@@ -21,6 +21,7 @@ import type {
   Usuario,
 } from "../../types/api";
 import { tieneRol } from "../../lib/roles";
+import { MotivosOperativos, ParametrosOperativos } from "./Operativa";
 import { Permisos } from "./Permisos";
 import { UsuariosRoles } from "./UsuariosRoles";
 
@@ -44,9 +45,17 @@ const POLITICAS_RMA: { valor: PoliticaGarantiaRma | ""; texto: string }[] = [
   { valor: "SIN_GARANTIA", texto: "Sin nueva garantía" },
 ];
 
-type Pestana = "catalogos" | "usuarios" | "permisos" | "auditoria";
+type Pestana =
+  | "catalogos"
+  | "motivos"
+  | "parametros"
+  | "usuarios"
+  | "permisos"
+  | "auditoria";
 const PESTANAS: { valor: Pestana; texto: string }[] = [
   { valor: "catalogos", texto: "Catálogos" },
+  { valor: "motivos", texto: "Motivos" },
+  { valor: "parametros", texto: "Parámetros" },
   { valor: "usuarios", texto: "Usuarios y roles" },
   { valor: "permisos", texto: "Permisos" },
   { valor: "auditoria", texto: "Auditoría" },
@@ -323,6 +332,8 @@ export function ConfiguracionPanel({ actor }: { actor: Usuario | null }) {
       {pestana === "permisos" && (
         <Permisos actor={actor} editable={catalogo.editable} onCambio={cargar} />
       )}
+      {pestana === "motivos" && <MotivosOperativos actor={actor} />}
+      {pestana === "parametros" && <ParametrosOperativos actor={actor} />}
 
       {pestana === "catalogos" && (
       <>

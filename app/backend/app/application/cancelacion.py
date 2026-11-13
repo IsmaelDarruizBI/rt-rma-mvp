@@ -17,6 +17,7 @@ estados para la cancelacion.
 """
 
 from app.domain.models import OrdenReparacion
+from app.domain.models.operativa import TipoMotivo
 from app.services import cancelar_detalle as cancelar_detalle_servicio
 from app.services import cancelar_orden as cancelar_orden_servicio
 from app.services import (
@@ -27,6 +28,7 @@ from app.services import (
 from .contexto import ApplicationContext
 from .documentos import emitir_documentos_de_salida
 from .modificacion import orden_para_modificar
+from .operativa import resolver_motivo
 
 
 def cancelar_detalle(
@@ -36,8 +38,16 @@ def cancelar_detalle(
     detalle_id: str,
     usuario_id: str,
     motivo: str,
+    motivo_codigo: str | None = None,
 ) -> OrdenReparacion:
-    """Cancela UN Detalle pendiente y reevalua la Orden (300 -> 211)."""
+    """Cancela UN Detalle pendiente y reevalua la Orden (300 -> 211).
+
+    DEC-MI-15: ``motivo_codigo`` elige un motivo del catalogo de
+    cancelacion (``motivo`` es su descripcion); sin el, texto libre.
+    """
+    motivo = resolver_motivo(
+        contexto, TipoMotivo.CANCELACION, motivo_codigo, motivo
+    )
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
@@ -60,10 +70,15 @@ def cancelar_orden(
     orden_id: str,
     usuario_id: str,
     motivo: str,
+    motivo_codigo: str | None = None,
 ) -> OrdenReparacion:
     """Cancela la Orden (DC31): cancela lo pendiente, fija CANCELADA y la
     cierra en el mismo acto. Si alguna precondicion falla, el service
-    rechaza sin cambiar nada y no se guarda nada."""
+    rechaza sin cambiar nada y no se guarda nada. Motivo de catalogo o
+    texto libre (DEC-MI-15)."""
+    motivo = resolver_motivo(
+        contexto, TipoMotivo.CANCELACION, motivo_codigo, motivo
+    )
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 

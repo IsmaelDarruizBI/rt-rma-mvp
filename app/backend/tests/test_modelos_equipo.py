@@ -69,6 +69,8 @@ def _corregir(cliente, orden_id: str, equipo: dict):
         json={
             "usuario_id": RECEPCION,
             "equipo": {"falla_reportada": "No enciende.", **equipo},
+            # DEC-MI-07: corregir lo ya registrado exige un motivo.
+            "motivo": "Correccion del modelo.",
         },
     )
 

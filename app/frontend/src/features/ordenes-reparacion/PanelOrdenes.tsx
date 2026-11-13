@@ -53,6 +53,8 @@ import {
 import { InventarioPanel } from "../inventario/Inventario";
 import { ReportesPanel } from "../reportes/Reportes";
 import { ReclamoRechazado } from "./ReclamoRechazado";
+import { RetiroDemorado } from "./RetiroDemorado";
+import { registrarSeguimientoRetiro } from "../../api/operativa";
 import { ConfiguracionPanel } from "../configuracion/Configuracion";
 import { AntecedentesEquipo } from "./AntecedentesEquipo";
 import { AutorizacionClienteOrden } from "./AutorizacionCliente";
@@ -435,6 +437,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
       motivo,
       observaciones,
       resultado,
+      motivoCodigo,
     ) =>
       void ejecutarComando(() =>
         api.interrumpirEjecucion(
@@ -446,6 +449,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
           observaciones || null,
           resultado?.estadoTrabajo ?? null,
           resultado ? resultado.reversible : null,
+          motivoCodigo,
         ),
       ),
     requerirRedefinicion: (
@@ -557,12 +561,14 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
       void ejecutarComando(() =>
         api.registrarDevolucion(idOrden, idActor, retiro),
       ),
-    cancelarDetalle: (detalleId, motivo) =>
+    cancelarDetalle: (detalleId, motivo, motivoCodigo) =>
       void ejecutarComando(() =>
-        api.cancelarDetalle(idOrden, detalleId, idActor, motivo),
+        api.cancelarDetalle(idOrden, detalleId, idActor, motivo, motivoCodigo),
       ),
-    cancelarOrden: (motivo) =>
-      void ejecutarComando(() => api.cancelarOrden(idOrden, idActor, motivo)),
+    cancelarOrden: (motivo, motivoCodigo) =>
+      void ejecutarComando(() =>
+        api.cancelarOrden(idOrden, idActor, motivo, motivoCodigo),
+      ),
     cambiarPrioridad: (prioridad, motivo) =>
       void ejecutarComando(() =>
         api.cambiarPrioridad(idOrden, idActor, prioridad, motivo),
@@ -857,6 +863,17 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                 orden={orden}
                 usuarios={usuarios}
                 estaciones={estaciones}
+              />
+              <RetiroDemorado
+                orden={orden}
+                actor={actor}
+                usuarios={usuarios}
+                ocupado={ocupado}
+                onRegistrar={(nota, canal) =>
+                  void ejecutarComando(() =>
+                    registrarSeguimientoRetiro(idOrden, idActor, nota, canal),
+                  )
+                }
               />
 
               {/* Solo formularios: cada uno se abre en su ventana. */}

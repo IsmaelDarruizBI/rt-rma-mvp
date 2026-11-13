@@ -121,6 +121,8 @@ def test_cada_rol_ve_sus_bandejas(tmp_path):
                 "DEVOLUCION_EQUIPO",
                 "PRIORIZAR",
                 "EN_OTROS_SECTORES",
+                # DEC-MI-14.
+                "RETIRO_DEMORADO",
             ],
             TECNICO: ["MIS_TOMADAS", "COLA", "REVISIONES"],
             COORDINADOR: [
@@ -136,6 +138,7 @@ def test_cada_rol_ve_sus_bandejas(tmp_path):
                 "CREDITO",
                 "SALDOS",
                 "INSUMOS_NEGATIVOS",
+                "RETIRO_DEMORADO",
             ],
         }
 

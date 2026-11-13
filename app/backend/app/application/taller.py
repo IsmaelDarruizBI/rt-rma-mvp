@@ -24,6 +24,7 @@ from app.domain.models import (
     InsumoUtilizado,
     OrdenReparacion,
 )
+from app.domain.models.operativa import TipoMotivo
 from app.services import (
     ROLES_LIBERACION_AJENA,
     ConfirmacionRequeridaError,
@@ -57,6 +58,7 @@ from app.services.tomas import buscar_detalle
 
 from .contexto import ApplicationContext
 from .modificacion import orden_para_modificar
+from .operativa import resolver_motivo
 
 
 def _motivo_del_ultimo_paso(orden: OrdenReparacion) -> str:
@@ -360,6 +362,7 @@ def interrumpir_ejecucion(
     observaciones: str | None = None,
     estado_trabajo: str | None = None,
     reversible: bool | None = None,
+    motivo_codigo: str | None = None,
 ) -> tuple[OrdenReparacion, ResultadoEvaluacionOrden]:
     """El tecnico interrumpe la Ejecucion (190 -> 200 Interrumpido -> 210
     -> 211), VAR-REP-003.
@@ -378,6 +381,10 @@ def interrumpir_ejecucion(
     (mismo u otro Detalle) o liberar la Orden (PROC-REP-212/213). El
     motivo es obligatorio; sin el no se guarda nada ni se mueve stock.
     """
+    # DEC-MI-15: motivo del catalogo de interrupcion o texto libre.
+    motivo = resolver_motivo(
+        contexto, TipoMotivo.INTERRUPCION, motivo_codigo, motivo
+    )
     return _cerrar_ejecucion(
         contexto,
         registrar_resultado=partial(
