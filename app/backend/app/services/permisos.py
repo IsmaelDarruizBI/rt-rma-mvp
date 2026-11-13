@@ -175,6 +175,13 @@ CLIENTE_BUSCAR = _definir(
     INGRESO,
     consulta=True,
 )
+# DEC-MI-11: corregir una vinculacion erronea con un Equipo.
+EQUIPO_VINCULO_CORREGIR = _definir(
+    "EQUIPO_VINCULO_CORREGIR",
+    "Corregir la vinculación de una Orden con un Equipo",
+    (RECEP, COORD, ADMIN),
+    INGRESO,
+)
 DETALLE_DEFINIR_RECEPCION = _definir(
     "DETALLE_DEFINIR_RECEPCION",
     "Cargar y finalizar los trabajos en el ingreso",

@@ -10,7 +10,7 @@
  * el origen y después se muestra solo el formulario de ese origen.
  */
 
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 
 import {
   Boton,
@@ -34,6 +34,7 @@ import { ApiError } from "../../api/client";
 import { EQUIPO_VACIO, type EquipoElegido, datosDelEquipo } from "./modelosEquipo";
 import { normalizarDni } from "./clientes";
 import { SelectorEquipo, useModelosEquipo } from "./SelectorEquipo";
+import { SelectorIdentidad } from "./IdentidadEquipo";
 import {
   ESTADO_WORKFLOW,
   ORIGEN,
@@ -538,6 +539,8 @@ export function FormularioAltaOrden({
 interface Ingreso {
   imei: string;
   numeroSerie: string;
+  /** DEC-MI-11: Equipo existente elegido; `null`, «Ninguno». */
+  equipoId: string | null;
   estadoFisico: string;
   /** Visibles: salen en el comprobante. */
   observaciones: string;
@@ -549,6 +552,7 @@ function ingresoInicial(): Ingreso {
   return {
     imei: "",
     numeroSerie: "",
+    equipoId: null,
     estadoFisico: "Sin golpes ni marcas visibles.",
     observaciones: "",
     notasInternas: "",
@@ -564,6 +568,7 @@ function datosDeIngreso(ingreso: Ingreso) {
     identificadores: {
       imei: textoONulo(ingreso.imei),
       numero_serie: textoONulo(ingreso.numeroSerie),
+      id: ingreso.equipoId,
     },
     recepcion: {
       estado_fisico: textoONulo(ingreso.estadoFisico),
@@ -588,6 +593,8 @@ function CamposIngreso({
   clienteExterno?: boolean;
   onCambiar: (ingreso: Ingreso) => void;
 }) {
+  const ingresoActual = useRef(ingreso);
+  ingresoActual.current = ingreso;
   const cambiar =
     (clave: keyof Ingreso) =>
     (evento: { target: { value: string } }) =>
@@ -621,6 +628,14 @@ function CamposIngreso({
           </Campo>
         )}
       </div>
+      <SelectorIdentidad
+        imei={ingreso.imei}
+        numeroSerie={ingreso.numeroSerie}
+        elegido={ingreso.equipoId}
+        onElegir={(equipoId) =>
+          onCambiar({ ...ingresoActual.current, equipoId })
+        }
+      />
       <Campo etiqueta="Estado físico al recibirlo">
         <textarea
           value={ingreso.estadoFisico}

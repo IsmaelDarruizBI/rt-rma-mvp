@@ -1221,6 +1221,14 @@ export interface Orden {
   retiro_demorado_dias?: number | null;
   /** DEC-MI-08: intentos de WhatsApp y su confirmación manual. */
   comunicaciones?: ComunicacionCliente[];
+  /** DEC-MI-11: correcciones de la vinculación con el Equipo. */
+  correcciones_equipo?: {
+    equipo_anterior_id: string;
+    equipo_nuevo_id: string;
+    motivo: string;
+    usuario_id: string;
+    fecha: string;
+  }[];
   created_at: string;
   updated_at: string;
   /** Solo lo devuelven notificar y registrar pago (PROC-REP-265). */

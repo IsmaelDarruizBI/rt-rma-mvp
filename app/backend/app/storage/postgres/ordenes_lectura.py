@@ -64,7 +64,7 @@ from app.domain.models.comunicaciones import (
 )
 from app.domain.models.descuentos import RegistroDescuento
 from app.domain.models.documentos import Documento, DocumentoEmitido
-from app.domain.models.equipos import EntregaEquipo
+from app.domain.models.equipos import CorreccionVinculoEquipo, EntregaEquipo
 from app.domain.models.fotos import FotoOrden
 from app.domain.models.operativa import SeguimientoRetiro
 from app.domain.models.pagos import (
@@ -182,6 +182,15 @@ FILTRO_DNI = consulta(
     """
     SELECT codigo, version FROM rma.orden
     WHERE cliente_id IS NOT NULL AND cliente_documento_numero = %(dni)s
+    """,
+    modo=LECTURA,
+)
+FILTRO_EQUIPO_ID = consulta(
+    "ordenes.filtro_equipo_id",
+    """
+    SELECT o.codigo, o.version FROM rma.orden o
+      JOIN rma.equipo e ON e.id = o.equipo_id
+     WHERE e.codigo = %(equipo)s
     """,
     modo=LECTURA,
 )
@@ -553,6 +562,20 @@ _DEVOLUCIONES = consulta(
     """,
     modo=LECTURA,
 )
+_CORRECCIONES_EQUIPO = consulta(
+    "ordenes.correcciones_equipo",
+    """
+    SELECT c.orden_id, c.equipo_anterior_codigo, c.equipo_nuevo_codigo,
+           c.motivo, u.codigo AS usuario, c.registrado_en
+    FROM rma.correccion_vinculo_equipo c
+    JOIN rma.usuario u ON u.id = c.usuario_id
+    WHERE c.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
+    ORDER BY c.orden_id, c.posicion
+    """,
+    modo=LECTURA,
+)
 _COMUNICACIONES = consulta(
     "ordenes.comunicaciones",
     """
@@ -676,6 +699,7 @@ _HIJAS = (
     _Hija("descuentos", _DESCUENTOS),
     _Hija("seguimientos_retiro", _SEGUIMIENTOS_RETIRO),
     _Hija("comunicaciones", _COMUNICACIONES),
+    _Hija("correcciones_equipo", _CORRECCIONES_EQUIPO),
     _Hija("movimientos", _MOVIMIENTOS),
 )
 
@@ -861,6 +885,16 @@ def _armar(raiz: Any, hijas: dict[str, Any]) -> Instantanea:
         comunicaciones=[
             _comunicacion(fila)
             for fila in hijas["comunicaciones"].get(raiz.id, [])
+        ],
+        correcciones_equipo=[
+            CorreccionVinculoEquipo(
+                equipo_anterior_id=fila.equipo_anterior_codigo,
+                equipo_nuevo_id=fila.equipo_nuevo_codigo,
+                motivo=fila.motivo,
+                usuario_id=fila.usuario,
+                fecha=utc(fila.registrado_en),
+            )
+            for fila in hijas["correcciones_equipo"].get(raiz.id, [])
         ],
         movimientos_insumo=[_movimiento(fila) for fila in filas_movimiento],
         devolucion=None if entregada else salida,

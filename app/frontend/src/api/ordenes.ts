@@ -80,6 +80,8 @@ export interface DatosEquipo {
   falla_reportada: string;
   imei?: string | null;
   numero_serie?: string | null;
+  /** DEC-MI-11: el Equipo existente elegido; sin él, identidad nueva. */
+  id?: string | null;
 }
 
 export interface DatosNuevaOrden {

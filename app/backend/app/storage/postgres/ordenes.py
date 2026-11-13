@@ -132,6 +132,7 @@ from .ordenes_lectura import (
     FILTRO_ABIERTAS,
     FILTRO_DNI,
     FILTRO_EQUIPO,
+    FILTRO_EQUIPO_ID,
     FILTRO_MOVIMIENTOS,
     FILTRO_RESERVAS,
     FILTRO_TODAS,
@@ -308,6 +309,17 @@ _INSERTAR_DEVOLUCION_DINERO = consulta(
     VALUES (%(codigo)s, %(orden)s, %(pago)s, %(monto)s, %(medio)s,
             %(motivo)s, %(referencia)s, %(usuario)s, %(fecha)s,
             %(operacion)s, %(posicion)s)
+    """,
+    modo=ESCRITURA,
+)
+_INSERTAR_CORRECCION_EQUIPO = consulta(
+    "ordenes.insertar_correccion_equipo",
+    """
+    INSERT INTO rma.correccion_vinculo_equipo
+        (orden_id, equipo_anterior_codigo, equipo_nuevo_codigo, motivo,
+         usuario_id, registrado_en, posicion)
+    VALUES (%(orden)s, %(anterior)s, %(nuevo)s, %(motivo)s, %(usuario)s,
+            %(fecha)s, %(posicion)s)
     """,
     modo=ESCRITURA,
 )
@@ -890,6 +902,13 @@ class PostgresOrdenReparacionRepository:
             lambda o: o.cliente is not None and o.cliente.dni == dni,
         )
 
+    def listar_por_equipo(self, equipo_id: str) -> list[OrdenReparacion]:
+        return self._leer(
+            FILTRO_EQUIPO_ID,
+            {"equipo": equipo_id},
+            lambda o: o.equipo.id == equipo_id,
+        )
+
     def listar_por_identificacion_equipo(
         self, *, imei: str | None, numero_serie: str | None
     ) -> list[OrdenReparacion]:
@@ -1274,6 +1293,7 @@ class _Guardado:
         self._descuentos(orden_id)
         self._seguimientos_retiro(orden_id)
         self._comunicaciones(orden_id)
+        self._correcciones_equipo(orden_id)
         self._historial(orden_id)
         # La raiz va al final: si este guardar cierra la Orden, nada se
         # inserta despues del cierre (diseno fisico, regla 9).
@@ -1414,6 +1434,7 @@ class _Guardado:
         usuarios.update(d.usuario_id for d in resumen.devoluciones)
         usuarios.update(d.usuario_id for d in orden.descuentos)
         usuarios.update(s.usuario_id for s in orden.seguimientos_retiro)
+        usuarios.update(c.usuario_id for c in orden.correcciones_equipo)
         for comunicacion in orden.comunicaciones:
             usuarios.add(comunicacion.usuario_id)
             if comunicacion.confirmacion:
@@ -2012,6 +2033,26 @@ class _Guardado:
                     "usuario": self._id("usuario", devolucion.usuario_id),
                     "fecha": devolucion.fecha,
                     "operacion": devolucion.operacion_id,
+                    "posicion": posicion,
+                },
+            )
+
+    def _correcciones_equipo(self, orden_id: UUID) -> None:
+        """DEC-MI-11: las correcciones de la vinculacion solo crecen."""
+        for posicion, correccion in self._con_posicion(
+            "las correcciones del Equipo",
+            self._previa.orden.correcciones_equipo if self._previa else [],
+            self._orden.correcciones_equipo,
+        ):
+            self._ej.ejecutar(
+                _INSERTAR_CORRECCION_EQUIPO,
+                {
+                    "orden": orden_id,
+                    "anterior": correccion.equipo_anterior_id,
+                    "nuevo": correccion.equipo_nuevo_id,
+                    "motivo": correccion.motivo,
+                    "usuario": self._id("usuario", correccion.usuario_id),
+                    "fecha": correccion.fecha,
                     "posicion": posicion,
                 },
             )

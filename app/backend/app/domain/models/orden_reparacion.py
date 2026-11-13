@@ -15,7 +15,7 @@ from .enums import (
     EstadoWorkflow,
     OrigenOrden,
 )
-from .equipos import EntregaEquipo, Equipo
+from .equipos import CorreccionVinculoEquipo, EntregaEquipo, Equipo
 from .fotos import FotoOrden
 from .inventario import MovimientoInsumo
 from .operativa import SeguimientoRetiro
@@ -139,6 +139,10 @@ class OrdenReparacion(BaseModel):
     # DEC-MI-08: mensajes asistidos al cliente (intento y confirmacion
     # manual); solo crecen.
     comunicaciones: list[ComunicacionCliente] = Field(default_factory=list)
+    # DEC-MI-11: correcciones de la vinculacion con el Equipo.
+    correcciones_equipo: list[CorreccionVinculoEquipo] = Field(
+        default_factory=list
+    )
     # Fotos del equipo (UAT-010): solo sus datos; la imagen esta en el
     # almacenamiento de objetos. Default vacio: un JSON anterior carga.
     fotos: list[FotoOrden] = Field(default_factory=list)

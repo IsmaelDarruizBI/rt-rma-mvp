@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .enums import TipoEntrega
 
@@ -93,3 +93,14 @@ class EntregaEquipo(BaseModel):
 # Nombre historico: la devolucion sin reparar de una Orden CANCELADA es una
 # ``EntregaEquipo`` de tipo DEVOLUCION_SIN_REPARACION.
 DevolucionEquipo = EntregaEquipo
+
+
+class CorreccionVinculoEquipo(BaseModel):
+    """Correccion de la vinculacion de la Orden con un Equipo (DEC-MI-11):
+    de que identidad a cual, por que, quien y cuando. Solo crece."""
+
+    equipo_anterior_id: str
+    equipo_nuevo_id: str
+    motivo: str = Field(min_length=1)
+    usuario_id: str
+    fecha: datetime

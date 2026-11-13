@@ -67,6 +67,7 @@ from .catalogo_equipos import equipo_desde_catalogo
 from .cola import encolar_si_ingreso_automatico
 from .contexto import ApplicationContext
 from .documentos import emitir_comprobante_recepcion_inicial
+from .identidad import validar_equipo_del_ingreso
 from .identificadores import siguiente_detalle_id, siguiente_orden_id
 from .modificacion import orden_para_modificar
 
@@ -101,6 +102,8 @@ def crear_orden(
     equipo = equipo_desde_catalogo(contexto, equipo)
 
     with contexto.transaccion():
+        # DEC-MI-11: reusar una identidad exige el mismo IMEI o serie.
+        validar_equipo_del_ingreso(contexto, equipo)
         cliente = cliente_para_orden(
             # Sin DNI no hay con quien compararlo (cliente_para_orden).
             contexto.ordenes.listar_por_dni_cliente(cliente.dni)
@@ -143,6 +146,7 @@ def crear_orden_rt(
     equipo = equipo_desde_catalogo(contexto, equipo)
 
     with contexto.transaccion():
+        validar_equipo_del_ingreso(contexto, equipo)
         orden = crear_orden_rt_interno(
             orden_id=siguiente_orden_id(contexto.ordenes),
             equipo=equipo,

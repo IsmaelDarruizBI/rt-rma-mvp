@@ -93,6 +93,10 @@ class OrdenReparacionRepository(Protocol):
         """
         ...
 
+    def listar_por_equipo(self, equipo_id: str) -> list[OrdenReparacion]:
+        """Las Ordenes vinculadas a esa identidad de Equipo (DEC-MI-11)."""
+        ...
+
     def listar_por_identificacion_equipo(
         self, *, imei: str | None, numero_serie: str | None
     ) -> list[OrdenReparacion]:

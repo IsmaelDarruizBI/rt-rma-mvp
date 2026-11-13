@@ -95,6 +95,7 @@ from app.domain.models import (
     importe_de_descuento,
 )
 from app.domain.models.comunicaciones import ComunicacionCliente
+from app.domain.models.equipos import CorreccionVinculoEquipo
 from app.domain.models.operativa import SeguimientoRetiro
 from app.domain.politicas import CondicionComercial, politica_de
 from app.domain.prioridad import (
@@ -2136,6 +2137,10 @@ class OrdenOut(BaseModel):
     retiro_demorado_dias: int | None = None
     # DEC-MI-08: intentos de envio asistido y su confirmacion manual.
     comunicaciones: list[ComunicacionCliente] = Field(default_factory=list)
+    # DEC-MI-11: correcciones de la vinculacion con el Equipo.
+    correcciones_equipo: list[CorreccionVinculoEquipo] = Field(
+        default_factory=list
+    )
     created_at: datetime
     updated_at: datetime
 
@@ -2305,6 +2310,7 @@ class OrdenOut(BaseModel):
             fotos_habilitadas=fotos_habilitadas,
             seguimientos_retiro=list(orden.seguimientos_retiro),
             comunicaciones=list(orden.comunicaciones),
+            correcciones_equipo=list(orden.correcciones_equipo),
             created_at=orden.created_at,
             updated_at=orden.updated_at,
         )

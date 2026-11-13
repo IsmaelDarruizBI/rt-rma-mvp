@@ -56,6 +56,7 @@ import { ReclamoRechazado } from "./ReclamoRechazado";
 import { RetiroDemorado } from "./RetiroDemorado";
 import { ComunicacionesOrden } from "./ComunicacionesOrden";
 import { FirmasDocumentos } from "./FirmasDocumentos";
+import { IdentidadDeLaOrden } from "./IdentidadEquipo";
 import { registrarSeguimientoRetiro } from "../../api/operativa";
 import { ConfiguracionPanel } from "../configuracion/Configuracion";
 import { AntecedentesEquipo } from "./AntecedentesEquipo";
@@ -928,6 +929,13 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                 resumen="Otras Órdenes con el mismo IMEI o número de serie"
               >
                 <AntecedentesEquipo orden={orden} />
+                <IdentidadDeLaOrden
+                  key={`${orden.id}-${orden.equipo.id}`}
+                  orden={orden}
+                  actor={actor}
+                  ocupado={ocupado}
+                  ejecutarComando={ejecutarComando}
+                />
               </SeccionPlegable>
 
               <SeccionPlegable

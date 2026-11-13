@@ -178,6 +178,9 @@ class JsonOrdenReparacionRepository:
             if orden.cliente is not None and orden.cliente.dni == dni
         ]
 
+    def listar_por_equipo(self, equipo_id: str) -> list[OrdenReparacion]:
+        return [o for o in self.listar() if o.equipo.id == equipo_id]
+
     def listar_por_identificacion_equipo(
         self, *, imei: str | None, numero_serie: str | None
     ) -> list[OrdenReparacion]:
