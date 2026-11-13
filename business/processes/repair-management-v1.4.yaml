@@ -13,6 +13,12 @@
 # aristas nuevos): 265, 269 y 270 exigen el check-in con trabajos realizados y
 # garantia aplicable; 036 y EVT-REP-998 registran tres pendientes de la garantia
 # vencida; 212 y 213 tratan la liberacion ajena con una Ejecucion en curso.
+# Decisiones de la macroiteracion integral (12/11/2026, DEC-MI-01 a 15), solo
+# texto, sin nodos, aristas ni estados nuevos: 030 (identidad del Equipo y
+# continuacion paga de un reclamo), 036 y EVT-REP-998 (registro de reclamos de
+# garantia), 046 (firma opcional), 260 (plantillas, envio asistido y retiro
+# demorado), 265, 269 y 270 (criterio de garantia aplicable y correccion del
+# check-in), 271 (responsables de custodia) y 280 (comprobante regenerado).
 # El texto que sigue describe las iteraciones V1.4 previas a la consolidacion;
 # donde contradiga lo anterior, rige la consolidacion.
 #
@@ -304,9 +310,16 @@ nodes:
       aporta el tp_id como referencia comercial y nunca reemplaza la identidad
       fisica, o se cargan a mano cuando el equipo no esta en el catalogo
       (BR-REP-048). El formulario inicial de CLIENTE_EXTERNO no pide numero de
-      serie (UAT-011): el dato sigue existiendo en el Equipo. Un equipo sin IMEI
-      disponible o legible, o con coincidencias ambiguas, queda pendiente de
-      definicion funcional.
+      serie (UAT-011): el dato sigue existiendo en el Equipo. Sin IMEI se busca
+      por numero de serie y, sin ninguno de los dos, se registra una identidad
+      nueva; ante varias coincidencias Recepcion elige el Equipo o indica
+      "Ninguno", y nunca se vincula por similitud de nombre, modelo o cliente
+      (DEC-MI-11, BR-REP-022). Continuacion paga de un reclamo de garantia
+      rechazado (DEC-MI-02, BR-REP-019): cuando Recepcion la elige, el cliente,
+      el equipo y el motivo llegan precargados desde el reclamo, Recepcion los
+      confirma y la Orden nueva queda vinculada al reclamo, sin Ordenes
+      duplicadas. Los datos del ingreso se corrigen con motivo y auditoria, sin
+      alterar los comprobantes emitidos (DEC-MI-07, BR-REP-046).
     outputs:
       - Cliente identificado (existente reutilizado expresamente o nuevo), con su clasificacion
       - Equipo identificado (reutilizacion confirmada por Recepcion o Equipo nuevo), con su tp_id cuando proviene del catalogo
@@ -443,12 +456,17 @@ nodes:
       informan los Detalles que siguen siendo elegibles, que pueden reclamarse
       en un pedido nuevo. La excepcion la autorizan por defecto Recepcion,
       Coordinacion RMA y Administracion, no el Tecnico (DEC-IT1-01,
-      BR-REP-039). Siguen pendientes de decision, sin transiciones ni estados
-      nuevos: si la atencion puede continuar como una reparacion paga que
-      conserve la relacion con el reclamo rechazado, y si se persiste y como se
-      audita el intento de reclamo rechazado. Mientras no se decidan, no se
-      asume ninguna ruta. Las precedencias concretas entre politicas de
-      garantia siguen pendientes de decision (DC15A).
+      BR-REP-039). Reclamos de garantia (DEC-MI-02, BR-REP-019): cada pedido,
+      admitido o rechazado, queda en el registro independiente de reclamos de
+      garantia, con la Orden original, los Detalles reclamados, el Equipo, el
+      usuario, la fecha/hora, la vigencia evaluada y las excepciones; un
+      rechazo conserva su motivo y su resultado. Recepcion puede continuar un
+      reclamo rechazado como reparacion paga: una Orden CLIENTE_EXTERNO nueva,
+      vinculada al reclamo, que empieza su propio recorrido (PROC-REP-030, con
+      los datos precargados). No se agregan transiciones desde este nodo ni
+      desde EVT-REP-998. La garantia que otorgan los trabajos de la Orden de
+      garantia sigue la politica RMA de su Tipo de Reparacion (DEC-MI-01,
+      BR-REP-041).
     inputs:
       - Orden de Reparacion origen y Detalle(s) origen identificados
     outputs:
@@ -548,7 +566,7 @@ nodes:
       resultado, y contemplando evidencia de consentimiento: el canal elegido y,
       cuando corresponda, la firma manuscrita en pantalla o la foto o archivo
       del documento firmado, ligada al documento y su version (BR-REP-042,
-      DC26); cuando cada firma es obligatoria sigue pendiente de decision. La
+      DC26); la firma es opcional en todos los documentos (DEC-MI-06). La
       aceptacion de la revision tecnica NO autoriza reparaciones posteriores:
       los Detalles que se definan luego vuelven a requerir su propia decision.
       Un Detalle nuevo o modificado (nueva definicion vigente) nace
@@ -1972,8 +1990,16 @@ nodes:
       consentimiento y las preferencias del cliente por finalidad, y un aviso
       operativo se distingue de un mensaje comercial (BR-REP-043, BR-REP-044).
       El cliente puede ser notificado antes del check-in, sin comunicar una
-      garantia definitiva no confirmada (UAT-009). Plantillas, disparadores y
-      proveedor oficial siguen pendientes.
+      garantia definitiva no confirmada (UAT-009). Etapa 1 (DEC-MI-08): el
+      usuario elige una plantilla configurada por Administracion (entre las
+      iniciales, equipo listo para retirar), revisa y puede editar el mensaje
+      antes de abrir WhatsApp, y confirma manualmente el envio; se registran la
+      plantilla, el mensaje preparado, el canal y el intento de apertura, y
+      nunca un "entregado" o "leido" sin evidencia de un proveedor. Desde esta
+      notificacion corre el plazo del retiro demorado (DEC-MI-14, BR-REP-033):
+      al vencer la Orden se marca, se alerta en las bandejas y se registran
+      seguimientos y recordatorios de retiro, sin cerrarla. El proveedor
+      oficial de la etapa 2 sigue pendiente.
     rules:
       - BR-REP-043
       - BR-REP-044
@@ -2008,7 +2034,10 @@ nodes:
       (BR-REP-016) y los Pagos anulados no cuentan para el Saldo. Es un documento
       versionado: una correccion genera una version nueva con motivo y
       referencia a la reemplazada (DC13, BR-REP-031), y la firma o el archivo
-      firmado quedan ligados a esa version (BR-REP-042).
+      firmado, opcionales (DEC-MI-06), quedan ligados a esa version
+      (BR-REP-042). Si el check-in se corrige antes de la entrega, el
+      comprobante se regenera cuando corresponde como una version nueva, sin
+      destruir las anteriores (DEC-MI-05, BR-REP-045).
     outputs:
       - Comprobante final con desglose de Detalles/Ajustes/pagos/saldo
       - Garantia de reparacion (unicamente si hubo reparacion), con plazo definitivo y vencimiento por Detalle
@@ -2059,8 +2088,8 @@ nodes:
       aprueba, reflejando siempre el saldo definitivo.
       Consolidacion V1.4 (UAT-009, BR-REP-045): una Orden de CLIENTE_EXTERNO con
       trabajos realizados y garantia aplicable ademas exige el check-in
-      registrado para aprobar la entrega; el criterio exacto para determinar
-      cuando la garantia es aplicable sigue pendiente de definicion. Con
+      registrado para aprobar la entrega; la garantia es aplicable cuando al
+      menos un trabajo realizado tiene garantia mayor a cero (DEC-MI-01). Con
       Saldo = 0 y el check-in pendiente la salida es "Saldo en 0,
       falta el check-in" -> PROC-REP-269; "Si" significa Saldo = 0 y, cuando
       corresponde, check-in registrado. Las cuatro salidas son excluyentes. El
@@ -2114,9 +2143,10 @@ nodes:
       Aplica solo a CLIENTE_EXTERNO; la custodia de los demas origenes sigue sin
       definir. No cambia CANCELADA a ENTREGADA. Consolidacion V1.4 (DC18B):
       registrar este evento de custodia requiere un permiso configurable desde
-      Administracion; Recepcion es el actor declarado, y los responsables
-      predeterminados de cada evento de custodia siguen pendientes de decision
-      (BR-REP-039).
+      Administracion; Recepcion es el actor declarado. Los eventos de custodia
+      los registran por defecto Recepcion y Administracion (DEC-MI-04); la
+      regularizacion registra uno de ellos y su permiso parte de la
+      configuracion inicial (DEC-MI-12, BR-REP-039).
       Revision DC31 (09/11/2026): se alcanza desde la Orden abierta sin trabajos
       vigentes (PROC-REP-307) y, resuelta la custodia, vuelve a ella; la
       devolucion y la cancelacion explicita siguen desde alli. Las Ordenes que
@@ -2206,7 +2236,8 @@ nodes:
     description: >
       Nodo nuevo de la consolidacion V1.4 (UAT-009, BR-REP-045), analogo a
       PROC-REP-266. Una Orden de CLIENTE_EXTERNO con trabajos realizados y
-      garantia aplicable (el criterio exacto sigue pendiente, BR-REP-045), con
+      garantia aplicable (al menos un trabajo realizado con garantia mayor a
+      cero, DEC-MI-01, BR-REP-045), con
       la reparacion lista y el Saldo en 0, no puede entregarse mientras no se
       registre el check-in (verificacion de funciones basicas). La situacion
       visible es "Pendiente de verificacion de funciones basicas": es solo
@@ -2217,7 +2248,9 @@ nodes:
       al registrarlo se reasigna la garantia sugerida de cada Detalle no
       cancelado sin pisar ajustes manuales (BR-REP-041) y se revalida la
       condicion de entrega (PROC-REP-265). Sin trabajos realizados, RT_INTERNO y
-      la garantia RMA no pasan por aqui.
+      la garantia RMA no pasan por aqui. Hasta la entrega el check-in puede
+      corregirse con motivo obligatorio; se conservan todas sus versiones y
+      rige la ultima (DEC-MI-05, BR-REP-045).
     rules:
       - BR-REP-045
       - BR-REP-041
@@ -2268,8 +2301,11 @@ nodes:
       Orden de CLIENTE_EXTERNO con trabajos realizados y garantia aplicable
       exige ademas el check-in registrado (PROC-REP-265/269, BR-REP-045); la
       constancia de entrega puede
-      llevar firma manuscrita en pantalla o un archivo firmado (BR-REP-042), cuya
-      obligatoriedad sigue pendiente.
+      llevar firma manuscrita en pantalla o un archivo firmado (BR-REP-042), que
+      es opcional (DEC-MI-06). La entrega y la devolucion sin reparar las
+      registran por defecto Recepcion y Administracion (DEC-MI-04). Un retiro
+      demorado no cierra la Orden ni habilita a disponer del equipo
+      (DEC-MI-14, BR-REP-033).
     outputs:
       - Devolucion fisica registrada (fecha/hora, usuario que entrega y persona que recibe) cuando corresponde
     rules:
@@ -2517,10 +2553,11 @@ nodes:
       PROC-REP-036 cuando la garantia de origen esta vencida y no se autorizo
       una excepcion. No es el fin de una Orden de Reparacion: la Orden de
       garantia no llega a crearse, no hay pagos ni custodia que verificar y por
-      eso no pasa por PROC-REP-268. La Orden origen permanece sin cambios. Que
-      queda registrado del intento de reclamo rechazado, y si la atencion puede
-      continuar como una reparacion paga vinculada a ese reclamo, siguen
-      pendientes de decision: este fin no los resuelve.
+      eso no pasa por PROC-REP-268. La Orden origen permanece sin cambios. El
+      reclamo rechazado queda en el registro de reclamos de garantia, con su
+      motivo y su resultado (DEC-MI-02, BR-REP-019). Si Recepcion lo continua
+      como reparacion paga, se crea una Orden CLIENTE_EXTERNO nueva vinculada
+      al reclamo, que empieza su propio recorrido: este fin no tiene salidas.
 
   - id: EVT-REP-999
     type: end

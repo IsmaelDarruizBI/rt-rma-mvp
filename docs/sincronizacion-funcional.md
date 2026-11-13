@@ -4,11 +4,11 @@
 
 | Ítem | Valor |
 |---|---|
-| Fuente | `rt-rma-app`, rama `spec/macro-v14` (V1.4 con DC31, las decisiones DEC-IT1-01 a 05 y el estado de implementación de la macroiteración, sobre `spec/iteracion-1-decisiones` y la etiqueta `v1.4-baseline`) |
-| Commit de origen | `420feb97fd71fb85f62a722e3033db8cefd45e40` |
+| Fuente | `rt-rma-app`, rama `spec/macro-integral` (decisiones DEC-MI-01 a 15 sobre `spec/macro-v14`: V1.4 con DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`) |
+| Commit de origen | `45562633d659a9630c2f9b05a7ffdf1073d2591e` |
 | Contenido funcional aprobado | `b6cc3a5` (DC01, 24/10/2026) |
 | Manifiesto | `business/FUNCTIONAL_SOURCE.json`: repositorio, commit, etiqueta y SHA-256 de cada archivo |
-| Sincronizado | 12/11/2026 (macroiteración: estado de implementación); antes, 11/11/2026 (iteración 1: DEC-IT1-01 a 05), 10/11/2026 (DC31, `ab928b6`) y 24/10/2026, rama `sync/functional-v1.4` |
+| Sincronizado | 13/11/2026 (macroiteración integral: DEC-MI-01 a 15); antes, 12/11/2026 (macroiteración: estado de implementación); antes, 11/11/2026 (iteración 1: DEC-IT1-01 a 05), 10/11/2026 (DC31, `ab928b6`) y 24/10/2026, rama `sync/functional-v1.4` |
 
 ## Qué contiene `business/`
 

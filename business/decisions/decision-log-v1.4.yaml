@@ -159,7 +159,6 @@ decisions:
       status: PARCIAL
       evidence: roles fijos por constante (por ejemplo services/cancelaciones.py ROLES_CANCELACION RECEP y COORD); rt-rma-mvp feat/macro-v14 (domain/models/enums.py OrigenCancelacion.DESCARTE_TECNICO, aplicado por la evaluacion tecnica DESCARTADO)
       gap: permisos configurables (hito M).
-    open: [ABI-06, ABI-23]
 
   # ------------------------------------------------------------------ Bloque 2
   - id: DC05
@@ -210,7 +209,6 @@ decisions:
     implementation:
       status: NO_IMPLEMENTADO
       evidence: services/custodia.py:68 (ROLES_RECEPCION_EQUIPO fijo)
-    open: [ABI-06]
 
   - id: DC21
     block: 2
@@ -247,7 +245,6 @@ decisions:
       status: PARCIAL
       evidence: domain/models/equipos.py (tp_id separado del identificador fisico; el Equipo se copia en cada Orden con un identificador nuevo); rt-rma-mvp feat/macro-v14 (application/consultas_operativas.py y GET /api/equipment/history, antecedentes por IMEI o numero de serie, solo consulta)
       gap: entidad Equipo con historia propia y confirmacion de reutilizacion por Recepcion (ABI-05).
-    open: [ABI-05]
 
   - id: DC15A
     block: 3
@@ -260,7 +257,7 @@ decisions:
       status: PARCIAL
       evidence: domain/garantia.py:15-18 (90/30 fijo, maximo de ajuste 730 dias); garantia sugerida y definitiva por Detalle
       gap: politica configurable y precedencias.
-    open: [ABI-03, ABI-37]
+    open: [ABI-38, ABI-39]
 
   - id: DC15B
     block: 3
@@ -273,7 +270,6 @@ decisions:
     implementation:
       status: IMPLEMENTADO
       evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/ordenes.py evaluar_vigencia_garantia y crear_orden_garantia_rma; vigencia y excepcion por Detalle origen; migracion 20261111000100_it1_alineacion_v14.sql)
-    open: [ABI-03, ABI-34, ABI-35]
 
   - id: DC14
     block: 3
@@ -348,7 +344,6 @@ decisions:
       status: PARCIAL
       evidence: "rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/descuentos.py: un Ajuste Comercial vigente por Orden, clase DESCUENTO o CORTESIA, porcentaje o importe)"
       gap: el ajuste por Detalle; el permiso inicial del DESCUENTO.
-    open: [ABI-09, ABI-10]
 
   - id: DC10
     block: 5
@@ -374,7 +369,6 @@ decisions:
     implementation:
       status: IMPLEMENTADO
       evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/descuentos.py aplicar_descuento con clase CORTESIA; la entrega se bloquea con saldo a favor hasta la devolucion, PROC-REP-265/267)
-    open: [ABI-10]
 
   - id: DC12C
     block: 5
@@ -387,7 +381,7 @@ decisions:
     implementation:
       status: IMPLEMENTADO
       evidence: services/pagos.py:79-84 y 491 (ROLES_DEVOLUCION_DINERO ADMIN y RECEP), domain/models/pagos.py:68-83
-    open: [ABI-07, ABI-29]
+    open: [ABI-29, ABI-40]
 
   - id: DC13
     block: 5
@@ -410,7 +404,6 @@ decisions:
     implementation:
       status: NO_IMPLEMENTADO
       evidence: los documentos no tienen firma ni identificacion digital
-    open: [ABI-08]
 
   # ------------------------------------------------------------------ Bloque 6
   - id: DC24
@@ -423,7 +416,6 @@ decisions:
     implementation:
       status: NO_IMPLEMENTADO
       evidence: no existe modulo de Compras
-    open: [ABI-12]
 
   - id: DC24LOT
     block: 6
@@ -435,7 +427,6 @@ decisions:
     implementation:
       status: NO_IMPLEMENTADO
       evidence: movimientos sin lote
-    open: [ABI-12]
 
   - id: DC25
     block: 6
@@ -460,7 +451,6 @@ decisions:
     implementation:
       status: NO_IMPLEMENTADO
       evidence: no existe registro de consentimiento
-    open: [ABI-31]
 
   - id: DC29
     block: 6
@@ -514,7 +504,7 @@ decisions:
     implementation:
       status: NO_APLICA
       evidence: plan de consolidacion del 23/10/2026
-    open: [ABI-16, ABI-22, ABI-24]
+    open: [ABI-16, ABI-24]
 
   # ------------------------------------------------------------------ DC07
   - id: DC07A
@@ -692,6 +682,315 @@ decisions:
       status: IMPLEMENTADO
       evidence: rt-rma-mvp feat/iteracion-1-alineacion-v14 (services/decision_cliente.py solicitud de desistimiento; services/cancelaciones.py resolver_desistimiento_solicitado con el usuario que interrumpio)
 
+  # ------------------------------------------------------------------ Macroiteracion integral (12/11/2026)
+  # Aprobadas por el responsable de producto el 12/11/2026 para la
+  # macroiteracion integral de rt-rma-mvp. Fuera de alcance: la vinculacion o
+  # integracion de equipos con Gestion RT, la integracion con ventas de Gestion
+  # RT, el proveedor automatico de WhatsApp, los envios automaticos de
+  # marketing, el gemelo digital y Odoo.
+  - id: DEC-MI-01
+    block: MI
+    title: Garantia por Tipo de Reparacion con plazos segun el check-in, politica para trabajos dentro de una garantia RMA y check-in exigible solo con garantia mayor a cero
+    status: CONFIRMADA
+    rules: [BR-REP-041, BR-REP-045, BR-REP-017, BR-REP-040]
+    nodes: [PROC-REP-265, PROC-REP-269, PROC-REP-270, PROC-REP-280, PROC-REP-036]
+    features: [FEAT-REP-008, FEAT-REP-010, FEAT-REP-001]
+    scenarios: [HP-REP-001, VAR-REP-031, VAR-REP-034, VAR-REP-040, VAR-REP-041]
+    notes: >
+      Aprobada por el responsable de producto el 12/11/2026. Cierra ABI-03 y
+      ABI-37. Cada Tipo de Reparacion configura un plazo con check-in
+      realizado y otro con check-in no realizado (valores iniciales 90 y 30
+      dias) y una politica para los trabajos hechos dentro de una garantia
+      RMA: (1) iniciar un nuevo plazo segun el Tipo de Reparacion, (2)
+      conservar el tiempo restante de la garantia original o (3) no otorgar
+      nueva garantia. El ajuste manual autorizado conserva su precedencia, con
+      motivo y auditoria. El check-in es obligatorio para entregar una Orden
+      CLIENTE_EXTERNO unicamente cuando algun trabajo realizado tiene garantia
+      mayor a cero (criterio de garantia aplicable). Cada Detalle tiene un
+      plazo calculado y trazable. No decide cual de las tres politicas RMA es
+      la inicial de cada Tipo (ABI-38) ni que plazo rige cuando el check-in no
+      es exigible fuera de la garantia RMA (ABI-39).
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+    open: [ABI-38, ABI-39]
+
+  - id: DEC-MI-02
+    block: MI
+    title: Registro independiente de reclamos de garantia y continuacion de un reclamo rechazado como reparacion paga vinculada
+    status: CONFIRMADA
+    rules: [BR-REP-019, BR-REP-039]
+    nodes: [PROC-REP-036, EVT-REP-998, PROC-REP-030]
+    features: [FEAT-REP-001, FEAT-REP-011]
+    scenarios: [VAR-REP-038, VAR-REP-039]
+    notes: >
+      Aprobada el 12/11/2026. Cierra ABI-35 y ABI-34. El registro de reclamos
+      de garantia conserva la Orden original, los trabajos reclamados, el
+      Equipo, el usuario y la fecha, la vigencia evaluada, el motivo y el
+      resultado del rechazo, las excepciones autorizadas si existen y la
+      relacion con una Orden paga posterior. La Orden original entregada no se
+      modifica. Recepcion puede continuar un reclamo rechazado como reparacion
+      paga: se precargan cliente, equipo y motivo, se requiere su
+      confirmacion, se crea una Orden CLIENTE_EXTERNO vinculada al reclamo y
+      no se crean Ordenes duplicadas. Consultan los reclamos Recepcion,
+      Coordinacion RMA y Administracion. No agrega transiciones al grafo: la
+      Orden paga es una Orden nueva que empieza su propio recorrido
+      (PROC-REP-030) y EVT-REP-998 sigue siendo un fin sin salidas.
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+
+  - id: DEC-MI-03
+    block: MI
+    title: DESCUENTO y CORTESIA por Recepcion, Coordinacion RMA y Administracion; ajustes por Orden o por Detalle sin prorrateo; todo ajuste por debajo de lo cobrado deja saldo a favor
+    status: CONFIRMADA
+    rules: [BR-REP-016, BR-REP-038, BR-REP-039]
+    nodes: [PROC-REP-265, PROC-REP-267, PROC-REP-280]
+    features: [FEAT-REP-007, FEAT-REP-011]
+    scenarios: [VAR-REP-041]
+    notes: >
+      Aprobada el 12/11/2026. Cierra ABI-09 y ABI-10. Recepcion, Coordinacion
+      RMA y Administracion aplican DESCUENTO y CORTESIA. Los ajustes se
+      registran por Orden o por Detalle, como porcentaje o importe, segun las
+      reglas existentes; un ajuste general de la Orden no se prorratea
+      automaticamente entre sus Detalles. Si un ajuste deja el total por debajo
+      de lo ya cobrado genera saldo a favor, la devolucion se exige antes de
+      entregar, se conservan los pagos y los ajustes historicos y no hay
+      dobles devoluciones. No agrega reglas de acumulacion ni limites.
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+
+  - id: DEC-MI-04
+    block: MI
+    title: Recepcion y Administracion registran la recepcion fisica, el no recibido, la devolucion sin reparar y la entrega
+    status: CONFIRMADA
+    rules: [BR-REP-033, BR-REP-039]
+    nodes: [PROC-REP-060, PROC-REP-270, PROC-REP-271]
+    features: [FEAT-REP-008, FEAT-REP-009, FEAT-REP-011]
+    notes: >
+      Aprobada el 12/11/2026. Cierra ABI-06. Cada evento registra usuario y
+      fecha/hora. La regularizacion de PROC-REP-271 no se nombra por separado:
+      registra uno de esos eventos y su permiso parte de la configuracion
+      inicial de DEC-MI-12.
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+
+  - id: DEC-MI-05
+    block: MI
+    title: El check-in se corrige antes de la entrega con motivo; se conservan todas las versiones, rige la ultima y el comprobante se regenera como version nueva
+    status: CONFIRMADA
+    rules: [BR-REP-045, BR-REP-041, BR-REP-031]
+    nodes: [PROC-REP-269, PROC-REP-280, PROC-REP-270]
+    features: [FEAT-REP-008]
+    notes: >
+      Aprobada el 12/11/2026. Cierra ABI-32. La correccion se admite antes de
+      la entrega, con motivo obligatorio; se conservan todas las versiones del
+      check-in y rige la ultima. Cuando corresponde, el comprobante final se
+      regenera como una version nueva (DC13), sin destruir las anteriores.
+      Quien corrige parte de la configuracion inicial de permisos (DEC-MI-12).
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+
+  - id: DEC-MI-06
+    block: MI
+    title: Firma opcional en todos los documentos, en pantalla o foto del documento firmado, ligada al documento
+    status: CONFIRMADA
+    rules: [BR-REP-042]
+    nodes: [PROC-REP-046, PROC-REP-270, PROC-REP-280]
+    features: [FEAT-REP-002, FEAT-REP-008]
+    notes: >
+      Aprobada el 12/11/2026. Cierra ABI-08: ningun documento exige firma. La
+      evidencia (firma en pantalla o foto del documento firmado) queda ligada
+      al documento.
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+
+  - id: DEC-MI-07
+    block: MI
+    title: Correccion de los datos del ingreso por Recepcion, Coordinacion RMA y Administracion, con motivo y auditoria, sin alterar comprobantes emitidos
+    status: CONFIRMADA
+    rules: [BR-REP-046, BR-REP-039]
+    nodes: [PROC-REP-030, PROC-REP-032]
+    features: [FEAT-REP-001, FEAT-REP-011]
+    notes: >
+      Aprobada el 12/11/2026. Cierra ABI-25 y confirma UAT-I18. Motivo
+      obligatorio y auditoria de los valores anteriores y nuevos; la
+      correccion no altera los comprobantes ya emitidos. No decide hasta
+      cuando se admite la correccion (ABI-41).
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+    open: [ABI-41]
+
+  - id: DEC-MI-08
+    block: MI
+    title: WhatsApp asistido con plantillas configurables e historial del envio; consentimiento expreso y revocable para marketing
+    status: CONFIRMADA
+    rules: [BR-REP-043, BR-REP-044, BR-REP-040]
+    nodes: [PROC-REP-260]
+    features: [FEAT-REP-008, FEAT-REP-010]
+    notes: >
+      Aprobada el 12/11/2026. Cierra ABI-31 y la etapa 1 de ABI-13; la etapa
+      2 (proveedor automatico) sigue abierta en ABI-13 y queda fuera de este
+      alcance. Plantillas configurables por Administracion, cinco iniciales
+      (ingreso de equipo, autorizacion pendiente, equipo listo para retirar,
+      recordatorio de retiro y garantia) con variables de la Orden; el mensaje
+      se revisa y se edita antes de abrir WhatsApp; se registran Orden,
+      plantilla, mensaje preparado, usuario, fecha, canal, intento de apertura
+      y confirmacion manual del envio, y nunca "entregado" ni "leido" sin
+      evidencia de un proveedor. Las comunicaciones operativas se distinguen
+      de las comerciales; el marketing exige consentimiento expreso, revocable,
+      con usuario, fecha, canal y origen, y se respetan las preferencias. Los
+      envios automaticos de marketing quedan fuera del alcance.
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+    open: [ABI-13]
+
+  - id: DEC-MI-09
+    block: MI
+    title: Compras como Solicitud, Orden de compra, Recepciones parciales e Ingreso de stock, sin compras automaticas ni aprobacion
+    status: CONFIRMADA
+    rules: [BR-REP-049, BR-REP-039]
+    features: [FEAT-REP-003]
+    notes: >
+      Aprobada el 12/11/2026. Cierra ABI-12. Respeta DC24: Compras es un
+      proceso propio y no agrega nodos a PROC-REP; BR-REP-049 y FEAT-REP-003
+      solo describen el limite y la entrada de stock. Solicitudes manuales o
+      sugeridas ante un faltante, nunca compras automaticas sin confirmacion.
+      Las Ordenes de compra las crean Recepcion, Coordinacion RMA y
+      Administracion, sin aprobacion, registrando quien crea y quien confirma,
+      el proveedor, los insumos, las cantidades y los costos. Las recepciones
+      las registran esos tres roles: varias parciales, control de pendientes,
+      sin duplicados y con registro de diferencias. El ultimo costo de compra
+      es la referencia operativa; cada recepcion conserva su costo historico;
+      solo Administracion configura precios; el costo real lo registra quien
+      recibe. Proveedores con datos basicos.
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+
+  - id: DEC-MI-10
+    block: MI
+    title: Lote configurable por tipo de insumo, serie cuando corresponda y movimientos de reserva, consumo, devolucion y desperdicio
+    status: CONFIRMADA
+    rules: [BR-REP-049, BR-REP-005]
+    nodes: [PROC-REP-185, PROC-REP-210]
+    features: [FEAT-REP-003, FEAT-REP-005]
+    notes: >
+      Aprobada el 12/11/2026. Cierra ABI-22. La devolucion es el insumo
+      utilizable que vuelve al stock y el desperdicio el material inutilizado;
+      son movimientos distintos entre si y de la reserva y el consumo. Stock
+      disponible y reservado coherentes, idempotencia, historial con
+      responsables y trazabilidad de la compra al consumo. La contabilidad de
+      stock existente pasa al modelo nuevo con una transicion controlada.
+      BR-REP-005 no cambia de texto (sigue identica a V1.3): BR-REP-049 la
+      complementa.
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+
+  - id: DEC-MI-11
+    block: MI
+    title: Identidad del Equipo por IMEI, despues por numero de serie y si no identidad nueva; nunca por similitud; correccion auditada de la vinculacion
+    status: CONFIRMADA
+    rules: [BR-REP-022, BR-REP-039]
+    nodes: [PROC-REP-030]
+    features: [FEAT-REP-001, FEAT-REP-011]
+    notes: >
+      Aprobada el 12/11/2026. Cierra ABI-05. Ante varias coincidencias
+      Recepcion elige el Equipo o indica "Ninguno". Nunca se vincula por
+      similitud de nombre, modelo o cliente. Una vinculacion erronea la
+      corrigen Recepcion, Coordinacion RMA o Administracion, con motivo y
+      auditoria. El Equipo conserva su historial completo: Ordenes,
+      reparaciones, garantias, reingresos y custodia. Excluida toda
+      integracion con Gestion RT.
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+
+  - id: DEC-MI-12
+    block: MI
+    title: Permisos configurables por rol; varios roles por usuario; rol habilitante registrado; los permisos implementados son la configuracion inicial
+    status: CONFIRMADA
+    rules: [BR-REP-039, BR-REP-040]
+    features: [FEAT-REP-011, FEAT-REP-010]
+    notes: >
+      Aprobada el 12/11/2026 sobre DC27A, DC27B y DC08. Cierra ABI-23. Un
+      usuario tiene varios roles y sus permisos se acumulan, con las
+      restricciones de contexto; un tecnico puede controlar su propio trabajo
+      si tiene los permisos; cada accion registra el usuario y el rol que la
+      habilito; solo Administracion gestiona las asignaciones de roles, desde
+      Configuracion y con auditoria; los permisos son configurables por rol
+      desde Administracion; los permisos implementados hoy (incluidos
+      inventario, catalogo de equipos, ajuste de garantia y fotografias) son la
+      configuracion inicial; los permisos de consulta de reportes,
+      antecedentes y operaciones administrativas son configurables; ningun
+      cambio puede dejar el sistema sin un administrador autorizado.
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+
+  - id: DEC-MI-13
+    block: MI
+    title: Catalogos administrados desde Administracion, con permisos, auditoria y referencias historicas preservadas
+    status: CONFIRMADA
+    rules: [BR-REP-040, BR-REP-015]
+    features: [FEAT-REP-010]
+    notes: >
+      Aprobada el 12/11/2026 sobre DC23 y DC23AUD. Se administran Tipos de
+      Reparacion, Mesas de trabajo, Insumos, politicas de garantia, checklist
+      por tipo de equipo, plantillas de WhatsApp, motivos de cancelacion y de
+      interrupcion, parametros operativos, precios y costos. Cada cambio
+      respeta permisos, se audita, preserva las referencias historicas y no
+      cambia precios de Ordenes existentes.
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+
+  - id: DEC-MI-14
+    block: MI
+    title: Retiro demorado a los 30 dias de avisar el equipo listo, configurable; alerta y seguimiento sin cerrar la Orden ni disponer del equipo
+    status: CONFIRMADA
+    rules: [BR-REP-033, BR-REP-044, BR-REP-040]
+    nodes: [PROC-REP-260, PROC-REP-270]
+    features: [FEAT-REP-008, FEAT-REP-010]
+    notes: >
+      Aprobada el 12/11/2026. Cierra ABI-07 en lo que se refiere al plazo y al
+      abandono: plazo inicial de 30 dias desde la notificacion de equipo
+      listo, configurable por Administracion; al vencer se marca retiro
+      demorado, se alerta en las bandejas y se registran seguimientos y
+      comunicaciones; la Orden sigue abierta y nunca se cierra, declara
+      abandono ni dispone del equipo por vencimiento. Las devoluciones de
+      dinero posteriores a ENTREGADA y el dinero no retirado cuando no hay un
+      equipo por retirar no se decidieron (ABI-40).
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+    open: [ABI-40]
+
+  - id: DEC-MI-15
+    block: MI
+    title: Catalogos configurables y separados de motivos de cancelacion y de interrupcion; "Otro" con descripcion; version historica del motivo
+    status: CONFIRMADA
+    rules: [BR-REP-014, BR-REP-004, BR-REP-040]
+    nodes: [PROC-REP-200, PROC-REP-300]
+    features: [FEAT-REP-009, FEAT-REP-005, FEAT-REP-010]
+    notes: >
+      Aprobada el 12/11/2026. Cierra ABI-29 en lo que se refiere a los
+      motivos de cancelacion y de interrupcion; el catalogo de medios de
+      devolucion no se decidio y sigue en ABI-29. "Otro" exige descripcion;
+      se conserva el motivo elegido y su version historica; las cancelaciones
+      anteriores no cambian de significado.
+    implementation:
+      status: NO_IMPLEMENTADO
+      evidence: pendiente de rt-rma-mvp feat/macro-integral
+    open: [ABI-29]
+
   # ------------------------------------------------------------------ Baseline y sincronizacion
   - id: DC01
     block: BASELINE
@@ -736,7 +1035,7 @@ uat_items:
       - "Iteracion 1: mejoras del primer UAT (19/10/2026), cambio 7"
       - "UAT-009: mover check-in al cierre (20/10/2026)"
       - "Cierre UAT-009 (20/10/2026), Decisiones aprobadas 1 a 7"
-    confirmed_by: [DC15A]
+    confirmed_by: [DC15A, DEC-MI-01, DEC-MI-05]
     implemented_in: [rt-rma-mvp@884bf3e, rt-rma-mvp@547e64c]
     rules: [BR-REP-041, BR-REP-045]
     nodes: [PROC-REP-265, PROC-REP-269, PROC-REP-280]
@@ -746,10 +1045,10 @@ uat_items:
       - Registro auditado temporalmente en RecepcionEquipo.registros_checkin (aceptado como temporal, decision 7)
       - Situacion visible PENDIENTE_CHECKIN (solo presentacion)
       - Ajuste manual por RECEPCION o COORDINADOR_RMA (roles de la implementacion; predeterminado provisional en BR-REP-039)
-      - "Volver a registrar el check-in hasta la entrega (repetir el mismo resultado no agrega un registro): comportamiento tecnico implementado en 547e64c, sin aprobacion funcional demostrada; no es regla de negocio (ABI-32)"
-      - "Interpretacion provisional de garantia aplicable: la politica del origen requiere_checkin_en_entrega lo exige en CLIENTE_EXTERNO con al menos un trabajo realizado, sin evaluar la garantia de cada Detalle; no es regla aprobada (ABI-37)"
-      - "Hasta registrar el check-in rige como provisorio el plazo del tipo de reparacion: comportamiento tecnico sin aprobacion funcional, dentro de las precedencias pendientes (ABI-03)"
-    pending: [ABI-03, ABI-23, ABI-32, ABI-37]
+      - "Volver a registrar el check-in hasta la entrega (repetir el mismo resultado no agrega un registro): comportamiento tecnico implementado en 547e64c, sin aprobacion funcional demostrada; no es regla de negocio (ABI-32). DEC-MI-05 decidio despues la correccion antes de la entrega, con motivo obligatorio, versiones y comprobante regenerado"
+      - "Interpretacion provisional de garantia aplicable: la politica del origen requiere_checkin_en_entrega lo exige en CLIENTE_EXTERNO con al menos un trabajo realizado, sin evaluar la garantia de cada Detalle; no es regla aprobada (ABI-37). DEC-MI-01 fijo despues el criterio: algun trabajo realizado con garantia mayor a cero"
+      - "Hasta registrar el check-in rige como provisorio el plazo del tipo de reparacion: comportamiento tecnico sin aprobacion funcional (ABI-03, cerrado por DEC-MI-01; el plazo sin check-in exigible sigue en ABI-39)"
+    pending: [ABI-39]
 
   - id: UAT-I02
     title: Fotografias del equipo
@@ -757,6 +1056,7 @@ uat_items:
     approval_evidence:
       - "UAT-010: Busqueda por DNI y fotografias (21/10/2026), seccion 2"
       - "Cierre UAT-010/011 y publicacion en UAT (21/10/2026), Fase 1 punto 2"
+    confirmed_by: [DEC-MI-12]
     implemented_in: [rt-rma-mvp@3b31d35]
     rules: [BR-REP-024]
     nodes: [PROC-REP-032]
@@ -765,7 +1065,6 @@ uat_items:
       - Bucket privado de Cloud Storage, formatos JPEG, PNG o WebP hasta 8 MB, reduccion a 1600 px
       - Limpieza manual de imagenes huerfanas por ADMINISTRADOR
       - "Interfaz aprobada en UAT-010 y retirada de BR-REP-024 por no ser regla de negocio (correccion final, M9): contador visible, captura con la camara del celular o seleccion multiple desde la galeria o los archivos, vista previa, miniaturas y vista ampliada"
-    pending: [ABI-23]
 
   - id: UAT-I03
     title: Busqueda y reutilizacion de Clientes por DNI
@@ -789,15 +1088,14 @@ uat_items:
     approval_evidence:
       - "Integracion del catalogo de equipos de Ventas (22/10/2026)"
       - "DC20 (23/10/2026): tp_id como referencia comercial"
-    confirmed_by: [DC20]
+    confirmed_by: [DC20, DEC-MI-12]
     implemented_in: [rt-rma-mvp@f270a84]
     rules: [BR-REP-048, BR-REP-022]
     nodes: [PROC-REP-030]
     features: [FEAT-REP-001, FEAT-REP-010]
     technical_only:
       - Adaptador de Google Sheets, variables RMA_CATALOGO_*, copia JSON efimera, compresion de respuestas
-      - Sincronizacion por ADMINISTRADOR o COORDINADOR_RMA (predeterminado provisional)
-    pending: [ABI-23]
+      - Sincronizacion por ADMINISTRADOR o COORDINADOR_RMA (predeterminado provisional, confirmado como configuracion inicial por DEC-MI-12)
 
   - id: UAT-I05
     title: Reparacion "Otros - Reparacion no tipificada"
@@ -841,13 +1139,13 @@ uat_items:
     approval_evidence:
       - "MVP v2: gestion operativa de inventario y validacion de custodia (14/10/2026)"
       - "Ajustes finales de inventario y checkpoint (14/10/2026)"
+    confirmed_by: [DEC-MI-10, DEC-MI-12]
     implemented_in: [rt-rma-mvp@685b14c]
     rules: [BR-REP-049]
     nodes: [PROC-REP-120]
     features: [FEAT-REP-003]
     technical_only:
       - Pantalla Inventario y endpoints de ingreso, ajuste y revalidacion
-    pending: [ABI-22, ABI-23]
 
   - id: UAT-I09
     title: Comprobantes de ingreso y autorizacion (ING) y de autorizacion de reparacion (AUT)
@@ -856,14 +1154,13 @@ uat_items:
       - "Mejoras UAT: recepcion, documentos e interfaz (16/10/2026), bloque 1"
       - "Cierre de trazabilidad y checkpoint UAT (16/10/2026): ACC-REP-060 aprobado"
       - "Iteracion 1 (19/10/2026), cambio 1 (UAT-008)"
-    confirmed_by: [DC13]
+    confirmed_by: [DC13, DEC-MI-06]
     implemented_in: [rt-rma-mvp@25551ab, rt-rma-mvp@884bf3e]
     rules: [BR-REP-031, BR-REP-046]
     nodes: [PROC-REP-046, PROC-REP-060]
     features: [FEAT-REP-002]
     technical_only:
       - Numeracion OR-xxxxxx-ING-01, PDF, Web Share API
-    pending: [ABI-08]
 
   - id: UAT-I10
     title: Ingreso inicial simplificado (UAT-008)
@@ -911,12 +1208,11 @@ uat_items:
     status: CONFIRMADO
     approval_evidence:
       - "Iteracion 1 (19/10/2026), cambio 4; reemplazado en el modelo por DC09"
-    confirmed_by: [DC09]
+    confirmed_by: [DC09, DEC-MI-03]
     implemented_in: [rt-rma-mvp@884bf3e]
     rules: [BR-REP-016]
     features: [FEAT-REP-007]
-    notes: La aprobacion de aplicar descuentos desde Recepcion (cambio 4) se conserva en ABI-09; no se fija como predeterminado mientras los permisos por tipo de Ajuste Comercial sigan pendientes.
-    pending: [ABI-09, ABI-10]
+    notes: La aprobacion de aplicar descuentos desde Recepcion (cambio 4) se conservo en ABI-09; DEC-MI-03 fijo despues el DESCUENTO para Recepcion, Coordinacion RMA y Administracion y el saldo a favor de un descuento por debajo de lo cobrado.
 
   - id: UAT-I14
     title: Motivo obligatorio para interrumpir una reparacion
@@ -943,6 +1239,7 @@ uat_items:
     status: CONFIRMADO
     approval_evidence:
       - "Mejoras UAT (16/10/2026), punto 1.3"
+    confirmed_by: [DEC-MI-08]
     implemented_in: [rt-rma-mvp@25551ab]
     rules: [BR-REP-044]
     nodes: [PROC-REP-260]
@@ -960,12 +1257,22 @@ uat_items:
 
   - id: UAT-I18
     title: Correccion de los datos del ingreso con versiones anteriores
-    status: PENDIENTE
+    status: CONFIRMADO
     approval_evidence:
       - "Diseno de experiencia operativa previa al UAT (14/10/2026), seccion D: solo pedia proponer que se puede corregir, hasta cuando y quien"
+      - "Decisiones de la macroiteracion integral (12/11/2026), DEC-MI-07"
+    confirmed_by: [DEC-MI-07]
     implemented_in: [rt-rma-mvp@2c5e0de]
-    notes: Implementado (versiones_anteriores de la recepcion) sin una aprobacion documentada; no se incorpora como regla definitiva.
-    pending: [ABI-25]
+    rules: [BR-REP-046]
+    nodes: [PROC-REP-030, PROC-REP-032]
+    features: [FEAT-REP-001]
+    notes: >
+      Implementado (versiones_anteriores de la recepcion) sin una aprobacion
+      documentada hasta DEC-MI-07, que lo formaliza con motivo obligatorio,
+      auditoria de los valores anteriores y nuevos, los roles Recepcion,
+      Coordinacion RMA y Administracion y sin alterar los comprobantes
+      emitidos. Hasta cuando se admite la correccion sigue abierto.
+    pending: [ABI-41]
 
   - id: UAT-I19
     title: Bandejas por rol, cola de taller, busqueda y navegacion
@@ -1007,6 +1314,16 @@ open_items:
 
   - id: ABI-03
     title: Precedencias concretas entre politicas de garantia
+    status: CERRADO
+    closed_by: DEC-MI-01
+    closed_on: "2026-11-12"
+    resolution: >
+      Cada Tipo de Reparacion configura un plazo con check-in realizado y otro
+      con check-in no realizado (iniciales 90 y 30 dias) y una politica para los
+      trabajos hechos dentro de una garantia RMA (nuevo plazo, tiempo restante o
+      sin nueva garantia). El ajuste manual autorizado prevalece, con motivo y
+      auditoria. La politica RMA inicial de cada Tipo sigue en ABI-38 y el plazo
+      sin check-in exigible fuera de RMA en ABI-39.
     impact: BLOQUEA_IMPLEMENTACION
     decisions: [DC15A, DC15B]
     needed: Orden entre plazo del tipo de reparacion, resultado del check-in y excepciones.
@@ -1025,30 +1342,65 @@ open_items:
 
   - id: ABI-05
     title: Equipos sin IMEI y coincidencias ambiguas por IMEI
+    status: CERRADO
+    closed_by: DEC-MI-11
+    closed_on: "2026-11-12"
+    resolution: >
+      Se busca por IMEI; sin IMEI, por numero de serie; sin ninguno, identidad
+      nueva. Ante varias coincidencias Recepcion elige el Equipo o indica
+      "Ninguno". Nunca se vincula por similitud de nombre, modelo o cliente; una
+      vinculacion erronea se corrige con motivo y auditoria.
     impact: BLOQUEA_IMPLEMENTACION
     decisions: [DC20]
     needed: Criterio de identificacion alternativa y como se resuelve una coincidencia ambigua.
 
   - id: ABI-06
     title: Responsables predeterminados por evento de custodia
+    status: CERRADO
+    closed_by: DEC-MI-04
+    closed_on: "2026-11-12"
+    resolution: >
+      Recepcion y Administracion registran la recepcion fisica, el no recibido,
+      la devolucion sin reparar y la entrega, con usuario y fecha/hora.
     impact: BLOQUEA_IMPLEMENTACION
     decisions: [DC18B, DC08]
     needed: Predeterminado de cada evento; hasta definirlo, el producto conserva sus roles actuales.
 
   - id: ABI-07
     title: Tratamiento de devoluciones que el cliente no retira
+    status: CERRADO
+    closed_by: DEC-MI-14
+    closed_on: "2026-11-12"
+    resolution: >
+      Retiro demorado: 30 dias desde la notificacion de equipo listo,
+      configurable por Administracion; al vencer se marca, se alerta en las
+      bandejas y se registran seguimientos y comunicaciones; la Orden sigue
+      abierta y nunca se cierra, declara abandono ni dispone del equipo por
+      vencimiento. Las devoluciones de dinero posteriores a ENTREGADA y el
+      dinero no retirado sin un equipo por retirar siguen en ABI-40.
     impact: POSTERIOR
     decisions: [DC12C]
     needed: Plazo, abandono y devoluciones posteriores a ENTREGADA.
 
   - id: ABI-08
     title: Obligatoriedad de firmas segun el documento
+    status: CERRADO
+    closed_by: DEC-MI-06
+    closed_on: "2026-11-12"
+    resolution: >
+      La firma es opcional en todos los documentos, en pantalla o como foto del
+      documento firmado, con la evidencia ligada al documento.
     impact: POSTERIOR
     decisions: [DC26]
     needed: Que documentos exigen firma y en que momento.
 
   - id: ABI-09
     title: Permisos iniciales por tipo de Ajuste Comercial
+    status: CERRADO
+    closed_by: DEC-MI-03
+    closed_on: "2026-11-12"
+    resolution: >
+      Recepcion, Coordinacion RMA y Administracion aplican DESCUENTO y CORTESIA.
     impact: BLOQUEA_IMPLEMENTACION
     decisions: [DC09]
     rules: [BR-REP-016]
@@ -1063,6 +1415,13 @@ open_items:
 
   - id: ABI-10
     title: DESCUENTO que deja el total por debajo de lo ya cobrado
+    status: CERRADO
+    closed_by: DEC-MI-03
+    closed_on: "2026-11-12"
+    resolution: >
+      Cualquier ajuste que deja el total por debajo de lo cobrado genera saldo a
+      favor; la devolucion se exige antes de entregar, se conservan los pagos y
+      los ajustes historicos y no hay dobles devoluciones.
     impact: BLOQUEA_IMPLEMENTACION
     decisions: [DC09, DC11]
     needed: Si se bloquea (comportamiento actual) o genera saldo a favor como la cortesia total.
@@ -1075,6 +1434,14 @@ open_items:
 
   - id: ABI-12
     title: Definicion completa del circuito de Compras, lotes y costos
+    status: CERRADO
+    closed_by: DEC-MI-09
+    closed_on: "2026-11-12"
+    resolution: >
+      Solicitud, Orden de compra, Recepciones parciales e Ingreso de stock, en un
+      proceso propio fuera de PROC-REP; sin compras automaticas ni aprobacion;
+      ultimo costo como referencia y costo historico por recepcion. Los lotes y
+      movimientos los decidio DEC-MI-10.
     impact: BLOQUEA_IMPLEMENTACION
     decisions: [DC24, DC24LOT]
     needed: Proceso de Compras propio (necesidad, solicitud, OC, proveedor, recepcion, ingreso).
@@ -1082,8 +1449,12 @@ open_items:
   - id: ABI-13
     title: Plantillas, disparadores y proveedor de WhatsApp
     impact: BLOQUEA_IMPLEMENTACION
-    decisions: [DC25]
-    needed: Plantillas y disparadores para la etapa 1; proveedor oficial para la etapa 2.
+    decisions: [DC25, DEC-MI-08]
+    needed: >
+      Proveedor oficial para la etapa 2 (envio automatico con estados y
+      reintentos). La etapa 1 (plantillas y envio asistido) la decidio
+      DEC-MI-08; el proveedor automatico queda fuera de la macroiteracion
+      integral.
 
   - id: ABI-14
     title: Capacidades de tecnicos y recursos distintos de insumos
@@ -1141,12 +1512,26 @@ open_items:
 
   - id: ABI-22
     title: Catalogo de tipos de movimiento de insumo (DESPERDICIO de BR-REP-005 frente a DEVOLUCION de la implementacion)
+    status: CERRADO
+    closed_by: DEC-MI-10
+    closed_on: "2026-11-12"
+    resolution: >
+      Se diferencian reserva, consumo, devolucion (insumo utilizable que vuelve)
+      y desperdicio (material inutilizado), con idempotencia, historial con
+      responsables y una transicion controlada de la contabilidad existente.
     impact: BLOQUEA_MIGRACION
     decisions: [DC24LOT, DC16]
     needed: Catalogo definitivo antes del esquema de movimientos.
 
   - id: ABI-23
     title: Validar los permisos predeterminados provisionales tomados de la implementacion
+    status: CERRADO
+    closed_by: DEC-MI-12
+    closed_on: "2026-11-12"
+    resolution: >
+      Los permisos implementados hoy, incluidos inventario, catalogo de equipos,
+      ajuste de garantia y fotografias, son la configuracion inicial,
+      configurable por rol desde Administracion.
     impact: POSTERIOR
     decisions: [DC08, DC16]
     needed: Inventario, catalogo de equipos, ajuste de garantia y fotografias.
@@ -1159,6 +1544,13 @@ open_items:
 
   - id: ABI-25
     title: Correccion de los datos del ingreso (implementada sin aprobacion documentada)
+    status: CERRADO
+    closed_by: DEC-MI-07
+    closed_on: "2026-11-12"
+    resolution: >
+      La corrigen Recepcion, Coordinacion RMA y Administracion, con motivo
+      obligatorio y auditoria de los valores anteriores y nuevos, sin alterar
+      los comprobantes emitidos. Hasta cuando se admite sigue en ABI-41.
     impact: POSTERIOR
     decisions: [DC16]
     needed: Confirmar si se formaliza, que se corrige, hasta cuando y quien.
@@ -1190,8 +1582,10 @@ open_items:
   - id: ABI-29
     title: Catalogos de motivos de cancelacion e interrupcion y de medios de devolucion
     impact: POSTERIOR
-    decisions: [DC08, DC12C]
-    needed: Catalogos definitivos.
+    decisions: [DC08, DC12C, DEC-MI-15]
+    needed: >
+      Catalogo definitivo de medios de devolucion (BR-REP-038). Los catalogos
+      de motivos de cancelacion y de interrupcion los decidio DEC-MI-15.
 
   - id: ABI-30
     title: Proveedor autorizado de consulta externa por DNI
@@ -1201,6 +1595,13 @@ open_items:
 
   - id: ABI-31
     title: Como se obtiene el consentimiento y que exige cada finalidad
+    status: CERRADO
+    closed_by: DEC-MI-08
+    closed_on: "2026-11-12"
+    resolution: >
+      Se distinguen las comunicaciones operativas de las comerciales; el
+      marketing exige consentimiento expreso y revocable, con usuario, fecha,
+      canal y origen, y se respetan las preferencias.
     impact: BLOQUEA_IMPLEMENTACION
     decisions: [DC30, DC25]
     needed: Definir junto con plantillas y disparadores.
@@ -1208,6 +1609,13 @@ open_items:
   # ---------------------------------------- correccion final previa a DC01 (B1, B3, B4)
   - id: ABI-32
     title: Correccion o nuevo registro del check-in antes de la entrega y su efecto sobre el comprobante final
+    status: CERRADO
+    closed_by: DEC-MI-05
+    closed_on: "2026-11-12"
+    resolution: >
+      Se corrige antes de la entrega con motivo obligatorio; se conservan todas
+      las versiones y rige la ultima; el comprobante final se regenera, cuando
+      corresponde, como version nueva sin destruir las anteriores.
     impact: BLOQUEA_IMPLEMENTACION
     decisions: [DC16, DC15A, DC13]
     rules: [BR-REP-045, BR-REP-041]
@@ -1244,6 +1652,14 @@ open_items:
 
   - id: ABI-34
     title: Continuacion como reparacion paga despues de una garantia vencida sin excepcion
+    status: CERRADO
+    closed_by: DEC-MI-02
+    closed_on: "2026-11-12"
+    resolution: >
+      Recepcion puede continuar el reclamo rechazado como reparacion paga: se
+      precargan cliente, equipo y motivo, se confirma y se crea una Orden
+      CLIENTE_EXTERNO vinculada al reclamo, sin Ordenes duplicadas. No agrega
+      transiciones desde PROC-REP-036 ni desde EVT-REP-998.
     impact: BLOQUEA_IMPLEMENTACION
     decisions: [DC15B]
     nodes: [PROC-REP-036, EVT-REP-998]
@@ -1257,6 +1673,14 @@ open_items:
 
   - id: ABI-35
     title: Persistencia y auditoria del intento de reclamo de garantia rechazado
+    status: CERRADO
+    closed_by: DEC-MI-02
+    closed_on: "2026-11-12"
+    resolution: >
+      Registro independiente de reclamos de garantia con Orden original,
+      trabajos reclamados, Equipo, usuario, fecha, vigencia evaluada, motivo y
+      resultado del rechazo, excepciones y relacion con una Orden paga
+      posterior. Lo consultan Recepcion, Coordinacion RMA y Administracion.
     impact: BLOQUEA_IMPLEMENTACION
     decisions: [DC15B]
     nodes: [PROC-REP-036, EVT-REP-998]
@@ -1282,6 +1706,13 @@ open_items:
   # ---------------------------------------- cierre de DC01 (24/10/2026)
   - id: ABI-37
     title: Criterio de garantia aplicable para exigir el check-in de entrega
+    status: CERRADO
+    closed_by: DEC-MI-01
+    closed_on: "2026-11-12"
+    resolution: >
+      La garantia es aplicable cuando algun trabajo realizado tiene garantia
+      mayor a cero: solo entonces el check-in es obligatorio para entregar una
+      Orden CLIENTE_EXTERNO.
     impact: BLOQUEA_IMPLEMENTACION
     decisions: [DC15A, DC16]
     rules: [BR-REP-041, BR-REP-045]
@@ -1297,6 +1728,63 @@ open_items:
       aprobada como regla: la politica del origen requiere_checkin_en_entrega lo
       exige en CLIENTE_EXTERNO con al menos un trabajo realizado, sin evaluar la
       garantia de cada Detalle.
+
+  # ---------------------------------------- macroiteracion integral (12/11/2026)
+  - id: ABI-38
+    title: Politica inicial de cada Tipo de Reparacion para los trabajos hechos dentro de una garantia RMA
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DEC-MI-01, DC15A]
+    rules: [BR-REP-041, BR-REP-019]
+    features: [FEAT-REP-010]
+    needed: >
+      DEC-MI-01 define tres politicas posibles por Tipo de Reparacion para un
+      trabajo hecho dentro de una garantia RMA (iniciar un nuevo plazo segun el
+      Tipo, conservar el tiempo restante de la garantia original o no otorgar
+      nueva garantia), pero no cual es la inicial de cada Tipo. Tambien falta
+      definir, en la politica de nuevo plazo, cual de los dos plazos del Tipo
+      (con o sin check-in realizado) se aplica, porque la garantia RMA no exige
+      el check-in.
+
+  - id: ABI-39
+    title: Plazo de garantia cuando el check-in no es exigible fuera de la garantia RMA
+    impact: BLOQUEA_IMPLEMENTACION
+    decisions: [DEC-MI-01, DC15A]
+    rules: [BR-REP-041, BR-REP-045]
+    nodes: [PROC-REP-280]
+    features: [FEAT-REP-008]
+    needed: >
+      Que plazo rige para un Detalle cuando el check-in no es exigible fuera
+      de la garantia RMA (por ejemplo RT_INTERNO o RT_GARANTIA_VENTA) o no se
+      registro, y cual se muestra mientras no hay uno registrado. DEC-MI-01
+      solo fija los plazos con check-in realizado y no realizado.
+
+  - id: ABI-40
+    title: Dinero no retirado y devoluciones de dinero posteriores a ENTREGADA
+    impact: POSTERIOR
+    decisions: [DEC-MI-14, DC12C]
+    rules: [BR-REP-038]
+    nodes: [PROC-REP-267, PROC-REP-268]
+    features: [FEAT-REP-007]
+    needed: >
+      Separado de ABI-07 al cerrarlo con DEC-MI-14, que decide el retiro
+      demorado del equipo. Falta definir como se registra y autoriza una
+      devolucion de dinero que surge despues de que la Orden quedo ENTREGADA,
+      y si el plazo y el seguimiento del retiro demorado se aplican tambien al
+      dinero a favor que el cliente no retira cuando no hay un equipo por
+      retirar.
+
+  - id: ABI-41
+    title: Hasta cuando se pueden corregir los datos del ingreso
+    impact: POSTERIOR
+    decisions: [DEC-MI-07]
+    rules: [BR-REP-046]
+    nodes: [PROC-REP-030, PROC-REP-032]
+    features: [FEAT-REP-001]
+    needed: >
+      DEC-MI-07 decide quien corrige los datos del ingreso, con motivo y
+      auditoria, y que la correccion no altera los comprobantes emitidos, pero
+      no hasta que momento de la Orden se admite (por ejemplo, hasta la
+      entrega) ni si cambia segun el dato.
 
 improvements:
 
@@ -1327,11 +1815,12 @@ improvements:
     audit_ref: M4
     title: Momento del comprobante final respecto de la entrega si se admite corregir el check-in
     nodes: [PROC-REP-280, PROC-REP-270]
-    open: [ABI-32]
     needed: >
-      PROC-REP-280 se genera antes de PROC-REP-270. Si ABI-32 admite corregir el
-      check-in despues de 280, precisar si el comprobante final se genera en la
-      operacion de entrega o se emite una version nueva (DC13).
+      PROC-REP-280 se genera antes de PROC-REP-270. DEC-MI-05 (cierra ABI-32)
+      admite corregir el check-in hasta la entrega y regenerar el comprobante,
+      cuando corresponde, como version nueva (DC13). Falta reflejar en el
+      grafo o en una prueba que una correccion posterior a 280 vuelve a emitir
+      el comprobante antes de entregar.
 
   - id: MEJ-04
     audit_ref: M6

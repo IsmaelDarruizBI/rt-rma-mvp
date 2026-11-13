@@ -14,6 +14,11 @@
 # interrupcion incluida en una liberacion ajena como excepcion especifica;
 # BR-REP-041 precisa "registrado como no realizado"; BR-REP-024, 040, 044 y 047
 # dejan de describir detalles de almacenamiento o de interfaz.
+# Decisiones de la macroiteracion integral (12/11/2026, DEC-MI-01 a 15): BR-REP-004,
+# 014, 016, 019, 022, 033, 038 a 046 y 049 reemplazan sus "pendiente de
+# decision" por lo decidido; lo que esas decisiones no definen sigue pendiente
+# (ABI-13, 29 y 38 a 41 del registro). BR-REP-005 no cambia: BR-REP-049 la
+# complementa con los tipos de movimiento (DEC-MI-10).
 # El texto que sigue describe las iteraciones V1.4 previas a la consolidacion;
 # donde contradiga lo anterior, rige la consolidacion.
 #
@@ -131,7 +136,11 @@ rules:
       Si o No, junto con una descripcion obligatoria del estado actual del
       trabajo; ambos datos quedan en la Ejecucion y en su historial. No se
       define por ahora una clasificacion mas detallada ni consecuencias
-      automaticas de la reversibilidad.
+      automaticas de la reversibilidad. Motivos (DEC-MI-15, 12/11/2026): el
+      motivo de una interrupcion se elige de un catalogo configurable propio,
+      separado del de motivos de cancelacion (BR-REP-014, BR-REP-040); "Otro"
+      exige una descripcion, y se conservan el motivo elegido y su version
+      historica.
     status: approved
 
   - id: BR-REP-005
@@ -478,8 +487,12 @@ rules:
       defecto Recepcion y Coordinacion), descarte tecnico (el Tecnico,
       PROC-REP-183, BR-REP-036) y desistimiento solicitado por el cliente (lo
       registra Recepcion), cada uno con permiso configurable (BR-REP-039); por
-      eso PROC-REP-300/305/306 no declaran un unico actor. El catalogo de
-      motivos de cancelacion sigue pendiente. Revision DC31 (09/11/2026;
+      eso PROC-REP-300/305/306 no declaran un unico actor. Motivos (DEC-MI-15,
+      12/11/2026): el motivo de una cancelacion se elige de un catalogo
+      configurable, separado del de motivos de interrupcion (BR-REP-004,
+      BR-REP-040); "Otro" exige una descripcion; se conservan el motivo elegido
+      y su version historica, y las cancelaciones anteriores no cambian de
+      significado. Revision DC31 (09/11/2026;
       reemplaza los desenlaces (A) y (B) en lo que se refiere a cancelar la
       Orden): cancelar un Detalle solo cancela ese Detalle y NUNCA cancela la
       Orden, aunque todos queden CANCELADO; en ese caso la Orden sigue abierta
@@ -554,9 +567,8 @@ rules:
       de ajuste tiene su propio permiso (BR-REP-039). Permisos por tipo
       (DEC-IT1-02, 11/11/2026): la CORTESIA la otorgan, modifican y quitan por
       defecto Recepcion, Coordinacion RMA y Administracion, con el mismo
-      permiso para las tres operaciones; el permiso inicial del DESCUENTO sigue
-      pendiente (hasta decidirlo se documenta, sin convertirlo en regla, el
-      descuento de Recepcion o Administracion de la implementacion del UAT). La
+      permiso para las tres operaciones; el DESCUENTO lo aplican por defecto
+      los mismos tres roles (DEC-MI-03, 12/11/2026). La
       CORTESIA puede ser total o parcial (DEC-IT1-02), como porcentaje o
       importe, con el mismo Ajuste Comercial que el DESCUENTO (no hay un modelo
       paralelo). Una cortesia, total o parcial, que deja el total por debajo de
@@ -564,8 +576,14 @@ rules:
       entregar (DC11, BR-REP-038); los Pagos no se modifican. Un envio
       duplicado de la misma operacion no registra un segundo ajuste. Esta
       decision no agrega reglas de acumulacion, limites comerciales ni
-      autorizacion de devoluciones. Pendiente: como se trata un DESCUENTO que
-      deja el total por debajo de lo ya cobrado (la implementacion lo rechaza).
+      autorizacion de devoluciones. Alcance y saldo (DEC-MI-03): un ajuste se
+      registra sobre la Orden o sobre un Detalle, como porcentaje o importe
+      segun estas reglas; un ajuste general de la Orden NO se prorratea
+      automaticamente entre sus Detalles. Todo Ajuste Comercial -DESCUENTO o
+      CORTESIA- que deja el total por debajo de lo ya cobrado genera saldo a
+      favor del cliente: la devolucion se exige antes de entregar (BR-REP-038),
+      los Pagos y los ajustes historicos se conservan y una misma devolucion
+      no se registra dos veces.
       Condicion comercial distinta de cortesia: el origen de la Orden determina
       si es COBRABLE (CLIENTE_EXTERNO, salvo cortesia), NO_COBRABLE
       (RT_GARANTIA_VENTA, RMA_GARANTIA_REPARACION) o NO_COBRABLE_AL_CLIENTE
@@ -744,8 +762,20 @@ rules:
       que pueden reclamarse sin el vencido. La excepcion la autorizan por
       defecto Recepcion, Coordinacion RMA y Administracion (DEC-IT1-01,
       BR-REP-039); el Tecnico no, y el permiso se valida en el sistema, no solo
-      en la interfaz. La politica configurable de garantia es BR-REP-041; sus
-      precedencias concretas siguen pendientes. Revision obligatoria y
+      en la interfaz. La politica configurable de garantia es BR-REP-041,
+      incluida la garantia que otorgan los trabajos hechos dentro de una
+      garantia RMA (DEC-MI-01). Reclamos de garantia (DEC-MI-02, 12/11/2026):
+      cada pedido de ingreso en garantia queda en un registro independiente de
+      reclamos de garantia, con la Orden original, los trabajos (Detalles
+      origen) reclamados, el Equipo, el usuario, la fecha/hora y la vigencia
+      evaluada de cada Detalle; las excepciones autorizadas, si existen; el
+      motivo y el resultado del rechazo, si se rechaza; y la relacion con una
+      Orden paga posterior. La Orden original entregada nunca se modifica.
+      Recepcion puede continuar un reclamo rechazado como una reparacion paga:
+      se precargan el cliente, el equipo y el motivo del reclamo, Recepcion
+      confirma y se crea una Orden CLIENTE_EXTERNO nueva vinculada al reclamo;
+      un mismo reclamo no origina Ordenes duplicadas. Consultan los reclamos
+      Recepcion, Coordinacion RMA y Administracion. Revision obligatoria y
       multi-Detalle (MVP v2): toda garantia RMA pasa por revision tecnica antes
       de definir que reparacion se realiza (PROC-REP-045 = No -> 055 -> 065 ->
       068). La nueva Orden nace EN_REVISION y sin Detalles propios; tras la
@@ -816,9 +846,16 @@ rules:
       de ordenes de ese Equipo; si no la confirma, se registra un Equipo nuevo.
       No se crea una entidad duplicada cuando se reutiliza. El formulario
       inicial de CLIENTE_EXTERNO no pide numero de serie (UAT-011), que sigue
-      siendo un dato del Equipo, opcional, para todos los origenes. Pendiente
-      de definicion: como se identifica un equipo sin IMEI disponible o legible
-      y como se resuelven las coincidencias ambiguas.
+      siendo un dato del Equipo, opcional, para todos los origenes.
+      Identificacion (DEC-MI-11, 12/11/2026): se busca por IMEI; sin IMEI, por
+      numero de serie; sin ninguno de los dos se registra una identidad nueva.
+      Ante varias coincidencias Recepcion elige el Equipo o indica "Ninguno", y
+      entonces se registra uno nuevo. Nunca se vincula un Equipo por similitud
+      de nombre, modelo o cliente. Una vinculacion erronea la corrigen
+      Recepcion, Coordinacion RMA o Administracion, con motivo y auditoria. El
+      Equipo conserva su historial completo: Ordenes, reparaciones, garantias,
+      reingresos y custodia. La vinculacion o integracion con equipos de
+      Gestion RT queda fuera de alcance.
     status: approved
 
   - id: BR-REP-023
@@ -1240,8 +1277,18 @@ rules:
       equipo no recibido, regularizacion en PROC-REP-271, devolucion fisica y
       entrega en PROC-REP-270) registra responsable, fecha/hora y evidencia o
       referencia, y requiere un permiso configurable por evento (BR-REP-039);
-      los responsables predeterminados de cada evento siguen pendientes de
-      decision. Custodia previa a la ejecucion (regla aprobada el 14/10/2026):
+      responsables predeterminados (DEC-MI-04, 12/11/2026): Recepcion y
+      Administracion registran la recepcion fisica, el equipo no recibido, la
+      devolucion sin reparar y la entrega, con usuario y fecha/hora; la
+      regularizacion de PROC-REP-271 registra uno de esos eventos y su permiso
+      parte de la configuracion inicial (DEC-MI-12, BR-REP-039). Retiro
+      demorado (DEC-MI-14, 12/11/2026): si el cliente no retira el equipo
+      dentro del plazo -30 dias desde la notificacion de equipo listo,
+      configurable por Administracion (BR-REP-040)-, la Orden se marca con
+      retiro demorado, se alerta en las bandejas y se registran los
+      seguimientos y las comunicaciones (BR-REP-044). La Orden sigue abierta:
+      el vencimiento nunca la cierra, nunca declara el abandono del equipo ni
+      habilita a disponer de el. Custodia previa a la ejecucion (regla aprobada el 14/10/2026):
       cuando la politica del origen exige recepcion fisica (CLIENTE_EXTERNO y
       garantia RMA), un tecnico no puede iniciar una Ejecucion sobre un equipo
       cuya recepcion no esta confirmada o que se registro como no recibido; el
@@ -1588,8 +1635,12 @@ rules:
       consecuencias comerciales de una cancelacion (por ejemplo penalidades)
       siguen pendientes. Una cortesia, total o parcial, que deja el Total final
       por debajo de los Pagos recibidos tambien genera saldo a favor (DC11,
-      DEC-IT1-02). Pendientes: plazo o abandono si el cliente no retira el
-      dinero y devoluciones posteriores a ENTREGADA.
+      DEC-IT1-02), igual que un DESCUENTO (DEC-MI-03): se conservan los Pagos y
+      los ajustes historicos y una devolucion no se registra dos veces. El
+      retiro demorado del equipo (BR-REP-033, DEC-MI-14) no cierra la Orden ni
+      habilita a disponer de nada. Pendientes: plazo o abandono si el cliente
+      no retira el dinero cuando no hay un equipo por retirar y devoluciones
+      posteriores a ENTREGADA.
     status: approved
 
   - id: BR-REP-039
@@ -1612,7 +1663,15 @@ rules:
       sus permisos efectivos son la union de los permisos de sus roles, siempre
       sujeta a esas restricciones de contexto (DC27A). Tambien son
       configurables los permisos de consulta de Ordenes, Clientes, fotografias,
-      documentos, pagos y reportes (DC27B). La cancelacion se distingue en tres
+      documentos, pagos y reportes (DC27B), y los de antecedentes y
+      operaciones administrativas (DEC-MI-12). Configuracion (DEC-MI-12,
+      12/11/2026): los permisos son configurables por rol desde
+      Administracion; solo Administracion gestiona las asignaciones de roles,
+      desde Configuracion y con auditoria; cada accion registra el usuario y el
+      rol que la habilito; un tecnico puede controlar su propio trabajo si
+      tiene los permisos; ningun cambio puede dejar el sistema sin un
+      administrador autorizado; y los permisos implementados hoy son la
+      configuracion inicial. La cancelacion se distingue en tres
       tipos con permiso propio (DC08): cancelacion administrativa
       (predeterminado: Recepcion y Coordinacion, los responsables vigentes),
       descarte tecnico (Tecnico, PROC-REP-183) y desistimiento solicitado por
@@ -1629,8 +1688,8 @@ rules:
       Recepcion o Administracion (UAT-009, BR-REP-045); registrar pagos todo
       usuario activo salvo Tecnico (BR-REP-017); override de recursos y de
       estacion Coordinacion (BR-REP-003, PROC-REP-179). Predeterminados
-      provisionales, tomados de la implementacion y a validar con Rosario
-      Tecno: consultar el inventario todos los roles operativos; ingresos,
+      tomados de la implementacion, confirmados como configuracion inicial
+      (DEC-MI-12): consultar el inventario todos los roles operativos; ingresos,
       ajustes de stock y revalidacion masiva Administracion y Coordinacion
       (BR-REP-049); sincronizar el catalogo de equipos Administracion y
       Coordinacion (BR-REP-048); ajustar la garantia de un Detalle Recepcion y
@@ -1640,8 +1699,20 @@ rules:
       de garantia vencida de un Detalle origen (PROC-REP-036) Recepcion,
       Coordinacion RMA y Administracion, no el Tecnico; otorgar, modificar o
       quitar una CORTESIA Recepcion, Coordinacion RMA y Administracion.
-      Pendientes, sin predeterminado definido: los responsables de cada evento
-      de custodia (BR-REP-033) y el permiso inicial del DESCUENTO (BR-REP-016).
+      Predeterminados de la macroiteracion integral (12/11/2026): aplicar un
+      DESCUENTO Recepcion, Coordinacion RMA y Administracion (DEC-MI-03,
+      BR-REP-016); registrar la recepcion fisica, el equipo no recibido, la
+      devolucion sin reparar y la entrega Recepcion y Administracion
+      (DEC-MI-04, BR-REP-033); continuar un reclamo de garantia rechazado como
+      reparacion paga Recepcion, y consultar los reclamos Recepcion,
+      Coordinacion RMA y Administracion (DEC-MI-02, BR-REP-019); corregir los
+      datos del ingreso Recepcion, Coordinacion RMA y Administracion
+      (DEC-MI-07, BR-REP-046); corregir la vinculacion de un Equipo Recepcion,
+      Coordinacion RMA y Administracion (DEC-MI-11, BR-REP-022); crear y
+      confirmar Ordenes de compra y registrar sus recepciones Recepcion,
+      Coordinacion RMA y Administracion, sin aprobacion, y configurar precios
+      solo Administracion (DEC-MI-09, BR-REP-049); configurar las plantillas
+      de mensajes Administracion (DEC-MI-08, BR-REP-044).
       La autenticacion y el almacenamiento de usuarios, roles y permisos son
       una decision de arquitectura (DC27C), no de esta regla.
     status: approved
@@ -1661,7 +1732,14 @@ rules:
       registradas en una reparacion: cada Detalle, Ejecucion y documento
       conserva su copia de lo que se aplico (precio, puntaje, garantia,
       checklist, datos del equipo). El catalogo de equipos lo mantiene Ventas
-      y RMA solo lo sincroniza (BR-REP-048).
+      y RMA solo lo sincroniza (BR-REP-048). Catalogos administrados
+      (DEC-MI-13, 12/11/2026): Tipos de Reparacion, Mesas de trabajo, Insumos,
+      politicas de garantia (BR-REP-041), checklist por tipo de equipo,
+      plantillas de WhatsApp (BR-REP-044), motivos de cancelacion y de
+      interrupcion (BR-REP-014, BR-REP-004), parametros operativos (por
+      ejemplo el plazo del retiro demorado, BR-REP-033), precios y costos.
+      Cada cambio respeta los permisos, se audita, preserva las referencias
+      historicas y no cambia los precios de las Ordenes existentes.
     status: approved
 
   - id: BR-REP-041
@@ -1671,13 +1749,21 @@ rules:
       UAT-009). La garantia se asigna a cada Detalle de reparacion, no solo a
       la Orden. Su plazo surge de una politica configurable por tipo de
       reparacion y por el resultado del check-in, administrada desde
-      Administracion (BR-REP-040); las precedencias entre politicas y sus
-      excepciones se definen desde Administracion y su contenido concreto sigue
-      pendiente de decision. Politica vigente confirmada en UAT: con el
+      Administracion (BR-REP-040). Politica vigente confirmada en UAT: con el
       check-in registrado como realizado se sugieren 90 dias y con el check-in
       registrado como no realizado, 30 dias, por cada Detalle no cancelado
-      (BR-REP-045). Que plazo rige mientras no hay un check-in registrado, o en
-      las Ordenes que no lo exigen, forma parte de las precedencias pendientes.
+      (BR-REP-045). Politica por Tipo de Reparacion (DEC-MI-01, 12/11/2026):
+      cada Tipo de Reparacion configura un plazo con check-in realizado y un
+      plazo con check-in no realizado, con 90 y 30 dias como valores
+      iniciales, y una politica para los trabajos hechos dentro de una
+      garantia RMA, a elegir entre (1) iniciar un nuevo plazo segun el Tipo de
+      Reparacion, (2) conservar el tiempo restante de la garantia original o
+      (3) no otorgar nueva garantia. El ajuste manual autorizado prevalece
+      sobre el plazo calculado, con motivo y auditoria. Cada Detalle tiene un
+      plazo calculado y trazable. Siguen pendientes de decision cual de las
+      tres politicas RMA es la inicial de cada Tipo de Reparacion y que plazo
+      rige cuando el check-in no es exigible fuera de la garantia RMA, o
+      mientras no hay uno registrado.
       Se conservan el plazo sugerido y el
       definitivo; un usuario autorizado puede ajustar el plazo manualmente con
       motivo antes de la entrega, el ajuste queda registrado y una nueva
@@ -1697,9 +1783,11 @@ rules:
       manuscrita en pantalla o con una foto o archivo del documento firmado. La
       evidencia queda ligada al documento y a la version firmada, con usuario y
       fecha/hora de registro, y nunca se borra. Una version nueva del documento
-      (BR-REP-031) no hereda la firma de la anterior. Cuando es obligatoria cada
-      firma, segun el documento, sigue pendiente de decision; el comprobante de
-      autorizacion (AUT) se definio en UAT sin firma obligatoria. Registrar la
+      (BR-REP-031) no hereda la firma de la anterior. La firma es opcional en
+      todos los documentos (DEC-MI-06, 12/11/2026): ningun documento la exige,
+      y cuando se registra queda como firma en pantalla o foto del documento
+      firmado, con la evidencia ligada al documento; el comprobante de
+      autorizacion (AUT) ya se habia definido en UAT sin firma obligatoria. Registrar la
       evidencia nunca se infiere de haber generado o compartido el documento.
     status: approved
 
@@ -1712,9 +1800,12 @@ rules:
       la finalidad, el canal, la fecha/hora, el origen (como se obtuvo) y, si
       ocurre, su revocacion, que se conserva en el historial. El envio de un
       mensaje respeta el consentimiento y las preferencias vigentes para su
-      finalidad y canal. Como se obtiene el consentimiento en el ingreso y que
-      mensajes concretos requiere cada finalidad se definen con las plantillas
-      y disparadores (pendientes, DC25).
+      finalidad y canal. Consentimiento (DEC-MI-08, 12/11/2026): las
+      comunicaciones operativas se distinguen de las comerciales; las
+      comerciales (marketing) exigen un consentimiento expreso y revocable, que
+      registra el usuario, la fecha/hora, el canal y el origen, y se respetan
+      las preferencias del cliente. Los envios automaticos de marketing quedan
+      fuera de alcance.
     status: approved
 
   - id: BR-REP-044
@@ -1729,8 +1820,17 @@ rules:
       envio asistido queda en el historial de comunicaciones de la Orden, con la
       plantilla, el destinatario, el canal, el documento compartido, el usuario
       y la fecha/hora. Se respeta el consentimiento por finalidad (BR-REP-043).
+      Etapa 1 (DEC-MI-08, 12/11/2026): WhatsApp asistido, sin proveedor
+      automatico. Administracion configura las plantillas; las cinco iniciales
+      son ingreso de equipo, autorizacion pendiente, equipo listo para
+      retirar, recordatorio de retiro y garantia, con variables de la Orden. El
+      usuario revisa y puede editar el mensaje antes de abrir WhatsApp. Se
+      registran la Orden, la plantilla, el mensaje preparado, el usuario, la
+      fecha/hora, el canal, el intento de apertura y la confirmacion manual del
+      envio; nunca se registra un mensaje como entregado o leido sin evidencia
+      de un proveedor.
       Etapa 2 (DC25): proveedor oficial, con estados de envio y reintentos.
-      Pendientes: plantillas, disparadores y proveedor.
+      Pendiente: el proveedor de la etapa 2.
     status: approved
 
   - id: BR-REP-045
@@ -1741,13 +1841,17 @@ rules:
       equipo: realizado o no realizado. Se registra con la reparacion lista
       (todos los trabajos terminados y aprobados en control) y antes de
       entregar. Lo registran Recepcion o Administracion (predeterminado,
-      BR-REP-039), con usuario y fecha/hora, y el registro queda auditado. Si
-      el check-in puede corregirse o registrarse otra vez antes de la entrega,
-      hasta cuando y como afecta eso al comprobante final siguen pendientes de
-      decision. En CLIENTE_EXTERNO, con trabajos realizados y garantia
+      BR-REP-039), con usuario y fecha/hora, y el registro queda auditado.
+      Correccion (DEC-MI-05, 12/11/2026): el check-in puede corregirse antes de
+      la entrega, con motivo obligatorio; se conservan todas sus versiones y
+      rige la ultima; cuando corresponde, el comprobante final se regenera
+      como una version nueva (BR-REP-031), sin destruir las anteriores. Quien
+      corrige parte de la configuracion inicial de permisos (DEC-MI-12). En
+      CLIENTE_EXTERNO, con trabajos realizados y garantia
       aplicable, la entrega exige el check-in registrado (PROC-REP-265 ->
-      PROC-REP-269); el criterio exacto para determinar cuando la garantia es
-      aplicable sigue pendiente de definicion; sin trabajos realizados,
+      PROC-REP-269); la garantia es aplicable cuando al menos un trabajo
+      realizado tiene una garantia mayor a cero (DEC-MI-01), y solo en ese caso
+      el check-in es obligatorio para entregar; sin trabajos realizados,
       RT_INTERNO y la garantia RMA no lo exigen. El ingreso y su comprobante no
       lo piden. Al registrarlo se reasigna la garantia sugerida de cada Detalle
       no cancelado (BR-REP-041) sin pisar los ajustes manuales. La notificacion y
@@ -1784,7 +1888,12 @@ rules:
       solo al ingreso inicial de CLIENTE_EXTERNO: RT_INTERNO, la garantia RMA,
       el camino de revision tecnica y las autorizaciones posteriores conservan
       su circuito explicito. El check-in no forma parte del ingreso (UAT-009,
-      BR-REP-045).
+      BR-REP-045). Correccion de los datos del ingreso (DEC-MI-07, 12/11/2026):
+      Recepcion, Coordinacion RMA y Administracion pueden corregir los datos
+      registrados en el ingreso, con motivo obligatorio; se auditan los
+      valores anteriores y nuevos, y la correccion no altera los comprobantes
+      ya emitidos. Hasta cuando se admite la correccion sigue pendiente de
+      decision.
     status: approved
 
   - id: BR-REP-047
@@ -1845,9 +1954,29 @@ rules:
       recursos, sin reservar stock, sin repetir PROC-REP-140, sin cambiar la
       prioridad ni interrumpir tomas o Ejecuciones, y respetando autorizaciones
       y revisiones pendientes (PROC-REP-080/120, BR-REP-034). Los permisos de
-      consulta, ingresos, ajustes y revalidacion son provisionales (BR-REP-039).
-      Fuera de alcance: compras, lotes y costos (proceso de Compras, DC24 y
-      DC24LOT) e inventarios fisicos periodicos. Pendiente de decision: el
-      catalogo de tipos de movimiento (DESPERDICIO de BR-REP-005 frente a
-      DEVOLUCION de la implementacion).
+      consulta, ingresos, ajustes y revalidacion implementados son la
+      configuracion inicial (DEC-MI-12, BR-REP-039). Tipos de movimiento y
+      lotes (DEC-MI-10, 12/11/2026; complementa BR-REP-005): se diferencian la
+      reserva, el consumo, la devolucion (insumo utilizable que vuelve al
+      stock) y el desperdicio (material inutilizado), ademas de los ingresos y
+      los ajustes; el stock disponible y el reservado se mantienen coherentes
+      con esos movimientos, un reintento no duplica un movimiento y el
+      historial conserva los responsables. Cada tipo de insumo configura si se
+      controla por lote, y se registra el numero de serie cuando corresponda;
+      la trazabilidad va de la compra al consumo. La contabilidad de stock
+      existente pasa a este modelo mediante una transicion controlada. Compras
+      (DEC-MI-09, 12/11/2026; proceso propio, fuera de PROC-REP, DC24): el
+      circuito es Solicitud -> Orden de compra -> Recepciones parciales ->
+      Ingreso de stock. Las solicitudes son manuales o sugeridas ante un
+      faltante; nunca hay compras automaticas sin confirmacion. Las Ordenes de
+      compra las crean Recepcion, Coordinacion RMA y Administracion, sin
+      aprobacion, y registran quien crea y quien confirma, el proveedor, los
+      insumos, las cantidades y los costos. Las recepciones las registran esos
+      tres roles: una Orden de compra admite varias recepciones parciales, se
+      controla lo pendiente, no se registran recepciones duplicadas y se
+      registran las diferencias. Costos: el ultimo costo de compra es la
+      referencia operativa, cada recepcion conserva su costo historico, el
+      costo real lo registra quien recibe y solo Administracion configura
+      precios. Los proveedores tienen datos basicos. Fuera de alcance:
+      inventarios fisicos periodicos.
     status: approved

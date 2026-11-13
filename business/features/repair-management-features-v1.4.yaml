@@ -187,9 +187,21 @@ features:
           cargarlas a mano (BR-REP-048)
         - Omitir el numero de serie del formulario inicial de CLIENTE_EXTERNO,
           sin quitarlo del Equipo (UAT-011)
+        - Identificar el Equipo por IMEI, sin IMEI por numero de serie y sin
+          ninguno con una identidad nueva; ante varias coincidencias dejar que
+          Recepcion elija o indique "Ninguno", nunca vincular por similitud y
+          corregir con motivo y auditoria una vinculacion erronea (BR-REP-022,
+          DEC-MI-11)
+        - Corregir los datos del ingreso con motivo obligatorio y auditoria de
+          los valores anteriores y nuevos, sin alterar los comprobantes
+          emitidos (BR-REP-046, DEC-MI-07)
         - Validar la vigencia de la garantia de origen de una garantia RMA y
           admitir una excepcion autorizada y auditada o bloquear el ingreso
           (PROC-REP-036, BR-REP-019, BR-REP-041)
+        - Registrar cada reclamo de garantia, admitido o rechazado, en un
+          registro independiente, y continuar un reclamo rechazado como una
+          Orden CLIENTE_EXTERNO paga vinculada al reclamo, con los datos
+          precargados y sin Ordenes duplicadas (BR-REP-019, DEC-MI-02)
         - Relacionar una garantia de reparacion con la Orden original y con
           uno o mas Detalles origen (una unica Orden de garantia por
           inicio, BR-REP-019)
@@ -225,9 +237,7 @@ features:
           autorizado (BR-REP-021)
         - Administrar las preguntas del checklist, el catalogo de equipos y las
           politicas de garantia (FEAT-REP-010)
-        - Definir como sigue la atencion de un cliente cuya garantia RMA esta
-          vencida y no tiene excepcion, mientras siga pendiente de decision
-          (ver open_questions)
+        - Integrar o vincular equipos con Gestion RT (DEC-MI-11)
         - Validar factibilidad o disponibilidad de recursos
         - Ejecutar Detalles de Reparacion
         - Gestionar comercialmente la Orden (precio, pagos, saldo)
@@ -244,10 +254,6 @@ features:
         Proveedor autorizado de consulta externa por DNI (BR-REP-021, DC14):
         no hay ninguno habilitado; elegirlo y autorizarlo queda pendiente.
       - >
-        Equipos sin IMEI disponible o legible y coincidencias ambiguas por
-        IMEI (BR-REP-022): falta definir el criterio de identificacion y como
-        se resuelve la coincidencia.
-      - >
         Estandarizacion del diagnostico inicial mediante una configuracion
         administrable (BR-REP-023): a definir posteriormente.
       - >
@@ -255,17 +261,20 @@ features:
         Recepcion hasta que FEAT-REP-002 cree los Detalles (BR-REP-026): a
         definir.
       - >
-        Precedencias concretas entre politicas de garantia (BR-REP-041,
-        PROC-REP-036): pendientes de decision. El responsable predeterminado
-        de la excepcion de garantia vencida lo decidio DEC-IT1-01.
+        Politica inicial de cada Tipo de Reparacion para los trabajos hechos
+        dentro de una garantia RMA (BR-REP-041): pendiente de decision. Las
+        precedencias las decidio DEC-MI-01 y el responsable de la excepcion de
+        garantia vencida, DEC-IT1-01.
       - >
-        Garantia RMA vencida (PROC-REP-036, EVT-REP-998), pendientes de
-        decision: la continuacion como reparacion paga, conservando la
-        relacion con el reclamo rechazado, y la persistencia y auditoria del
-        intento de reclamo rechazado. No se modelan transiciones ni estados
-        nuevos hasta decidirlos. La garantia parcialmente vigente (Detalles
-        origen con situaciones distintas) la resolvio DEC-IT1-03: evaluacion
-        y excepcion por Detalle.
+        Hasta cuando se pueden corregir los datos del ingreso (BR-REP-046):
+        pendiente de decision; quien y como los corrige lo decidio DEC-MI-07.
+      - >
+        Garantia RMA vencida (PROC-REP-036, EVT-REP-998): DEC-MI-02 decidio el
+        registro de reclamos y la continuacion como reparacion paga vinculada
+        al reclamo rechazado, sin transiciones ni estados nuevos (la Orden paga
+        empieza su propio recorrido). La garantia parcialmente vigente
+        (Detalles origen con situaciones distintas) la resolvio DEC-IT1-03:
+        evaluacion y excepcion por Detalle.
 
   - id: FEAT-REP-002
     name: Diagnostico y gestion de Detalles de Reparacion
@@ -489,10 +498,6 @@ features:
         DESCARTADA. (V1.4 ya fija el origen RECEPCION en PROC-REP-070 y
         REVISION_TECNICA en PROC-REP-075.)
       - >
-        Cuando es obligatoria la firma de cada documento (BR-REP-042, DC26):
-        pendiente de decision. El canal y la forma de la evidencia ya estan
-        definidos (BR-REP-028).
-      - >
         Si el estado fisico es obligatorio para emitir el comprobante de
         ingreso y autorizacion (BR-REP-046): decision de la implementacion
         pendiente de confirmar.
@@ -606,6 +611,12 @@ features:
         - Revalidar las Ordenes que esperan recursos evaluando solo los
           Detalles bloqueados por recursos, sin reservar, sin repetir la
           habilitacion ni cambiar la prioridad (BR-REP-049)
+        - Diferenciar los movimientos de reserva, consumo, devolucion y
+          desperdicio, con lote configurable por tipo de insumo, numero de
+          serie cuando corresponda, idempotencia e historial con responsables
+          (BR-REP-049, DEC-MI-10)
+        - Recibir como ingreso de stock lo que registra una recepcion de compra,
+          con su costo historico (BR-REP-049, DEC-MI-09)
 
       excludes:
         - Decidir la autorizacion del cliente (FEAT-REP-002)
@@ -614,7 +625,9 @@ features:
         - Seleccionar un Detalle especifico para trabajar (FEAT-REP-005)
         - Ejecutar Detalles de Reparacion (FEAT-REP-005)
         - Exigir que todos los Detalles de la Orden sean factibles
-        - Compras, lotes y costos de inventario (proceso de Compras, DC24)
+        - El circuito de Compras (Solicitud, Orden de compra, recepciones
+          parciales y proveedores), que es un proceso propio fuera de PROC-REP
+          (DC24; su contenido lo decidio DEC-MI-09)
 
     open_questions:
       - >
@@ -1050,7 +1063,12 @@ features:
           CANCELADO
         - Registrar Ajustes Comerciales (CORTESIA o DESCUENTO) por Orden o por
           Detalle, en porcentaje o importe fijo, con motivo e historial, sin
-          tocar precios de catalogo ni snapshots (BR-REP-016)
+          tocar precios de catalogo ni snapshots (BR-REP-016); los aplican
+          Recepcion, Coordinacion RMA y Administracion y un ajuste general de
+          la Orden no se prorratea entre sus Detalles (DEC-MI-03)
+        - Tratar todo Ajuste Comercial que deja el total por debajo de lo
+          cobrado como saldo a favor que se devuelve antes de entregar, sin
+          dobles devoluciones (BR-REP-016, BR-REP-038, DEC-MI-03)
         - Anular un Pago registrado por error (Administracion por defecto,
           delegable), con motivo y auditoria, sin borrarlo (BR-REP-017)
         - Tratar una cortesia total con Pagos previos como saldo a favor que se
@@ -1088,16 +1106,12 @@ features:
         Impuestos, recargos y otros conceptos comerciales futuros entre Base
         Comercial y Total Cobrable.
       - >
-        Permiso inicial del DESCUENTO (BR-REP-016): pendiente de decision. La
-        CORTESIA, total o parcial, la decidio DEC-IT1-02.
-      - >
-        Tratamiento de un DESCUENTO que deja el total por debajo de lo ya
-        cobrado (BR-REP-016): la implementacion lo rechaza; pendiente de
-        decision.
-      - >
         Catalogo de medios de devolucion (BR-REP-038), el plazo o abandono si el
-        cliente no retira el dinero, las devoluciones posteriores a ENTREGADA y
-        el tratamiento de un saldo a favor en origenes sin circuito comercial.
+        cliente no retira el dinero cuando no hay un equipo por retirar, las
+        devoluciones posteriores a ENTREGADA y el tratamiento de un saldo a
+        favor en origenes sin circuito comercial. El permiso del DESCUENTO y el
+        DESCUENTO por debajo de lo cobrado los decidio DEC-MI-03; la CORTESIA,
+        DEC-IT1-02.
 
   - id: FEAT-REP-008
     name: Finalizacion, entrega e integracion del resultado
@@ -1165,16 +1179,26 @@ features:
       includes:
         - Registrar el check-in (Recepcion o Administracion) desde que la
           reparacion esta lista y exigirlo para entregar una Orden de
-          CLIENTE_EXTERNO con trabajos realizados y garantia aplicable, cuyo
-          criterio exacto sigue pendiente (PROC-REP-269, BR-REP-045)
-        - Reasignar la garantia sugerida de cada Detalle segun el check-in, sin
-          pisar ajustes manuales, y contar la vigencia desde la entrega
-          (BR-REP-041)
-        - Preparar los avisos al cliente desde plantillas, registrar cada envio
-          asistido sin darlo por enviado y respetar el consentimiento por
-          finalidad (BR-REP-043, BR-REP-044)
-        - Registrar la firma en pantalla o el archivo firmado de la constancia
-          de entrega y del comprobante final (BR-REP-042)
+          CLIENTE_EXTERNO con trabajos realizados y garantia aplicable, es
+          decir, con al menos un trabajo realizado con garantia mayor a cero
+          (PROC-REP-269, BR-REP-045, DEC-MI-01)
+        - Corregir el check-in antes de la entrega con motivo obligatorio,
+          conservando todas sus versiones, y regenerar el comprobante final
+          como version nueva cuando corresponde (BR-REP-045, DEC-MI-05)
+        - Reasignar la garantia sugerida de cada Detalle segun el check-in y
+          los plazos de su Tipo de Reparacion, sin pisar ajustes manuales, y
+          contar la vigencia desde la entrega (BR-REP-041, DEC-MI-01)
+        - Preparar los avisos al cliente desde plantillas configurables, que el
+          usuario revisa y edita antes de abrir WhatsApp, registrar cada envio
+          asistido con su confirmacion manual sin darlo por entregado ni leido
+          y respetar el consentimiento por finalidad (BR-REP-043, BR-REP-044,
+          DEC-MI-08)
+        - Marcar el retiro demorado cuando vence el plazo desde la
+          notificacion de equipo listo, alertar y registrar seguimientos sin
+          cerrar la Orden ni disponer del equipo (BR-REP-033, DEC-MI-14)
+        - Registrar, de forma opcional, la firma en pantalla o el archivo
+          firmado de la constancia de entrega y del comprobante final
+          (BR-REP-042, DEC-MI-06)
         - Registrar la devolucion fisica del equipo cuando una Orden CANCELADA
           lo exige (PROC-REP-270 reutilizado, BR-REP-033), con fecha/hora,
           usuario que entrega y persona que recibe, sin convertir CANCELADA en
@@ -1208,8 +1232,12 @@ features:
         Definir el estado terminal definitivo para Ordenes de origen
         RT_INTERNO.
       - >
-        Cuando es obligatoria cada firma (BR-REP-042) y las plantillas,
-        disparadores y proveedor de WhatsApp (BR-REP-044): pendientes.
+        Proveedor de WhatsApp de la etapa 2 (BR-REP-044): pendiente. La firma
+        opcional y la etapa 1 asistida las decidieron DEC-MI-06 y DEC-MI-08.
+      - >
+        Plazo de garantia cuando el check-in no es exigible fuera de la
+        garantia RMA, o mientras no hay uno registrado (BR-REP-041): pendiente
+        de decision.
 
   - id: FEAT-REP-009
     name: Cancelacion de Detalles y Orden
@@ -1373,7 +1401,9 @@ features:
         - Consecuencias comerciales/reembolsos de la cancelacion (el saldo a
           favor y su devolucion son de FEAT-REP-007, BR-REP-038)
         - Interrumpir la Ejecucion (FEAT-REP-005)
-        - Definir el catalogo de motivos de cancelacion
+        - Administrar el catalogo de motivos de cancelacion, que se configura
+          en FEAT-REP-010 (DEC-MI-15); esta Feature solo usa el motivo elegido
+          y conserva su version historica
 
     open_questions:
       - >
@@ -1390,7 +1420,6 @@ features:
         Custodia y devolucion de Ordenes con origen distinto de CLIENTE_EXTERNO
         (BR-REP-033): RT_INTERNO no emite comprobante de recepcion, por lo que
         su criterio de equipo recibido no esta definido.
-      - Catalogo definitivo de motivos de cancelacion/interrupcion.
       - >
         Consecuencias comerciales de la cancelacion distintas del saldo a favor
         (por ejemplo penalidades): pendientes.
@@ -1454,9 +1483,18 @@ features:
         - Auditar todo cambio con usuario, fecha/hora, valor anterior y nuevo,
           y conservar el historial de precios
         - Configurar el checklist de recepcion por tipo de equipo (DC12)
-        - Configurar las politicas de garantia (DC15A)
+        - Configurar las politicas de garantia (DC15A), por Tipo de
+          Reparacion, el plazo con check-in realizado y no realizado y la
+          politica de los trabajos hechos dentro de una garantia RMA
+          (BR-REP-041, DEC-MI-01)
         - Administrar las Mesas de trabajo (Estaciones) y sus tipos de
           reparacion habilitados
+        - Administrar Tipos de Reparacion, Insumos, plantillas de WhatsApp,
+          motivos de cancelacion y de interrupcion, parametros operativos (entre
+          ellos el plazo del retiro demorado), precios y costos, respetando
+          permisos, auditando cada cambio, preservando las referencias
+          historicas y sin cambiar precios de Ordenes existentes (BR-REP-040,
+          DEC-MI-13)
         - Sincronizar manualmente el catalogo de equipos de Ventas
           (BR-REP-048)
       excludes:
@@ -1468,13 +1506,15 @@ features:
 
     open_questions:
       - >
-        Precedencias concretas entre politicas de garantia (DC15A).
+        Politica inicial de cada Tipo de Reparacion para los trabajos hechos
+        dentro de una garantia RMA (DEC-MI-01 no la fija): pendiente de
+        decision.
       - >
         Capacidades de los tecnicos y recursos distintos de los insumos:
         pendientes de definicion.
       - >
-        Plantillas, disparadores y proveedor de mensajes de WhatsApp (DC25):
-        pendientes de definicion.
+        Proveedor de mensajes de WhatsApp de la etapa 2 (DC25): pendiente. Las
+        plantillas de la etapa 1 las decidio DEC-MI-08.
 
   - id: FEAT-REP-011
     name: Seguridad, roles y permisos
@@ -1534,10 +1574,17 @@ features:
         - Asignar varios roles a un usuario y calcular sus permisos como union,
           sujeta a las restricciones de contexto
         - Configurar permisos de consulta (Ordenes, Clientes, fotografias,
-          documentos, pagos y reportes)
+          documentos, pagos y reportes, y tambien antecedentes y operaciones
+          administrativas, DEC-MI-12)
         - Distinguir el permiso de cancelacion administrativa, descarte tecnico
           y desistimiento solicitado por el cliente
         - Auditar todo cambio de permisos (BR-REP-040)
+        - Configurar los permisos por rol desde Administracion, partiendo de
+          los permisos implementados como configuracion inicial; gestionar las
+          asignaciones de roles solo desde Administracion, con auditoria;
+          registrar en cada accion el usuario y el rol que la habilito; e
+          impedir cualquier cambio que deje el sistema sin un administrador
+          autorizado (BR-REP-039, DEC-MI-12)
       excludes:
         - Autenticacion y almacenamiento de usuarios, roles y permisos
           (decision de arquitectura DC27C, fuera de las Features)
@@ -1545,15 +1592,4 @@ features:
           permiso
         - Implementar la configuracion antes de la migracion a PostgreSQL
 
-    open_questions:
-      - >
-        Responsables predeterminados de cada evento de custodia (BR-REP-033):
-        pendiente de decision.
-      - >
-        Permiso inicial del DESCUENTO (BR-REP-016): pendiente de decision. Los
-        de la excepcion de garantia y de la CORTESIA los decidieron DEC-IT1-01
-        y DEC-IT1-02.
-      - >
-        Predeterminados provisionales tomados de la implementacion
-        (inventario, catalogo de equipos, ajuste de garantia, fotografias):
-        a validar con Rosario Tecno.
+    open_questions: []

@@ -2,7 +2,7 @@
 
 La baseline funcional vigente es PROC-REP V1.4, aprobada en DC01 y sincronizada desde `rt-rma-app` (DC02):
 
-- Commit de origen: `420feb97fd71fb85f62a722e3033db8cefd45e40` (rama `spec/macro-v14`: V1.4 con DC31, las decisiones DEC-IT1-01 a 05 y el estado de implementación de la macroiteración, sobre `spec/iteracion-1-decisiones` y la etiqueta `v1.4-baseline`).
+- Commit de origen: `45562633d659a9630c2f9b05a7ffdf1073d2591e` (rama `spec/macro-integral`: las decisiones DEC-MI-01 a 15 de la macroiteración integral, sobre `spec/macro-v14`, con DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
 - Contenido funcional aprobado en `b6cc3a5`.
 - Manifiesto de procedencia: `business/FUNCTIONAL_SOURCE.json`.
 
@@ -18,13 +18,28 @@ Fuente de los estados de implementación: `business/decisions/decision-log-v1.4.
 
 Las tres que figuraban (DC06, DC07 y DC11) se alinearon en la iteración 1: ver la sección G.
 
-## B. Decisiones no implementadas (11)
+## B. Decisiones no implementadas (26)
 
 | Decisión | Qué dice la baseline | Situación en el producto | Pendientes |
 |---|---|---|---|
 | DC18B | Permisos configurables por evento de custodia | `services/custodia.py:68` (ROLES_RECEPCION_EQUIPO fijo) | ABI-06 |
 | DC19 | Registrar Minorista/Mayorista sin cambios automáticos de precio | `domain/models/personas.py` (Cliente sin clasificación) | - |
 | DC12 | Checklist configurable por tipo de equipo, opcional, con advertencia por información faltante | No existe checklist | - |
+| DEC-MI-01 | Plazo de garantía por Tipo con y sin check-in; política para trabajos en garantía RMA; check-in exigible solo con garantía mayor a cero | `domain/garantia.py` (90/30 fijos; sin check-in, el plazo del Tipo) | ABI-38, ABI-39 |
+| DEC-MI-02 | Registro de reclamos de garantía rechazados y continuación como reparación paga | El rechazo informa los elegibles y no se registra | - |
+| DEC-MI-03 | Descuento y cortesía por Orden o por Detalle, para Recepción, Coordinación y Administración; por debajo de lo cobrado deja saldo a favor | `services/descuentos.py` (un ajuste por Orden; el descuento lo aplican Recepción y Administración y se rechaza por debajo de lo cobrado) | - |
+| DEC-MI-04 | Custodia: Recepción y Administración registran sus eventos | `services/custodia.py` (Recepción y Administración, fijo) | - |
+| DEC-MI-05 | Corrección del check-in antes de entregar, con motivo y versiones | El check-in se vuelve a registrar sin motivo ni versiones | - |
+| DEC-MI-06 | Firma opcional en pantalla o foto del documento firmado | Los documentos no tienen firma | - |
+| DEC-MI-07 | Corrección de los datos del ingreso con motivo y auditoría | Corrección implementada sin motivo obligatorio ni auditoría de valores | ABI-41 |
+| DEC-MI-08 | WhatsApp asistido con plantillas, historial y consentimiento por finalidad | `whatsapp.ts` comparte sin plantillas, historial ni consentimiento | ABI-13 (etapa 2) |
+| DEC-MI-09 | Compras: solicitud, orden de compra, recepciones parciales e ingreso | No existe módulo de Compras | - |
+| DEC-MI-10 | Lotes, número de serie y desperdicio con trazabilidad compra-consumo | Movimientos sin lote; existe devolución, no desperdicio | - |
+| DEC-MI-11 | Identidad propia del Equipo, reutilización confirmada y corrección auditada | El Equipo se copia en cada Orden; antecedentes solo de consulta | - |
+| DEC-MI-12 | Varios roles por usuario y permisos configurables con auditoría | Un rol por usuario; permisos fijos en el código | - |
+| DEC-MI-13 | Administración de los catálogos y parámetros, con auditoría | Solo Tipos de Reparación y Mesas | - |
+| DEC-MI-14 | Retiro demorado: plazo configurable, alertas y seguimientos, sin cierre automático | No existe | ABI-40 |
+| DEC-MI-15 | Catálogos de motivos de cancelación e interrupción con «Otro» | Motivos en texto libre | ABI-29 (medios de devolución) |
 | DC26 | Firma en pantalla o archivo firmado, ligados al documento y su versión | Los documentos no tienen firma | ABI-08 |
 | DC24 | Compras en un proceso propio, después de PostgreSQL | No existe módulo de Compras | ABI-12 |
 | DC24LOT | Movimientos por lote con trazabilidad hasta el Detalle | Movimientos sin lote | ABI-12 |
