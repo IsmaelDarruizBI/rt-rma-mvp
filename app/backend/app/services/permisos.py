@@ -156,6 +156,12 @@ GARANTIA_EXCEPCION = _definir(
     (RECEP, COORD, ADMIN),
     INGRESO,
 )
+INGRESO_CORREGIR = _definir(
+    "INGRESO_CORREGIR",
+    "Corregir datos del ingreso ya registrados (con motivo)",
+    (RECEP, COORD, ADMIN),
+    INGRESO,
+)
 CLIENTE_BUSCAR = _definir(
     "CLIENTE_BUSCAR",
     "Buscar clientes por DNI",

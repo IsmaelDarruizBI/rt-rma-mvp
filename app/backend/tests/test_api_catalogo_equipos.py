@@ -458,6 +458,8 @@ def _corregir(cliente, orden_id, equipo):
         f"/api/orders/{orden_id}/reception",
         json={
             "usuario_id": RECEPCION,
+            # DEC-MI-07: corregir un dato ya registrado exige motivo.
+            "motivo": "Correccion de prueba (DEC-MI-07).",
             "estado_fisico": "Sin golpes.",
             "equipo": {"falla_reportada": "No carga.", **equipo},
         },

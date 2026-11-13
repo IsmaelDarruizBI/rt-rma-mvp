@@ -277,7 +277,9 @@ _DETALLES = consulta(
            ux.codigo AS cancelado_por, d.cancelado_en,
            us.codigo AS desistimiento_solicitado_por,
            d.desistimiento_solicitado_en, d.desistimiento_motivo,
-           d.desistimiento_canal, d.origen_diagnostico
+           d.desistimiento_canal, d.origen_diagnostico,
+           d.garantia_con_checkin, d.garantia_sin_checkin,
+           d.politica_garantia_rma
     FROM rma.detalle d
     LEFT JOIN rma.usuario uc ON uc.id = d.control_usuario_id
     LEFT JOIN rma.usuario ux ON ux.id = d.cancelado_por
@@ -452,7 +454,8 @@ _NOTAS_RECEPCION = consulta(
 _CHECKINS = consulta(
     "ordenes.checkins",
     """
-    SELECT c.orden_id, c.realizado, u.codigo AS usuario, c.registrado_en
+    SELECT c.orden_id, c.realizado, u.codigo AS usuario, c.registrado_en,
+           c.motivo
     FROM rma.checkin c
     JOIN rma.usuario u ON u.id = c.usuario_id
     WHERE c.orden_id = ANY(ARRAY(
@@ -865,6 +868,7 @@ def _recepcion(
             realizado=checkin.realizado,
             usuario_id=checkin.usuario,
             fecha=utc(checkin.registrado_en),
+            motivo=checkin.motivo,
         )
         for checkin in hijas["checkins"].get(orden_id, [])
     ]
@@ -903,6 +907,8 @@ def _recepcion(
                 registrado_en=utc(version.registrado_en),
                 reemplazado_por=version.reemplazado_por,
                 reemplazado_en=utc(version.reemplazado_en),
+                motivo=version.datos.get("motivo"),
+                cambios=version.datos.get("cambios") or [],
             )
             for version in hijas["versiones_recepcion"].get(orden_id, [])
         ],
@@ -1066,6 +1072,9 @@ def _detalles(
                 puntaje=vigente.puntaje,
                 garantia_dias=fila.garantia_dias,
                 garantia_dias_sugerida=fila.garantia_dias_sugerida,
+                garantia_con_checkin=fila.garantia_con_checkin,
+                garantia_sin_checkin=fila.garantia_sin_checkin,
+                politica_garantia_rma=fila.politica_garantia_rma,
                 ajustes_garantia=[
                     AjusteGarantia(
                         dias_anteriores=ajuste.dias_anteriores,

@@ -61,12 +61,18 @@ def preparar_ingreso(cliente, orden_id: str, usuario=RECEPCION) -> dict:
 
 
 def registrar_checkin(
-    cliente, orden_id: str, realizado: bool = True, usuario=RECEPCION
+    cliente,
+    orden_id: str,
+    realizado: bool = True,
+    usuario=RECEPCION,
+    motivo: str | None = None,
 ):
-    """``POST .../checkin``: si se pudieron verificar las funciones."""
+    """``POST .../checkin``: si se pudieron verificar las funciones.
+
+    ``motivo``: el de una correccion (DEC-MI-05)."""
     return cliente.post(
         f"/api/orders/{orden_id}/checkin",
-        json={"usuario_id": usuario, "realizado": realizado},
+        json={"usuario_id": usuario, "realizado": realizado, "motivo": motivo},
     )
 
 

@@ -48,7 +48,9 @@ from app.domain.models import (
     EstadoReparacionDetail,
     EstadoWorkflow,
     OrdenReparacion,
+    OrigenOrden,
     PagoEnDocumento,
+    PoliticaGarantiaRma,
     RegistroAutorizacionCliente,
     ReparacionDetail,
     ResultadoAutorizacion,
@@ -176,10 +178,48 @@ def generar_comprobante_recepcion(
     return nueva_orden
 
 
+def aplicar_politica_garantia_rma(
+    orden: OrdenReparacion,
+    fecha: datetime,
+    zona_horaria: tzinfo = timezone.utc,
+) -> OrdenReparacion:
+    """DEC-MI-01: la garantia de los trabajos hechos dentro de una garantia
+    RMA, segun la politica copiada de su Tipo.
+
+    SIN_GARANTIA: 0 dias. PLAZO_RESTANTE: los dias que le quedaban a la
+    garantia del Detalle origen al entregar (nunca negativos).
+    NUEVO_PLAZO o sin definir (ABI-38): el plazo del Tipo, como antes. Un
+    ajuste manual nunca se pisa.
+    """
+    if orden.origen is not OrigenOrden.RMA_GARANTIA_REPARACION:
+        return orden
+    vencimientos = {
+        v.detalle_id: v.vence for v in orden.vigencia_garantia_origen
+    }
+    entrega = fecha.astimezone(zona_horaria).date()
+    nueva = orden.model_copy(deep=True)
+    for detalle in nueva.reparaciones_detail:
+        if (
+            detalle.ajustes_garantia
+            or detalle.estado is EstadoReparacionDetail.CANCELADO
+        ):
+            continue
+        politica = detalle.politica_garantia_rma
+        if politica is PoliticaGarantiaRma.SIN_GARANTIA:
+            detalle.garantia_dias = 0
+        elif politica is PoliticaGarantiaRma.PLAZO_RESTANTE:
+            vence = vencimientos.get(detalle.detalle_origen_id)
+            detalle.garantia_dias = (
+                max((vence - entrega).days, 0) if vence is not None else 0
+            )
+    return nueva
+
+
 def generar_comprobante_final(
     orden: OrdenReparacion,
     *,
     fecha: datetime,
+    zona_horaria: tzinfo = timezone.utc,
 ) -> OrdenReparacion:
     """PROC-REP-280: comprobante final y garantia de reparacion.
 
@@ -208,6 +248,7 @@ def generar_comprobante_final(
             f"{orden.saldo}."
         )
 
+    orden = aplicar_politica_garantia_rma(orden, fecha, zona_horaria)
     sin_reparacion = finalizada_sin_reparacion(orden)
     observacion = f"Total {orden.total} / Saldo {orden.saldo}"
     if sin_reparacion:

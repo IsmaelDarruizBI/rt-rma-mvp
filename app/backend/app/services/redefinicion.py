@@ -275,11 +275,17 @@ def aplicar_redefinicion(
     redefinido.descripcion = None
     redefinido.precio = tipo_reparacion.precio
     redefinido.puntaje = tipo_reparacion.puntaje
+    redefinido.garantia_con_checkin = tipo_reparacion.garantia_con_checkin
+    redefinido.garantia_sin_checkin = tipo_reparacion.garantia_sin_checkin
+    redefinido.politica_garantia_rma = tipo_reparacion.politica_garantia_rma
     # La garantia sigue la sugerencia (check-in o Tipo), salvo que una
     # persona ya la haya ajustado: ese plazo se conserva.
     if not redefinido.ajustes_garantia:
         dias = garantia_sugerida(
-            checkin_de(orden), tipo_reparacion.garantia_dias
+            checkin_de(orden),
+            tipo_reparacion.garantia_dias,
+            tipo_reparacion.garantia_con_checkin,
+            tipo_reparacion.garantia_sin_checkin,
         )
         redefinido.garantia_dias = dias
         redefinido.garantia_dias_sugerida = dias

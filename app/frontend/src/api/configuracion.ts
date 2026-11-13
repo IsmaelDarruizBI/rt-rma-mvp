@@ -4,7 +4,12 @@
  */
 
 import { get, post, put } from "./client";
-import type { RolUsuario, TipoReparacion, Usuario } from "../types/api";
+import type {
+  PoliticaGarantiaRma,
+  RolUsuario,
+  TipoReparacion,
+  Usuario,
+} from "../types/api";
 
 export interface MesaConfigurable {
   id: string;
@@ -49,6 +54,9 @@ export interface DatosTipo {
   puntaje: number;
   garantia_dias: number;
   activo: boolean;
+  garantia_con_checkin: number;
+  garantia_sin_checkin: number;
+  politica_garantia_rma: PoliticaGarantiaRma | null;
 }
 
 export function obtenerCatalogo(): Promise<CatalogoConfigurable> {

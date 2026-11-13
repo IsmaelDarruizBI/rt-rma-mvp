@@ -20,6 +20,7 @@ from .enums import (
     EstadoTomaOrden,
     OrigenCancelacion,
     OrigenDiagnostico,
+    PoliticaGarantiaRma,
     ResultadoAutorizacion,
     ResultadoControl,
     ResultadoEvaluacionTecnica,
@@ -161,6 +162,11 @@ class ReparacionDetail(BaseModel):
     # catalogo si no hay check-in). ``None`` en un JSON anterior: el
     # sugerido fue el mismo ``garantia_dias``.
     garantia_dias_sugerida: int | None = Field(default=None, ge=0)
+    # DEC-MI-01: copia de la politica de garantia del Tipo al definirlo
+    # (BR-REP-015). ``None`` en un Detalle anterior: 90/30 y sin politica.
+    garantia_con_checkin: int | None = Field(default=None, ge=0)
+    garantia_sin_checkin: int | None = Field(default=None, ge=0)
+    politica_garantia_rma: PoliticaGarantiaRma | None = None
     # Cambios manuales del plazo, del mas antiguo al mas reciente.
     ajustes_garantia: list[AjusteGarantia] = Field(default_factory=list)
 

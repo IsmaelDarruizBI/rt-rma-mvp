@@ -136,7 +136,8 @@ export interface EjecutorAcciones {
   liberarOrdenAjena: (motivo: string, insumosUtilizados: InsumoUtilizado[]) => void;
   ajustarGarantia: (detalleId: string, dias: number, motivo: string) => void;
   /** Antes de entregar: si se pudieron verificar las funciones básicas. */
-  registrarCheckin: (realizado: boolean) => void;
+  /** DEC-MI-05: `motivo` al corregir un check-in ya registrado. */
+  registrarCheckin: (realizado: boolean, motivo?: string | null) => void;
 }
 
 interface Props {
@@ -1174,9 +1175,10 @@ function FormularioCheckin({
   orden: Orden;
   usuarios: Usuario[];
   deshabilitado: boolean;
-  onConfirmar: (realizado: boolean) => void;
+  onConfirmar: (realizado: boolean, motivo?: string | null) => void;
 }) {
   const actual = orden.recepcion?.datos.checkin ?? null;
+  const [motivo, setMotivo] = useState("");
   const [valor, setValor] = useState<"" | "si" | "no">(
     actual === true ? "si" : actual === false ? "no" : "",
   );
@@ -1195,7 +1197,7 @@ function FormularioCheckin({
           {ultimo
             ? ` · ${nombreDeUsuario(usuarios, ultimo.usuario_id)}`
             : " · en el ingreso"}
-          . Se puede cambiar hasta entregar.
+          . Se puede corregir hasta entregar, con motivo.
         </p>
       )}
       <CampoCheckin valor={valor} deshabilitado={deshabilitado} onCambiar={setValor} />
@@ -1208,9 +1210,24 @@ function FormularioCheckin({
           .
         </p>
       )}
+      {actual !== null && !sinCambios && (
+        <Campo etiqueta="Motivo de la corrección">
+          <input
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            style={estiloInput}
+          />
+        </Campo>
+      )}
       <Boton
-        disabled={deshabilitado || sinCambios}
-        onClick={() => onConfirmar(valor === "si")}
+        disabled={
+          deshabilitado ||
+          sinCambios ||
+          (actual !== null && motivo.trim() === "")
+        }
+        onClick={() =>
+          onConfirmar(valor === "si", actual !== null ? motivo.trim() : null)
+        }
       >
         Registrar el check-in
       </Boton>

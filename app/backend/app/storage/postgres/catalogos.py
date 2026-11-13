@@ -66,7 +66,8 @@ from .transaccion import UnidadDeTrabajoPostgres
 _TIPOS = consulta(
     "catalogos.tipos_reparacion",
     """
-    SELECT codigo, nombre, precio, puntaje, garantia_dias, activo
+    SELECT codigo, nombre, precio, puntaje, garantia_dias, activo,
+           garantia_con_checkin, garantia_sin_checkin, politica_garantia_rma
     FROM rma.tipo_reparacion
     WHERE codigo <> %(otros)s
     ORDER BY codigo COLLATE "C"
@@ -76,7 +77,8 @@ _TIPOS = consulta(
 _TIPO = consulta(
     "catalogos.tipo_reparacion",
     """
-    SELECT codigo, nombre, precio, puntaje, garantia_dias, activo
+    SELECT codigo, nombre, precio, puntaje, garantia_dias, activo,
+           garantia_con_checkin, garantia_sin_checkin, politica_garantia_rma
     FROM rma.tipo_reparacion
     WHERE codigo = %(codigo)s AND codigo <> %(otros)s
     """,
@@ -544,6 +546,9 @@ def _tipo(f) -> TipoReparacion:
         puntaje=f.puntaje,
         garantia_dias=f.garantia_dias,
         activo=f.activo,
+        garantia_con_checkin=f.garantia_con_checkin,
+        garantia_sin_checkin=f.garantia_sin_checkin,
+        politica_garantia_rma=f.politica_garantia_rma,
     )
 
 

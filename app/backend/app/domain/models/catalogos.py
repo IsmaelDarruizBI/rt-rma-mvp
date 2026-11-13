@@ -9,6 +9,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
+from .enums import PoliticaGarantiaRma
+
 # Reparacion no tipificada: un tipo del sistema, no una fila del catalogo.
 # El Detalle lleva su descripcion y su precio manual; asi se distingue en
 # reportes de un tipo parametrizado sin crear un tipo por cada caso.
@@ -29,6 +31,13 @@ class TipoReparacion(BaseModel):
     puntaje: int = Field(ge=0)
     garantia_dias: int = Field(ge=0)
     activo: bool = True
+    # DEC-MI-01: plazos segun el check-in de entrega (90 y 30 al inicio) y
+    # la politica para los trabajos hechos dentro de una garantia RMA (sin
+    # definir: ABI-38). ``garantia_dias`` sigue siendo el plazo cuando no
+    # hay check-in exigible (ABI-39).
+    garantia_con_checkin: int = Field(default=90, ge=0)
+    garantia_sin_checkin: int = Field(default=30, ge=0)
+    politica_garantia_rma: PoliticaGarantiaRma | None = None
 
 
 class Insumo(BaseModel):

@@ -12,6 +12,7 @@ from decimal import Decimal
 from app.domain.models import (
     CambioConfiguracion,
     EntidadConfiguracion,
+    PoliticaGarantiaRma,
     TipoReparacion,
 )
 from app.repositories.configuracion import ConfiguracionRepository
@@ -43,6 +44,9 @@ def guardar_tipo_reparacion(
     precio: Decimal,
     puntaje: int,
     garantia_dias: int,
+    garantia_con_checkin: int = 90,
+    garantia_sin_checkin: int = 30,
+    politica_garantia_rma: PoliticaGarantiaRma | None = None,
     activo: bool = True,
     nuevo: bool,
 ) -> TipoReparacion:
@@ -55,6 +59,9 @@ def guardar_tipo_reparacion(
         precio=precio,
         puntaje=puntaje,
         garantia_dias=garantia_dias,
+        garantia_con_checkin=garantia_con_checkin,
+        garantia_sin_checkin=garantia_sin_checkin,
+        politica_garantia_rma=politica_garantia_rma,
         activo=activo,
     )
     with contexto.transaccion():

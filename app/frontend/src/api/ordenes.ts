@@ -556,10 +556,12 @@ export function registrarCheckin(
   ordenId: string,
   usuarioId: string,
   realizado: boolean,
+  motivo: string | null = null,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/checkin`, {
     usuario_id: usuarioId,
     realizado,
+    motivo,
   });
 }
 
@@ -830,11 +832,13 @@ export function registrarRecepcion(
   usuarioId: string,
   datos: DatosRecepcion,
   equipo: DatosEquipo | null,
+  motivo: string | null = null,
 ): Promise<Orden> {
   return put<Orden>(`/api/orders/${ordenId}/reception`, {
     usuario_id: usuarioId,
     ...datos,
     equipo,
+    motivo,
   });
 }
 

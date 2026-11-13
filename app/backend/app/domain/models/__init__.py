@@ -64,6 +64,7 @@ from .enums import (
     OrigenCancelacion,
     OrigenDiagnostico,
     OrigenOrden,
+    PoliticaGarantiaRma,
     RegistroRecepcion,
     ResultadoAutorizacion,
     ResultadoControl,
@@ -88,6 +89,7 @@ from .orden_reparacion import (
 from .pagos import AnulacionPago, DevolucionDinero, Pago, ResumenPago
 from .personas import Cliente, Usuario
 from .recepcion import (
+    CambioDatoIngreso,
     ConfirmacionRecepcion,
     DatosRecepcion,
     NoRecepcion,
@@ -111,6 +113,8 @@ from .reparacion import (
 from .workflow import HistorialWorkflow
 
 __all__ = [
+    "PoliticaGarantiaRma",
+    "CambioDatoIngreso",
     "CambioConfiguracion",
     "EntidadConfiguracion",
     # Enums

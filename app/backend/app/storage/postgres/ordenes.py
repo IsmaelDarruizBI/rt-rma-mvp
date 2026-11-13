@@ -234,8 +234,9 @@ _INSERTAR_CHECKIN = consulta(
     "ordenes.insertar_checkin",
     """
     INSERT INTO rma.checkin
-        (orden_id, realizado, usuario_id, registrado_en, posicion)
-    VALUES (%(orden)s, %(realizado)s, %(usuario)s, %(fecha)s, %(posicion)s)
+        (orden_id, realizado, usuario_id, registrado_en, posicion, motivo)
+    VALUES (%(orden)s, %(realizado)s, %(usuario)s, %(fecha)s, %(posicion)s,
+            %(motivo)s)
     """,
     modo=ESCRITURA,
 )
@@ -584,7 +585,8 @@ _INSERTAR_DETALLE = consulta(
          observaciones, cancelacion_origen, cancelacion_motivo,
          cancelado_por, cancelado_en, desistimiento_solicitado_por,
          desistimiento_solicitado_en, desistimiento_motivo,
-         desistimiento_canal, origen_diagnostico)
+         desistimiento_canal, origen_diagnostico, garantia_con_checkin,
+         garantia_sin_checkin, politica_garantia_rma)
     VALUES
         (%(orden)s, %(codigo)s, %(estado)s, %(condicion)s,
          %(control_estado)s, %(control_usuario_id)s, %(control_en)s,
@@ -594,7 +596,8 @@ _INSERTAR_DETALLE = consulta(
          %(cancelado_por)s, %(cancelado_en)s,
          %(desistimiento_solicitado_por)s, %(desistimiento_solicitado_en)s,
          %(desistimiento_motivo)s, %(desistimiento_canal)s,
-         %(origen_diagnostico)s)
+         %(origen_diagnostico)s, %(garantia_con_checkin)s,
+         %(garantia_sin_checkin)s, %(politica_garantia_rma)s)
     RETURNING id
     """,
     modo=ESCRITURA,
@@ -619,7 +622,10 @@ _ACTUALIZAR_DETALLE = consulta(
         desistimiento_solicitado_en = %(desistimiento_solicitado_en)s,
         desistimiento_motivo = %(desistimiento_motivo)s,
         desistimiento_canal = %(desistimiento_canal)s,
-        origen_diagnostico = %(origen_diagnostico)s
+        origen_diagnostico = %(origen_diagnostico)s,
+        garantia_con_checkin = %(garantia_con_checkin)s,
+        garantia_sin_checkin = %(garantia_sin_checkin)s,
+        politica_garantia_rma = %(politica_garantia_rma)s
     WHERE id = %(id)s
     """,
     modo=ESCRITURA,
@@ -1688,6 +1694,11 @@ class _Guardado:
                         {
                             "equipo": _dominio_json(version.equipo),
                             "datos": _dominio_json(version.datos),
+                            # DEC-MI-07: la auditoria de la correccion.
+                            "motivo": version.motivo,
+                            "cambios": [
+                                _dominio_json(c) for c in version.cambios
+                            ],
                         }
                     ),
                     "registrado_por": self._id(
@@ -1730,6 +1741,7 @@ class _Guardado:
                     "usuario": self._id("usuario", registro.usuario_id),
                     "fecha": registro.fecha,
                     "posicion": posicion,
+                    "motivo": registro.motivo,
                 },
             )
 
@@ -2042,6 +2054,9 @@ class _Guardado:
             detalle.cancelacion,
             detalle.solicitud_desistimiento,
             detalle.origen_diagnostico,
+            detalle.garantia_con_checkin,
+            detalle.garantia_sin_checkin,
+            detalle.politica_garantia_rma,
         )
 
     def _fila_detalle(
@@ -2062,6 +2077,13 @@ class _Guardado:
             "control_observaciones": detalle.control_observaciones,
             "garantia_dias": detalle.garantia_dias,
             "garantia_dias_sugerida": detalle.garantia_dias_sugerida,
+            "garantia_con_checkin": detalle.garantia_con_checkin,
+            "garantia_sin_checkin": detalle.garantia_sin_checkin,
+            "politica_garantia_rma": (
+                detalle.politica_garantia_rma.value
+                if detalle.politica_garantia_rma
+                else None
+            ),
             "detalle_origen_id": self._detalle_de_origen(
                 detalle.detalle_origen_id
             ),

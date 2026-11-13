@@ -25,9 +25,11 @@ _INSERTAR_TIPO = consulta(
     "configuracion.insertar_tipo",
     """
     INSERT INTO rma.tipo_reparacion
-        (codigo, nombre, precio, puntaje, garantia_dias, activo)
+        (codigo, nombre, precio, puntaje, garantia_dias, activo,
+         garantia_con_checkin, garantia_sin_checkin, politica_garantia_rma)
     VALUES (%(codigo)s, %(nombre)s, %(precio)s, %(puntaje)s,
-            %(garantia_dias)s, %(activo)s)
+            %(garantia_dias)s, %(activo)s, %(con_checkin)s,
+            %(sin_checkin)s, %(politica_rma)s)
     ON CONFLICT (codigo) DO NOTHING
     RETURNING id
     """,
@@ -38,7 +40,10 @@ _ACTUALIZAR_TIPO = consulta(
     """
     UPDATE rma.tipo_reparacion
        SET nombre = %(nombre)s, precio = %(precio)s, puntaje = %(puntaje)s,
-           garantia_dias = %(garantia_dias)s, activo = %(activo)s
+           garantia_dias = %(garantia_dias)s, activo = %(activo)s,
+           garantia_con_checkin = %(con_checkin)s,
+           garantia_sin_checkin = %(sin_checkin)s,
+           politica_garantia_rma = %(politica_rma)s
      WHERE codigo = %(codigo)s
     """,
     modo=ESCRITURA,
@@ -158,6 +163,13 @@ class PostgresConfiguracionRepository:
             "precio": tipo.precio,
             "puntaje": tipo.puntaje,
             "garantia_dias": tipo.garantia_dias,
+            "con_checkin": tipo.garantia_con_checkin,
+            "sin_checkin": tipo.garantia_sin_checkin,
+            "politica_rma": (
+                tipo.politica_garantia_rma.value
+                if tipo.politica_garantia_rma
+                else None
+            ),
             "activo": tipo.activo,
         }
         if nuevo:

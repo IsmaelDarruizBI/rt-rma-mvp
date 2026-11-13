@@ -166,6 +166,8 @@ def _corregir_recepcion(cliente, orden_id, estado_fisico, **extra):
             json={
                 "usuario_id": f.RECEPCION,
                 "estado_fisico": estado_fisico,
+                # DEC-MI-07: corregir un dato ya registrado exige motivo.
+                "motivo": "Correccion de prueba (DEC-MI-07).",
                 **extra,
             },
         )
@@ -284,7 +286,12 @@ def _flujos_de_salida(cliente: TestClient) -> None:
     _tic()
     f.ok(c.registrar_checkin(cliente, orden, realizado=False))
     _tic()
-    f.ok(c.registrar_checkin(cliente, orden, realizado=True))
+    # DEC-MI-05: corregir el check-in exige motivo.
+    f.ok(
+        c.registrar_checkin(
+            cliente, orden, realizado=True, motivo="Se verifico de nuevo."
+        )
+    )
     f.notificar_pagar_entregar(cliente, orden)
 
     # Comprobante de autorizacion: lo pide Recepcion, por el camino de

@@ -97,6 +97,9 @@ def test_alta_y_edicion_de_un_tipo_con_su_auditoria(admin, base):
         ("precio", None, "80000.00"),
         ("puntaje", None, "10"),
         ("garantia_dias", None, "90"),
+        # DEC-MI-01: los plazos segun el check-in.
+        ("garantia_con_checkin", None, "90"),
+        ("garantia_sin_checkin", None, "30"),
         ("activo", None, "true"),
         ("precio", "80000.00", "45000.00"),
         ("activo", "true", "false"),

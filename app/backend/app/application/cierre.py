@@ -225,6 +225,7 @@ def registrar_checkin(
     orden_id: str,
     usuario_id: str,
     realizado: bool,
+    motivo: str | None = None,
 ) -> OrdenReparacion:
     """Recepcion (o Administracion) registra el check-in antes de entregar.
 
@@ -238,7 +239,11 @@ def registrar_checkin(
 
     with orden_para_modificar(contexto, orden_id) as orden:
         orden = registrar_checkin_de_entrega(
-            orden, realizado=realizado, usuario=usuario, fecha=fecha
+            orden,
+            realizado=realizado,
+            usuario=usuario,
+            fecha=fecha,
+            motivo=motivo,
         )
         contexto.ordenes.guardar(orden)
     return orden
@@ -304,7 +309,9 @@ def entregar(
             observaciones=observaciones,
         )
 
-        orden = generar_comprobante_final(orden, fecha=fecha)
+        orden = generar_comprobante_final(
+            orden, fecha=fecha, zona_horaria=contexto.zona_horaria
+        )
         orden = entregar_equipo(
             orden, usuario=usuario, fecha=fecha, entrega=entrega
         )

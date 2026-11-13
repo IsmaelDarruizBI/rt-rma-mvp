@@ -176,6 +176,8 @@ def test_el_alta_y_la_correccion_ignoran_un_checkin_enviado(cliente):
             f"/api/orders/{orden_id}/reception",
             json={
                 "usuario_id": RECEPCION,
+                # DEC-MI-07: corregir un dato ya registrado exige motivo.
+                "motivo": "Se vio una raya.",
                 "estado_fisico": "Raya leve.",
                 "checkin": False,
             },
@@ -247,8 +249,13 @@ def test_el_checkin_no_pisa_un_ajuste_manual(cliente, tmp_path):
     orden = ok(registrar_checkin(cliente, orden_id, False))
     assert _garantias(orden) == {"DET-001": (120, 30), "DET-002": (30, 30)}
 
-    # Se puede volver a registrar antes de entregar; el ajuste sigue.
-    orden = ok(registrar_checkin(cliente, orden_id, True))
+    # Se puede corregir antes de entregar, con motivo (DEC-MI-05); el
+    # ajuste sigue.
+    orden = ok(
+        registrar_checkin(
+            cliente, orden_id, True, motivo="Se verifico de nuevo (DEC-MI-05)."
+        )
+    )
     assert _garantias(orden) == {"DET-001": (120, 90), "DET-002": (90, 90)}
     registros = orden["recepcion"]["registros_checkin"]
     assert [registro["realizado"] for registro in registros] == [False, True]
@@ -267,7 +274,11 @@ def test_un_ajuste_despues_del_checkin_se_conserva(cliente):
     ok(registrar_checkin(cliente, orden_id, False))
     ok(_ajustar(cliente, orden_id, "DET-001", 60))
 
-    orden = ok(registrar_checkin(cliente, orden_id, True))
+    orden = ok(
+        registrar_checkin(
+            cliente, orden_id, True, motivo="Se verifico de nuevo (DEC-MI-05)."
+        )
+    )
 
     assert _garantias(orden) == {"DET-001": (60, 90)}
 

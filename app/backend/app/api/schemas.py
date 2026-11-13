@@ -47,6 +47,7 @@ from app.application import (
 from app.domain.garantia import GARANTIA_MAXIMA_DIAS
 from app.domain.models import (
     AjusteGarantia,
+    CambioDatoIngreso,
     CanalComunicacion,
     ClaseAjuste,
     Cliente,
@@ -622,6 +623,8 @@ class RegistrarCheckinIn(BaseModel):
 
     usuario_id: str = Field(min_length=1)
     realizado: bool
+    # DEC-MI-05: obligatorio al corregir un check-in ya registrado.
+    motivo: str | None = None
 
 
 class NotificarIn(BaseModel):
@@ -839,6 +842,8 @@ class RegistrarRecepcionIn(BaseModel):
     observaciones: str | None = None
     notas_internas: str | None = None
     equipo: EquipoIn | None = None
+    # DEC-MI-07: obligatorio al corregir un dato ya registrado.
+    motivo: str | None = None
 
     def datos(self) -> DatosRecepcion:
         return DatosRecepcion(
@@ -1329,6 +1334,10 @@ class VersionRecepcionOut(BaseModel):
     registrado_en: datetime
     reemplazado_por: str
     reemplazado_en: datetime
+    # DEC-MI-07: motivo de la correccion y cada dato con su valor anterior
+    # y el nuevo (vacios en las versiones anteriores a esa decision).
+    motivo: str | None = None
+    cambios: list[CambioDatoIngreso] = Field(default_factory=list)
 
 
 class ConfirmacionRecepcionOut(BaseModel):
@@ -1356,6 +1365,8 @@ class RegistroCheckinOut(BaseModel):
     realizado: bool
     usuario_id: str
     fecha: datetime
+    # DEC-MI-05: motivo de la correccion (vacio en el primer registro).
+    motivo: str | None = None
 
 
 class RecepcionOut(BaseModel):

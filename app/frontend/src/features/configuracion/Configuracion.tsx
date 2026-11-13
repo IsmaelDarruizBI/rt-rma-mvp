@@ -15,7 +15,11 @@ import type {
   DatosTipo,
 } from "../../api/configuracion";
 import { Boton, Campo, colores, estiloInput } from "../../components/ui";
-import type { TipoReparacion, Usuario } from "../../types/api";
+import type {
+  PoliticaGarantiaRma,
+  TipoReparacion,
+  Usuario,
+} from "../../types/api";
 import { tieneRol } from "../../lib/roles";
 import { Permisos } from "./Permisos";
 import { UsuariosRoles } from "./UsuariosRoles";
@@ -28,7 +32,17 @@ const CAMPOS: Record<string, string> = {
   activo: "Vigente",
   tipos_habilitados: "Tipos habilitados",
   roles: "Roles",
+  garantia_con_checkin: "Garantía con check-in (días)",
+  garantia_sin_checkin: "Garantía sin check-in (días)",
+  politica_garantia_rma: "Política en garantía RMA",
 };
+
+const POLITICAS_RMA: { valor: PoliticaGarantiaRma | ""; texto: string }[] = [
+  { valor: "", texto: "Sin definir (como hasta ahora: el plazo del Tipo)" },
+  { valor: "NUEVO_PLAZO", texto: "Nuevo plazo del Tipo" },
+  { valor: "PLAZO_RESTANTE", texto: "Lo que le quedaba a la garantía original" },
+  { valor: "SIN_GARANTIA", texto: "Sin nueva garantía" },
+];
 
 type Pestana = "catalogos" | "usuarios" | "permisos" | "auditoria";
 const PESTANAS: { valor: Pestana; texto: string }[] = [
@@ -130,7 +144,7 @@ function FormularioTipo({
           style={estiloInput}
         />
       </Campo>
-      <Campo etiqueta="Garantía (días)">
+      <Campo etiqueta="Garantía sin check-in exigible (días)">
         <input
           type="number"
           min={0}
@@ -141,6 +155,52 @@ function FormularioTipo({
           disabled={deshabilitado}
           style={estiloInput}
         />
+      </Campo>
+      <Campo etiqueta="Garantía con check-in realizado (días)">
+        <input
+          type="number"
+          min={0}
+          value={datos.garantia_con_checkin}
+          onChange={(e) =>
+            setDatos({ ...datos, garantia_con_checkin: Number(e.target.value) })
+          }
+          disabled={deshabilitado}
+          style={estiloInput}
+        />
+      </Campo>
+      <Campo etiqueta="Garantía con check-in no realizado (días)">
+        <input
+          type="number"
+          min={0}
+          value={datos.garantia_sin_checkin}
+          onChange={(e) =>
+            setDatos({ ...datos, garantia_sin_checkin: Number(e.target.value) })
+          }
+          disabled={deshabilitado}
+          style={estiloInput}
+        />
+      </Campo>
+      <Campo etiqueta="Trabajos hechos dentro de una garantía RMA">
+        <select
+          value={datos.politica_garantia_rma ?? ""}
+          onChange={(e) =>
+            setDatos({
+              ...datos,
+              politica_garantia_rma:
+                e.target.value === ""
+                  ? null
+                  : (e.target.value as PoliticaGarantiaRma),
+            })
+          }
+          disabled={deshabilitado}
+          style={estiloInput}
+        >
+          {POLITICAS_RMA.map((p) => (
+            <option key={p.valor} value={p.valor}>
+              {p.texto}
+            </option>
+          ))}
+        </select>
       </Campo>
       {!conCodigo && (
         <label style={{ fontSize: "0.85rem" }}>
@@ -170,6 +230,9 @@ function datosDe(tipo: TipoReparacion): DatosTipo {
     puntaje: tipo.puntaje,
     garantia_dias: tipo.garantia_dias,
     activo: tipo.activo ?? true,
+    garantia_con_checkin: tipo.garantia_con_checkin ?? 90,
+    garantia_sin_checkin: tipo.garantia_sin_checkin ?? 30,
+    politica_garantia_rma: tipo.politica_garantia_rma ?? null,
   };
 }
 
@@ -288,7 +351,10 @@ export function ConfiguracionPanel({ actor }: { actor: Usuario | null }) {
                 <td style={{ padding: "0.25rem 0.5rem" }}>{tipo.nombre}</td>
                 <td style={{ padding: "0.25rem 0.5rem" }}>{tipo.precio}</td>
                 <td style={{ padding: "0.25rem 0.5rem" }}>{tipo.puntaje}</td>
-                <td style={{ padding: "0.25rem 0.5rem" }}>{tipo.garantia_dias}</td>
+                <td style={{ padding: "0.25rem 0.5rem" }}>
+                  {tipo.garantia_dias} · {tipo.garantia_con_checkin ?? 90}/
+                  {tipo.garantia_sin_checkin ?? 30}
+                </td>
                 <td style={{ padding: "0.25rem 0.5rem" }}>
                   {tipo.activo === false ? "No" : "Sí"}
                 </td>
@@ -328,7 +394,16 @@ export function ConfiguracionPanel({ actor }: { actor: Usuario | null }) {
         )}
         <h4 style={{ margin: "0.8rem 0 0.4rem" }}>Nuevo tipo de reparación</h4>
         <FormularioTipo
-          inicial={{ nombre: "", precio: "", puntaje: 0, garantia_dias: 90, activo: true }}
+          inicial={{
+            nombre: "",
+            precio: "",
+            puntaje: 0,
+            garantia_dias: 90,
+            activo: true,
+            garantia_con_checkin: 90,
+            garantia_sin_checkin: 30,
+            politica_garantia_rma: null,
+          }}
           conCodigo
           deshabilitado={bloqueado}
           onGuardar={(codigo, datos) =>

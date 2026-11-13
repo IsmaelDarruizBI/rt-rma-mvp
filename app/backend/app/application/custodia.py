@@ -34,6 +34,7 @@ def registrar_recepcion(
     usuario_id: str,
     datos: DatosRecepcion,
     equipo: Equipo | None = None,
+    motivo: str | None = None,
 ) -> OrdenReparacion:
     """Recepcion registra o corrige los datos del ingreso.
 
@@ -51,7 +52,12 @@ def registrar_recepcion(
                 contexto, equipo, actual=orden.equipo
             )
         orden = registrar_datos_recepcion(
-            orden, usuario=usuario, fecha=fecha, datos=datos, equipo=equipo
+            orden,
+            usuario=usuario,
+            fecha=fecha,
+            datos=datos,
+            equipo=equipo,
+            motivo=motivo,
         )
         contexto.ordenes.guardar(orden)
     return orden

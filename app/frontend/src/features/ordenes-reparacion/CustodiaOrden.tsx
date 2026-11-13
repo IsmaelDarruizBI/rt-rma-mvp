@@ -40,7 +40,12 @@ interface Props {
   actor: Usuario | null;
   usuarios: Usuario[];
   ocupado: boolean;
-  onRegistrar: (datos: DatosRecepcion, equipo: DatosEquipo | null) => void;
+  /** DEC-MI-07: `motivo` al corregir datos ya registrados. */
+  onRegistrar: (
+    datos: DatosRecepcion,
+    equipo: DatosEquipo | null,
+    motivo?: string | null,
+  ) => void;
   onConfirmar: (observaciones: string | null) => void;
   onNoRecibido: (motivo: string) => void;
   /** `interna`: solo para el personal; nunca sale en un documento. */
@@ -455,6 +460,7 @@ function FormularioDatosIngreso({
   const [notasInternas, setNotasInternas] = useState(
     recepcion?.datos.notas_internas ?? "",
   );
+  const [motivo, setMotivo] = useState("");
   const deshabilitado = !habilitada(accion, actor) || ocupado;
   const datosEquipo = datosDelEquipo(catalogo.modelos.length > 0, elegido);
 
@@ -526,6 +532,12 @@ function FormularioDatosIngreso({
         notasInternas,
         setNotasInternas,
       )}
+      {recepcion !== null &&
+        campo(
+          "Motivo de la corrección (obligatorio si cambiás un dato ya registrado)",
+          motivo,
+          setMotivo,
+        )}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         <Boton
           disabled={deshabilitado || !datosEquipo || !falla.trim()}
@@ -545,6 +557,7 @@ function FormularioDatosIngreso({
                 imei: imei.trim() || null,
                 numero_serie: serie.trim() || null,
               },
+              motivo.trim() || null,
             )
           }
         >

@@ -16,6 +16,7 @@ repository.
 from collections.abc import Collection, Iterable
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
 
 from app.domain.models import (
     TIPO_REPARACION_OTROS,
@@ -30,7 +31,16 @@ from .autorizacion import validar_alguno_de
 from .exceptions import PrecondicionInvalidaError
 
 ROLES_ADMINISTRACION_CONFIGURACION = permisos.CONFIGURACION_ADMINISTRAR
-CAMPOS_TIPO = ("nombre", "precio", "puntaje", "garantia_dias", "activo")
+CAMPOS_TIPO = (
+    "nombre",
+    "precio",
+    "puntaje",
+    "garantia_dias",
+    "garantia_con_checkin",
+    "garantia_sin_checkin",
+    "politica_garantia_rma",
+    "activo",
+)
 CAMPO_TIPOS_HABILITADOS = "tipos_habilitados"
 
 
@@ -42,6 +52,8 @@ def texto(valor: object) -> str | None:
         return "true" if valor else "false"
     if isinstance(valor, Decimal):
         return f"{valor:.2f}"
+    if isinstance(valor, Enum):
+        return valor.value
     return str(valor)
 
 
@@ -55,7 +67,13 @@ def _validar_tipo(tipo: TipoReparacion) -> None:
         raise PrecondicionInvalidaError(
             "El Tipo de Reparacion necesita nombre."
         )
-    if tipo.precio < 0 or tipo.puntaje < 0 or tipo.garantia_dias < 0:
+    if (
+        tipo.precio < 0
+        or tipo.puntaje < 0
+        or tipo.garantia_dias < 0
+        or tipo.garantia_con_checkin < 0
+        or tipo.garantia_sin_checkin < 0
+    ):
         raise PrecondicionInvalidaError(
             "Precio, puntaje y garantia no pueden ser negativos."
         )
@@ -86,8 +104,11 @@ def cambios_de_tipo(
             fecha=fecha,
         )
         for campo in CAMPOS_TIPO
-        if anterior is None
-        or texto(getattr(anterior, campo)) != texto(getattr(nuevo, campo))
+        if (anterior is None and texto(getattr(nuevo, campo)) is not None)
+        or (
+            anterior is not None
+            and texto(getattr(anterior, campo)) != texto(getattr(nuevo, campo))
+        )
     ]
     if not cambios:
         raise PrecondicionInvalidaError(

@@ -147,7 +147,12 @@ def _a_revision(cliente, orden_id):
 def _corregir(cliente, orden_id, **datos):
     return cliente.put(
         f"/api/orders/{orden_id}/reception",
-        json={"usuario_id": RECEPCION, **datos},
+        # DEC-MI-07: corregir un dato ya registrado exige motivo.
+        json={
+            "usuario_id": RECEPCION,
+            "motivo": "Correccion de prueba (DEC-MI-07).",
+            **datos,
+        },
     )
 
 

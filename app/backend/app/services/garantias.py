@@ -45,6 +45,35 @@ def _con_trabajos_realizados(orden: OrdenReparacion) -> bool:
     )
 
 
+def tiene_garantia(detalle) -> bool:
+    """Un trabajo con garantia mayor a cero (DEC-MI-01): el plazo ajustado
+    a mano si lo hay, o alguno de los plazos de su politica."""
+    if detalle.ajustes_garantia:
+        return detalle.garantia_dias > 0
+    con = (
+        90
+        if detalle.garantia_con_checkin is None
+        else detalle.garantia_con_checkin
+    )
+    sin = (
+        30
+        if detalle.garantia_sin_checkin is None
+        else detalle.garantia_sin_checkin
+    )
+    return max(con, sin) > 0
+
+
+def _con_trabajos_con_garantia(orden: OrdenReparacion) -> bool:
+    """DEC-MI-01 (cierra ABI-37): algun trabajo realizado con garantia
+    mayor a cero. Solo entonces el check-in se exige para entregar."""
+    return any(
+        tiene_garantia(d)
+        for d in orden.reparaciones_detail
+        if d.estado is EstadoReparacionDetail.COMPLETO
+        and d.control_estado is EstadoControl.APROBADO
+    )
+
+
 def checkin_registrable(orden: OrdenReparacion) -> bool:
     """Se puede registrar (o volver a registrar) el check-in ahora.
 
@@ -58,6 +87,7 @@ def checkin_registrable(orden: OrdenReparacion) -> bool:
         and orden.entrega is None
         and orden.recepcion is not None
         and _con_trabajos_realizados(orden)
+        and _con_trabajos_con_garantia(orden)
     )
 
 
@@ -86,8 +116,13 @@ def registrar_checkin_de_entrega(
     realizado: bool,
     usuario: Usuario,
     fecha: datetime,
+    motivo: str | None = None,
 ) -> OrdenReparacion:
     """Registra el check-in antes de la entrega y reasigna la garantia.
+
+    DEC-MI-05 (cierra ABI-32): cambiar un resultado ya registrado es una
+    correccion y exige motivo; todos los registros se conservan y rige el
+    ultimo. El comprobante final se genera al entregar, con el vigente.
 
     ``realizado``: si se pudieron verificar las funciones basicas. Queda
     en ``DatosRecepcion.checkin`` (el mismo dato de siempre) con quien y
@@ -111,11 +146,20 @@ def registrar_checkin_de_entrega(
     ):
         return orden
 
+    motivo = (motivo or "").strip() or None
+    anterior = checkin_de(orden)
+    if anterior is not None and anterior is not realizado and motivo is None:
+        raise PrecondicionInvalidaError(
+            "Corregir el check-in ya registrado exige un motivo."
+        )
     nueva_orden = orden.model_copy(deep=True)
     nueva_orden.recepcion.datos.checkin = realizado
     nueva_orden.recepcion.registros_checkin.append(
         RegistroCheckin(
-            realizado=realizado, usuario_id=usuario.id, fecha=fecha
+            realizado=realizado,
+            usuario_id=usuario.id,
+            fecha=fecha,
+            motivo=motivo if anterior is not None else None,
         )
     )
     nueva_orden.updated_at = fecha

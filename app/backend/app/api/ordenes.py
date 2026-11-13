@@ -1187,6 +1187,7 @@ def put_recepcion(
         usuario_id=cuerpo.usuario_id,
         datos=cuerpo.datos(),
         equipo=cuerpo.equipo.a_dominio() if cuerpo.equipo else None,
+        motivo=cuerpo.motivo,
     )
     return _salida(orden, contexto)
 
@@ -1601,6 +1602,7 @@ def post_registrar_checkin(
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
         realizado=cuerpo.realizado,
+        motivo=cuerpo.motivo,
     )
     return _salida(orden, contexto)
 

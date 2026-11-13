@@ -220,6 +220,8 @@ export interface RegistroCheckin {
   realizado: boolean;
   usuario_id: string;
   fecha: string;
+  /** DEC-MI-05: motivo de una corrección. */
+  motivo?: string | null;
 }
 
 /** Datos del ingreso reemplazados por una corrección (antes de confirmar). */
@@ -518,7 +520,17 @@ export interface TipoReparacion {
   puntaje: number;
   garantia_dias: number;
   activo: boolean;
+  /** DEC-MI-01: plazos según el check-in y política RMA (ABI-38). */
+  garantia_con_checkin?: number;
+  garantia_sin_checkin?: number;
+  politica_garantia_rma?: PoliticaGarantiaRma | null;
 }
+
+/** Garantía de un trabajo hecho dentro de una garantía RMA (DEC-MI-01). */
+export type PoliticaGarantiaRma =
+  | "NUEVO_PLAZO"
+  | "PLAZO_RESTANTE"
+  | "SIN_GARANTIA";
 
 export interface Estacion {
   id: string;

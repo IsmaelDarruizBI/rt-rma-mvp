@@ -557,9 +557,9 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
       void ejecutarComando(() =>
         api.ajustarGarantia(idOrden, detalleId, idActor, dias, motivo),
       ),
-    registrarCheckin: (realizado) =>
+    registrarCheckin: (realizado, motivo) =>
       void ejecutarComando(() =>
-        api.registrarCheckin(idOrden, idActor, realizado),
+        api.registrarCheckin(idOrden, idActor, realizado, motivo ?? null),
       ),
   };
 
@@ -889,9 +889,15 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                   actor={actor}
                   usuarios={usuarios}
                   ocupado={ocupado}
-                  onRegistrar={(datos, equipo) =>
+                  onRegistrar={(datos, equipo, motivo) =>
                     void ejecutarComando(() =>
-                      api.registrarRecepcion(idOrden, idActor, datos, equipo),
+                      api.registrarRecepcion(
+                        idOrden,
+                        idActor,
+                        datos,
+                        equipo,
+                        motivo ?? null,
+                      ),
                     )
                   }
                   onConfirmar={(observaciones) =>

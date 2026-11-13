@@ -38,6 +38,10 @@ def test_un_alta_audita_cada_campo():
         ("precio", None, "80000.00"),
         ("puntaje", None, "10"),
         ("garantia_dias", None, "90"),
+        # DEC-MI-01: los plazos segun el check-in (la politica RMA sin
+        # definir no deja un cambio vacio).
+        ("garantia_con_checkin", None, "90"),
+        ("garantia_sin_checkin", None, "30"),
         ("activo", None, "true"),
     ]
     assert {c.usuario_id for c in cambios} == {"ADMIN-001"}

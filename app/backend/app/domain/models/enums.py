@@ -248,6 +248,20 @@ class EstadoEjecucion(str, Enum):
     INTERRUMPIDO = "INTERRUMPIDO"
 
 
+class PoliticaGarantiaRma(str, Enum):
+    """Garantia de un trabajo hecho dentro de una garantia RMA (DEC-MI-01).
+
+    ``NUEVO_PLAZO``: el plazo del Tipo de Reparacion, como un trabajo
+    nuevo. ``PLAZO_RESTANTE``: lo que le quedaba a la garantia original.
+    ``SIN_GARANTIA``: no se otorga una nueva. Sin definir (ABI-38) rige el
+    comportamiento anterior, que es el del nuevo plazo.
+    """
+
+    NUEVO_PLAZO = "NUEVO_PLAZO"
+    PLAZO_RESTANTE = "PLAZO_RESTANTE"
+    SIN_GARANTIA = "SIN_GARANTIA"
+
+
 class RolUsuario(str, Enum):
     """Rol operativo del usuario dentro de RMA."""
 

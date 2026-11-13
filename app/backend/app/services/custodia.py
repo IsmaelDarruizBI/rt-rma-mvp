@@ -26,6 +26,7 @@ Las acciones de recepcion son transversales: dejan traza en el historial
 from datetime import datetime
 
 from app.domain.models import (
+    CambioDatoIngreso,
     ConfirmacionRecepcion,
     DatosRecepcion,
     EntregaEquipo,
@@ -305,6 +306,7 @@ def registrar_datos_recepcion(
     fecha: datetime,
     datos: DatosRecepcion,
     equipo: Equipo | None = None,
+    motivo: str | None = None,
 ) -> OrdenReparacion:
     """Registra o corrige los datos del ingreso, antes de confirmarlo.
 
@@ -312,8 +314,13 @@ def registrar_datos_recepcion(
     (conserva su ID). La version reemplazada queda en
     ``versiones_anteriores``. En una Orden anterior a este registro, el
     primer registro es una REGULARIZACION. Sin cambios, no registra nada.
+
+    DEC-MI-07: completar un dato vacio es registrarlo; cambiar un dato ya
+    registrado es una correccion, que exige motivo y la pueden hacer
+    Recepcion, Coordinacion RMA o Administracion (``INGRESO_CORREGIR``).
+    Cada dato cambiado queda con su valor anterior y el nuevo. Hasta cuando
+    se corrige sigue igual (antes de confirmar la recepcion; ABI-41).
     """
-    validar_alguno_de(usuario, ROLES_RECEPCION_EQUIPO)
     _exigir_recepcion_modificable(orden)
 
     # El check-in no es un dato del ingreso: se registra antes de la
@@ -343,7 +350,26 @@ def registrar_datos_recepcion(
         and recepcion.datos == datos
         and equipo_nuevo == orden.equipo
     ):
+        validar_alguno_de(usuario, ROLES_RECEPCION_EQUIPO)
         return orden
+
+    cambios = cambios_del_ingreso(
+        orden.equipo,
+        recepcion.datos if recepcion is not None else None,
+        equipo_nuevo,
+        datos,
+    )
+    correccion = [c for c in cambios if c.anterior is not None]
+    motivo = (motivo or "").strip() or None
+    if correccion:
+        validar_alguno_de(usuario, permisos.INGRESO_CORREGIR)
+        if motivo is None:
+            campos = ", ".join(c.campo for c in correccion)
+            raise PrecondicionInvalidaError(
+                f"Corregir datos ya registrados ({campos}) exige un motivo."
+            )
+    else:
+        validar_alguno_de(usuario, ROLES_RECEPCION_EQUIPO)
 
     nueva_orden = orden.model_copy(deep=True)
     if recepcion is None:
@@ -364,6 +390,8 @@ def registrar_datos_recepcion(
                 registrado_en=recepcion.registrado_en,
                 reemplazado_por=usuario.id,
                 reemplazado_en=fecha,
+                motivo=motivo,
+                cambios=cambios,
             )
         )
         actual.datos = datos
@@ -373,6 +401,12 @@ def registrar_datos_recepcion(
             f"Correccion de los datos del ingreso (version "
             f"{len(actual.versiones_anteriores) + 1})"
         )
+        if correccion:
+            detalle = "; ".join(
+                f"{c.campo}: {c.anterior} -> {c.nuevo or '(vacio)'}"
+                for c in correccion
+            )
+            observacion += f". Motivo: {motivo}. {detalle}"
     nueva_orden.equipo = equipo_nuevo
 
     return registrar_accion_funcional(
@@ -383,6 +417,63 @@ def registrar_datos_recepcion(
         usuario_id=usuario.id,
         observacion=observacion,
     )
+
+
+CAMPOS_EQUIPO = (
+    "marca",
+    "modelo",
+    "falla_reportada",
+    "imei",
+    "numero_serie",
+    "tipo_producto_id",
+    "variante",
+    "capacidad",
+    "color",
+)
+CAMPOS_DATOS = (
+    "estado_fisico",
+    "accesorios",
+    "observaciones",
+    "notas_internas",
+)
+
+
+def _como_texto(valor) -> str | None:
+    if isinstance(valor, list):
+        valor = ", ".join(str(v) for v in valor)
+    if valor is None:
+        return None
+    texto = str(valor).strip()
+    return texto or None
+
+
+def cambios_del_ingreso(
+    equipo_anterior: Equipo,
+    datos_anteriores: DatosRecepcion | None,
+    equipo_nuevo: Equipo,
+    datos_nuevos: DatosRecepcion,
+) -> list[CambioDatoIngreso]:
+    """Cada dato del ingreso que cambia, con su valor anterior y el nuevo."""
+    cambios = []
+    for campo in CAMPOS_EQUIPO:
+        antes = _como_texto(getattr(equipo_anterior, campo))
+        despues = _como_texto(getattr(equipo_nuevo, campo))
+        if antes != despues:
+            cambios.append(
+                CambioDatoIngreso(
+                    campo=f"equipo.{campo}", anterior=antes, nuevo=despues
+                )
+            )
+    for campo in CAMPOS_DATOS:
+        antes = _como_texto(
+            getattr(datos_anteriores, campo) if datos_anteriores else None
+        )
+        despues = _como_texto(getattr(datos_nuevos, campo))
+        if antes != despues:
+            cambios.append(
+                CambioDatoIngreso(campo=campo, anterior=antes, nuevo=despues)
+            )
+    return cambios
 
 
 def confirmar_recepcion_fisica(

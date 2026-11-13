@@ -53,13 +53,25 @@ class RegistroCheckin(BaseModel):
     realizado: bool
     usuario_id: str
     fecha: datetime
+    # DEC-MI-05: motivo de una correccion (vacio en el primer registro).
+    motivo: str | None = None
+
+
+class CambioDatoIngreso(BaseModel):
+    """Un dato del ingreso que cambio: valor anterior y nuevo, como texto."""
+
+    campo: str
+    anterior: str | None = None
+    nuevo: str | None = None
 
 
 class VersionRecepcion(BaseModel):
     """Datos de ingreso reemplazados por una correccion.
 
     Conserva el equipo y las condiciones tal como estaban, quien los
-    habia registrado y quien los reemplazo.
+    habia registrado y quien los reemplazo. DEC-MI-07: ``motivo`` de la
+    correccion y ``cambios`` (cada dato con su valor anterior y el nuevo).
+    Vacios en las versiones anteriores a esa decision.
     """
 
     equipo: Equipo
@@ -68,6 +80,8 @@ class VersionRecepcion(BaseModel):
     registrado_en: datetime
     reemplazado_por: str
     reemplazado_en: datetime
+    motivo: str | None = None
+    cambios: list[CambioDatoIngreso] = Field(default_factory=list)
 
 
 class ConfirmacionRecepcion(BaseModel):

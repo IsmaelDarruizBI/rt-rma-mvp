@@ -1238,6 +1238,8 @@ def test_a4_los_comandos_de_recepcion_funcionan_sobre_postgres(
                 orden_id=codigo,
                 usuario_id=f.RECEPCION,
                 datos=DatosRecepcion(estado_fisico=estado),
+                # DEC-MI-07: la segunda cambia un dato registrado.
+                motivo="Se reviso de nuevo.",
             )
         )
     comprobar(
@@ -1449,6 +1451,8 @@ def test_a4_el_checkin_real_sobre_postgres(armar, base, corpus):
             orden_id=orden.id,
             usuario_id=f.RECEPCION,
             realizado=realizado,
+            # DEC-MI-05: la segunda es una correccion y exige motivo.
+            motivo="Se verifico de nuevo." if realizado else None,
         )
         assert repo.obtener(orden.id) == resultado
     leida = repo.obtener(orden.id).recepcion

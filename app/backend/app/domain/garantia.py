@@ -20,12 +20,26 @@ GARANTIA_SIN_CHECKIN_DIAS = 30
 GARANTIA_MAXIMA_DIAS = 730
 
 
-def garantia_sugerida(checkin: bool | None, dias_del_tipo: int) -> int:
-    """Dias sugeridos para un Detalle segun el check-in."""
+def garantia_sugerida(
+    checkin: bool | None,
+    dias_del_tipo: int,
+    con_checkin: int | None = None,
+    sin_checkin: int | None = None,
+) -> int:
+    """Dias sugeridos para un Detalle segun el check-in.
+
+    DEC-MI-01: los plazos con y sin check-in son los del Tipo de
+    Reparacion (``None`` en un Detalle anterior: 90 y 30). Sin check-in
+    rige el plazo del Tipo (ABI-39 sigue abierto).
+    """
     if checkin is True:
-        return GARANTIA_CON_CHECKIN_DIAS
+        return (
+            GARANTIA_CON_CHECKIN_DIAS if con_checkin is None else con_checkin
+        )
     if checkin is False:
-        return GARANTIA_SIN_CHECKIN_DIAS
+        return (
+            GARANTIA_SIN_CHECKIN_DIAS if sin_checkin is None else sin_checkin
+        )
     return dias_del_tipo
 
 

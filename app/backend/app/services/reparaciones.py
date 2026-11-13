@@ -327,7 +327,12 @@ def _detalle_con_snapshot(
     anterior con el check-in del ingreso, la que este sugiere: sugerida y
     definitiva nacen iguales.
     """
-    dias = garantia_sugerida(checkin, tipo_reparacion.garantia_dias)
+    dias = garantia_sugerida(
+        checkin,
+        tipo_reparacion.garantia_dias,
+        tipo_reparacion.garantia_con_checkin,
+        tipo_reparacion.garantia_sin_checkin,
+    )
     return ReparacionDetail(
         id=detalle_id,
         tipo_reparacion_id=tipo_reparacion.id,
@@ -336,6 +341,9 @@ def _detalle_con_snapshot(
         puntaje=tipo_reparacion.puntaje,
         garantia_dias=dias,
         garantia_dias_sugerida=dias,
+        garantia_con_checkin=tipo_reparacion.garantia_con_checkin,
+        garantia_sin_checkin=tipo_reparacion.garantia_sin_checkin,
+        politica_garantia_rma=tipo_reparacion.politica_garantia_rma,
         estado=EstadoReparacionDetail.DEFINIDO,
         control_estado=EstadoControl.PENDIENTE,
         observaciones=observaciones,
@@ -359,7 +367,12 @@ def reaplicar_garantia_sugerida(orden: OrdenReparacion) -> OrdenReparacion:
     for detalle in nueva_orden.reparaciones_detail:
         if detalle.estado is EstadoReparacionDetail.CANCELADO:
             continue
-        dias = garantia_sugerida(checkin, detalle.garantia_dias)
+        dias = garantia_sugerida(
+            checkin,
+            detalle.garantia_dias,
+            detalle.garantia_con_checkin,
+            detalle.garantia_sin_checkin,
+        )
         detalle.garantia_dias_sugerida = dias
         if not detalle.ajustes_garantia:
             detalle.garantia_dias = dias
