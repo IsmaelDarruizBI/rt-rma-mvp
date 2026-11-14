@@ -19,6 +19,11 @@ from decimal import Decimal
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from app.application.checklist import catalogo as catalogo_checklist
+from app.application.checklist import (
+    guardar_pregunta,
+    guardar_tipo_equipo,
+)
 from app.application.configuracion import (
     guardar_tipo_reparacion,
     habilitar_tipos_en_mesa,
@@ -318,3 +323,72 @@ def put_insumo(clave: str, cuerpo: InsumoIn, contexto: ContextoDep) -> dict:
         control=cuerpo.control,
         precio=cuerpo.precio,
     ).model_dump(mode="json")
+
+
+class TipoEquipoIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+    nombre: str = Field(min_length=1)
+    activo: bool = True
+
+
+class PreguntaChecklistIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+    tipo_equipo_id: str = Field(min_length=1)
+    texto: str = Field(min_length=1)
+    opciones: list[str] = Field(min_length=2)
+    activa: bool = True
+    orden: int = 0
+
+
+@router.get("/checklist")
+def get_checklist_admin(contexto: ContextoDep) -> dict:
+    return catalogo_checklist(contexto, solo_vigentes=False)
+
+
+@router.post("/equipment-types")
+def post_tipo_equipo(cuerpo: TipoEquipoIn, contexto: ContextoDep) -> dict:
+    return guardar_tipo_equipo(
+        contexto,
+        usuario_id=cuerpo.usuario_id,
+        codigo=None,
+        nombre=cuerpo.nombre,
+        activo=cuerpo.activo,
+    ).model_dump()
+
+
+@router.put("/equipment-types/{codigo}")
+def put_tipo_equipo(
+    codigo: str, cuerpo: TipoEquipoIn, contexto: ContextoDep
+) -> dict:
+    return guardar_tipo_equipo(
+        contexto,
+        usuario_id=cuerpo.usuario_id,
+        codigo=codigo,
+        nombre=cuerpo.nombre,
+        activo=cuerpo.activo,
+    ).model_dump()
+
+
+def _pregunta(contexto, codigo, cuerpo: PreguntaChecklistIn) -> dict:
+    return guardar_pregunta(
+        contexto,
+        usuario_id=cuerpo.usuario_id,
+        codigo=codigo,
+        tipo_equipo_id=cuerpo.tipo_equipo_id,
+        texto=cuerpo.texto,
+        opciones=cuerpo.opciones,
+        activa=cuerpo.activa,
+        orden=cuerpo.orden,
+    ).model_dump()
+
+
+@router.post("/checklist-questions")
+def post_pregunta(cuerpo: PreguntaChecklistIn, contexto: ContextoDep) -> dict:
+    return _pregunta(contexto, None, cuerpo)
+
+
+@router.put("/checklist-questions/{codigo}")
+def put_pregunta(
+    codigo: str, cuerpo: PreguntaChecklistIn, contexto: ContextoDep
+) -> dict:
+    return _pregunta(contexto, codigo, cuerpo)

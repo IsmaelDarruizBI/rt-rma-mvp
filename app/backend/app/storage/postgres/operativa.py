@@ -4,6 +4,7 @@ auditoria en la misma transaccion (DEC-MI-13, 14 y 15)."""
 from collections.abc import Sequence
 
 from app.domain.models import CambioConfiguracion, Insumo
+from app.domain.models.checklist import PreguntaChecklist, TipoEquipo
 from app.domain.models.comunicaciones import PlantillaMensaje
 from app.domain.models.operativa import MotivoOperativo, TipoMotivo
 from app.repositories.exceptions import (
@@ -115,6 +116,64 @@ _ACTUALIZAR_INSUMO = consulta(
     modo=ESCRITURA,
 )
 
+_TIPOS_EQUIPO = consulta(
+    "operativa.tipos_equipo",
+    "SELECT codigo, nombre, activo FROM rma.tipo_equipo "
+    'ORDER BY nombre, codigo COLLATE "C"',
+    modo=LECTURA,
+)
+_INSERTAR_TIPO_EQUIPO = consulta(
+    "operativa.insertar_tipo_equipo",
+    """
+    INSERT INTO rma.tipo_equipo (codigo, nombre, activo)
+    VALUES (%(codigo)s, %(nombre)s, %(activo)s)
+    ON CONFLICT (codigo) DO NOTHING
+    """,
+    modo=ESCRITURA,
+)
+_ACTUALIZAR_TIPO_EQUIPO = consulta(
+    "operativa.actualizar_tipo_equipo",
+    """
+    UPDATE rma.tipo_equipo
+       SET nombre = %(nombre)s, activo = %(activo)s, modificado_en = now()
+     WHERE codigo = %(codigo)s
+    """,
+    modo=ESCRITURA,
+)
+_PREGUNTAS = consulta(
+    "operativa.preguntas_checklist",
+    """
+    SELECT p.codigo, t.codigo AS tipo, p.texto, p.opciones, p.activa,
+           p.orden
+      FROM rma.checklist_pregunta p
+      JOIN rma.tipo_equipo t ON t.id = p.tipo_equipo_id
+     ORDER BY t.codigo, p.orden, p.codigo COLLATE "C"
+    """,
+    modo=LECTURA,
+)
+_INSERTAR_PREGUNTA = consulta(
+    "operativa.insertar_pregunta",
+    """
+    INSERT INTO rma.checklist_pregunta
+        (codigo, tipo_equipo_id, texto, opciones, activa, orden)
+    SELECT %(codigo)s, t.id, %(texto)s, %(opciones)s, %(activa)s,
+           %(orden)s
+      FROM rma.tipo_equipo t WHERE t.codigo = %(tipo)s
+    ON CONFLICT (codigo) DO NOTHING
+    """,
+    modo=ESCRITURA,
+)
+_ACTUALIZAR_PREGUNTA = consulta(
+    "operativa.actualizar_pregunta",
+    """
+    UPDATE rma.checklist_pregunta
+       SET texto = %(texto)s, opciones = %(opciones)s, activa = %(activa)s,
+           orden = %(orden)s, modificado_en = now()
+     WHERE codigo = %(codigo)s
+    """,
+    modo=ESCRITURA,
+)
+
 
 class PostgresConfiguracionOperativa:
     editable = True
@@ -211,6 +270,76 @@ class PostgresConfiguracionOperativa:
             raise PersistenciaError(
                 f"No se pudo guardar el insumo {insumo.id}: el codigo o "
                 "el identificador ya existe."
+            )
+        self._auditoria._auditar(ejecutor, cambios)
+
+    def listar_tipos_equipo(self) -> list[TipoEquipo]:
+        with self._unidad.lectura() as lector:
+            filas = lector.filas(_TIPOS_EQUIPO)
+        return [
+            TipoEquipo(id=f.codigo, nombre=f.nombre, activo=f.activo)
+            for f in filas
+        ]
+
+    def guardar_tipo_equipo(
+        self,
+        tipo: TipoEquipo,
+        *,
+        nuevo: bool,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None:
+        self._exigir_transaccion()
+        ejecutor = self._unidad.ejecutor()
+        consulta_sql = (
+            _INSERTAR_TIPO_EQUIPO if nuevo else _ACTUALIZAR_TIPO_EQUIPO
+        )
+        parametros = {
+            "codigo": tipo.id,
+            "nombre": tipo.nombre,
+            "activo": tipo.activo,
+        }
+        if ejecutor.ejecutar(consulta_sql, parametros) != 1:
+            raise PersistenciaError(
+                f"No se pudo guardar el tipo de equipo {tipo.id}."
+            )
+        self._auditoria._auditar(ejecutor, cambios)
+
+    def listar_preguntas_checklist(self) -> list[PreguntaChecklist]:
+        with self._unidad.lectura() as lector:
+            filas = lector.filas(_PREGUNTAS)
+        return [
+            PreguntaChecklist(
+                id=f.codigo,
+                tipo_equipo_id=f.tipo,
+                texto=f.texto,
+                opciones=list(f.opciones),
+                activa=f.activa,
+                orden=f.orden,
+            )
+            for f in filas
+        ]
+
+    def guardar_pregunta_checklist(
+        self,
+        pregunta: PreguntaChecklist,
+        *,
+        nuevo: bool,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None:
+        self._exigir_transaccion()
+        ejecutor = self._unidad.ejecutor()
+        consulta_sql = _INSERTAR_PREGUNTA if nuevo else _ACTUALIZAR_PREGUNTA
+        parametros = {
+            "codigo": pregunta.id,
+            "tipo": pregunta.tipo_equipo_id,
+            "texto": pregunta.texto,
+            "opciones": pregunta.opciones,
+            "activa": pregunta.activa,
+            "orden": pregunta.orden,
+        }
+        if ejecutor.ejecutar(consulta_sql, parametros) != 1:
+            raise PersistenciaError(
+                f"No se pudo guardar la pregunta {pregunta.id}."
             )
         self._auditoria._auditar(ejecutor, cambios)
 

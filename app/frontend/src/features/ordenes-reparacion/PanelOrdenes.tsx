@@ -58,6 +58,7 @@ import { RetiroDemorado } from "./RetiroDemorado";
 import { ComunicacionesOrden } from "./ComunicacionesOrden";
 import { FirmasDocumentos } from "./FirmasDocumentos";
 import { DevolucionesInsumo } from "./DevolucionesInsumo";
+import { AdvertenciaFaltante, ChecklistRecepcion } from "./ChecklistRecepcion";
 import { IdentidadDeLaOrden } from "./IdentidadEquipo";
 import { registrarSeguimientoRetiro } from "../../api/operativa";
 import { ConfiguracionPanel } from "../configuracion/Configuracion";
@@ -884,6 +885,12 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                 usuarios={usuarios}
                 estaciones={estaciones}
               />
+              <AdvertenciaFaltante
+                orden={orden}
+                actor={actor}
+                ocupado={ocupado}
+                ejecutarComando={ejecutarComando}
+              />
               <RetiroDemorado
                 orden={orden}
                 actor={actor}
@@ -1008,6 +1015,12 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                       ),
                     )
                   }
+                />
+                <ChecklistRecepcion
+                  orden={orden}
+                  actor={actor}
+                  ocupado={ocupado}
+                  ejecutarComando={ejecutarComando}
                 />
               </SeccionPlegable>
 

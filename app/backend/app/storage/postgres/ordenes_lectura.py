@@ -58,6 +58,10 @@ from app.domain.models import (
     SolicitudDesistimiento,
     VigenciaGarantiaOrigen,
 )
+from app.domain.models.checklist import (
+    ConfirmacionInformacionFaltante,
+    RegistroChecklist,
+)
 from app.domain.models.comunicaciones import (
     ComunicacionCliente,
     ConfirmacionEnvio,
@@ -564,6 +568,34 @@ _DEVOLUCIONES = consulta(
     """,
     modo=LECTURA,
 )
+_CHECKLISTS = consulta(
+    "ordenes.checklists",
+    """
+    SELECT c.orden_id, c.tipo_equipo_codigo, c.tipo_equipo_nombre,
+           c.respuestas, c.sin_registrar, u.codigo AS usuario,
+           c.registrado_en, c.motivo
+    FROM rma.checklist_registro c
+    JOIN rma.usuario u ON u.id = c.usuario_id
+    WHERE c.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
+    ORDER BY c.orden_id, c.posicion
+    """,
+    modo=LECTURA,
+)
+_CONFIRMACIONES_FALTANTE = consulta(
+    "ordenes.confirmaciones_faltante",
+    """
+    SELECT c.orden_id, c.faltantes, u.codigo AS usuario, c.registrado_en
+    FROM rma.informacion_faltante_confirmacion c
+    JOIN rma.usuario u ON u.id = c.usuario_id
+    WHERE c.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
+    ORDER BY c.orden_id, c.posicion
+    """,
+    modo=LECTURA,
+)
 _CORRECCIONES_EQUIPO = consulta(
     "ordenes.correcciones_equipo",
     """
@@ -704,6 +736,8 @@ _HIJAS = (
     _Hija("seguimientos_retiro", _SEGUIMIENTOS_RETIRO),
     _Hija("comunicaciones", _COMUNICACIONES),
     _Hija("correcciones_equipo", _CORRECCIONES_EQUIPO),
+    _Hija("checklists", _CHECKLISTS),
+    _Hija("confirmaciones_faltante", _CONFIRMACIONES_FALTANTE),
     _Hija("movimientos", _MOVIMIENTOS),
 )
 
@@ -899,6 +933,26 @@ def _armar(raiz: Any, hijas: dict[str, Any]) -> Instantanea:
                 fecha=utc(fila.registrado_en),
             )
             for fila in hijas["correcciones_equipo"].get(raiz.id, [])
+        ],
+        checklists_recepcion=[
+            RegistroChecklist(
+                tipo_equipo_id=fila.tipo_equipo_codigo,
+                tipo_equipo_nombre=fila.tipo_equipo_nombre,
+                respuestas=fila.respuestas,
+                sin_registrar=list(fila.sin_registrar),
+                usuario_id=fila.usuario,
+                fecha=utc(fila.registrado_en),
+                motivo=fila.motivo,
+            )
+            for fila in hijas["checklists"].get(raiz.id, [])
+        ],
+        confirmaciones_informacion_faltante=[
+            ConfirmacionInformacionFaltante(
+                faltantes=list(fila.faltantes),
+                usuario_id=fila.usuario,
+                fecha=utc(fila.registrado_en),
+            )
+            for fila in hijas["confirmaciones_faltante"].get(raiz.id, [])
         ],
         movimientos_insumo=[_movimiento(fila) for fila in filas_movimiento],
         devolucion=None if entregada else salida,

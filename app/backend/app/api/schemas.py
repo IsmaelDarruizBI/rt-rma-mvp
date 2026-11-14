@@ -95,6 +95,7 @@ from app.domain.models import (
     VigenciaGarantiaOrigen,
     importe_de_descuento,
 )
+from app.domain.models.checklist import RegistroChecklist
 from app.domain.models.comunicaciones import ComunicacionCliente
 from app.domain.models.equipos import CorreccionVinculoEquipo
 from app.domain.models.operativa import SeguimientoRetiro
@@ -127,6 +128,7 @@ from app.services import (
     requiere_autorizacion_cliente,
     toma_activa,
 )
+from app.services.checklist import advertencia_pendiente
 from app.services.evaluacion_tecnica import requiere_evaluacion
 
 # --- Catalogos ---------------------------------------------------------------
@@ -2199,6 +2201,10 @@ class OrdenOut(BaseModel):
     )
     # DEC-MI-10: consumos de la Orden con lo ya devuelto al stock.
     consumos_insumo: list[ConsumoInsumoOut] = Field(default_factory=list)
+    # DC12: checklists de recepcion (rige el ultimo) y la advertencia por
+    # informacion faltante que Recepcion todavia no confirmo (no bloquea).
+    checklists_recepcion: list[RegistroChecklist] = Field(default_factory=list)
+    informacion_faltante: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -2370,6 +2376,8 @@ class OrdenOut(BaseModel):
             comunicaciones=list(orden.comunicaciones),
             correcciones_equipo=list(orden.correcciones_equipo),
             consumos_insumo=_consumos(orden),
+            checklists_recepcion=list(orden.checklists_recepcion),
+            informacion_faltante=advertencia_pendiente(orden),
             created_at=orden.created_at,
             updated_at=orden.updated_at,
         )

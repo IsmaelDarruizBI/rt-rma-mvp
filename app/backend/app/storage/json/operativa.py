@@ -35,3 +35,16 @@ class JsonConfiguracionOperativa:
 
     def guardar_insumo(self, insumo, *, nuevo, cambios) -> None:
         raise NotImplementedError
+
+    # DC12: en la demo JSON el catalogo del checklist esta vacio.
+    def listar_tipos_equipo(self):
+        return []
+
+    def guardar_tipo_equipo(self, tipo, *, nuevo, cambios) -> None:
+        raise NotImplementedError
+
+    def listar_preguntas_checklist(self):
+        return []
+
+    def guardar_pregunta_checklist(self, pregunta, *, nuevo, cambios) -> None:
+        raise NotImplementedError

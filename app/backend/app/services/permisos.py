@@ -182,6 +182,14 @@ EQUIPO_VINCULO_CORREGIR = _definir(
     (RECEP, COORD, ADMIN),
     INGRESO,
 )
+# DC12: checklist de recepcion y advertencia por informacion faltante;
+# por defecto, quienes corrigen los datos del ingreso.
+CHECKLIST_REGISTRAR = _definir(
+    "CHECKLIST_REGISTRAR",
+    "Registrar el checklist de recepción",
+    (RECEP, COORD, ADMIN),
+    INGRESO,
+)
 DETALLE_DEFINIR_RECEPCION = _definir(
     "DETALLE_DEFINIR_RECEPCION",
     "Cargar y finalizar los trabajos en el ingreso",

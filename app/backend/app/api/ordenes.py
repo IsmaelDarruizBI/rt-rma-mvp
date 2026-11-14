@@ -92,6 +92,10 @@ from app.application import (
     vista_previa_documento,
 )
 from app.application.acciones import ACCION_INICIAR_GARANTIA_RMA
+from app.application.checklist import (
+    confirmar_faltantes,
+    registrar_checklist_de_orden,
+)
 from app.application.evaluacion import (
     PedidoAdicional,
     agregar_trabajo_adicional,
@@ -1724,5 +1728,54 @@ def post_devolucion_insumo(
         cantidad=cuerpo.cantidad,
         motivo=cuerpo.motivo,
         usuario_id=cuerpo.usuario_id,
+    )
+    return _salida(orden, contexto)
+
+
+class RespuestaChecklistIn(BaseModel):
+    pregunta_id: str = Field(min_length=1)
+    respuesta: str | None = None
+    no_realizada: bool = False
+
+
+class ChecklistIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+    tipo_equipo_id: str = Field(min_length=1)
+    respuestas: list[RespuestaChecklistIn] = Field(default_factory=list)
+    motivo: str | None = None
+
+
+class ConfirmarFaltantesIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+
+
+@router.post("/{orden_id}/checklist")
+def post_checklist(
+    orden_id: str, cuerpo: ChecklistIn, contexto: ContextoDep
+) -> OrdenOut:
+    """Checklist de recepcion (DC12): todas las verificaciones son
+    opcionales; corregirlo agrega una version con motivo."""
+    orden = registrar_checklist_de_orden(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        tipo_equipo_id=cuerpo.tipo_equipo_id,
+        respuestas=[
+            (r.pregunta_id, r.respuesta, r.no_realizada)
+            for r in cuerpo.respuestas
+        ],
+        motivo=cuerpo.motivo,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/missing-info-ack")
+def post_confirmar_faltantes(
+    orden_id: str, cuerpo: ConfirmarFaltantesIn, contexto: ContextoDep
+) -> OrdenOut:
+    """Continuar igualmente con informacion faltante (BR-REP-025): queda
+    registrado que faltaba y quien siguio. Nunca bloquea."""
+    orden = confirmar_faltantes(
+        contexto, orden_id=orden_id, usuario_id=cuerpo.usuario_id
     )
     return _salida(orden, contexto)

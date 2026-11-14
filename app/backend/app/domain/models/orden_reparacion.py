@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, computed_field
 
+from .checklist import ConfirmacionInformacionFaltante, RegistroChecklist
 from .comunicaciones import ComunicacionCliente
 from .descuentos import RegistroDescuento, importe_de_descuento
 from .documentos import DocumentosOrden
@@ -143,6 +144,12 @@ class OrdenReparacion(BaseModel):
     correcciones_equipo: list[CorreccionVinculoEquipo] = Field(
         default_factory=list
     )
+    # DC12: checklists de recepcion (versiones; rige la ultima) y las
+    # confirmaciones de continuar con informacion faltante (BR-REP-025).
+    checklists_recepcion: list[RegistroChecklist] = Field(default_factory=list)
+    confirmaciones_informacion_faltante: list[
+        ConfirmacionInformacionFaltante
+    ] = Field(default_factory=list)
     # Fotos del equipo (UAT-010): solo sus datos; la imagen esta en el
     # almacenamiento de objetos. Default vacio: un JSON anterior carga.
     fotos: list[FotoOrden] = Field(default_factory=list)

@@ -327,6 +327,27 @@ _INSERTAR_CORRECCION_EQUIPO = consulta(
     """,
     modo=ESCRITURA,
 )
+_INSERTAR_CHECKLIST = consulta(
+    "ordenes.insertar_checklist",
+    """
+    INSERT INTO rma.checklist_registro
+        (orden_id, posicion, tipo_equipo_codigo, tipo_equipo_nombre,
+         respuestas, sin_registrar, usuario_id, registrado_en, motivo)
+    VALUES (%(orden)s, %(posicion)s, %(tipo)s, %(nombre)s,
+            %(respuestas)s::jsonb, %(sin_registrar)s, %(usuario)s, %(fecha)s,
+            %(motivo)s)
+    """,
+    modo=ESCRITURA,
+)
+_INSERTAR_CONFIRMACION_FALTANTE = consulta(
+    "ordenes.insertar_confirmacion_faltante",
+    """
+    INSERT INTO rma.informacion_faltante_confirmacion
+        (orden_id, posicion, faltantes, usuario_id, registrado_en)
+    VALUES (%(orden)s, %(posicion)s, %(faltantes)s, %(usuario)s, %(fecha)s)
+    """,
+    modo=ESCRITURA,
+)
 _INSERTAR_COMUNICACION = consulta(
     "ordenes.insertar_comunicacion",
     """
@@ -1302,6 +1323,7 @@ class _Guardado:
         self._seguimientos_retiro(orden_id)
         self._comunicaciones(orden_id)
         self._correcciones_equipo(orden_id)
+        self._checklists(orden_id)
         self._historial(orden_id)
         # La raiz va al final: si este guardar cierra la Orden, nada se
         # inserta despues del cierre (diseno fisico, regla 9).
@@ -1443,6 +1465,10 @@ class _Guardado:
         usuarios.update(d.usuario_id for d in orden.descuentos)
         usuarios.update(s.usuario_id for s in orden.seguimientos_retiro)
         usuarios.update(c.usuario_id for c in orden.correcciones_equipo)
+        usuarios.update(c.usuario_id for c in orden.checklists_recepcion)
+        usuarios.update(
+            c.usuario_id for c in orden.confirmaciones_informacion_faltante
+        )
         for comunicacion in orden.comunicaciones:
             usuarios.add(comunicacion.usuario_id)
             if comunicacion.confirmacion:
@@ -2043,6 +2069,49 @@ class _Guardado:
                     "fecha": devolucion.fecha,
                     "operacion": devolucion.operacion_id,
                     "posicion": posicion,
+                },
+            )
+
+    def _checklists(self, orden_id: UUID) -> None:
+        """DC12: checklists y confirmaciones de faltantes solo crecen."""
+        previa = self._previa.orden if self._previa else None
+        for posicion, registro in self._con_posicion(
+            "los checklists de recepcion",
+            previa.checklists_recepcion if previa else [],
+            self._orden.checklists_recepcion,
+        ):
+            self._ej.ejecutar(
+                _INSERTAR_CHECKLIST,
+                {
+                    "orden": orden_id,
+                    "posicion": posicion,
+                    "tipo": registro.tipo_equipo_id,
+                    "nombre": registro.tipo_equipo_nombre,
+                    "respuestas": json.dumps(
+                        [
+                            r.model_dump(mode="json")
+                            for r in registro.respuestas
+                        ]
+                    ),
+                    "sin_registrar": registro.sin_registrar,
+                    "usuario": self._id("usuario", registro.usuario_id),
+                    "fecha": registro.fecha,
+                    "motivo": registro.motivo,
+                },
+            )
+        for posicion, confirmacion in self._con_posicion(
+            "las confirmaciones de informacion faltante",
+            previa.confirmaciones_informacion_faltante if previa else [],
+            self._orden.confirmaciones_informacion_faltante,
+        ):
+            self._ej.ejecutar(
+                _INSERTAR_CONFIRMACION_FALTANTE,
+                {
+                    "orden": orden_id,
+                    "posicion": posicion,
+                    "faltantes": confirmacion.faltantes,
+                    "usuario": self._id("usuario", confirmacion.usuario_id),
+                    "fecha": confirmacion.fecha,
                 },
             )
 

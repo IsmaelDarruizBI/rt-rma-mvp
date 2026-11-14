@@ -35,6 +35,10 @@ from tests.postgres import test_permisos_rma_backend as permisos  # noqa: E402
 from tests.postgres.test_ajuste_por_detalle_postgres import (  # noqa: E402,F401
     test_ajuste_por_detalle_se_guarda_y_la_vista_coincide,
 )
+from tests.postgres.test_checklist_postgres import (  # noqa: E402,F401
+    cliente_checklist,
+    test_checklist_configurable_con_copia_y_versiones,
+)
 from tests.postgres.test_compras_postgres import (  # noqa: E402,F401
     contexto_compras,
     test_circuito_completo_con_recepciones_parciales,

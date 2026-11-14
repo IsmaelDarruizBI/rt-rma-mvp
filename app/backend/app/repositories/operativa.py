@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from app.domain.models import CambioConfiguracion, Insumo
+from app.domain.models.checklist import PreguntaChecklist, TipoEquipo
 from app.domain.models.comunicaciones import (
     ConsentimientoComunicacion,
     PlantillaMensaje,
@@ -39,6 +40,27 @@ class ConfiguracionOperativaRepository(Protocol):
     def guardar_insumo(
         self,
         insumo: Insumo,
+        *,
+        nuevo: bool,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None: ...
+
+    # DC12: tipos de equipo y preguntas del checklist.
+    def listar_tipos_equipo(self) -> list[TipoEquipo]: ...
+
+    def guardar_tipo_equipo(
+        self,
+        tipo: TipoEquipo,
+        *,
+        nuevo: bool,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None: ...
+
+    def listar_preguntas_checklist(self) -> list[PreguntaChecklist]: ...
+
+    def guardar_pregunta_checklist(
+        self,
+        pregunta: PreguntaChecklist,
         *,
         nuevo: bool,
         cambios: Sequence[CambioConfiguracion],

@@ -14,6 +14,7 @@ from app.application import (
     listar_tipos_reparacion,
     listar_usuarios,
 )
+from app.application.checklist import catalogo
 from app.application.operativa import listar_motivos
 from app.domain.models.operativa import MotivoOperativo, TipoMotivo
 
@@ -81,3 +82,9 @@ def get_motivos(
 ) -> list[MotivoOperativo]:
     """Motivos de cancelacion o interrupcion (DEC-MI-15)."""
     return listar_motivos(contexto, tipo)
+
+
+@router.get("/checklist")
+def get_checklist(contexto: ContextoDep) -> dict:
+    """Tipos de equipo y preguntas vigentes del checklist (DC12)."""
+    return catalogo(contexto, solo_vigentes=True)
