@@ -161,3 +161,36 @@ def test_la_misma_clave_de_otro_usuario_no_reutiliza_su_respuesta(api, base):
     assert ajena.status_code == 403, ajena.text
     assert ajena.json()["error"]["codigo"] == "IDENTIDAD_NO_COINCIDE"
     assert _sql(base, "select count(*) from rma.pago") == [(2,)]
+
+
+def test_la_consulta_de_ordenes_es_un_permiso_configurable(api):
+    """DC27B: por defecto la consulta queda como estaba (todos los roles);
+    si Administracion la restringe, rige desde el pedido siguiente."""
+    from app.storage.postgres.configuracion import (
+        PostgresConfiguracionRepository,
+    )
+
+    app, cliente, verificador = api
+    contexto = app.state.contexto
+    app.state.contexto = replace(
+        contexto,
+        configuracion=PostgresConfiguracionRepository(
+            contexto.unidad_de_trabajo
+        ),
+    )
+    _activar(app, verificador)
+    recepcion, admin = _sesion(f.RECEPCION), _sesion(f.ADMINISTRADOR)
+    assert cliente.get("/api/orders", headers=recepcion).status_code == 200
+    assert cliente.get("/api/inventory", headers=recepcion).status_code == 200
+
+    respuesta = cliente.put(
+        "/api/admin/permissions/ORDENES_CONSULTAR",
+        json={"usuario_id": f.ADMINISTRADOR, "roles": ["ADMINISTRADOR"]},
+        headers=admin,
+    )
+    assert respuesta.status_code == 200, respuesta.text
+    negada = cliente.get("/api/orders", headers=recepcion)
+    assert negada.status_code == 403, negada.text
+    assert cliente.get("/api/orders", headers=admin).status_code == 200
+    # El inventario es otro permiso: no cambio.
+    assert cliente.get("/api/inventory", headers=recepcion).status_code == 200

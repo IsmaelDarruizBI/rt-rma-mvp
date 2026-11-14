@@ -420,6 +420,21 @@ RECLAMOS_CONSULTAR = _definir(
     CONSULTAS,
     consulta=True,
 )
+# DC27B: consultas configurables; por defecto, todos los roles (como hoy).
+ORDENES_CONSULTAR = _definir(
+    "ORDENES_CONSULTAR",
+    "Consultar las Órdenes y sus documentos",
+    TODOS,
+    CONSULTAS,
+    consulta=True,
+)
+INVENTARIO_CONSULTAR = _definir(
+    "INVENTARIO_CONSULTAR",
+    "Consultar el inventario, sus movimientos y lotes",
+    TODOS,
+    CONSULTAS,
+    consulta=True,
+)
 COMPRAS_CONSULTAR = _definir(
     "COMPRAS_CONSULTAR",
     "Consultar compras, proveedores y costos",

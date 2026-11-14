@@ -123,6 +123,7 @@ from app.services import (
     PrecondicionInvalidaError,
     evaluar_vigencia_garantia,
 )
+from app.services.permisos import ORDENES_CONSULTAR
 
 from .dependencias import ContextoDep
 from .idempotencia import ClaveDep, con_clave, id_de_foto, idempotente
@@ -187,6 +188,9 @@ from .schemas import (
     VistaPreviaDocumentoOut,
 )
 from .seguridad import exigir_rol
+
+# DC27B: la consulta de las Ordenes es un permiso configurable.
+_consulta = [exigir_rol(ORDENES_CONSULTAR)]
 
 router = APIRouter(prefix="/api/orders", tags=["ordenes"])
 
@@ -305,7 +309,7 @@ def _salida_con_entrega(
 # --- Lectura -----------------------------------------------------------------
 
 
-@router.get("")
+@router.get("", dependencies=_consulta)
 def get_ordenes(contexto: ContextoDep) -> list[OrdenResumenOut]:
     """Listado de Ordenes, con la situacion operativa de cada una.
 
@@ -330,7 +334,7 @@ def get_ordenes(contexto: ContextoDep) -> list[OrdenResumenOut]:
     ]
 
 
-@router.get("/authorizations/pending")
+@router.get("/authorizations/pending", dependencies=_consulta)
 def get_pendientes_de_autorizacion(
     contexto: ContextoDep,
 ) -> list[PendienteAutorizacionOut]:
@@ -345,7 +349,7 @@ def get_pendientes_de_autorizacion(
     ]
 
 
-@router.get("/{orden_id}")
+@router.get("/{orden_id}", dependencies=_consulta)
 def get_orden(orden_id: str, contexto: ContextoDep) -> OrdenOut:
     """Una Orden con su detalle completo."""
     with contexto.lectura():
@@ -353,7 +357,7 @@ def get_orden(orden_id: str, contexto: ContextoDep) -> OrdenOut:
         return _salida(obtener_orden(contexto, orden_id), contexto)
 
 
-@router.get("/{orden_id}/finances")
+@router.get("/{orden_id}/finances", dependencies=_consulta)
 def get_finanzas(orden_id: str, contexto: ContextoDep) -> FinanzasOrdenOut:
     """Saldo, credito a favor y movimientos de dinero, en orden cronologico.
 
@@ -362,7 +366,7 @@ def get_finanzas(orden_id: str, contexto: ContextoDep) -> FinanzasOrdenOut:
     return FinanzasOrdenOut.desde_dominio(obtener_orden(contexto, orden_id))
 
 
-@router.get("/{orden_id}/custody")
+@router.get("/{orden_id}/custody", dependencies=_consulta)
 def get_custodia(orden_id: str, contexto: ContextoDep) -> dict:
     """Custodia del equipo y datos del ingreso. Solo lectura.
 
@@ -381,7 +385,7 @@ def get_custodia(orden_id: str, contexto: ContextoDep) -> dict:
     }
 
 
-@router.get("/{orden_id}/documents")
+@router.get("/{orden_id}/documents", dependencies=_consulta)
 def get_documentos(orden_id: str, contexto: ContextoDep) -> DocumentosOrdenOut:
     """Documentos emitidos de la Orden, con su contenido. Solo lectura.
 
@@ -407,7 +411,7 @@ def get_documentos(orden_id: str, contexto: ContextoDep) -> DocumentosOrdenOut:
     )
 
 
-@router.get("/{orden_id}/documents/preview/{tipo}")
+@router.get("/{orden_id}/documents/preview/{tipo}", dependencies=_consulta)
 def get_vista_previa_documento(
     orden_id: str,
     tipo: TipoDocumento,
@@ -423,6 +427,7 @@ def get_vista_previa_documento(
 
 @router.get(
     "/{orden_id}/documents/{documento_id}/pdf",
+    dependencies=_consulta,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
 )
@@ -447,7 +452,7 @@ def get_documento_pdf(
     )
 
 
-@router.get("/{orden_id}/documents/{documento_id}")
+@router.get("/{orden_id}/documents/{documento_id}", dependencies=_consulta)
 def get_documento(
     orden_id: str,
     documento_id: str,
@@ -466,7 +471,7 @@ def get_documento(
     )
 
 
-@router.get("/{orden_id}/authorizations")
+@router.get("/{orden_id}/authorizations", dependencies=_consulta)
 def get_autorizaciones(
     orden_id: str,
     contexto: ContextoDep,
@@ -481,7 +486,10 @@ def get_autorizaciones(
     )
 
 
-@router.get("/{orden_id}/details/{detalle_id}/resources/override-preview")
+@router.get(
+    "/{orden_id}/details/{detalle_id}/resources/override-preview",
+    dependencies=_consulta,
+)
 def get_impacto_override(
     orden_id: str,
     detalle_id: str,

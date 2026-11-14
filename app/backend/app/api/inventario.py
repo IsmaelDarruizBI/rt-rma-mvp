@@ -19,7 +19,11 @@ from app.application import (
 from app.application.lotes import saldos_de_insumo
 from app.domain.models import TipoMovimientoInsumo
 from app.domain.models.lotes import SaldosDeInsumo
-from app.services import ROLES_GESTION_STOCK, ROLES_REVALIDACION_RECURSOS
+from app.services import (
+    ROLES_GESTION_STOCK,
+    ROLES_REVALIDACION_RECURSOS,
+    permisos,
+)
 
 from .dependencias import ContextoDep
 from .idempotencia import idempotente
@@ -35,10 +39,12 @@ from .schemas_inventario import (
 )
 from .seguridad import exigir_rol
 
+_consulta = [exigir_rol(permisos.INVENTARIO_CONSULTAR)]
+
 router = APIRouter(prefix="/api/inventory", tags=["inventario"])
 
 
-@router.get("")
+@router.get("", dependencies=_consulta)
 def get_inventario(
     contexto: ContextoDep,
     buscar: str | None = None,
@@ -57,7 +63,7 @@ def get_inventario(
     ]
 
 
-@router.get("/movements")
+@router.get("/movements", dependencies=_consulta)
 def get_movimientos(
     contexto: ContextoDep,
     insumo_id: str | None = None,
@@ -91,7 +97,7 @@ def post_revalidar_ordenes(
     )
 
 
-@router.get("/{insumo_id}")
+@router.get("/{insumo_id}", dependencies=_consulta)
 def get_insumo(insumo_id: str, contexto: ContextoDep) -> DetalleInsumoOut:
     """Un insumo: reservas vigentes, movimientos y faltantes registrados."""
     return DetalleInsumoOut.desde_aplicacion(
@@ -148,7 +154,7 @@ def post_ajuste(
     )
 
 
-@router.get("/{insumo_id}/lots")
+@router.get("/{insumo_id}/lots", dependencies=_consulta)
 def get_lotes(insumo_id: str, contexto: ContextoDep) -> SaldosDeInsumo:
     """Lotes del insumo con su saldo y el stock sin lote identificado
     (DEC-MI-10)."""
