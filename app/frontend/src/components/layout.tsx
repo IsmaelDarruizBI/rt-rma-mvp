@@ -22,6 +22,7 @@ import {
   IconoInicio,
   IconoInventario,
   IconoReportes,
+  IconoCompras,
   IconoConfiguracion,
   IconoMas,
   IconoMenu,
@@ -36,6 +37,7 @@ export type Seccion =
   | "taller"
   | "inventario"
   | "reportes"
+  | "compras"
   | "configuracion";
 
 const SECCIONES: readonly {
@@ -44,12 +46,15 @@ const SECCIONES: readonly {
   icono: () => ReactNode;
   /** Solo para Administración (DC23); el backend lo valida igual. */
   soloAdministracion?: boolean;
+  /** DEC-MI-09: solo con el permiso de consultar compras. */
+  soloCompras?: boolean;
 }[] = [
   { clave: "inicio", nombre: "Inicio", icono: IconoInicio },
   { clave: "ordenes", nombre: "Órdenes", icono: IconoOrdenes },
   { clave: "taller", nombre: "Taller", icono: IconoTaller },
   { clave: "inventario", nombre: "Inventario", icono: IconoInventario },
   { clave: "reportes", nombre: "Reportes", icono: IconoReportes },
+  { clave: "compras", nombre: "Compras", icono: IconoCompras, soloCompras: true },
   {
     clave: "configuracion",
     nombre: "Configuración",
@@ -85,7 +90,12 @@ export function Layout({
 }: {
   seccion: Seccion;
   onNavegar: (seccion: Seccion) => void;
-  usuario: { nombre: string; rol: string; esAdministracion?: boolean };
+  usuario: {
+    nombre: string;
+    rol: string;
+    esAdministracion?: boolean;
+    puedeComprar?: boolean;
+  };
   onCerrarSesion: () => void;
   barra: Barra;
   children: ReactNode;
@@ -120,7 +130,9 @@ export function Layout({
         </div>
         <nav className="rt-sidebar__nav">
           {SECCIONES.filter(
-            (s) => !s.soloAdministracion || usuario.esAdministracion,
+            (s) =>
+              (!s.soloAdministracion || usuario.esAdministracion) &&
+              (!s.soloCompras || usuario.puedeComprar),
           ).map(({ clave, nombre, icono: Icono }) => (
             <button
               key={clave}

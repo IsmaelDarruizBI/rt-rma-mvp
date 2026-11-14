@@ -381,6 +381,14 @@ DEVOLUCION_STOCK = _definir(
     (ADMIN, COORD),
     INVENTARIO,
 )
+# DEC-MI-09: Recepcion, Coordinacion RMA y Administracion crean, confirman
+# y reciben ordenes de compra (sin aprobacion).
+COMPRAS_GESTIONAR = _definir(
+    "COMPRAS_GESTIONAR",
+    "Solicitudes, órdenes de compra y recepciones",
+    (RECEP, COORD, ADMIN),
+    INVENTARIO,
+)
 CATALOGO_EQUIPOS_SINCRONIZAR = _definir(
     "CATALOGO_EQUIPOS_SINCRONIZAR",
     "Sincronizar el catálogo de equipos de Ventas",
@@ -400,6 +408,13 @@ REPORTES_CONSULTAR = _definir(
 RECLAMOS_CONSULTAR = _definir(
     "RECLAMOS_CONSULTAR",
     "Consultar los reclamos de garantía rechazados",
+    (RECEP, COORD, ADMIN),
+    CONSULTAS,
+    consulta=True,
+)
+COMPRAS_CONSULTAR = _definir(
+    "COMPRAS_CONSULTAR",
+    "Consultar compras, proveedores y costos",
     (RECEP, COORD, ADMIN),
     CONSULTAS,
     consulta=True,

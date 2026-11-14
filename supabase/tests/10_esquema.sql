@@ -10,14 +10,14 @@ declare
     'detalle', 'detalle_version', 'decision_cliente', 'ajuste_garantia', 'toma', 'ejecucion', 'ejecucion_insumo', 'control_tecnico', 'evaluacion_tecnica',
     'insumo', 'movimiento_inventario', 'override_recursos', 'override_insumo',
     'pago', 'devolucion_dinero', 'descuento', 'documento_emitido',
-    'accion_usuario', 'evento_negocio', 'tipo_evento', 'equivalencia_historial', 'auditoria_tecnica', 'cambio_configuracion', 'permiso', 'reclamo_garantia', 'motivo_operativo', 'parametro', 'seguimiento_retiro', 'plantilla_mensaje', 'comunicacion_cliente', 'comunicacion_confirmacion', 'consentimiento_comunicacion', 'firma_documento', 'correccion_vinculo_equipo', 'lote_insumo',
+    'accion_usuario', 'evento_negocio', 'tipo_evento', 'equivalencia_historial', 'auditoria_tecnica', 'cambio_configuracion', 'permiso', 'reclamo_garantia', 'motivo_operativo', 'parametro', 'seguimiento_retiro', 'plantilla_mensaje', 'comunicacion_cliente', 'comunicacion_confirmacion', 'consentimiento_comunicacion', 'firma_documento', 'correccion_vinculo_equipo', 'lote_insumo', 'proveedor', 'solicitud_compra', 'orden_compra', 'orden_compra_item', 'recepcion_compra', 'recepcion_compra_linea',
     'usuario', 'rol', 'usuario_rol', 'mesa_trabajo', 'mesa_tipo_reparacion', 'tipo_reparacion',
     'tipo_reparacion_insumo', 'medio_pago', 'tipo_documento', 'motivo_ajuste', 'empresa', 'texto_legal'
   ];
   v_faltan text[];
   v_sobran text[];
 begin
-  perform rma_pruebas.debe_ser(cardinality(v_esperadas), 59, 'el diseño lógico tiene 59 entidades');
+  perform rma_pruebas.debe_ser(cardinality(v_esperadas), 65, 'el diseño lógico tiene 65 entidades');
   select array_agg(t) into v_faltan from unnest(v_esperadas) t
    where not exists (select 1 from information_schema.tables
                       where table_schema = 'rma' and table_name = t and table_type = 'BASE TABLE');

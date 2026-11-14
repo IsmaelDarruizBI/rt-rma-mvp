@@ -40,6 +40,7 @@ from app.repositories import (
     RegistroDeAcciones,
     UnidadDeTrabajo,
 )
+from app.repositories.compras import ComprasRepository
 from app.repositories.configuracion import ConfiguracionRepository
 from app.repositories.lotes import LotesRepository
 from app.repositories.operativa import (
@@ -118,6 +119,8 @@ class ApplicationContext:
     firmas: FirmasRepository | None = None
     # Lotes de insumo (DEC-MI-10).
     lotes: LotesRepository | None = None
+    # Compras (DEC-MI-09): solo PostgreSQL (DC23).
+    compras: ComprasRepository | None = None
     # Cierre de los recursos de la persistencia (el pool de PostgreSQL).
     cerrar: Callable[[], None] | None = None
 
@@ -164,6 +167,7 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
     """
     from app.storage.postgres.acciones import PostgresRegistroDeAcciones
     from app.storage.postgres.catalogos import PostgresCatalogosRepository
+    from app.storage.postgres.compras import PostgresComprasRepository
     from app.storage.postgres.conexion import HOSTS_LOCALES, servidor_unico
     from app.storage.postgres.configuracion import (
         PostgresConfiguracionRepository,
@@ -232,6 +236,7 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
         consentimientos=PostgresConsentimientosRepository(unidad),
         firmas=PostgresFirmasRepository(unidad),
         lotes=PostgresLotesRepository(unidad),
+        compras=PostgresComprasRepository(unidad),
         cerrar=lambda: cerrar_pool(pool),
     )
 

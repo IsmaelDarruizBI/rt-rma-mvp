@@ -104,3 +104,11 @@ export const IconoSalir = () => (
     <path d="M10 16l4-4-4-4M14 12H4" />
   </Icono>
 );
+
+export const IconoCompras = () => (
+  <Icono>
+    <path d="M3 4h2l2.4 11h11.2L21 7H6.2" />
+    <circle cx="9" cy="19" r="1.5" />
+    <circle cx="17" cy="19" r="1.5" />
+  </Icono>
+);

@@ -19,6 +19,7 @@ from app.api import (
     catalogo_equipos,
     catalogos,
     clientes,
+    compras,
     comunicaciones,
     configuracion,
     consultas_operativas,
@@ -139,6 +140,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         comunicaciones,
         firmas,
         identidad,
+        compras,
     ):
         application.include_router(modulo.router, dependencies=protegido)
 

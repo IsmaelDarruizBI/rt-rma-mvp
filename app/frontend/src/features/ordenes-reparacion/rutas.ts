@@ -15,6 +15,7 @@ export type Ruta =
   | { pantalla: "taller" }
   | { pantalla: "inventario" }
   | { pantalla: "reportes" }
+  | { pantalla: "compras" }
   | { pantalla: "configuracion" };
 
 /** Al entrar: las tareas del usuario. */
@@ -39,6 +40,7 @@ export function parsearRuta(hash: string): Ruta {
     if (partes[0] === "taller") return { pantalla: "taller" };
     if (partes[0] === "inventario") return { pantalla: "inventario" };
     if (partes[0] === "reportes") return { pantalla: "reportes" };
+    if (partes[0] === "compras") return { pantalla: "compras" };
     if (partes[0] === "configuracion") return { pantalla: "configuracion" };
   }
   if (partes[0] === "ordenes") {
@@ -70,6 +72,8 @@ export function hashDe(ruta: Ruta): string {
       return "#/inventario";
     case "reportes":
       return "#/reportes";
+    case "compras":
+      return "#/compras";
     case "configuracion":
       return "#/configuracion";
   }

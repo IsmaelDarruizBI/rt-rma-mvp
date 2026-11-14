@@ -52,6 +52,7 @@ import {
 } from "./AccionesOrden";
 import { InventarioPanel } from "../inventario/Inventario";
 import { ReportesPanel } from "../reportes/Reportes";
+import { ComprasPanel } from "../compras/Compras";
 import { ReclamoRechazado } from "./ReclamoRechazado";
 import { RetiroDemorado } from "./RetiroDemorado";
 import { ComunicacionesOrden } from "./ComunicacionesOrden";
@@ -122,7 +123,7 @@ import {
 } from "./acciones";
 import { Layout, MenuAcciones, type Seccion } from "../../components/layout";
 import { Modal } from "../../components/Modal";
-import { rolesDe, tieneRol } from "../../lib/roles";
+import { puede, rolesDe, tieneRol } from "../../lib/roles";
 
 type Informativa =
   | "cliente"
@@ -689,6 +690,11 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
           ? { titulo: "Inventario", subtitulo: "Stock, reservas y movimientos" }
           : ruta.pantalla === "reportes"
           ? { titulo: "Reportes", subtitulo: "Indicadores operativos" }
+          : ruta.pantalla === "compras"
+          ? {
+              titulo: "Compras",
+              subtitulo: "Solicitudes, órdenes de compra y recepciones",
+            }
           : ruta.pantalla === "configuracion"
           ? {
               titulo: "Configuración",
@@ -758,6 +764,11 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
           .map((r) => ROL[r] ?? r)
           .join(" · "),
         esAdministracion: tieneRol(actor, "ADMINISTRADOR"),
+        puedeComprar: puede(actor, "COMPRAS_CONSULTAR", [
+          "RECEPCION",
+          "COORDINADOR_RMA",
+          "ADMINISTRADOR",
+        ]),
       }}
       onCerrarSesion={cerrarSesion}
       barra={barra}
@@ -796,6 +807,8 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
         <InventarioPanel actor={actor} usuarios={usuarios} />
       ) : ruta.pantalla === "reportes" ? (
         <ReportesPanel actor={actor} />
+      ) : ruta.pantalla === "compras" ? (
+        <ComprasPanel actor={actor} />
       ) : ruta.pantalla === "configuracion" ? (
         <ConfiguracionPanel actor={actor} />
       ) : ruta.pantalla === "ordenes" || ruta.pantalla === "nueva" ? (
