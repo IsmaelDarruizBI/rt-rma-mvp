@@ -2,7 +2,7 @@
 
 La baseline funcional vigente es PROC-REP V1.4, aprobada en DC01 y sincronizada desde `rt-rma-app` (DC02):
 
-- Commit de origen: `99c69e827bbb0f82be435f4c33e53b91dec4a44d` (rama `spec/macro-integral`: las decisiones DEC-MI-01 a 15 de la macroiteración integral y su estado de implementación, sobre `spec/macro-v14`, con DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
+- Commit de origen: `3ac91ea6f731c12a25396ce0531fb292663fab60` (rama `spec/macro-integral`: las decisiones DEC-MI-01 a 15 de la macroiteración integral y su estado de implementación, sobre `spec/macro-v14`, con DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
 - Contenido funcional aprobado en `b6cc3a5`.
 - Manifiesto de procedencia: `business/FUNCTIONAL_SOURCE.json`.
 
@@ -18,27 +18,20 @@ Fuente de los estados de implementación: `business/decisions/decision-log-v1.4.
 
 Las tres que figuraban (DC06, DC07 y DC11) se alinearon en la iteración 1: ver la sección G.
 
-## B. Decisiones no implementadas (8)
+## B. Decisiones no implementadas (3)
 
 | Decisión | Qué dice la baseline | Situación en el producto | Pendientes |
 |---|---|---|---|
 | DC19 | Registrar Minorista/Mayorista sin cambios automáticos de precio | `domain/models/personas.py` (Cliente sin clasificación) | - |
-| DC12 | Checklist configurable por tipo de equipo, opcional, con advertencia por información faltante | No existe checklist. **Falta una decisión:** qué es el «tipo de equipo» y de dónde lo toma la Orden (no hay catálogo de tipos de equipo; DEC-MI-13 lo nombra sin definirlo) | - |
-| DEC-MI-09 | Compras: solicitud, orden de compra, recepciones parciales e ingreso | No existe módulo de Compras; el ingreso de stock manual sigue en Inventario. No entró en la macroiteración integral | - |
-| DEC-MI-10 | Lotes, número de serie y desperdicio con trazabilidad compra-consumo | Movimientos sin lote; existe devolución, no desperdicio. No entró en la macroiteración integral: exige la transición controlada del stock existente | - |
-| DC24 | Compras en un proceso propio, después de PostgreSQL | No existe módulo de Compras | ABI-12 |
-| DC24LOT | Movimientos por lote con trazabilidad hasta el Detalle | Movimientos sin lote | ABI-12 |
 | DC27C | Supabase Auth; usuarios, roles y permisos en PostgreSQL | Sin autenticación | - |
 | DC02 | `rt-rma-mvp/business` es una copia generada y verificada | **Implementada por esta sincronización.** El registro de `rt-rma-app` todavía dice NO_IMPLEMENTADO porque se evaluó antes; corresponde actualizarlo en la fuente | - |
 
-## C. Decisiones implementadas en parte (5)
+## C. Decisiones implementadas en parte (3)
 
 | Decisión | Qué dice la baseline | Qué hay en el producto | Qué falta | Pendientes |
 |---|---|---|---|---|
 | DC18 | Cuatro situaciones de custodia con eventos y responsables | `domain/models/enums.py:303-327`: seis valores calculados | Unificar el modelo y registrar cada evento con responsable | - |
-| DC23 | Administración gestiona catálogos y valores predeterminados; permisos delegables | Configuración (solo Administración, sobre PostgreSQL; en JSON de solo lectura): Tipos de Reparación con sus políticas de garantía, Mesas, usuarios y roles, permisos, motivos, parámetros, plantillas e insumos, con auditoría | Checklist por tipo de equipo (DC12) y precios y costos de compra (DEC-MI-09) | - |
-| DEC-MI-13 | Catálogos administrados con permisos, auditoría y referencias históricas | Los de DC23, cada uno auditado en `rma.cambio_configuracion`; lo registrado conserva su copia | Checklist (DC12) y precios y costos de compra (DEC-MI-09) | - |
-| DC27B | Permisos de consulta configurables | Reportes, reclamos, antecedentes y búsqueda de clientes con permisos de consulta configurables (`services/permisos.py`) | La consulta de Órdenes y catálogos queda abierta a todo usuario autenticado | - |
+| DC12 | Checklist configurable por tipo de equipo, opcional, con advertencia por información faltante | Tipos de equipo y preguntas configurables y auditados (catálogo inicial vacío); checklist opcional con copia de las preguntas y versiones con motivo; advertencia que nunca bloquea y registra la confirmación (`c8cd64f`) | **Decisión pendiente:** de dónde toma la Orden su tipo de equipo. Hoy lo elige Recepción al completar el checklist. Alternativas: (a) Recepción, como hoy; (b) el modelo técnico del catálogo con su tipo, heredado por la Orden; (c) la categoría del catálogo de Ventas, que solo tienen las Órdenes anteriores | - |
 | GLO-01 | Estación = Mesa de trabajo, con «Mesa de trabajo» como nombre visible | Una sola entidad; la interfaz dice «Estación de trabajo» | Texto visible | - |
 
 ## D. Diferencias de recorrido entre el grafo V1.4 y lo que registra el backend
@@ -123,3 +116,7 @@ Implementación de DEC-MI-01 a 15 (13/11/2026), sin decisiones nuevas. El regist
 | DEC-MI-06, DC26 | Firma opcional ligada al documento emitido, en pantalla o foto del papel firmado | `6a199dc` | - |
 | DEC-MI-11, DC20 | Identidad del Equipo por IMEI y después serie, sin similitud; historial por identidad; corrección auditada | `c4ca1fd` | - |
 | DC23AUD | Auditoría de todos los catálogos administrados | `5c0536d` y los anteriores | - |
+| DEC-MI-09, DC24 | Compras como proceso propio: solicitudes manuales o sugeridas y confirmadas, órdenes de compra sin aprobación, recepciones parciales con ingreso de stock, último costo e histórico; proveedores administrados | `3434453` | - |
+| DEC-MI-10, DC24LOT | Control por lote o serie; el stock existente queda como stock sin lote identificado; desperdicio y devolución; el libro valida lotes y concurrencia | `8699dbd` | - |
+| DEC-MI-13, DC23 | Todos los catálogos de BR-REP-040 y DEC-MI-13 administrados con auditoría | `5c0536d`, `8699dbd`, `3434453`, `c8cd64f` | - |
+| DC27B | Consultas de Órdenes, inventario, compras, reclamos, reportes y antecedentes como permisos configurables, con todos los roles como valor inicial | `c973bb0` | - |

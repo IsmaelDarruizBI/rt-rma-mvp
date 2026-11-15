@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 13/11/2026.
+**Última actualización:** 14/11/2026.
 
 - **Hecho:**
   - autenticación real y DC31 desplegadas en UAT (10/11, `00020-tux`);
@@ -15,10 +15,10 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - **macroiteración funcional** (12/11): evaluación técnica, reparaciones adicionales, desistimiento total guiado, antecedentes del equipo, reporte operativo y configuración auditada; integrada en `mvp-v2` (`5c6137e`) con el CI en verde (sección B);
   - **macroiteración en UAT** (12/11): migraciones `20261112000100` y `20261112000200` en São Paulo, Cloud Run `00029-kay` (`5c6137e`) y Vercel `dpl_CRXZubTCVE1ALhZmLe2wHhoZhbWR` (sección B);
   - **UAT validada** (12/11): inicio de sesión de las cuatro cuentas, aislamiento de tokens, lecturas y E2E de la macroiteración con datos ficticios (67 de 67), limpiados después; el UAT volvió a su estado inicial (sección B);
-  - **macroiteración integral** (13/11, rama `feat/macro-integral`, commits locales sin publicar): DEC-MI-01 a 08, 11, 12, 14 y 15 implementadas; DEC-MI-13 en parte (sección B).
+  - **macroiteración integral** (13 y 14/11, rama `feat/macro-integral`, commits locales sin publicar): DEC-MI-01 a 15 implementadas, con Compras, lotes y desperdicio, catálogos auditados y consultas configurables; checklist de recepción por tipo de equipo (DC12) implementado salvo el origen del tipo de equipo de la Orden; QA cerrada con 0 fallas (sección B).
 - **Falta:**
-  - de la macroiteración integral: Compras (DEC-MI-09), lotes y desperdicio (DEC-MI-10) y el checklist por tipo de equipo (DC12, falta definir qué es el tipo de equipo);
-  - publicar `feat/macro-integral` y `spec/macro-integral`, aplicar las migraciones `20261113000100` a `0800` en Supabase y desplegar: cada paso con autorización;
+  - decisión de negocio de DC12: de dónde toma la Orden su tipo de equipo (hoy lo elige Recepción al completar el checklist; alternativas en la sección I de las discrepancias);
+  - publicar `feat/macro-integral` y `spec/macro-integral`, aplicar las migraciones `20261113000100` a `001100` en Supabase y desplegar: cada paso con autorización;
   - opcional: repetir `medir_api.py` (falló el inicio de sesión, HTTP 400, probablemente por la contraseña tipeada; solo mide tiempos);
   - integrar en `main` (P0-2).
 
@@ -75,7 +75,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ### Macroiteración integral (13/11/2026), rama `feat/macro-integral`
 
-Commits locales sobre `ce37c78`, **sin publicar** (sin push, PR, merge ni despliegue; `main` sin cambios). Especificación: `rt-rma-app` `spec/macro-integral`, con las decisiones en `4556263` y su estado de implementación en `99c69e8` (commits locales), sincronizada en `business/`. Diferencias con la baseline: [`discrepancias-baseline-v1.4.md`](../traceability/discrepancias-baseline-v1.4.md), sección I.
+Commits locales sobre `ce37c78`, **sin publicar** (sin push, PR, merge ni despliegue; `main` sin cambios). Especificación: `rt-rma-app` `spec/macro-integral`, con las decisiones en `4556263` y su estado de implementación en `99c69e8` y `3ac91ea` (commits locales), sincronizada en `business/`. Contratos (API, permisos, garantías de integridad): [`contratos-macro-integral.md`](contratos-macro-integral.md). Diferencias con la baseline: [`discrepancias-baseline-v1.4.md`](../traceability/discrepancias-baseline-v1.4.md), sección I.
 
 - **Roles y permisos (DEC-MI-12, DC27A, `c47903e`):** varios roles por usuario; catálogo de permisos con los roles de siempre como predeterminados, configurable desde Configuración (Usuarios y roles, Permisos), con auditoría; el historial registra el rol habilitante; nunca queda el sistema sin un Administrador.
 - **Comercial (DEC-MI-03, DC09, `85f42cf`):** ajuste por Orden o por Detalle, sin prorrateo; por debajo de lo cobrado deja saldo a favor y la entrega exige devolverlo.
@@ -86,10 +86,14 @@ Commits locales sobre `ce37c78`, **sin publicar** (sin push, PR, merge ni despli
 - **Firmas (DEC-MI-06, `6a199dc`):** opcionales, en pantalla o foto del papel firmado, ligadas al documento emitido; también con la Orden entregada.
 - **Identidad del equipo (DEC-MI-11, `c4ca1fd`):** por IMEI y después serie, sin similitud; Recepción elige o «Ninguno» al ingresar; historial por identidad; corrección con motivo.
 - **Insumos (DEC-MI-13, `5c0536d`):** alta y edición auditadas; el código no cambia y el stock solo con movimientos.
-- **Sin implementar:** Compras (DEC-MI-09), lotes y desperdicio (DEC-MI-10) y el checklist por tipo de equipo (DC12, bloqueado: falta definir el tipo de equipo).
-- **Trazabilidad:** decisión → commit en el registro de `rt-rma-app` (`99c69e8`) y en la sección I de las discrepancias. **Pendiente:** el grafo `traceability/macro-integral.yaml` (como `macro-v14.yaml`), que no se armó en esta macroiteración.
-- **Migraciones aditivas, solo locales:** `20261113000100` a `20261113000800` ([`diseno-fisico.md`](postgresql/diseno-fisico.md), sección 3); el esquema queda en 58 tablas y 7 vistas. Ninguna aplicada en Supabase.
-- **Pruebas:** JSON 1790 pasan, 0 fallan (29 omitidas); `tests/postgres` completa: 433 pasan y 1 falla (la prueba de contrato que esperaba que dos roles fueran un error, anterior a DEC-MI-12; corregida en `19ee96c`, su archivo pasa 35 de 35); las pruebas de PostgreSQL de la macroiteración también corren con el rol mínimo `rma_backend`; `ruff` sin errores; frontend: typecheck, 134 tests y build; `validate:all`, `validate:discrepancies` y `validate:v1.4` de `rt-rma-app` en verde; copia de `business/` verificada contra `99c69e8`; búsqueda de secretos limpia.
+- **Lotes, series y desperdicio (DEC-MI-10, `8699dbd`):** control por insumo (sin lote, por lote o por serie); el libro de inventario es la única fuente: el saldo de cada lote y el «stock sin lote identificado» salen de sus movimientos y la disponibilidad sigue siendo una por insumo. Desperdicio al cerrar la Ejecución (cierra la reserva como el consumo) y devolución al stock de lo consumido, al mismo lote. Transición aditiva: todo insumo existente queda «sin lote»; al pasarlo a lote o serie, su stock queda como «sin lote identificado», sin inventar lotes históricos. El trigger del libro impide saldos negativos con el insumo bloqueado.
+- **Compras (DEC-MI-09, `3434453`, solo PostgreSQL):** proveedores, solicitud manual o sugerida por faltante, Orden de Compra sin aprobación (registra quién la crea y quién la confirma), recepciones parciales y múltiples con pedido, recibido y pendiente; cada línea recibida ingresa stock (con lote o serie si corresponde) y guarda el costo real; último costo como referencia y precio del insumo configurable. Sin contabilidad ni pagos.
+- **Checklist de recepción (DC12, `c8cd64f`):** Administración define tipos de equipo y preguntas con vigencia; Recepción completa el checklist (opcional) con copia de las preguntas; lo registrado no cambia; advertencia de información faltante que no bloquea. **Pendiente de negocio:** de dónde toma la Orden su tipo de equipo (hoy lo elige Recepción); ninguna clasificación inventada.
+- **Consultas configurables (DC27B, `c973bb0`):** consulta de Órdenes e inventario como permisos, con todos los roles por defecto (sin acceso nuevo ni quitado).
+- **Trazabilidad:** decisión → commit en el registro de `rt-rma-app` (`3ac91ea`) y en la sección I de las discrepancias; grafo [`traceability/macro-integral.yaml`](../traceability/macro-integral.yaml) (`3ed3252`, 226 elementos y 370 vínculos).
+- **Migraciones aditivas, solo locales:** `20261113000100` a `20261113001100` ([`diseno-fisico.md`](postgresql/diseno-fisico.md), sección 3); el esquema queda en 69 tablas y 8 vistas. Ninguna aplicada en Supabase.
+- **Cierre de QA (14/11/2026):** JSON 1797 pasan, 0 fallan (29 omitidas; la única falla de la corrida completa era la prueba de arquitectura que prohíbe el nombre `proveedor` en una transacción, corregida en `96410ce` sin cambiar la prueba); `tests/postgres` completa sobre `3ed3252`: **453 pasan, 0 fallan**; las pruebas PostgreSQL de lotes, compras, checklist, insumos e identidad también corren con el rol mínimo `rma_backend` (48 de 48); `ruff` sin errores; frontend: typecheck, 134 tests y build (las pantallas nuevas no tienen pruebas unitarias propias: las cubre el recorrido en el navegador); `validate:all` en verde; búsqueda de secretos limpia. Recorrido en el navegador sobre PostgreSQL local con datos ficticios: proveedor, insumo con lote, solicitud → OC → confirmación → recepción parcial 2 de 3 con lote y costo distinto (la OC queda PARCIAL), saldo del lote en Inventario, checklist y advertencia de faltantes en la Orden, WhatsApp asistido, permisos nuevos y auditoría.
+- **Pruebas anteriores (13/11/2026):** JSON 1790 pasan, 0 fallan (29 omitidas); `tests/postgres` completa: 433 pasan y 1 falla (la prueba de contrato que esperaba que dos roles fueran un error, anterior a DEC-MI-12; corregida en `19ee96c`, su archivo pasa 35 de 35); las pruebas de PostgreSQL de la macroiteración también corren con el rol mínimo `rma_backend`; `ruff` sin errores; frontend: typecheck, 134 tests y build; `validate:all`, `validate:discrepancies` y `validate:v1.4` de `rt-rma-app` en verde; copia de `business/` verificada contra `99c69e8`; búsqueda de secretos limpia.
 - **Revisión en el navegador** (datos ficticios, JSON local): alta con búsqueda de identidad, identidad e historial en la Orden, mensaje preparado, editado, intento registrado (sin llegar a WhatsApp: el pedido se bloqueó), confirmación manual, revocación del consentimiento operativo que impide preparar otro envío, y las pestañas nuevas de Configuración en solo lectura. Encontró las plantillas sin tildes (corregido en `dc06b0a`). Los clics del navegador automatizado dejaron de responder después de que la máquina se suspendió; se usaron eventos del DOM.
 
 ### Validación autenticada y E2E de la macroiteración en UAT (12/11/2026)
@@ -614,7 +618,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (13/11/2026):** revisar la macroiteración integral (rama `feat/macro-integral` y `spec/macro-integral`, sección B) y decidir, con autorización explícita para cada acción: publicar las ramas, integrar, aplicar las migraciones `20261113000100` a `0800` en Supabase y desplegar en UAT. Después: Compras (DEC-MI-09), lotes (DEC-MI-10) y la definición del tipo de equipo para el checklist (DC12).
+**Próximo paso (14/11/2026):** revisar la macroiteración integral (rama `feat/macro-integral` y `spec/macro-integral`, sección B) y decidir, con autorización explícita para cada acción: publicar las ramas, integrar, aplicar las migraciones `20261113000100` a `001100` en Supabase y desplegar en UAT. En paralelo, negocio define el origen del tipo de equipo de la Orden (DC12).
 
 **Antes (12/11/2026):** la macroiteración está desplegada y validada en UAT, con los datos de prueba limpiados (sección B). Queda, opcional, repetir `medir_api.py`: solo mide tiempos y pide la contraseña de `administracion`. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
 

@@ -287,9 +287,9 @@ decisions:
     features: [FEAT-REP-001, FEAT-REP-010]
     notes: La advertencia incluye las verificaciones del checklist sin registrar (interpretacion de "advertir cuando falte informacion"; ver ABI-02).
     implementation:
-      status: NO_IMPLEMENTADO
-      evidence: "no existe checklist en el producto"
-      gap: "falta la decision de que es el tipo de equipo y de donde lo toma la Orden (no hay un catalogo de tipos de equipo; DEC-MI-13 lo nombra sin definirlo)."
+      status: PARCIAL
+      evidence: "rt-rma-mvp feat/macro-integral c8cd64f (tipos de equipo y preguntas configurables y auditados, catalogo inicial vacio; checklist opcional con copia de las preguntas y versiones con motivo; advertencia por informacion faltante que nunca bloquea y registra la confirmacion)"
+      gap: "falta decidir de donde toma la Orden su tipo de equipo: hoy lo elige Recepcion al completar el checklist. Alternativas: (a) que lo elija Recepcion (como hoy); (b) que el modelo tecnico del catalogo tenga su tipo y la Orden lo herede; (c) derivarlo de la categoria del catalogo de Ventas, que solo tienen las Ordenes anteriores."
 
   - id: DC23
     block: 4
@@ -299,9 +299,8 @@ decisions:
     features: [FEAT-REP-010]
     notes: La administracion de configuraciones nuevas se implementa sobre la persistencia definitiva (DC28), no sobre los archivos JSON del MVP. Se retiro de BR-REP-040 por ser un detalle de almacenamiento (correccion final, M9).
     implementation:
-      status: PARCIAL
-      evidence: "rt-rma-mvp feat/macro-v14 (application/configuracion.py, api/configuracion.py y la pantalla Configuracion: Administracion da de alta, edita y desactiva Tipos de Reparacion y define los Tipos habilitados de cada Mesa de trabajo; solo sobre PostgreSQL, en JSON los catalogos son de solo lectura); rt-rma-mvp feat/macro-integral (ver DEC-MI-13)"
-      gap: "checklist por tipo de equipo (DC12) y precios y costos de compra (DEC-MI-09)."
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/macro-v14 (application/configuracion.py, api/configuracion.py y la pantalla Configuracion: Administracion da de alta, edita y desactiva Tipos de Reparacion y define los Tipos habilitados de cada Mesa de trabajo; solo sobre PostgreSQL, en JSON los catalogos son de solo lectura); rt-rma-mvp feat/macro-integral (ver DEC-MI-13); rt-rma-mvp feat/macro-integral c8cd64f, 3434453 y 8699dbd (checklist, proveedores, control y precio de insumos)"
 
   - id: DC23AUD
     block: 4
@@ -406,8 +405,8 @@ decisions:
     features: [FEAT-REP-003]
     notes: No se agregan nodos de Compras a PROC-REP; BR-REP-049 y FEAT-REP-003 solo marcan el limite.
     implementation:
-      status: NO_IMPLEMENTADO
-      evidence: no existe modulo de Compras
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/macro-integral 3434453 (Compras como proceso propio, fuera de PROC-REP)"
 
   - id: DC24LOT
     block: 6
@@ -417,8 +416,8 @@ decisions:
     features: [FEAT-REP-005]
     notes: Se define con el proceso de Compras; BR-REP-005 no cambia ahora.
     implementation:
-      status: NO_IMPLEMENTADO
-      evidence: movimientos sin lote
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/macro-integral 8699dbd (movimientos por lote, de la recepcion de compra al consumo del Detalle)"
 
   - id: DC25
     block: 6
@@ -473,9 +472,8 @@ decisions:
     rules: [BR-REP-039]
     features: [FEAT-REP-011]
     implementation:
-      status: PARCIAL
-      evidence: "las consultas GET no estan protegidas; rt-rma-mvp feat/macro-integral c47903e (permisos de consulta configurables: reportes, reclamos, antecedentes y busqueda de clientes)"
-      gap: "la consulta de Ordenes y catalogos queda abierta a todo usuario autenticado."
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/macro-integral c47903e (permisos de consulta configurables: reportes, reclamos, antecedentes y busqueda de clientes); rt-rma-mvp feat/macro-integral c973bb0 (ORDENES_CONSULTAR e INVENTARIO_CONSULTAR configurables, con todos los roles como valor inicial; probado con sesion real)"
 
   - id: DC27C
     block: 7
@@ -705,7 +703,7 @@ decisions:
       es exigible fuera de la garantia RMA (ABI-39).
     implementation:
       status: IMPLEMENTADO
-      evidence: "pendiente de rt-rma-mvp feat/macro-integral; rt-rma-mvp feat/macro-integral cc46121 (domain/garantia.py garantia_sugerida con los plazos del Tipo; TipoReparacion.garantia_con_checkin, garantia_sin_checkin y politica_garantia_rma; services/documentos.py aplicar_politica_garantia_rma; check-in exigible solo con garantia mayor a cero)"
+      evidence: "rt-rma-mvp feat/macro-integral cc46121 (domain/garantia.py garantia_sugerida con los plazos del Tipo; TipoReparacion.garantia_con_checkin, garantia_sin_checkin y politica_garantia_rma; services/documentos.py aplicar_politica_garantia_rma; check-in exigible solo con garantia mayor a cero)"
     open: [ABI-38, ABI-39]
 
   - id: DEC-MI-02
@@ -731,7 +729,7 @@ decisions:
       (PROC-REP-030) y EVT-REP-998 sigue siendo un fin sin salidas.
     implementation:
       status: IMPLEMENTADO
-      evidence: "pendiente de rt-rma-mvp feat/macro-integral; rt-rma-mvp feat/macro-integral 75948ac (domain/models/reclamos.py, application/reclamos.py, api/reclamos.py: reclamo rechazado independiente y continuacion como reparacion paga vinculada, sin duplicados; rma.reclamo_garantia)"
+      evidence: "rt-rma-mvp feat/macro-integral 75948ac (domain/models/reclamos.py, application/reclamos.py, api/reclamos.py: reclamo rechazado independiente y continuacion como reparacion paga vinculada, sin duplicados; rma.reclamo_garantia)"
 
   - id: DEC-MI-03
     block: MI
@@ -752,7 +750,7 @@ decisions:
       dobles devoluciones. No agrega reglas de acumulacion ni limites.
     implementation:
       status: IMPLEMENTADO
-      evidence: "pendiente de rt-rma-mvp feat/macro-integral; rt-rma-mvp feat/macro-integral 85f42cf (services/descuentos.py: ajuste por Orden o por Detalle sin prorrateo; por debajo de lo cobrado deja saldo a favor y la entrega exige la devolucion)"
+      evidence: "rt-rma-mvp feat/macro-integral 85f42cf (services/descuentos.py: ajuste por Orden o por Detalle sin prorrateo; por debajo de lo cobrado deja saldo a favor y la entrega exige la devolucion)"
 
   - id: DEC-MI-04
     block: MI
@@ -768,7 +766,7 @@ decisions:
       inicial de DEC-MI-12.
     implementation:
       status: IMPLEMENTADO
-      evidence: "pendiente de rt-rma-mvp feat/macro-integral; rt-rma-mvp feat/macro-integral c47903e (services/permisos.py CUSTODIA: Recepcion y Administracion por defecto, configurable)"
+      evidence: "rt-rma-mvp feat/macro-integral c47903e (services/permisos.py CUSTODIA: Recepcion y Administracion por defecto, configurable)"
 
   - id: DEC-MI-05
     block: MI
@@ -785,7 +783,7 @@ decisions:
       Quien corrige parte de la configuracion inicial de permisos (DEC-MI-12).
     implementation:
       status: IMPLEMENTADO
-      evidence: "pendiente de rt-rma-mvp feat/macro-integral; rt-rma-mvp feat/macro-integral cc46121 y 7a79d97 (registrar_checkin_de_entrega con motivo al corregir; los registros anteriores se conservan)"
+      evidence: "rt-rma-mvp feat/macro-integral cc46121 y 7a79d97 (registrar_checkin_de_entrega con motivo al corregir; los registros anteriores se conservan)"
 
   - id: DEC-MI-06
     block: MI
@@ -800,7 +798,7 @@ decisions:
       al documento.
     implementation:
       status: IMPLEMENTADO
-      evidence: "pendiente de rt-rma-mvp feat/macro-integral; rt-rma-mvp feat/macro-integral 6a199dc (application/firmas.py y rma.firma_documento: firma en pantalla o foto del documento firmado, ligada al documento emitido; ningun documento la exige)"
+      evidence: "rt-rma-mvp feat/macro-integral 6a199dc (application/firmas.py y rma.firma_documento: firma en pantalla o foto del documento firmado, ligada al documento emitido; ningun documento la exige)"
 
   - id: DEC-MI-07
     block: MI
@@ -816,7 +814,7 @@ decisions:
       cuando se admite la correccion (ABI-41).
     implementation:
       status: IMPLEMENTADO
-      evidence: "pendiente de rt-rma-mvp feat/macro-integral; rt-rma-mvp feat/macro-integral cc46121 (services/custodia.py cambios_del_ingreso: motivo obligatorio y valores anteriores y nuevos en la version; INGRESO_CORREGIR para Recepcion, Coordinacion RMA y Administracion; los comprobantes emitidos no cambian)"
+      evidence: "rt-rma-mvp feat/macro-integral cc46121 (services/custodia.py cambios_del_ingreso: motivo obligatorio y valores anteriores y nuevos en la version; INGRESO_CORREGIR para Recepcion, Coordinacion RMA y Administracion; los comprobantes emitidos no cambian)"
     open: [ABI-41]
 
   - id: DEC-MI-08
@@ -841,7 +839,7 @@ decisions:
       envios automaticos de marketing quedan fuera del alcance.
     implementation:
       status: IMPLEMENTADO
-      evidence: "pendiente de rt-rma-mvp feat/macro-integral; rt-rma-mvp feat/macro-integral b4dd52c (services/comunicaciones.py y application/comunicaciones.py: cinco plantillas editables, mensaje editable antes de abrir WhatsApp, intento y confirmacion manual, nunca entregado ni leido; consentimiento por finalidad y canal como historial)"
+      evidence: "rt-rma-mvp feat/macro-integral b4dd52c (services/comunicaciones.py y application/comunicaciones.py: cinco plantillas editables, mensaje editable antes de abrir WhatsApp, intento y confirmacion manual, nunca entregado ni leido; consentimiento por finalidad y canal como historial)"
     open: [ABI-13]
 
   - id: DEC-MI-09
@@ -864,8 +862,8 @@ decisions:
       solo Administracion configura precios; el costo real lo registra quien
       recibe. Proveedores con datos basicos.
     implementation:
-      status: NO_IMPLEMENTADO
-      evidence: pendiente de rt-rma-mvp feat/macro-integral
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/macro-integral 3434453 (services/compras.py, application/compras.py y la pantalla Compras: solicitudes manuales o sugeridas por faltante y confirmadas, ordenes de compra sin aprobacion con creador y confirmador, recepciones parciales sin superar lo pendiente que generan ingresos con lote o serie, ultimo costo e historico; proveedores en Configuracion; solo PostgreSQL)"
 
   - id: DEC-MI-10
     block: MI
@@ -884,8 +882,8 @@ decisions:
       BR-REP-005 no cambia de texto (sigue identica a V1.3): BR-REP-049 la
       complementa.
     implementation:
-      status: NO_IMPLEMENTADO
-      evidence: pendiente de rt-rma-mvp feat/macro-integral
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/macro-integral 8699dbd (insumo.control SIN_LOTE, LOTE o SERIE; lote_insumo y lote_id en el libro; saldo del lote desde el libro y stock sin lote identificado para el stock existente; DESPERDICIO y DEVOLUCION habilitados; el trigger valida lotes y concurrencia)"
 
   - id: DEC-MI-11
     block: MI
@@ -904,7 +902,7 @@ decisions:
       integracion con Gestion RT.
     implementation:
       status: IMPLEMENTADO
-      evidence: "pendiente de rt-rma-mvp feat/macro-integral; rt-rma-mvp feat/macro-integral c4ca1fd (domain/identidad.py: por IMEI y despues serie, sin similitud; services/identidad.py: reuso validado y correccion con motivo; GET /api/equipment/{id}/orders)"
+      evidence: "rt-rma-mvp feat/macro-integral c4ca1fd (domain/identidad.py: por IMEI y despues serie, sin similitud; services/identidad.py: reuso validado y correccion con motivo; GET /api/equipment/{id}/orders)"
 
   - id: DEC-MI-12
     block: MI
@@ -926,7 +924,7 @@ decisions:
       cambio puede dejar el sistema sin un administrador autorizado.
     implementation:
       status: IMPLEMENTADO
-      evidence: "pendiente de rt-rma-mvp feat/macro-integral; rt-rma-mvp feat/macro-integral c47903e (services/permisos.py: catalogo de permisos con los roles predeterminados; varios roles por usuario; rol habilitante en el historial; Configuracion > Usuarios y roles y Permisos; nunca sin un Administrador)"
+      evidence: "rt-rma-mvp feat/macro-integral c47903e (services/permisos.py: catalogo de permisos con los roles predeterminados; varios roles por usuario; rol habilitante en el historial; Configuracion > Usuarios y roles y Permisos; nunca sin un Administrador)"
 
   - id: DEC-MI-13
     block: MI
@@ -942,9 +940,8 @@ decisions:
       respeta permisos, se audita, preserva las referencias historicas y no
       cambia precios de Ordenes existentes.
     implementation:
-      status: PARCIAL
-      evidence: "pendiente de rt-rma-mvp feat/macro-integral; rt-rma-mvp feat/macro-integral (Configuracion: Tipos de Reparacion, Mesas, politicas de garantia por Tipo cc46121, permisos c47903e, motivos y parametros ac7a56d, plantillas b4dd52c e insumos 5c0536d, todos auditados en rma.cambio_configuracion)"
-      gap: "checklist por tipo de equipo (DC12): falta definir que es el tipo de equipo y de donde lo toma la Orden; precios y costos de compra (DEC-MI-09)."
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/macro-integral (Configuracion: Tipos de Reparacion, Mesas, politicas de garantia por Tipo cc46121, permisos c47903e, motivos y parametros ac7a56d, plantillas b4dd52c e insumos 5c0536d, todos auditados en rma.cambio_configuracion); rt-rma-mvp feat/macro-integral 3434453 (proveedores) y c8cd64f (checklist por tipo de equipo); 8699dbd (control y precio de insumos)"
 
   - id: DEC-MI-14
     block: MI
@@ -964,7 +961,7 @@ decisions:
       equipo por retirar no se decidieron (ABI-40).
     implementation:
       status: IMPLEMENTADO
-      evidence: "pendiente de rt-rma-mvp feat/macro-integral; rt-rma-mvp feat/macro-integral ac7a56d (domain/retiro.py: demora desde el aviso de equipo listo con PLAZO_RETIRO_DIAS, 30 por defecto; bandeja RETIRO_DEMORADO y seguimientos inmutables; nunca cierra la Orden)"
+      evidence: "rt-rma-mvp feat/macro-integral ac7a56d (domain/retiro.py: demora desde el aviso de equipo listo con PLAZO_RETIRO_DIAS, 30 por defecto; bandeja RETIRO_DEMORADO y seguimientos inmutables; nunca cierra la Orden)"
     open: [ABI-40]
 
   - id: DEC-MI-15
@@ -982,7 +979,7 @@ decisions:
       anteriores no cambian de significado.
     implementation:
       status: IMPLEMENTADO
-      evidence: "pendiente de rt-rma-mvp feat/macro-integral; rt-rma-mvp feat/macro-integral ac7a56d (services/operativa.py texto_de_motivo: catalogos separados de cancelacion e interrupcion, Otro exige descripcion y el registro copia el texto)"
+      evidence: "rt-rma-mvp feat/macro-integral ac7a56d (services/operativa.py texto_de_motivo: catalogos separados de cancelacion e interrupcion, Otro exige descripcion y el registro copia el texto)"
     open: [ABI-29]
 
   # ------------------------------------------------------------------ Baseline y sincronizacion
