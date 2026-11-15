@@ -92,12 +92,12 @@ def guardar_proveedor(
         anterior = existentes.get(codigo)
         if not nuevo and anterior is None:
             raise EntidadNoEncontradaError(f"No existe el proveedor {codigo}")
-        proveedor = Proveedor(id=codigo, **datos)
+        guardado = Proveedor(id=codigo, **datos)
         cambios = cambios_de_proveedor(
-            anterior, proveedor, usuario=usuario, fecha=fecha
+            anterior, guardado, usuario=usuario, fecha=fecha
         )
-        repo.guardar_proveedor(proveedor, nuevo=nuevo, cambios=cambios)
-    return proveedor
+        repo.guardar_proveedor(guardado, nuevo=nuevo, cambios=cambios)
+    return guardado
 
 
 # --- Solicitudes y sugerencias -----------------------------------------------
