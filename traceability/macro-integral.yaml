@@ -1,0 +1,2495 @@
+# Trazabilidad de la macroiteracion integral (13-15/11/2026).
+#
+# Archivo propio (ver traceability/README.md), con el formato de
+# macro-v14.yaml. Cadena: Decision -> Regla (governed_by) -> Code
+# (implements) -> Internal Test (exercises/verifies). Los UAT quedan
+# PENDING: los tests internos no son aceptacion.
+#
+# Continua la numeracion global: US-REP-049, ACC-REP-071, FR-REP-172,
+# TR-REP-153, TASK-REP-225, CODE-REP-270, TEST-REP-589, UAT-REP-055.
+# Generado desde business/ (reglas, Features y nodos de cada decision).
+# Validacion: npx tsx scripts/validate-traceability.ts traceability/macro-integral.yaml
+
+meta:
+  id: TRACE-MACRO-INTEGRAL
+  name: 'Trazabilidad de la macroiteracion integral: DEC-MI-01 a 15 y DC12'
+  generated_from: rama feat/macro-integral; business/ de rt-rma-app spec/macro-integral
+  date: '2026-11-15'
+  business_domain: DOM-RMA
+  business_process: PROC-REP
+  business_process_version: '1.4'
+  implemented_scenario: []
+  decisions:
+    DEC-MI-12: Permisos configurables por rol; varios roles por usuario; rol habilitante registrado; los
+      permisos implementados son la configuracion inicial
+    DC27A: Varios roles por usuario; permisos como union, sujeta al contexto
+    DC27B: Permisos de consulta configurables (Ordenes, Clientes, fotografias, documentos, pagos, reportes)
+    DC08: Permisos dinamicos por accion y contexto; responsabilidades actuales como predeterminadas; tres
+      tipos de cancelacion
+    DEC-MI-04: Recepcion y Administracion registran la recepcion fisica, el no recibido, la devolucion
+      sin reparar y la entrega
+    DEC-MI-03: DESCUENTO y CORTESIA por Recepcion, Coordinacion RMA y Administracion; ajustes por Orden
+      o por Detalle sin prorrateo; todo ajuste por debajo de lo cobrado deja saldo a favor
+    DC09: Ajuste Comercial unificado (CORTESIA o DESCUENTO) por Orden o por Detalle, con permisos por
+      tipo
+    DEC-MI-01: Garantia por Tipo de Reparacion con plazos segun el check-in, politica para trabajos dentro
+      de una garantia RMA y check-in exigible solo con garantia mayor a cero
+    DEC-MI-05: El check-in se corrige antes de la entrega con motivo; se conservan todas las versiones,
+      rige la ultima y el comprobante se regenera como version nueva
+    DEC-MI-07: Correccion de los datos del ingreso por Recepcion, Coordinacion RMA y Administracion, con
+      motivo y auditoria, sin alterar comprobantes emitidos
+    DEC-MI-02: Registro independiente de reclamos de garantia y continuacion de un reclamo rechazado como
+      reparacion paga vinculada
+    DEC-MI-15: Catalogos configurables y separados de motivos de cancelacion y de interrupcion; "Otro"
+      con descripcion; version historica del motivo
+    DEC-MI-14: Retiro demorado a los 30 dias de avisar el equipo listo, configurable; alerta y seguimiento
+      sin cerrar la Orden ni disponer del equipo
+    DEC-MI-08: WhatsApp asistido con plantillas configurables e historial del envio; consentimiento expreso
+      y revocable para marketing
+    DEC-MI-06: Firma opcional en todos los documentos, en pantalla o foto del documento firmado, ligada
+      al documento
+    DEC-MI-11: Identidad del Equipo por IMEI, despues por numero de serie y si no identidad nueva; nunca
+      por similitud; correccion auditada de la vinculacion
+    DEC-MI-13: Catalogos administrados desde Administracion, con permisos, auditoria y referencias historicas
+      preservadas
+    DC23: Administracion gestiona catalogos y valores predeterminados; permisos delegables
+    DC23AUD: Auditoria de todo cambio de configuracion; historial de precios; lo historico no cambia
+    DEC-MI-10: Lote configurable por tipo de insumo, serie cuando corresponda y movimientos de reserva,
+      consumo, devolucion y desperdicio
+    DEC-MI-09: Compras como Solicitud, Orden de compra, Recepciones parciales e Ingreso de stock, sin
+      compras automaticas ni aprobacion
+    DC12: Checklist configurable por tipo de equipo, todas las verificaciones opcionales, advertencia
+      por informacion faltante
+  related_trace_files:
+  - traceability/macro-v14.yaml (macroiteracion anterior)
+  - traceability/discrepancias-baseline-v1.4.md (seccion I)
+  - 'Sin Scenarios nuevos: las decisiones cambian reglas, nodos y Features, no el grafo'
+  sources:
+    process: business/processes/repair-management-v1.4.yaml
+    rules: business/rules/business-rules-v1.4.yaml
+    features: business/features/repair-management-features-v1.4.yaml
+    decisions: business/decisions/decision-log-v1.4.yaml
+    convention: traceability/README.md
+    backend: app/backend/
+    frontend: app/frontend/
+    migration: supabase/migrations/20261113000100 a 20261113001100
+  relationship_vocabulary:
+    belongs_to: el origen pertenece al destino (jerarquia)
+    activates: el Scenario activa la Feature
+    realizes: la System Action realiza la User Story
+    covers: la System Action cubre el nodo del Business Process
+    governed_by: el item esta gobernado por la Business Rule
+    derives_from: el Functional Requirement deriva de la System Action
+    satisfies: el Technical Requirement satisface el Functional Requirement
+    implements: la Task o el Code implementa un Technical Requirement
+    produced_by: el Code fue producido por la Task
+    exercises: el Internal Test ejercita el Code
+    verifies: el Internal Test verifica un FR o un TR
+    accepts: el UAT acepta una User Story o un Functional Requirement
+items:
+- id: DOM-RMA
+  type: business_domain
+  name: Area funcional RMA
+  status: active
+  source: traceability/README.md
+- id: PROC-REP
+  type: business_process
+  name: Gestion de Ordenes de Reparacion
+  status: approved
+  version: '1.4'
+  source: business/processes/repair-management-v1.4.yaml
+- id: BR-REP-039
+  type: business_rule
+  name: Permisos configurables por accion y contexto
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-040
+  type: business_rule
+  name: Administracion de configuracion y auditoria de cambios
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-014
+  type: business_rule
+  name: Cancelacion de Detalle y de Orden
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-036
+  type: business_rule
+  name: Resultado principal de la evaluacion tecnica y reparaciones adicionales
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-011
+  type: business_rule
+  name: Compatibilidad de estacion de trabajo
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-033
+  type: business_rule
+  name: Custodia fisica del equipo y devolucion obligatoria en la cancelacion
+  status: draft
+  coverage: IMPLEMENTED
+- id: FEAT-REP-011
+  type: feature
+  name: Seguridad, roles y permisos
+  status: draft
+  feature_status: draft
+  implemented_slice_status: PARTIAL
+- id: FEAT-REP-010
+  type: feature
+  name: Administracion de configuracion
+  status: draft
+  feature_status: draft
+  implemented_slice_status: PARTIAL
+- id: FEAT-REP-009
+  type: feature
+  name: Cancelacion de Detalles y Orden
+  status: draft
+  feature_status: draft
+  implemented_slice_status: PARTIAL
+- id: FEAT-REP-008
+  type: feature
+  name: Finalizacion, entrega e integracion del resultado
+  status: draft
+  feature_status: draft
+  implemented_slice_status: PARTIAL
+- id: PROC-REP-300
+  type: process_node
+  name: Cancelar Detalle
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: PROC-REP-305
+  type: process_node
+  name: Cancelar trabajos pendientes
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: PROC-REP-306
+  type: process_node
+  name: Cancelar Orden sin Detalles
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: PROC-REP-179
+  type: process_node
+  name: Registrar override de estacion (Detalle)
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: PROC-REP-060
+  type: process_node
+  name: Generar comprobante de recepcion
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: PROC-REP-270
+  type: process_node
+  name: Entregar equipo
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: PROC-REP-271
+  type: process_node
+  name: Resolver custodia del equipo pendiente de confirmar
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: US-REP-049
+  type: user_story
+  name: Como Administracion quiero asignar varios roles a un usuario y configurar los permisos de cada
+    rol, sin dejar al sistema sin administradores
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-ADMIN
+- id: ACC-REP-071
+  type: system_action
+  name: Administrar roles de usuario y permisos por rol
+  status: IMPLEMENTED
+  actor: ACT-ADMIN
+  decisions:
+  - DEC-MI-12
+  - DC27A
+  - DC27B
+  - DC08
+  - DEC-MI-04
+- id: FR-REP-172
+  type: functional_requirement
+  name: Un usuario puede tener varios roles; sus permisos son la union, con las restricciones de contexto
+    de cada regla
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-12
+  - DC27A
+  - DC27B
+  - DC08
+  - DEC-MI-04
+- id: FR-REP-173
+  type: functional_requirement
+  name: Los permisos por rol son configurables, con los roles actuales como valores iniciales; el historial
+    registra el rol habilitante
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-12
+  - DC27A
+  - DC27B
+  - DC08
+  - DEC-MI-04
+- id: FR-REP-174
+  type: functional_requirement
+  name: Solo Administracion administra roles y permisos, con auditoria, y nunca queda el sistema sin un
+    Administrador
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-12
+  - DC27A
+  - DC27B
+  - DC08
+  - DEC-MI-04
+- id: FR-REP-175
+  type: functional_requirement
+  name: Las consultas de Ordenes, inventario, compras, reclamos, reportes y antecedentes son permisos
+    configurables
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-12
+  - DC27A
+  - DC27B
+  - DC08
+  - DEC-MI-04
+- id: TR-REP-153
+  type: technical_requirement
+  name: services/permisos.py (catalogo y politica por pedido), application/roles.py y api/configuracion.py
+    (/users, /permissions)
+  status: IMPLEMENTED
+- id: TASK-REP-225
+  type: task
+  name: Implementar Administrar roles de usuario y permisos por rol (macroiteracion integral)
+  status: DONE
+- id: CODE-REP-270
+  type: code_artifact
+  name: permisos
+  status: IMPLEMENTED
+  source: app/backend/app/services/permisos.py::_definir
+- id: CODE-REP-271
+  type: code_artifact
+  name: cambio_de_roles
+  status: IMPLEMENTED
+  source: app/backend/app/services/roles.py::cambio_de_roles
+- id: TEST-REP-589
+  type: internal_test
+  name: test_un_usuario_anterior_tiene_su_unico_rol
+  status: PASSING
+  source: app/backend/tests/test_roles_permisos.py::test_un_usuario_anterior_tiene_su_unico_rol
+- id: TEST-REP-590
+  type: internal_test
+  name: test_varios_roles_suman_permisos_y_anotan_el_rol_habilitante
+  status: PASSING
+  source: app/backend/tests/test_roles_permisos.py::test_varios_roles_suman_permisos_y_anotan_el_rol_habilitante
+- id: TEST-REP-591
+  type: internal_test
+  name: test_sin_politica_rigen_los_predeterminados
+  status: PASSING
+  source: app/backend/tests/test_roles_permisos.py::test_sin_politica_rigen_los_predeterminados
+- id: TEST-REP-592
+  type: internal_test
+  name: test_una_politica_configurada_cambia_quien_puede
+  status: PASSING
+  source: app/backend/tests/test_roles_permisos.py::test_una_politica_configurada_cambia_quien_puede
+- id: TEST-REP-593
+  type: internal_test
+  name: test_todo_permiso_tiene_un_predeterminado
+  status: PASSING
+  source: app/backend/tests/test_roles_permisos.py::test_todo_permiso_tiene_un_predeterminado
+- id: TEST-REP-594
+  type: internal_test
+  name: test_asignar_roles_audita_y_conserva_el_principal
+  status: PASSING
+  source: app/backend/tests/test_roles_permisos.py::test_asignar_roles_audita_y_conserva_el_principal
+- id: TEST-REP-595
+  type: internal_test
+  name: test_reglas_de_la_asignacion
+  status: PASSING
+  source: app/backend/tests/test_roles_permisos.py::test_reglas_de_la_asignacion
+- id: TEST-REP-596
+  type: internal_test
+  name: test_otro_administrador_permite_quitar_el_rol
+  status: PASSING
+  source: app/backend/tests/test_roles_permisos.py::test_otro_administrador_permite_quitar_el_rol
+- id: TEST-REP-597
+  type: internal_test
+  name: test_configurar_un_permiso
+  status: PASSING
+  source: app/backend/tests/test_roles_permisos.py::test_configurar_un_permiso
+- id: TEST-REP-598
+  type: internal_test
+  name: test_un_usuario_con_dos_roles_trabaja_con_los_dos
+  status: PASSING
+  source: app/backend/tests/test_roles_permisos.py::test_un_usuario_con_dos_roles_trabaja_con_los_dos
+- id: TEST-REP-599
+  type: internal_test
+  name: test_la_administracion_de_roles_exige_postgres
+  status: PASSING
+  source: app/backend/tests/test_roles_permisos.py::test_la_administracion_de_roles_exige_postgres
+- id: TEST-REP-600
+  type: internal_test
+  name: test_las_consultas_respetan_el_permiso_configurado
+  status: PASSING
+  source: app/backend/tests/test_roles_permisos.py::test_las_consultas_respetan_el_permiso_configurado
+- id: TEST-REP-601
+  type: internal_test
+  name: test_asignar_un_segundo_rol_y_actuar_con_el
+  status: PASSING
+  source: app/backend/tests/postgres/test_roles_permisos_postgres.py::test_asignar_un_segundo_rol_y_actuar_con_el
+- id: TEST-REP-602
+  type: internal_test
+  name: test_nunca_sin_administrador
+  status: PASSING
+  source: app/backend/tests/postgres/test_roles_permisos_postgres.py::test_nunca_sin_administrador
+- id: TEST-REP-603
+  type: internal_test
+  name: test_un_permiso_configurado_rige_en_el_pedido_siguiente
+  status: PASSING
+  source: app/backend/tests/postgres/test_roles_permisos_postgres.py::test_un_permiso_configurado_rige_en_el_pedido_siguiente
+- id: TEST-REP-604
+  type: internal_test
+  name: test_la_consulta_de_ordenes_es_un_permiso_configurable
+  status: PASSING
+  source: app/backend/tests/postgres/test_autenticacion_postgres.py::test_la_consulta_de_ordenes_es_un_permiso_configurable
+- id: UAT-REP-055
+  type: uat
+  name: 'Aceptacion de negocio: Como Administracion quiero asignar varios roles a un usuario y configurar
+    los permisos de '
+  status: PENDING
+- id: BR-REP-016
+  type: business_rule
+  name: Ajustes Comerciales y Cortesia
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-038
+  type: business_rule
+  name: Devolucion de dinero y saldo a favor del cliente
+  status: draft
+  coverage: IMPLEMENTED
+- id: FEAT-REP-007
+  type: feature
+  name: Gestion comercial y pagos de la Orden
+  status: draft
+  feature_status: draft
+  implemented_slice_status: PARTIAL
+- id: PROC-REP-265
+  type: process_node
+  name: Completar cobro - validar condicion de entrega
+  node_type: decision
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: PROC-REP-267
+  type: process_node
+  name: Registrar devolucion de dinero al cliente
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: PROC-REP-280
+  type: process_node
+  name: Generar comprobante final
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: US-REP-050
+  type: user_story
+  name: Como Recepcion quiero aplicar un descuento o una cortesia a la Orden o a un trabajo, dejando saldo
+    a favor si corresponde
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-RECEP
+- id: ACC-REP-072
+  type: system_action
+  name: Aplicar un ajuste comercial por Orden o por Detalle
+  status: IMPLEMENTED
+  actor: ACT-RECEP
+  decisions:
+  - DEC-MI-03
+  - DC09
+- id: FR-REP-176
+  type: functional_requirement
+  name: El ajuste se aplica a la Orden o a un Detalle, sin prorrateo del ajuste de la Orden
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-03
+  - DC09
+- id: FR-REP-177
+  type: functional_requirement
+  name: Un ajuste por debajo de lo cobrado deja saldo a favor y la entrega exige devolverlo, sin devoluciones
+    duplicadas
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-03
+  - DC09
+- id: TR-REP-154
+  type: technical_requirement
+  name: services/descuentos.py aplicar_descuento(detalle_id) y descuento.detalle_id en PostgreSQL
+  status: IMPLEMENTED
+- id: TASK-REP-226
+  type: task
+  name: Implementar Aplicar un ajuste comercial por Orden o por Detalle (macroiteracion integral)
+  status: DONE
+- id: CODE-REP-272
+  type: code_artifact
+  name: aplicar_descuento
+  status: IMPLEMENTED
+  source: app/backend/app/services/descuentos.py::aplicar_descuento
+- id: TEST-REP-605
+  type: internal_test
+  name: test_ajuste_de_un_trabajo_y_de_la_orden_sin_prorrateo
+  status: PASSING
+  source: app/backend/tests/test_ajuste_por_detalle.py::test_ajuste_de_un_trabajo_y_de_la_orden_sin_prorrateo
+- id: TEST-REP-606
+  type: internal_test
+  name: test_reglas_del_ajuste_de_un_trabajo
+  status: PASSING
+  source: app/backend/tests/test_ajuste_por_detalle.py::test_reglas_del_ajuste_de_un_trabajo
+- id: TEST-REP-607
+  type: internal_test
+  name: test_bajo_lo_cobrado_queda_saldo_a_favor_y_se_devuelve_una_vez
+  status: PASSING
+  source: app/backend/tests/test_ajuste_por_detalle.py::test_bajo_lo_cobrado_queda_saldo_a_favor_y_se_devuelve_una_vez
+- id: TEST-REP-608
+  type: internal_test
+  name: test_ajuste_por_detalle_se_guarda_y_la_vista_coincide
+  status: PASSING
+  source: app/backend/tests/postgres/test_ajuste_por_detalle_postgres.py::test_ajuste_por_detalle_se_guarda_y_la_vista_coincide
+- id: UAT-REP-056
+  type: uat
+  name: 'Aceptacion de negocio: Como Recepcion quiero aplicar un descuento o una cortesia a la Orden o
+    a un trabajo, dejan'
+  status: PENDING
+- id: BR-REP-041
+  type: business_rule
+  name: Politica de garantia configurable y garantia por Detalle
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-045
+  type: business_rule
+  name: Check-in de entrega
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-017
+  type: business_rule
+  name: Registrar Pago (transversal) y Completar Cobro (secuencial)
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-031
+  type: business_rule
+  name: Comprobante de recepcion despues de la decision inicial del cliente
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-046
+  type: business_rule
+  name: Ingreso inicial simplificado y comprobante de ingreso y autorizacion
+  status: draft
+  coverage: IMPLEMENTED
+- id: FEAT-REP-001
+  type: feature
+  name: Ingreso y creacion de Orden de Reparacion
+  status: draft
+  feature_status: draft
+  implemented_slice_status: PARTIAL
+- id: PROC-REP-269
+  type: process_node
+  name: Orden pendiente de check-in (entrega bloqueada)
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: PROC-REP-036
+  type: process_node
+  name: "\xBFGarantia de origen vigente?"
+  node_type: decision
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: PROC-REP-030
+  type: process_node
+  name: Registrar cliente y equipo
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: PROC-REP-032
+  type: process_node
+  name: Registrar informacion inicial y condiciones del equipo
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: US-REP-051
+  type: user_story
+  name: Como Recepcion quiero que la garantia de cada trabajo siga la politica de su Tipo y poder corregir
+    el check-in y los datos del ingreso con motivo
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-RECEP
+- id: ACC-REP-073
+  type: system_action
+  name: Aplicar la politica de garantia por Tipo y corregir check-in e ingreso con motivo
+  status: IMPLEMENTED
+  actor: ACT-RECEP
+  decisions:
+  - DEC-MI-01
+  - DEC-MI-05
+  - DEC-MI-07
+- id: FR-REP-178
+  type: functional_requirement
+  name: Plazos con y sin check-in por Tipo y politica para trabajos en garantia RMA; el ajuste manual
+    prevalece
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-01
+  - DEC-MI-05
+  - DEC-MI-07
+- id: FR-REP-179
+  type: functional_requirement
+  name: El check-in se exige solo si algun trabajo realizado tiene garantia mayor a cero y se corrige
+    con motivo
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-01
+  - DEC-MI-05
+  - DEC-MI-07
+- id: FR-REP-180
+  type: functional_requirement
+  name: Corregir los datos del ingreso exige motivo y registra valores anteriores y nuevos sin alterar
+    comprobantes
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-01
+  - DEC-MI-05
+  - DEC-MI-07
+- id: TR-REP-155
+  type: technical_requirement
+  name: domain/garantia.py garantia_sugerida, services/documentos.py aplicar_politica_garantia_rma, services/custodia.py
+    cambios_del_ingreso
+  status: IMPLEMENTED
+- id: TASK-REP-227
+  type: task
+  name: Implementar Aplicar la politica de garantia por Tipo y corregir check-in e ingreso con motivo
+    (macroiteracion integral)
+  status: DONE
+- id: CODE-REP-273
+  type: code_artifact
+  name: garantia_sugerida
+  status: IMPLEMENTED
+  source: app/backend/app/domain/garantia.py::garantia_sugerida
+- id: TEST-REP-609
+  type: internal_test
+  name: test_los_plazos_del_tipo_segun_el_checkin
+  status: PASSING
+  source: app/backend/tests/test_politica_garantia.py::test_los_plazos_del_tipo_segun_el_checkin
+- id: TEST-REP-610
+  type: internal_test
+  name: test_politica_de_los_trabajos_en_garantia_rma
+  status: PASSING
+  source: app/backend/tests/test_politica_garantia.py::test_politica_de_los_trabajos_en_garantia_rma
+- id: TEST-REP-611
+  type: internal_test
+  name: test_sin_garantia_no_se_exige_el_checkin
+  status: PASSING
+  source: app/backend/tests/test_politica_garantia.py::test_sin_garantia_no_se_exige_el_checkin
+- id: TEST-REP-612
+  type: internal_test
+  name: test_corregir_el_checkin_exige_motivo
+  status: PASSING
+  source: app/backend/tests/test_politica_garantia.py::test_corregir_el_checkin_exige_motivo
+- id: TEST-REP-613
+  type: internal_test
+  name: test_registrar_no_pide_motivo_y_corregir_si
+  status: PASSING
+  source: app/backend/tests/test_correccion_ingreso.py::test_registrar_no_pide_motivo_y_corregir_si
+- id: UAT-REP-057
+  type: uat
+  name: 'Aceptacion de negocio: Como Recepcion quiero que la garantia de cada trabajo siga la politica
+    de su Tipo y poder '
+  status: PENDING
+- id: BR-REP-019
+  type: business_rule
+  name: Garantia RMA - Orden nueva vinculada y Detalle origen
+  status: draft
+  coverage: IMPLEMENTED
+- id: US-REP-052
+  type: user_story
+  name: Como Recepcion quiero que un reclamo de garantia rechazado quede registrado y pueda seguir como
+    reparacion paga
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-RECEP
+- id: ACC-REP-074
+  type: system_action
+  name: Registrar un reclamo rechazado y continuarlo como reparacion paga
+  status: IMPLEMENTED
+  actor: ACT-RECEP
+  decisions:
+  - DEC-MI-02
+- id: FR-REP-181
+  type: functional_requirement
+  name: El reclamo rechazado es un registro independiente
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-02
+- id: FR-REP-182
+  type: functional_requirement
+  name: Continuar crea una Orden CLIENTE_EXTERNO paga vinculada al reclamo, con confirmacion y sin duplicados
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-02
+- id: TR-REP-156
+  type: technical_requirement
+  name: application/reclamos.py y api/reclamos.py; rma.reclamo_garantia
+  status: IMPLEMENTED
+- id: TASK-REP-228
+  type: task
+  name: Implementar Registrar un reclamo rechazado y continuarlo como reparacion paga (macroiteracion
+    integral)
+  status: DONE
+- id: CODE-REP-274
+  type: code_artifact
+  name: continuar_como_pago
+  status: IMPLEMENTED
+  source: app/backend/app/application/reclamos.py::continuar_como_pago
+- id: TEST-REP-614
+  type: internal_test
+  name: test_un_reclamo_rechazado_se_registra_y_se_continua_una_vez
+  status: PASSING
+  source: app/backend/tests/test_reclamos_garantia.py::test_un_reclamo_rechazado_se_registra_y_se_continua_una_vez
+- id: TEST-REP-615
+  type: internal_test
+  name: test_con_sesion_solo_consultan_los_roles_habilitados
+  status: PASSING
+  source: app/backend/tests/test_reclamos_garantia.py::test_con_sesion_solo_consultan_los_roles_habilitados
+- id: TEST-REP-616
+  type: internal_test
+  name: test_reclamo_rechazado_y_continuacion_en_postgres
+  status: PASSING
+  source: app/backend/tests/postgres/test_reclamos_garantia_postgres.py::test_reclamo_rechazado_y_continuacion_en_postgres
+- id: UAT-REP-058
+  type: uat
+  name: 'Aceptacion de negocio: Como Recepcion quiero que un reclamo de garantia rechazado quede registrado
+    y pueda seguir'
+  status: PENDING
+- id: BR-REP-004
+  type: business_rule
+  name: Registro de ejecucion real
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-044
+  type: business_rule
+  name: Comunicaciones asistidas con plantillas e historial
+  status: draft
+  coverage: IMPLEMENTED
+- id: FEAT-REP-005
+  type: feature
+  name: Ejecucion de Detalles y gestion de insumos
+  status: draft
+  feature_status: draft
+  implemented_slice_status: PARTIAL
+- id: PROC-REP-200
+  type: process_node
+  name: Registrar ejecucion real del Detalle
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: PROC-REP-260
+  type: process_node
+  name: Notificar cliente
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: US-REP-053
+  type: user_story
+  name: Como Recepcion quiero elegir el motivo de una cancelacion o interrupcion de un catalogo y seguir
+    los retiros demorados
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-RECEP
+- id: ACC-REP-075
+  type: system_action
+  name: Registrar motivos de catalogo y el seguimiento de un retiro demorado
+  status: IMPLEMENTED
+  actor: ACT-RECEP
+  decisions:
+  - DEC-MI-15
+  - DEC-MI-14
+- id: FR-REP-183
+  type: functional_requirement
+  name: Catalogos separados de motivos de cancelacion e interrupcion; Otro exige descripcion y el registro
+    copia el texto
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-15
+  - DEC-MI-14
+- id: FR-REP-184
+  type: functional_requirement
+  name: Vencido el plazo configurable desde el aviso de equipo listo, la Orden se alerta y admite seguimientos
+    sin cerrarse
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-15
+  - DEC-MI-14
+- id: TR-REP-157
+  type: technical_requirement
+  name: services/operativa.py, domain/retiro.py, bandeja RETIRO_DEMORADO y rma.motivo_operativo, parametro
+    y seguimiento_retiro
+  status: IMPLEMENTED
+- id: TASK-REP-229
+  type: task
+  name: Implementar Registrar motivos de catalogo y el seguimiento de un retiro demorado (macroiteracion
+    integral)
+  status: DONE
+- id: CODE-REP-275
+  type: code_artifact
+  name: texto_de_motivo
+  status: IMPLEMENTED
+  source: app/backend/app/services/operativa.py::texto_de_motivo
+- id: CODE-REP-276
+  type: code_artifact
+  name: dias_de_retiro_demorado
+  status: IMPLEMENTED
+  source: app/backend/app/domain/retiro.py::dias_de_retiro_demorado
+- id: TEST-REP-617
+  type: internal_test
+  name: test_motivos_de_catalogo_y_texto_libre
+  status: PASSING
+  source: app/backend/tests/test_motivos_retiro.py::test_motivos_de_catalogo_y_texto_libre
+- id: TEST-REP-618
+  type: internal_test
+  name: test_la_configuracion_operativa_es_de_solo_lectura_en_json
+  status: PASSING
+  source: app/backend/tests/test_motivos_retiro.py::test_la_configuracion_operativa_es_de_solo_lectura_en_json
+- id: TEST-REP-619
+  type: internal_test
+  name: test_retiro_demorado_alerta_y_admite_seguimientos
+  status: PASSING
+  source: app/backend/tests/test_motivos_retiro.py::test_retiro_demorado_alerta_y_admite_seguimientos
+- id: TEST-REP-620
+  type: internal_test
+  name: test_motivos_y_parametros_administrados_con_auditoria
+  status: PASSING
+  source: app/backend/tests/postgres/test_motivos_retiro_postgres.py::test_motivos_y_parametros_administrados_con_auditoria
+- id: TEST-REP-621
+  type: internal_test
+  name: test_retiro_demorado_y_seguimientos_en_postgres
+  status: PASSING
+  source: app/backend/tests/postgres/test_motivos_retiro_postgres.py::test_retiro_demorado_y_seguimientos_en_postgres
+- id: UAT-REP-059
+  type: uat
+  name: 'Aceptacion de negocio: Como Recepcion quiero elegir el motivo de una cancelacion o interrupcion
+    de un catalogo y '
+  status: PENDING
+- id: BR-REP-043
+  type: business_rule
+  name: Consentimiento y preferencias de comunicacion
+  status: draft
+  coverage: IMPLEMENTED
+- id: US-REP-054
+  type: user_story
+  name: Como Recepcion quiero preparar mensajes de WhatsApp desde plantillas, revisarlos y registrar si
+    los envie, respetando el consentimiento
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-RECEP
+- id: ACC-REP-076
+  type: system_action
+  name: Preparar y registrar un mensaje asistido por WhatsApp
+  status: IMPLEMENTED
+  actor: ACT-RECEP
+  decisions:
+  - DEC-MI-08
+- id: FR-REP-185
+  type: functional_requirement
+  name: El mensaje sale de una plantilla con variables de la Orden y se edita antes de abrir WhatsApp
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-08
+- id: FR-REP-186
+  type: functional_requirement
+  name: Se registran el intento y la confirmacion manual; nunca entregado ni leido
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-08
+- id: FR-REP-187
+  type: functional_requirement
+  name: Lo comercial exige consentimiento expreso; la preferencia del cliente se respeta y el consentimiento
+    es un historial
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-08
+- id: TR-REP-158
+  type: technical_requirement
+  name: services/comunicaciones.py y application/comunicaciones.py; rma.comunicacion_cliente, comunicacion_confirmacion
+    y consentimiento_comunicacion
+  status: IMPLEMENTED
+- id: TASK-REP-230
+  type: task
+  name: Implementar Preparar y registrar un mensaje asistido por WhatsApp (macroiteracion integral)
+  status: DONE
+- id: CODE-REP-277
+  type: code_artifact
+  name: registrar_intento
+  status: IMPLEMENTED
+  source: app/backend/app/services/comunicaciones.py::registrar_intento
+- id: TEST-REP-622
+  type: internal_test
+  name: test_plantillas_iniciales_y_mensaje_preparado
+  status: PASSING
+  source: app/backend/tests/test_comunicaciones.py::test_plantillas_iniciales_y_mensaje_preparado
+- id: TEST-REP-623
+  type: internal_test
+  name: test_intento_y_confirmacion_manual
+  status: PASSING
+  source: app/backend/tests/test_comunicaciones.py::test_intento_y_confirmacion_manual
+- id: TEST-REP-624
+  type: internal_test
+  name: test_la_preferencia_del_cliente_se_respeta
+  status: PASSING
+  source: app/backend/tests/test_comunicaciones.py::test_la_preferencia_del_cliente_se_respeta
+- id: TEST-REP-625
+  type: internal_test
+  name: test_plantilla_comercial_exige_consentimiento
+  status: PASSING
+  source: app/backend/tests/postgres/test_comunicaciones_postgres.py::test_plantilla_comercial_exige_consentimiento
+- id: TEST-REP-626
+  type: internal_test
+  name: test_intento_y_confirmacion_se_guardan_inmutables
+  status: PASSING
+  source: app/backend/tests/postgres/test_comunicaciones_postgres.py::test_intento_y_confirmacion_se_guardan_inmutables
+- id: UAT-REP-060
+  type: uat
+  name: 'Aceptacion de negocio: Como Recepcion quiero preparar mensajes de WhatsApp desde plantillas,
+    revisarlos y registr'
+  status: PENDING
+- id: BR-REP-042
+  type: business_rule
+  name: Firma y evidencia de los documentos
+  status: draft
+  coverage: IMPLEMENTED
+- id: FEAT-REP-002
+  type: feature
+  name: Diagnostico y gestion de Detalles de Reparacion
+  status: draft
+  feature_status: draft
+  implemented_slice_status: PARTIAL
+- id: PROC-REP-046
+  type: process_node
+  name: Registrar decision del cliente por Detalle
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: US-REP-055
+  type: user_story
+  name: Como Recepcion quiero registrar la firma de un documento, en pantalla o con una foto del papel
+    firmado
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-RECEP
+- id: ACC-REP-077
+  type: system_action
+  name: Registrar la firma opcional de un documento emitido
+  status: IMPLEMENTED
+  actor: ACT-RECEP
+  decisions:
+  - DEC-MI-06
+- id: FR-REP-188
+  type: functional_requirement
+  name: La firma es opcional y queda ligada al documento emitido, tambien con la Orden entregada
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-06
+- id: TR-REP-159
+  type: technical_requirement
+  name: application/firmas.py y rma.firma_documento, con la imagen en el almacenamiento privado
+  status: IMPLEMENTED
+- id: TASK-REP-231
+  type: task
+  name: Implementar Registrar la firma opcional de un documento emitido (macroiteracion integral)
+  status: DONE
+- id: CODE-REP-278
+  type: code_artifact
+  name: registrar_firma
+  status: IMPLEMENTED
+  source: app/backend/app/application/firmas.py::registrar_firma
+- id: TEST-REP-627
+  type: internal_test
+  name: test_la_firma_es_opcional_y_queda_ligada_al_documento
+  status: PASSING
+  source: app/backend/tests/test_firmas_documentos.py::test_la_firma_es_opcional_y_queda_ligada_al_documento
+- id: TEST-REP-628
+  type: internal_test
+  name: test_sin_imagen_valida_no_hay_firma
+  status: PASSING
+  source: app/backend/tests/test_firmas_documentos.py::test_sin_imagen_valida_no_hay_firma
+- id: TEST-REP-629
+  type: internal_test
+  name: test_firma_de_un_documento_con_la_orden_entregada
+  status: PASSING
+  source: app/backend/tests/postgres/test_firmas_postgres.py::test_firma_de_un_documento_con_la_orden_entregada
+- id: UAT-REP-061
+  type: uat
+  name: 'Aceptacion de negocio: Como Recepcion quiero registrar la firma de un documento, en pantalla
+    o con una foto del p'
+  status: PENDING
+- id: BR-REP-022
+  type: business_rule
+  name: Identidad fisica del Equipo y reutilizacion confirmada por IMEI
+  status: draft
+  coverage: IMPLEMENTED
+- id: US-REP-056
+  type: user_story
+  name: Como Recepcion quiero reconocer un equipo que ya vino por su IMEI o su numero de serie y corregir
+    una vinculacion erronea
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-RECEP
+- id: ACC-REP-078
+  type: system_action
+  name: Identificar el Equipo y corregir su vinculacion
+  status: IMPLEMENTED
+  actor: ACT-RECEP
+  decisions:
+  - DEC-MI-11
+- id: FR-REP-189
+  type: functional_requirement
+  name: Se busca por IMEI y despues por numero de serie; nunca por similitud
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-11
+- id: FR-REP-190
+  type: functional_requirement
+  name: Reusar una identidad exige compartir IMEI o serie; la correccion exige motivo y queda auditada
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-11
+- id: TR-REP-160
+  type: technical_requirement
+  name: domain/identidad.py, services/identidad.py y rma.correccion_vinculo_equipo
+  status: IMPLEMENTED
+- id: TASK-REP-232
+  type: task
+  name: Implementar Identificar el Equipo y corregir su vinculacion (macroiteracion integral)
+  status: DONE
+- id: CODE-REP-279
+  type: code_artifact
+  name: candidatos
+  status: IMPLEMENTED
+  source: app/backend/app/domain/identidad.py::candidatos
+- id: TEST-REP-630
+  type: internal_test
+  name: test_identificar_por_imei_despues_por_serie_nunca_por_similitud
+  status: PASSING
+  source: app/backend/tests/test_identidad_equipo.py::test_identificar_por_imei_despues_por_serie_nunca_por_similitud
+- id: TEST-REP-631
+  type: internal_test
+  name: test_reusar_la_identidad_exige_el_mismo_imei_o_serie
+  status: PASSING
+  source: app/backend/tests/test_identidad_equipo.py::test_reusar_la_identidad_exige_el_mismo_imei_o_serie
+- id: TEST-REP-632
+  type: internal_test
+  name: test_corregir_una_vinculacion_erronea
+  status: PASSING
+  source: app/backend/tests/test_identidad_equipo.py::test_corregir_una_vinculacion_erronea
+- id: TEST-REP-633
+  type: internal_test
+  name: test_identidad_compartida_y_correccion_en_postgres
+  status: PASSING
+  source: app/backend/tests/postgres/test_identidad_equipo_postgres.py::test_identidad_compartida_y_correccion_en_postgres
+- id: UAT-REP-062
+  type: uat
+  name: 'Aceptacion de negocio: Como Recepcion quiero reconocer un equipo que ya vino por su IMEI o su
+    numero de serie y c'
+  status: PENDING
+- id: BR-REP-015
+  type: business_rule
+  name: Precio snapshot y Subtotal
+  status: draft
+  coverage: IMPLEMENTED
+- id: US-REP-057
+  type: user_story
+  name: Como Administracion quiero administrar los catalogos de la operacion con auditoria y sin alterar
+    lo ya registrado
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-ADMIN
+- id: ACC-REP-079
+  type: system_action
+  name: Administrar catalogos auditados
+  status: IMPLEMENTED
+  actor: ACT-ADMIN
+  decisions:
+  - DEC-MI-13
+  - DC23
+  - DC23AUD
+- id: FR-REP-191
+  type: functional_requirement
+  name: Tipos, Mesas, politicas, permisos, motivos, parametros, plantillas, insumos con control y precio,
+    proveedores y checklist se administran con auditoria
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-13
+  - DC23
+  - DC23AUD
+- id: FR-REP-192
+  type: functional_requirement
+  name: Un cambio de catalogo no altera lo ya registrado en las Ordenes
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-13
+  - DC23
+  - DC23AUD
+- id: TR-REP-161
+  type: technical_requirement
+  name: application/configuracion.py, application/operativa.py y rma.cambio_configuracion
+  status: IMPLEMENTED
+- id: TASK-REP-233
+  type: task
+  name: Implementar Administrar catalogos auditados (macroiteracion integral)
+  status: DONE
+- id: CODE-REP-280
+  type: code_artifact
+  name: guardar_insumo
+  status: IMPLEMENTED
+  source: app/backend/app/application/operativa.py::guardar_insumo
+- id: TEST-REP-634
+  type: internal_test
+  name: test_insumos_de_solo_lectura_en_json
+  status: PASSING
+  source: app/backend/tests/test_insumos_admin.py::test_insumos_de_solo_lectura_en_json
+- id: TEST-REP-635
+  type: internal_test
+  name: test_alta_y_edicion_de_un_insumo_auditadas
+  status: PASSING
+  source: app/backend/tests/postgres/test_insumos_admin_postgres.py::test_alta_y_edicion_de_un_insumo_auditadas
+- id: UAT-REP-063
+  type: uat
+  name: 'Aceptacion de negocio: Como Administracion quiero administrar los catalogos de la operacion con
+    auditoria y sin a'
+  status: PENDING
+- id: BR-REP-049
+  type: business_rule
+  name: Gestion operativa del stock
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-005
+  type: business_rule
+  name: Inventario consecuencia de ejecucion
+  status: draft
+  coverage: IMPLEMENTED
+- id: FEAT-REP-003
+  type: feature
+  name: Validacion de factibilidad y habilitacion
+  status: draft
+  feature_status: draft
+  implemented_slice_status: PARTIAL
+- id: PROC-REP-185
+  type: process_node
+  name: Reservar insumos e iniciar Ejecucion del Detalle
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: PROC-REP-210
+  type: process_node
+  name: Generar movimientos de inventario
+  node_type: activity
+  status: draft
+  in_scenario: false
+  implemented: true
+- id: US-REP-058
+  type: user_story
+  name: Como Tecnico quiero declarar lo utilizado y lo desperdiciado de cada lote al cerrar un trabajo,
+    y que lo que vuelve al stock quede trazado
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-TECH
+- id: ACC-REP-080
+  type: system_action
+  name: Registrar consumo, desperdicio y devolucion por lote
+  status: IMPLEMENTED
+  actor: ACT-TECH
+  decisions:
+  - DEC-MI-10
+- id: FR-REP-193
+  type: functional_requirement
+  name: Cada insumo se controla sin lote, por lote o por serie; el stock existente queda como stock sin
+    lote identificado
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-10
+- id: FR-REP-194
+  type: functional_requirement
+  name: Consumo y desperdicio cierran la reserva; la devolucion vuelve al mismo lote sin superar lo consumido
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-10
+- id: FR-REP-195
+  type: functional_requirement
+  name: Ningun lote ni el stock sin lote identificado quedan negativos, aun con operaciones concurrentes
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-10
+- id: TR-REP-162
+  type: technical_requirement
+  name: services/lotes.py, application/lotes.py y la migracion 20261113000900 (lote_insumo, lote_id y
+    trigger del libro)
+  status: IMPLEMENTED
+- id: TASK-REP-234
+  type: task
+  name: Implementar Registrar consumo, desperdicio y devolucion por lote (macroiteracion integral)
+  status: DONE
+- id: CODE-REP-281
+  type: code_artifact
+  name: saldos
+  status: IMPLEMENTED
+  source: app/backend/app/services/lotes.py::saldos
+- id: CODE-REP-282
+  type: code_artifact
+  name: generar_movimientos_inventario
+  status: IMPLEMENTED
+  source: app/backend/app/services/inventario.py::generar_movimientos_inventario
+- id: TEST-REP-636
+  type: internal_test
+  name: test_migracion_conserva_el_stock_existente
+  status: PASSING
+  source: app/backend/tests/postgres/test_lotes_postgres.py::test_migracion_conserva_el_stock_existente
+- id: TEST-REP-637
+  type: internal_test
+  name: test_desperdicio_y_devolucion_sin_lote
+  status: PASSING
+  source: app/backend/tests/postgres/test_lotes_postgres.py::test_desperdicio_y_devolucion_sin_lote
+- id: TEST-REP-638
+  type: internal_test
+  name: test_lotes_ingreso_consumo_devolucion_y_transicion
+  status: PASSING
+  source: app/backend/tests/postgres/test_lotes_postgres.py::test_lotes_ingreso_consumo_devolucion_y_transicion
+- id: TEST-REP-639
+  type: internal_test
+  name: test_series_de_a_una_y_nunca_dos_veces
+  status: PASSING
+  source: app/backend/tests/postgres/test_lotes_postgres.py::test_series_de_a_una_y_nunca_dos_veces
+- id: TEST-REP-640
+  type: internal_test
+  name: test_dos_salidas_del_mismo_lote_no_lo_dejan_negativo
+  status: PASSING
+  source: app/backend/tests/postgres/test_lotes_postgres.py::test_dos_salidas_del_mismo_lote_no_lo_dejan_negativo
+- id: UAT-REP-064
+  type: uat
+  name: 'Aceptacion de negocio: Como Tecnico quiero declarar lo utilizado y lo desperdiciado de cada lote
+    al cerrar un tra'
+  status: PENDING
+- id: US-REP-059
+  type: user_story
+  name: Como Recepcion quiero pedir, comprar y recibir insumos con recepciones parciales y que el stock
+    y el costo queden registrados
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-RECEP
+- id: ACC-REP-081
+  type: system_action
+  name: Gestionar solicitudes, ordenes de compra y recepciones
+  status: IMPLEMENTED
+  actor: ACT-RECEP
+  decisions:
+  - DEC-MI-09
+- id: FR-REP-196
+  type: functional_requirement
+  name: Solicitudes manuales o sugeridas por faltante, nunca compras automaticas
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-09
+- id: FR-REP-197
+  type: functional_requirement
+  name: Ordenes de compra sin aprobacion, con creador y confirmador
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-09
+- id: FR-REP-198
+  type: functional_requirement
+  name: Recepciones parciales sin superar lo pendiente; cada linea genera su ingreso con lote o serie
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-09
+- id: FR-REP-199
+  type: functional_requirement
+  name: El ultimo costo es la referencia y cada recepcion conserva su costo historico
+  status: IMPLEMENTED
+  decisions:
+  - DEC-MI-09
+- id: TR-REP-163
+  type: technical_requirement
+  name: services/compras.py, application/compras.py y la migracion 20261113001000
+  status: IMPLEMENTED
+- id: TASK-REP-235
+  type: task
+  name: Implementar Gestionar solicitudes, ordenes de compra y recepciones (macroiteracion integral)
+  status: DONE
+- id: CODE-REP-283
+  type: code_artifact
+  name: recibir
+  status: IMPLEMENTED
+  source: app/backend/app/application/compras.py::recibir
+- id: CODE-REP-284
+  type: code_artifact
+  name: nueva_recepcion
+  status: IMPLEMENTED
+  source: app/backend/app/services/compras.py::nueva_recepcion
+- id: TEST-REP-641
+  type: internal_test
+  name: test_sugerencias_restan_disponible_y_en_camino
+  status: PASSING
+  source: app/backend/tests/test_compras_reglas.py::test_sugerencias_restan_disponible_y_en_camino
+- id: TEST-REP-642
+  type: internal_test
+  name: test_solicitud_solo_de_quien_puede_y_con_motivo
+  status: PASSING
+  source: app/backend/tests/test_compras_reglas.py::test_solicitud_solo_de_quien_puede_y_con_motivo
+- id: TEST-REP-643
+  type: internal_test
+  name: test_recepciones_parciales_nunca_superan_lo_pendiente
+  status: PASSING
+  source: app/backend/tests/test_compras_reglas.py::test_recepciones_parciales_nunca_superan_lo_pendiente
+- id: TEST-REP-644
+  type: internal_test
+  name: test_lote_y_series_segun_el_control_del_insumo
+  status: PASSING
+  source: app/backend/tests/test_compras_reglas.py::test_lote_y_series_segun_el_control_del_insumo
+- id: TEST-REP-645
+  type: internal_test
+  name: test_no_se_compra_dos_veces_el_mismo_insumo_en_una_orden
+  status: PASSING
+  source: app/backend/tests/test_compras_reglas.py::test_no_se_compra_dos_veces_el_mismo_insumo_en_una_orden
+- id: TEST-REP-646
+  type: internal_test
+  name: test_en_la_demo_json_compras_no_esta_disponible
+  status: PASSING
+  source: app/backend/tests/test_compras_reglas.py::test_en_la_demo_json_compras_no_esta_disponible
+- id: TEST-REP-647
+  type: internal_test
+  name: test_circuito_completo_con_recepciones_parciales
+  status: PASSING
+  source: app/backend/tests/postgres/test_compras_postgres.py::test_circuito_completo_con_recepciones_parciales
+- id: TEST-REP-648
+  type: internal_test
+  name: test_recepcion_con_lote_y_con_series
+  status: PASSING
+  source: app/backend/tests/postgres/test_compras_postgres.py::test_recepcion_con_lote_y_con_series
+- id: TEST-REP-649
+  type: internal_test
+  name: test_series_un_ingreso_por_unidad
+  status: PASSING
+  source: app/backend/tests/postgres/test_compras_postgres.py::test_series_un_ingreso_por_unidad
+- id: TEST-REP-650
+  type: internal_test
+  name: test_cancelar_sin_recepciones_devuelve_las_solicitudes
+  status: PASSING
+  source: app/backend/tests/postgres/test_compras_postgres.py::test_cancelar_sin_recepciones_devuelve_las_solicitudes
+- id: TEST-REP-651
+  type: internal_test
+  name: test_dos_recepciones_a_la_vez_no_superan_lo_pedido
+  status: PASSING
+  source: app/backend/tests/postgres/test_compras_postgres.py::test_dos_recepciones_a_la_vez_no_superan_lo_pedido
+- id: UAT-REP-065
+  type: uat
+  name: 'Aceptacion de negocio: Como Recepcion quiero pedir, comprar y recibir insumos con recepciones
+    parciales y que el '
+  status: PENDING
+- id: BR-REP-024
+  type: business_rule
+  name: Fotografias y checklist de recepcion opcionales
+  status: draft
+  coverage: IMPLEMENTED
+- id: BR-REP-025
+  type: business_rule
+  name: Advertencia no bloqueante por evidencias faltantes al avanzar desde la carga inicial
+  status: draft
+  coverage: IMPLEMENTED
+- id: US-REP-060
+  type: user_story
+  name: Como Recepcion quiero completar un checklist segun el tipo de equipo y saber que informacion falta,
+    sin que me bloquee
+  status: IMPLEMENTED
+  priority: P1
+  actor: ACT-RECEP
+- id: ACC-REP-082
+  type: system_action
+  name: Registrar el checklist de recepcion y la advertencia por informacion faltante
+  status: IMPLEMENTED
+  actor: ACT-RECEP
+  decisions:
+  - DC12
+- id: FR-REP-200
+  type: functional_requirement
+  name: Administracion configura tipos de equipo y preguntas; todas las verificaciones son opcionales
+  status: IMPLEMENTED
+  decisions:
+  - DC12
+- id: FR-REP-201
+  type: functional_requirement
+  name: Lo registrado guarda la copia de las preguntas y una correccion agrega una version con motivo
+  status: IMPLEMENTED
+  decisions:
+  - DC12
+- id: FR-REP-202
+  type: functional_requirement
+  name: La advertencia por informacion faltante nunca bloquea y la confirmacion queda registrada
+  status: IMPLEMENTED
+  decisions:
+  - DC12
+- id: TR-REP-164
+  type: technical_requirement
+  name: services/checklist.py, application/checklist.py y la migracion 20261113001100
+  status: IMPLEMENTED
+- id: TASK-REP-236
+  type: task
+  name: Implementar Registrar el checklist de recepcion y la advertencia por informacion faltante (macroiteracion
+    integral)
+  status: DONE
+- id: CODE-REP-285
+  type: code_artifact
+  name: registrar_checklist
+  status: IMPLEMENTED
+  source: app/backend/app/services/checklist.py::registrar_checklist
+- id: TEST-REP-652
+  type: internal_test
+  name: test_advertencia_no_bloquea_y_la_confirmacion_queda
+  status: PASSING
+  source: app/backend/tests/test_checklist_recepcion.py::test_advertencia_no_bloquea_y_la_confirmacion_queda
+- id: TEST-REP-653
+  type: internal_test
+  name: test_checklist_configurable_con_copia_y_versiones
+  status: PASSING
+  source: app/backend/tests/postgres/test_checklist_postgres.py::test_checklist_configurable_con_copia_y_versiones
+- id: UAT-REP-066
+  type: uat
+  name: 'Aceptacion de negocio: Como Recepcion quiero completar un checklist segun el tipo de equipo y
+    saber que informaci'
+  status: PENDING
+links:
+- from: PROC-REP
+  to: DOM-RMA
+  relationship: belongs_to
+- from: FEAT-REP-011
+  to: PROC-REP
+  relationship: belongs_to
+- from: FEAT-REP-010
+  to: PROC-REP
+  relationship: belongs_to
+- from: FEAT-REP-009
+  to: PROC-REP
+  relationship: belongs_to
+- from: FEAT-REP-008
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-300
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-305
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-306
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-179
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-060
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-270
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-271
+  to: PROC-REP
+  relationship: belongs_to
+- from: US-REP-049
+  to: FEAT-REP-011
+  relationship: belongs_to
+- from: ACC-REP-071
+  to: US-REP-049
+  relationship: realizes
+- from: ACC-REP-071
+  to: PROC-REP-300
+  relationship: covers
+- from: ACC-REP-071
+  to: PROC-REP-305
+  relationship: covers
+- from: ACC-REP-071
+  to: PROC-REP-306
+  relationship: covers
+- from: ACC-REP-071
+  to: PROC-REP-179
+  relationship: covers
+- from: ACC-REP-071
+  to: PROC-REP-060
+  relationship: covers
+- from: ACC-REP-071
+  to: PROC-REP-270
+  relationship: covers
+- from: ACC-REP-071
+  to: PROC-REP-271
+  relationship: covers
+- from: ACC-REP-071
+  to: BR-REP-039
+  relationship: governed_by
+- from: ACC-REP-071
+  to: BR-REP-040
+  relationship: governed_by
+- from: ACC-REP-071
+  to: BR-REP-014
+  relationship: governed_by
+- from: ACC-REP-071
+  to: BR-REP-036
+  relationship: governed_by
+- from: ACC-REP-071
+  to: BR-REP-011
+  relationship: governed_by
+- from: ACC-REP-071
+  to: BR-REP-033
+  relationship: governed_by
+- from: FR-REP-172
+  to: ACC-REP-071
+  relationship: derives_from
+- from: TR-REP-153
+  to: FR-REP-172
+  relationship: satisfies
+- from: FR-REP-173
+  to: ACC-REP-071
+  relationship: derives_from
+- from: TR-REP-153
+  to: FR-REP-173
+  relationship: satisfies
+- from: FR-REP-174
+  to: ACC-REP-071
+  relationship: derives_from
+- from: TR-REP-153
+  to: FR-REP-174
+  relationship: satisfies
+- from: FR-REP-175
+  to: ACC-REP-071
+  relationship: derives_from
+- from: TR-REP-153
+  to: FR-REP-175
+  relationship: satisfies
+- from: TASK-REP-225
+  to: TR-REP-153
+  relationship: implements
+- from: CODE-REP-270
+  to: TR-REP-153
+  relationship: implements
+- from: CODE-REP-270
+  to: TASK-REP-225
+  relationship: produced_by
+- from: CODE-REP-271
+  to: TR-REP-153
+  relationship: implements
+- from: CODE-REP-271
+  to: TASK-REP-225
+  relationship: produced_by
+- from: TEST-REP-589
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-589
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-590
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-590
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-591
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-591
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-592
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-592
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-593
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-593
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-594
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-594
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-595
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-595
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-596
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-596
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-597
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-597
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-598
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-598
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-599
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-599
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-600
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-600
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-601
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-601
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-602
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-602
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-603
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-603
+  to: FR-REP-172
+  relationship: verifies
+- from: TEST-REP-604
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-604
+  to: FR-REP-172
+  relationship: verifies
+- from: UAT-REP-055
+  to: US-REP-049
+  relationship: accepts
+- from: FEAT-REP-007
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-265
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-267
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-280
+  to: PROC-REP
+  relationship: belongs_to
+- from: US-REP-050
+  to: FEAT-REP-007
+  relationship: belongs_to
+- from: ACC-REP-072
+  to: US-REP-050
+  relationship: realizes
+- from: ACC-REP-072
+  to: PROC-REP-265
+  relationship: covers
+- from: ACC-REP-072
+  to: PROC-REP-267
+  relationship: covers
+- from: ACC-REP-072
+  to: PROC-REP-280
+  relationship: covers
+- from: ACC-REP-072
+  to: BR-REP-016
+  relationship: governed_by
+- from: ACC-REP-072
+  to: BR-REP-038
+  relationship: governed_by
+- from: ACC-REP-072
+  to: BR-REP-039
+  relationship: governed_by
+- from: FR-REP-176
+  to: ACC-REP-072
+  relationship: derives_from
+- from: TR-REP-154
+  to: FR-REP-176
+  relationship: satisfies
+- from: FR-REP-177
+  to: ACC-REP-072
+  relationship: derives_from
+- from: TR-REP-154
+  to: FR-REP-177
+  relationship: satisfies
+- from: TASK-REP-226
+  to: TR-REP-154
+  relationship: implements
+- from: CODE-REP-272
+  to: TR-REP-154
+  relationship: implements
+- from: CODE-REP-272
+  to: TASK-REP-226
+  relationship: produced_by
+- from: TEST-REP-605
+  to: CODE-REP-272
+  relationship: exercises
+- from: TEST-REP-605
+  to: FR-REP-176
+  relationship: verifies
+- from: TEST-REP-606
+  to: CODE-REP-272
+  relationship: exercises
+- from: TEST-REP-606
+  to: FR-REP-176
+  relationship: verifies
+- from: TEST-REP-607
+  to: CODE-REP-272
+  relationship: exercises
+- from: TEST-REP-607
+  to: FR-REP-176
+  relationship: verifies
+- from: TEST-REP-608
+  to: CODE-REP-272
+  relationship: exercises
+- from: TEST-REP-608
+  to: FR-REP-176
+  relationship: verifies
+- from: UAT-REP-056
+  to: US-REP-050
+  relationship: accepts
+- from: FEAT-REP-001
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-269
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-036
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-030
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-032
+  to: PROC-REP
+  relationship: belongs_to
+- from: US-REP-051
+  to: FEAT-REP-008
+  relationship: belongs_to
+- from: ACC-REP-073
+  to: US-REP-051
+  relationship: realizes
+- from: ACC-REP-073
+  to: PROC-REP-265
+  relationship: covers
+- from: ACC-REP-073
+  to: PROC-REP-269
+  relationship: covers
+- from: ACC-REP-073
+  to: PROC-REP-270
+  relationship: covers
+- from: ACC-REP-073
+  to: PROC-REP-280
+  relationship: covers
+- from: ACC-REP-073
+  to: PROC-REP-036
+  relationship: covers
+- from: ACC-REP-073
+  to: PROC-REP-030
+  relationship: covers
+- from: ACC-REP-073
+  to: PROC-REP-032
+  relationship: covers
+- from: ACC-REP-073
+  to: BR-REP-041
+  relationship: governed_by
+- from: ACC-REP-073
+  to: BR-REP-045
+  relationship: governed_by
+- from: ACC-REP-073
+  to: BR-REP-017
+  relationship: governed_by
+- from: ACC-REP-073
+  to: BR-REP-040
+  relationship: governed_by
+- from: ACC-REP-073
+  to: BR-REP-031
+  relationship: governed_by
+- from: ACC-REP-073
+  to: BR-REP-046
+  relationship: governed_by
+- from: ACC-REP-073
+  to: BR-REP-039
+  relationship: governed_by
+- from: FR-REP-178
+  to: ACC-REP-073
+  relationship: derives_from
+- from: TR-REP-155
+  to: FR-REP-178
+  relationship: satisfies
+- from: FR-REP-179
+  to: ACC-REP-073
+  relationship: derives_from
+- from: TR-REP-155
+  to: FR-REP-179
+  relationship: satisfies
+- from: FR-REP-180
+  to: ACC-REP-073
+  relationship: derives_from
+- from: TR-REP-155
+  to: FR-REP-180
+  relationship: satisfies
+- from: TASK-REP-227
+  to: TR-REP-155
+  relationship: implements
+- from: CODE-REP-273
+  to: TR-REP-155
+  relationship: implements
+- from: CODE-REP-273
+  to: TASK-REP-227
+  relationship: produced_by
+- from: TEST-REP-609
+  to: CODE-REP-273
+  relationship: exercises
+- from: TEST-REP-609
+  to: FR-REP-178
+  relationship: verifies
+- from: TEST-REP-610
+  to: CODE-REP-273
+  relationship: exercises
+- from: TEST-REP-610
+  to: FR-REP-178
+  relationship: verifies
+- from: TEST-REP-611
+  to: CODE-REP-273
+  relationship: exercises
+- from: TEST-REP-611
+  to: FR-REP-178
+  relationship: verifies
+- from: TEST-REP-612
+  to: CODE-REP-273
+  relationship: exercises
+- from: TEST-REP-612
+  to: FR-REP-178
+  relationship: verifies
+- from: TEST-REP-613
+  to: CODE-REP-273
+  relationship: exercises
+- from: TEST-REP-613
+  to: FR-REP-178
+  relationship: verifies
+- from: UAT-REP-057
+  to: US-REP-051
+  relationship: accepts
+- from: US-REP-052
+  to: FEAT-REP-001
+  relationship: belongs_to
+- from: ACC-REP-074
+  to: US-REP-052
+  relationship: realizes
+- from: ACC-REP-074
+  to: PROC-REP-036
+  relationship: covers
+- from: ACC-REP-074
+  to: PROC-REP-030
+  relationship: covers
+- from: ACC-REP-074
+  to: BR-REP-019
+  relationship: governed_by
+- from: ACC-REP-074
+  to: BR-REP-039
+  relationship: governed_by
+- from: FR-REP-181
+  to: ACC-REP-074
+  relationship: derives_from
+- from: TR-REP-156
+  to: FR-REP-181
+  relationship: satisfies
+- from: FR-REP-182
+  to: ACC-REP-074
+  relationship: derives_from
+- from: TR-REP-156
+  to: FR-REP-182
+  relationship: satisfies
+- from: TASK-REP-228
+  to: TR-REP-156
+  relationship: implements
+- from: CODE-REP-274
+  to: TR-REP-156
+  relationship: implements
+- from: CODE-REP-274
+  to: TASK-REP-228
+  relationship: produced_by
+- from: TEST-REP-614
+  to: CODE-REP-274
+  relationship: exercises
+- from: TEST-REP-614
+  to: FR-REP-181
+  relationship: verifies
+- from: TEST-REP-615
+  to: CODE-REP-274
+  relationship: exercises
+- from: TEST-REP-615
+  to: FR-REP-181
+  relationship: verifies
+- from: TEST-REP-616
+  to: CODE-REP-274
+  relationship: exercises
+- from: TEST-REP-616
+  to: FR-REP-181
+  relationship: verifies
+- from: UAT-REP-058
+  to: US-REP-052
+  relationship: accepts
+- from: FEAT-REP-005
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-200
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-260
+  to: PROC-REP
+  relationship: belongs_to
+- from: US-REP-053
+  to: FEAT-REP-009
+  relationship: belongs_to
+- from: ACC-REP-075
+  to: US-REP-053
+  relationship: realizes
+- from: ACC-REP-075
+  to: PROC-REP-200
+  relationship: covers
+- from: ACC-REP-075
+  to: PROC-REP-300
+  relationship: covers
+- from: ACC-REP-075
+  to: PROC-REP-260
+  relationship: covers
+- from: ACC-REP-075
+  to: PROC-REP-270
+  relationship: covers
+- from: ACC-REP-075
+  to: BR-REP-014
+  relationship: governed_by
+- from: ACC-REP-075
+  to: BR-REP-004
+  relationship: governed_by
+- from: ACC-REP-075
+  to: BR-REP-040
+  relationship: governed_by
+- from: ACC-REP-075
+  to: BR-REP-033
+  relationship: governed_by
+- from: ACC-REP-075
+  to: BR-REP-044
+  relationship: governed_by
+- from: FR-REP-183
+  to: ACC-REP-075
+  relationship: derives_from
+- from: TR-REP-157
+  to: FR-REP-183
+  relationship: satisfies
+- from: FR-REP-184
+  to: ACC-REP-075
+  relationship: derives_from
+- from: TR-REP-157
+  to: FR-REP-184
+  relationship: satisfies
+- from: TASK-REP-229
+  to: TR-REP-157
+  relationship: implements
+- from: CODE-REP-275
+  to: TR-REP-157
+  relationship: implements
+- from: CODE-REP-275
+  to: TASK-REP-229
+  relationship: produced_by
+- from: CODE-REP-276
+  to: TR-REP-157
+  relationship: implements
+- from: CODE-REP-276
+  to: TASK-REP-229
+  relationship: produced_by
+- from: TEST-REP-617
+  to: CODE-REP-275
+  relationship: exercises
+- from: TEST-REP-617
+  to: FR-REP-183
+  relationship: verifies
+- from: TEST-REP-618
+  to: CODE-REP-275
+  relationship: exercises
+- from: TEST-REP-618
+  to: FR-REP-183
+  relationship: verifies
+- from: TEST-REP-619
+  to: CODE-REP-275
+  relationship: exercises
+- from: TEST-REP-619
+  to: FR-REP-183
+  relationship: verifies
+- from: TEST-REP-620
+  to: CODE-REP-275
+  relationship: exercises
+- from: TEST-REP-620
+  to: FR-REP-183
+  relationship: verifies
+- from: TEST-REP-621
+  to: CODE-REP-275
+  relationship: exercises
+- from: TEST-REP-621
+  to: FR-REP-183
+  relationship: verifies
+- from: UAT-REP-059
+  to: US-REP-053
+  relationship: accepts
+- from: US-REP-054
+  to: FEAT-REP-008
+  relationship: belongs_to
+- from: ACC-REP-076
+  to: US-REP-054
+  relationship: realizes
+- from: ACC-REP-076
+  to: PROC-REP-260
+  relationship: covers
+- from: ACC-REP-076
+  to: BR-REP-043
+  relationship: governed_by
+- from: ACC-REP-076
+  to: BR-REP-044
+  relationship: governed_by
+- from: ACC-REP-076
+  to: BR-REP-040
+  relationship: governed_by
+- from: FR-REP-185
+  to: ACC-REP-076
+  relationship: derives_from
+- from: TR-REP-158
+  to: FR-REP-185
+  relationship: satisfies
+- from: FR-REP-186
+  to: ACC-REP-076
+  relationship: derives_from
+- from: TR-REP-158
+  to: FR-REP-186
+  relationship: satisfies
+- from: FR-REP-187
+  to: ACC-REP-076
+  relationship: derives_from
+- from: TR-REP-158
+  to: FR-REP-187
+  relationship: satisfies
+- from: TASK-REP-230
+  to: TR-REP-158
+  relationship: implements
+- from: CODE-REP-277
+  to: TR-REP-158
+  relationship: implements
+- from: CODE-REP-277
+  to: TASK-REP-230
+  relationship: produced_by
+- from: TEST-REP-622
+  to: CODE-REP-277
+  relationship: exercises
+- from: TEST-REP-622
+  to: FR-REP-185
+  relationship: verifies
+- from: TEST-REP-623
+  to: CODE-REP-277
+  relationship: exercises
+- from: TEST-REP-623
+  to: FR-REP-185
+  relationship: verifies
+- from: TEST-REP-624
+  to: CODE-REP-277
+  relationship: exercises
+- from: TEST-REP-624
+  to: FR-REP-185
+  relationship: verifies
+- from: TEST-REP-625
+  to: CODE-REP-277
+  relationship: exercises
+- from: TEST-REP-625
+  to: FR-REP-185
+  relationship: verifies
+- from: TEST-REP-626
+  to: CODE-REP-277
+  relationship: exercises
+- from: TEST-REP-626
+  to: FR-REP-185
+  relationship: verifies
+- from: UAT-REP-060
+  to: US-REP-054
+  relationship: accepts
+- from: FEAT-REP-002
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-046
+  to: PROC-REP
+  relationship: belongs_to
+- from: US-REP-055
+  to: FEAT-REP-002
+  relationship: belongs_to
+- from: ACC-REP-077
+  to: US-REP-055
+  relationship: realizes
+- from: ACC-REP-077
+  to: PROC-REP-046
+  relationship: covers
+- from: ACC-REP-077
+  to: PROC-REP-270
+  relationship: covers
+- from: ACC-REP-077
+  to: PROC-REP-280
+  relationship: covers
+- from: ACC-REP-077
+  to: BR-REP-042
+  relationship: governed_by
+- from: FR-REP-188
+  to: ACC-REP-077
+  relationship: derives_from
+- from: TR-REP-159
+  to: FR-REP-188
+  relationship: satisfies
+- from: TASK-REP-231
+  to: TR-REP-159
+  relationship: implements
+- from: CODE-REP-278
+  to: TR-REP-159
+  relationship: implements
+- from: CODE-REP-278
+  to: TASK-REP-231
+  relationship: produced_by
+- from: TEST-REP-627
+  to: CODE-REP-278
+  relationship: exercises
+- from: TEST-REP-627
+  to: FR-REP-188
+  relationship: verifies
+- from: TEST-REP-628
+  to: CODE-REP-278
+  relationship: exercises
+- from: TEST-REP-628
+  to: FR-REP-188
+  relationship: verifies
+- from: TEST-REP-629
+  to: CODE-REP-278
+  relationship: exercises
+- from: TEST-REP-629
+  to: FR-REP-188
+  relationship: verifies
+- from: UAT-REP-061
+  to: US-REP-055
+  relationship: accepts
+- from: US-REP-056
+  to: FEAT-REP-001
+  relationship: belongs_to
+- from: ACC-REP-078
+  to: US-REP-056
+  relationship: realizes
+- from: ACC-REP-078
+  to: PROC-REP-030
+  relationship: covers
+- from: ACC-REP-078
+  to: BR-REP-022
+  relationship: governed_by
+- from: ACC-REP-078
+  to: BR-REP-039
+  relationship: governed_by
+- from: FR-REP-189
+  to: ACC-REP-078
+  relationship: derives_from
+- from: TR-REP-160
+  to: FR-REP-189
+  relationship: satisfies
+- from: FR-REP-190
+  to: ACC-REP-078
+  relationship: derives_from
+- from: TR-REP-160
+  to: FR-REP-190
+  relationship: satisfies
+- from: TASK-REP-232
+  to: TR-REP-160
+  relationship: implements
+- from: CODE-REP-279
+  to: TR-REP-160
+  relationship: implements
+- from: CODE-REP-279
+  to: TASK-REP-232
+  relationship: produced_by
+- from: TEST-REP-630
+  to: CODE-REP-279
+  relationship: exercises
+- from: TEST-REP-630
+  to: FR-REP-189
+  relationship: verifies
+- from: TEST-REP-631
+  to: CODE-REP-279
+  relationship: exercises
+- from: TEST-REP-631
+  to: FR-REP-189
+  relationship: verifies
+- from: TEST-REP-632
+  to: CODE-REP-279
+  relationship: exercises
+- from: TEST-REP-632
+  to: FR-REP-189
+  relationship: verifies
+- from: TEST-REP-633
+  to: CODE-REP-279
+  relationship: exercises
+- from: TEST-REP-633
+  to: FR-REP-189
+  relationship: verifies
+- from: UAT-REP-062
+  to: US-REP-056
+  relationship: accepts
+- from: US-REP-057
+  to: FEAT-REP-010
+  relationship: belongs_to
+- from: ACC-REP-079
+  to: US-REP-057
+  relationship: realizes
+- from: ACC-REP-079
+  to: BR-REP-040
+  relationship: governed_by
+- from: ACC-REP-079
+  to: BR-REP-015
+  relationship: governed_by
+- from: FR-REP-191
+  to: ACC-REP-079
+  relationship: derives_from
+- from: TR-REP-161
+  to: FR-REP-191
+  relationship: satisfies
+- from: FR-REP-192
+  to: ACC-REP-079
+  relationship: derives_from
+- from: TR-REP-161
+  to: FR-REP-192
+  relationship: satisfies
+- from: TASK-REP-233
+  to: TR-REP-161
+  relationship: implements
+- from: CODE-REP-280
+  to: TR-REP-161
+  relationship: implements
+- from: CODE-REP-280
+  to: TASK-REP-233
+  relationship: produced_by
+- from: TEST-REP-634
+  to: CODE-REP-280
+  relationship: exercises
+- from: TEST-REP-634
+  to: FR-REP-191
+  relationship: verifies
+- from: TEST-REP-635
+  to: CODE-REP-280
+  relationship: exercises
+- from: TEST-REP-635
+  to: FR-REP-191
+  relationship: verifies
+- from: UAT-REP-063
+  to: US-REP-057
+  relationship: accepts
+- from: FEAT-REP-003
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-185
+  to: PROC-REP
+  relationship: belongs_to
+- from: PROC-REP-210
+  to: PROC-REP
+  relationship: belongs_to
+- from: US-REP-058
+  to: FEAT-REP-003
+  relationship: belongs_to
+- from: ACC-REP-080
+  to: US-REP-058
+  relationship: realizes
+- from: ACC-REP-080
+  to: PROC-REP-185
+  relationship: covers
+- from: ACC-REP-080
+  to: PROC-REP-210
+  relationship: covers
+- from: ACC-REP-080
+  to: BR-REP-049
+  relationship: governed_by
+- from: ACC-REP-080
+  to: BR-REP-005
+  relationship: governed_by
+- from: FR-REP-193
+  to: ACC-REP-080
+  relationship: derives_from
+- from: TR-REP-162
+  to: FR-REP-193
+  relationship: satisfies
+- from: FR-REP-194
+  to: ACC-REP-080
+  relationship: derives_from
+- from: TR-REP-162
+  to: FR-REP-194
+  relationship: satisfies
+- from: FR-REP-195
+  to: ACC-REP-080
+  relationship: derives_from
+- from: TR-REP-162
+  to: FR-REP-195
+  relationship: satisfies
+- from: TASK-REP-234
+  to: TR-REP-162
+  relationship: implements
+- from: CODE-REP-281
+  to: TR-REP-162
+  relationship: implements
+- from: CODE-REP-281
+  to: TASK-REP-234
+  relationship: produced_by
+- from: CODE-REP-282
+  to: TR-REP-162
+  relationship: implements
+- from: CODE-REP-282
+  to: TASK-REP-234
+  relationship: produced_by
+- from: TEST-REP-636
+  to: CODE-REP-281
+  relationship: exercises
+- from: TEST-REP-636
+  to: FR-REP-193
+  relationship: verifies
+- from: TEST-REP-637
+  to: CODE-REP-281
+  relationship: exercises
+- from: TEST-REP-637
+  to: FR-REP-193
+  relationship: verifies
+- from: TEST-REP-638
+  to: CODE-REP-281
+  relationship: exercises
+- from: TEST-REP-638
+  to: FR-REP-193
+  relationship: verifies
+- from: TEST-REP-639
+  to: CODE-REP-281
+  relationship: exercises
+- from: TEST-REP-639
+  to: FR-REP-193
+  relationship: verifies
+- from: TEST-REP-640
+  to: CODE-REP-281
+  relationship: exercises
+- from: TEST-REP-640
+  to: FR-REP-193
+  relationship: verifies
+- from: UAT-REP-064
+  to: US-REP-058
+  relationship: accepts
+- from: US-REP-059
+  to: FEAT-REP-003
+  relationship: belongs_to
+- from: ACC-REP-081
+  to: US-REP-059
+  relationship: realizes
+- from: ACC-REP-081
+  to: BR-REP-049
+  relationship: governed_by
+- from: ACC-REP-081
+  to: BR-REP-039
+  relationship: governed_by
+- from: FR-REP-196
+  to: ACC-REP-081
+  relationship: derives_from
+- from: TR-REP-163
+  to: FR-REP-196
+  relationship: satisfies
+- from: FR-REP-197
+  to: ACC-REP-081
+  relationship: derives_from
+- from: TR-REP-163
+  to: FR-REP-197
+  relationship: satisfies
+- from: FR-REP-198
+  to: ACC-REP-081
+  relationship: derives_from
+- from: TR-REP-163
+  to: FR-REP-198
+  relationship: satisfies
+- from: FR-REP-199
+  to: ACC-REP-081
+  relationship: derives_from
+- from: TR-REP-163
+  to: FR-REP-199
+  relationship: satisfies
+- from: TASK-REP-235
+  to: TR-REP-163
+  relationship: implements
+- from: CODE-REP-283
+  to: TR-REP-163
+  relationship: implements
+- from: CODE-REP-283
+  to: TASK-REP-235
+  relationship: produced_by
+- from: CODE-REP-284
+  to: TR-REP-163
+  relationship: implements
+- from: CODE-REP-284
+  to: TASK-REP-235
+  relationship: produced_by
+- from: TEST-REP-641
+  to: CODE-REP-283
+  relationship: exercises
+- from: TEST-REP-641
+  to: FR-REP-196
+  relationship: verifies
+- from: TEST-REP-642
+  to: CODE-REP-283
+  relationship: exercises
+- from: TEST-REP-642
+  to: FR-REP-196
+  relationship: verifies
+- from: TEST-REP-643
+  to: CODE-REP-283
+  relationship: exercises
+- from: TEST-REP-643
+  to: FR-REP-196
+  relationship: verifies
+- from: TEST-REP-644
+  to: CODE-REP-283
+  relationship: exercises
+- from: TEST-REP-644
+  to: FR-REP-196
+  relationship: verifies
+- from: TEST-REP-645
+  to: CODE-REP-283
+  relationship: exercises
+- from: TEST-REP-645
+  to: FR-REP-196
+  relationship: verifies
+- from: TEST-REP-646
+  to: CODE-REP-283
+  relationship: exercises
+- from: TEST-REP-646
+  to: FR-REP-196
+  relationship: verifies
+- from: TEST-REP-647
+  to: CODE-REP-283
+  relationship: exercises
+- from: TEST-REP-647
+  to: FR-REP-196
+  relationship: verifies
+- from: TEST-REP-648
+  to: CODE-REP-283
+  relationship: exercises
+- from: TEST-REP-648
+  to: FR-REP-196
+  relationship: verifies
+- from: TEST-REP-649
+  to: CODE-REP-283
+  relationship: exercises
+- from: TEST-REP-649
+  to: FR-REP-196
+  relationship: verifies
+- from: TEST-REP-650
+  to: CODE-REP-283
+  relationship: exercises
+- from: TEST-REP-650
+  to: FR-REP-196
+  relationship: verifies
+- from: TEST-REP-651
+  to: CODE-REP-283
+  relationship: exercises
+- from: TEST-REP-651
+  to: FR-REP-196
+  relationship: verifies
+- from: UAT-REP-065
+  to: US-REP-059
+  relationship: accepts
+- from: US-REP-060
+  to: FEAT-REP-001
+  relationship: belongs_to
+- from: ACC-REP-082
+  to: US-REP-060
+  relationship: realizes
+- from: ACC-REP-082
+  to: PROC-REP-032
+  relationship: covers
+- from: ACC-REP-082
+  to: BR-REP-024
+  relationship: governed_by
+- from: ACC-REP-082
+  to: BR-REP-025
+  relationship: governed_by
+- from: ACC-REP-082
+  to: BR-REP-040
+  relationship: governed_by
+- from: FR-REP-200
+  to: ACC-REP-082
+  relationship: derives_from
+- from: TR-REP-164
+  to: FR-REP-200
+  relationship: satisfies
+- from: FR-REP-201
+  to: ACC-REP-082
+  relationship: derives_from
+- from: TR-REP-164
+  to: FR-REP-201
+  relationship: satisfies
+- from: FR-REP-202
+  to: ACC-REP-082
+  relationship: derives_from
+- from: TR-REP-164
+  to: FR-REP-202
+  relationship: satisfies
+- from: TASK-REP-236
+  to: TR-REP-164
+  relationship: implements
+- from: CODE-REP-285
+  to: TR-REP-164
+  relationship: implements
+- from: CODE-REP-285
+  to: TASK-REP-236
+  relationship: produced_by
+- from: TEST-REP-652
+  to: CODE-REP-285
+  relationship: exercises
+- from: TEST-REP-652
+  to: FR-REP-200
+  relationship: verifies
+- from: TEST-REP-653
+  to: CODE-REP-285
+  relationship: exercises
+- from: TEST-REP-653
+  to: FR-REP-200
+  relationship: verifies
+- from: UAT-REP-066
+  to: US-REP-060
+  relationship: accepts
