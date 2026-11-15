@@ -16,10 +16,10 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - **macroiteración en UAT** (12/11): migraciones `20261112000100` y `20261112000200` en São Paulo, Cloud Run `00029-kay` (`5c6137e`) y Vercel `dpl_CRXZubTCVE1ALhZmLe2wHhoZhbWR` (sección B);
   - **UAT validada** (12/11): inicio de sesión de las cuatro cuentas, aislamiento de tokens, lecturas y E2E de la macroiteración con datos ficticios (67 de 67), limpiados después; el UAT volvió a su estado inicial (sección B);
   - **macroiteración integral** (13 a 15/11, rama `feat/macro-integral`): DEC-MI-01 a 16 implementadas, con Compras, lotes y desperdicio, catálogos auditados y consultas configurables; DC12 con la decisión aprobada DEC-MI-16 (tipos de equipo del catálogo de Ventas de Gestión RT, copia de solo lectura), pendiente de qué dato de Ventas es el tipo (ABI-42); QA cerrada con 0 fallas (sección B).
-  - **despliegue de la macroiteración integral preparado** (15/11, rama local `prep/despliegue-macro-integral`, sin publicar): ensayo local completo del despliegue y de la vuelta atrás (56 de 56), una incompatibilidad con la versión publicada corregida, procedimiento, respaldos, reinicio y E2E listos; **DC12 inactiva por ABI-42, sin impedir el resto** (sección B).
+  - **despliegue de la macroiteración integral preparado** (15/11, `prep/despliegue-macro-integral`, publicada e integrada en `mvp-v2` en `16796ee` con CI en verde; sin desplegar): ensayo local completo del despliegue y de la vuelta atrás (56 de 56), una incompatibilidad con la versión publicada corregida, procedimiento, respaldos, reinicio y E2E listos; **DC12 inactiva por ABI-42, sin impedir el resto** (sección B).
 - **Falta:**
   - ABI-42: que Gestión RT indique qué columna (o tabla) de su catálogo es el Tipo de Equipo; con una columna `tp_*` alcanza con fijar `RMA_TIPO_EQUIPO_CAMPO` y sincronizar;
-  - publicar la rama de preparación e integrarla en `mvp-v2`; después, aplicar las 12 migraciones en São Paulo y desplegar en UAT con el procedimiento de [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 7: cada paso con autorización;
+  - aplicar las 12 migraciones en São Paulo y desplegar en UAT con el procedimiento de [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 7: cada paso con autorización;
   - opcional: repetir `medir_api.py` (falló el inicio de sesión, HTTP 400, probablemente por la contraseña tipeada; solo mide tiempos);
   - integrar en `main` (P0-2).
 
@@ -41,7 +41,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | Persistencia en uso | UAT: PostgreSQL en Supabase (`RMA_PERSISTENCIA=postgres`). JSON sigue siendo el valor por defecto local |
 | UAT publicado | Desde el 12/11/2026 a las 15:14 UTC, macroiteración V1.4 sobre Supabase São Paulo: backend en Cloud Run (`00029-kay`, código `5c6137e`) y frontend en Vercel (`dpl_CRXZubTCVE1ALhZmLe2wHhoZhbWR`). Vuelta atrás inmediata: `00027-sas` y `dpl_CdRi5ttv…` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 6). Oregón sigue como vuelta atrás de la migración hasta el 25/11/2026 |
 
-**Rama de trabajo:** `mvp-v2`, con la macroiteración integral integrada por avance rápido el 15/11/2026 (`feat/macro-integral`, publicada, `63697fb`). CI en verde (cinco workflows) en la rama y en `mvp-v2`. `business/` viene de `rt-rma-app` `9854046` (rama `spec/macro-integral`, publicada). `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)); Vercel no despliega desde GitHub.
+**Rama de trabajo:** `mvp-v2` en `16796ee`: la macroiteración integral (`feat/macro-integral`, `63697fb`) y su preparación de despliegue (`prep/despliegue-macro-integral`), integradas por avance rápido el 15/11/2026. CI en verde (cinco workflows) en las ramas y en `mvp-v2`. `business/` viene de `rt-rma-app` `9854046` (rama `spec/macro-integral`, publicada). `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)); Vercel no despliega desde GitHub.
 
 **Últimos commits de código:** `ef79e45` (DC12 con DEC-MI-16), `96410ce` y los de la macroiteración integral desde `c47903e`; antes `5c6137e` (macroiteración). Desplegado: `5c6137e`, desde el 12/11/2026: la macroiteración integral no está en UAT y sus migraciones no se aplicaron en Supabase. Ver `git log`.
 
@@ -76,7 +76,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ### Preparación del despliegue de la macroiteración integral (15/11/2026), rama `prep/despliegue-macro-integral`
 
-Commits locales sobre `mvp-v2` (`6feb6fe`), **sin publicar**; sin cambios en Cloud Run, Vercel, Supabase ni GCP. Decisión aprobada: **DC12 queda inactiva hasta resolver ABI-42** (`RMA_TIPO_EQUIPO_CAMPO` sin configurar) y no impide publicar lo demás.
+Commits `31f927c`, `42f69c8` y `16796ee` sobre `mvp-v2` (`6feb6fe`), publicados e integrados por avance rápido (`mvp-v2` en `16796ee`): los cinco workflows en verde sobre la rama (disparados a mano: `prep/**` no los dispara por push) y los pertinentes en `mvp-v2`. Sin cambios en Cloud Run, Vercel, Supabase ni GCP: la API pública sigue sin las rutas nuevas (`/api/purchases/status` 404), el bundle publicado no tiene las de Compras ni lotes, y GitHub no registra despliegues desde el 11/11. Decisión aprobada: **DC12 queda inactiva hasta resolver ABI-42** (`RMA_TIPO_EQUIPO_CAMPO` sin configurar) y no impide publicar lo demás.
 
 - **Estado real verificado:** `mvp-v2` local y remoto en `6feb6fe`, CI en verde; `rt-rma-app` `spec/macro-integral` en `9854046`; las 23 migraciones de São Paulo idénticas entre el código publicado (`5c6137e`) y `mvp-v2`, y las 12 nuevas solo se agregan. La app de `ce37c78` es idéntica a `5c6137e` y trae el E2E V1.4: se usó como «versión publicada» en el ensayo.
 - **Ensayo local del despliegue** ([`ensayar_migracion_integral.py`](../supabase/scripts/validacion_uat/ensayar_migracion_integral.py), PostgreSQL 17, rol de la API miembro de `rma_backend`, **56 de 56**):
@@ -641,7 +641,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (15/11/2026):** con autorización explícita para cada acción: publicar `prep/despliegue-macro-integral` e integrarla en `mvp-v2` (CI); después, el despliegue de [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 7 (preflight, respaldo, 12 migraciones, backend sin tráfico, frontend sin publicar, publicación coordinada, E2E con datos ficticios y limpieza). DC12 sigue inactiva hasta que Gestión RT resuelva ABI-42.
+**Próximo paso (15/11/2026):** con autorización explícita para cada acción, desde `mvp-v2` (`16796ee` o posterior, nunca `6feb6fe`): el despliegue de [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 7 (preflight, respaldo, 12 migraciones, backend sin tráfico, frontend sin publicar, publicación coordinada, E2E con datos ficticios y limpieza). DC12 sigue inactiva hasta que Gestión RT resuelva ABI-42.
 
 **Antes (12/11/2026):** la macroiteración está desplegada y validada en UAT, con los datos de prueba limpiados (sección B). Queda, opcional, repetir `medir_api.py`: solo mide tiempos y pide la contraseña de `administracion`. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
 
