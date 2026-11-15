@@ -12,6 +12,8 @@ Recorrido autenticado y E2E de la macroiteración V1.4 sobre el UAT de São Paul
 | [`../migracion_sp/probar_entornos.py`](../migracion_sp/probar_entornos.py) | Paso 1, solo lectura: inicio de sesión, aislamiento de tokens entre Oregón y São Paulo, catálogos, Inicio, Taller, cero Órdenes y stock |
 | [`../migracion_sp/medir_api.py`](../migracion_sp/medir_api.py) | Paso 2, solo lectura: lecturas autenticadas con sus tiempos |
 | [`probar_macro_v14.py`](probar_macro_v14.py) | Paso 3, **escribe**: 6 escenarios, 67 comprobaciones con las cuatro cuentas |
+| [`probar_macro_integral.py`](probar_macro_integral.py) | **Escribe**, macroiteración integral: DC12 inactiva (ABI-42), permisos configurables, desperdicio y devolución, compra con recepciones parciales e idempotencia, stock sin lote, catálogos operativos e identidad por IMEI. Reutiliza la conexión, las sesiones y las guardas de `probar_macro_v14.py`. Deja inactivo el «Proveedor Ficticio E2E» (no admite borrado) |
+| [`ensayar_migracion_integral.py`](ensayar_migracion_integral.py) | **Solo local.** Ensayo completo del despliegue de la macroiteración integral: base con las 23 migraciones de São Paulo, datos del código publicado, las 12 migraciones nuevas con conciliación, código nuevo, vuelta atrás (y sus incompatibilidades conocidas), restauración del respaldo y reinicio. Uso en [`docs/DESPLIEGUE_UAT.md`](../../../docs/DESPLIEGUE_UAT.md), sección 7 |
 
 **Escenarios de `probar_macro_v14.py`:**
 
@@ -61,3 +63,5 @@ Reutiliza los helpers de `app/backend/tests/fixtures`, así que recorre los mism
 6. **Después:**
    - ensayo de restauración en la nube;
    - estado igual al inicial (el `updated_at` de Auth cambia por los inicios de sesión).
+
+**Macroiteración integral:** el mismo recorrido con `probar_macro_integral.py` después de `probar_macro_v14.py` (que exige 0 Órdenes: va primero). El reinicio ya clasifica las 22 tablas nuevas: las de compras, lotes, comunicaciones, firmas, reclamos, seguimientos y checklists son operativas; permisos, motivos, parámetros, plantillas, proveedores y Tipos de Equipo son maestras. Ensayado completo, con su vuelta atrás (`02_restaurar.sql`), por `ensayar_migracion_integral.py`.

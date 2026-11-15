@@ -24,6 +24,13 @@ select 'operativa' as grupo, t.tabla, t.filas from (
   union all select 'evento_negocio', count(*) from rma.evento_negocio
   union all select 'accion_usuario', count(*) from rma.accion_usuario
   union all select 'movimiento_inventario', count(*) from rma.movimiento_inventario
+  -- Macroiteración integral.
+  union all select 'lote_insumo', count(*) from rma.lote_insumo
+  union all select 'orden_compra', count(*) from rma.orden_compra
+  union all select 'solicitud_compra', count(*) from rma.solicitud_compra
+  union all select 'comunicacion_cliente', count(*) from rma.comunicacion_cliente
+  union all select 'reclamo_garantia', count(*) from rma.reclamo_garantia
+  union all select 'checklist_registro', count(*) from rma.checklist_registro
 ) t
 union all select 'maestra', t.tabla, t.filas from (
   select 'tipo_reparacion' tabla, count(*) filas from rma.tipo_reparacion
@@ -35,6 +42,9 @@ union all select 'maestra', t.tabla, t.filas from (
   union all select 'tipo_evento', count(*) from rma.tipo_evento
   union all select 'equivalencia_historial', count(*) from rma.equivalencia_historial
   union all select 'usuario_rol', count(*) from rma.usuario_rol
+  union all select 'proveedor', count(*) from rma.proveedor
+  union all select 'tipo_equipo', count(*) from rma.tipo_equipo
+  union all select 'permiso', count(*) from rma.permiso
 ) t
 union all select 'usuarios_vinculados', null,
   (select count(*) from rma.usuario u join auth.users a on a.id = u.auth_user_id where u.activo)

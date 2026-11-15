@@ -27,10 +27,16 @@ declare
     'checkin', 'detalle', 'detalle_version', 'evaluacion_tecnica',
     'orden_detalle_origen',
     'decision_cliente', 'override_recursos', 'override_insumo',
-    'ajuste_garantia', 'toma', 'ejecucion', 'ejecucion_insumo',
+    'ajuste_garantia', 'toma', 'lote_insumo', 'ejecucion', 'ejecucion_insumo',
     'control_tecnico', 'movimiento_inventario', 'pago', 'devolucion_dinero',
     'descuento', 'documento_emitido', 'foto', 'salida', 'evento_negocio',
-    'cambio_configuracion'
+    'cambio_configuracion',
+    -- Macroiteración integral, después de lo que referencian.
+    'reclamo_garantia', 'seguimiento_retiro', 'comunicacion_cliente',
+    'comunicacion_confirmacion', 'consentimiento_comunicacion', 'firma_documento',
+    'correccion_vinculo_equipo', 'checklist_registro',
+    'informacion_faltante_confirmacion', 'orden_compra', 'solicitud_compra',
+    'orden_compra_item', 'recepcion_compra', 'recepcion_compra_linea'
   ];
   v_tabla text;
   v_columnas text;

@@ -38,6 +38,17 @@
 -- Los catálogos en sí (tipo_reparacion, mesa_tipo_reparacion) son maestros y
 -- no se tocan: un cambio de prueba se devuelve antes por la API.
 --
+-- Macroiteración integral (15/11/2026, migraciones 20261113000100 a
+-- 20261115000100): son operativas las tablas de lo que pasa con las Órdenes,
+-- el stock y las compras (reclamos, seguimientos del retiro, comunicaciones
+-- y su confirmación, consentimientos, firmas, correcciones del Equipo, lotes,
+-- solicitudes, órdenes y recepciones de compra, checklists y confirmaciones
+-- de faltantes). Son maestras las de configuración: permisos, motivos,
+-- parámetros, plantillas, proveedores, Tipos de Equipo y preguntas del
+-- checklist. El proveedor ficticio del E2E queda inactivo (no admite
+-- borrado). Los lotes se vacían con el libro: el control por lote de cada
+-- insumo no cambia y su stock vuelve a quedar «sin lote identificado».
+--
 -- TRUNCATE: los triggers de inmutabilidad y «sin borrado» son BEFORE DELETE
 -- por fila y no se disparan con TRUNCATE (no hay triggers ON TRUNCATE en rma).
 -- Sin CASCADE: si una tabla no listada dependiera de las operativas, falla.
@@ -67,13 +78,22 @@ declare
     'documento_emitido', 'ejecucion', 'ejecucion_insumo', 'equipo',
     'evaluacion_tecnica', 'evento_negocio', 'foto', 'movimiento_inventario', 'orden',
     'orden_detalle_origen', 'override_insumo', 'override_recursos', 'pago',
-    'recepcion', 'recepcion_nota', 'recepcion_version', 'salida', 'toma'
+    'recepcion', 'recepcion_nota', 'recepcion_version', 'salida', 'toma',
+    -- Macroiteración integral.
+    'checklist_registro', 'comunicacion_cliente', 'comunicacion_confirmacion',
+    'consentimiento_comunicacion', 'correccion_vinculo_equipo', 'firma_documento',
+    'informacion_faltante_confirmacion', 'lote_insumo', 'orden_compra',
+    'orden_compra_item', 'recepcion_compra', 'recepcion_compra_linea',
+    'reclamo_garantia', 'seguimiento_retiro', 'solicitud_compra'
   ];
   c_maestras constant text[] := array[
     'empresa', 'equivalencia_historial', 'insumo', 'medio_pago',
     'mesa_tipo_reparacion', 'mesa_trabajo', 'modelo_equipo', 'motivo_ajuste',
     'rol', 'texto_legal', 'tipo_documento', 'tipo_evento', 'tipo_reparacion',
-    'tipo_reparacion_insumo', 'usuario', 'usuario_rol'
+    'tipo_reparacion_insumo', 'usuario', 'usuario_rol',
+    -- Macroiteración integral.
+    'checklist_pregunta', 'motivo_operativo', 'parametro', 'permiso',
+    'plantilla_mensaje', 'proveedor', 'tipo_equipo'
   ];
   c_respaldo constant text := 'rma_respaldo_reinicio';
 
