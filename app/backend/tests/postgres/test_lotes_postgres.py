@@ -158,6 +158,16 @@ def test_desperdicio_y_devolucion_sin_lote(lotes, base):
     )
     assert [m.tipo for m in a.movimientos_insumo] == [T.RESERVA, T.DESPERDICIO]
     assert _stock(base)[0] == Decimal("4")
+    # La base guarda todo lo que salio (utilizado + desperdicio) en
+    # cantidad_utilizada, siempre > 0: la version anterior puede leer la fila
+    # durante una vuelta atras; la aplicacion devuelve lo utilizado (0).
+    assert _sql(
+        base,
+        "select cantidad_utilizada::text, desperdicio::text "
+        "from rma.ejecucion_insumo where desperdicio > 0",
+    ) == [("1.000", "1.000")]
+    (utilizado,) = a.ejecuciones[-1].insumos_utilizados
+    assert (utilizado.cantidad, utilizado.desperdicio) == (0, 1)
 
     b = _cerrar(
         contexto,

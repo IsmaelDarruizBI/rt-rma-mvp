@@ -1312,7 +1312,10 @@ def _ejecucion(fila: Any, insumos: list[Any]) -> EjecucionReparacion:
         insumos_utilizados=[
             InsumoUtilizado(
                 insumo_id=insumo.insumo,
-                cantidad=decimal_sin_ceros(insumo.cantidad_utilizada),
+                # La columna guarda utilizado + desperdicio.
+                cantidad=decimal_sin_ceros(
+                    insumo.cantidad_utilizada - insumo.desperdicio
+                ),
                 desperdicio=decimal_sin_ceros(insumo.desperdicio),
                 lote_id=insumo.lote,
             )

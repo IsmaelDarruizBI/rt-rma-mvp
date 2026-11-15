@@ -2653,8 +2653,13 @@ class _Guardado:
                     {
                         "ejecucion": self._ejecuciones[ejecucion.id],
                         "insumo": self._id("insumo", insumo.insumo_id),
+                        # Todo lo que salio (utilizado + desperdicio): la
+                        # columna conserva su sentido y su CHECK > 0, y la
+                        # version anterior puede leerla (vuelta atras).
                         "cantidad": _escala(
-                            insumo.cantidad, _TRES_DECIMALES, "cantidad"
+                            insumo.cantidad + insumo.desperdicio,
+                            _TRES_DECIMALES,
+                            "cantidad",
                         ),
                         "posicion": orden_insumo,
                         "desperdicio": _escala(

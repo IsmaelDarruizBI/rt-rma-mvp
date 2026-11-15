@@ -209,7 +209,7 @@ def test_la_migracion_concilia_stock_y_reservas_existentes(base_previa):
           from rma.ejecucion where codigo = 'EJE-MIG';
         insert into rma.ejecucion_insumo
           (ejecucion_id, insumo_id, cantidad_utilizada, desperdicio)
-        select e.id, i.id, case i.codigo when 'MIG-BAT' then 2 else 0 end,
+        select e.id, i.id, case i.codigo when 'MIG-BAT' then 2 else 1 end,
                case i.codigo when 'MIG-PAN' then 1 else 0 end
           from rma.ejecucion e, rma.insumo i
          where e.codigo = 'EJE-MIG2' and left(i.codigo, 4) = 'MIG-';

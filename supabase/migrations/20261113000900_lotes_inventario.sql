@@ -15,6 +15,12 @@
 --     DEVOLUCION (vuelve al stock lo consumido, al mismo lote), ya previstos
 --     por el libro (movimiento_tipo_con_operacion);
 --   * `ejecucion_insumo` guarda también el desperdicio declarado y el lote.
+--     `cantidad_utilizada` sigue siendo todo lo que salió del stock en esa
+--     línea (utilizado más desperdicio, siempre mayor que cero) y
+--     `desperdicio` es la parte inutilizada: así se conserva la restricción
+--     original y la versión anterior de la aplicación puede leer cualquier
+--     fila durante una vuelta atrás (para ella, lo desperdiciado cuenta como
+--     utilizado). `v_ejecucion_insumo_consumo` declara solo lo utilizado.
 --
 -- La disponibilidad sigue siendo una por insumo (físico menos reservado):
 -- los lotes desagregan el físico. El trigger del libro valida los lotes.
@@ -76,11 +82,34 @@ alter table rma.ejecucion_insumo add column if not exists lote_id uuid;
 alter table rma.ejecucion_insumo drop constraint if exists ejecucion_insumo_lote;
 alter table rma.ejecucion_insumo add constraint ejecucion_insumo_lote
   foreign key (lote_id, insumo_id) references rma.lote_insumo (id, insumo_id);
-alter table rma.ejecucion_insumo drop constraint if exists ejecucion_insumo_cantidad_utilizada_check;
-alter table rma.ejecucion_insumo drop constraint if exists ejecucion_insumo_algo_salio;
-alter table rma.ejecucion_insumo add constraint ejecucion_insumo_algo_salio
-  check (cantidad_utilizada >= 0 and cantidad_utilizada + desperdicio > 0);
-comment on column rma.ejecucion_insumo.desperdicio is 'Material inutilizado que declaró el técnico (DEC-MI-10).';
+alter table rma.ejecucion_insumo drop constraint if exists ejecucion_insumo_desperdicio_incluido;
+alter table rma.ejecucion_insumo add constraint ejecucion_insumo_desperdicio_incluido
+  check (desperdicio <= cantidad_utilizada);
+comment on column rma.ejecucion_insumo.cantidad_utilizada is 'Todo lo que salió del stock en la línea: lo utilizado más el desperdicio (siempre mayor que cero).';
+comment on column rma.ejecucion_insumo.desperdicio is 'Parte de cantidad_utilizada que se inutilizó (DEC-MI-10); lo utilizado es la diferencia.';
+
+-- Lo declarado como utilizado excluye el desperdicio, que sale del stock como
+-- DESPERDICIO y no como CONSUMO. Mismas columnas.
+create or replace view rma.v_ejecucion_insumo_consumo as
+with declarado as (
+  select ejecucion_id, insumo_id, sum(cantidad_utilizada - desperdicio) as cantidad
+  from rma.ejecucion_insumo
+  group by ejecucion_id, insumo_id
+),
+consumido as (
+  select ejecucion_id, insumo_id, sum(cantidad) as cantidad
+  from rma.movimiento_inventario
+  where tipo = 'CONSUMO'
+  group by ejecucion_id, insumo_id
+)
+select
+  coalesce(d.ejecucion_id, c.ejecucion_id) as ejecucion_id,
+  coalesce(d.insumo_id, c.insumo_id) as insumo_id,
+  coalesce(d.cantidad, 0) as utilizada_declarada,
+  coalesce(c.cantidad, 0) as consumida,
+  greatest(coalesce(d.cantidad, 0) - coalesce(c.cantidad, 0), 0) as sin_respaldo
+from declarado d
+full join consumido c on c.ejecucion_id = d.ejecucion_id and c.insumo_id = d.insumo_id;
 comment on column rma.ejecucion_insumo.lote_id is 'Lote de donde salió (referencia a lote_insumo); vacío: sin lote identificado.';
 
 create or replace view rma.v_saldo_lote as
