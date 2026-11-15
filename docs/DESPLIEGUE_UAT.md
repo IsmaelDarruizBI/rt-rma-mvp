@@ -129,8 +129,11 @@ Publica `mvp-v2` con la macroiteración integral sobre el par vigente (`00029-ka
 ### 7.1 Preflight (solo lectura)
 
 1. `mvp-v2` en el commit a publicar, con los cinco workflows en verde y `business/` verificado (`npm run verify:functional-copy:source`).
-2. Tráfico 100 % en `00029-kay`; Vercel en `dpl_CRXZ…` y desconectado (`link` vacío); São Paulo con 23 migraciones; 0 Órdenes y BAT-IP14 10/0 (`reinicio_uat/03_verificar.sql`, solo lectura).
-3. `probar_entornos.py --api-sao-paulo --sin-oregon` (sesiones de las cuatro cuentas).
+2. Tráfico 100 % en `00029-kay`; Vercel en `dpl_CRXZ…` y desconectado (`link` vacío). En São Paulo, con [`reinicio_uat/03_verificar.sql`](../supabase/scripts/reinicio_uat/03_verificar.sql), solo lectura:
+   - 23 migraciones; antes de migrar, las tablas nuevas salen como `ausente`;
+   - las Órdenes existentes **identificadas**: desde el 13/11/2026 está `OR-000001` (5 fotos), que se conserva;
+   - BAT-IP14 10/0 conciliado.
+3. `probar_entornos.py --sin-oregon --ordenes-previas OR-000001` (sesiones de las cuatro cuentas).
 4. [Checklist de seguridad](CHECKLIST_SEGURIDAD_DESPLIEGUE.md).
 
 ### 7.2 Respaldo previo
@@ -196,14 +199,34 @@ Uno detrás del otro: el frontend nuevo necesita el backend nuevo, y el anterior
 
 | Prueba | Sesión | Escribe |
 |---|---|---|
-| `probar_entornos.py --api-sao-paulo --sin-oregon` | Sí (contraseñas sin eco) | No |
+| `probar_entornos.py --sin-oregon --ordenes-previas <previas>` | Sí (contraseñas sin eco) | No |
 | `medir_api.py` | Sí | No |
 | `/health`, 401 sin token, `/docs` 404, bundle | No | No |
-| `probar_macro_v14.py --escribir` (regresión; exige 0 Órdenes: va primero) | Sí, las cuatro cuentas | Sí, datos ficticios |
-| `probar_macro_integral.py --escribir` | Sí, las cuatro cuentas | Sí, datos ficticios y el proveedor ficticio, que queda inactivo |
+| `probar_macro_v14.py --escribir --ordenes-previas <previas>` (regresión) | Sí, las cuatro cuentas | Sí, datos ficticios |
+| `probar_macro_integral.py --escribir --ordenes-previas <previas>` | Sí, las cuatro cuentas | Sí, datos ficticios y el proveedor ficticio, que queda inactivo |
 | Pasada manual en un navegador real (P2-17): Compras, Inventario por lote, Configuración (Checklist con el aviso de ABI-42, Usuarios y roles, Permisos, Proveedores) | Sí | Opcional |
 
-Después: identificar lo creado y limpiar con [`reinicio_uat/`](../supabase/scripts/reinicio_uat/) (ensayo → respaldo → aplicar → `03_verificar.sql`), ya preparado para las tablas nuevas. Al final, respaldo y ensayo de restauración en la nube.
+**Cada E2E se limpia por separado, sin tocar lo previo.**
+
+- **Datos previos:** `OR-000001`, sus fotos y documentos, y cualquier Orden existente. `--ordenes-previas` tiene que listarlas exactamente; si no, el E2E no escribe nada.
+- **Por cada script, en orden:**
+  1. [`05_linea_base_e2e.sql`](../supabase/scripts/reinicio_uat/05_linea_base_e2e.sql): copia privada del estado de `rma`.
+  2. El E2E.
+  3. [`06_limpiar_e2e.sql`](../supabase/scripts/reinicio_uat/06_limpiar_e2e.sql) en `ensayo`: no deja ningún efecto.
+  4. `06_limpiar_e2e.sql` en `aplicar`, sobre una copia con `v_modo` cambiado.
+  5. `03_verificar.sql`.
+
+  Primero `probar_macro_v14.py` y después `probar_macro_integral.py`, cada uno con su línea de base.
+- **Qué borra la limpieza:** solo las filas que no estaban en la línea de base. Aborta sin cambios si:
+  - una Orden o un cliente nuevo no es del E2E («Cliente Ficticio E2E»);
+  - cambió o falta una fila previa;
+  - cambió un catálogo, salvo el stock y el «Proveedor Ficticio E2E», que queda inactivo.
+- **Qué queda igual:** todas las tablas, verificado contra la línea de base. Al aplicar, las secuencias vuelven a su valor (la numeración sigue en `OR-000002`) y la línea de base se elimina.
+- **Fotos del bucket:** la limpieza no las toca. Su resumen lista las claves de las fotos nuevas, para borrarlas por nombre; el E2E no sube ninguna. Nunca se borra por prefijo.
+- **Ensayado en local** con [`ensayar_limpieza_e2e.py`](../supabase/scripts/validacion_uat/ensayar_limpieza_e2e.py): 38 de 38. Cubre los dos E2E con una Orden previa y su foto, y las guardas.
+- `01_reiniciar.sql` **ya no se usa después del E2E**, porque vacía todas las Órdenes; queda solo para un reinicio total autorizado.
+
+Al final, respaldo y ensayo de restauración en la nube.
 
 ### 7.8 Vuelta atrás
 
@@ -222,10 +245,10 @@ select (select count(*) from rma.movimiento_inventario where tipo = 'DESPERDICIO
 
 | Dato | Efecto en `00029-kay` | Antes de volver |
 |---|---|---|
-| Un movimiento DESPERDICIO | No lista Órdenes ni inventario ni da altas (500): no conoce el tipo | En el UAT (datos ficticios): el reinicio, que vacía el libro |
+| Un movimiento DESPERDICIO | No lista Órdenes ni inventario ni da altas (500): no conoce el tipo | En el UAT: la limpieza del E2E (`06_limpiar_e2e.sql`) borra los que creó la prueba. Uno creado fuera del E2E bloquea la vuelta atrás hasta corregirlo (P1-15) |
 | Un usuario con varios roles | No emite documentos ni lista usuarios (500: «el MVP admite exactamente uno») | Dejarle un solo rol desde Usuarios y roles (con la versión nueva) |
 | Un insumo por lote o serie | Sus ingresos fallan (500: la base exige el lote) | Volverlo a SIN_LOTE (exige sus lotes en cero) o no ingresarlo |
 
-Todo lo demás (compras, lotes de otros insumos, devoluciones, descuentos por Detalle, comunicaciones, firmas, reclamos, identidad, permisos configurados) queda en la base y la versión anterior lo ignora. Con 0 Órdenes y sin datos reales, la vuelta atrás del UAT es: reinicio (si hubo E2E), un rol por usuario y los dos comandos. Se ensayó así (fase 5c: lee, escribe e integridad sin problemas).
+Todo lo demás (compras, lotes de otros insumos, devoluciones, descuentos por Detalle, comunicaciones, firmas, reclamos, identidad, permisos configurados) queda en la base y la versión anterior lo ignora. Sin datos reales, la vuelta atrás del UAT es: la limpieza de cada E2E (que conserva `OR-000001`), la consulta de arriba en cero, un rol por usuario y los dos comandos. Se ensayó así (fase 5c: lee, escribe e integridad sin problemas).
 
 **Pares de vuelta atrás después de publicar:** `00029-kay` + `dpl_CRXZ…` (macroiteración V1.4). `00027-sas` y anteriores no se probaron sobre las 35 migraciones.

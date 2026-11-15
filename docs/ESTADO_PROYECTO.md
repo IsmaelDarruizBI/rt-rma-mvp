@@ -74,6 +74,20 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ## B. Últimos avances
 
+### Preflight del despliegue integral y limpieza selectiva del E2E (15/11/2026), commits locales sobre `6b05266`
+
+- **Preflight, solo lectura, sobre `mvp-v2` en `6b05266`:**
+  - CI cubre el código a publicar y `business/` es igual a `9854046`;
+  - tráfico 100 % en `00029-kay`; Vercel en `dpl_CRXZ…`, desconectado;
+  - São Paulo con 23 migraciones, y las 12 pendientes son las de la sección 7.3;
+  - BAT-IP14 10/0, conciliado;
+  - respaldos diarios correctos (último `uat/20261115T060018Z`, con 23 migraciones).
+- **Hallazgo:** São Paulo tiene **`OR-000001`**, creada por `RECEP-001` el 13/11/2026 a las 20:30 UTC. Está abierta (`EN_COLA`), con 5 fotos en el bucket, y no está documentada; el cliente no tiene la marca de prueba. Se conserva.
+- **Corregido:** `03_verificar.sql` corre con 23 y con 35 migraciones. Los E2E, `probar_entornos.py` y `validar_uat.ps1` aceptan `--ordenes-previas`. El reporte del E2E V1.4 compara contra el estado inicial.
+- **Limpieza nueva:** `05_linea_base_e2e.sql` y `06_limpiar_e2e.sql` borran solo lo que crea cada E2E y conservan las Órdenes, fotos y documentos previos.
+- **Ensayado en local:** `ensayar_limpieza_e2e.py`, 38 de 38. Pruebas nuevas en `test_scripts_reinicio_uat.py` y `tests/postgres/test_reinicio_clasificacion.py`.
+- Detalle en [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), secciones 7.1 y 7.7.
+
 ### Preparación del despliegue de la macroiteración integral (15/11/2026), rama `prep/despliegue-macro-integral`
 
 Commits `31f927c`, `42f69c8` y `16796ee` sobre `mvp-v2` (`6feb6fe`), publicados e integrados por avance rápido (`mvp-v2` en `16796ee`): los cinco workflows en verde sobre la rama (disparados a mano: `prep/**` no los dispara por push) y los pertinentes en `mvp-v2`. Sin cambios en Cloud Run, Vercel, Supabase ni GCP: la API pública sigue sin las rutas nuevas (`/api/purchases/status` 404), el bundle publicado no tiene las de Compras ni lotes, y GitHub no registra despliegues desde el 11/11. Decisión aprobada: **DC12 queda inactiva hasta resolver ABI-42** (`RMA_TIPO_EQUIPO_CAMPO` sin configurar) y no impide publicar lo demás.
