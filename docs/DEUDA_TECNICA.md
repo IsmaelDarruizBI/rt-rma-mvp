@@ -37,6 +37,7 @@ Revisado el 13/11/2026 (macroiteración integral, rama `feat/macro-integral`).
 | P1-9 | **Resuelto (11/11/2026):** el respaldo usa `rma_respaldo` (`pg_read_all_data`, `BYPASSRLS`, solo lectura), no la credencial de administración | — | — |
 | P1-10 | **Resuelto (11/11/2026):** el cierre de `/docs`, `/redoc` y `/openapi.json` está publicado en `00024-top` (`d226fd2`), y `04_eliminar_respaldo.sql` se usó en el segundo reinicio de São Paulo | — | — |
 | P1-11 | **Largo mínimo de contraseña 10** sin confirmar en los dos proyectos de Auth | Seguridad | Confirmar en el panel |
+| P1-15 | **La vuelta atrás a `00029-kay` no tolera tres datos de la macroiteración integral** (medido en el ensayo del 15/11/2026): un movimiento DESPERDICIO (no lista Órdenes ni inventario), un usuario con varios roles (no emite documentos) y los ingresos de un insumo por lote o serie (la base exige el lote). En el UAT se resuelve con el reinicio de los datos ficticios y un rol por usuario ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 7.8) | Vuelta atrás; producción con datos reales | Mientras haya datos reales en juego, una versión puente que lea esos datos, o aceptar que la vuelta atrás exige corregirlos antes. Las líneas de solo desperdicio ya no son problema: `cantidad_utilizada` guarda utilizado más desperdicio (`31f927c`) |
 
 ## P2
 

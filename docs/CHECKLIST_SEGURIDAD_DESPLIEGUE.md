@@ -48,6 +48,15 @@ Controles críticos para revisar antes y después de publicar. No es una auditor
 - [ ] Apunta al mismo ref de Supabase que el backend y a la URL pública del backend.
 - [ ] La pantalla de acceso no revela qué usuarios existen: mismo mensaje para usuario inexistente o contraseña incorrecta.
 
+## Preparación de la macroiteración integral (15/11/2026, sin desplegar)
+
+- **Verificado en local** (ensayo del despliegue, [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 7):
+  - repositorio: escaneo de secretos sin hallazgos; las 12 migraciones nuevas son aditivas y no crean ni modifican roles; la función del libro sigue `security definer` con `search_path` fijo, como antes;
+  - base, después de las 35 migraciones: `rma_backend` lee las 69 tablas, con DELETE solo en `usuario_rol` y `mesa_tipo_reparacion` (este último desde la migración 23) y sin TRUNCATE; UPDATE en las tablas nuevas solo en los catálogos de configuración; `anon`, `authenticated` y `service_role` sin `usage` en `rma`; la API del ensayo conectó con un rol miembro de `rma_backend`, como `rma_api`;
+  - API: ninguna ruta ni campo de la anterior desaparece; las rutas nuevas de administración, compras, costos, roles, permisos y la copia del catálogo responden 403 sin el permiso con sesión real (`test_seguridad_de_roles_compras_y_configuracion`); nadie se asigna administración ni actúa en nombre de otro;
+  - DC12: `RMA_TIPO_EQUIPO_CAMPO` no se configura; sin ella no se lee el catálogo de Ventas para tipos y no se escribe nada.
+- **A verificar en el despliegue:** los puntos de Backend, Base de datos, Supabase Auth y Frontend de arriba, por la URL de la etiqueta y con sesión real; que la plantilla heredada no tenga `RMA_TIPO_EQUIPO_CAMPO`.
+
 ## Resultado de la revisión del 11/11/2026 (`00020-tux`, Oregón)
 
 - **Correcto:**

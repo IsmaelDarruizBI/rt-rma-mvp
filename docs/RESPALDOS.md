@@ -190,3 +190,21 @@ Revisar el costo al cargar datos reales.
 | Respaldos manuales previos (`%USERPROFILE%\respaldos-rma\`) | Hasta el 25/11/2026, cuando cierra el período de vuelta atrás de la migración. Tienen datos personales `uat-reinicio-20261110` y `sp-or000001-20261111`. Esta última está en la computadora actual, con acceso solo para la cuenta de Windows de quien opera. `uat-reinicio-20261110` y `sp-pruebas-20261111` quedaron en la computadora anterior: confirmar dónde están y borrarlas en la misma fecha |
 
 Cuando el UAT pase a datos reales, revisar la retención y considerar el plan Pro (copias físicas y PITR).
+
+## 6. Macroiteración integral: preparación (15/11/2026, sin cambios en GCP)
+
+**Scripts sin cambios.** `respaldar.sh`, `restaurar.sh` y `ensayar_restauracion.sh` recorren las tablas y secuencias de `rma` sin listas fijas: las 22 tablas nuevas entran solas en el volcado, el manifiesto, el vaciado y la verificación de conteos. `rma_respaldo` las lee por `pg_read_all_data`. No hace falta subir herramientas nuevas ni tocar el Job, el bucket, el Scheduler ni los secretos.
+
+**Único cambio, al aplicar las migraciones en São Paulo** (con autorización): subir las 12 nuevas a `_herramientas/migraciones/`. Son archivos nuevos, no chocan con la retención:
+
+```powershell
+gcloud storage cp supabase/migrations/20261113*.sql supabase/migrations/20261115*.sql gs://rt-rma-uat-respaldos/_herramientas/migraciones/   # 11 + 1 archivos
+```
+
+Hasta ese momento no se suben: el ensayo en la nube aplica todo lo que hay en esa carpeta y el manifiesto de São Paulo seguiría listando 23, así que la restauración abortaría por migraciones distintas (es lo correcto).
+
+**Ensayado en local** (`ensayar_migracion_integral.py`, fase 7, 15/11/2026): el mismo `ensayar_restauracion.sh` en `postgres:17-alpine`, con las 35 migraciones y leyendo con un rol como `rma_respaldo` (`LOGIN BYPASSRLS`, `pg_read_all_data`, solo lectura) una base con datos de las dos versiones: respaldo, restauración en ensayo y en aplicar con los conteos de las 69 tablas e integridad sin problemas, secuencias iguales al manifiesto y Auth en una base de trabajo. **ENSAYO_RESTAURACION_OK.**
+
+**Copias anteriores:** las de 23 migraciones (hasta la última antes de migrar) se restauran sobre una base con esas 23, que están en el historial de Git; no sobre una con 35. La retención no cambia (30 días inmutables, borrado a los 35).
+
+**Después de migrar:** respaldo y ensayo en la nube (`--args /respaldos/_herramientas/ensayar_restauracion.sh`), que tienen que informar 35 migraciones y 69 tablas.

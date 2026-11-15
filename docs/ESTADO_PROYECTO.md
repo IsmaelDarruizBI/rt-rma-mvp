@@ -16,9 +16,10 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - **macroiteración en UAT** (12/11): migraciones `20261112000100` y `20261112000200` en São Paulo, Cloud Run `00029-kay` (`5c6137e`) y Vercel `dpl_CRXZubTCVE1ALhZmLe2wHhoZhbWR` (sección B);
   - **UAT validada** (12/11): inicio de sesión de las cuatro cuentas, aislamiento de tokens, lecturas y E2E de la macroiteración con datos ficticios (67 de 67), limpiados después; el UAT volvió a su estado inicial (sección B);
   - **macroiteración integral** (13 a 15/11, rama `feat/macro-integral`): DEC-MI-01 a 16 implementadas, con Compras, lotes y desperdicio, catálogos auditados y consultas configurables; DC12 con la decisión aprobada DEC-MI-16 (tipos de equipo del catálogo de Ventas de Gestión RT, copia de solo lectura), pendiente de qué dato de Ventas es el tipo (ABI-42); QA cerrada con 0 fallas (sección B).
+  - **despliegue de la macroiteración integral preparado** (15/11, rama local `prep/despliegue-macro-integral`, sin publicar): ensayo local completo del despliegue y de la vuelta atrás (56 de 56), una incompatibilidad con la versión publicada corregida, procedimiento, respaldos, reinicio y E2E listos; **DC12 inactiva por ABI-42, sin impedir el resto** (sección B).
 - **Falta:**
   - ABI-42: que Gestión RT indique qué columna (o tabla) de su catálogo es el Tipo de Equipo; con una columna `tp_*` alcanza con fijar `RMA_TIPO_EQUIPO_CAMPO` y sincronizar;
-  - aplicar las migraciones `20261113000100` a `20261115000100` en Supabase São Paulo y desplegar en UAT: cada paso con autorización;
+  - publicar la rama de preparación e integrarla en `mvp-v2`; después, aplicar las 12 migraciones en São Paulo y desplegar en UAT con el procedimiento de [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 7: cada paso con autorización;
   - opcional: repetir `medir_api.py` (falló el inicio de sesión, HTTP 400, probablemente por la contraseña tipeada; solo mide tiempos);
   - integrar en `main` (P0-2).
 
@@ -72,6 +73,26 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Preparación del despliegue de la macroiteración integral (15/11/2026), rama `prep/despliegue-macro-integral`
+
+Commits locales sobre `mvp-v2` (`6feb6fe`), **sin publicar**; sin cambios en Cloud Run, Vercel, Supabase ni GCP. Decisión aprobada: **DC12 queda inactiva hasta resolver ABI-42** (`RMA_TIPO_EQUIPO_CAMPO` sin configurar) y no impide publicar lo demás.
+
+- **Estado real verificado:** `mvp-v2` local y remoto en `6feb6fe`, CI en verde; `rt-rma-app` `spec/macro-integral` en `9854046`; las 23 migraciones de São Paulo idénticas entre el código publicado (`5c6137e`) y `mvp-v2`, y las 12 nuevas solo se agregan. La app de `ce37c78` es idéntica a `5c6137e` y trae el E2E V1.4: se usó como «versión publicada» en el ensayo.
+- **Ensayo local del despliegue** ([`ensayar_migracion_integral.py`](../supabase/scripts/validacion_uat/ensayar_migracion_integral.py), PostgreSQL 17, rol de la API miembro de `rma_backend`, **56 de 56**):
+  1. base con las 23 migraciones, cargas, historial de migraciones y Auth mínimo con las 4 cuentas;
+  2. datos con el código publicado: E2E V1.4 (sus 7 escenarios) y además una reserva abierta (Ejecución iniciada), un consumo, una cancelación y una entrega;
+  3. las 12 migraciones: libro de inventario, stock físico y reservado idénticos; de las 47 tablas anteriores solo crecen los catálogos que siembran las migraciones; todo SIN_LOTE, 0 lotes, 0 Tipos de Equipo; integridad vacía; `rma_backend` lee las 69 tablas;
+  4. código nuevo con DC12 sin configurar: las Órdenes anteriores se leen igual (estado, Detalles, historial); E2E de la macroiteración integral; la reserva abierta antes de migrar se consume; lotes, series (incompletas rechazadas), compra recibida, dos recepciones concurrentes (una entra, la otra 409), ingreso idempotente, un usuario con dos roles y un descuento por Detalle; integridad vacía;
+  5. vuelta atrás a la versión publicada: tres incompatibilidades medidas con su causa exacta (abajo); sin ellas lee las 15 Órdenes y escribe; con el reinicio y un rol por usuario, lee, escribe e integridad vacía; el reinicio aplicado y su restauración (`02_restaurar.sql`) devuelven todas las tablas;
+  6. regreso al código nuevo: todas las Órdenes, también las escritas por la versión anterior;
+  7. `ensayar_restauracion.sh` (el script del Job) con las 35 migraciones y un rol como `rma_respaldo`: **ENSAYO_RESTAURACION_OK**;
+  8. `01_reiniciar.sql` en ensayo: todas las tablas clasificadas, integridad vacía.
+- **Corregido (`31f927c`):** con una línea de solo desperdicio (`cantidad_utilizada` en 0) la versión publicada no podía cargar esa Orden y fallaba el listado completo. `cantidad_utilizada` vuelve a ser todo lo que salió (utilizado más desperdicio, siempre mayor que cero) y la aplicación resta el desperdicio al leer; la migración `20261113000900` (no aplicada en ninguna base remota) conserva la restricción original. Sin cambios de dominio ni de API.
+- **Incompatibilidades que quedan para la vuelta atrás** (P1-15; procedimiento en [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 7.8): un movimiento DESPERDICIO (la versión publicada no conoce el tipo), un usuario con varios roles y los ingresos de un insumo por lote. En el UAT, con datos ficticios: reinicio y un rol por usuario antes de volver.
+- **Contratos:** ninguna ruta ni campo de la API publicada desaparece (89 rutas → 146; solo agrega `roles` y `permisos` en respuestas). Ninguna variable nueva obligatoria: `RMA_TIPO_EQUIPO_CAMPO` es opcional y queda sin configurar; las 5 `VITE_*` no cambian.
+- **Preparado:** procedimiento de publicación y vuelta atrás ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 7); respaldos sin cambios de scripts, solo subir las 12 migraciones al aplicarlas ([`RESPALDOS.md`](RESPALDOS.md), sección 6); reinicio del UAT con las 22 tablas nuevas clasificadas; E2E [`probar_macro_integral.py`](../supabase/scripts/validacion_uat/probar_macro_integral.py); [checklist de seguridad](CHECKLIST_SEGURIDAD_DESPLIEGUE.md) con lo verificado en local.
+- **Pruebas:** `tests/postgres` completa sobre `42f69c8`: **461 pasan, 0 fallan**; las 141 de lotes, migración del stock, órdenes, reservas, compras, base y rol mínimo, después de la corrección; `ruff` sin errores. Frontend sin cambios desde `6feb6fe` (CI en verde): no se repitió.
 
 ### Macroiteración integral (13 a 15/11/2026), rama `feat/macro-integral`
 
@@ -620,7 +641,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (15/11/2026):** con autorización explícita para cada acción, aplicar las migraciones `20261113000100` a `20261115000100` en Supabase São Paulo (en orden, después del respaldo) y desplegar en UAT ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)). En paralelo, Gestión RT resuelve ABI-42 (qué dato de su catálogo es el Tipo de Equipo).
+**Próximo paso (15/11/2026):** con autorización explícita para cada acción: publicar `prep/despliegue-macro-integral` e integrarla en `mvp-v2` (CI); después, el despliegue de [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 7 (preflight, respaldo, 12 migraciones, backend sin tráfico, frontend sin publicar, publicación coordinada, E2E con datos ficticios y limpieza). DC12 sigue inactiva hasta que Gestión RT resuelva ABI-42.
 
 **Antes (12/11/2026):** la macroiteración está desplegada y validada en UAT, con los datos de prueba limpiados (sección B). Queda, opcional, repetir `medir_api.py`: solo mide tiempos y pide la contraseña de `administracion`. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
 
