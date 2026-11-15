@@ -6,8 +6,10 @@ ESCRIBE en el UAT con datos FICTICIOS: crea Órdenes de prueba (cliente
 de prueba y cambia un precio y una Mesa de trabajo, que devuelve a su valor
 original al terminar (también si falla una comprobación). No crea Tipos de
 Reparación: ``tipo_reparacion`` no admite borrado y quedarían para siempre.
-Los datos se eliminan después con el reinicio documentado
-(``supabase/scripts/reinicio_uat/``), que es un paso aparte y autorizado.
+Los datos se eliminan después con la limpieza selectiva
+(``supabase/scripts/reinicio_uat/05_linea_base_e2e.sql`` antes y
+``06_limpiar_e2e.sql`` después), que borra solo lo que creó esta ejecución y
+conserva las Órdenes previas. Es un paso aparte y autorizado.
 
 Escenarios (los mismos recorridos que las pruebas automáticas, a través de
 los helpers de ``app/backend/tests/fixtures``):
@@ -21,7 +23,10 @@ los helpers de ``app/backend/tests/fixtures``):
 
 Guardas: solo la API pública del UAT con el proyecto de São Paulo (o una API
 local con ``--sin-autenticacion`` para ensayar); sin ``--escribir`` solo
-verifica las precondiciones; si el UAT tiene Órdenes, no escribe nada.
+verifica las precondiciones; si las Órdenes existentes no son exactamente las
+declaradas en ``--ordenes-previas`` (por defecto, ninguna), no escribe nada.
+Las comprobaciones usan solo las Órdenes que crea la ejecución, y el reporte
+operativo se compara contra el tomado antes de escribir.
 
     $env:SUPABASE_PUBLISHABLE_KEY = "<clave publicable de São Paulo>"
     app/backend/.venv/Scripts/python supabase/scripts/validacion_uat/probar_macro_v14.py --escribir --informe <archivo.json>
@@ -159,6 +164,31 @@ class ClienteApi:
     def cerrar(self) -> None:
         self._tokens = None
         self._http.close()
+
+
+def agregar_ordenes_previas(p) -> None:
+    p.add_argument(
+        "--ordenes-previas",
+        default="",
+        help=(
+            "Órdenes que ya existen y se conservan, separadas por coma (por "
+            "ejemplo OR-000001). Tienen que ser exactamente las existentes; "
+            "si no, no se escribe nada. Por defecto, ninguna"
+        ),
+    )
+
+
+def ordenes_previas_coinciden(c, declaradas: str) -> bool:
+    """Las Órdenes existentes son exactamente las declaradas. Así una Orden
+    que nadie revisó no queda mezclada con la prueba ni con su limpieza."""
+    esperadas = sorted({x.strip() for x in declaradas.split(",") if x.strip()})
+    existentes = sorted(o["id"] for o in f.ok(c.get("/api/orders")))
+    return anotar(
+        "0",
+        f"las Órdenes existentes son las declaradas ({', '.join(esperadas) or 'ninguna'})",
+        existentes == esperadas,
+        f"existentes: {', '.join(existentes) or 'ninguna'}",
+    )
 
 
 def crear_ficticia(cliente, imei=None, serie=None) -> str:
@@ -628,39 +658,62 @@ def antecedentes(c, ctx):
         )
 
 
+def reporte_operativo(c) -> dict:
+    with c.como(f.ADMINISTRADOR):
+        return f.ok(c.get("/api/reports/operational"))
+
+
+def _consumo(rep: dict) -> dict:
+    return {
+        x["insumo_id"]: Decimal(str(x["cantidad"]))
+        for x in rep["consumo_insumos"]
+    }
+
+
+def _completadas(rep: dict, tecnico: str) -> int:
+    tecnicos = {t["usuario_id"]: t for t in rep["trabajos_por_tecnico"]}
+    return tecnicos.get(tecnico, {}).get("completadas", 0)
+
+
 @escenario("5. Reporte operativo")
 def reporte(c, ctx):
+    """Las cifras se comparan contra el reporte tomado antes de escribir:
+    las Órdenes previas (``--ordenes-previas``) ya cuentan en él."""
     e = "5"
-    with c.como(f.ADMINISTRADOR):
-        rep = f.ok(c.get("/api/reports/operational"))
-    total = sum(rep["ordenes_por_origen"].values())
+    rep = reporte_operativo(c)
+    antes = ctx["reporte_inicial"]
+    total = sum(rep["ordenes_por_origen"].values()) - sum(
+        antes["ordenes_por_origen"].values()
+    )
     anotar(
         e,
         f"cuenta las {len(creadas)} Órdenes de la prueba",
         total == len(creadas),
         f"{total}",
     )
+    canceladas = rep["ordenes_por_estado"].get("CANCELADA", 0) - antes[
+        "ordenes_por_estado"
+    ].get("CANCELADA", 0)
     anotar(
         e,
         "2 Órdenes canceladas",
-        rep["ordenes_por_estado"].get("CANCELADA") == 2,
-        str(rep["ordenes_por_estado"]),
+        canceladas == 2,
+        f"{rep['ordenes_por_estado']} (antes {antes['ordenes_por_estado']})",
     )
-    tecnicos = {t["usuario_id"]: t for t in rep["trabajos_por_tecnico"]}
+    completadas = _completadas(rep, f.TECNICO) - _completadas(antes, f.TECNICO)
     anotar(
         e,
         "TECH-001 con 2 trabajos completados",
-        tecnicos.get(f.TECNICO, {}).get("completadas") == 2,
-        str(tecnicos)[:200],
+        completadas == 2,
+        str(completadas),
     )
-    consumo = {
-        x["insumo_id"]: Decimal(str(x["cantidad"]))
-        for x in rep["consumo_insumos"]
-    }
+    consumo = _consumo(rep).get(ctx["insumo"], Decimal(0)) - _consumo(
+        antes
+    ).get(ctx["insumo"], Decimal(0))
     anotar(
         e,
         "consumo de 1 unidad del insumo de batería",
-        consumo.get(ctx["insumo"]) == 1,
+        consumo == 1,
         str(consumo),
     )
     pendientes = [p["orden_id"] for p in rep["pendientes"]]
@@ -935,6 +988,7 @@ def main() -> int:
         action="store_true",
         help="crea los datos ficticios (sin esto, solo precondiciones)",
     )
+    agregar_ordenes_previas(p)
     p.add_argument(
         "--informe",
         help="archivo JSON con los resultados (sin tokens ni contraseñas)",
@@ -966,11 +1020,10 @@ def main() -> int:
     ctx: dict = {"autenticado": tokens is not None}
     try:
         print("\nPrecondiciones:")
-        ordenes = f.ok(c.get("/api/orders"))
-        if not anotar(
-            "0", f"el UAT no tiene Órdenes (hay {len(ordenes)})", ordenes == []
-        ):
-            print("Hay Órdenes: no se escribe nada.")
+        if not ordenes_previas_coinciden(c, a.ordenes_previas):
+            print(
+                "Las Órdenes existentes no son las declaradas: no se escribe nada."
+            )
             return finalizar(a, 1)
         inventario = f.ok(c.get("/api/inventory"))
         bateria = [i for i in inventario if i.get("codigo") == "BAT-IP14"]
@@ -995,13 +1048,15 @@ def main() -> int:
             return finalizar(a, 0 if all(x["ok"] for x in resultados) else 1)
 
         f.crear = crear_ficticia  # los helpers crean con los datos ficticios
+        ctx["reporte_inicial"] = reporte_operativo(c)
         evaluacion_y_adicionales(c, ctx)
         redefinicion_y_descarte(c, ctx)
         desistimiento_total(c, ctx)
+        # Solo las de esta ejecución: las Órdenes previas no se miran.
         ctx["canceladas"] = [
             o["id"]
             for o in f.ok(c.get("/api/orders"))
-            if o.get("estado_workflow") == "CANCELADA"
+            if o.get("estado_workflow") == "CANCELADA" and o["id"] in creadas
         ]
         antecedentes(c, ctx)
         reporte(c, ctx)

@@ -9,8 +9,9 @@ Tipos de Equipo, y no cambia el control por lote de ningún insumo. El único
 dato de catálogo que deja es el proveedor «Proveedor Ficticio E2E», que se
 reutiliza en cada ejecución y queda inactivo al terminar (``proveedor`` no
 admite borrado). Las Órdenes, la compra y los movimientos se eliminan
-después con el reinicio documentado (``supabase/scripts/reinicio_uat/``),
-que es un paso aparte y autorizado.
+después con la limpieza selectiva (``reinicio_uat/05_linea_base_e2e.sql``
+antes y ``06_limpiar_e2e.sql`` después), que conserva las Órdenes previas.
+Es un paso aparte y autorizado.
 
 Escenarios:
 
@@ -26,8 +27,9 @@ Escenarios:
 
 Guardas: las de ``probar_macro_v14.py`` (solo la API pública del UAT con São
 Paulo, o una API local con ``--sin-autenticacion``; sin ``--escribir`` solo
-precondiciones; con Órdenes existentes no escribe). Para ensayar sobre una
-base local que ya tiene Órdenes, ``--permitir-ordenes`` (solo en local).
+precondiciones; si las Órdenes existentes no son exactamente las de
+``--ordenes-previas``, no escribe). Para ensayar sobre una base local con
+Órdenes sin declararlas, ``--permitir-ordenes`` (solo en local).
 
     $env:SUPABASE_PUBLISHABLE_KEY = "<clave publicable de São Paulo>"
     app/backend/.venv/Scripts/python supabase/scripts/validacion_uat/probar_macro_integral.py --escribir --informe <archivo.json>
@@ -596,6 +598,7 @@ def main() -> int:
         action="store_true",
         help="solo en local: ensayar sobre una base que ya tiene Órdenes",
     )
+    base.agregar_ordenes_previas(p)
     p.add_argument(
         "--informe",
         help="archivo JSON con los resultados (sin tokens ni contraseñas)",
@@ -630,13 +633,12 @@ def main() -> int:
     ctx: dict = {"autenticado": tokens is not None}
     try:
         print("\nPrecondiciones:")
-        ordenes = f.ok(c.get("/api/orders"))
-        if not anotar(
-            "0",
-            f"el UAT no tiene Órdenes (hay {len(ordenes)})",
-            ordenes == [] or a.permitir_ordenes,
+        if not a.permitir_ordenes and not base.ordenes_previas_coinciden(
+            c, a.ordenes_previas
         ):
-            print("Hay Órdenes: no se escribe nada.")
+            print(
+                "Las Órdenes existentes no son las declaradas: no se escribe nada."
+            )
             return finalizar(a, 1)
         inventario = f.ok(c.get("/api/inventory"))
         bateria = [i for i in inventario if i.get("codigo") == "BAT-IP14"]

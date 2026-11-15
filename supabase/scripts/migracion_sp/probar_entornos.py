@@ -8,7 +8,8 @@ en Supabase Auth de Oregón y de São Paulo y comprueba:
 - el token de São Paulo entra en la revisión de São Paulo y NO en la de Oregón;
 - el token de Oregón entra en la revisión de Oregón y NO en la de São Paulo;
 - en São Paulo, por la API: ``/api/me`` es el usuario esperado, catálogos,
-  Inicio y Taller responden, cero Órdenes y el stock esperado.
+  Inicio y Taller responden, las Órdenes existentes son exactamente las de
+  ``--ordenes-previas`` (por defecto, ninguna) y el stock esperado.
 
 Imprime solo OK/FALLA, códigos HTTP y conteos: nunca tokens ni contraseñas.
 
@@ -96,6 +97,11 @@ def main() -> int:
         help="URL de la API de São Paulo (por defecto, la pública)",
     )
     p.add_argument(
+        "--ordenes-previas",
+        default="",
+        help="Órdenes que se espera encontrar, separadas por coma (por defecto, ninguna)",
+    )
+    p.add_argument(
         "--sin-oregon",
         action="store_true",
         help="no inicia sesión en Oregón ni prueba el aislamiento",
@@ -166,9 +172,15 @@ def main() -> int:
         cantidad = len(cuerpo) if isinstance(cuerpo, list) else "-"
         anotar(f"{nombre}: HTTP {estado}, elementos {cantidad}", estado == 200)
     estado, ordenes = pedir(api + "/api/orders", token)
+    esperadas = sorted(
+        {x.strip() for x in a.ordenes_previas.split(",") if x.strip()}
+    )
+    existentes = (
+        sorted(o["id"] for o in ordenes) if isinstance(ordenes, list) else None
+    )
     anotar(
-        f"Órdenes: HTTP {estado}, cantidad {len(ordenes) if isinstance(ordenes, list) else '-'} (esperado 0)",
-        estado == 200 and ordenes == [],
+        f"Órdenes: HTTP {estado}, {', '.join(existentes or []) or 'ninguna'} (esperadas: {', '.join(esperadas) or 'ninguna'})",
+        estado == 200 and existentes == esperadas,
     )
     estado, inventario = pedir(api + "/api/inventory", token)
     esperado = dict(x.split("=") for x in a.stock.split(","))
