@@ -40,9 +40,9 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | Persistencia en uso | UAT: PostgreSQL en Supabase (`RMA_PERSISTENCIA=postgres`). JSON sigue siendo el valor por defecto local |
 | UAT publicado | Desde el 12/11/2026 a las 15:14 UTC, macroiteración V1.4 sobre Supabase São Paulo: backend en Cloud Run (`00029-kay`, código `5c6137e`) y frontend en Vercel (`dpl_CRXZubTCVE1ALhZmLe2wHhoZhbWR`). Vuelta atrás inmediata: `00027-sas` y `dpl_CdRi5ttv…` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 6). Oregón sigue como vuelta atrás de la migración hasta el 25/11/2026 |
 
-**Rama de trabajo:** `mvp-v2`, con la macroiteración integrada por avance rápido el 12/11/2026 (`feat/macro-v14`, publicada). CI en verde en la rama y en `mvp-v2`. `business/` viene de `rt-rma-app` `420feb9` (rama `spec/macro-v14`, publicada). `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
+**Rama de trabajo:** `mvp-v2`, con la macroiteración integral integrada por avance rápido el 15/11/2026 (`feat/macro-integral`, publicada, `63697fb`). CI en verde (cinco workflows) en la rama y en `mvp-v2`. `business/` viene de `rt-rma-app` `9854046` (rama `spec/macro-integral`, publicada). `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)); Vercel no despliega desde GitHub.
 
-**Últimos commits de código:** `673dc7d` (macroiteración), `5c6137e` (cierre de QA) y `14108ef` (iteración 1). Desplegado: `5c6137e` (macroiteración), desde el 12/11/2026. Ver `git log`.
+**Últimos commits de código:** `ef79e45` (DC12 con DEC-MI-16), `96410ce` y los de la macroiteración integral desde `c47903e`; antes `5c6137e` (macroiteración). Desplegado: `5c6137e`, desde el 12/11/2026: la macroiteración integral no está en UAT y sus migraciones no se aplicaron en Supabase. Ver `git log`.
 
 **Estado de desarrollo:**
 - El MVP está en UAT sobre PostgreSQL, con autenticación real (Supabase Auth, usuario y contraseña) y DC31, solo con datos ficticios y en cero Órdenes ([`autenticacion.md`](autenticacion.md)).
@@ -75,7 +75,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ### Macroiteración integral (13 a 15/11/2026), rama `feat/macro-integral`
 
-Commits sobre `ce37c78`; sin despliegue ni migraciones remotas, `main` sin cambios. Especificación: `rt-rma-app` `spec/macro-integral`, con las decisiones en `4556263`, su estado de implementación en `99c69e8` y `3ac91ea` y DEC-MI-16 en `9854046`, sincronizada en `business/` (`9854046ea54aa28dc2a9ab6dfe73721b168d97af`). Contratos (API, permisos, garantías de integridad): [`contratos-macro-integral.md`](contratos-macro-integral.md). Diferencias con la baseline: [`discrepancias-baseline-v1.4.md`](../traceability/discrepancias-baseline-v1.4.md), sección I.
+Commits sobre `ce37c78`, publicados e integrados en `mvp-v2` por avance rápido el 15/11/2026 (`63697fb`, cinco workflows en verde en la rama y en `mvp-v2`); sin despliegue ni migraciones remotas, `main` sin cambios. Especificación: `rt-rma-app` `spec/macro-integral`, con las decisiones en `4556263`, su estado de implementación en `99c69e8` y `3ac91ea` y DEC-MI-16 en `9854046`, sincronizada en `business/` (`9854046ea54aa28dc2a9ab6dfe73721b168d97af`). Contratos (API, permisos, garantías de integridad): [`contratos-macro-integral.md`](contratos-macro-integral.md). Diferencias con la baseline: [`discrepancias-baseline-v1.4.md`](../traceability/discrepancias-baseline-v1.4.md), sección I.
 
 - **Roles y permisos (DEC-MI-12, DC27A, `c47903e`):** varios roles por usuario; catálogo de permisos con los roles de siempre como predeterminados, configurable desde Configuración (Usuarios y roles, Permisos), con auditoría; el historial registra el rol habilitante; nunca queda el sistema sin un Administrador.
 - **Comercial (DEC-MI-03, DC09, `85f42cf`):** ajuste por Orden o por Detalle, sin prorrateo; por debajo de lo cobrado deja saldo a favor y la entrega exige devolverlo.
