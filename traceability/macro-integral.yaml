@@ -12,7 +12,7 @@
 
 meta:
   id: TRACE-MACRO-INTEGRAL
-  name: 'Trazabilidad de la macroiteracion integral: DEC-MI-01 a 15 y DC12'
+  name: 'Trazabilidad de la macroiteracion integral: DEC-MI-01 a 16 y DC12'
   generated_from: rama feat/macro-integral; business/ de rt-rma-app spec/macro-integral
   date: '2026-11-15'
   business_domain: DOM-RMA
@@ -60,6 +60,7 @@ meta:
       compras automaticas ni aprobacion
     DC12: Checklist configurable por tipo de equipo, todas las verificaciones opcionales, advertencia
       por informacion faltante
+    DEC-MI-16: El Tipo de Equipo del checklist se obtiene del catalogo de Ventas de Gestion RT
   related_trace_files:
   - traceability/macro-v14.yaml (macroiteracion anterior)
   - traceability/discrepancias-baseline-v1.4.md (seccion I)
@@ -72,7 +73,7 @@ meta:
     convention: traceability/README.md
     backend: app/backend/
     frontend: app/frontend/
-    migration: supabase/migrations/20261113000100 a 20261113001100
+    migration: supabase/migrations/20261113000100 a 20261115000100
   relationship_vocabulary:
     belongs_to: el origen pertenece al destino (jerarquia)
     activates: el Scenario activa la Feature
@@ -362,6 +363,11 @@ items:
   name: test_la_consulta_de_ordenes_es_un_permiso_configurable
   status: PASSING
   source: app/backend/tests/postgres/test_autenticacion_postgres.py::test_la_consulta_de_ordenes_es_un_permiso_configurable
+- id: TEST-REP-605
+  type: internal_test
+  name: test_seguridad_de_roles_compras_y_configuracion
+  status: PASSING
+  source: app/backend/tests/postgres/test_autenticacion_postgres.py::test_seguridad_de_roles_compras_y_configuracion
 - id: UAT-REP-055
   type: uat
   name: 'Aceptacion de negocio: Como Administracion quiero asignar varios roles a un usuario y configurar
@@ -447,22 +453,22 @@ items:
   name: aplicar_descuento
   status: IMPLEMENTED
   source: app/backend/app/services/descuentos.py::aplicar_descuento
-- id: TEST-REP-605
+- id: TEST-REP-606
   type: internal_test
   name: test_ajuste_de_un_trabajo_y_de_la_orden_sin_prorrateo
   status: PASSING
   source: app/backend/tests/test_ajuste_por_detalle.py::test_ajuste_de_un_trabajo_y_de_la_orden_sin_prorrateo
-- id: TEST-REP-606
+- id: TEST-REP-607
   type: internal_test
   name: test_reglas_del_ajuste_de_un_trabajo
   status: PASSING
   source: app/backend/tests/test_ajuste_por_detalle.py::test_reglas_del_ajuste_de_un_trabajo
-- id: TEST-REP-607
+- id: TEST-REP-608
   type: internal_test
   name: test_bajo_lo_cobrado_queda_saldo_a_favor_y_se_devuelve_una_vez
   status: PASSING
   source: app/backend/tests/test_ajuste_por_detalle.py::test_bajo_lo_cobrado_queda_saldo_a_favor_y_se_devuelve_una_vez
-- id: TEST-REP-608
+- id: TEST-REP-609
   type: internal_test
   name: test_ajuste_por_detalle_se_guarda_y_la_vista_coincide
   status: PASSING
@@ -589,27 +595,27 @@ items:
   name: garantia_sugerida
   status: IMPLEMENTED
   source: app/backend/app/domain/garantia.py::garantia_sugerida
-- id: TEST-REP-609
+- id: TEST-REP-610
   type: internal_test
   name: test_los_plazos_del_tipo_segun_el_checkin
   status: PASSING
   source: app/backend/tests/test_politica_garantia.py::test_los_plazos_del_tipo_segun_el_checkin
-- id: TEST-REP-610
+- id: TEST-REP-611
   type: internal_test
   name: test_politica_de_los_trabajos_en_garantia_rma
   status: PASSING
   source: app/backend/tests/test_politica_garantia.py::test_politica_de_los_trabajos_en_garantia_rma
-- id: TEST-REP-611
+- id: TEST-REP-612
   type: internal_test
   name: test_sin_garantia_no_se_exige_el_checkin
   status: PASSING
   source: app/backend/tests/test_politica_garantia.py::test_sin_garantia_no_se_exige_el_checkin
-- id: TEST-REP-612
+- id: TEST-REP-613
   type: internal_test
   name: test_corregir_el_checkin_exige_motivo
   status: PASSING
   source: app/backend/tests/test_politica_garantia.py::test_corregir_el_checkin_exige_motivo
-- id: TEST-REP-613
+- id: TEST-REP-614
   type: internal_test
   name: test_registrar_no_pide_motivo_y_corregir_si
   status: PASSING
@@ -664,17 +670,17 @@ items:
   name: continuar_como_pago
   status: IMPLEMENTED
   source: app/backend/app/application/reclamos.py::continuar_como_pago
-- id: TEST-REP-614
+- id: TEST-REP-615
   type: internal_test
   name: test_un_reclamo_rechazado_se_registra_y_se_continua_una_vez
   status: PASSING
   source: app/backend/tests/test_reclamos_garantia.py::test_un_reclamo_rechazado_se_registra_y_se_continua_una_vez
-- id: TEST-REP-615
+- id: TEST-REP-616
   type: internal_test
   name: test_con_sesion_solo_consultan_los_roles_habilitados
   status: PASSING
   source: app/backend/tests/test_reclamos_garantia.py::test_con_sesion_solo_consultan_los_roles_habilitados
-- id: TEST-REP-616
+- id: TEST-REP-617
   type: internal_test
   name: test_reclamo_rechazado_y_continuacion_en_postgres
   status: PASSING
@@ -765,27 +771,27 @@ items:
   name: dias_de_retiro_demorado
   status: IMPLEMENTED
   source: app/backend/app/domain/retiro.py::dias_de_retiro_demorado
-- id: TEST-REP-617
+- id: TEST-REP-618
   type: internal_test
   name: test_motivos_de_catalogo_y_texto_libre
   status: PASSING
   source: app/backend/tests/test_motivos_retiro.py::test_motivos_de_catalogo_y_texto_libre
-- id: TEST-REP-618
+- id: TEST-REP-619
   type: internal_test
   name: test_la_configuracion_operativa_es_de_solo_lectura_en_json
   status: PASSING
   source: app/backend/tests/test_motivos_retiro.py::test_la_configuracion_operativa_es_de_solo_lectura_en_json
-- id: TEST-REP-619
+- id: TEST-REP-620
   type: internal_test
   name: test_retiro_demorado_alerta_y_admite_seguimientos
   status: PASSING
   source: app/backend/tests/test_motivos_retiro.py::test_retiro_demorado_alerta_y_admite_seguimientos
-- id: TEST-REP-620
+- id: TEST-REP-621
   type: internal_test
   name: test_motivos_y_parametros_administrados_con_auditoria
   status: PASSING
   source: app/backend/tests/postgres/test_motivos_retiro_postgres.py::test_motivos_y_parametros_administrados_con_auditoria
-- id: TEST-REP-621
+- id: TEST-REP-622
   type: internal_test
   name: test_retiro_demorado_y_seguimientos_en_postgres
   status: PASSING
@@ -847,27 +853,27 @@ items:
   name: registrar_intento
   status: IMPLEMENTED
   source: app/backend/app/services/comunicaciones.py::registrar_intento
-- id: TEST-REP-622
+- id: TEST-REP-623
   type: internal_test
   name: test_plantillas_iniciales_y_mensaje_preparado
   status: PASSING
   source: app/backend/tests/test_comunicaciones.py::test_plantillas_iniciales_y_mensaje_preparado
-- id: TEST-REP-623
+- id: TEST-REP-624
   type: internal_test
   name: test_intento_y_confirmacion_manual
   status: PASSING
   source: app/backend/tests/test_comunicaciones.py::test_intento_y_confirmacion_manual
-- id: TEST-REP-624
+- id: TEST-REP-625
   type: internal_test
   name: test_la_preferencia_del_cliente_se_respeta
   status: PASSING
   source: app/backend/tests/test_comunicaciones.py::test_la_preferencia_del_cliente_se_respeta
-- id: TEST-REP-625
+- id: TEST-REP-626
   type: internal_test
   name: test_plantilla_comercial_exige_consentimiento
   status: PASSING
   source: app/backend/tests/postgres/test_comunicaciones_postgres.py::test_plantilla_comercial_exige_consentimiento
-- id: TEST-REP-626
+- id: TEST-REP-627
   type: internal_test
   name: test_intento_y_confirmacion_se_guardan_inmutables
   status: PASSING
@@ -928,17 +934,17 @@ items:
   name: registrar_firma
   status: IMPLEMENTED
   source: app/backend/app/application/firmas.py::registrar_firma
-- id: TEST-REP-627
+- id: TEST-REP-628
   type: internal_test
   name: test_la_firma_es_opcional_y_queda_ligada_al_documento
   status: PASSING
   source: app/backend/tests/test_firmas_documentos.py::test_la_firma_es_opcional_y_queda_ligada_al_documento
-- id: TEST-REP-628
+- id: TEST-REP-629
   type: internal_test
   name: test_sin_imagen_valida_no_hay_firma
   status: PASSING
   source: app/backend/tests/test_firmas_documentos.py::test_sin_imagen_valida_no_hay_firma
-- id: TEST-REP-629
+- id: TEST-REP-630
   type: internal_test
   name: test_firma_de_un_documento_con_la_orden_entregada
   status: PASSING
@@ -992,22 +998,22 @@ items:
   name: candidatos
   status: IMPLEMENTED
   source: app/backend/app/domain/identidad.py::candidatos
-- id: TEST-REP-630
+- id: TEST-REP-631
   type: internal_test
   name: test_identificar_por_imei_despues_por_serie_nunca_por_similitud
   status: PASSING
   source: app/backend/tests/test_identidad_equipo.py::test_identificar_por_imei_despues_por_serie_nunca_por_similitud
-- id: TEST-REP-631
+- id: TEST-REP-632
   type: internal_test
   name: test_reusar_la_identidad_exige_el_mismo_imei_o_serie
   status: PASSING
   source: app/backend/tests/test_identidad_equipo.py::test_reusar_la_identidad_exige_el_mismo_imei_o_serie
-- id: TEST-REP-632
+- id: TEST-REP-633
   type: internal_test
   name: test_corregir_una_vinculacion_erronea
   status: PASSING
   source: app/backend/tests/test_identidad_equipo.py::test_corregir_una_vinculacion_erronea
-- id: TEST-REP-633
+- id: TEST-REP-634
   type: internal_test
   name: test_identidad_compartida_y_correccion_en_postgres
   status: PASSING
@@ -1068,12 +1074,12 @@ items:
   name: guardar_insumo
   status: IMPLEMENTED
   source: app/backend/app/application/operativa.py::guardar_insumo
-- id: TEST-REP-634
+- id: TEST-REP-635
   type: internal_test
   name: test_insumos_de_solo_lectura_en_json
   status: PASSING
   source: app/backend/tests/test_insumos_admin.py::test_insumos_de_solo_lectura_en_json
-- id: TEST-REP-635
+- id: TEST-REP-636
   type: internal_test
   name: test_alta_y_edicion_de_un_insumo_auditadas
   status: PASSING
@@ -1165,31 +1171,41 @@ items:
   name: generar_movimientos_inventario
   status: IMPLEMENTED
   source: app/backend/app/services/inventario.py::generar_movimientos_inventario
-- id: TEST-REP-636
+- id: TEST-REP-637
   type: internal_test
   name: test_migracion_conserva_el_stock_existente
   status: PASSING
   source: app/backend/tests/postgres/test_lotes_postgres.py::test_migracion_conserva_el_stock_existente
-- id: TEST-REP-637
+- id: TEST-REP-638
   type: internal_test
   name: test_desperdicio_y_devolucion_sin_lote
   status: PASSING
   source: app/backend/tests/postgres/test_lotes_postgres.py::test_desperdicio_y_devolucion_sin_lote
-- id: TEST-REP-638
+- id: TEST-REP-639
   type: internal_test
   name: test_lotes_ingreso_consumo_devolucion_y_transicion
   status: PASSING
   source: app/backend/tests/postgres/test_lotes_postgres.py::test_lotes_ingreso_consumo_devolucion_y_transicion
-- id: TEST-REP-639
+- id: TEST-REP-640
   type: internal_test
   name: test_series_de_a_una_y_nunca_dos_veces
   status: PASSING
   source: app/backend/tests/postgres/test_lotes_postgres.py::test_series_de_a_una_y_nunca_dos_veces
-- id: TEST-REP-640
+- id: TEST-REP-641
   type: internal_test
   name: test_dos_salidas_del_mismo_lote_no_lo_dejan_negativo
   status: PASSING
   source: app/backend/tests/postgres/test_lotes_postgres.py::test_dos_salidas_del_mismo_lote_no_lo_dejan_negativo
+- id: TEST-REP-642
+  type: internal_test
+  name: test_la_migracion_concilia_stock_y_reservas_existentes
+  status: PASSING
+  source: app/backend/tests/postgres/test_migracion_stock_lotes.py::test_la_migracion_concilia_stock_y_reservas_existentes
+- id: TEST-REP-643
+  type: internal_test
+  name: test_pasar_a_lote_deja_el_stock_previo_sin_lote_identificado
+  status: PASSING
+  source: app/backend/tests/postgres/test_migracion_stock_lotes.py::test_pasar_a_lote_deja_el_stock_previo_sin_lote_identificado
 - id: UAT-REP-064
   type: uat
   name: 'Aceptacion de negocio: Como Tecnico quiero declarar lo utilizado y lo desperdiciado de cada lote
@@ -1251,57 +1267,57 @@ items:
   name: nueva_recepcion
   status: IMPLEMENTED
   source: app/backend/app/services/compras.py::nueva_recepcion
-- id: TEST-REP-641
+- id: TEST-REP-644
   type: internal_test
   name: test_sugerencias_restan_disponible_y_en_camino
   status: PASSING
   source: app/backend/tests/test_compras_reglas.py::test_sugerencias_restan_disponible_y_en_camino
-- id: TEST-REP-642
+- id: TEST-REP-645
   type: internal_test
   name: test_solicitud_solo_de_quien_puede_y_con_motivo
   status: PASSING
   source: app/backend/tests/test_compras_reglas.py::test_solicitud_solo_de_quien_puede_y_con_motivo
-- id: TEST-REP-643
+- id: TEST-REP-646
   type: internal_test
   name: test_recepciones_parciales_nunca_superan_lo_pendiente
   status: PASSING
   source: app/backend/tests/test_compras_reglas.py::test_recepciones_parciales_nunca_superan_lo_pendiente
-- id: TEST-REP-644
+- id: TEST-REP-647
   type: internal_test
   name: test_lote_y_series_segun_el_control_del_insumo
   status: PASSING
   source: app/backend/tests/test_compras_reglas.py::test_lote_y_series_segun_el_control_del_insumo
-- id: TEST-REP-645
+- id: TEST-REP-648
   type: internal_test
   name: test_no_se_compra_dos_veces_el_mismo_insumo_en_una_orden
   status: PASSING
   source: app/backend/tests/test_compras_reglas.py::test_no_se_compra_dos_veces_el_mismo_insumo_en_una_orden
-- id: TEST-REP-646
+- id: TEST-REP-649
   type: internal_test
   name: test_en_la_demo_json_compras_no_esta_disponible
   status: PASSING
   source: app/backend/tests/test_compras_reglas.py::test_en_la_demo_json_compras_no_esta_disponible
-- id: TEST-REP-647
+- id: TEST-REP-650
   type: internal_test
   name: test_circuito_completo_con_recepciones_parciales
   status: PASSING
   source: app/backend/tests/postgres/test_compras_postgres.py::test_circuito_completo_con_recepciones_parciales
-- id: TEST-REP-648
+- id: TEST-REP-651
   type: internal_test
   name: test_recepcion_con_lote_y_con_series
   status: PASSING
   source: app/backend/tests/postgres/test_compras_postgres.py::test_recepcion_con_lote_y_con_series
-- id: TEST-REP-649
+- id: TEST-REP-652
   type: internal_test
   name: test_series_un_ingreso_por_unidad
   status: PASSING
   source: app/backend/tests/postgres/test_compras_postgres.py::test_series_un_ingreso_por_unidad
-- id: TEST-REP-650
+- id: TEST-REP-653
   type: internal_test
   name: test_cancelar_sin_recepciones_devuelve_las_solicitudes
   status: PASSING
   source: app/backend/tests/postgres/test_compras_postgres.py::test_cancelar_sin_recepciones_devuelve_las_solicitudes
-- id: TEST-REP-651
+- id: TEST-REP-654
   type: internal_test
   name: test_dos_recepciones_a_la_vez_no_superan_lo_pedido
   status: PASSING
@@ -1321,10 +1337,15 @@ items:
   name: Advertencia no bloqueante por evidencias faltantes al avanzar desde la carga inicial
   status: draft
   coverage: IMPLEMENTED
+- id: BR-REP-048
+  type: business_rule
+  name: Catalogo de equipos de Ventas
+  status: draft
+  coverage: IMPLEMENTED
 - id: US-REP-060
   type: user_story
-  name: Como Recepcion quiero completar un checklist segun el tipo de equipo y saber que informacion falta,
-    sin que me bloquee
+  name: Como Recepcion quiero completar un checklist segun el tipo de equipo del catalogo de Ventas y
+    saber que informacion falta, sin que me bloquee
   status: IMPLEMENTED
   priority: P1
   actor: ACT-RECEP
@@ -1335,27 +1356,42 @@ items:
   actor: ACT-RECEP
   decisions:
   - DC12
+  - DEC-MI-16
 - id: FR-REP-200
   type: functional_requirement
-  name: Administracion configura tipos de equipo y preguntas; todas las verificaciones son opcionales
+  name: Los tipos de equipo son una copia de solo lectura del catalogo de Ventas; Administracion configura
+    las preguntas, su vigencia y su orden; todas las verificaciones son opcionales
   status: IMPLEMENTED
   decisions:
   - DC12
+  - DEC-MI-16
 - id: FR-REP-201
   type: functional_requirement
-  name: Lo registrado guarda la copia de las preguntas y una correccion agrega una version con motivo
+  name: Lo registrado guarda la copia del tipo y de las preguntas y una correccion agrega una version
+    con motivo; un cambio del catalogo no lo altera
   status: IMPLEMENTED
   decisions:
   - DC12
+  - DEC-MI-16
 - id: FR-REP-202
   type: functional_requirement
   name: La advertencia por informacion faltante nunca bloquea y la confirmacion queda registrada
   status: IMPLEMENTED
   decisions:
   - DC12
+  - DEC-MI-16
+- id: FR-REP-203
+  type: functional_requirement
+  name: Sin la columna de Ventas definida (ABI-42) no hay tipos y el checklist no se ofrece; si el origen
+    falla, la copia no cambia
+  status: IMPLEMENTED
+  decisions:
+  - DC12
+  - DEC-MI-16
 - id: TR-REP-164
   type: technical_requirement
-  name: services/checklist.py, application/checklist.py y la migracion 20261113001100
+  name: services/checklist.py, application/checklist.py (sincronizar_tipos_equipo con el ProveedorCatalogo
+    existente) y las migraciones 20261113001100 y 20261115000100
   status: IMPLEMENTED
 - id: TASK-REP-236
   type: task
@@ -1367,20 +1403,55 @@ items:
   name: registrar_checklist
   status: IMPLEMENTED
   source: app/backend/app/services/checklist.py::registrar_checklist
-- id: TEST-REP-652
+- id: CODE-REP-286
+  type: code_artifact
+  name: sincronizar_tipos_equipo
+  status: IMPLEMENTED
+  source: app/backend/app/application/checklist.py::sincronizar_tipos_equipo
+- id: TEST-REP-655
   type: internal_test
   name: test_advertencia_no_bloquea_y_la_confirmacion_queda
   status: PASSING
   source: app/backend/tests/test_checklist_recepcion.py::test_advertencia_no_bloquea_y_la_confirmacion_queda
-- id: TEST-REP-653
+- id: TEST-REP-656
   type: internal_test
-  name: test_checklist_configurable_con_copia_y_versiones
+  name: test_tipos_informados_son_los_valores_distintos_de_equipos_vigentes
   status: PASSING
-  source: app/backend/tests/postgres/test_checklist_postgres.py::test_checklist_configurable_con_copia_y_versiones
+  source: app/backend/tests/test_checklist_recepcion.py::test_tipos_informados_son_los_valores_distintos_de_equipos_vigentes
+- id: TEST-REP-657
+  type: internal_test
+  name: test_fusion_da_de_alta_reactiva_y_da_de_baja_sin_borrar
+  status: PASSING
+  source: app/backend/tests/test_checklist_recepcion.py::test_fusion_da_de_alta_reactiva_y_da_de_baja_sin_borrar
+- id: TEST-REP-658
+  type: internal_test
+  name: test_cambiar_la_columna_de_origen_queda_auditado
+  status: PASSING
+  source: app/backend/tests/test_checklist_recepcion.py::test_cambiar_la_columna_de_origen_queda_auditado
+- id: TEST-REP-659
+  type: internal_test
+  name: test_sin_columna_definida_no_hay_tipos_ni_se_pide_checklist
+  status: PASSING
+  source: app/backend/tests/postgres/test_checklist_postgres.py::test_sin_columna_definida_no_hay_tipos_ni_se_pide_checklist
+- id: TEST-REP-660
+  type: internal_test
+  name: test_tipos_desde_ventas_preguntas_y_checklist_con_copia
+  status: PASSING
+  source: app/backend/tests/postgres/test_checklist_postgres.py::test_tipos_desde_ventas_preguntas_y_checklist_con_copia
+- id: TEST-REP-661
+  type: internal_test
+  name: test_origen_caido_o_ambiguo_no_cambia_la_copia
+  status: PASSING
+  source: app/backend/tests/postgres/test_checklist_postgres.py::test_origen_caido_o_ambiguo_no_cambia_la_copia
+- id: TEST-REP-662
+  type: internal_test
+  name: test_codigos_anteriores_de_la_migracion_siguen_siendo_validos
+  status: PASSING
+  source: app/backend/tests/postgres/test_checklist_postgres.py::test_codigos_anteriores_de_la_migracion_siguen_siendo_validos
 - id: UAT-REP-066
   type: uat
-  name: 'Aceptacion de negocio: Como Recepcion quiero completar un checklist segun el tipo de equipo y
-    saber que informaci'
+  name: 'Aceptacion de negocio: Como Recepcion quiero completar un checklist segun el tipo de equipo del
+    catalogo de Venta'
   status: PENDING
 links:
 - from: PROC-REP
@@ -1599,6 +1670,12 @@ links:
 - from: TEST-REP-604
   to: FR-REP-172
   relationship: verifies
+- from: TEST-REP-605
+  to: CODE-REP-270
+  relationship: exercises
+- from: TEST-REP-605
+  to: FR-REP-172
+  relationship: verifies
 - from: UAT-REP-055
   to: US-REP-049
   relationship: accepts
@@ -1659,12 +1736,6 @@ links:
 - from: CODE-REP-272
   to: TASK-REP-226
   relationship: produced_by
-- from: TEST-REP-605
-  to: CODE-REP-272
-  relationship: exercises
-- from: TEST-REP-605
-  to: FR-REP-176
-  relationship: verifies
 - from: TEST-REP-606
   to: CODE-REP-272
   relationship: exercises
@@ -1681,6 +1752,12 @@ links:
   to: CODE-REP-272
   relationship: exercises
 - from: TEST-REP-608
+  to: FR-REP-176
+  relationship: verifies
+- from: TEST-REP-609
+  to: CODE-REP-272
+  relationship: exercises
+- from: TEST-REP-609
   to: FR-REP-176
   relationship: verifies
 - from: UAT-REP-056
@@ -1776,12 +1853,6 @@ links:
 - from: CODE-REP-273
   to: TASK-REP-227
   relationship: produced_by
-- from: TEST-REP-609
-  to: CODE-REP-273
-  relationship: exercises
-- from: TEST-REP-609
-  to: FR-REP-178
-  relationship: verifies
 - from: TEST-REP-610
   to: CODE-REP-273
   relationship: exercises
@@ -1804,6 +1875,12 @@ links:
   to: CODE-REP-273
   relationship: exercises
 - from: TEST-REP-613
+  to: FR-REP-178
+  relationship: verifies
+- from: TEST-REP-614
+  to: CODE-REP-273
+  relationship: exercises
+- from: TEST-REP-614
   to: FR-REP-178
   relationship: verifies
 - from: UAT-REP-057
@@ -1848,12 +1925,6 @@ links:
 - from: CODE-REP-274
   to: TASK-REP-228
   relationship: produced_by
-- from: TEST-REP-614
-  to: CODE-REP-274
-  relationship: exercises
-- from: TEST-REP-614
-  to: FR-REP-181
-  relationship: verifies
 - from: TEST-REP-615
   to: CODE-REP-274
   relationship: exercises
@@ -1864,6 +1935,12 @@ links:
   to: CODE-REP-274
   relationship: exercises
 - from: TEST-REP-616
+  to: FR-REP-181
+  relationship: verifies
+- from: TEST-REP-617
+  to: CODE-REP-274
+  relationship: exercises
+- from: TEST-REP-617
   to: FR-REP-181
   relationship: verifies
 - from: UAT-REP-058
@@ -1938,12 +2015,6 @@ links:
 - from: CODE-REP-276
   to: TASK-REP-229
   relationship: produced_by
-- from: TEST-REP-617
-  to: CODE-REP-275
-  relationship: exercises
-- from: TEST-REP-617
-  to: FR-REP-183
-  relationship: verifies
 - from: TEST-REP-618
   to: CODE-REP-275
   relationship: exercises
@@ -1966,6 +2037,12 @@ links:
   to: CODE-REP-275
   relationship: exercises
 - from: TEST-REP-621
+  to: FR-REP-183
+  relationship: verifies
+- from: TEST-REP-622
+  to: CODE-REP-275
+  relationship: exercises
+- from: TEST-REP-622
   to: FR-REP-183
   relationship: verifies
 - from: UAT-REP-059
@@ -2016,12 +2093,6 @@ links:
 - from: CODE-REP-277
   to: TASK-REP-230
   relationship: produced_by
-- from: TEST-REP-622
-  to: CODE-REP-277
-  relationship: exercises
-- from: TEST-REP-622
-  to: FR-REP-185
-  relationship: verifies
 - from: TEST-REP-623
   to: CODE-REP-277
   relationship: exercises
@@ -2044,6 +2115,12 @@ links:
   to: CODE-REP-277
   relationship: exercises
 - from: TEST-REP-626
+  to: FR-REP-185
+  relationship: verifies
+- from: TEST-REP-627
+  to: CODE-REP-277
+  relationship: exercises
+- from: TEST-REP-627
   to: FR-REP-185
   relationship: verifies
 - from: UAT-REP-060
@@ -2088,12 +2165,6 @@ links:
 - from: CODE-REP-278
   to: TASK-REP-231
   relationship: produced_by
-- from: TEST-REP-627
-  to: CODE-REP-278
-  relationship: exercises
-- from: TEST-REP-627
-  to: FR-REP-188
-  relationship: verifies
 - from: TEST-REP-628
   to: CODE-REP-278
   relationship: exercises
@@ -2104,6 +2175,12 @@ links:
   to: CODE-REP-278
   relationship: exercises
 - from: TEST-REP-629
+  to: FR-REP-188
+  relationship: verifies
+- from: TEST-REP-630
+  to: CODE-REP-278
+  relationship: exercises
+- from: TEST-REP-630
   to: FR-REP-188
   relationship: verifies
 - from: UAT-REP-061
@@ -2145,12 +2222,6 @@ links:
 - from: CODE-REP-279
   to: TASK-REP-232
   relationship: produced_by
-- from: TEST-REP-630
-  to: CODE-REP-279
-  relationship: exercises
-- from: TEST-REP-630
-  to: FR-REP-189
-  relationship: verifies
 - from: TEST-REP-631
   to: CODE-REP-279
   relationship: exercises
@@ -2167,6 +2238,12 @@ links:
   to: CODE-REP-279
   relationship: exercises
 - from: TEST-REP-633
+  to: FR-REP-189
+  relationship: verifies
+- from: TEST-REP-634
+  to: CODE-REP-279
+  relationship: exercises
+- from: TEST-REP-634
   to: FR-REP-189
   relationship: verifies
 - from: UAT-REP-062
@@ -2205,16 +2282,16 @@ links:
 - from: CODE-REP-280
   to: TASK-REP-233
   relationship: produced_by
-- from: TEST-REP-634
+- from: TEST-REP-635
   to: CODE-REP-280
   relationship: exercises
-- from: TEST-REP-634
+- from: TEST-REP-635
   to: FR-REP-191
   relationship: verifies
-- from: TEST-REP-635
+- from: TEST-REP-636
   to: CODE-REP-280
   relationship: exercises
-- from: TEST-REP-635
+- from: TEST-REP-636
   to: FR-REP-191
   relationship: verifies
 - from: UAT-REP-063
@@ -2280,12 +2357,6 @@ links:
 - from: CODE-REP-282
   to: TASK-REP-234
   relationship: produced_by
-- from: TEST-REP-636
-  to: CODE-REP-281
-  relationship: exercises
-- from: TEST-REP-636
-  to: FR-REP-193
-  relationship: verifies
 - from: TEST-REP-637
   to: CODE-REP-281
   relationship: exercises
@@ -2308,6 +2379,24 @@ links:
   to: CODE-REP-281
   relationship: exercises
 - from: TEST-REP-640
+  to: FR-REP-193
+  relationship: verifies
+- from: TEST-REP-641
+  to: CODE-REP-281
+  relationship: exercises
+- from: TEST-REP-641
+  to: FR-REP-193
+  relationship: verifies
+- from: TEST-REP-642
+  to: CODE-REP-281
+  relationship: exercises
+- from: TEST-REP-642
+  to: FR-REP-193
+  relationship: verifies
+- from: TEST-REP-643
+  to: CODE-REP-281
+  relationship: exercises
+- from: TEST-REP-643
   to: FR-REP-193
   relationship: verifies
 - from: UAT-REP-064
@@ -2364,24 +2453,6 @@ links:
 - from: CODE-REP-284
   to: TASK-REP-235
   relationship: produced_by
-- from: TEST-REP-641
-  to: CODE-REP-283
-  relationship: exercises
-- from: TEST-REP-641
-  to: FR-REP-196
-  relationship: verifies
-- from: TEST-REP-642
-  to: CODE-REP-283
-  relationship: exercises
-- from: TEST-REP-642
-  to: FR-REP-196
-  relationship: verifies
-- from: TEST-REP-643
-  to: CODE-REP-283
-  relationship: exercises
-- from: TEST-REP-643
-  to: FR-REP-196
-  relationship: verifies
 - from: TEST-REP-644
   to: CODE-REP-283
   relationship: exercises
@@ -2428,6 +2499,24 @@ links:
   to: CODE-REP-283
   relationship: exercises
 - from: TEST-REP-651
+  to: FR-REP-196
+  relationship: verifies
+- from: TEST-REP-652
+  to: CODE-REP-283
+  relationship: exercises
+- from: TEST-REP-652
+  to: FR-REP-196
+  relationship: verifies
+- from: TEST-REP-653
+  to: CODE-REP-283
+  relationship: exercises
+- from: TEST-REP-653
+  to: FR-REP-196
+  relationship: verifies
+- from: TEST-REP-654
+  to: CODE-REP-283
+  relationship: exercises
+- from: TEST-REP-654
   to: FR-REP-196
   relationship: verifies
 - from: UAT-REP-065
@@ -2451,6 +2540,9 @@ links:
 - from: ACC-REP-082
   to: BR-REP-040
   relationship: governed_by
+- from: ACC-REP-082
+  to: BR-REP-048
+  relationship: governed_by
 - from: FR-REP-200
   to: ACC-REP-082
   relationship: derives_from
@@ -2469,6 +2561,12 @@ links:
 - from: TR-REP-164
   to: FR-REP-202
   relationship: satisfies
+- from: FR-REP-203
+  to: ACC-REP-082
+  relationship: derives_from
+- from: TR-REP-164
+  to: FR-REP-203
+  relationship: satisfies
 - from: TASK-REP-236
   to: TR-REP-164
   relationship: implements
@@ -2478,16 +2576,58 @@ links:
 - from: CODE-REP-285
   to: TASK-REP-236
   relationship: produced_by
-- from: TEST-REP-652
+- from: CODE-REP-286
+  to: TR-REP-164
+  relationship: implements
+- from: CODE-REP-286
+  to: TASK-REP-236
+  relationship: produced_by
+- from: TEST-REP-655
   to: CODE-REP-285
   relationship: exercises
-- from: TEST-REP-652
+- from: TEST-REP-655
   to: FR-REP-200
   relationship: verifies
-- from: TEST-REP-653
+- from: TEST-REP-656
   to: CODE-REP-285
   relationship: exercises
-- from: TEST-REP-653
+- from: TEST-REP-656
+  to: FR-REP-200
+  relationship: verifies
+- from: TEST-REP-657
+  to: CODE-REP-285
+  relationship: exercises
+- from: TEST-REP-657
+  to: FR-REP-200
+  relationship: verifies
+- from: TEST-REP-658
+  to: CODE-REP-285
+  relationship: exercises
+- from: TEST-REP-658
+  to: FR-REP-200
+  relationship: verifies
+- from: TEST-REP-659
+  to: CODE-REP-285
+  relationship: exercises
+- from: TEST-REP-659
+  to: FR-REP-200
+  relationship: verifies
+- from: TEST-REP-660
+  to: CODE-REP-285
+  relationship: exercises
+- from: TEST-REP-660
+  to: FR-REP-200
+  relationship: verifies
+- from: TEST-REP-661
+  to: CODE-REP-285
+  relationship: exercises
+- from: TEST-REP-661
+  to: FR-REP-200
+  relationship: verifies
+- from: TEST-REP-662
+  to: CODE-REP-285
+  relationship: exercises
+- from: TEST-REP-662
   to: FR-REP-200
   relationship: verifies
 - from: UAT-REP-066

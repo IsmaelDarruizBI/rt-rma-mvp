@@ -101,7 +101,7 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 | M2 | `correccion_vinculo_equipo` | `orden`, `usuario` | Posición única por Orden; inmutable; códigos de Equipo como texto (DEC-MI-11, `20261113000800`) |
 | M3 | `lote_insumo` | `insumo`, `usuario` | Número único por insumo; inmutable; el saldo sale del libro (`v_saldo_lote`) (DEC-MI-10, `20261113000900`) |
 | M3 | `proveedor`, `solicitud_compra`, `orden_compra`, `orden_compra_item`, `recepcion_compra`, `recepcion_compra_linea` | `insumo`, `usuario`, entre sí | Recepción ≤ pedido (trigger con bloqueo de la orden); remito único por orden; confirmada o cancelada una vez; líneas inmutables (DEC-MI-09, `20261113001000`) |
-| M6 | `tipo_equipo`, `checklist_pregunta` | entre sí | Sin borrado; al menos dos opciones por pregunta (DC12, `20261113001100`) |
+| M6 | `tipo_equipo`, `checklist_pregunta` | entre sí | Sin borrado; al menos dos opciones por pregunta (DC12, `20261113001100`). `tipo_equipo` es la copia de solo lectura del catálogo de Ventas: código de Ventas tal cual, columna de origen y última sincronización (DEC-MI-16, `20261115000100`) |
 | M2 | `checklist_registro`, `informacion_faltante_confirmacion` | `orden`, `usuario` | Posición única por Orden; motivo desde la segunda versión; inmutables (DC12) |
 | M3 | `insumo` | — | `stock_fisico >= stock_reservado >= 0`; nace en cero |
 | M3 | `movimiento_inventario` | `insumo`, `orden`, `detalle` y `ejecucion` (comp.), sí mismo (comp.), `motivo_ajuste`, `usuario`, `accion_usuario` | Vínculos por tipo; DESPERDICIO y DEVOLUCION sin operación; inmutable; sin ON CONFLICT |
@@ -171,6 +171,7 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 - **`20261113000900_lotes_inventario.sql`:** `insumo.control` (SIN_LOTE por defecto: el stock existente no cambia) y `insumo.precio`; `lote_insumo`; `movimiento_inventario.lote_id`; desperdicio y lote en `ejecucion_insumo`; la vista `v_saldo_lote`; DESPERDICIO y DEVOLUCION habilitados; el trigger del libro valida lotes y el stock sin lote identificado, y `verificar_integridad()` suma LOTE_NEGATIVO y SIN_LOTE_NEGATIVO (DEC-MI-10).
 - **`20261113001000_compras.sql`:** `proveedor`, `solicitud_compra`, `orden_compra`, `orden_compra_item`, `recepcion_compra`, `recepcion_compra_linea`; triggers que impiden recibir más de lo pedido (aun en paralelo) y cambiar lo confirmado (DEC-MI-09).
 - **`20261113001100_checklist_recepcion.sql`:** `tipo_equipo`, `checklist_pregunta`, `checklist_registro`, `informacion_faltante_confirmacion` (DC12).
+- **`20261115000100_tipo_equipo_catalogo_ventas.sql`:** `tipo_equipo` pasa a ser la copia del catálogo de Ventas (DEC-MI-16): `campo_origen` y `sincronizado_en` (admiten vacío) y la restricción del código ampliada (todo `TEQ-...` sigue siendo válido). Sin tablas nuevas.
 
 Con ellas el esquema `rma` tiene 69 tablas y 8 vistas (`tests/postgres/test_base_local.py`, `supabase/tests/10_esquema.sql`).
 

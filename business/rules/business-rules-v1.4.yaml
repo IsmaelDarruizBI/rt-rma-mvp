@@ -900,6 +900,11 @@ rules:
       de equipo y las configura Administracion (BR-REP-040); todas las
       verificaciones son opcionales y un checklist incompleto no bloquea la
       recepcion. Lo cargado se puede guardar y recuperar posteriormente.
+      DEC-MI-16 (15/11/2026): el tipo de equipo se elige entre los del
+      catalogo de Ventas de Gestion RT (BR-REP-048); la Orden conserva su
+      identificador y su descripcion al elegirlo, y un cambio posterior del
+      catalogo no modifica los checklists registrados. Que dato de Ventas es
+      el tipo esta pendiente (ABI-42): mientras tanto no se ofrece.
     status: approved
 
   - id: BR-REP-025
@@ -1740,6 +1745,9 @@ rules:
       ejemplo el plazo del retiro demorado, BR-REP-033), precios y costos.
       Cada cambio respeta los permisos, se audita, preserva las referencias
       historicas y no cambia los precios de las Ordenes existentes.
+      Del checklist, Administracion configura las preguntas, sus opciones,
+      su vigencia y su orden; los tipos de equipo los define Gestion RT y no
+      se modifican desde RMA (DEC-MI-16).
     status: approved
 
   - id: BR-REP-041
@@ -1931,6 +1939,14 @@ rules:
       falla y registra fecha, usuario y resultado de cada intento. El alta de
       una Orden nunca consulta el origen de Ventas en linea, y un cambio
       posterior del catalogo no reescribe Ordenes ni documentos.
+      DEC-MI-16 (15/11/2026): del mismo catalogo, y con la misma lectura de
+      solo lectura, RMA copia los Tipos de Equipo del checklist (BR-REP-024):
+      con su identificador de Ventas, sin crearlos ni editarlos, sin borrar
+      (los que dejan de venir quedan no vigentes) y conservando la copia
+      anterior si la lectura falla. Es la unica integracion autorizada con
+      Gestion RT para el checklist: no se vinculan equipos con productos o
+      ventas, no se consultan Ordenes de venta, no se modifica nada en Gestion
+      RT y no se sincroniza inventario. Que dato es el tipo: ABI-42.
     status: approved
 
   - id: BR-REP-049

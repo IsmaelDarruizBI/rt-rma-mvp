@@ -2,7 +2,7 @@
 
 La baseline funcional vigente es PROC-REP V1.4, aprobada en DC01 y sincronizada desde `rt-rma-app` (DC02):
 
-- Commit de origen: `3ac91ea6f731c12a25396ce0531fb292663fab60` (rama `spec/macro-integral`: las decisiones DEC-MI-01 a 15 de la macroiteración integral y su estado de implementación, sobre `spec/macro-v14`, con DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
+- Commit de origen: `9854046ea54aa28dc2a9ab6dfe73721b168d97af` (rama `spec/macro-integral`: las decisiones DEC-MI-01 a 16 de la macroiteración integral y su estado de implementación, sobre `spec/macro-v14`, con DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
 - Contenido funcional aprobado en `b6cc3a5`.
 - Manifiesto de procedencia: `business/FUNCTIONAL_SOURCE.json`.
 
@@ -26,12 +26,13 @@ Las tres que figuraban (DC06, DC07 y DC11) se alinearon en la iteración 1: ver 
 | DC27C | Supabase Auth; usuarios, roles y permisos en PostgreSQL | Sin autenticación | - |
 | DC02 | `rt-rma-mvp/business` es una copia generada y verificada | **Implementada por esta sincronización.** El registro de `rt-rma-app` todavía dice NO_IMPLEMENTADO porque se evaluó antes; corresponde actualizarlo en la fuente | - |
 
-## C. Decisiones implementadas en parte (3)
+## C. Decisiones implementadas en parte (4)
 
 | Decisión | Qué dice la baseline | Qué hay en el producto | Qué falta | Pendientes |
 |---|---|---|---|---|
 | DC18 | Cuatro situaciones de custodia con eventos y responsables | `domain/models/enums.py:303-327`: seis valores calculados | Unificar el modelo y registrar cada evento con responsable | - |
-| DC12 | Checklist configurable por tipo de equipo, opcional, con advertencia por información faltante | Tipos de equipo y preguntas configurables y auditados (catálogo inicial vacío); checklist opcional con copia de las preguntas y versiones con motivo; advertencia que nunca bloquea y registra la confirmación (`c8cd64f`) | **Decisión pendiente:** de dónde toma la Orden su tipo de equipo. Hoy lo elige Recepción al completar el checklist. Alternativas: (a) Recepción, como hoy; (b) el modelo técnico del catálogo con su tipo, heredado por la Orden; (c) la categoría del catálogo de Ventas, que solo tienen las Órdenes anteriores | - |
+| DC12 | Checklist configurable por tipo de equipo, opcional, con advertencia por información faltante | Preguntas configurables con vigencia y orden, auditadas; checklist opcional con copia del tipo y de las preguntas y versiones con motivo; advertencia que nunca bloquea (`c8cd64f`, `ef79e45`) | **Dependencia pendiente (ABI-42):** sin tipos de equipo (ver DEC-MI-16) el checklist no se ofrece ni se pide | - |
+| DEC-MI-16 | El Tipo de Equipo viene del catálogo de Ventas de Gestión RT; RMA configura solo las preguntas; la Orden conserva el tipo elegido | Tipos copiados del catálogo de Ventas con el origen de solo lectura existente, sin alta ni edición en RMA; identificador de Ventas y descripción en la Orden; la copia no cambia si el origen falla (`ef79e45`) | **Dependencia pendiente (ABI-42):** qué dato del catálogo de Ventas es el Tipo de Equipo. La tabla que RMA lee no tiene esa entidad y ninguna columna equivale sin ambigüedad; `RMA_TIPO_EQUIPO_CAMPO` queda sin definir | - |
 | GLO-01 | Estación = Mesa de trabajo, con «Mesa de trabajo» como nombre visible | Una sola entidad; la interfaz dice «Estación de trabajo» | Texto visible | - |
 
 ## D. Diferencias de recorrido entre el grafo V1.4 y lo que registra el backend

@@ -4,11 +4,11 @@
 
 | Ítem | Valor |
 |---|---|
-| Fuente | `rt-rma-app`, rama `spec/macro-integral` (decisiones DEC-MI-01 a 15 sobre `spec/macro-v14`: V1.4 con DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`) |
-| Commit de origen | `3ac91ea6f731c12a25396ce0531fb292663fab60` |
+| Fuente | `rt-rma-app`, rama `spec/macro-integral` (decisiones DEC-MI-01 a 16 sobre `spec/macro-v14`: V1.4 con DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`) |
+| Commit de origen | `9854046ea54aa28dc2a9ab6dfe73721b168d97af` |
 | Contenido funcional aprobado | `b6cc3a5` (DC01, 24/10/2026) |
 | Manifiesto | `business/FUNCTIONAL_SOURCE.json`: repositorio, commit, etiqueta y SHA-256 de cada archivo |
-| Sincronizado | 13/11/2026 (macroiteración integral: DEC-MI-01 a 15); antes, 12/11/2026 (macroiteración: estado de implementación); antes, 11/11/2026 (iteración 1: DEC-IT1-01 a 05), 10/11/2026 (DC31, `ab928b6`) y 24/10/2026, rama `sync/functional-v1.4` |
+| Sincronizado | 15/11/2026 (DEC-MI-16: tipo de equipo desde el catálogo de Ventas, ABI-42); antes, 13/11/2026 (macroiteración integral: DEC-MI-01 a 15); antes, 12/11/2026 (macroiteración: estado de implementación); antes, 11/11/2026 (iteración 1: DEC-IT1-01 a 05), 10/11/2026 (DC31, `ab928b6`) y 24/10/2026, rama `sync/functional-v1.4` |
 
 ## Qué contiene `business/`
 

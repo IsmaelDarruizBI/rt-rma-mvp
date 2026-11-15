@@ -288,8 +288,9 @@ decisions:
     notes: La advertencia incluye las verificaciones del checklist sin registrar (interpretacion de "advertir cuando falte informacion"; ver ABI-02).
     implementation:
       status: PARCIAL
-      evidence: "rt-rma-mvp feat/macro-integral c8cd64f (tipos de equipo y preguntas configurables y auditados, catalogo inicial vacio; checklist opcional con copia de las preguntas y versiones con motivo; advertencia por informacion faltante que nunca bloquea y registra la confirmacion)"
-      gap: "falta decidir de donde toma la Orden su tipo de equipo: hoy lo elige Recepcion al completar el checklist. Alternativas: (a) que lo elija Recepcion (como hoy); (b) que el modelo tecnico del catalogo tenga su tipo y la Orden lo herede; (c) derivarlo de la categoria del catalogo de Ventas, que solo tienen las Ordenes anteriores."
+      evidence: "rt-rma-mvp feat/macro-integral c8cd64f (preguntas configurables y auditadas; checklist opcional con copia de las preguntas y versiones con motivo; advertencia por informacion faltante que nunca bloquea y registra la confirmacion); rt-rma-mvp feat/macro-integral ef79e45 (DEC-MI-16: tipos de equipo copiados del catalogo de Ventas con el origen de solo lectura existente, sin alta ni edicion en RMA; preguntas por identificador externo con orden y vigencia; la Orden conserva el identificador y la descripcion del tipo)"
+      gap: "falta definir que dato del catalogo de Ventas es el Tipo de Equipo (ABI-42): mientras no se defina no hay tipos y el checklist no se ofrece."
+    open: [ABI-42]
 
   - id: DC23
     block: 4
@@ -981,6 +982,36 @@ decisions:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/macro-integral ac7a56d (services/operativa.py texto_de_motivo: catalogos separados de cancelacion e interrupcion, Otro exige descripcion y el registro copia el texto)"
     open: [ABI-29]
+
+  - id: DEC-MI-16
+    block: MI
+    title: El Tipo de Equipo del checklist se obtiene del catalogo de Ventas de Gestion RT
+    status: CONFIRMADA
+    rules: [BR-REP-024, BR-REP-040, BR-REP-048]
+    nodes: [PROC-REP-032]
+    features: [FEAT-REP-001, FEAT-REP-010]
+    notes: >
+      Aprobada el 15/11/2026; completa DC12. (1) Gestion RT es la fuente de
+      verdad de los Tipos de Equipo. (2) RMA no crea un catalogo propio de
+      tipos. (3) Las preguntas del checklist se configuran en RMA asociadas al
+      identificador estable del tipo en Gestion RT. (4) Al ingresar una Orden,
+      Recepcion elige el tipo entre los valores del catalogo. (5) La Orden
+      conserva el identificador y una descripcion historica del tipo elegido.
+      (6) Un cambio posterior del catalogo no modifica los checklists ya
+      registrados. (7) Administracion gestiona las preguntas pero no modifica
+      desde RMA los tipos de Gestion RT. La integracion autorizada es solo la
+      lectura del catalogo de tipos: siguen excluidos vincular equipos con
+      productos o ventas, consultar Ordenes de venta, modificar registros o la
+      aplicacion de Gestion RT, sincronizar inventario y cualquier otra
+      integracion. El catalogo de Ventas que RMA lee (raw_TipoProducto) no tiene
+      una entidad Tipo de Equipo: sus clasificaciones son comerciales
+      (tp_categoria, tp_subcat_1, tp_gp) y ninguna equivale sin ambiguedad;
+      que dato corresponde queda en ABI-42.
+    implementation:
+      status: PARCIAL
+      evidence: "rt-rma-mvp feat/macro-integral ef79e45 (application/checklist.py sincronizar_tipos_equipo: lectura con el ProveedorCatalogo existente fuera de la transaccion, copia en rma.tipo_equipo sin borrar, auditada; RMA_TIPO_EQUIPO_CAMPO sin definir por defecto; migracion 20261115000100)"
+      gap: "falta definir que columna (o tabla) de Gestion RT es el Tipo de Equipo (ABI-42); con una columna tp_* basta configurarla y sincronizar, con otra tabla hace falta un adaptador nuevo del mismo puerto."
+    open: [ABI-42]
 
   # ------------------------------------------------------------------ Baseline y sincronizacion
   - id: DC01
@@ -1776,6 +1807,25 @@ open_items:
       auditoria, y que la correccion no altera los comprobantes emitidos, pero
       no hasta que momento de la Orden se admite (por ejemplo, hasta la
       entrega) ni si cambia segun el dato.
+
+  - id: ABI-42
+    title: Que dato del catalogo de Ventas de Gestion RT es el Tipo de Equipo
+    impact: POSTERIOR
+    decisions: [DEC-MI-16, DC12]
+    rules: [BR-REP-024, BR-REP-048]
+    nodes: [PROC-REP-032]
+    features: [FEAT-REP-001, FEAT-REP-010]
+    needed: >
+      DEC-MI-16 fija que el Tipo de Equipo viene del catalogo de Ventas, pero
+      la tabla que RMA lee (raw_TipoProducto) no tiene esa entidad. Candidatas,
+      ninguna equivalente sin ambiguedad: tp_categoria (IPHONE, SMARTPHONE,
+      ACCESORIOS: mezcla linea de marca y tipo), tp_subcat_1 (incluye la
+      condicion nuevo o usado) y tp_gp (grupo de productos, tambien con la
+      condicion; hay registros con subcategoria IPHONE USADOS y grupo
+      smartphone_usados_); tp_id es el producto completo (modelo, variante,
+      capacidad y color), no un tipo. Hace falta que Gestion RT indique la
+      columna, o una tabla de tipos con identificador estable, y la lista de
+      valores vigentes.
 
 improvements:
 

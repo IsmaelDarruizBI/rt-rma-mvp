@@ -738,6 +738,7 @@ origen de Ventas --adaptador--> ProveedorCatalogo --> sincronizacion
 | `RMA_CATALOGO_SHEETS_CUENTA` | (vacia) | cuenta de servicio a impersonar (IAM Credentials) |
 | `RMA_CATALOGO_ARCHIVO` | (obligatoria con archivo) | ruta del CSV |
 | `RMA_CATALOGO_TIMEOUT_S` | `30` | espera maxima de la lectura |
+| `RMA_TIPO_EQUIPO_CAMPO` | (vacia) | DEC-MI-16: columna de Ventas que es el Tipo de Equipo del checklist (`tp_categoria`, `tp_subcat_1` o `tp_gp`). Vacia: no se copian tipos (decision pendiente, ABI-42) |
 
 Una configuracion incompleta impide arrancar el backend (en Cloud Run la
 revision nueva no recibe trafico y sigue la anterior). Los tokens se piden
