@@ -44,6 +44,7 @@ CLAVE = ec.generate_private_key(ec.SECP256R1())
 IDENTIDAD = {
     f.RECEPCION: str(uuid.uuid4()),
     f.ADMINISTRADOR: str(uuid.uuid4()),
+    f.TECNICO: str(uuid.uuid4()),
 }
 
 
@@ -194,3 +195,148 @@ def test_la_consulta_de_ordenes_es_un_permiso_configurable(api):
     assert cliente.get("/api/orders", headers=admin).status_code == 200
     # El inventario es otro permiso: no cambio.
     assert cliente.get("/api/inventory", headers=recepcion).status_code == 200
+
+
+def test_seguridad_de_roles_compras_y_configuracion(api, base):
+    """Macroiteracion integral con sesion real: nadie se da permisos de
+    administracion a si mismo ni actua en nombre de otro; compras, costos,
+    roles, permisos y la copia del catalogo de Ventas (DC12) quedan para
+    quien tiene el permiso; consultar no habilita escribir; nunca queda el
+    sistema sin Administrador."""
+    from app.storage.postgres.compras import PostgresComprasRepository
+    from app.storage.postgres.configuracion import (
+        PostgresConfiguracionRepository,
+    )
+    from app.storage.postgres.operativa import PostgresConfiguracionOperativa
+
+    app, cliente, verificador = api
+    contexto = app.state.contexto
+    unidad = contexto.unidad_de_trabajo
+    app.state.contexto = replace(
+        contexto,
+        configuracion=PostgresConfiguracionRepository(unidad),
+        compras=PostgresComprasRepository(unidad),
+        operativa=PostgresConfiguracionOperativa(unidad),
+    )
+    _activar(app, verificador)
+    recepcion = _sesion(f.RECEPCION)
+    tecnico = _sesion(f.TECNICO)
+    admin = _sesion(f.ADMINISTRADOR)
+
+    def codigo(respuesta) -> str:
+        return respuesta.json()["error"]["codigo"]
+
+    # 1. Darse permisos de administracion: rechazado (403) antes de ejecutar.
+    propia = cliente.put(
+        f"/api/admin/users/{f.RECEPCION}/roles",
+        json={"usuario_id": f.RECEPCION, "roles": ["ADMINISTRADOR"]},
+        headers=recepcion,
+    )
+    assert propia.status_code == 403, propia.text
+    permiso = cliente.put(
+        "/api/admin/permissions/COMPRAS_GESTIONAR",
+        json={"usuario_id": f.TECNICO, "roles": ["TECNICO"]},
+        headers=tecnico,
+    )
+    assert permiso.status_code == 403, permiso.text
+    # ... ni declarando ser el Administrador en el cuerpo.
+    suplantada = cliente.put(
+        f"/api/admin/users/{f.RECEPCION}/roles",
+        json={"usuario_id": f.ADMINISTRADOR, "roles": ["ADMINISTRADOR"]},
+        headers=recepcion,
+    )
+    assert suplantada.status_code == 403
+    assert codigo(suplantada) == "IDENTIDAD_NO_COINCIDE"
+    roles = _sql(
+        base,
+        "select o.codigo from rma.usuario_rol r "
+        "join rma.usuario u on u.id = r.usuario_id "
+        "join rma.rol o on o.id = r.rol_id where u.codigo = %s",
+        (f.RECEPCION,),
+    )
+    assert roles == [("RECEPCION",)]
+
+    # 2. Configuracion y la copia del catalogo de Ventas: solo
+    # Administracion.
+    for metodo, ruta, cuerpo in (
+        ("get", "/api/admin/checklist", None),
+        ("get", "/api/admin/users", None),
+        ("get", "/api/admin/permissions", None),
+        ("get", "/api/admin/suppliers", None),
+        ("post", "/api/admin/equipment-types/sync", {"usuario_id": f.TECNICO}),
+        (
+            "post",
+            "/api/admin/checklist-questions",
+            {
+                "usuario_id": f.TECNICO,
+                "tipo_equipo_id": "x",
+                "texto": "x",
+                "opciones": ["a", "b"],
+            },
+        ),
+    ):
+        respuesta = getattr(cliente, metodo)(
+            ruta, headers=tecnico, **({"json": cuerpo} if cuerpo else {})
+        )
+        assert respuesta.status_code == 403, (ruta, respuesta.text)
+    assert (
+        cliente.get("/api/admin/checklist", headers=admin).status_code == 200
+    )
+
+    # 3. Compras y costos: el Tecnico no consulta ni gestiona.
+    assert (
+        cliente.get("/api/purchases/costs", headers=tecnico).status_code == 403
+    )
+    assert (
+        cliente.get("/api/purchases/orders", headers=tecnico).status_code
+        == 403
+    )
+    solicitud = {
+        "usuario_id": f.TECNICO,
+        "insumo_id": f.INSUMO_BATERIA,
+        "cantidad": "1",
+        "motivo": "x",
+    }
+    escrita = cliente.post(
+        "/api/purchases/requests", json=solicitud, headers=tecnico
+    )
+    assert escrita.status_code in (403, 409), escrita.text
+    assert _sql(base, "select count(*) from rma.solicitud_compra") == [(0,)]
+    assert (
+        cliente.get("/api/purchases/costs", headers=recepcion).status_code
+        == 200
+    )
+
+    # 4. Consultar no habilita escribir: con COMPRAS_CONSULTAR el Tecnico
+    # lee, pero sigue sin poder crear una solicitud.
+    habilitada = cliente.put(
+        "/api/admin/permissions/COMPRAS_CONSULTAR",
+        json={
+            "usuario_id": f.ADMINISTRADOR,
+            "roles": [
+                "RECEPCION",
+                "COORDINADOR_RMA",
+                "ADMINISTRADOR",
+                "TECNICO",
+            ],
+        },
+        headers=admin,
+    )
+    assert habilitada.status_code == 200, habilitada.text
+    assert (
+        cliente.get("/api/purchases/costs", headers=tecnico).status_code == 200
+    )
+    escrita = cliente.post(
+        "/api/purchases/requests", json=solicitud, headers=tecnico
+    )
+    assert escrita.status_code in (403, 409), escrita.text
+    assert _sql(base, "select count(*) from rma.solicitud_compra") == [(0,)]
+
+    # 5. Nunca sin Administrador: el unico no puede quitarse el rol.
+    sin_admin = cliente.put(
+        f"/api/admin/users/{f.ADMINISTRADOR}/roles",
+        json={"usuario_id": f.ADMINISTRADOR, "roles": ["RECEPCION"]},
+        headers=admin,
+    )
+    assert sin_admin.status_code == 409, sin_admin.text
+    assert "Administrador" in sin_admin.json()["error"]["mensaje"]

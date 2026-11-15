@@ -1,28 +1,66 @@
 """Checklist de recepcion por tipo de equipo y advertencia por informacion
-faltante (DC12). El catalogo lo administra Administracion sobre PostgreSQL
-(DC23); en JSON esta vacio y no se edita."""
+faltante (DC12).
+
+Los Tipos de Equipo son una copia del catalogo de Ventas de Gestion RT:
+``sincronizar_tipos_equipo`` los lee con el mismo origen de solo lectura
+que la copia de productos (``contexto.proveedor_catalogo``), de la columna
+que fija ``RMA_TIPO_EQUIPO_CAMPO``, y los guarda en RMA. Administracion no
+los crea ni los edita; configura las preguntas de cada uno (DC23). Todo
+sobre PostgreSQL; en JSON el catalogo esta vacio y no se edita."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import datetime
 
 from app.domain.models import OrdenReparacion
 from app.domain.models.checklist import PreguntaChecklist, TipoEquipo
-from app.services import EntidadNoEncontradaError
+from app.integraciones.catalogo import CatalogoOrigenInvalidoError
+from app.services import EntidadNoEncontradaError, PrecondicionInvalidaError
+from app.services.autorizacion import validar_alguno_de
 from app.services.checklist import (
     cambios_de_pregunta,
-    cambios_de_tipo_equipo,
     confirmar_informacion_faltante,
+    fusionar_tipos_equipo,
     registrar_checklist,
+    tipos_informados,
 )
+from app.services.permisos import CONFIGURACION_ADMINISTRAR
 
 from .contexto import ApplicationContext
 from .modificacion import orden_para_modificar
 from .operativa import _editable
+
+DECISION_PENDIENTE = (
+    "Falta definir qué dato del catálogo de Ventas es el tipo de equipo "
+    "(RMA_TIPO_EQUIPO_CAMPO): es una decisión de negocio pendiente de DC12."
+)
+
+
+def origen_tipos_equipo(
+    contexto: ApplicationContext, tipos: Sequence[TipoEquipo]
+) -> dict:
+    """De donde salen los tipos y cuando se actualizaron por ultima vez."""
+    fechas = [t.sincronizado_en for t in tipos if t.sincronizado_en]
+    origen = contexto.proveedor_catalogo
+    return {
+        "campo": contexto.campo_tipo_equipo,
+        "definido": contexto.campo_tipo_equipo is not None,
+        "origen": origen.descripcion if origen else None,
+        "sincronizable": (
+            contexto.operativa.editable
+            and contexto.campo_tipo_equipo is not None
+            and origen is not None
+        ),
+        "ultima_sincronizacion": max(fechas) if fechas else None,
+        "aviso": (None if contexto.campo_tipo_equipo else DECISION_PENDIENTE),
+    }
 
 
 def catalogo(contexto: ApplicationContext, *, solo_vigentes: bool) -> dict:
     with contexto.lectura():
         tipos = contexto.operativa.listar_tipos_equipo()
         preguntas = contexto.operativa.listar_preguntas_checklist()
+    origen = origen_tipos_equipo(contexto, tipos)
     if solo_vigentes:
         tipos = [t for t in tipos if t.activo]
         vigentes = {t.id for t in tipos}
@@ -33,7 +71,27 @@ def catalogo(contexto: ApplicationContext, *, solo_vigentes: bool) -> dict:
         "editable": contexto.operativa.editable,
         "tipos": tipos,
         "preguntas": preguntas,
+        "origen": origen,
     }
+
+
+def checklist_disponible(contexto: ApplicationContext) -> bool:
+    """Hay al menos un tipo de equipo vigente: se puede completar un
+    checklist. En la lectura en curso, si hay una."""
+    with contexto.lectura():
+        return any(t.activo for t in contexto.operativa.listar_tipos_equipo())
+
+
+@dataclass(frozen=True)
+class ResultadoTiposEquipo:
+    campo: str
+    origen: str
+    fecha: datetime
+    vigentes: int
+    nuevos: int
+    reactivados: int
+    dados_de_baja: int
+    sin_cambios: int
 
 
 def _siguiente(existentes: Sequence[str], prefijo: str) -> str:
@@ -45,31 +103,52 @@ def _siguiente(existentes: Sequence[str], prefijo: str) -> str:
     return f"{prefijo}-{max(numeros, default=0) + 1:04d}"
 
 
-def guardar_tipo_equipo(
-    contexto: ApplicationContext,
-    *,
-    usuario_id: str,
-    codigo: str | None,
-    nombre: str,
-    activo: bool,
-) -> TipoEquipo:
+def sincronizar_tipos_equipo(
+    contexto: ApplicationContext, *, usuario_id: str
+) -> ResultadoTiposEquipo:
+    """Actualiza la copia de los tipos de equipo desde el catalogo de
+    Ventas (solo lectura). La lectura es FUERA de la transaccion; si el
+    origen falla (``CatalogoOrigenNoDisponibleError``, 503) o responde
+    algo no confiable (409), la copia no cambia y las Ordenes siguen
+    consultandose con lo que ya tenian."""
     repositorio = _editable(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    with contexto.transaccion():
-        existentes = {t.id: t for t in repositorio.listar_tipos_equipo()}
-        nuevo = codigo is None
-        codigo = codigo or _siguiente(list(existentes), "TEQ")
-        anterior = existentes.get(codigo)
-        if not nuevo and anterior is None:
-            raise EntidadNoEncontradaError(
-                f"No existe el tipo de equipo {codigo}"
-            )
-        tipo = TipoEquipo(id=codigo, nombre=nombre.strip(), activo=activo)
-        cambios = cambios_de_tipo_equipo(
-            anterior, tipo, usuario=usuario, fecha=contexto.ahora()
+    validar_alguno_de(usuario, CONFIGURACION_ADMINISTRAR)
+    campo = contexto.campo_tipo_equipo
+    if campo is None:
+        raise PrecondicionInvalidaError(DECISION_PENDIENTE)
+    origen = contexto.proveedor_catalogo
+    if origen is None:
+        raise PrecondicionInvalidaError(
+            "No hay un origen del catálogo de Ventas configurado "
+            "(RMA_CATALOGO_ORIGEN): no se pueden actualizar los tipos."
         )
-        repositorio.guardar_tipo_equipo(tipo, nuevo=nuevo, cambios=cambios)
-    return tipo
+    descripcion = origen.descripcion
+    try:
+        lectura = origen.leer(contexto.filtro_catalogo)
+    except CatalogoOrigenInvalidoError as error:
+        raise PrecondicionInvalidaError(str(error)) from error
+    informados = tipos_informados(lectura.productos, campo)
+    fecha = contexto.ahora()
+    with contexto.transaccion():
+        fusion = fusionar_tipos_equipo(
+            repositorio.listar_tipos_equipo(),
+            informados,
+            campo=campo,
+            usuario=usuario,
+            fecha=fecha,
+        )
+        repositorio.aplicar_tipos_equipo(fusion.tipos, fusion.cambios)
+    return ResultadoTiposEquipo(
+        campo=campo,
+        origen=descripcion,
+        fecha=fecha,
+        vigentes=len(informados),
+        nuevos=fusion.nuevos,
+        reactivados=fusion.reactivados,
+        dados_de_baja=fusion.dados_de_baja,
+        sin_cambios=fusion.sin_cambios,
+    )
 
 
 def guardar_pregunta(
@@ -152,8 +231,14 @@ def confirmar_faltantes(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
     with orden_para_modificar(contexto, orden_id) as orden:
+        disponible = any(
+            t.activo for t in contexto.operativa.listar_tipos_equipo()
+        )
         orden = confirmar_informacion_faltante(
-            orden, usuario=usuario, fecha=fecha
+            orden,
+            usuario=usuario,
+            fecha=fecha,
+            checklist_disponible=disponible,
         )
         contexto.ordenes.guardar(orden)
     return orden

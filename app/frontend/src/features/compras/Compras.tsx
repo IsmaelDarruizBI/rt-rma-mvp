@@ -24,10 +24,18 @@ import type {
 import { listarInventario } from "../../api/inventario";
 import { Boton, Campo, colores, estiloInput, fechaCorta } from "../../components/ui";
 import { puede } from "../../lib/roles";
+import {
+  GESTORES,
+  costoDistinto,
+  erroresDeRecepcion,
+  lineasIniciales,
+  lineasParaRecibir,
+  ultimosCostos,
+} from "./recepcion";
+import type { LineaEditable } from "./recepcion";
 import type { SituacionInsumo, Usuario } from "../../types/api";
 import { useSaldosLotes } from "../inventario/lotes";
 
-const GESTORES = ["RECEPCION", "COORDINADOR_RMA", "ADMINISTRADOR"];
 const mensajeDe = (causa: unknown) =>
   causa instanceof Error ? causa.message : String(causa);
 
@@ -455,11 +463,7 @@ function NuevaOrden({
   useEffect(() => {
     api
       .costos()
-      .then((lista) => {
-        const ultimo: Record<string, string> = {};
-        for (const costo of lista) ultimo[costo.insumo_id] ??= costo.costo_unitario;
-        setUltimos(ultimo);
-      })
+      .then((lista) => setUltimos(ultimosCostos(lista)))
       .catch(() => setUltimos({}));
   }, []);
 
@@ -697,15 +701,6 @@ function DetalleOrdenCompra({
   );
 }
 
-interface LineaEditable {
-  insumo_id: string;
-  cantidad: string;
-  costo: string;
-  lote: string;
-  series: string;
-  diferencia: string;
-}
-
 function FormularioRecepcion({
   orden,
   nombreInsumo,
@@ -723,15 +718,7 @@ function FormularioRecepcion({
 }) {
   const pendientes = orden.renglones.filter((r) => Number(r.pendiente) > 0);
   const inicial = useMemo(
-    () =>
-      pendientes.map<LineaEditable>((r) => ({
-        insumo_id: r.insumo_id,
-        cantidad: "",
-        costo: orden.items.find((i) => i.insumo_id === r.insumo_id)?.costo_unitario ?? "0",
-        lote: "",
-        series: "",
-        diferencia: "",
-      })),
+    () => lineasIniciales(orden),
     [orden.id, orden.recepciones.length],
   );
   const [lineas, setLineas] = useState<LineaEditable[]>(inicial);
@@ -739,7 +726,8 @@ function FormularioRecepcion({
   const [observaciones, setObservaciones] = useState("");
   useEffect(() => setLineas(inicial), [inicial]);
 
-  const cargadas = lineas.filter((l) => Number(l.cantidad) > 0);
+  const errores = erroresDeRecepcion(orden, lineas);
+  const hayCarga = lineas.some((l) => l.cantidad.trim() !== "");
   const cambiar = (indice: number, cambio: Partial<LineaEditable>) =>
     setLineas(lineas.map((l, i) => (i === indice ? { ...l, ...cambio } : l)));
 
@@ -751,6 +739,7 @@ function FormularioRecepcion({
           key={linea.insumo_id}
           linea={linea}
           pendiente={pendientes[indice]?.pendiente ?? "0"}
+          costoDistinto={costoDistinto(orden, linea)}
           nombre={nombreInsumo(linea.insumo_id)}
           onCambio={(cambio) => cambiar(indice, cambio)}
         />
@@ -763,21 +752,18 @@ function FormularioRecepcion({
           <input value={observaciones} onChange={(e) => setObservaciones(e.target.value)} style={estiloInput} />
         </Campo>
       </div>
+      {hayCarga && errores.length > 0 && (
+        <ul role="alert" style={{ color: colores.error, fontSize: "0.8rem", margin: "0.3rem 0" }}>
+          {errores.map((e) => (
+            <li key={e}>{e}</li>
+          ))}
+        </ul>
+      )}
       <Boton
-        disabled={ocupado || cargadas.length === 0}
+        disabled={ocupado || errores.length > 0}
         onClick={() =>
           void onRecibir({
-            lineas: cargadas.map((l) => ({
-              insumo_id: l.insumo_id,
-              cantidad: l.cantidad.trim(),
-              costo_unitario: l.costo.trim(),
-              lote: l.lote.trim() || null,
-              series: l.series
-                .split(/[\n,]/)
-                .map((s) => s.trim())
-                .filter(Boolean),
-              diferencia: l.diferencia.trim() || null,
-            })),
+            lineas: lineasParaRecibir(lineas),
             remito: remito.trim() || null,
             observaciones: observaciones.trim() || null,
           }).then((ok) => {
@@ -797,11 +783,13 @@ function FormularioRecepcion({
 function LineaRecepcionForm({
   linea,
   pendiente,
+  costoDistinto: distinto,
   nombre,
   onCambio,
 }: {
   linea: LineaEditable;
   pendiente: string;
+  costoDistinto: boolean;
   nombre: string;
   onCambio: (cambio: Partial<LineaEditable>) => void;
 }) {
@@ -829,7 +817,7 @@ function LineaRecepcionForm({
             <input value={linea.series} onChange={(e) => onCambio({ series: e.target.value })} style={estiloInput} />
           </Campo>
         )}
-        <Campo etiqueta="Diferencia (opcional)">
+        <Campo etiqueta={distinto ? "Diferencia con el costo acordado (opcional)" : "Diferencia (opcional)"}>
           <input value={linea.diferencia} onChange={(e) => onCambio({ diferencia: e.target.value })} style={estiloInput} />
         </Campo>
       </div>

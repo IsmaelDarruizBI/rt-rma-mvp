@@ -12,13 +12,7 @@ import { Boton, colores } from "../../components/ui";
 import { rolesDe } from "../../lib/roles";
 import type { RolUsuario, Usuario } from "../../types/api";
 import { ROL } from "../ordenes-reparacion/etiquetas";
-
-const ROLES: RolUsuario[] = [
-  "ADMINISTRADOR",
-  "COORDINADOR_RMA",
-  "RECEPCION",
-  "TECNICO",
-];
+import { ROLES, alternarRol, mismosRoles, motivoParaNoGuardarRoles } from "./roles";
 
 export function UsuariosRoles({
   actor,
@@ -90,9 +84,10 @@ export function UsuariosRoles({
           {usuarios.map((usuario) => {
             const actuales = rolesDe(usuario);
             const propios = elegidos[usuario.id] ?? actuales;
-            const cambiado =
-              propios.length !== actuales.length ||
-              propios.some((r) => !actuales.includes(r));
+            const cambiado = !mismosRoles(propios, actuales);
+            const impedimento = cambiado
+              ? motivoParaNoGuardarRoles(usuarios, usuario.id, propios)
+              : null;
             return (
               <tr key={usuario.id}>
                 <td style={{ padding: "0.25rem 0.5rem" }}>
@@ -109,9 +104,7 @@ export function UsuariosRoles({
                       onChange={(e) =>
                         setElegidos({
                           ...elegidos,
-                          [usuario.id]: e.target.checked
-                            ? [...propios, rol]
-                            : propios.filter((r) => r !== rol),
+                          [usuario.id]: alternarRol(propios, rol, e.target.checked),
                         })
                       }
                     />
@@ -119,11 +112,16 @@ export function UsuariosRoles({
                 ))}
                 <td style={{ padding: "0.25rem 0.5rem" }}>
                   <Boton
-                    disabled={!editable || ocupado || !cambiado || propios.length === 0}
+                    disabled={!editable || ocupado || !cambiado || impedimento !== null}
                     onClick={() => guardar(usuario)}
                   >
                     Guardar
                   </Boton>
+                  {impedimento && (
+                    <span role="note" style={{ marginLeft: "0.4rem", color: colores.suave }}>
+                      {impedimento}
+                    </span>
+                  )}
                 </td>
               </tr>
             );

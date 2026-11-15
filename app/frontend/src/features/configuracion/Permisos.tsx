@@ -13,16 +13,7 @@ import type { PermisoConfigurable } from "../../api/configuracion";
 import { Boton, colores } from "../../components/ui";
 import type { RolUsuario, Usuario } from "../../types/api";
 import { ROL } from "../ordenes-reparacion/etiquetas";
-
-const ROLES: RolUsuario[] = [
-  "ADMINISTRADOR",
-  "COORDINADOR_RMA",
-  "RECEPCION",
-  "TECNICO",
-];
-
-const igual = (a: RolUsuario[], b: RolUsuario[]) =>
-  a.length === b.length && a.every((r) => b.includes(r));
+import { ROLES, alternarRol, mismosRoles as igual, puedeGuardarPermiso } from "./roles";
 
 export function Permisos({
   actor,
@@ -121,9 +112,7 @@ export function Permisos({
                             onChange={(e) =>
                               setElegidos({
                                 ...elegidos,
-                                [permiso.codigo]: e.target.checked
-                                  ? [...propios, rol]
-                                  : propios.filter((r) => r !== rol),
+                                [permiso.codigo]: alternarRol(propios, rol, e.target.checked),
                               })
                             }
                           />
@@ -133,7 +122,7 @@ export function Permisos({
                         {permiso.configurable ? (
                           <>
                             <Boton
-                              disabled={bloqueado || igual(propios, permiso.vigentes)}
+                              disabled={bloqueado || !puedeGuardarPermiso(permiso, propios)}
                               onClick={() => guardar(permiso, propios)}
                             >
                               Guardar

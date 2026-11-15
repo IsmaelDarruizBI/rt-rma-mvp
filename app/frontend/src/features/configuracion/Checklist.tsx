@@ -1,8 +1,10 @@
 /**
- * Checklist de recepción por tipo de equipo (DC12): Administración define los
- * tipos de equipo y, para cada uno, sus preguntas con opciones. Empieza
- * vacío: el sistema no trae una clasificación. Todo queda auditado; lo ya
- * registrado en las Órdenes no cambia. Solo sobre PostgreSQL.
+ * Checklist de recepción por tipo de equipo (DC12). Los tipos de equipo
+ * vienen del catálogo de Ventas de Gestión RT: acá solo se ven (con su
+ * origen y su última actualización) y se actualiza la copia; no se crean
+ * ni se editan. Administración configura las preguntas de cada tipo, su
+ * vigencia y su orden. Todo queda auditado; lo ya registrado en las
+ * Órdenes no cambia. Solo sobre PostgreSQL.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -11,13 +13,17 @@ import * as api from "../../api/checklist";
 import type { CatalogoChecklist, PreguntaChecklist } from "../../api/checklist";
 import { Boton, Campo, colores, estiloInput } from "../../components/ui";
 import type { Usuario } from "../../types/api";
+import {
+  moverPregunta,
+  preguntasDelTipo,
+  textoOrigen,
+} from "../ordenes-reparacion/checklist";
 
 const mensaje = (causa: unknown) =>
   causa instanceof Error ? causa.message : String(causa);
 
 export function ChecklistAdmin({ actor }: { actor: Usuario }) {
   const [datos, setDatos] = useState<CatalogoChecklist | null>(null);
-  const [nombreTipo, setNombreTipo] = useState("");
   const [tipo, setTipo] = useState("");
   const [texto, setTexto] = useState("");
   const [opciones, setOpciones] = useState("");
@@ -33,13 +39,13 @@ export function ChecklistAdmin({ actor }: { actor: Usuario }) {
   }, []);
   useEffect(cargar, [cargar]);
 
-  const ejecutar = (accion: () => Promise<unknown>, exito: string) => {
+  const ejecutar = (accion: () => Promise<unknown>, exito: string | ((r: unknown) => string)) => {
     setOcupado(true);
     setError(null);
     setAviso(null);
     return accion()
-      .then(() => {
-        setAviso(exito);
+      .then((resultado) => {
+        setAviso(typeof exito === "function" ? exito(resultado) : exito);
         cargar();
         return true;
       })
@@ -50,7 +56,7 @@ export function ChecklistAdmin({ actor }: { actor: Usuario }) {
       .finally(() => setOcupado(false));
   };
 
-  if (!datos) return error ? <p role="alert">{error}</p> : null;
+  if (!datos) return error ? <p role="alert">{error}</p> : <p>Cargando…</p>;
   if (!datos.editable) {
     return (
       <p style={{ color: colores.suave }}>
@@ -58,21 +64,35 @@ export function ChecklistAdmin({ actor }: { actor: Usuario }) {
       </p>
     );
   }
-  const preguntas = datos.preguntas.filter((p) => p.tipo_equipo_id === tipo);
+  // Las de todos los estados, para administrar (también las no vigentes).
+  const preguntas = [...datos.preguntas]
+    .filter((p) => p.tipo_equipo_id === tipo)
+    .sort((a, b) => a.orden - b.orden || a.id.localeCompare(b.id));
+  const vigentes = preguntasDelTipo(datos, tipo);
   const listaOpciones = opciones
     .split(",")
     .map((o) => o.trim())
     .filter(Boolean);
+  const origen = datos.origen;
 
   const cambiarPregunta = (p: PreguntaChecklist, cambio: Partial<PreguntaChecklist>) =>
     ejecutar(() => api.guardarPregunta(actor.id, { ...p, ...cambio }), `Se guardó «${p.texto}».`);
+
+  const mover = (p: PreguntaChecklist, sentido: -1 | 1) => {
+    const cambios = moverPregunta(preguntas, p.id, sentido);
+    if (cambios.length === 0) return;
+    void ejecutar(async () => {
+      for (const c of cambios) await api.guardarPregunta(actor.id, c);
+    }, "Se guardó el orden.");
+  };
 
   return (
     <section>
       <h3 style={{ margin: "0 0 0.5rem" }}>Checklist de recepción por tipo de equipo</h3>
       <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
-        Todas las verificaciones son opcionales y pueden registrarse como no
-        realizadas. Recepción elige el tipo de equipo al completar el checklist.
+        Los tipos de equipo vienen del catálogo de Ventas de Gestión RT y no se
+        editan desde RMA. Las verificaciones son opcionales y pueden registrarse
+        como no realizadas.
       </p>
       {error && (
         <p role="alert" style={{ color: colores.error, fontSize: "0.85rem" }}>
@@ -85,6 +105,22 @@ export function ChecklistAdmin({ actor }: { actor: Usuario }) {
         </p>
       )}
       <h4 style={{ margin: "0 0 0.3rem" }}>Tipos de equipo</h4>
+      <p style={{ margin: "0 0 0.3rem", fontSize: "0.8rem" }}>{textoOrigen(origen)}</p>
+      <Boton
+        variante="secundario"
+        disabled={ocupado || !origen?.sincronizable}
+        onClick={() =>
+          void ejecutar(
+            () => api.sincronizarTipos(actor.id),
+            (r) => {
+              const x = r as api.ResultadoSincronizacionTipos;
+              return `Tipos actualizados: ${x.vigentes} vigentes (${x.nuevos} nuevos, ${x.reactivados} reactivados, ${x.dados_de_baja} dados de baja).`;
+            },
+          )
+        }
+      >
+        Actualizar desde el catálogo de Ventas
+      </Boton>
       <ul style={{ paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
         {datos.tipos.map((t) => (
           <li key={t.id}>
@@ -96,49 +132,19 @@ export function ChecklistAdmin({ actor }: { actor: Usuario }) {
               {t.nombre}
             </button>{" "}
             ({t.id}
-            {t.activo ? "" : " · no vigente"}){" "}
-            <label style={{ fontSize: "0.8rem" }}>
-              <input
-                type="checkbox"
-                checked={t.activo}
-                disabled={ocupado}
-                onChange={(e) =>
-                  void ejecutar(
-                    () => api.guardarTipo(actor.id, { ...t, activo: e.target.checked }),
-                    `Se guardó ${t.nombre}.`,
-                  )
-                }
-              />{" "}
-              vigente
-            </label>
+            {t.activo ? "" : " · ya no está en el catálogo"})
           </li>
         ))}
         {datos.tipos.length === 0 && <li style={{ color: colores.suave }}>Sin tipos de equipo.</li>}
       </ul>
-      <div style={{ display: "flex", gap: "0.4rem", alignItems: "end", maxWidth: 420 }}>
-        <Campo etiqueta="Nuevo tipo de equipo">
-          <input value={nombreTipo} onChange={(e) => setNombreTipo(e.target.value)} style={estiloInput} />
-        </Campo>
-        <Boton
-          disabled={ocupado || !nombreTipo.trim()}
-          onClick={() =>
-            void ejecutar(
-              () => api.guardarTipo(actor.id, { nombre: nombreTipo.trim(), activo: true }),
-              `Se agregó ${nombreTipo.trim()}.`,
-            ).then((ok) => ok && setNombreTipo(""))
-          }
-        >
-          Agregar
-        </Boton>
-      </div>
 
       {tipo && (
         <div style={{ marginTop: "0.8rem" }}>
           <h4 style={{ margin: "0 0 0.3rem" }}>
-            Preguntas de {datos.tipos.find((t) => t.id === tipo)?.nombre}
+            Preguntas de {datos.tipos.find((t) => t.id === tipo)?.nombre} ({vigentes.length} vigentes)
           </h4>
           <ul style={{ paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
-            {preguntas.map((p) => (
+            {preguntas.map((p, i) => (
               <li key={p.id}>
                 {p.texto} — {p.opciones.join(" / ")}
                 {p.activa ? "" : " · no vigente"}{" "}
@@ -150,7 +156,23 @@ export function ChecklistAdmin({ actor }: { actor: Usuario }) {
                     onChange={(e) => void cambiarPregunta(p, { activa: e.target.checked })}
                   />{" "}
                   vigente
-                </label>
+                </label>{" "}
+                <button
+                  type="button"
+                  aria-label={`Subir ${p.texto}`}
+                  disabled={ocupado || i === 0}
+                  onClick={() => mover(p, -1)}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Bajar ${p.texto}`}
+                  disabled={ocupado || i === preguntas.length - 1}
+                  onClick={() => mover(p, 1)}
+                >
+                  ↓
+                </button>
               </li>
             ))}
             {preguntas.length === 0 && <li style={{ color: colores.suave }}>Sin preguntas.</li>}

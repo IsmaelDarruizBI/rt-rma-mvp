@@ -6,10 +6,34 @@
 import type { Orden } from "../types/api";
 import { get, post, put } from "./client";
 
+/** Tipo de Equipo: copia del catálogo de Ventas de Gestión RT (DC12).
+ * `id` es el identificador de Ventas; RMA no los crea ni los edita. */
 export interface TipoEquipo {
   id: string;
   nombre: string;
   activo: boolean;
+  campo_origen?: string | null;
+  sincronizado_en?: string | null;
+}
+
+export interface OrigenTiposEquipo {
+  campo: string | null;
+  definido: boolean;
+  origen: string | null;
+  sincronizable: boolean;
+  ultima_sincronizacion: string | null;
+  aviso: string | null;
+}
+
+export interface ResultadoSincronizacionTipos {
+  campo: string;
+  origen: string;
+  fecha: string;
+  vigentes: number;
+  nuevos: number;
+  reactivados: number;
+  dados_de_baja: number;
+  sin_cambios: number;
 }
 
 export interface PreguntaChecklist {
@@ -43,20 +67,16 @@ export interface CatalogoChecklist {
   editable: boolean;
   tipos: TipoEquipo[];
   preguntas: PreguntaChecklist[];
+  origen?: OrigenTiposEquipo;
 }
 
 export const catalogo = () => get<CatalogoChecklist>("/api/catalogs/checklist");
 export const catalogoAdmin = () =>
   get<CatalogoChecklist>("/api/admin/checklist");
 
-export function guardarTipo(
-  usuarioId: string,
-  tipo: { id?: string; nombre: string; activo: boolean },
-): Promise<TipoEquipo> {
-  const cuerpo = { usuario_id: usuarioId, nombre: tipo.nombre, activo: tipo.activo };
-  return tipo.id
-    ? put(`/api/admin/equipment-types/${encodeURIComponent(tipo.id)}`, cuerpo)
-    : post("/api/admin/equipment-types", cuerpo);
+/** Actualiza la copia de los tipos desde el catálogo de Ventas. */
+export function sincronizarTipos(usuarioId: string): Promise<ResultadoSincronizacionTipos> {
+  return post("/api/admin/equipment-types/sync", { usuario_id: usuarioId });
 }
 
 export function guardarPregunta(

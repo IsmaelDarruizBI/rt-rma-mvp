@@ -45,16 +45,18 @@ class ConfiguracionOperativaRepository(Protocol):
         cambios: Sequence[CambioConfiguracion],
     ) -> None: ...
 
-    # DC12: tipos de equipo y preguntas del checklist.
+    # DC12: copia de los tipos de equipo del catalogo de Ventas y
+    # preguntas del checklist.
     def listar_tipos_equipo(self) -> list[TipoEquipo]: ...
 
-    def guardar_tipo_equipo(
+    def aplicar_tipos_equipo(
         self,
-        tipo: TipoEquipo,
-        *,
-        nuevo: bool,
+        tipos: Sequence[TipoEquipo],
         cambios: Sequence[CambioConfiguracion],
-    ) -> None: ...
+    ) -> None:
+        """Alta o actualizacion de cada tipo (por su identificador de
+        Ventas) y su auditoria, en la transaccion del comando."""
+        ...
 
     def listar_preguntas_checklist(self) -> list[PreguntaChecklist]: ...
 

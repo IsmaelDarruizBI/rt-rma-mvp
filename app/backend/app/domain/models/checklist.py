@@ -1,15 +1,17 @@
 """Checklist de recepcion por tipo de equipo (DC12; BR-REP-024/025/040).
 
-- Tipos de equipo y preguntas los configura Administracion (con
-  auditoria). El catalogo empieza vacio: el sistema no inventa una
-  clasificacion. Cada pregunta tiene sus opciones; ninguna verificacion es
-  obligatoria y cualquiera puede registrarse como no realizada.
-- De donde toma la Orden su tipo de equipo no esta definido en la baseline
-  (ver la discrepancia de DC12): hoy lo elige Recepcion al completar el
-  checklist. Nada se infiere del modelo ni de la marca.
-- Lo que se registra en la Orden es una copia de las preguntas y opciones
-  aplicadas: cambiar el catalogo no altera un checklist ya completado. Una
-  correccion agrega una version nueva con motivo; rige la ultima.
+- El Tipo de Equipo viene del catalogo de Ventas de Gestion RT (decision
+  aprobada de DC12): RMA guarda una COPIA de solo lectura, que se actualiza
+  sincronizando desde el origen ya existente (``integraciones.catalogo``).
+  Administracion no crea ni edita tipos; si configura las preguntas, que se
+  asocian al identificador estable del tipo en Ventas.
+- Que dato de Ventas es el Tipo de Equipo lo fija ``RMA_TIPO_EQUIPO_CAMPO``.
+  Mientras negocio no lo confirme queda vacio: no hay tipos y el checklist
+  no se ofrece. Nada se infiere del modelo ni de la marca.
+- Lo que se registra en la Orden es una copia del tipo (identificador y
+  descripcion) y de las preguntas y opciones aplicadas: un cambio posterior
+  del catalogo no altera un checklist ya completado. Una correccion agrega
+  una version nueva con motivo; rige la ultima.
 - Advertencia por informacion faltante (BR-REP-025): fotos, observaciones
   o verificaciones sin registrar. Nunca bloquea: Recepcion puede continuar
   igualmente y esa confirmacion queda registrada.
@@ -21,9 +23,20 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class TipoEquipo(BaseModel):
-    id: str = Field(pattern=r"^TEQ-[0-9A-Z-]+$")
+    """Un Tipo de Equipo del catalogo de Ventas, tal como lo copio RMA.
+
+    ``id``: el valor de Ventas tal cual (identificador estable). ``activo``:
+    sigue en el catalogo en la ultima sincronizacion (los que dejan de
+    estar no se borran: las preguntas y los checklists los referencian).
+    """
+
+    id: str = Field(min_length=1, max_length=200)
     nombre: str = Field(min_length=1)
     activo: bool = True
+    # Columna de Ventas de la que salio (``tp_categoria``, ...).
+    campo_origen: str | None = None
+    # Ultima sincronizacion en la que estaba en el catalogo.
+    sincronizado_en: datetime | None = None
 
 
 class PreguntaChecklist(BaseModel):

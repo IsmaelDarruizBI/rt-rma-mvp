@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 from app.application.checklist import catalogo as catalogo_checklist
 from app.application.checklist import (
     guardar_pregunta,
-    guardar_tipo_equipo,
+    sincronizar_tipos_equipo,
 )
 from app.application.configuracion import (
     guardar_tipo_reparacion,
@@ -325,10 +325,8 @@ def put_insumo(clave: str, cuerpo: InsumoIn, contexto: ContextoDep) -> dict:
     ).model_dump(mode="json")
 
 
-class TipoEquipoIn(BaseModel):
+class SincronizarTiposIn(BaseModel):
     usuario_id: str = Field(min_length=1)
-    nombre: str = Field(min_length=1)
-    activo: bool = True
 
 
 class PreguntaChecklistIn(BaseModel):
@@ -345,28 +343,27 @@ def get_checklist_admin(contexto: ContextoDep) -> dict:
     return catalogo_checklist(contexto, solo_vigentes=False)
 
 
-@router.post("/equipment-types")
-def post_tipo_equipo(cuerpo: TipoEquipoIn, contexto: ContextoDep) -> dict:
-    return guardar_tipo_equipo(
-        contexto,
-        usuario_id=cuerpo.usuario_id,
-        codigo=None,
-        nombre=cuerpo.nombre,
-        activo=cuerpo.activo,
-    ).model_dump()
-
-
-@router.put("/equipment-types/{codigo}")
-def put_tipo_equipo(
-    codigo: str, cuerpo: TipoEquipoIn, contexto: ContextoDep
+@router.post("/equipment-types/sync")
+def post_sincronizar_tipos(
+    cuerpo: SincronizarTiposIn, contexto: ContextoDep
 ) -> dict:
-    return guardar_tipo_equipo(
-        contexto,
-        usuario_id=cuerpo.usuario_id,
-        codigo=codigo,
-        nombre=cuerpo.nombre,
-        activo=cuerpo.activo,
-    ).model_dump()
+    """DC12: actualiza la copia de los Tipos de Equipo desde el catalogo
+    de Ventas (solo lectura). RMA no crea ni edita tipos: no hay alta ni
+    edicion. 409 si la columna de origen no esta definida; 503 si el
+    origen no responde (la copia no cambia)."""
+    resultado = sincronizar_tipos_equipo(
+        contexto, usuario_id=cuerpo.usuario_id
+    )
+    return {
+        "campo": resultado.campo,
+        "origen": resultado.origen,
+        "fecha": resultado.fecha.isoformat(),
+        "vigentes": resultado.vigentes,
+        "nuevos": resultado.nuevos,
+        "reactivados": resultado.reactivados,
+        "dados_de_baja": resultado.dados_de_baja,
+        "sin_cambios": resultado.sin_cambios,
+    }
 
 
 def _pregunta(contexto, codigo, cuerpo: PreguntaChecklistIn) -> dict:

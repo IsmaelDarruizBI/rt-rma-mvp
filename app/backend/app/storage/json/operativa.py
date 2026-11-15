@@ -40,7 +40,7 @@ class JsonConfiguracionOperativa:
     def listar_tipos_equipo(self):
         return []
 
-    def guardar_tipo_equipo(self, tipo, *, nuevo, cambios) -> None:
+    def aplicar_tipos_equipo(self, tipos, cambios) -> None:
         raise NotImplementedError
 
     def listar_preguntas_checklist(self):

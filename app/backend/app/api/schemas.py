@@ -2098,6 +2098,13 @@ def _consumos(orden: OrdenReparacion) -> list[ConsumoInsumoOut]:
     ]
 
 
+class TipoEquipoOrdenOut(BaseModel):
+    """DC12: el Tipo de Equipo elegido, como quedo registrado en la Orden."""
+
+    id: str
+    descripcion: str
+
+
 class OrdenOut(BaseModel):
     """La Orden completa tal como la consume el frontend."""
 
@@ -2205,6 +2212,9 @@ class OrdenOut(BaseModel):
     # informacion faltante que Recepcion todavia no confirmo (no bloquea).
     checklists_recepcion: list[RegistroChecklist] = Field(default_factory=list)
     informacion_faltante: list[str] = Field(default_factory=list)
+    # DC12: Tipo de Equipo de la Orden (el del ultimo checklist): el
+    # identificador de Ventas y su descripcion al registrarlo (copia).
+    tipo_equipo: TipoEquipoOrdenOut | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -2227,6 +2237,7 @@ class OrdenOut(BaseModel):
         situacion: SituacionOperativa | None = None,
         fotos_habilitadas: bool = False,
         garantia_por_detalle: Sequence[VigenciaGarantiaOrigen] = (),
+        checklist_disponible: bool = True,
     ) -> "OrdenOut":
         vigentes = _vigentes(orden)
         en_ingreso = es_ingreso_inicial(orden)
@@ -2377,7 +2388,19 @@ class OrdenOut(BaseModel):
             correcciones_equipo=list(orden.correcciones_equipo),
             consumos_insumo=_consumos(orden),
             checklists_recepcion=list(orden.checklists_recepcion),
-            informacion_faltante=advertencia_pendiente(orden),
+            informacion_faltante=advertencia_pendiente(
+                orden, checklist_disponible=checklist_disponible
+            ),
+            tipo_equipo=(
+                TipoEquipoOrdenOut(
+                    id=orden.checklists_recepcion[-1].tipo_equipo_id,
+                    descripcion=orden.checklists_recepcion[
+                        -1
+                    ].tipo_equipo_nombre,
+                )
+                if orden.checklists_recepcion
+                else None
+            ),
             created_at=orden.created_at,
             updated_at=orden.updated_at,
         )

@@ -2,8 +2,10 @@
  * Checklist de recepción (DC12) y advertencia por información faltante
  * (BR-REP-025).
  *
- * - Recepción elige el tipo de equipo y responde lo que quiera: todas las
+ * - Recepción elige el tipo de equipo entre los del catálogo de Ventas de
+ *   Gestión RT (copia de solo lectura) y responde lo que quiera: todas las
  *   verificaciones son opcionales y pueden quedar «no realizadas».
+ * - La Orden conserva el identificador y la descripción del tipo elegido.
  * - Lo registrado guarda la copia de las preguntas; corregirlo agrega una
  *   versión con motivo (la anterior se conserva).
  * - La advertencia nunca bloquea: se puede completar lo que falta o
@@ -17,12 +19,21 @@ import type { CatalogoChecklist, RegistroChecklist } from "../../api/checklist";
 import { Boton, Campo, colores, estiloInput, fechaCorta } from "../../components/ui";
 import { puede } from "../../lib/roles";
 import type { Orden, Usuario } from "../../types/api";
+import {
+  NO_REALIZADA,
+  motivoSinChecklist,
+  preguntasDelTipo,
+  puedeRegistrarChecklist,
+  respuestasParaEnviar,
+  tipoPropuesto,
+} from "./checklist";
 
 const QUIENES = ["RECEPCION", "COORDINADOR_RMA", "ADMINISTRADOR"];
 
 type OrdenConChecklist = Orden & {
   checklists_recepcion?: RegistroChecklist[];
   informacion_faltante?: string[];
+  tipo_equipo?: { id: string; descripcion: string } | null;
 };
 
 export function AdvertenciaFaltante({
@@ -80,6 +91,7 @@ export function ChecklistRecepcion({
   ejecutarComando: (comando: () => Promise<Orden>) => Promise<boolean>;
 }) {
   const [catalogo, setCatalogo] = useState<CatalogoChecklist | null>(null);
+  const [cargando, setCargando] = useState(true);
   const [tipo, setTipo] = useState("");
   const [respuestas, setRespuestas] = useState<Record<string, string>>({});
   const [motivo, setMotivo] = useState("");
@@ -94,17 +106,21 @@ export function ChecklistRecepcion({
     api
       .catalogo()
       .then(setCatalogo)
-      .catch(() => setCatalogo(null));
+      .catch(() => setCatalogo(null))
+      .finally(() => setCargando(false));
   }, []);
 
-  const preguntas = (catalogo?.preguntas ?? []).filter((p) => p.tipo_equipo_id === tipo);
+  const preguntas = preguntasDelTipo(catalogo, tipo);
+  const sinChecklist = cargando ? null : motivoSinChecklist(catalogo);
+  const tiposVigentes = (catalogo?.tipos ?? []).filter((t) => t.activo);
 
   return (
     <section aria-label="Checklist de recepción" style={{ marginTop: "0.8rem" }}>
       <h4 style={{ margin: "0 0 0.4rem" }}>Checklist de recepción (opcional)</h4>
       {vigente ? (
         <div style={{ fontSize: "0.85rem", marginBottom: "0.4rem" }}>
-          {vigente.tipo_equipo_nombre} · {fechaCorta(vigente.fecha)} · {vigente.usuario_id}
+          Tipo de equipo: {vigente.tipo_equipo_nombre} ({vigente.tipo_equipo_id}) ·{" "}
+          {fechaCorta(vigente.fecha)} · {vigente.usuario_id}
           {registros.length > 1 ? ` · versión ${registros.length} (${vigente.motivo})` : ""}
           <ul style={{ margin: "0.2rem 0", paddingLeft: "1.1rem" }}>
             {vigente.respuestas.map((r) => (
@@ -124,13 +140,20 @@ export function ChecklistRecepcion({
           Sin checklist registrado.
         </p>
       )}
-      {catalogo && catalogo.tipos.length === 0 && (
-        <p style={{ fontSize: "0.8rem", color: colores.suave }}>
-          Todavía no hay tipos de equipo con checklist: los configura Administración.
-        </p>
+      {cargando && <p style={{ fontSize: "0.8rem", color: colores.suave }}>Cargando el catálogo…</p>}
+      {sinChecklist && (
+        <p style={{ fontSize: "0.8rem", color: colores.suave }}>{sinChecklist}</p>
       )}
-      {habilitado && catalogo && catalogo.tipos.length > 0 && !editando && (
-        <Boton variante="secundario" disabled={ocupado} onClick={() => setEditando(true)}>
+      {habilitado && !sinChecklist && !cargando && !editando && (
+        <Boton
+          variante="secundario"
+          disabled={ocupado}
+          onClick={() => {
+            setTipo(tipoPropuesto(catalogo?.tipos ?? [], orden.tipo_equipo));
+            setRespuestas({});
+            setEditando(true);
+          }}
+        >
           {vigente ? "Corregir el checklist" : "Completar el checklist"}
         </Boton>
       )}
@@ -146,7 +169,7 @@ export function ChecklistRecepcion({
               style={estiloInput}
             >
               <option value="">Elegir…</option>
-              {catalogo.tipos.map((t) => (
+              {tiposVigentes.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.nombre}
                 </option>
@@ -166,7 +189,7 @@ export function ChecklistRecepcion({
                     {o}
                   </option>
                 ))}
-                <option value="NO_REALIZADA">No realizada</option>
+                <option value={NO_REALIZADA}>No realizada</option>
               </select>
             </Campo>
           ))}
@@ -177,19 +200,13 @@ export function ChecklistRecepcion({
           )}
           <div style={{ display: "flex", gap: "0.4rem" }}>
             <Boton
-              disabled={ocupado || !tipo || (vigente !== null && !motivo.trim())}
+              disabled={ocupado || !puedeRegistrarChecklist(tipo, vigente !== null, motivo)}
               onClick={() =>
                 void ejecutarComando(() =>
                   api.registrar(orden.id, {
                     usuario_id: actor?.id ?? "",
                     tipo_equipo_id: tipo,
-                    respuestas: Object.entries(respuestas)
-                      .filter(([, valor]) => valor)
-                      .map(([pregunta_id, valor]) => ({
-                        pregunta_id,
-                        respuesta: valor.startsWith("R:") ? valor.slice(2) : null,
-                        no_realizada: valor === "NO_REALIZADA",
-                      })),
+                    respuestas: respuestasParaEnviar(respuestas),
                     motivo: motivo.trim() || null,
                   }),
                 ).then((ok) => {

@@ -97,6 +97,9 @@ class ApplicationContext:
     catalogo_equipos: CatalogoEquiposRepository | None = None
     proveedor_catalogo: ProveedorCatalogo | None = None
     filtro_catalogo: FiltroCatalogo = FiltroCatalogo(("IPHONE USADOS",))
+    # DC12: columna del catalogo de Ventas que da el Tipo de Equipo
+    # (``RMA_TIPO_EQUIPO_CAMPO``); ``None``: sin definir.
+    campo_tipo_equipo: str | None = None
     # Catalogo tecnico de modelos (propio de RMA, solo lectura).
     modelos_equipo: ModelosEquipoRepository | None = None
     # Limite transaccional de los comandos (E1). Por defecto, el lock de
@@ -227,6 +230,7 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
         ),
         proveedor_catalogo=construir_proveedor_catalogo(settings),
         filtro_catalogo=filtro_catalogo(settings),
+        campo_tipo_equipo=settings.tipo_equipo_campo or None,
         modelos_equipo=PostgresModelosEquipoRepository(unidad),
         unidad_de_trabajo=unidad,
         acciones=PostgresRegistroDeAcciones(unidad),
@@ -263,6 +267,7 @@ def construir_contexto(settings: Settings) -> ApplicationContext:
         ),
         proveedor_catalogo=construir_proveedor_catalogo(settings),
         filtro_catalogo=filtro_catalogo(settings),
+        campo_tipo_equipo=settings.tipo_equipo_campo or None,
         modelos_equipo=JsonModelosEquipoRepository(
             settings.modelos_equipo_archivo
         ),

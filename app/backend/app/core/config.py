@@ -93,6 +93,11 @@ class Settings(BaseSettings):
     catalogo_sheets_cuenta: str | None = None
     catalogo_archivo: Path | None = None
     catalogo_timeout_s: float = 30.0
+    # DC12: que columna del catalogo de Ventas es el Tipo de Equipo del
+    # checklist. Vacia (por defecto): no esta definido y no se copian
+    # tipos. Negocio no confirmo todavia cual corresponde (ninguna equivale
+    # sin ambiguedad: ver traceability/discrepancias-baseline-v1.4.md).
+    tipo_equipo_campo: Literal["", "tp_categoria", "tp_subcat_1", "tp_gp"] = ""
 
     # Catalogo tecnico de modelos de equipo (propio de RMA). Viaja con el
     # codigo; los tests pueden apuntar a otro archivo.

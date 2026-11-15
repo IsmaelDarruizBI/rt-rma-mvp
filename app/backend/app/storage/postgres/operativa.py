@@ -118,25 +118,23 @@ _ACTUALIZAR_INSUMO = consulta(
 
 _TIPOS_EQUIPO = consulta(
     "operativa.tipos_equipo",
-    "SELECT codigo, nombre, activo FROM rma.tipo_equipo "
-    'ORDER BY nombre, codigo COLLATE "C"',
+    "SELECT codigo, nombre, activo, campo_origen, sincronizado_en "
+    'FROM rma.tipo_equipo ORDER BY nombre, codigo COLLATE "C"',
     modo=LECTURA,
 )
-_INSERTAR_TIPO_EQUIPO = consulta(
-    "operativa.insertar_tipo_equipo",
+# DC12: copia del catalogo de Ventas. El identificador es el de Ventas;
+# una sincronizacion actualiza lo que ya estaba y nunca borra.
+_APLICAR_TIPO_EQUIPO = consulta(
+    "operativa.aplicar_tipo_equipo",
     """
-    INSERT INTO rma.tipo_equipo (codigo, nombre, activo)
-    VALUES (%(codigo)s, %(nombre)s, %(activo)s)
-    ON CONFLICT (codigo) DO NOTHING
-    """,
-    modo=ESCRITURA,
-)
-_ACTUALIZAR_TIPO_EQUIPO = consulta(
-    "operativa.actualizar_tipo_equipo",
-    """
-    UPDATE rma.tipo_equipo
-       SET nombre = %(nombre)s, activo = %(activo)s, modificado_en = now()
-     WHERE codigo = %(codigo)s
+    INSERT INTO rma.tipo_equipo
+        (codigo, nombre, activo, campo_origen, sincronizado_en)
+    VALUES (%(codigo)s, %(nombre)s, %(activo)s, %(campo)s, %(fecha)s)
+    ON CONFLICT (codigo) DO UPDATE
+       SET nombre = excluded.nombre, activo = excluded.activo,
+           campo_origen = excluded.campo_origen,
+           sincronizado_en = excluded.sincronizado_en,
+           modificado_en = now()
     """,
     modo=ESCRITURA,
 )
@@ -277,31 +275,35 @@ class PostgresConfiguracionOperativa:
         with self._unidad.lectura() as lector:
             filas = lector.filas(_TIPOS_EQUIPO)
         return [
-            TipoEquipo(id=f.codigo, nombre=f.nombre, activo=f.activo)
+            TipoEquipo(
+                id=f.codigo,
+                nombre=f.nombre,
+                activo=f.activo,
+                campo_origen=f.campo_origen,
+                sincronizado_en=f.sincronizado_en,
+            )
             for f in filas
         ]
 
-    def guardar_tipo_equipo(
+    def aplicar_tipos_equipo(
         self,
-        tipo: TipoEquipo,
-        *,
-        nuevo: bool,
+        tipos: Sequence[TipoEquipo],
         cambios: Sequence[CambioConfiguracion],
     ) -> None:
         self._exigir_transaccion()
         ejecutor = self._unidad.ejecutor()
-        consulta_sql = (
-            _INSERTAR_TIPO_EQUIPO if nuevo else _ACTUALIZAR_TIPO_EQUIPO
-        )
-        parametros = {
-            "codigo": tipo.id,
-            "nombre": tipo.nombre,
-            "activo": tipo.activo,
-        }
-        if ejecutor.ejecutar(consulta_sql, parametros) != 1:
-            raise PersistenciaError(
-                f"No se pudo guardar el tipo de equipo {tipo.id}."
-            )
+        for tipo in tipos:
+            parametros = {
+                "codigo": tipo.id,
+                "nombre": tipo.nombre,
+                "activo": tipo.activo,
+                "campo": tipo.campo_origen,
+                "fecha": tipo.sincronizado_en,
+            }
+            if ejecutor.ejecutar(_APLICAR_TIPO_EQUIPO, parametros) != 1:
+                raise PersistenciaError(
+                    f"No se pudo guardar el tipo de equipo {tipo.id}."
+                )
         self._auditoria._auditar(ejecutor, cambios)
 
     def listar_preguntas_checklist(self) -> list[PreguntaChecklist]:

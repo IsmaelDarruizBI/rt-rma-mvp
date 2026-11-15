@@ -207,6 +207,10 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
     with contexto.lectura():
         if orden.reparaciones_detail:
             contexto.catalogos.anticipar()
+        # DC12: sin ningun tipo de equipo vigente no se pide checklist.
+        checklist_disponible = any(
+            tipo.activo for tipo in contexto.operativa.listar_tipos_equipo()
+        )
         nombres = nombres_de_tipo_por_detalle(contexto, orden)
         previstos = insumos_previstos_por_detalle(contexto, orden)
         origen = detalles_origen_de(contexto, orden)
@@ -239,6 +243,7 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
         ),
         fotos_habilitadas=contexto.fotos is not None,
         garantia_por_detalle=garantia,
+        checklist_disponible=checklist_disponible,
     )
     salida.retiro_demorado_dias = dias_de_retiro_demorado(
         orden, contexto.ahora(), plazo_retiro_dias(contexto)

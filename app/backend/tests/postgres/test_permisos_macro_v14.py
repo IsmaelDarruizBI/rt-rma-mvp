@@ -36,8 +36,10 @@ from tests.postgres.test_ajuste_por_detalle_postgres import (  # noqa: E402,F401
     test_ajuste_por_detalle_se_guarda_y_la_vista_coincide,
 )
 from tests.postgres.test_checklist_postgres import (  # noqa: E402,F401
-    cliente_checklist,
-    test_checklist_configurable_con_copia_y_versiones,
+    entorno,
+    test_origen_caido_o_ambiguo_no_cambia_la_copia,
+    test_sin_columna_definida_no_hay_tipos_ni_se_pide_checklist,
+    test_tipos_desde_ventas_preguntas_y_checklist_con_copia,
 )
 from tests.postgres.test_compras_postgres import (  # noqa: E402,F401
     contexto_compras,

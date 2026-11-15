@@ -11,36 +11,11 @@ import { useEffect, useState } from "react";
 
 import { get } from "../../api/client";
 import { Campo, colores, estiloInput } from "../../components/ui";
+import { NOMBRE_CONTROL, muestraLotes, opcionesDeLote, origenDelLote } from "./saldos";
+import type { SaldosDeInsumo } from "./saldos";
 
-export type ControlInsumo = "SIN_LOTE" | "LOTE" | "SERIE";
-
-export interface SaldoLote {
-  lote: {
-    id: string;
-    insumo_id: string;
-    numero: string;
-    serie: boolean;
-    origen: "COMPRA" | "INGRESO_MANUAL";
-    referencia: string | null;
-    usuario_id: string;
-    fecha: string;
-  };
-  saldo: string;
-}
-
-export interface SaldosDeInsumo {
-  insumo_id: string;
-  control: ControlInsumo;
-  stock_fisico: string;
-  lotes: SaldoLote[];
-  sin_lote_identificado: string;
-}
-
-export const NOMBRE_CONTROL: Record<ControlInsumo, string> = {
-  SIN_LOTE: "Sin lote",
-  LOTE: "Por lote",
-  SERIE: "Por número de serie",
-};
+export type { ControlInsumo, SaldoLote, SaldosDeInsumo } from "./saldos";
+export { NOMBRE_CONTROL } from "./saldos";
 
 export function leerSaldos(insumoId: string): Promise<SaldosDeInsumo> {
   return get<SaldosDeInsumo>(
@@ -74,7 +49,7 @@ export function LotesDelInsumo({ saldos }: { saldos: SaldosDeInsumo | null }) {
       <p style={{ margin: "0.6rem 0 0.3rem", fontWeight: 600, fontSize: "0.9rem" }}>
         Lotes · control: {NOMBRE_CONTROL[saldos.control]}
       </p>
-      {saldos.control === "SIN_LOTE" && saldos.lotes.length === 0 ? (
+      {!muestraLotes(saldos) ? (
         <p style={{ margin: 0, color: colores.suave }}>
           El insumo no se controla por lote.
         </p>
@@ -83,11 +58,7 @@ export function LotesDelInsumo({ saldos }: { saldos: SaldosDeInsumo | null }) {
           {saldos.lotes.map(({ lote, saldo }) => (
             <li key={lote.id}>
               {lote.serie ? "Serie" : "Lote"} {lote.numero}: {saldo}
-              <span style={{ color: colores.suave }}>
-                {" "}
-                · {lote.origen === "COMPRA" ? "compra" : "ingreso manual"}
-                {lote.referencia ? ` ${lote.referencia}` : ""}
-              </span>
+              <span style={{ color: colores.suave }}> · {origenDelLote({ lote, saldo })}</span>
             </li>
           ))}
           <li>
@@ -122,16 +93,11 @@ export function SelectorLote({
         disabled={deshabilitado}
         style={estiloInput}
       >
-        <option value="">
-          Stock sin lote identificado ({saldos.sin_lote_identificado})
-        </option>
-        {saldos.lotes
-          .filter(({ saldo }) => Number(saldo) > 0 || valor !== "")
-          .map(({ lote, saldo }) => (
-            <option key={lote.id} value={lote.id}>
-              {lote.serie ? "Serie" : "Lote"} {lote.numero} ({saldo})
-            </option>
-          ))}
+        {opcionesDeLote(saldos, valor).map((opcion) => (
+          <option key={opcion.valor} value={opcion.valor}>
+            {opcion.texto}
+          </option>
+        ))}
       </select>
     </Campo>
   );
