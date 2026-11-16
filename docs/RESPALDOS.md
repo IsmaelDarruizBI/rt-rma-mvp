@@ -136,7 +136,7 @@ Proyecto `rosariotecno-460217`, región `southamerica-east1`.
 | Recurso | Configuración |
 |---|---|
 | Bucket `gs://rt-rma-uat-respaldos` | Standard, acceso uniforme, acceso público bloqueado (un pedido anónimo recibe 403). **Retención de 30 días** en todo el bucket: ningún objeto se borra ni se sobrescribe antes. Ciclo de vida: borra `uat/` a los 35 días. `_herramientas/` queda excluida: si se borrara, el Job dejaría de funcionar. Borrado suave de 7 días |
-| `_herramientas/` | `respaldar.sh`, `restaurar.sh`, `ensayar_restauracion.sh`, `supabase-ca.crt` y `migraciones/` (las 35 del repositorio; la 21 a la 23 se agregaron el 12/11/2026 y la 24 a la 35 el 16/11/2026, al aplicarlas en São Paulo) |
+| `_herramientas/` | `respaldar.sh`, `restaurar.sh`, `ensayar_restauracion.sh`, `supabase-ca.crt` y `migraciones/` (las 37 del repositorio; la 21 a la 23 se agregaron el 12/11/2026, la 24 a la 35 el 16/11/2026 y la 36 y la 37 ese mismo día, al aplicarlas en São Paulo) |
 | Cuenta de servicio `rt-rma-respaldo` | Sin roles en el proyecto. `storage.objectCreator` y `storage.objectViewer` solo en ese bucket: crea y lee, no borra ni sobrescribe. `secretAccessor` solo en su secreto. `run.invoker` solo en su Job |
 | Secreto `rma-uat-respaldo-db-url` | Versión 1. Solo la lee `rt-rma-respaldo`. Conexión de `rma_respaldo` (sección 2) |
 | Rol `rma_respaldo` en São Paulo | Sección 2 |
@@ -219,5 +219,14 @@ Hasta ese momento no se suben: el ensayo en la nube aplica todo lo que hay en es
 | Ensayo después de migrar | `rt-rma-respaldo-db-6k89g` | ENSAYO_RESTAURACION_OK: 35 migraciones, 69 tablas, secuencias y 4 cuentas |
 | Respaldo posterior | `rt-rma-respaldo-db-5p29r` | `uat/20261116T014847Z`: 35 migraciones, 69 tablas, `OR-000001` completa |
 | Ensayo final | `rt-rma-respaldo-db-bdgd5` | ENSAYO_RESTAURACION_OK |
+
+**Iteración de UX de Recepción (16/11/2026), dos migraciones aditivas; scripts sin cambios:**
+
+| Momento | Ejecución | Resultado |
+|---|---|---|
+| Respaldo previo | `rt-rma-respaldo-db-bkgjw` | `uat/20261116T184846Z`: 35 migraciones, `OR-000001` con su documento y 5 fotos (en el bucket), 4 cuentas; `SHA256SUMS` correcto |
+| Herramientas | — | `20261116000100` y `20261116000200` en `_herramientas/migraciones/` (37, MD5 iguales al repositorio) |
+| Respaldo posterior | `rt-rma-respaldo-db-9rrlp` | `uat/20261116T220226Z`: 37 migraciones, 69 tablas, `OR-000001` (cancelada) con 2 documentos y 5 fotos; `SHA256SUMS` correcto |
+| Ensayo en la nube | `rt-rma-respaldo-db-lwn9t` | ENSAYO_RESTAURACION_OK: 37 migraciones, 69 tablas con sus conteos, integridad, secuencias y 4 cuentas |
 
 El respaldo diario sigue sin cambios de configuración.

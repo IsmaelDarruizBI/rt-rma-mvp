@@ -65,6 +65,16 @@ Controles críticos para revisar antes y después de publicar. No es una auditor
 - **Hallazgo corregido en código (sin desplegar):** `/docs`, `/redoc` y `/openapi.json` eran públicos y mostraban 78 rutas; se corrige en `4af9854`. Queda pendiente para el próximo despliegue.
 - **Pendiente de confirmar en el panel:** el largo mínimo 10 en los dos proyectos.
 
+## Resultado de la revisión del 16/11/2026 (`00033-fah`, iteración de UX de Recepción, São Paulo)
+
+- **Correcto:**
+  - repositorio: escaneo de secretos sin hallazgos; CI en verde en `677dbb1`; las dos migraciones son aditivas y no cambian roles;
+  - backend: plantilla heredada de `00031-ror` (14 variables, `RMA_AUTH_MODO=supabase`, `RMA_DATABASE_URL` desde el secreto) y **sin `RMA_TIPO_EQUIPO_CAMPO`** (DC12 desactivada); 401 sin token y con token inválido, también en `/api/admin/payment-methods`, administración, compras y lotes; `/docs` 404; un origen ajeno no recibe CORS; registros sin errores, 5xx ni credenciales;
+  - base, después de migrar: `rma_backend` inserta pagos pero no actualiza el reparto del recargo (solo las columnas de anulación); el recargo devuelto tiene tope en la base; `anon` y `authenticated` sin acceso; `verificar_integridad()` vacío; la entidad `MEDIO_PAGO` queda en la auditoría de configuración;
+  - frontend: solo la clave publicable (las apariciones de `sb_secret_` y `service_role` son la guarda del frontend que las rechaza); mismo ref que el backend y el mismo servicio de Cloud Run;
+  - permisos con sesiones reales en el E2E UX: Recepción no cambia el recargo de un medio de pago; Administración sí, con auditoría.
+- **No verificado en esta revisión:** suplantación con una sesión real; la pasada manual en un navegador real (P2-17).
+
 ## Resultado de la revisión del 16/11/2026 (`00031-ror`, macroiteración integral, São Paulo)
 
 - **Correcto:**

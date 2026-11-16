@@ -19,10 +19,11 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - **despliegue de la macroiteración integral preparado** (15/11, `prep/despliegue-macro-integral`, publicada e integrada en `mvp-v2` en `16796ee` con CI en verde; sin desplegar): ensayo local completo del despliegue y de la vuelta atrás (56 de 56), una incompatibilidad con la versión publicada corregida, procedimiento, respaldos, reinicio y E2E listos; **DC12 inactiva por ABI-42, sin impedir el resto** (sección B).
   - **macroiteración integral en UAT** (16/11): las 12 migraciones en São Paulo (35), Cloud Run `00031-ror` (`9176921`) y Vercel `dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e`; E2E V1.4 67 de 67 e integral 68 de 68 con limpieza selectiva; `OR-000001` intacta; DC12 desactivada por ABI-42 (sección B).
   - **iteración de UX de Recepción cerrada** (16/11, `feat/ux-recepcion` sobre `614d167`, publicada y para integrar en `mvp-v2` por avance rápido con CI en verde; sin desplegar): UX-02 a UX-12, UX-01 documentada sin cambios de código, y las decisiones de cierre DEC-UX-13 (recargo incorporado a los trabajos, ABI-45) y DEC-UX-14 (recargo devuelto en proporción, ABI-44); UX-03 y UX-04 revisadas. Especificación en `rt-rma-app` `spec/ux-recepcion` `ebd0840` (publicada) y `business/` sincronizado. Dos migraciones aditivas, solo locales (`20261116000100` y `20261116000200`) ([`ux-recepcion.md`](ux-recepcion.md); sección B).
+  - **iteración de UX de Recepción en UAT** (16/11): las migraciones `20261116000100` y `20261116000200` en São Paulo (37), Cloud Run `00033-fah` (`677dbb1`) y Vercel `dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`; E2E UX 47 de 47, V1.4 67 de 67 e integral 68 de 68, cada uno con limpieza selectiva; respaldos y ensayo de restauración en la nube correctos (sección B).
 - **Falta:**
-  - iteración de UX de Recepción, con autorización: desplegarla en UAT (migraciones `20261116000100` y `20261116000200` en São Paulo, Cloud Run y Vercel) y conseguir la exportación de Ventas de ABI-43;
+  - conseguir la exportación de Ventas de ABI-43 (modelos que faltan en el catálogo técnico);
   - ABI-42: que Gestión RT indique qué columna (o tabla) de su catálogo es el Tipo de Equipo; con una columna `tp_*` alcanza con fijar `RMA_TIPO_EQUIPO_CAMPO` y sincronizar;
-  - eliminar la Orden de prueba `OR-000001` (autorizada, sin fecha): un borrado controlado aparte, que no es la limpieza del E2E;
+  - `OR-000001` sigue como Orden de prueba (cancelada desde la pantalla el 16/11); el UAT es solo de datos ficticios y su borrado o reinicio está autorizado cuando las pruebas lo requieran;
   - una pasada manual en un navegador real de las pantallas nuevas (P2-17);
   - opcional: repetir `medir_api.py` (falló el inicio de sesión, HTTP 400, probablemente por la contraseña tipeada; solo mide tiempos);
   - integrar en `main` (P0-2).
@@ -41,13 +42,13 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | Tooling de la raíz | Node y TypeScript: validaciones, diagramas Mermaid y visor HTML (`package.json`) |
 | `app/backend/` | Python 3.11 o posterior, FastAPI y Pydantic v2. Capas `api → application → services → repositories ← storage` ([README](../app/backend/README.md)) |
 | `app/frontend/` | React, TypeScript y Vite ([README](../app/frontend/README.md)) |
-| `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). 35 de 35 aplicadas en `db-rt-rma` (São Paulo, `sa-east-1`): las 12 de la macroiteración integral (`20261113000100` a `20261115000100`), aditivas, el 16/11/2026; antes, la 21 a la 23 el 12/11/2026. Oregón (`rt-rma-db`, vuelta atrás de la migración) queda en 20 |
+| `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). 37 de 37 aplicadas en `db-rt-rma` (São Paulo, `sa-east-1`): `20261116000100` y `20261116000200` (iteración de UX de Recepción, aditivas) el 16/11/2026; antes, las 12 de la macroiteración integral ese mismo día. Oregón (`rt-rma-db`, vuelta atrás de la migración) queda en 20 |
 | Persistencia en uso | UAT: PostgreSQL en Supabase (`RMA_PERSISTENCIA=postgres`). JSON sigue siendo el valor por defecto local |
-| UAT publicado | Desde el 16/11/2026 a las 01:31 UTC, macroiteración integral sobre Supabase São Paulo: backend en Cloud Run (`rt-rma-uat-api-00031-ror`, código `9176921`) y frontend en Vercel (`dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e`). Vuelta atrás: `00029-kay` y `dpl_CRXZ…`, con los controles de P1-15 ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 7.8). Oregón sigue como vuelta atrás de la migración hasta el 25/11/2026 |
+| UAT publicado | Desde el 16/11/2026 a las 18:54 UTC, la iteración de UX de Recepción sobre Supabase São Paulo: backend en Cloud Run (`rt-rma-uat-api-00033-fah`, código `677dbb1`) y frontend en Vercel (`dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`). Vuelta atrás: `00031-ror` y `dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 8). Oregón sigue como vuelta atrás de la migración hasta el 25/11/2026 |
 
-**Rama de trabajo:** `mvp-v2`, con la iteración de UX de Recepción (`feat/ux-recepcion`, publicada) integrada por avance rápido y `business/` de `rt-rma-app` `ebd0840` (`spec/ux-recepcion`, publicada). Código desplegado en UAT: `9176921` (la macroiteración integral, su preparación y la limpieza selectiva del E2E). Los commits posteriores solo amplían el E2E y la documentación. `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
+**Rama de trabajo:** `mvp-v2`, con la iteración de UX de Recepción integrada; `business/` de `rt-rma-app` `ebd0840` (`spec/ux-recepcion`, publicada). Código desplegado en UAT: `677dbb1`, desde el 16/11/2026; los commits posteriores son documentación. `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
 
-**Últimos commits de código:** `31f927c` (desperdicio compatible con la versión anterior), `ef79e45` (DC12 con DEC-MI-16) y los de la macroiteración integral desde `c47903e`. Desplegado: `9176921`, desde el 16/11/2026. Ver `git log`.
+**Últimos commits de código:** `582d1bc` (rótulo del comprobante de autorización), `677dbb1` (E2E comercial y ensayo del despliegue), `3c96320` y `0a4c5ad` (ABI-44 y ABI-45, UX-03 y UX-04 revisadas) y los de la iteración de UX desde `b39daea`. Desplegado: `677dbb1`, desde el 16/11/2026. Ver `git log`.
 
 **Estado de desarrollo:**
 - El MVP está en UAT sobre PostgreSQL, con autenticación real (Supabase Auth, usuario y contraseña), DC31 y la macroiteración integral, solo con datos ficticios: la Orden de prueba `OR-000001` (13/11/2026, con 5 fotos) y nada más ([`autenticacion.md`](autenticacion.md)).
@@ -77,6 +78,25 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Despliegue de la iteración de UX de Recepción en UAT (16/11/2026)
+
+Procedimiento de [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 8, con autorización. Sin cambios en producción, `main`, Gestión RT ni DC12.
+
+- **Ajustes previos en `mvp-v2`:** `582d1bc` (el comprobante de autorización rotula el texto único como «Observaciones del equipo»; los documentos anteriores siguen con «Falla declarada») y `677dbb1` (E2E comercial `probar_ux_recepcion.py`, 43 de 43 en local, y ensayo local del despliegue `ensayar_despliegue_ux.py`, 48 de 48, que incluye el backend anterior sobre las 37 migraciones). CI en verde.
+- **Preflight:** tráfico 100 % en `00031-ror`, plantilla de 14 variables sin `RMA_TIPO_EQUIPO_CAMPO`; Vercel en `dpl_7Zo4…`; São Paulo con 35 migraciones, `OR-000001` (1 documento, 5 fotos en el bucket), BAT-IP14 10/0 conciliado, 4 usuarios vinculados, 0 Tipos de Equipo.
+- **Respaldo previo:** `rt-rma-respaldo-db-bkgjw`, copia `uat/20261116T184846Z` (`SHA256SUMS` correcto; 35 migraciones; `OR-000001` con su documento y sus 5 fotos; Auth).
+- **Migraciones:** el `db push --dry-run` listó solo las dos previstas; aplicadas. Después: 37 migraciones, 69 tablas y 8 vistas, Transferencia 2 %, `rma_backend` sin UPDATE sobre el reparto del recargo, `anon` y `authenticated` sin acceso, integridad sin problemas, huella de `OR-000001` y de los catálogos idéntica; `00031-ror` siguió respondiendo. Las dos subidas a `_herramientas/migraciones/` (37, MD5 iguales).
+- **Backend:** `rt-rma-uat-api-00033-fah`, etiqueta `ux-677dbb1`, desde una exportación limpia de `677dbb1`, plantilla heredada. Por la etiqueta: `/health` 200, `/docs` 404, 401 sin token y con token inválido (también en medios de pago, administración, compras y lotes), CORS solo del frontend; registros sin errores ni credenciales.
+- **Frontend:** `dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB` (`vercel deploy --prod --skip-domain` desde la misma exportación; `.env.local` de `vercel link` borrado antes de construir).
+- **Publicación:** tráfico 100 % a `00033-fah` y `vercel promote` a las 18:54 UTC. El bundle apunta a São Paulo, solo con la clave publicable (las apariciones de `sb_secret_` y `service_role` son la guarda que las rechaza) y con las pantallas nuevas.
+- **E2E, cada uno con su línea de base y limpieza selectiva (ensayo y aplicada):**
+  - `probar_ux_recepcion.py`: **47 de 47** (43 del E2E y 4 sesiones). La limpieza borró, además, un intento de WhatsApp registrado a mano sobre `OR-000001` durante la prueba: la limpieza no distingue actividad manual sobre una Orden conservada. Sin consecuencias, el UAT es solo de datos ficticios;
+  - `probar_macro_v14.py`: el primer intento no escribió nada (había `OR-000002`, creada a mano desde la pantalla, y `OR-000001` se había cancelado a mano). Con autorización, `OR-000002` se borró con un borrado dirigido con ensayo (8 tablas, nada más; `OR-000001` intacta, integridad vacía) y la línea de base se regeneró. Después: **67 de 67**;
+  - `probar_macro_integral.py`: **68 de 68**.
+- **Estado final:** solo `OR-000001` (cancelada), sin pagos, devoluciones, compras, reclamos, comunicaciones ni lotes; BAT-IP14 10/0 conciliado y sin lote; integridad vacía; 37 migraciones; los 4 usuarios con sus roles; Transferencia 2 %; DC12 sin tipos; próxima Orden `OR-000002`; sin esquemas temporales. Sin 5xx en `00033-fah`.
+- **Respaldo posterior:** `rt-rma-respaldo-db-9rrlp`, copia `uat/20261116T220226Z` (37 migraciones, 69 tablas); ensayo de restauración en la nube `rt-rma-respaldo-db-lwn9t`: ENSAYO_RESTAURACION_OK (37 migraciones, 69 tablas con sus conteos, integridad, secuencias y 4 cuentas).
+- **Vuelta atrás:** `00031-ror` + `dpl_7Zo4…`, ensayada sobre las 37 migraciones.
 
 ### Cierre de la iteración de UX de Recepción (16/11/2026), `feat/ux-recepcion`
 
@@ -697,7 +717,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (16/11/2026):** con autorización explícita, desplegar la iteración de UX de Recepción en UAT desde `mvp-v2`: respaldo previo, las migraciones `20261116000100` y `20261116000200` en São Paulo, Cloud Run y Vercel, con el procedimiento de [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md). Siguen pendientes la pasada manual (P2-17), eliminar `OR-000001` cuando se decida, ABI-42, ABI-43 y la integración en `main` (P0-2).
+**Próximo paso (16/11/2026):** UAT operativo con la iteración de UX de Recepción (sección B). Siguen pendientes, con autorización: la pasada manual en un navegador real (P2-17, incluye el diálogo real de impresión y el desborde de «Pendientes» a 390 px), ABI-43 (exportación de Ventas), ABI-42 (para activar DC12) y la integración en `main` (P0-2).
 
 **Antes (12/11/2026):** la macroiteración está desplegada y validada en UAT, con los datos de prueba limpiados (sección B). Queda, opcional, repetir `medir_api.py`: solo mide tiempos y pide la contraseña de `administracion`. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
 

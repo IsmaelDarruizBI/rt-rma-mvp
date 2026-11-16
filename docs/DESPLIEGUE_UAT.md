@@ -260,6 +260,10 @@ Todo lo demás (compras, lotes de otros insumos, devoluciones, descuentos por De
 
 ## 8. Iteración de UX de Recepción: procedimiento (16/11/2026)
 
+**Resultado del 16/11/2026: publicado y validado.** Backend `00033-fah` (`677dbb1`), frontend `dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`, São Paulo con 37 migraciones, desde las 18:54 UTC. Respaldos: antes `uat/20261116T184846Z`, después `uat/20261116T220226Z` con ensayo en la nube correcto. E2E UX 47 de 47, V1.4 67 de 67 e integral 68 de 68, cada uno con su limpieza selectiva. Detalle en [`ESTADO_PROYECTO.md`](ESTADO_PROYECTO.md), sección B.
+
+**Lección:** la limpieza selectiva borra toda fila nueva desde su línea de base y solo aborta si aparece una Orden o un cliente que no son del E2E, o si cambia una fila previa; una acción manual sobre una Orden conservada que solo agrega filas (por ejemplo, un intento de WhatsApp) se borra con el E2E. Mientras corren los E2E no se opera en la pantalla del UAT.
+
 Publica `mvp-v2` con la iteración de UX de Recepción (DEC-UX-01 a 14) sobre el par vigente `00031-ror` + `dpl_7Zo4…`. Igual que la sección 7, con estas diferencias:
 
 - **Migraciones (2, en orden):** `20261116000100_recargos_medio_pago` (recargo por medio de pago, Transferencia 2 %, copia en el pago, entidad de auditoría `MEDIO_PAGO`) y `20261116000200_recargo_detalles_devoluciones` (reparto del recargo en el pago, recargo devuelto con su tope, marca de observaciones unificadas en la recepción). Aditivas: columnas con valor por defecto, sin tablas nuevas (69 tablas y 8 vistas). El `db push --dry-run` tiene que listar **solo esas dos**; después, 37.
