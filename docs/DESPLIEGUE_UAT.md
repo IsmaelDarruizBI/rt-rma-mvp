@@ -257,3 +257,15 @@ select (select count(*) from rma.movimiento_inventario where tipo = 'DESPERDICIO
 Todo lo demás (compras, lotes de otros insumos, devoluciones, descuentos por Detalle, comunicaciones, firmas, reclamos, identidad, permisos configurados) queda en la base y la versión anterior lo ignora. Sin datos reales, la vuelta atrás del UAT es: la limpieza de cada E2E (que conserva `OR-000001`), la consulta de arriba en cero, un rol por usuario y los dos comandos. Se ensayó así (fase 5c: lee, escribe e integridad sin problemas).
 
 **Pares de vuelta atrás desde el 16/11/2026:** `00029-kay` + `dpl_CRXZ…` (macroiteración V1.4), ensayado sobre las 35 migraciones. Al cierre del despliegue los tres controles de la consulta de arriba daban 0. `00027-sas` y anteriores no se probaron sobre las 35 migraciones.
+
+## 8. Iteración de UX de Recepción: procedimiento (16/11/2026)
+
+Publica `mvp-v2` con la iteración de UX de Recepción (DEC-UX-01 a 14) sobre el par vigente `00031-ror` + `dpl_7Zo4…`. Igual que la sección 7, con estas diferencias:
+
+- **Migraciones (2, en orden):** `20261116000100_recargos_medio_pago` (recargo por medio de pago, Transferencia 2 %, copia en el pago, entidad de auditoría `MEDIO_PAGO`) y `20261116000200_recargo_detalles_devoluciones` (reparto del recargo en el pago, recargo devuelto con su tope, marca de observaciones unificadas en la recepción). Aditivas: columnas con valor por defecto, sin tablas nuevas (69 tablas y 8 vistas). El `db push --dry-run` tiene que listar **solo esas dos**; después, 37.
+- **Configuración:** ninguna variable nueva. La plantilla de `00031-ror` sirve tal cual; DC12 sigue inactiva (sin `RMA_TIPO_EQUIPO_CAMPO`).
+- **E2E posteriores, cada uno con su línea de base y su limpieza (7.7):** [`probar_ux_recepcion.py`](../supabase/scripts/validacion_uat/probar_ux_recepcion.py), `probar_macro_v14.py` y `probar_macro_integral.py`. El primero cambia el recargo de Transferencia a 3 % durante la prueba y lo vuelve a 2 % al terminar, también si falla; si no quedara en 2 %, la limpieza aborta porque `medio_pago` es maestra.
+- **Ensayo local:** [`ensayar_despliegue_ux.py`](../supabase/scripts/validacion_uat/ensayar_despliegue_ux.py), 48 de 48: base con las 35 migraciones y una Orden previa con foto; el backend anterior (`9176921`) sigue funcionando con las 37 (E2E V1.4 con su limpieza); el backend nuevo pasa los tres E2E con su limpieza; y el anterior lee las Órdenes que crea la versión nueva.
+
+**Vuelta atrás:** `00031-ror` + `dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e`, sin tocar el esquema (ensayado sobre las 37 migraciones). La versión anterior ignora los recargos, su reparto y el recargo devuelto: sus pantallas muestran los importes base. Con una Orden ingresada con el texto único (sin estado físico aparte), la versión anterior pide registrar el estado físico antes de generar el comprobante o confirmar la recepción: se completa desde la corrección del ingreso. Sin datos reales, la limpieza de cada E2E deja la base como antes.
+
