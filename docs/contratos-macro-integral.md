@@ -32,6 +32,7 @@ La copia de los Tipos de Equipo desde el catálogo de Ventas (`POST /api/admin/e
 | Roles y permisos | `GET/PUT /api/admin/users[/{codigo}/roles]`, `GET/PUT /api/admin/permissions[/{codigo}]` |
 | Reclamos | `GET /api/warranty-claims[/{id}]`, `POST /api/warranty-claims/{id}/continue` |
 | Motivos y retiro | `GET /api/catalogs/reasons?tipo=`, `GET/POST/PUT /api/admin/reasons`, `GET/PUT /api/admin/parameters`, `POST /api/orders/{id}/pickup-followups` |
+| Recargo por medio de pago (DEC-UX-08, rama `feat/ux-recepcion`) | `GET /api/admin/payment-methods` (`editable` y los medios con `recargo_porcentaje`), `PUT /api/admin/payment-methods/{codigo}` (`usuario_id`, `recargo_porcentaje` 0 a 100 con hasta dos decimales; Administración, auditado como `MEDIO_PAGO`; solo PostgreSQL). `MedioPagoOut` suma `recargo_porcentaje`; `PagoOut` suma `recargo_porcentaje`, `recargo_importe` y `total_cobrado` (`monto` + recargo; `monto` es lo imputado al saldo) |
 | Comunicaciones | `GET /api/communications/templates`, `GET /api/orders/{id}/messages/prepare?plantilla=`, `POST /api/orders/{id}/messages`, `POST /api/orders/{id}/messages/{com}/confirm`, `GET/POST /api/clients/{id}/consents`, `GET/POST/PUT /api/admin/message-templates` |
 | Firmas | `GET /api/orders/{id}/signatures[/{firma}]`, `POST /api/orders/{id}/documents/{doc}/signatures?usuario_id=&forma=` (cuerpo: la imagen) |
 | Identidad del equipo | `GET /api/equipment/identify?imei=&numero_serie=`, `GET /api/equipment/{equipo}/orders`, `POST /api/orders/{id}/equipment-link` |

@@ -54,7 +54,7 @@ Los pasos 2 y 3 tienen que entrar juntos: si la validación llega antes, el alta
 
 **Hoy.** El generador la excluye (`MODELOS_EXCLUIDOS`). En la exportación de Ventas del 21/10/2026 son 420 filas con las variantes Estándar, Pro, Pro Max, Air, E y Duo, más dos filas sin número de modelo («iPhone 18 Pro 256GB» y «iPhone 18 Pro Max 256GB»). Mientras tanto, un iPhone 18 se puede cargar a mano.
 
-**Falta.** Validar los nombres. Después, quitarla de `MODELOS_EXCLUIDOS` y regenerar: los modelos existentes conservan sus IDs.
+**Falta.** Validar los nombres. Después, quitarla de `MODELOS_EXCLUIDOS` y regenerar: los modelos existentes conservan sus IDs. La iteración de UX de Recepción (DEC-UX-01, 16/11/2026) confirmó que el mismo mecanismo completa también los modelos que Ventas agregó después del 21/10 o nunca vendió: hace falta una exportación nueva de Ventas (pendiente ABI-43 en `business/`; detalle en [`ux-recepcion.md`](ux-recepcion.md), UX-01).
 
 ## P-04. Garantía de 180 días en los Términos y Condiciones
 

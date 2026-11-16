@@ -1013,6 +1013,221 @@ decisions:
       gap: "falta definir que columna (o tabla) de Gestion RT es el Tipo de Equipo (ABI-42); con una columna tp_* basta configurarla y sincronizar, con otra tabla hace falta un adaptador nuevo del mismo puerto."
     open: [ABI-42]
 
+  # ------------------------------------------------------------------ Iteracion de UX de Recepcion (16/11/2026)
+  - id: DEC-UX-01
+    block: UX
+    title: Los modelos del catalogo tecnico vienen de Ventas; no se inventan ni se duplican
+    status: CONFIRMADA
+    rules: [BR-REP-048, BR-REP-022]
+    nodes: [PROC-REP-030]
+    features: [FEAT-REP-001]
+    notes: >
+      Aprobada el 16/11/2026 (UX-01). El catalogo tecnico de modelos del alta
+      es una copia generada una sola vez desde una exportacion de Ventas del
+      21/10/2026 (rt-rma-mvp ef8f543); la linea iPhone 18 se excluyo hasta
+      verificar sus nombres y los modelos que Ventas no tenia entonces, o nunca
+      vendio, no estan. Se completa volviendo a generar la copia desde una
+      exportacion nueva de Ventas (solo lectura, identificadores estables, sin
+      duplicar) y aplicandola con autorizacion; mientras tanto el modelo se
+      carga a mano. RMA no modifica Gestion RT.
+    implementation:
+      status: NO_IMPLEMENTADO
+      gap: "falta la exportacion actualizada de Ventas y la verificacion de los nombres de la linea iPhone 18 (ABI-43); sin cambios de codigo."
+    open: [ABI-43]
+
+  - id: DEC-UX-02
+    block: UX
+    title: Un equipo sin IMEI se identifica con el identificador interno del Equipo, visible en la Orden y en el comprobante
+    status: CONFIRMADA
+    rules: [BR-REP-022, BR-REP-046]
+    nodes: [PROC-REP-030, PROC-REP-046]
+    features: [FEAT-REP-001]
+    notes: >
+      Aprobada el 16/11/2026 (UX-02). Se reutiliza la identidad del Equipo de
+      DEC-MI-11: su identificador interno, unico en la base, nunca un IMEI
+      ficticio. Se muestra en la Orden y en el comprobante de ingreso. El IMEI
+      real se asocia despues con la correccion de los datos del ingreso
+      (DEC-MI-07), que conserva el identificador y la version anterior; hasta
+      cuando se admite esa correccion sigue en ABI-41.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ux-recepcion d0f7868 (comprobante con el identificador; pruebas de altas simultaneas sin IMEI con identificadores unicos, codigo repetido rechazado por la base e IMEI real asociado despues) y 864c599 (identificador en la cabecera y en Cliente y equipo)"
+    open: [ABI-41]
+
+  - id: DEC-UX-03
+    block: UX
+    title: Un solo campo visible de Observaciones del equipo en la recepcion
+    status: CONFIRMADA
+    rules: [BR-REP-023, BR-REP-046]
+    nodes: [PROC-REP-030]
+    features: [FEAT-REP-001]
+    notes: >
+      Aprobada el 16/11/2026 (UX-03). Recepcion carga un solo texto con lo que
+      declara el cliente, el problema, el estado estetico y otras
+      observaciones; se registra como falla declarada, estado fisico y
+      observacion visible, de modo que las exigencias del comprobante y de la
+      recepcion no cambian. Las notas internas siguen aparte. Las Ordenes
+      anteriores conservan sus datos y su significado: se muestran por
+      separado, con sus nombres. No se agregan ni se borran datos.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ux-recepcion d0f7868 (el comprobante muestra el texto unico una vez y las Ordenes anteriores sus datos separados) y 864c599 (alta y correccion con el texto unico)"
+
+  - id: DEC-UX-04
+    block: UX
+    title: El primer trabajo puede cargarse desde el alta de la Orden
+    status: CONFIRMADA
+    rules: [BR-REP-026, BR-REP-035, BR-REP-046]
+    nodes: [PROC-REP-030, PROC-REP-045]
+    features: [FEAT-REP-001, FEAT-REP-002]
+    notes: >
+      Aprobada el 16/11/2026 (UX-04). El alta ofrece un trabajo inicial
+      opcional entre los Tipos de Reparacion activos; se agrega con el mismo
+      comando que en la Orden, con su evaluacion tecnica, autorizacion,
+      reserva, auditoria y estados. Sin trabajo la Orden se crea igual
+      (BR-REP-026). Si el trabajo no puede agregarse, la Orden queda creada y
+      se informa el motivo. Otros (BR-REP-047) se carga en la Orden.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ux-recepcion 864c599 (alta con trabajo inicial; probado en navegador contra PostgreSQL local)"
+
+  - id: DEC-UX-05
+    block: UX
+    title: Imprimir el comprobante ya generado, con el mismo PDF
+    status: CONFIRMADA
+    rules: [BR-REP-042, BR-REP-046]
+    nodes: [PROC-REP-046]
+    features: [FEAT-REP-002]
+    notes: >
+      Aprobada el 16/11/2026 (UX-05). Junto a Descargar, Imprimir abre el
+      dialogo de impresion del navegador con el mismo PDF del documento
+      emitido. Imprimir es una lectura: no emite, no registra ni duplica
+      documentos.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ux-recepcion 864c599 (impresion desde un marco oculto con el PDF; si el navegador no lo permite, se abre en otra pestana)"
+
+  - id: DEC-UX-06
+    block: UX
+    title: El comprobante de recepcion muestra DNI, identificador del equipo, observaciones y espacio para firmar
+    status: CONFIRMADA
+    rules: [BR-REP-046, BR-REP-042, BR-REP-021]
+    nodes: [PROC-REP-046]
+    features: [FEAT-REP-002]
+    notes: >
+      Aprobada el 16/11/2026 (UX-06). El comprobante de ingreso y autorizacion
+      muestra el nombre y el DNI del cliente (si no se cargo, lo dice; nunca se
+      inventa), los datos e identificador del equipo, las observaciones y un
+      recuadro de conformidad con firma, aclaracion y DNI. Antes de generarlo
+      la pantalla avisa si falta el DNI o no es valido, sin bloquear. Los
+      documentos ya emitidos no cambian.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ux-recepcion d0f7868 (PDF) y 864c599 (aviso previo)"
+
+  - id: DEC-UX-07
+    block: UX
+    title: La firma sigue opcional y se ofrece junto al comprobante de ingreso
+    status: CONFIRMADA
+    rules: [BR-REP-042]
+    nodes: [PROC-REP-046]
+    features: [FEAT-REP-002]
+    notes: >
+      Aprobada el 16/11/2026 (UX-07). Completa DEC-MI-06: junto al comprobante
+      de ingreso vigente se ofrece Registrar firma, que lleva al registro de la
+      firma con ese documento elegido (trazo en pantalla o foto del papel
+      firmado). Nunca bloquea la recepcion.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ux-recepcion 864c599 (Registrar firma con el documento preseleccionado; probado en navegador)"
+
+  - id: DEC-UX-08
+    block: UX
+    title: Recargo porcentual por medio de pago, configurable y copiado en cada pago
+    status: CONFIRMADA
+    rules: [BR-REP-017, BR-REP-038, BR-REP-040]
+    nodes: [PROC-REP-265, PROC-REP-267]
+    features: [FEAT-REP-007, FEAT-REP-010]
+    notes: >
+      Aprobada el 16/11/2026 (UX-08). Cada medio de pago tiene un recargo
+      porcentual que configura Administracion, con auditoria; el inicial es
+      Transferencia 2 %. Al registrar un pago se calcula el recargo sobre su
+      importe (al centavo) y se guarda en el pago, como copia, el porcentaje y
+      el importe del recargo; se muestran el importe, el porcentaje, el
+      recargo y el total cobrado. El importe del pago es lo que se imputa al
+      saldo de la Orden, como hasta ahora; el recargo se cobra aparte. Cambiar
+      el porcentaje no recalcula pagos registrados; los anteriores quedan sin
+      recargo. Pagos parciales, varios medios, ajustes, saldo a favor y
+      devoluciones siguen operando sobre los importes imputados.
+    implementation:
+      status: PARCIAL
+      evidence: "rt-rma-mvp feat/ux-recepcion b39daea (medio_pago.recargo_porcentaje, copia en el pago, auditoria MEDIO_PAGO, migracion 20261116000100) y 864c599 (vista previa al cobrar, recargo en los movimientos, configuracion por Administracion)"
+      gap: "sin decidir si el recargo se devuelve en una devolucion de dinero (ABI-44) ni si figura en los comprobantes (ABI-45): las devoluciones siguen sobre importes y los comprobantes no lo muestran."
+    open: [ABI-44, ABI-45]
+
+  - id: DEC-UX-09
+    block: UX
+    title: Cancelar el trabajo se ofrece en cada trabajo; cancelar la Orden sigue en Mas acciones
+    status: CONFIRMADA
+    rules: [BR-REP-014, BR-REP-027]
+    nodes: [PROC-REP-300, PROC-REP-305]
+    features: [FEAT-REP-009]
+    notes: >
+      Aprobada el 16/11/2026 (UX-09). Solo cambia donde se ofrece: la
+      cancelacion de un Detalle aparece en las acciones de ese trabajo y la de
+      la Orden en Mas acciones. Se conservan los comandos, el motivo
+      obligatorio con catalogo y Otro con descripcion (DEC-MI-15), la
+      auditoria, las restricciones por estado, la interrupcion y DC31.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ux-recepcion 864c599 (acciones.ts organizarBarra: porTrabajo; probado en navegador)"
+
+  - id: DEC-UX-10
+    block: UX
+    title: El resultado tecnico se muestra derivado, sin estados nuevos
+    status: CONFIRMADA
+    rules: [BR-REP-008, BR-REP-010, BR-REP-012]
+    nodes: [PROC-REP-069, PROC-REP-220, PROC-REP-240]
+    features: [FEAT-REP-006]
+    notes: >
+      Aprobada el 16/11/2026 (UX-10). La Orden muestra su resultado tecnico
+      (reparado, sin reparacion o cancelada) y el de cada trabajo, derivados de
+      lo que ya se registra (control tecnico aprobado con la reparacion lista o
+      entregada, conclusion sin reparacion de PROC-REP-069, cancelaciones), y
+      el paso que sigue. No agrega estados.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ux-recepcion 864c599 (recepcionUx.ts resultadoTecnico; probado en navegador)"
+
+  - id: DEC-UX-11
+    block: UX
+    title: Acceso directo al WhatsApp asistido desde la Orden
+    status: CONFIRMADA
+    rules: [BR-REP-044]
+    nodes: [PROC-REP-260]
+    features: [FEAT-REP-008]
+    notes: >
+      Aprobada el 16/11/2026 (UX-11). La barra de la Orden ofrece WhatsApp, que
+      abre las comunicaciones de la Orden con sus plantillas, consentimientos,
+      historial de intentos y confirmacion manual (DEC-MI-08). Nunca envia
+      solo.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ux-recepcion 864c599 y d9803fa (acceso en la barra que abre Comunicaciones)"
+
+  - id: DEC-UX-12
+    block: UX
+    title: La cabecera de la Orden muestra solo el numero, el nombre y el telefono del cliente y las acciones
+    status: CONFIRMADA
+    features: [FEAT-REP-001]
+    documented_in: [docs/consolidation/README.md]
+    notes: >
+      Aprobada el 16/11/2026 (UX-12). La custodia y las observaciones del
+      equipo pasan al cuerpo (Cliente y equipo). Probado en pantallas angostas.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ux-recepcion 864c599 (subtituloOrden)"
+
   # ------------------------------------------------------------------ Baseline y sincronizacion
   - id: DC01
     block: BASELINE
@@ -1826,6 +2041,40 @@ open_items:
       capacidad y color), no un tipo. Hace falta que Gestion RT indique la
       columna, o una tabla de tipos con identificador estable, y la lista de
       valores vigentes.
+
+  - id: ABI-43
+    title: Modelos del catalogo tecnico que faltan (linea iPhone 18 y modelos posteriores a la exportacion de Ventas)
+    impact: POSTERIOR
+    decisions: [DEC-UX-01]
+    rules: [BR-REP-048]
+    features: [FEAT-REP-001]
+    needed: >
+      Una exportacion actualizada del catalogo de Ventas y la verificacion de
+      los nombres y variantes de la linea iPhone 18, para volver a generar el
+      catalogo tecnico; o decidir que Administracion pueda agregar modelos al
+      catalogo tecnico.
+
+  - id: ABI-44
+    title: Si el recargo por medio de pago se devuelve cuando se devuelve dinero
+    impact: POSTERIOR
+    decisions: [DEC-UX-08]
+    rules: [BR-REP-017, BR-REP-038]
+    features: [FEAT-REP-007]
+    needed: >
+      Alternativas: nunca (el recargo cubre el costo del medio), en proporcion
+      a lo devuelto del pago, o a criterio con motivo. Mientras tanto las
+      devoluciones operan sobre los importes imputados, sin el recargo.
+
+  - id: ABI-45
+    title: Si el recargo por medio de pago figura en los comprobantes
+    impact: POSTERIOR
+    decisions: [DEC-UX-08]
+    rules: [BR-REP-017, BR-REP-046]
+    features: [FEAT-REP-007]
+    needed: >
+      Alternativas: solo en el pago y en los cobros de la Orden, o tambien en
+      los comprobantes. Mientras tanto se muestra en los cobros y en el
+      historial del pago, y los comprobantes no cambian.
 
 improvements:
 

@@ -18,7 +18,9 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - **macroiteración integral** (13 a 15/11, rama `feat/macro-integral`): DEC-MI-01 a 16 implementadas, con Compras, lotes y desperdicio, catálogos auditados y consultas configurables; DC12 con la decisión aprobada DEC-MI-16 (tipos de equipo del catálogo de Ventas de Gestión RT, copia de solo lectura), pendiente de qué dato de Ventas es el tipo (ABI-42); QA cerrada con 0 fallas (sección B).
   - **despliegue de la macroiteración integral preparado** (15/11, `prep/despliegue-macro-integral`, publicada e integrada en `mvp-v2` en `16796ee` con CI en verde; sin desplegar): ensayo local completo del despliegue y de la vuelta atrás (56 de 56), una incompatibilidad con la versión publicada corregida, procedimiento, respaldos, reinicio y E2E listos; **DC12 inactiva por ABI-42, sin impedir el resto** (sección B).
   - **macroiteración integral en UAT** (16/11): las 12 migraciones en São Paulo (35), Cloud Run `00031-ror` (`9176921`) y Vercel `dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e`; E2E V1.4 67 de 67 e integral 68 de 68 con limpieza selectiva; `OR-000001` intacta; DC12 desactivada por ABI-42 (sección B).
+  - **iteración de UX de Recepción** (16/11, rama local `feat/ux-recepcion` sobre `614d167`, sin publicar ni desplegar): UX-02 a UX-12 implementadas, UX-01 documentada sin cambios de código; decisiones DEC-UX-01 a 12 en `rt-rma-app` `spec/ux-recepcion` (`a6ce997`, local) y `business/` sincronizado; una migración aditiva nueva (`20261116000100`, solo local) ([`ux-recepcion.md`](ux-recepcion.md), sección B).
 - **Falta:**
+  - iteración de UX de Recepción, con autorización: publicar `feat/ux-recepcion` y `spec/ux-recepcion`, integrarlas y desplegar (migración `20261116000100` en São Paulo); decidir ABI-44 y ABI-45 (recargo en devoluciones y comprobantes) y conseguir la exportación de Ventas de ABI-43;
   - ABI-42: que Gestión RT indique qué columna (o tabla) de su catálogo es el Tipo de Equipo; con una columna `tp_*` alcanza con fijar `RMA_TIPO_EQUIPO_CAMPO` y sincronizar;
   - eliminar la Orden de prueba `OR-000001` (autorizada, sin fecha): un borrado controlado aparte, que no es la limpieza del E2E;
   - una pasada manual en un navegador real de las pantallas nuevas (P2-17);
@@ -43,7 +45,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | Persistencia en uso | UAT: PostgreSQL en Supabase (`RMA_PERSISTENCIA=postgres`). JSON sigue siendo el valor por defecto local |
 | UAT publicado | Desde el 16/11/2026 a las 01:31 UTC, macroiteración integral sobre Supabase São Paulo: backend en Cloud Run (`rt-rma-uat-api-00031-ror`, código `9176921`) y frontend en Vercel (`dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e`). Vuelta atrás: `00029-kay` y `dpl_CRXZ…`, con los controles de P1-15 ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 7.8). Oregón sigue como vuelta atrás de la migración hasta el 25/11/2026 |
 
-**Rama de trabajo:** `mvp-v2`. Código desplegado en UAT: `9176921` (la macroiteración integral, su preparación y la limpieza selectiva del E2E). Los commits posteriores solo amplían el E2E y la documentación. CI en verde. `business/` viene de `rt-rma-app` `9854046` (rama `spec/macro-integral`, publicada). `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
+**Rama de trabajo:** `mvp-v2`; la iteración de UX de Recepción está en la rama local `feat/ux-recepcion` (sin publicar), con `business/` de `rt-rma-app` `a6ce997` (`spec/ux-recepcion`, local). Código desplegado en UAT: `9176921` (la macroiteración integral, su preparación y la limpieza selectiva del E2E). Los commits posteriores solo amplían el E2E y la documentación. CI en verde. `business/` viene de `rt-rma-app` `9854046` (rama `spec/macro-integral`, publicada). `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
 
 **Últimos commits de código:** `31f927c` (desperdicio compatible con la versión anterior), `ef79e45` (DC12 con DEC-MI-16) y los de la macroiteración integral desde `c47903e`. Desplegado: `9176921`, desde el 16/11/2026. Ver `git log`.
 
@@ -75,6 +77,17 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Iteración de UX de Recepción (16/11/2026), rama local `feat/ux-recepcion`
+
+Mejoras aprobadas UX-01 a UX-12 sobre `mvp-v2` `614d167`. Diseño, implementación y recorrido en navegador: [`ux-recepcion.md`](ux-recepcion.md). Sin push, merge, PR, despliegues, migraciones remotas ni cambios en Gestión RT; DC12 sigue desactivada.
+
+- **Commits:** `b39daea` (UX-08 backend y migración), `d0f7868` (UX-02, 03 y 06 en el comprobante), `864c599` (frontend UX-02 a 12), `d9803fa` (ajuste de UX-11) y el de documentación y sincronización.
+- **Especificación:** DEC-UX-01 a 12 y ABI-43 a 45 en `rt-rma-app` `a6ce997` (rama `spec/ux-recepcion`, local); BR-REP-017, 022, 046 y 048 actualizadas; `business/` exportado con el procedimiento oficial y verificado contra la fuente; discrepancias al día (DEC-UX-01 sin implementar, DEC-UX-08 parcial).
+- **Migración:** `20261116000100_recargos_medio_pago.sql`, aditiva, solo local ([`postgresql/diseno-fisico.md`](postgresql/diseno-fisico.md)). Con ella son 36; el esquema sigue en 69 tablas y 8 vistas.
+- **Pruebas:** backend JSON 1826 pasaron y 29 omitidas; `tests/postgres` completa: 469 pasaron, sin omitidas ni fallas; `ruff check` sin observaciones; frontend `tsc` sin errores, 162 de 162 pruebas y build correcto; `npm run validate:all` y `validate:v1.4` de `rt-rma-app` en verde; búsqueda de credenciales sin hallazgos.
+- **Navegador:** recorrido completo contra un PostgreSQL local aislado con datos ficticios ([`ux-recepcion.md`](ux-recepcion.md), sección 5).
+- **Pendiente:** ABI-43 (exportación de Ventas para los modelos que faltan), ABI-44 y ABI-45 (recargo en devoluciones y comprobantes), y en la pasada manual (P2-17) el diálogo real de impresión y un desborde horizontal previo de «Pendientes» a 390 px.
 
 ### Despliegue de la macroiteración integral en UAT (16/11/2026)
 
@@ -675,7 +688,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (16/11/2026):** UAT operativo con la macroiteración integral (sección B). Siguientes, con autorización: la pasada manual en un navegador real (P2-17), eliminar `OR-000001` cuando se decida, y que Gestión RT resuelva ABI-42 para activar DC12 (configurar `RMA_TIPO_EQUIPO_CAMPO` y actualizar los tipos). Integrar en `main` sigue pendiente (P0-2).
+**Próximo paso (16/11/2026):** revisar la iteración de UX de Recepción (`feat/ux-recepcion` y `spec/ux-recepcion`, locales) y, con autorización explícita para cada acción, publicarlas, integrarlas en `mvp-v2` y desplegar en UAT con la migración `20261116000100`. Antes, conviene decidir ABI-44 y ABI-45. Siguen pendientes la pasada manual (P2-17), eliminar `OR-000001` cuando se decida, ABI-42 y la integración en `main` (P0-2).
 
 **Antes (12/11/2026):** la macroiteración está desplegada y validada en UAT, con los datos de prueba limpiados (sección B). Queda, opcional, repetir `medir_api.py`: solo mide tiempos y pide la contraseña de `administracion`. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
 

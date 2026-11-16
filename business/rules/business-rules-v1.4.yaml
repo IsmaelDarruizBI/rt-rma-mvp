@@ -673,6 +673,12 @@ rules:
       CLIENTE_EXTERNO con trabajos realizados y garantia aplicable la entrega
       exige ademas el check-in registrado (BR-REP-045), sin que condicione el
       cobro.
+      DEC-UX-08 (16/11/2026): cada medio de pago tiene un recargo porcentual
+      configurable por Administracion (inicial: Transferencia 2 %). El pago
+      guarda la copia del porcentaje y del importe del recargo, calculado al
+      centavo sobre su importe; al saldo se imputa el importe y el recargo se
+      cobra aparte. Cambiar el porcentaje no recalcula pagos registrados.
+      Devolucion y comprobantes: ABI-44 y ABI-45.
     status: approved
 
   - id: BR-REP-018
@@ -856,6 +862,11 @@ rules:
       Equipo conserva su historial completo: Ordenes, reparaciones, garantias,
       reingresos y custodia. La vinculacion o integracion con equipos de
       Gestion RT queda fuera de alcance.
+      DEC-UX-02 (16/11/2026): sin IMEI ni numero de serie el equipo se
+      identifica con el identificador interno de su identidad, unico, que se
+      muestra en la Orden y en el comprobante de ingreso; nunca un IMEI
+      ficticio. El IMEI real se asocia despues con la correccion del ingreso
+      (DEC-MI-07), que conserva el identificador.
     status: approved
 
   - id: BR-REP-023
@@ -1902,6 +1913,14 @@ rules:
       valores anteriores y nuevos, y la correccion no altera los comprobantes
       ya emitidos. Hasta cuando se admite la correccion sigue pendiente de
       decision.
+      DEC-UX-03, DEC-UX-04 y DEC-UX-06 (16/11/2026): la recepcion carga un solo
+      texto de Observaciones del equipo, que se registra como falla declarada,
+      estado fisico y observacion visible (las notas internas siguen aparte);
+      el primer trabajo puede agregarse desde el alta con el mismo comando y
+      sus controles; el comprobante muestra el DNI del cliente (o que no se
+      cargo), el identificador del equipo, las observaciones y un espacio de
+      conformidad con firma, aclaracion y DNI. Imprimirlo usa el mismo PDF y no
+      emite otro documento (DEC-UX-05).
     status: approved
 
   - id: BR-REP-047
@@ -1947,6 +1966,9 @@ rules:
       Gestion RT para el checklist: no se vinculan equipos con productos o
       ventas, no se consultan Ordenes de venta, no se modifica nada en Gestion
       RT y no se sincroniza inventario. Que dato es el tipo: ABI-42.
+      DEC-UX-01 (16/11/2026): el catalogo tecnico de modelos del alta es una
+      copia de una exportacion de Ventas; se completa volviendo a generarla
+      desde una exportacion nueva, sin inventar ni duplicar modelos (ABI-43).
     status: approved
 
   - id: BR-REP-049
