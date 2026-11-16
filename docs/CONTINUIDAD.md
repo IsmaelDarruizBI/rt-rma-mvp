@@ -12,7 +12,7 @@ Esta guía no contiene contraseñas, tokens ni claves.
 | Frontend | Vercel `rt-rma-uat` (equipo `ismaeldarruizbis-projects`, Root Directory `app/frontend`) | Producción `dpl_6vsLwpAzxE2yS5K7RLHBMNVvETN8`, en `https://rt-rma-uat.vercel.app`. **Desconectado de GitHub:** se despliega a mano ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)) |
 | Base y Auth | Supabase São Paulo `pcdnmhzwhzymznojndrn` | 20 migraciones. La API usa `rma_api` (secreto `rma-uat-sp-database-url:1`) y el respaldo usa `rma_respaldo` |
 | Respaldo | Job `rt-rma-respaldo-db`, Scheduler `rt-rma-respaldo-diario` (03:00 de Argentina) y bucket `rt-rma-uat-respaldos` | Cifrado con `age`; la clave privada la guarda la persona responsable ([`RESPALDOS.md`](RESPALDOS.md)) |
-| Vuelta atrás, hasta el 25/11/2026 | Oregón `okcscsglnujnxtgobjfw`, revisión `00020-tux` (etiqueta `auth`) y despliegue `dpl_F1M6…` | [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16 |
+| Vuelta atrás, hasta el 25/11/2026 | Oregón `okcscsglnujnxtgobjfw`, revisión `00020-tux` (sin etiqueta desde el 16/11/2026) y despliegue `dpl_F1M6…` | [`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16 |
 
 ## 2. Repositorios y ramas
 

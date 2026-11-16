@@ -33,17 +33,19 @@ Desde una exportación limpia del commit (sin archivos locales):
 ```bash
 git archive <sha> app/backend | tar -x -C <carpeta temporal>
 gcloud run deploy rt-rma-uat-api --project rosariotecno-460217 --region southamerica-east1 \
-  --source <carpeta temporal>/app/backend --no-traffic --tag prueba \
+  --source <carpeta temporal>/app/backend --no-traffic --tag <etiqueta temporal> \
   --update-labels commit=<sha>
 ```
 
-1. **La revisión hereda las variables de la plantilla**, que es la de la última revisión creada. Verificar `RMA_AUTH_SUPABASE_URL`, `RMA_DATABASE_URL` (secreto y versión fijada) y `RMA_CORS_ALLOW_ORIGINS` con `gcloud run revisions describe`.
+1. **La revisión hereda las variables de la plantilla**, que es la de la última revisión creada, y también su escalado: mínimo 0 desde el 16/11/2026 (sección 9). Verificar `RMA_AUTH_SUPABASE_URL`, `RMA_DATABASE_URL` (secreto y versión fijada) y `RMA_CORS_ALLOW_ORIGINS` con `gcloud run revisions describe`. No pasar `--min-instances` mayor que 0.
 2. **Comprobar contra la URL de la etiqueta:**
    - `/health` 200;
    - 401 sin token y con token inválido;
    - `/docs` 404 en UAT;
    - lecturas autenticadas (`supabase/scripts/migracion_sp/medir_api.py --backend <url de la etiqueta>`).
 3. **Pasar el tráfico:** `gcloud run services update-traffic rt-rma-uat-api --region southamerica-east1 --project rosariotecno-460217 --to-revisions <revisión nueva>=100`.
+4. **Quitar la etiqueta temporal** al terminar las pruebas posteriores: `gcloud run services update-traffic rt-rma-uat-api --region southamerica-east1 --project rosariotecno-460217 --remove-tags <etiqueta temporal>`. No crea revisión. Las revisiones anteriores quedan para la vuelta atrás por su nombre, sin etiqueta.
+5. **Control de escalado:** [`verificar_escalado_uat.py`](../supabase/scripts/validacion_uat/verificar_escalado_uat.py) `--esperada <revisión nueva>` tiene que dar `RESULTADO: OK` (sección 9).
 
 ## 4. Frontend
 
@@ -80,17 +82,21 @@ Ninguno despliega ni usa secretos. Se activan al publicar la rama en GitHub. Com
 | Backend | `gcloud run services update-traffic … --to-revisions <revisión anterior>=100` | La anterior usa el mismo proyecto de Supabase y es compatible con el esquema (migraciones aditivas) |
 | Frontend | `vercel promote <despliegue anterior> --scope ismaeldarruizbis-projects` | Construido contra el mismo proyecto de Supabase que el backend al que se vuelve |
 
-**Pares vigentes (16/11/2026):**
+**Pares vigentes (16/11/2026, 22:54 UTC).** Desde esa hora ninguna revisión tiene etiqueta: se vuelve por el nombre de la revisión (sección 9).
 
 | Uso | Backend | Frontend | Supabase |
 |---|---|---|---|
-| Público (macroiteración integral, desde el 16/11/2026 a las 01:31 UTC) | `rt-rma-uat-api-00031-ror` (etiqueta `mi-9176921`, código `9176921`) | `rt-rma-bwwdm7cvz…` (`dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e`) | São Paulo `pcdnmhzwhzymznojndrn` (35 migraciones) |
-| Vuelta atrás de la macroiteración integral (con los controles de P1-15, sección 7.8) | `rt-rma-uat-api-00029-kay` (etiqueta `v14-5c6137e`, código `5c6137e`) | `rt-rma-62sdml5sb…` (`dpl_CRXZubTCVE1ALhZmLe2wHhoZhbWR`) | São Paulo `pcdnmhzwhzymznojndrn` (con las 35 migraciones, compatible: ensayado) |
-| Vuelta atrás de la macroiteración V1.4 (no probada sobre las 35 migraciones) | `rt-rma-uat-api-00027-sas` (etiqueta `it1-14108ef`, código `14108ef`) | `rt-rma-j00dbv3fc…` (`dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2`) | São Paulo `pcdnmhzwhzymznojndrn` (con las migraciones 22 y 23, compatible) |
-| Vuelta atrás de la iteración 1 | `rt-rma-uat-api-00024-top` (etiqueta `sp-d226fd2`, código `d226fd2`) | `rt-rma-pktu8ktbq…` (`dpl_6vsLwpAzxE2yS5K7RLHBMNVvETN8`) | São Paulo `pcdnmhzwhzymznojndrn` (con la migración 21, compatible; sobre la 22 y la 23 no se probó) |
-| Vuelta atrás de la migración, hasta el 25/11/2026 | `rt-rma-uat-api-00020-tux` (etiqueta `auth`, código `61e2a14`) | `rt-rma-n49rz9qgv…` (`dpl_F1M6Msv1FUHo3ghNYPVviYQtmztb`) | Oregón `okcscsglnujnxtgobjfw` |
+| Público (iteración de UX de Recepción) | `rt-rma-uat-api-00036-jis` (código `677dbb1`; la misma imagen que `00033-fah`, con mínimo 0) | `dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB` | São Paulo `pcdnmhzwhzymznojndrn` (37 migraciones) |
+| Vuelta atrás del escalado a cero (misma versión, mínimo 1) | `rt-rma-uat-api-00033-fah` (código `677dbb1`) | el mismo | el mismo |
+| Vuelta atrás de la iteración de UX (sección 8) | `rt-rma-uat-api-00031-ror` (código `9176921`) | `rt-rma-bwwdm7cvz…` (`dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e`) | São Paulo `pcdnmhzwhzymznojndrn` (con las 37 migraciones, compatible: ensayado) |
+| Vuelta atrás de la macroiteración integral (con los controles de P1-15, sección 7.8) | `rt-rma-uat-api-00029-kay` (código `5c6137e`) | `rt-rma-62sdml5sb…` (`dpl_CRXZubTCVE1ALhZmLe2wHhoZhbWR`) | São Paulo `pcdnmhzwhzymznojndrn` (con las 35 migraciones, compatible: ensayado; sobre las 37 no se probó) |
+| Vuelta atrás de la macroiteración V1.4 (no probada sobre las 35 migraciones) | `rt-rma-uat-api-00027-sas` (código `14108ef`) | `rt-rma-j00dbv3fc…` (`dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2`) | São Paulo `pcdnmhzwhzymznojndrn` (con las migraciones 22 y 23, compatible) |
+| Vuelta atrás de la iteración 1 | `rt-rma-uat-api-00024-top` (código `d226fd2`) | `rt-rma-pktu8ktbq…` (`dpl_6vsLwpAzxE2yS5K7RLHBMNVvETN8`) | São Paulo `pcdnmhzwhzymznojndrn` (con la migración 21, compatible; sobre la 22 y la 23 no se probó) |
+| Vuelta atrás de la migración, hasta el 25/11/2026 | `rt-rma-uat-api-00020-tux` (código `61e2a14`) | `rt-rma-n49rz9qgv…` (`dpl_F1M6Msv1FUHo3ghNYPVviYQtmztb`) | Oregón `okcscsglnujnxtgobjfw` |
 
-**Vuelta atrás vigente** (macroiteración integral → V1.4, `00029-kay` + `dpl_CRXZ…`): sección 7.8, con la consulta de control de P1-15 antes de los dos comandos.
+Hasta el 16/11/2026 esas revisiones tenían las etiquetas `ux-677dbb1`, `mi-9176921`, `v14-5c6137e`, `it1-14108ef`, `sp-d226fd2` y `auth`; los registros anteriores las nombran así.
+
+**Vuelta atrás vigente** (iteración de UX → macroiteración integral, `00031-ror` + `dpl_7Zo4…`): sección 8.
 
 **Histórico, vuelta atrás de la macroiteración V1.4 a la iteración 1** (coordinada, sin tocar la base: las migraciones 22 y 23 son aditivas y las pruebas `tests/postgres` de `14108ef` pasan sobre ellas, salvo las 2 que cuentan las tablas del esquema):
 
@@ -116,7 +122,7 @@ Los comandos de la vuelta atrás coordinada están en [`MIGRACION_SUPABASE_SAO_P
 
 **Conservar mientras dure el período de vuelta atrás** (14 días después del corte):
 
-- `00020-tux` y su etiqueta;
+- `00020-tux` (sin etiqueta desde el 16/11/2026: se vuelve por su nombre);
 - el secreto `rma-uat-database-url`;
 - el despliegue `rt-rma-n49rz9qgv…`;
 - el proyecto de Oregón.
@@ -260,7 +266,7 @@ Todo lo demás (compras, lotes de otros insumos, devoluciones, descuentos por De
 
 ## 8. Iteración de UX de Recepción: procedimiento (16/11/2026)
 
-**Resultado del 16/11/2026: publicado y validado.** Backend `00033-fah` (`677dbb1`), frontend `dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`, São Paulo con 37 migraciones, desde las 18:54 UTC. Respaldos: antes `uat/20261116T184846Z`, después `uat/20261116T220226Z` con ensayo en la nube correcto. E2E UX 47 de 47, V1.4 67 de 67 e integral 68 de 68, cada uno con su limpieza selectiva. Detalle en [`ESTADO_PROYECTO.md`](ESTADO_PROYECTO.md), sección B.
+**Resultado del 16/11/2026: publicado y validado.** Backend `00033-fah` (`677dbb1`), frontend `dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`, São Paulo con 37 migraciones, desde las 18:54 UTC. Respaldos: antes `uat/20261116T184846Z`, después `uat/20261116T220226Z` con ensayo en la nube correcto. E2E UX 47 de 47, V1.4 67 de 67 e integral 68 de 68, cada uno con su limpieza selectiva. Detalle en [`ESTADO_PROYECTO.md`](ESTADO_PROYECTO.md), sección B. Desde las 22:54 UTC el tráfico está en `00036-jis`: la misma imagen y configuración, con mínimo 0 (sección 9).
 
 **Lección:** la limpieza selectiva borra toda fila nueva desde su línea de base y solo aborta si aparece una Orden o un cliente que no son del E2E, o si cambia una fila previa; una acción manual sobre una Orden conservada que solo agrega filas (por ejemplo, un intento de WhatsApp) se borra con el E2E. Mientras corren los E2E no se opera en la pantalla del UAT.
 
@@ -273,3 +279,71 @@ Publica `mvp-v2` con la iteración de UX de Recepción (DEC-UX-01 a 14) sobre el
 
 **Vuelta atrás:** `00031-ror` + `dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e`, sin tocar el esquema (ensayado sobre las 37 migraciones). La versión anterior ignora los recargos, su reparto y el recargo devuelto: sus pantallas muestran los importes base. Con una Orden ingresada con el texto único (sin estado físico aparte), la versión anterior pide registrar el estado físico antes de generar el comprobante o confirmar la recepción: se completa desde la corrección del ingreso. Sin datos reales, la limpieza de cada E2E deja la base como antes.
 
+
+## 9. Escalado y costo del backend del UAT (desde el 16/11/2026)
+
+**Regla: el UAT escala a cero.** Ninguna instancia queda encendida sin uso; la primera solicitud después de un rato sin uso paga un arranque en frío: el 16/11/2026, `/health` respondió en 6,8 s con la instancia apagada y en 0,12 s después.
+
+### 9.1 Cómo se cobra y por qué se cambió
+
+- **Facturación por solicitud** (CPU solo durante las solicitudes). Una instancia mínima se cobra todo el día a la tarifa de inactividad, aunque no reciba solicitudes.
+- **Mínimo de servicio y mínimo de revisión no son lo mismo:**
+  - el **de servicio** (`gcloud run services update --min`) no crea revisión y se reparte entre las revisiones que reciben tráfico;
+  - el **de revisión** (`--min-instances`, anotación `autoscaling.knative.dev/minScale`) es inmutable: cambiarlo crea una revisión nueva. Lo hereda cada revisión nueva desde la plantilla.
+- **Una etiqueta mantiene el mínimo de su revisión aunque no reciba tráfico.** Hasta el 16/11/2026 todas las revisiones tenían mínimo 1 y quedaban seis referenciadas (la pública y cinco etiquetas): seis instancias inactivas todo el día, hasta 144 instancia-hora diarias; se midieron entre 96 y 104 en los días de los despliegues, porque las etiquetas se fueron sumando. La auditoría de costos de ese día lo identificó como el gasto principal del UAT.
+
+### 9.2 Cambio aplicado el 16/11/2026
+
+| Hora (UTC) | Acción | Revisión nueva |
+|---|---|---|
+| 22:44 | `update-traffic --remove-tags auth,sp-d226fd2,it1-14108ef,v14-5c6137e,mi-9176921,ux-677dbb1` | No |
+| 22:45 | `services update --min=0` (mínimo de servicio) | No |
+| 22:52 | Medición: las cinco revisiones viejas en 0 instancias; `00033-fah` seguía con 1 por su mínimo de revisión | — |
+| 22:53 | `services update --min-instances=0 --no-traffic --tag min0-677dbb1` → `00036-jis`, 0 % | Sí, indispensable |
+| 22:54 | `update-traffic --to-revisions rt-rma-uat-api-00036-jis=100` y `--remove-tags min0-677dbb1` | No |
+
+**Por qué la revisión nueva no puso en riesgo la versión publicada:**
+
+- la plantilla apuntaba a la imagen por digest (`sha256:dcc2f58d…`) y al secreto con la versión fijada;
+- el tráfico estaba fijado a `00033-fah` por nombre, y la revisión se creó con `--no-traffic`;
+- comparada con `00033-fah`: la misma imagen, las mismas 14 variables, recursos, cuenta de servicio, concurrencia y etiqueta `commit=677dbb1`. Solo cambia el mínimo;
+- por su etiqueta respondió igual que la URL pública antes de recibir tráfico: `/health` 200; 401 sin token y con token inválido; `/docs`, `/redoc` y `/openapi.json` 404; CORS solo del frontend.
+
+**Configuración efectiva después:**
+
+- servicio sin mínimo (0) y máximo 20;
+- plantilla y `00036-jis` sin mínimo (0) y máximo 1;
+- tráfico 100 % en `00036-jis`, sin etiquetas;
+- 22 revisiones: no se borró ninguna revisión ni imagen.
+
+Las demás revisiones conservan su mínimo 1 (inmutable), pero sin tráfico ni etiqueta no levantan instancias.
+
+**Medido (Cloud Monitoring, `instance_count` por revisión):**
+
+- las cinco revisiones que tenían etiqueta quedaron en 0 desde las 22:46;
+- `00033-fah` quedó en 0 desde las 22:56, al perder el tráfico;
+- `00036-jis` apagó su última instancia a las 23:11, unos 15 minutos después de la última solicitud.
+
+Después el servicio quedó sin instancias hasta la solicitud siguiente. `verificar_escalado_uat.py --esperada rt-rma-uat-api-00036-jis`: OK.
+
+**Ahorro estimado** (precios de lista sin verificar, una instancia inactiva de 1 vCPU y 512 MiB a unos USD 0,30 a 0,45 por día; no es un dato de facturación, porque no hay exportación de facturación):
+
+- frente a las seis instancias inactivas: unos USD 1,8 a 2,7 por día (USD 54 a 81 por mes);
+- frente a una sola revisión con mínimo 1: unos USD 0,30 a 0,45 por día (USD 9 a 14 por mes).
+
+El costo real se ve en la consola de Facturación.
+
+**Vuelta atrás del cambio:** `update-traffic --to-revisions rt-rma-uat-api-00033-fah=100`. Vuelve a dejar una instancia inactiva.
+
+### 9.3 En cada publicación
+
+1. **Mínimo 0.** La revisión nueva hereda mínimo 0 de la plantilla; no pasar `--min-instances` mayor que 0 ni `--min` al servicio.
+2. **Etiqueta solo temporal:** se crea con `--no-traffic --tag <etiqueta temporal>` para probar la revisión y se quita con `--remove-tags` al terminar las pruebas posteriores (sección 3, paso 4).
+3. **Vuelta atrás por nombre:** las revisiones anteriores quedan sin etiqueta y sin instancias.
+   - Volver a una de mínimo 1 (`00033-fah` y anteriores) vuelve a dejar una instancia inactiva mientras tenga el tráfico.
+   - Si la vuelta atrás va a durar, conviene una copia con mínimo 0: `services update --min-instances=0 --no-traffic --tag <etiqueta temporal> --image <digest de esa revisión>`. Ojo: la copia toma las variables de la plantilla, que son las de la última revisión; antes de pasarle el tráfico, compararla con la revisión original (`gcloud run revisions describe`), igual que en la sección 9.2, y ajustar con `--update-env-vars` o `--update-secrets` si difieren.
+4. **Control automático, al final de cada publicación:**
+   - correr `python supabase/scripts/validacion_uat/verificar_escalado_uat.py --esperada <revisión publicada>` (solo lectura);
+   - falla si hay mínimo de servicio o de plantilla, si el tráfico no está 100 % en la revisión esperada, si queda alguna etiqueta (salvo `--permitir-etiquetas` durante las pruebas) o si una revisión referenciada tiene mínimo;
+   - el resultado se anota en el registro del despliegue.
+5. **Comprobación con métricas** (opcional, tarda): en Cloud Monitoring, `run.googleapis.com/container/instance_count` por `revision_name`. Unos 15 minutos después de la última solicitud tiene que quedar en 0.

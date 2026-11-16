@@ -20,6 +20,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - **macroiteración integral en UAT** (16/11): las 12 migraciones en São Paulo (35), Cloud Run `00031-ror` (`9176921`) y Vercel `dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e`; E2E V1.4 67 de 67 e integral 68 de 68 con limpieza selectiva; `OR-000001` intacta; DC12 desactivada por ABI-42 (sección B).
   - **iteración de UX de Recepción cerrada** (16/11, `feat/ux-recepcion` sobre `614d167`, publicada y para integrar en `mvp-v2` por avance rápido con CI en verde; sin desplegar): UX-02 a UX-12, UX-01 documentada sin cambios de código, y las decisiones de cierre DEC-UX-13 (recargo incorporado a los trabajos, ABI-45) y DEC-UX-14 (recargo devuelto en proporción, ABI-44); UX-03 y UX-04 revisadas. Especificación en `rt-rma-app` `spec/ux-recepcion` `ebd0840` (publicada) y `business/` sincronizado. Dos migraciones aditivas, solo locales (`20261116000100` y `20261116000200`) ([`ux-recepcion.md`](ux-recepcion.md); sección B).
   - **iteración de UX de Recepción en UAT** (16/11): las migraciones `20261116000100` y `20261116000200` en São Paulo (37), Cloud Run `00033-fah` (`677dbb1`) y Vercel `dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`; E2E UX 47 de 47, V1.4 67 de 67 e integral 68 de 68, cada uno con limpieza selectiva; respaldos y ensayo de restauración en la nube correctos (sección B).
+  - **UAT escalado a cero** (16/11, 22:54 UTC): sin etiquetas; mínimo 0 en el servicio y en la revisión publicada `00036-jis`, que tiene la misma imagen que `00033-fah`; control [`verificar_escalado_uat.py`](../supabase/scripts/validacion_uat/verificar_escalado_uat.py) después de cada publicación ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 9).
 - **Falta:**
   - conseguir la exportación de Ventas de ABI-43 (modelos que faltan en el catálogo técnico);
   - ABI-42: que Gestión RT indique qué columna (o tabla) de su catálogo es el Tipo de Equipo; con una columna `tp_*` alcanza con fijar `RMA_TIPO_EQUIPO_CAMPO` y sincronizar;
@@ -44,7 +45,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | `app/frontend/` | React, TypeScript y Vite ([README](../app/frontend/README.md)) |
 | `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). 37 de 37 aplicadas en `db-rt-rma` (São Paulo, `sa-east-1`): `20261116000100` y `20261116000200` (iteración de UX de Recepción, aditivas) el 16/11/2026; antes, las 12 de la macroiteración integral ese mismo día. Oregón (`rt-rma-db`, vuelta atrás de la migración) queda en 20 |
 | Persistencia en uso | UAT: PostgreSQL en Supabase (`RMA_PERSISTENCIA=postgres`). JSON sigue siendo el valor por defecto local |
-| UAT publicado | Desde el 16/11/2026 a las 18:54 UTC, la iteración de UX de Recepción sobre Supabase São Paulo: backend en Cloud Run (`rt-rma-uat-api-00033-fah`, código `677dbb1`) y frontend en Vercel (`dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`). Vuelta atrás: `00031-ror` y `dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 8). Oregón sigue como vuelta atrás de la migración hasta el 25/11/2026 |
+| UAT publicado | Desde el 16/11/2026 a las 18:54 UTC, la iteración de UX de Recepción sobre Supabase São Paulo: backend en Cloud Run (`rt-rma-uat-api-00036-jis`, código `677dbb1`: desde las 22:54 UTC, la misma imagen que `00033-fah` con mínimo 0 instancias) y frontend en Vercel (`dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`). Vuelta atrás: `00031-ror` y `dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 8). Oregón sigue como vuelta atrás de la migración hasta el 25/11/2026 |
 
 **Rama de trabajo:** `mvp-v2`, con la iteración de UX de Recepción integrada; `business/` de `rt-rma-app` `ebd0840` (`spec/ux-recepcion`, publicada). Código desplegado en UAT: `677dbb1`, desde el 16/11/2026; los commits posteriores son documentación. `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
 
@@ -78,6 +79,25 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Optimización de costos del backend del UAT (16/11/2026)
+
+Con autorización, sin tocar Supabase, Vercel, los Jobs de respaldo, Scheduler, Gestión RT, producción ni `main`, y sin borrar revisiones ni imágenes. Procedimiento, mediciones y regla vigente en [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 9.
+
+- **Antes:** todas las revisiones con mínimo 1 instancia (a nivel revisión; el servicio sin mínimo) y seis referenciadas: `00033-fah` con el 100 % y cinco etiquetas viejas. Seis instancias inactivas todo el día.
+- **Cambios:**
+  - se quitaron las seis etiquetas;
+  - mínimo 0 en el servicio;
+  - revisión `00036-jis` con mínimo 0: la misma imagen (`sha256:dcc2f58d…`) y la misma configuración que `00033-fah`, creada sin tráfico y probada por una etiqueta temporal, que después se quitó. Fue la única revisión nueva, indispensable porque el mínimo de una revisión es inmutable.
+- **Después:**
+  - tráfico 100 % en `00036-jis`, sin etiquetas;
+  - 22 revisiones disponibles para volver atrás por su nombre;
+  - las seis revisiones referenciadas antes, en 0 instancias;
+  - `00036-jis` apagó su última instancia 15 minutos después de la última solicitud;
+  - arranque en frío de `/health` en 6,8 s;
+  - `/health` 200, 401 sin token, `/docs` 404 y CORS solo del frontend, igual que antes.
+- **Control nuevo:** [`verificar_escalado_uat.py`](../supabase/scripts/validacion_uat/verificar_escalado_uat.py), de solo lectura, después de cada publicación: OK.
+- **Ahorro estimado** (no es dato de facturación): unos USD 1,8 a 2,7 por día frente a las seis instancias inactivas.
 
 ### Despliegue de la iteración de UX de Recepción en UAT (16/11/2026)
 
@@ -717,7 +737,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (16/11/2026):** UAT operativo con la iteración de UX de Recepción (sección B). Siguen pendientes, con autorización: la pasada manual en un navegador real (P2-17, incluye el diálogo real de impresión y el desborde de «Pendientes» a 390 px), ABI-43 (exportación de Ventas), ABI-42 (para activar DC12) y la integración en `main` (P0-2).
+**Próximo paso (16/11/2026):** UAT operativo con la iteración de UX de Recepción, escalado a cero desde las 22:54 UTC (sección B). Cada publicación termina quitando su etiqueta temporal y con `verificar_escalado_uat.py` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 9). Siguen pendientes, con autorización: la pasada manual en un navegador real (P2-17, incluye el diálogo real de impresión y el desborde de «Pendientes» a 390 px), ABI-43 (exportación de Ventas), ABI-42 (para activar DC12) y la integración en `main` (P0-2).
 
 **Antes (12/11/2026):** la macroiteración está desplegada y validada en UAT, con los datos de prueba limpiados (sección B). Queda, opcional, repetir `medir_api.py`: solo mide tiempos y pide la contraseña de `administracion`. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
 
