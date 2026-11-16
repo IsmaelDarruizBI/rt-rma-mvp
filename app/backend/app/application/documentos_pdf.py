@@ -172,11 +172,15 @@ def _cliente_y_equipo(hoja: _Hoja, contenido, zona: tzinfo) -> None:
     equipo = contenido.equipo
     izquierda = [
         ("Cliente", cliente.nombre_apellido if cliente else "—"),
+        # UX-06: el DNI de la copia del documento; si no se cargo, se dice
+        # (nunca se inventa).
+        ("DNI", (cliente.dni or "sin DNI") if cliente else "—"),
         ("Teléfono", cliente.telefono if cliente else "—"),
     ]
     if cliente and cliente.email:
         izquierda.append(("Email", cliente.email))
-    derecha = [("Equipo", equipo.nombre)]
+    # UX-02: el identificador interno del equipo, con o sin IMEI.
+    derecha = [("Equipo", equipo.nombre), ("Identificador", equipo.id)]
     if equipo.capacidad:
         derecha.append(("Capacidad", equipo.capacidad))
     if equipo.color:
@@ -200,7 +204,24 @@ def _cliente_y_equipo(hoja: _Hoja, contenido, zona: tzinfo) -> None:
                 tamano=9.5,
             )
     hoja.y = y - 13 * max(len(izquierda), len(derecha)) - 4
-    hoja.parrafo(f"Falla declarada: {equipo.falla_reportada}", tamano=9)
+    if observaciones_unificadas(contenido):
+        # UX-03: un solo texto para lo declarado y lo observado.
+        hoja.parrafo(
+            f"Observaciones del equipo: {equipo.falla_reportada}", tamano=9
+        )
+    else:
+        hoja.parrafo(f"Falla declarada: {equipo.falla_reportada}", tamano=9)
+
+
+def observaciones_unificadas(contenido) -> bool:
+    """UX-03: las Ordenes nuevas guardan un solo texto, «Observaciones del
+    equipo», como falla declarada, estado fisico y observacion de la
+    recepcion. Si son el mismo texto se muestra una vez; en las anteriores,
+    cada uno con su nombre."""
+    observaciones = getattr(contenido, "observaciones", None)
+    return bool(observaciones) and (
+        observaciones.strip() == contenido.equipo.falla_reportada.strip()
+    )
 
 
 def _dato(hoja: _Hoja, etiqueta: str, valor: str) -> None:
@@ -221,7 +242,15 @@ def _recepcion(
     """Como se recibio el equipo. Solo lo visible: nunca notas internas."""
     hoja.titulo("Recepción del equipo")
     hoja.bajar(2)
-    _dato(hoja, "Estado físico", contenido.estado_fisico or "—")
+    unificadas = observaciones_unificadas(contenido)
+    # UX-03: con el texto unico, el estado fisico es ese mismo texto (ya
+    # salio una vez como «Observaciones del equipo»).
+    if not (
+        unificadas
+        and (contenido.estado_fisico or "").strip()
+        == contenido.observaciones.strip()
+    ):
+        _dato(hoja, "Estado físico", contenido.estado_fisico or "—")
     # Ya no se piden al ingresar: solo si la Orden los tiene registrados.
     if contenido.accesorios:
         _dato(hoja, "Accesorios", ", ".join(contenido.accesorios))
@@ -231,7 +260,7 @@ def _recepcion(
             "Check-in",
             "Realizado" if contenido.checkin else "No realizado",
         )
-    if contenido.observaciones:
+    if contenido.observaciones and not unificadas:
         _dato(hoja, "Observaciones", contenido.observaciones)
     for nota in contenido.notas:
         _dato(hoja, "Observación", nota)
@@ -397,6 +426,33 @@ def _leyenda(hoja: _Hoja, contenido) -> None:
     hoja.bajar(alto)
 
 
+def _firma(hoja: _Hoja) -> None:
+    """UX-06 y UX-07: espacio para la firma y la aclaracion del cliente. La
+    firma es opcional (DEC-MI-06): el papel firmado o su foto se registran
+    despues en la Orden y nunca bloquean la recepcion."""
+    pdf = hoja.pdf
+    alto = 78
+    hoja.asegurar(alto + 16)
+    hoja.bajar(16)
+    pdf.rectangulo(
+        MARGEN, hoja.y - alto, ANCHO_UTIL, alto, relleno=None, borde=0.6
+    )
+    pdf.texto(
+        MARGEN + 10,
+        hoja.y - 16,
+        "Conformidad del cliente con la recepción del equipo",
+        tamano=9.5,
+        negrita=True,
+    )
+    base = hoja.y - alto + 22
+    ancho = (ANCHO_UTIL - 40) / 3
+    for indice, etiqueta in enumerate(("Firma", "Aclaración", "DNI")):
+        x = MARGEN + 10 + indice * (ancho + 10)
+        pdf.linea(x, base, x + ancho, base, gris=0.4)
+        pdf.texto(x, base - 12, etiqueta, tamano=8.5, gris=0.35)
+    hoja.bajar(alto)
+
+
 def _pies(pdf: Pdf, documento: DocumentoEmitido) -> None:
     contenido = documento.contenido
     total = pdf.cantidad_paginas
@@ -443,6 +499,8 @@ def pdf_comprobante_autorizacion(
     _trabajos(hoja, contenido, zona_horaria)
     _version(hoja, documento)
     _leyenda(hoja, contenido)
+    if isinstance(contenido, ContenidoComprobanteIngreso):
+        _firma(hoja)
     _pies(pdf, documento)
     return pdf.bytes()
 
