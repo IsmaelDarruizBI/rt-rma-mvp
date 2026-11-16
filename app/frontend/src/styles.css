@@ -407,6 +407,8 @@ textarea {
 }
 
 .rt-plegable {
+  /* UX-11: al abrirla desde un acceso, el título queda bajo la barra fija. */
+  scroll-margin-top: calc(var(--rt-alto-barra) + 1.5rem);
   background: var(--rt-superficie);
   border: 1px solid var(--rt-borde);
   border-radius: var(--rt-radio);

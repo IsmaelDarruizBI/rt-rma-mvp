@@ -233,7 +233,10 @@ export function abrirSeccion(id: string): void {
   const seccion = document.getElementById(id);
   if (!(seccion instanceof HTMLDetailsElement)) return;
   seccion.open = true;
-  seccion.scrollIntoView({ behavior: "smooth", block: "start" });
+  // Después de que se despliega el contenido, para no quedar a mitad.
+  requestAnimationFrame(() =>
+    seccion.scrollIntoView({ behavior: "smooth", block: "start" }),
+  );
 }
 
 export function SeccionPlegable({
