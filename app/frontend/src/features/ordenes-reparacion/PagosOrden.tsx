@@ -33,6 +33,7 @@ import type {
 import { nombreDeUsuario } from "./DetalleOrden";
 import { ESTADO_PAGO, etiqueta } from "./etiquetas";
 import { TituloAccion, UbicacionAccion } from "./presentacion";
+import { recargoDe } from "./recepcionUx";
 import { tieneAlguno } from "../../lib/roles";
 
 interface Props {
@@ -585,7 +586,17 @@ function ListaMovimientos({
       medio: nombreDeMedio(medios, pago.metodo),
       importe: importe(pago.monto),
       usuario: nombreDeUsuario(usuarios, pago.usuario_id),
-      detalle: pago.referencia ?? "",
+      // UX-08: el recargo se cobró aparte; al saldo va el importe.
+      detalle: [
+        Number(pago.recargo_importe ?? 0) > 0
+          ? `Recargo ${pago.recargo_porcentaje}%: ${importe(
+              pago.recargo_importe ?? "0",
+            )} · total cobrado ${importe(pago.total_cobrado ?? pago.monto)}`
+          : "",
+        pago.referencia ?? "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
       color: pago.tipo_pago === "ANTICIPO" ? colores.alerta : colores.ok,
       anulado: !pago.vigente,
     });
@@ -777,6 +788,11 @@ function FormularioCobro({
   const [referencia, setReferencia] = useState("");
   const [operacion] = useState(nuevaOperacion);
   const deshabilitado = !habilitada(accion, actor) || ocupado;
+  // UX-08: el recargo del medio elegido, como lo calcula el backend. Al
+  // saldo se imputa el importe; el recargo se cobra aparte.
+  const porcentaje =
+    medios.find((medio) => medio.id === metodo)?.recargo_porcentaje ?? "0";
+  const conRecargo = Number(porcentaje) > 0 ? recargoDe(monto, porcentaje) : null;
 
   return (
     <Seccion titulo={accion.etiqueta} accion={accion} actor={actor}>
@@ -809,6 +825,26 @@ function FormularioCobro({
           deshabilitado={deshabilitado}
         />
       </Campo>
+      {conRecargo && (
+        <div
+          role="status"
+          style={{
+            margin: "0 0 0.6rem",
+            padding: "0.5rem 0.7rem",
+            border: `1px solid ${colores.borde}`,
+            borderRadius: 6,
+            fontSize: "0.85rem",
+          }}
+        >
+          <div>Importe (se imputa al saldo): {importe(monto)}</div>
+          <div>
+            Recargo {porcentaje}%: {importe(String(conRecargo.recargo))}
+          </div>
+          <div>
+            <strong>Total a cobrar: {importe(String(conRecargo.total))}</strong>
+          </div>
+        </div>
+      )}
       <Campo etiqueta="Referencia (opcional)">
         <input
           value={referencia}

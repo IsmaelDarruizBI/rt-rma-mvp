@@ -47,6 +47,8 @@ import type {
   Usuario,
 } from "../../types/api";
 import { nombreEquipo } from "./catalogoEquipos";
+import { avisoDni } from "./recepcionUx";
+import { imprimirPdf } from "./impresion";
 import { nombreDeUsuario } from "./DetalleOrden";
 import { CANAL, etiqueta } from "./etiquetas";
 import { Seccion, habilitada } from "./PagosOrden";
@@ -158,6 +160,8 @@ interface Props {
   onEmitirAutorizacion: () => void;
   /** Ingreso inicial: confirma, autoriza y genera el comprobante. */
   onGenerarIngreso: (canal: CanalComunicacion) => void;
+  /** UX-07: ir a registrar la firma (opcional) de un documento. */
+  onFirmar?: (documentoId: string) => void;
 }
 
 export function DocumentosOrden({
@@ -168,6 +172,7 @@ export function DocumentosOrden({
   onEmitirRecepcion,
   onEmitirAutorizacion,
   onGenerarIngreso,
+  onFirmar,
 }: Props) {
   const [documentos, setDocumentos] = useState<DocumentosDeOrden | null>(null);
   const [visible, setVisible] = useState<Visible | null>(null);
@@ -307,6 +312,18 @@ export function DocumentosOrden({
                 {CON_PDF.has(documento.tipo) && (
                   <AccionesPdf documento={documento} />
                 )}
+                {/* UX-07: la firma es opcional y nunca bloquea; queda a mano
+                    junto al comprobante de ingreso. */}
+                {onFirmar &&
+                  documento.vigente &&
+                  documento.tipo === "COMPROBANTE_INGRESO" && (
+                    <Boton
+                      variante="secundario"
+                      onClick={() => onFirmar(documento.id)}
+                    >
+                      Registrar firma (opcional)
+                    </Boton>
+                  )}
               </span>
             </li>
           ))}
@@ -469,6 +486,9 @@ function FormularioComprobanteIngreso({
   const { resumen } = orden;
   // El check-in no se pide acá: se registra antes de la entrega.
   const habilitado = !ocupado && accion.bloqueo === null;
+  // UX-06: el comprobante muestra el DNI del cliente; si falta o no es
+  // válido se avisa antes (no se inventa ni bloquea).
+  const dni = avisoDni(orden.cliente);
   return (
     <Seccion titulo="Generar el comprobante de ingreso y autorización" accion={accion}>
       <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", color: colores.suave }}>
@@ -510,6 +530,14 @@ function FormularioComprobanteIngreso({
       {accion.bloqueo && (
         <p role="alert" style={{ margin: "0 0 0.5rem", fontSize: "0.85rem", color: colores.alerta }}>
           {accion.bloqueo}.
+        </p>
+      )}
+      {dni && (
+        <p
+          role="status"
+          style={{ margin: "0 0 0.5rem", fontSize: "0.85rem", color: colores.alerta }}
+        >
+          {dni}
         </p>
       )}
       <Boton disabled={!habilitado} onClick={() => onGenerar(canal)}>
@@ -567,6 +595,23 @@ function AccionesPdf({ documento }: { documento: DocumentoEmitido }) {
         }
       >
         Descargar PDF
+      </Boton>
+      {/* UX-05: el mismo PDF, al diálogo de impresión: no emite otro. */}
+      <Boton
+        variante="secundario"
+        disabled={trabajando}
+        onClick={() =>
+          void conPdf(async (pdf) => {
+            const forma = await imprimirPdf(pdf);
+            setAviso(
+              forma === "dialogo"
+                ? null
+                : "Se abrió el PDF en otra pestaña: imprimilo desde ahí.",
+            );
+          })
+        }
+      >
+        Imprimir
       </Boton>
       <Boton variante="secundario" disabled={trabajando} onClick={() => void compartir()}>
         Compartir por WhatsApp

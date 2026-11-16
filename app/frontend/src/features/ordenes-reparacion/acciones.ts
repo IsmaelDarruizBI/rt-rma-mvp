@@ -37,6 +37,13 @@ export const CODIGOS_ESPECIALES = new Set([
   "ESPERAR_RECURSOS",
 ]);
 
+/**
+ * UX-09: acciones de UN trabajo que se ofrecen en ese trabajo (no en «Más
+ * acciones»). Mismo comando, motivo y restricciones: solo cambia el lugar.
+ * «Cancelar la Orden» sigue en «Más acciones».
+ */
+export const CODIGOS_DEL_TRABAJO = new Set(["CANCELAR_DETALLE"]);
+
 /** Opción secundaria de una tarea (interrumpir junto a completar). */
 export const CODIGOS_SECUNDARIOS = new Set(["INTERRUMPIR_EJECUCION"]);
 
@@ -107,6 +114,8 @@ export interface BarraDeAcciones {
   visibles: AccionHabilitada[];
   /** El resto, en «Más acciones»: primero las comunes, después las especiales. */
   menu: AccionHabilitada[];
+  /** UX-09: acciones de cada trabajo, por `detalle_id`, fuera del menú. */
+  porTrabajo: Record<string, AccionHabilitada[]>;
 }
 
 /**
@@ -138,13 +147,21 @@ export function organizarBarra(
   const comunes = resto.filter(
     (item) => !CODIGOS_ESPECIALES.has(item.accion.codigo),
   );
-  const especiales = resto.filter((item) =>
-    CODIGOS_ESPECIALES.has(item.accion.codigo),
+  const delTrabajo = (item: AccionHabilitada) =>
+    CODIGOS_DEL_TRABAJO.has(item.accion.codigo) && !!item.accion.detalle_id;
+  const especiales = resto.filter(
+    (item) => CODIGOS_ESPECIALES.has(item.accion.codigo) && !delTrabajo(item),
   );
+  const porTrabajo: Record<string, AccionHabilitada[]> = {};
+  for (const item of resto.filter(delTrabajo)) {
+    const detalle = item.accion.detalle_id as string;
+    (porTrabajo[detalle] ??= []).push(item);
+  }
   const candidatas = [...deTareas, ...comunes];
   return {
     visibles: candidatas.slice(0, maximo),
     menu: [...candidatas.slice(maximo), ...especiales],
+    porTrabajo,
   };
 }
 

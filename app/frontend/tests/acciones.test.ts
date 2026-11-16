@@ -122,6 +122,34 @@ describe("organizarBarra", () => {
     const salida = [...barra.visibles, ...barra.menu].map((x) => x.clave);
     assert.deepEqual([...salida].sort(), todas.map((x) => x.clave).sort());
   });
+
+  test("UX-09: cancelar un trabajo va en ese trabajo; cancelar la Orden, al menú", () => {
+    const det1 = accion("CANCELAR_DETALLE", { detalle_id: "DET-001" });
+    const det2 = accion("CANCELAR_DETALLE", { detalle_id: "DET-002" });
+    const orden = accion("CANCELAR_ORDEN");
+    const barra = organizarBarra([det1, det2, orden].map(habilitada), []);
+    assert.deepEqual(barra.visibles, []);
+    assert.deepEqual(
+      barra.menu.map((x) => x.accion.codigo),
+      ["CANCELAR_ORDEN"],
+    );
+    assert.deepEqual(
+      Object.fromEntries(
+        Object.entries(barra.porTrabajo).map(([d, xs]) => [
+          d,
+          xs.map((x) => x.accion.codigo),
+        ]),
+      ),
+      { "DET-001": ["CANCELAR_DETALLE"], "DET-002": ["CANCELAR_DETALLE"] },
+    );
+    // Ninguna se pierde ni se duplica.
+    const todas = [
+      ...barra.visibles,
+      ...barra.menu,
+      ...Object.values(barra.porTrabajo).flat(),
+    ];
+    assert.equal(todas.length, 3);
+  });
 });
 
 describe("clavesDeTareas y pendientesDe", () => {

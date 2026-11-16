@@ -8,6 +8,7 @@
 import type { ReactNode } from "react";
 
 import {
+  Boton,
   Etiqueta,
   Panel,
   colores,
@@ -17,6 +18,11 @@ import {
 import type { Detalle, Estacion, Orden, Usuario } from "../../types/api";
 import { descripcionEquipo } from "./catalogoEquipos";
 import { EtapasNegocio } from "./ProximoPaso";
+import {
+  TEXTO_RESULTADO,
+  resultadoDeTrabajo,
+  resultadoTecnico,
+} from "./recepcionUx";
 import {
   CANAL,
   CONDICION_TRABAJO,
@@ -150,6 +156,20 @@ export function CabeceraOrden({
         {descripcionEquipo(orden.equipo)} —{" "}
         {orden.equipo.falla_reportada}
       </p>
+      {/* UX-02: el identificador interno del equipo, con o sin IMEI. */}
+      <p
+        style={{
+          margin: "0.15rem 0 0",
+          fontSize: "0.82rem",
+          color: colores.suave,
+          overflowWrap: "anywhere",
+        }}
+      >
+        Identificador del equipo: <strong>{orden.equipo.id}</strong>
+        {orden.equipo.imei ? ` · IMEI ${orden.equipo.imei}` : " · sin IMEI"}
+        {orden.equipo.numero_serie ? ` · N.º de serie ${orden.equipo.numero_serie}` : ""}
+      </p>
+      <ResultadoTecnico orden={orden} />
       {orden.orden_origen_id && (
         <p style={{ margin: "0.15rem 0 0", color: colores.suave }}>
           Garantía de la Orden {orden.orden_origen_id}
@@ -199,6 +219,41 @@ export function CabeceraOrden({
   );
 }
 
+/**
+ * UX-10: el resultado técnico de la Orden, derivado de lo que ya registra
+ * el backend (sin estados nuevos). Mientras está en curso no se muestra.
+ */
+export function ResultadoTecnico({ orden }: { orden: Orden }) {
+  const resultado = resultadoTecnico(orden);
+  if (resultado === "EN_CURSO" || resultado === "SIN_TRABAJOS") return null;
+  const color =
+    resultado === "REPARADO"
+      ? colores.ok
+      : resultado === "SIN_REPARACION"
+        ? colores.alerta
+        : colores.suave;
+  const siguiente = orden.cerrada ? null : orden.situacion?.tareas[0]?.titulo;
+  return (
+    <p style={{ margin: "0.35rem 0 0", fontSize: "0.9rem" }}>
+      Resultado técnico:{" "}
+      <Etiqueta color={color}>{TEXTO_RESULTADO[resultado]}</Etiqueta>
+      {siguiente && (
+        <span style={{ color: colores.suave }}> · Sigue: {siguiente}</span>
+      )}
+      {orden.reparaciones_detail.length > 1 && (
+        <span style={{ display: "block", fontSize: "0.82rem", color: colores.suave }}>
+          {orden.reparaciones_detail
+            .map(
+              (detalle) =>
+                `${detalle.tipo_reparacion_nombre}: ${resultadoDeTrabajo(detalle).toLowerCase()}`,
+            )
+            .join(" · ")}
+        </span>
+      )}
+    </p>
+  );
+}
+
 /** Un título chico dentro de una sección. */
 export function Bloque({
   titulo,
@@ -236,12 +291,24 @@ function Linea({ children }: { children: ReactNode }) {
  * Los trabajos de la Orden: definición, autorización, ejecución y control
  * de cada uno, en un solo lugar.
  */
+/** UX-09: una acción de un trabajo (se abre en su ventana). */
+export interface AccionDeTrabajo {
+  clave: string;
+  etiqueta: string;
+}
+
 export function TrabajosOrden({
   orden,
   usuarios,
+  accionesPorTrabajo = {},
+  ocupado = false,
+  onAccion,
 }: {
   orden: Orden;
   usuarios: Usuario[];
+  accionesPorTrabajo?: Record<string, AccionDeTrabajo[]>;
+  ocupado?: boolean;
+  onAccion?: (clave: string) => void;
 }) {
   if (orden.reparaciones_detail.length === 0) {
     // PROC-REP-069: la conclusión y su motivo quedan en el historial.
@@ -269,6 +336,9 @@ export function TrabajosOrden({
           orden={orden}
           detalle={detalle}
           usuarios={usuarios}
+          acciones={accionesPorTrabajo[detalle.id] ?? []}
+          ocupado={ocupado}
+          onAccion={onAccion}
         />
       ))}
     </ul>
@@ -279,10 +349,16 @@ function Trabajo({
   orden,
   detalle,
   usuarios,
+  acciones,
+  ocupado,
+  onAccion,
 }: {
   orden: Orden;
   detalle: Detalle;
   usuarios: Usuario[];
+  acciones: AccionDeTrabajo[];
+  ocupado: boolean;
+  onAccion?: (clave: string) => void;
 }) {
   const cancelado = detalle.estado === "CANCELADO";
   const ejecuciones = orden.ejecuciones.filter(
@@ -379,6 +455,22 @@ function Trabajo({
           <Etiqueta color={colores.alerta}>Retrabajo pendiente</Etiqueta>
         )}
       </div>
+      {onAccion && acciones.length > 0 && (
+        <div
+          style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.4rem" }}
+        >
+          {acciones.map((accion) => (
+            <Boton
+              key={accion.clave}
+              variante="secundario"
+              disabled={ocupado}
+              onClick={() => onAccion(accion.clave)}
+            >
+              {accion.etiqueta}
+            </Boton>
+          ))}
+        </div>
+      )}
       {decision && (
         <Linea>
           {detalle.autorizado_en_ingreso

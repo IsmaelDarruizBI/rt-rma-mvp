@@ -112,10 +112,12 @@ import {
   MensajeDeComando,
   ProveedorPresentacion,
   SeccionPlegable,
+  abrirSeccion,
   accionesDeLaOrden,
   claveDeAccion,
   puedeEjecutar,
 } from "./presentacion";
+import { subtituloOrden } from "./recepcionUx";
 import { Pendientes } from "./Pendientes";
 import {
   CODIGOS_ESPECIALES,
@@ -196,6 +198,12 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
     ReadonlyMap<string, AccionRegistrada>
   >(new Map());
   const [abierta, setAbierta] = useState<string | null>(null);
+  // UX-07: documento elegido con «Registrar firma» (el pedido lo distingue
+  // si se vuelve a pedir el mismo).
+  const [firmaSugerida, setFirmaSugerida] = useState<{
+    documentoId: string;
+    pedido: number;
+  } | null>(null);
   const registrar = useCallback((registrada: AccionRegistrada) => {
     setRegistradas((previas) => {
       const nuevas = new Map(previas);
@@ -606,6 +614,33 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
     await ejecutarComando(() => api.tomarOrden(ordenId, idActor, estacionId));
   };
 
+  /**
+   * UX-04: crea la Orden y, si se eligió, agrega el trabajo inicial con el
+   * mismo comando de la Orden (mismas validaciones, evaluación técnica,
+   * autorización y reserva). Si el trabajo no se puede agregar, la Orden
+   * ya creada se abre igual y se muestra por qué (se agrega desde ahí).
+   */
+  const crearConTrabajo = async (
+    crear: () => Promise<Orden>,
+    trabajoInicial: string | null,
+  ) => {
+    let falloTrabajo: unknown = null;
+    let creada: Orden | null = null;
+    const hecho = await ejecutarComando(async () => {
+      creada = await crear();
+      if (!trabajoInicial) return creada;
+      try {
+        return await api.definirReparacion(creada.id, idActor, trabajoInicial);
+      } catch (fallo) {
+        falloTrabajo = fallo;
+        return creada;
+      }
+    });
+    if (hecho && falloTrabajo) {
+      setError(errorDe(falloTrabajo, creada, null, false, nombresConocidos.current));
+    }
+  };
+
   const abiertaPara = (seccion: Informativa) =>
     actor !== null &&
     rolesDe(actor).some((rol) => ABIERTA_POR_ROL[rol] === seccion);
@@ -629,7 +664,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
           clavesDeTareas(orden, actor),
           botonesVisibles,
         )
-      : { visibles: [], menu: [] };
+      : { visibles: [], menu: [], porTrabajo: {} };
   const accionAbierta = abierta ? (registradas.get(abierta) ?? null) : null;
   // Con varios trabajos, la misma acción aparece una vez por Detalle
   // («Evaluar el trabajo», «Iniciar el trabajo»): el botón dice cuál.
@@ -704,7 +739,9 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
           : ruta.pantalla === "orden"
             ? {
                 titulo: `Orden ${ruta.ordenId}`,
-                subtitulo: orden && enDetalle ? resumenCliente(orden) : undefined,
+                // UX-12: solo nombre y teléfono; custodia y observaciones
+                // están en «Cliente y equipo».
+                subtitulo: orden && enDetalle ? subtituloOrden(orden) : undefined,
                 acciones: (
                   <>
                     <button
@@ -714,6 +751,18 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                     >
                       ← Órdenes
                     </button>
+                    {/* UX-11: acceso a WhatsApp asistido (plantillas,
+                        consentimiento e intentos); nunca envía solo. */}
+                    {orden && enDetalle && orden.cliente?.telefono && (
+                      <button
+                        type="button"
+                        className="rt-btn rt-btn--fantasma"
+                        title="WhatsApp asistido: preparar un mensaje para el cliente"
+                        onClick={() => abrirSeccion("seccion-comunicaciones")}
+                      >
+                        <span className="rt-btn__texto">WhatsApp</span>
+                      </button>
+                    )}
                     {barraOrden.visibles.map(({ clave, accion }, indice) => (
                       <button
                         key={clave}
@@ -832,11 +881,12 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
               <FormularioAltaOrden
                 actor={actor}
                 ocupado={ocupado}
-                onCrearClienteExterno={(datos) =>
-                  void ejecutarComando(() => api.crearOrden(datos))
+                tipos={tipos}
+                onCrearClienteExterno={(datos, trabajoInicial) =>
+                  void crearConTrabajo(() => api.crearOrden(datos), trabajoInicial)
                 }
-                onCrearRtInterno={(datos) =>
-                  void ejecutarComando(() => api.crearOrdenRt(datos))
+                onCrearRtInterno={(datos, trabajoInicial) =>
+                  void crearConTrabajo(() => api.crearOrdenRt(datos), trabajoInicial)
                 }
                 onCancelar={() => navegar({ pantalla: "ordenes" })}
               />
@@ -941,7 +991,21 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                 resumen={resumenTrabajos(orden)}
                 abierta
               >
-                <TrabajosOrden orden={orden} usuarios={usuarios} />
+                <TrabajosOrden
+                  orden={orden}
+                  usuarios={usuarios}
+                  ocupado={ocupado}
+                  onAccion={setAbierta}
+                  accionesPorTrabajo={Object.fromEntries(
+                    Object.entries(barraOrden.porTrabajo).map(([detalle, items]) => [
+                      detalle,
+                      items.map(({ clave, accion }) => ({
+                        clave,
+                        etiqueta: nombreAccion(accion),
+                      })),
+                    ]),
+                  )}
+                />
               </SeccionPlegable>
 
               <SeccionPlegable
@@ -961,6 +1025,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
 
               <SeccionPlegable
                 key={`${orden.id}-${actorId}-comunicaciones`}
+                id="seccion-comunicaciones"
                 titulo="Comunicaciones"
                 resumen={`${(orden.comunicaciones ?? []).length} mensaje(s) por WhatsApp`}
               >
@@ -1191,12 +1256,16 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                       api.generarComprobanteIngreso(idOrden, idActor, canal),
                     )
                   }
+                  onFirmar={(documentoId) =>
+                    setFirmaSugerida({ documentoId, pedido: Date.now() })
+                  }
                 />
                 <FirmasDocumentos
                   key={`${orden.id}-${orden.documentos_emitidos.length}`}
                   orden={orden}
                   actor={actor}
                   usuarios={usuarios}
+                  sugerido={firmaSugerida}
                 />
               </SeccionPlegable>
 

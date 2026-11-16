@@ -23,13 +23,22 @@ export function FirmasDocumentos({
   orden,
   actor,
   usuarios,
+  sugerido = null,
 }: {
   orden: Orden;
   actor: Usuario | null;
   usuarios: Usuario[];
+  /** UX-07: documento elegido desde «Registrar firma» (con su pedido). */
+  sugerido?: { documentoId: string; pedido: number } | null;
 }) {
   const [firmas, setFirmas] = useState<FirmaDocumento[]>([]);
   const [documentoId, setDocumentoId] = useState("");
+  const seccion = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!sugerido) return;
+    setDocumentoId(sugerido.documentoId);
+    seccion.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [sugerido]);
   const [forma, setForma] = useState<FormaFirma>("PANTALLA");
   const [firmante, setFirmante] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +74,11 @@ export function FirmasDocumentos({
   if (documentos.length === 0) return null;
 
   return (
-    <section aria-label="Firmas de los documentos" style={{ marginTop: "1rem" }}>
+    <section
+      ref={seccion}
+      aria-label="Firmas de los documentos"
+      style={{ marginTop: "1rem" }}
+    >
       <h4 style={{ margin: "0 0 0.4rem" }}>Firmas (opcionales)</h4>
       {error && (
         <p role="alert" style={{ color: colores.error, fontSize: "0.85rem" }}>

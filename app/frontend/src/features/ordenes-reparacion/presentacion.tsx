@@ -228,20 +228,32 @@ export function irAAccion(clave: string): void {
  * Sección plegable con su título y una línea de resumen que se ve aunque
  * esté cerrada. Cada una se abre por separado.
  */
+/** Abre una sección plegable y la lleva a la vista (UX-11). */
+export function abrirSeccion(id: string): void {
+  const seccion = document.getElementById(id);
+  if (!(seccion instanceof HTMLDetailsElement)) return;
+  seccion.open = true;
+  seccion.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 export function SeccionPlegable({
   titulo,
   resumen,
   abierta = false,
+  id,
   children,
 }: {
   titulo: string;
   resumen?: ReactNode;
   abierta?: boolean;
+  /** Para abrirla desde un acceso directo (`abrirSeccion`). */
+  id?: string;
   children: ReactNode;
 }) {
   const [abiertaAhora, setAbiertaAhora] = useState(abierta);
   return (
     <details
+      id={id}
       className="rt-plegable"
       open={abierta}
       onToggle={(evento) => setAbiertaAhora(evento.currentTarget.open)}

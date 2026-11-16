@@ -34,6 +34,7 @@ import { Confirmacion, Seccion, habilitada } from "./PagosOrden";
 import { UbicacionAccion } from "./presentacion";
 import { datosDelEquipo, equipoElegidoDe } from "./modelosEquipo";
 import { SelectorEquipo, useModelosEquipo } from "./SelectorEquipo";
+import { observacionesParaMostrar } from "./recepcionUx";
 
 interface Props {
   orden: Orden;
@@ -198,15 +199,20 @@ export function CustodiaOrden(props: Props) {
       <Fila etiqueta="Equipo" valor={nombreEquipo(equipo)} />
       {equipo.capacidad && <Fila etiqueta="Capacidad" valor={equipo.capacidad} />}
       {equipo.color && <Fila etiqueta="Color" valor={equipo.color} />}
+      {/* UX-02: el identificador interno, también sin IMEI. */}
+      <Fila etiqueta="Identificador del equipo" valor={equipo.id} />
       <Fila etiqueta="IMEI" valor={equipo.imei ?? "—"} />
       <Fila etiqueta="N.º de serie" valor={equipo.numero_serie ?? "—"} />
-      <Fila etiqueta="Falla declarada" valor={equipo.falla_reportada} />
+      {/* UX-03: con el texto único se muestra una vez; en las Órdenes
+          anteriores, falla, estado físico y observaciones por separado. */}
+      {observacionesParaMostrar(orden).map((dato) => (
+        <Fila key={dato.etiqueta} etiqueta={dato.etiqueta} valor={dato.texto} />
+      ))}
       {recepcion ? (
         <>
-          <Fila
-            etiqueta="Estado físico"
-            valor={recepcion.datos.estado_fisico ?? "No registrado"}
-          />
+          {!recepcion.datos.estado_fisico && (
+            <Fila etiqueta="Estado físico" valor="No registrado" />
+          )}
           {/* Solo si se registraron: ya no se piden al ingresar. */}
           {recepcion.datos.accesorios.length > 0 && (
             <Fila
@@ -214,10 +220,6 @@ export function CustodiaOrden(props: Props) {
               valor={recepcion.datos.accesorios.join(", ")}
             />
           )}
-          <Fila
-            etiqueta="Observaciones del equipo"
-            valor={recepcion.datos.observaciones ?? "—"}
-          />
           {recepcion.datos.notas_internas && (
             <Fila
               etiqueta="Notas internas"
@@ -461,6 +463,16 @@ function FormularioDatosIngreso({
     recepcion?.datos.notas_internas ?? "",
   );
   const [motivo, setMotivo] = useState("");
+  // UX-03: si la Orden usa el texto único, se corrige en un solo campo
+  // (que vuelve a ir a los tres datos); si no, cada uno por separado.
+  const [unificado] = useState(
+    () =>
+      recepcion === null ||
+      (observacionesParaMostrar(orden)[0]?.etiqueta ===
+        "Observaciones del equipo" &&
+        (recepcion.datos.estado_fisico ?? "").trim() ===
+          equipo.falla_reportada.trim()),
+  );
   const deshabilitado = !habilitada(accion, actor) || ocupado;
   const datosEquipo = datosDelEquipo(catalogo.modelos.length > 0, elegido);
 
@@ -520,12 +532,26 @@ function FormularioDatosIngreso({
         {campo("IMEI (si tiene)", imei, setImei)}
         {campo("N.º de serie (si tiene)", serie, setSerie)}
       </div>
-      {campo("Falla declarada", falla, setFalla)}
-      {campo("Estado físico", estado, setEstado)}
-      {campo(
-        "Observaciones del equipo (salen en el comprobante)",
-        observaciones,
-        setObservaciones,
+      {unificado ? (
+        campo(
+          "Observaciones del equipo (salen en el comprobante)",
+          falla,
+          (valor) => {
+            setFalla(valor);
+            setEstado(valor);
+            setObservaciones(valor);
+          },
+        )
+      ) : (
+        <>
+          {campo("Falla declarada", falla, setFalla)}
+          {campo("Estado físico", estado, setEstado)}
+          {campo(
+            "Observaciones del equipo (salen en el comprobante)",
+            observaciones,
+            setObservaciones,
+          )}
+        </>
       )}
       {campo(
         "Notas internas (no salen en documentos)",

@@ -3,7 +3,7 @@
  * interrupción, parámetros y seguimientos del retiro demorado.
  */
 
-import type { Orden } from "../types/api";
+import type { MedioPago, Orden } from "../types/api";
 import { get, post, put } from "./client";
 
 export type TipoMotivo = "CANCELACION" | "INTERRUPCION";
@@ -73,6 +73,28 @@ export function guardarParametro(
   return put<Record<string, string>>(
     `/api/admin/parameters/${encodeURIComponent(clave)}`,
     { usuario_id: usuarioId, valor },
+  );
+}
+
+/** UX-08: medios de pago con su recargo, para Administración. */
+export interface MediosPagoAdmin {
+  editable: boolean;
+  medios: MedioPago[];
+}
+
+export function leerMediosPago(): Promise<MediosPagoAdmin> {
+  return get<MediosPagoAdmin>("/api/admin/payment-methods");
+}
+
+/** Cambia el recargo de un medio, con auditoría; no toca pagos ya hechos. */
+export function guardarRecargo(
+  usuarioId: string,
+  medioId: string,
+  porcentaje: string,
+): Promise<MedioPago> {
+  return put<MedioPago>(
+    `/api/admin/payment-methods/${encodeURIComponent(medioId)}`,
+    { usuario_id: usuarioId, recargo_porcentaje: porcentaje },
   );
 }
 

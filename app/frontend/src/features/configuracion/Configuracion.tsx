@@ -22,7 +22,11 @@ import type {
 } from "../../types/api";
 import { tieneRol } from "../../lib/roles";
 import { InsumosAdmin } from "./Insumos";
-import { MotivosOperativos, ParametrosOperativos } from "./Operativa";
+import {
+  MotivosOperativos,
+  ParametrosOperativos,
+  RecargosMedioPago,
+} from "./Operativa";
 import { ChecklistAdmin } from "./Checklist";
 import { Permisos } from "./Permisos";
 import { ProveedoresAdmin } from "./Proveedores";
@@ -345,7 +349,12 @@ export function ConfiguracionPanel({ actor }: { actor: Usuario | null }) {
         <Permisos actor={actor} editable={catalogo.editable} onCambio={cargar} />
       )}
       {pestana === "motivos" && <MotivosOperativos actor={actor} />}
-      {pestana === "parametros" && <ParametrosOperativos actor={actor} />}
+      {pestana === "parametros" && (
+        <>
+          <ParametrosOperativos actor={actor} />
+          <RecargosMedioPago actor={actor} />
+        </>
+      )}
       {pestana === "plantillas" && <PlantillasMensaje actor={actor} />}
       {pestana === "insumos" && <InsumosAdmin actor={actor} />}
       {pestana === "proveedores" && <ProveedoresAdmin actor={actor} />}

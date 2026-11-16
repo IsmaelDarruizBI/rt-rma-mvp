@@ -62,6 +62,8 @@ export interface MedioPago {
   nombre: string;
   activo: boolean;
   admite_devolucion: boolean;
+  /** UX-08: recargo porcentual del medio ("0": sin recargo). */
+  recargo_porcentaje?: string;
 }
 
 /** COMPLETO y CANCELADO son terminales. Un CANCELADO no se cobra ni se borra. */
@@ -894,6 +896,13 @@ export interface Pago {
   anulacion: { usuario_id: string; fecha: string; motivo: string } | null;
   devuelto: string;
   devolvible: string;
+  /**
+   * UX-08: copia del recargo del medio al cobrar. `monto` es lo imputado al
+   * saldo; el recargo se cobra aparte. `total_cobrado` = monto + recargo.
+   */
+  recargo_porcentaje?: string;
+  recargo_importe?: string;
+  total_cobrado?: string;
 }
 
 /** Dinero devuelto al cliente desde un Pago (no es un pago negativo). */

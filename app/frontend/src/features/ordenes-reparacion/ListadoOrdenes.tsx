@@ -26,13 +26,22 @@ import type {
   BusquedaCliente,
   OrdenResumen,
   PersonaExterna,
+  TipoReparacion,
   Usuario,
 } from "../../types/api";
-import type { DatosNuevaOrden, DatosNuevaOrdenRt } from "../../api/ordenes";
+import {
+  type DatosNuevaOrden,
+  type DatosNuevaOrdenRt,
+  TIPO_REPARACION_OTROS,
+} from "../../api/ordenes";
 import { buscarClientePorDni } from "../../api/clientes";
 import { ApiError } from "../../api/client";
 import { EQUIPO_VACIO, type EquipoElegido, datosDelEquipo } from "./modelosEquipo";
 import { normalizarDni } from "./clientes";
+import {
+  datosObservacionesUnificadas,
+  tiposParaTrabajoInicial,
+} from "./recepcionUx";
 import { SelectorEquipo, useModelosEquipo } from "./SelectorEquipo";
 import { SelectorIdentidad } from "./IdentidadEquipo";
 import {
@@ -472,14 +481,23 @@ type OrigenAlta = "" | "CLIENTE_EXTERNO" | "RT_INTERNO";
 export function FormularioAltaOrden({
   actor,
   ocupado,
+  tipos,
   onCrearClienteExterno,
   onCrearRtInterno,
   onCancelar,
 }: {
   actor: Usuario | null;
   ocupado: boolean;
-  onCrearClienteExterno: (datos: DatosNuevaOrden) => void;
-  onCrearRtInterno: (datos: DatosNuevaOrdenRt) => void;
+  /** UX-04: Tipos de Reparación para el trabajo inicial (opcional). */
+  tipos: TipoReparacion[];
+  onCrearClienteExterno: (
+    datos: DatosNuevaOrden,
+    trabajoInicial: string | null,
+  ) => void;
+  onCrearRtInterno: (
+    datos: DatosNuevaOrdenRt,
+    trabajoInicial: string | null,
+  ) => void;
   /** Volver al listado sin crear nada. */
   onCancelar?: () => void;
 }) {
@@ -502,6 +520,7 @@ export function FormularioAltaOrden({
         <FormularioNuevaOrden
           actor={actor}
           ocupado={ocupado}
+          tipos={tipos}
           onCrear={onCrearClienteExterno}
         />
       )}
@@ -509,6 +528,7 @@ export function FormularioAltaOrden({
         <FormularioNuevaOrdenRt
           actor={actor}
           ocupado={ocupado}
+          tipos={tipos}
           onCrear={onCrearRtInterno}
         />
       )}
@@ -541,11 +561,15 @@ interface Ingreso {
   numeroSerie: string;
   /** DEC-MI-11: Equipo existente elegido; `null`, «Ninguno». */
   equipoId: string | null;
-  estadoFisico: string;
-  /** Visibles: salen en el comprobante. */
+  /**
+   * UX-03: un solo texto visible (lo que declara el cliente, el problema,
+   * el estado estético y otras observaciones). Sale en el comprobante.
+   */
   observaciones: string;
   /** Solo para el personal: nunca salen en un documento. */
   notasInternas: string;
+  /** UX-04: Tipo de Reparación del primer trabajo; "" sin trabajo. */
+  trabajoInicial: string;
 }
 
 function ingresoInicial(): Ingreso {
@@ -553,9 +577,9 @@ function ingresoInicial(): Ingreso {
     imei: "",
     numeroSerie: "",
     equipoId: null,
-    estadoFisico: "Sin golpes ni marcas visibles.",
     observaciones: "",
     notasInternas: "",
+    trabajoInicial: "",
   };
 }
 
@@ -564,18 +588,19 @@ function textoONulo(valor: string): string | null {
 }
 
 function datosDeIngreso(ingreso: Ingreso) {
+  const { falla_reportada, recepcion } = datosObservacionesUnificadas(
+    ingreso.observaciones,
+    ingreso.notasInternas,
+  );
   return {
     identificadores: {
       imei: textoONulo(ingreso.imei),
       numero_serie: textoONulo(ingreso.numeroSerie),
       id: ingreso.equipoId,
     },
-    recepcion: {
-      estado_fisico: textoONulo(ingreso.estadoFisico),
-      accesorios: [],
-      observaciones: textoONulo(ingreso.observaciones),
-      notas_internas: textoONulo(ingreso.notasInternas),
-    },
+    falla: falla_reportada,
+    recepcion,
+    trabajoInicial: ingreso.trabajoInicial || null,
   };
 }
 
@@ -586,13 +611,16 @@ function datosDeIngreso(ingreso: Ingreso) {
 function CamposIngreso({
   ingreso,
   clienteExterno = false,
+  tipos,
   onCambiar,
 }: {
   ingreso: Ingreso;
   /** Cliente Externo: sigue con el comprobante de ingreso. */
   clienteExterno?: boolean;
+  tipos: TipoReparacion[];
   onCambiar: (ingreso: Ingreso) => void;
 }) {
+  const ofrecidos = tiposParaTrabajoInicial(tipos, TIPO_REPARACION_OTROS);
   const ingresoActual = useRef(ingreso);
   ingresoActual.current = ingreso;
   const cambiar =
@@ -636,20 +664,37 @@ function CamposIngreso({
           onCambiar({ ...ingresoActual.current, equipoId })
         }
       />
-      <Campo etiqueta="Estado físico al recibirlo">
+      <Campo etiqueta="Observaciones del equipo (salen en el comprobante)">
         <textarea
-          value={ingreso.estadoFisico}
-          onChange={cambiar("estadoFisico")}
-          rows={2}
+          value={ingreso.observaciones}
+          onChange={cambiar("observaciones")}
+          rows={3}
+          placeholder="Qué declara el cliente, el problema, el estado estético (golpes, rayones) y otras observaciones."
+          aria-describedby="ayuda-observaciones"
           style={{ ...estiloInput, resize: "vertical" }}
         />
       </Campo>
-      <Campo etiqueta="Observaciones del equipo (salen en el comprobante)">
-        <input
-          value={ingreso.observaciones}
-          onChange={cambiar("observaciones")}
+      {!ingreso.observaciones.trim() && (
+        <p
+          id="ayuda-observaciones"
+          style={{ margin: "-0.3rem 0 0.6rem", fontSize: "0.75rem", color: colores.alerta }}
+        >
+          Falta describir el equipo: lo que declara el cliente y cómo se recibe.
+        </p>
+      )}
+      <Campo etiqueta="Trabajo inicial (opcional)">
+        <select
+          value={ingreso.trabajoInicial}
+          onChange={cambiar("trabajoInicial")}
           style={estiloInput}
-        />
+        >
+          <option value="">Sin trabajo por ahora</option>
+          {ofrecidos.map((tipo) => (
+            <option key={tipo.id} value={tipo.id}>
+              {tipo.nombre} · {importe(tipo.precio)}
+            </option>
+          ))}
+        </select>
       </Campo>
       <Campo etiqueta="Notas internas (solo el personal; no salen en documentos)">
         <input
@@ -666,10 +711,12 @@ function CamposIngreso({
         }}
       >
         {clienteExterno
-          ? "Después de crearla se cargan los trabajos y se genera el " +
-            "comprobante de ingreso y autorización, que confirma la " +
-            "recepción del equipo."
-          : "La recepción física del equipo se confirma después, en la Orden."}
+          ? "El trabajo inicial se agrega al crearla, con las mismas " +
+            "validaciones que en la Orden; ahí se cargan los demás y «Otros». " +
+            "Después se genera el comprobante de ingreso y autorización, que " +
+            "confirma la recepción del equipo."
+          : "El trabajo inicial se agrega al crearla. La recepción física " +
+            "del equipo se confirma después, en la Orden."}
       </p>
     </>
   );
@@ -869,11 +916,13 @@ function PersonaParaRevisar({
 export function FormularioNuevaOrden({
   actor,
   ocupado,
+  tipos,
   onCrear,
 }: {
   actor: Usuario | null;
   ocupado: boolean;
-  onCrear: (datos: DatosNuevaOrden) => void;
+  tipos: TipoReparacion[];
+  onCrear: (datos: DatosNuevaOrden, trabajoInicial: string | null) => void;
 }) {
   const [nombreApellido, setNombreApellido] = useState("Cliente de Prueba");
   const [telefono, setTelefono] = useState("341-0000000");
@@ -888,7 +937,6 @@ export function FormularioNuevaOrden({
   // Del catálogo técnico de modelos (búsqueda) o a mano si no está.
   const catalogo = useModelosEquipo();
   const [equipo, setEquipo] = useState<EquipoElegido>(EQUIPO_VACIO);
-  const [falla, setFalla] = useState("La batería dura poco.");
   const [ingreso, setIngreso] = useState<Ingreso>(ingresoInicial);
 
   const esRecepcion = tieneRol(actor, "RECEPCION");
@@ -896,7 +944,11 @@ export function FormularioNuevaOrden({
   const dniInvalido = dni.trim() !== "" && dniNormalizado === null;
   const datosEquipo = datosDelEquipo(catalogo.modelos.length > 0, equipo);
   const completo =
-    nombreApellido.trim() && telefono.trim() && datosEquipo && falla && !dniInvalido;
+    nombreApellido.trim() &&
+    telefono.trim() &&
+    datosEquipo &&
+    ingreso.observaciones.trim() &&
+    !dniInvalido;
   const puedeBuscar =
     actor !== null &&
     puede(actor, "CLIENTE_BUSCAR", ["RECEPCION", "ADMINISTRADOR"]) &&
@@ -939,23 +991,27 @@ export function FormularioNuevaOrden({
       const encontrado = await buscar(false);
       if (encontrado?.origen === "BASE") return;
     }
-    const { identificadores, recepcion } = datosDeIngreso(ingreso);
+    const { identificadores, falla, recepcion, trabajoInicial } =
+      datosDeIngreso(ingreso);
     if (!datosEquipo) return;
-    onCrear({
-      usuario_id: actor.id,
-      cliente: {
-        nombre_apellido: nombreApellido.trim(),
-        telefono: telefono.trim(),
-        dni: dniNormalizado,
-        ...(clienteId ? { id: clienteId } : {}),
+    onCrear(
+      {
+        usuario_id: actor.id,
+        cliente: {
+          nombre_apellido: nombreApellido.trim(),
+          telefono: telefono.trim(),
+          dni: dniNormalizado,
+          ...(clienteId ? { id: clienteId } : {}),
+        },
+        equipo: {
+          ...datosEquipo,
+          falla_reportada: falla,
+          ...identificadores,
+        },
+        recepcion,
       },
-      equipo: {
-        ...datosEquipo,
-        falla_reportada: falla,
-        ...identificadores,
-      },
-      recepcion,
-    });
+      trabajoInicial,
+    );
   }
 
   return (
@@ -1018,14 +1074,17 @@ export function FormularioNuevaOrden({
         valor={equipo}
         onCambiar={setEquipo}
       />
-      <Campo etiqueta="Falla declarada por el cliente">
-        <input
-          value={falla}
-          onChange={(evento) => setFalla(evento.target.value)}
-          style={estiloInput}
-        />
-      </Campo>
-      <CamposIngreso ingreso={ingreso} clienteExterno onCambiar={setIngreso} />
+      <CamposIngreso
+        ingreso={ingreso}
+        clienteExterno
+        tipos={tipos}
+        onCambiar={setIngreso}
+      />
+      {!dni.trim() && (
+        <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
+          Sin DNI: se puede crear igual; el comprobante dirá «sin DNI».
+        </p>
+      )}
       {!nombreApellido.trim() && (
         <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.alerta }}>
           Falta el nombre y apellido del cliente.
@@ -1045,20 +1104,22 @@ export function FormularioNuevaOrden({
 export function FormularioNuevaOrdenRt({
   actor,
   ocupado,
+  tipos,
   onCrear,
 }: {
   actor: Usuario | null;
   ocupado: boolean;
-  onCrear: (datos: DatosNuevaOrdenRt) => void;
+  tipos: TipoReparacion[];
+  onCrear: (datos: DatosNuevaOrdenRt, trabajoInicial: string | null) => void;
 }) {
   const [marca, setMarca] = useState("Motorola");
   const [modelo, setModelo] = useState("Moto G84");
-  const [falla, setFalla] = useState("No enciende.");
   const [referenciaRt, setReferenciaRt] = useState("RT-INGRESO-0001");
   const [ingreso, setIngreso] = useState<Ingreso>(ingresoInicial);
 
   const esRecepcion = tieneRol(actor, "RECEPCION");
-  const completo = marca && modelo && falla && referenciaRt;
+  const completo =
+    marca && modelo && ingreso.observaciones.trim() && referenciaRt;
 
   return (
     <div>
@@ -1094,30 +1155,27 @@ export function FormularioNuevaOrdenRt({
           style={estiloInput}
         />
       </Campo>
-      <Campo etiqueta="Falla reportada">
-        <input
-          value={falla}
-          onChange={(evento) => setFalla(evento.target.value)}
-          style={estiloInput}
-        />
-      </Campo>
-      <CamposIngreso ingreso={ingreso} onCambiar={setIngreso} />
+      <CamposIngreso ingreso={ingreso} tipos={tipos} onCambiar={setIngreso} />
       <Boton
         disabled={!esRecepcion || ocupado || !completo || !actor}
         onClick={() => {
           if (!actor) return;
-          const { identificadores, recepcion } = datosDeIngreso(ingreso);
-          onCrear({
-            usuario_id: actor.id,
-            equipo: {
-              marca,
-              modelo,
-              falla_reportada: falla,
-              ...identificadores,
+          const { identificadores, falla, recepcion, trabajoInicial } =
+            datosDeIngreso(ingreso);
+          onCrear(
+            {
+              usuario_id: actor.id,
+              equipo: {
+                marca,
+                modelo,
+                falla_reportada: falla,
+                ...identificadores,
+              },
+              referencia_rt: referenciaRt,
+              recepcion,
             },
-            referencia_rt: referenciaRt,
-            recepcion,
-          });
+            trabajoInicial,
+          );
         }}
       >
         Crear Orden RT

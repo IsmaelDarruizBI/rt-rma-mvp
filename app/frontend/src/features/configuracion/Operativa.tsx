@@ -276,3 +276,87 @@ export function ParametrosOperativos({ actor }: { actor: Usuario }) {
     </section>
   );
 }
+
+/**
+ * UX-08: recargo porcentual por medio de pago. Se suma a cada cobro con
+ * ese medio y queda como copia en el pago; cambiarlo no recalcula pagos ya
+ * registrados. Cada cambio queda en la auditoría.
+ */
+export function RecargosMedioPago({ actor }: { actor: Usuario }) {
+  const [datos, setDatos] = useState<api.MediosPagoAdmin | null>(null);
+  const [valores, setValores] = useState<Record<string, string>>({});
+  const { error, setError, aviso, ocupado, ejecutar } = useEstado();
+
+  const cargar = useCallback(() => {
+    api
+      .leerMediosPago()
+      .then((leidos) => {
+        setDatos(leidos);
+        setValores(
+          Object.fromEntries(
+            leidos.medios.map((m) => [m.id, m.recargo_porcentaje ?? "0"]),
+          ),
+        );
+      })
+      .catch((causa: unknown) => setError(mensaje(causa)));
+  }, [setError]);
+  useEffect(cargar, [cargar]);
+
+  if (!datos) return <Mensajes error={error} aviso={aviso} />;
+  const bloqueado = ocupado || !datos.editable;
+
+  return (
+    <section style={{ maxWidth: 420, marginTop: "1.2rem" }}>
+      <h3 style={{ margin: "0 0 0.3rem" }}>Recargo por medio de pago</h3>
+      <p style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: colores.suave }}>
+        Porcentaje que se suma a cada cobro con ese medio. Al saldo de la
+        Orden se imputa el importe; el recargo se cobra aparte. Los pagos ya
+        registrados no cambian.
+      </p>
+      <Mensajes error={error} aviso={aviso} />
+      {datos.medios.map((medio) => {
+        const actual = medio.recargo_porcentaje ?? "0";
+        const valor = valores[medio.id] ?? "";
+        return (
+          <div
+            key={medio.id}
+            style={{ display: "flex", alignItems: "flex-end", gap: "0.5rem" }}
+          >
+            <div style={{ flex: 1 }}>
+              <Campo etiqueta={`${medio.nombre} (%)`}>
+                <input
+                  value={valor}
+                  inputMode="decimal"
+                  onChange={(evento) =>
+                    setValores({ ...valores, [medio.id]: evento.target.value })
+                  }
+                  disabled={bloqueado}
+                  style={estiloInput}
+                />
+              </Campo>
+            </div>
+            <div style={{ marginBottom: "0.6rem" }}>
+              <Boton
+                disabled={bloqueado || Number(valor) === Number(actual) || valor.trim() === ""}
+                onClick={() =>
+                  ejecutar(
+                    () => api.guardarRecargo(actor.id, medio.id, valor.trim()),
+                    `Se guardó el recargo de ${medio.nombre}.`,
+                    cargar,
+                  )
+                }
+              >
+                Guardar
+              </Boton>
+            </div>
+          </div>
+        );
+      })}
+      {!datos.editable && (
+        <p style={{ fontSize: "0.8rem", color: colores.suave }}>
+          Se configura sobre la base PostgreSQL.
+        </p>
+      )}
+    </section>
+  );
+}

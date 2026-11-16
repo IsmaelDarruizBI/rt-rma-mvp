@@ -36,7 +36,8 @@ export type EntidadConfiguracion =
   | "PLANTILLA"
   | "PARAMETRO"
   | "CHECKLIST"
-  | "PROVEEDOR";
+  | "PROVEEDOR"
+  | "MEDIO_PAGO";
 
 export interface CambioConfiguracion {
   entidad: EntidadConfiguracion;
