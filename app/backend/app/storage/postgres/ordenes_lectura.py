@@ -41,6 +41,7 @@ Diseno: ``docs/postgresql/e4-e7-diseno-integrado.md`` (seccion 4).
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -73,6 +74,7 @@ from app.domain.models.fotos import FotoOrden
 from app.domain.models.operativa import SeguimientoRetiro
 from app.domain.models.pagos import (
     AnulacionPago,
+    AsignacionRecargo,
     DevolucionDinero,
     Pago,
     ResumenPago,
@@ -269,6 +271,7 @@ _RECEPCION = consulta(
     """
     SELECT r.orden_id, r.registro, r.estado_fisico, r.accesorios,
            r.observaciones, r.notas_internas, r.checkin_ingreso,
+           r.observaciones_unificadas,
            ur.codigo AS registrado_por, r.registrado_en,
            uc.codigo AS confirmada_por, r.confirmada_en,
            r.confirmacion_observaciones,
@@ -538,7 +541,7 @@ _PAGOS = consulta(
            m.codigo AS metodo, u.codigo AS usuario, p.registrado_en,
            p.referencia, p.operacion_id, a.codigo AS anulado_por,
            p.anulado_en, p.anulacion_motivo, p.recargo_porcentaje,
-           p.recargo_importe
+           p.recargo_importe, p.recargo_distribucion
     FROM rma.pago p
     JOIN rma.medio_pago m ON m.id = p.medio_pago_id
     JOIN rma.usuario u ON u.id = p.usuario_id
@@ -556,7 +559,7 @@ _DEVOLUCIONES = consulta(
     """
     SELECT d.orden_id, d.codigo, p.codigo AS pago, d.monto,
            m.codigo AS medio, u.codigo AS usuario, d.registrada_en,
-           d.motivo, d.referencia, d.operacion_id
+           d.motivo, d.referencia, d.operacion_id, d.recargo_importe
     FROM rma.devolucion_dinero d
     JOIN rma.pago p ON p.id = d.pago_id
     JOIN rma.medio_pago m ON m.id = d.medio_pago_id
@@ -1039,6 +1042,7 @@ def _recepcion(
                 registros[-1].realizado if registros else fila.checkin_ingreso
             ),
             notas_internas=fila.notas_internas,
+            observaciones_unificadas=fila.observaciones_unificadas,
         ),
         registrado_por=fila.registrado_por,
         registrado_en=utc(fila.registrado_en),
@@ -1116,6 +1120,13 @@ def _pago(fila: Any) -> Pago:
         anulacion=anulacion,
         recargo_porcentaje=decimal_sin_ceros(fila.recargo_porcentaje),
         recargo_importe=decimal_sin_ceros(fila.recargo_importe),
+        recargo_distribucion=[
+            AsignacionRecargo(
+                detalle_id=a["detalle_id"],
+                importe=decimal_sin_ceros(Decimal(a["importe"])),
+            )
+            for a in fila.recargo_distribucion
+        ],
     )
 
 
@@ -1130,6 +1141,7 @@ def _devolucion(fila: Any) -> DevolucionDinero:
         motivo=fila.motivo,
         referencia=fila.referencia,
         operacion_id=fila.operacion_id,
+        recargo_importe=decimal_sin_ceros(fila.recargo_importe),
     )
 
 

@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, computed_field
 
+from ..recargos import distribuir
 from .checklist import ConfirmacionInformacionFaltante, RegistroChecklist
 from .comunicaciones import ComunicacionCliente
 from .descuentos import RegistroDescuento, importe_de_descuento
@@ -229,6 +230,36 @@ class OrdenReparacion(BaseModel):
         return importe_de_descuento(
             self.subtotal - self.descuento_detalles, self.descuento_vigente
         )
+
+    def importes_elegibles(self) -> list[tuple[str, Decimal]]:
+        """ABI-45: lo cobrable de cada Detalle no cancelado, en su orden:
+        su precio menos su propio Ajuste Comercial. El ajuste de la Orden
+        no se prorratea (DEC-MI-03). Sin importe, no es elegible."""
+        elegibles = []
+        for detalle in self.reparaciones_detail:
+            if detalle.estado is EstadoReparacionDetail.CANCELADO:
+                continue
+            neto = detalle.precio - importe_de_descuento(
+                detalle.precio, self.ajuste_de_detalle(detalle.id)
+            )
+            if neto > 0:
+                elegibles.append((detalle.id, neto))
+        return elegibles
+
+    @property
+    def recargo_neto(self) -> Decimal:
+        """Recargo cobrado que no se devolvio: el que se incorpora a los
+        importes finales de los Detalles (ABI-45)."""
+        return (
+            self.resumen_pago.recargo_cobrado
+            - self.resumen_pago.recargo_devuelto
+        )
+
+    def recargo_por_detalle(self) -> dict[str, Decimal]:
+        """ABI-45: el recargo neto repartido entre los Detalles elegibles
+        en proporcion a sus importes (centavos exactos, deterministico).
+        Es lo que se suma al precio de cada trabajo en el comprobante."""
+        return dict(distribuir(self.recargo_neto, self.importes_elegibles()))
 
     @computed_field
     @property

@@ -78,6 +78,9 @@ class TrabajoRealizadoEnDocumento(TrabajoEnDocumento):
 
     garantia_dias: int | None = Field(default=None, ge=0)
     garantia_vence: date | None = None
+    # DEC-UX-13: parte del recargo cobrado incorporada a este trabajo. Lo
+    # que se presenta es ``precio + recargo``; 0 en los documentos previos.
+    recargo: Decimal = Decimal("0")
 
 
 class TrabajoCanceladoEnDocumento(TrabajoEnDocumento):
@@ -109,6 +112,8 @@ class PagoEnDocumento(BaseModel):
     medio: str
     monto: Decimal
     referencia: str | None = None
+    # DEC-UX-13: recargo de ese pago; se presenta ``monto + recargo``.
+    recargo: Decimal = Decimal("0")
 
 
 class DevolucionDineroEnDocumento(BaseModel):
@@ -120,6 +125,8 @@ class DevolucionDineroEnDocumento(BaseModel):
     medio: str
     monto: Decimal
     motivo: str
+    # DEC-UX-14: recargo reintegrado; se presenta ``monto + recargo``.
+    recargo: Decimal = Decimal("0")
 
 
 class CoberturaGarantia(BaseModel):
@@ -168,6 +175,8 @@ class ContenidoComprobanteRecepcion(_ContenidoBase):
     estado_fisico: str | None = None
     accesorios: list[str] = Field(default_factory=list)
     observaciones: str | None = None
+    # DEC-UX-03: ``observaciones`` es el texto unico del equipo.
+    observaciones_unificadas: bool = False
     notas: list[str] = Field(default_factory=list)
     registrado_por: UsuarioEnDocumento | None = None
     registrado_en: datetime | None = None
@@ -214,6 +223,13 @@ class ContenidoComprobanteEntrega(_ContenidoBase):
     pagado: Decimal | None = None
     devuelto: Decimal | None = None
     saldo: Decimal | None = None
+    # DEC-UX-13/14: recargos de la Orden (copias). Los importes base de
+    # arriba no los incluyen; el comprobante los presenta incorporados:
+    # subtotal y total + ``recargo_incorporado``, pagado + ``recargo_cobrado``
+    # y devuelto + ``recargo_devuelto``. El saldo no cambia.
+    recargo_incorporado: Decimal = Decimal("0")
+    recargo_cobrado: Decimal = Decimal("0")
+    recargo_devuelto: Decimal = Decimal("0")
     pagos: list[PagoEnDocumento] = Field(default_factory=list)
     devoluciones_dinero: list[DevolucionDineroEnDocumento] = Field(
         default_factory=list
@@ -289,6 +305,8 @@ class ContenidoComprobanteIngreso(_ContenidoBase):
     estado_fisico: str | None = None
     accesorios: list[str] = Field(default_factory=list)
     observaciones: str | None = None
+    # DEC-UX-03: ``observaciones`` es el texto unico del equipo.
+    observaciones_unificadas: bool = False
     notas: list[str] = Field(default_factory=list)
     checkin: bool | None = None
     registrado_por: UsuarioEnDocumento | None = None

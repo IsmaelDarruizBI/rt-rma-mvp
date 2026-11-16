@@ -31,6 +31,14 @@ class AnulacionPago(BaseModel):
     motivo: str
 
 
+class AsignacionRecargo(BaseModel):
+    """ABI-45: la parte del recargo de un pago que se asigno a un Detalle
+    al cobrarlo (copia; no se recalcula)."""
+
+    detalle_id: str
+    importe: Decimal = Field(gt=0)
+
+
 class Pago(BaseModel):
     """Pago registrado sobre la Orden.
 
@@ -63,6 +71,10 @@ class Pago(BaseModel):
     # anteriores quedan en cero (no se recalculan).
     recargo_porcentaje: Decimal = Field(default=Decimal("0"), ge=0, le=100)
     recargo_importe: Decimal = Field(default=Decimal("0"), ge=0)
+    # ABI-45: como se repartio el recargo entre los Detalles elegibles al
+    # cobrar, en proporcion a sus importes. Vacia sin recargo, en los pagos
+    # anteriores o si todavia no habia Detalles (sena antes de definirlos).
+    recargo_distribucion: list[AsignacionRecargo] = Field(default_factory=list)
 
     @property
     def vigente(self) -> bool:
@@ -91,6 +103,14 @@ class DevolucionDinero(BaseModel):
     motivo: str
     referencia: str | None = None
     operacion_id: str | None = None
+    # ABI-44: la parte del recargo del pago que se devuelve con ``monto``
+    # (copia). ``monto`` es lo que se imputa al saldo, como siempre.
+    recargo_importe: Decimal = Field(default=Decimal("0"), ge=0)
+
+    @property
+    def total_reintegrado(self) -> Decimal:
+        """Lo que recibe el cliente: el importe mas el recargo devuelto."""
+        return self.monto + self.recargo_importe
 
 
 class ResumenPago(BaseModel):
@@ -120,6 +140,32 @@ class ResumenPago(BaseModel):
         """Suma de las devoluciones de dinero registradas."""
         return sum(
             (devolucion.monto for devolucion in self.devoluciones),
+            Decimal("0"),
+        )
+
+    @property
+    def recargo_cobrado(self) -> Decimal:
+        """Recargo cobrado en los Pagos no anulados (DEC-UX-08)."""
+        return sum(
+            (pago.recargo_importe for pago in self.pagos if pago.vigente),
+            Decimal("0"),
+        )
+
+    @property
+    def recargo_devuelto(self) -> Decimal:
+        """Recargo devuelto con las devoluciones de dinero (ABI-44)."""
+        return sum(
+            (d.recargo_importe for d in self.devoluciones), Decimal("0")
+        )
+
+    def recargo_devuelto_de(self, pago_id: str) -> Decimal:
+        """El recargo ya devuelto desde ESE Pago."""
+        return sum(
+            (
+                d.recargo_importe
+                for d in self.devoluciones
+                if d.pago_id == pago_id
+            ),
             Decimal("0"),
         )
 

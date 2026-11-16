@@ -86,7 +86,13 @@ from .orden_reparacion import (
     OrdenReparacion,
     VigenciaGarantiaOrigen,
 )
-from .pagos import AnulacionPago, DevolucionDinero, Pago, ResumenPago
+from .pagos import (
+    AnulacionPago,
+    AsignacionRecargo,
+    DevolucionDinero,
+    Pago,
+    ResumenPago,
+)
 from .personas import Cliente, Usuario
 from .recepcion import (
     CambioDatoIngreso,
@@ -194,6 +200,7 @@ __all__ = [
     "AnulacionPago",
     "DevolucionDinero",
     "Pago",
+    "AsignacionRecargo",
     "ResumenPago",
     # Documentos
     "CoberturaGarantia",

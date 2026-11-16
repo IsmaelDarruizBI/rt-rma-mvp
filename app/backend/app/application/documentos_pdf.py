@@ -205,23 +205,18 @@ def _cliente_y_equipo(hoja: _Hoja, contenido, zona: tzinfo) -> None:
             )
     hoja.y = y - 13 * max(len(izquierda), len(derecha)) - 4
     if observaciones_unificadas(contenido):
-        # UX-03: un solo texto para lo declarado y lo observado.
-        hoja.parrafo(
-            f"Observaciones del equipo: {equipo.falla_reportada}", tamano=9
-        )
+        # DEC-UX-03: un solo texto para lo declarado y lo observado.
+        texto = contenido.observaciones or equipo.falla_reportada
+        hoja.parrafo(f"Observaciones del equipo: {texto}", tamano=9)
     else:
         hoja.parrafo(f"Falla declarada: {equipo.falla_reportada}", tamano=9)
 
 
 def observaciones_unificadas(contenido) -> bool:
-    """UX-03: las Ordenes nuevas guardan un solo texto, «Observaciones del
-    equipo», como falla declarada, estado fisico y observacion de la
-    recepcion. Si son el mismo texto se muestra una vez; en las anteriores,
-    cada uno con su nombre."""
-    observaciones = getattr(contenido, "observaciones", None)
-    return bool(observaciones) and (
-        observaciones.strip() == contenido.equipo.falla_reportada.strip()
-    )
+    """DEC-UX-03: el ingreso se registro con el texto unico «Observaciones
+    del equipo» (marca explicita de la recepcion): se muestra una vez. En
+    lo registrado antes, cada dato con su nombre."""
+    return bool(getattr(contenido, "observaciones_unificadas", False))
 
 
 def _dato(hoja: _Hoja, etiqueta: str, valor: str) -> None:
@@ -243,13 +238,9 @@ def _recepcion(
     hoja.titulo("Recepción del equipo")
     hoja.bajar(2)
     unificadas = observaciones_unificadas(contenido)
-    # UX-03: con el texto unico, el estado fisico es ese mismo texto (ya
-    # salio una vez como «Observaciones del equipo»).
-    if not (
-        unificadas
-        and (contenido.estado_fisico or "").strip()
-        == contenido.observaciones.strip()
-    ):
+    # DEC-UX-03: con el texto unico no hay un estado fisico aparte (ya salio
+    # una vez como «Observaciones del equipo»).
+    if not unificadas or contenido.estado_fisico:
         _dato(hoja, "Estado físico", contenido.estado_fisico or "—")
     # Ya no se piden al ingresar: solo si la Orden los tiene registrados.
     if contenido.accesorios:

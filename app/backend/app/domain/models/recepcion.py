@@ -44,6 +44,24 @@ class DatosRecepcion(BaseModel):
     observaciones: str | None = None
     checkin: bool | None = None
     notas_internas: str | None = None
+    # DEC-UX-03: ``observaciones`` es el texto unico «Observaciones del
+    # equipo» (lo que declara el cliente, el problema, el estado estetico y
+    # otras observaciones). No se copia al estado fisico: no es una
+    # constatacion aparte de Recepcion. False en lo registrado antes.
+    observaciones_unificadas: bool = False
+
+
+def estado_fisico_registrado(datos: DatosRecepcion | None) -> bool:
+    """El ingreso describe como se recibio el equipo: con el estado fisico
+    o, en el formato unificado (DEC-UX-03), con las observaciones del
+    equipo, que lo incluyen."""
+    if datos is None:
+        return False
+    if datos.estado_fisico and datos.estado_fisico.strip():
+        return True
+    return datos.observaciones_unificadas and bool(
+        (datos.observaciones or "").strip()
+    )
 
 
 class RegistroCheckin(BaseModel):

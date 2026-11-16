@@ -341,6 +341,8 @@ class DatosRecepcionIn(BaseModel):
     accesorios: list[str] = Field(default_factory=list)
     observaciones: str | None = None
     notas_internas: str | None = None
+    # DEC-UX-03: ``observaciones`` es el texto unico del equipo.
+    observaciones_unificadas: bool = False
 
     def a_dominio(self) -> DatosRecepcion:
         return DatosRecepcion(
@@ -348,6 +350,7 @@ class DatosRecepcionIn(BaseModel):
             accesorios=list(self.accesorios),
             observaciones=self.observaciones,
             notas_internas=self.notas_internas,
+            observaciones_unificadas=self.observaciones_unificadas,
         )
 
 
@@ -362,6 +365,9 @@ class CrearOrdenIn(BaseModel):
     cliente: ClienteIn
     equipo: EquipoIn
     recepcion: DatosRecepcionIn | None = None
+    # DEC-UX-04: Tipo de Reparacion del primer trabajo, que se agrega en la
+    # misma operacion (si falla, no se crea nada). Sin el, sin Detalles.
+    trabajo_inicial: str | None = None
 
 
 class CrearOrdenRtIn(BaseModel):
@@ -375,6 +381,8 @@ class CrearOrdenRtIn(BaseModel):
     equipo: EquipoIn
     referencia_rt: str = Field(min_length=1)
     recepcion: DatosRecepcionIn | None = None
+    # DEC-UX-04: como en ``CrearOrdenIn``.
+    trabajo_inicial: str | None = None
 
 
 class DefinirReparacionIn(BaseModel):
@@ -896,6 +904,8 @@ class RegistrarRecepcionIn(BaseModel):
     equipo: EquipoIn | None = None
     # DEC-MI-07: obligatorio al corregir un dato ya registrado.
     motivo: str | None = None
+    # DEC-UX-03: ``observaciones`` es el texto unico del equipo.
+    observaciones_unificadas: bool = False
 
     def datos(self) -> DatosRecepcion:
         return DatosRecepcion(
@@ -903,6 +913,7 @@ class RegistrarRecepcionIn(BaseModel):
             accesorios=list(self.accesorios),
             observaciones=self.observaciones,
             notas_internas=self.notas_internas,
+            observaciones_unificadas=self.observaciones_unificadas,
         )
 
 
@@ -1313,6 +1324,11 @@ class AnulacionPagoOut(BaseModel):
     motivo: str
 
 
+class AsignacionRecargoOut(BaseModel):
+    detalle_id: str
+    importe: Decimal
+
+
 class PagoOut(BaseModel):
     """Pago registrado.
 
@@ -1339,6 +1355,12 @@ class PagoOut(BaseModel):
     recargo_porcentaje: Decimal = Decimal("0")
     recargo_importe: Decimal = Decimal("0")
     total_cobrado: Decimal = Decimal("0")
+    # DEC-UX-13: reparto del recargo entre los trabajos al cobrar (copia).
+    recargo_distribucion: list[AsignacionRecargoOut] = Field(
+        default_factory=list
+    )
+    # DEC-UX-14: recargo ya devuelto desde este Pago.
+    recargo_devuelto: Decimal = Decimal("0")
 
 
 class DevolucionDineroOut(BaseModel):
@@ -1352,6 +1374,10 @@ class DevolucionDineroOut(BaseModel):
     fecha: datetime
     motivo: str
     referencia: str | None = None
+    # DEC-UX-14: recargo reintegrado con el importe y lo que recibio el
+    # cliente. ``monto`` es lo imputado al saldo.
+    recargo_importe: Decimal = Decimal("0")
+    total_reintegrado: Decimal = Decimal("0")
 
 
 class DocumentoOut(BaseModel):
@@ -1382,6 +1408,8 @@ class DatosRecepcionOut(BaseModel):
     observaciones: str | None = None
     notas_internas: str | None = None
     checkin: bool | None = None
+    # DEC-UX-03: ``observaciones`` es el texto unico del equipo.
+    observaciones_unificadas: bool = False
 
 
 class VersionRecepcionOut(BaseModel):
@@ -1582,6 +1610,11 @@ class ResumenComercialOut(BaseModel):
     descuento: DescuentoVigenteOut | None = None
     # DC09, DEC-MI-03: los ajustes vigentes de cada trabajo.
     ajustes_detalle: list[DescuentoVigenteOut] = Field(default_factory=list)
+    # DEC-UX-13/14: recargos (uso interno; el saldo no los incluye). El
+    # comprobante los presenta incorporados a cada trabajo.
+    recargo_cobrado: Decimal = Decimal("0")
+    recargo_devuelto: Decimal = Decimal("0")
+    recargo_por_detalle: dict[str, Decimal] = Field(default_factory=dict)
 
 
 class HistorialOut(BaseModel):
@@ -2063,6 +2096,9 @@ def _resumen_comercial(orden: OrdenReparacion) -> "ResumenComercialOut":
         descuento_aplicado=orden.descuento_aplicado,
         descuento=_descuento_vigente(orden),
         ajustes_detalle=_ajustes_detalle(orden),
+        recargo_cobrado=orden.resumen_pago.recargo_cobrado,
+        recargo_devuelto=orden.resumen_pago.recargo_devuelto,
+        recargo_por_detalle=orden.recargo_por_detalle(),
     )
 
 
@@ -2305,6 +2341,9 @@ class OrdenOut(BaseModel):
                 PagoOut(
                     **pago.model_dump(exclude={"operacion_id"}),
                     total_cobrado=pago.total_cobrado,
+                    recargo_devuelto=orden.resumen_pago.recargo_devuelto_de(
+                        pago.id
+                    ),
                     vigente=pago.vigente,
                     devuelto=orden.resumen_pago.devuelto_de(pago.id),
                     devolvible=devolvible_de(orden, pago),
@@ -2313,7 +2352,8 @@ class OrdenOut(BaseModel):
             ],
             devoluciones_dinero=[
                 DevolucionDineroOut(
-                    **devolucion.model_dump(exclude={"operacion_id"})
+                    **devolucion.model_dump(exclude={"operacion_id"}),
+                    total_reintegrado=devolucion.total_reintegrado,
                 )
                 for devolucion in orden.resumen_pago.devoluciones
             ],

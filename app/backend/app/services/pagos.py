@@ -31,11 +31,12 @@ son del MVP, como ACC-REP-020 y ACC-REP-049: la SoT todavia no los asigna.
 
 from collections.abc import Sequence
 from datetime import datetime
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 
 from app.domain.models import (
     MEDIOS_PAGO_PREDETERMINADOS,
     AnulacionPago,
+    AsignacionRecargo,
     DevolucionDinero,
     EstadoWorkflow,
     MedioPago,
@@ -45,6 +46,7 @@ from app.domain.models import (
     Usuario,
 )
 from app.domain.politicas import CondicionComercial, politica_de
+from app.domain.recargos import distribuir, recargo_a_devolver, recargo_de
 
 from . import permisos
 from .autorizacion import validar_alguno_de
@@ -214,20 +216,6 @@ def _buscar_pago(orden: OrdenReparacion, pago_id: str) -> Pago:
 # --- Pagos -------------------------------------------------------------------
 
 
-def recargo_de(monto: Decimal, porcentaje: Decimal) -> Decimal:
-    """UX-08: el recargo de un cobro, redondeado al centavo (mitad hacia
-    arriba). No se imputa al saldo: se suma a lo que paga el cliente."""
-    if porcentaje <= 0:
-        return Decimal("0")
-    recargo = (monto * porcentaje / Decimal("100")).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
-    )
-    # Sin ceros decimales de mas, como lo devuelve PostgreSQL (200, 6.7).
-    if recargo == recargo.to_integral_value():
-        return recargo.quantize(Decimal(1))
-    return recargo.normalize()
-
-
 def descripcion_de_pago(pago: Pago) -> str:
     """Resumen legible del Pago para el historial de la Orden.
 
@@ -354,6 +342,7 @@ def registrar_pago(
                 f"({orden.saldo}): no se cobra de mas."
             )
 
+    recargo = recargo_de(monto, medio.recargo_porcentaje)
     pago = Pago(
         id=pago_id or nuevo_id("PAG"),
         monto=monto,
@@ -364,7 +353,15 @@ def registrar_pago(
         referencia=referencia,
         operacion_id=operacion_id,
         recargo_porcentaje=medio.recargo_porcentaje,
-        recargo_importe=recargo_de(monto, medio.recargo_porcentaje),
+        recargo_importe=recargo,
+        # ABI-45: el recargo de ESTE cobro, repartido entre los Detalles
+        # elegibles en proporcion a sus importes (nunca a uno solo).
+        recargo_distribucion=[
+            AsignacionRecargo(detalle_id=detalle_id, importe=importe)
+            for detalle_id, importe in distribuir(
+                recargo, orden.importes_elegibles()
+            )
+        ],
     )
 
     nueva_orden = registrar_accion_funcional(
@@ -535,6 +532,15 @@ def registrar_devolucion_dinero(
             f"Pago {pago.id} ({disponible})."
         )
 
+    # ABI-44: con el importe se devuelve la parte proporcional del
+    # recargo que se cobro en ese Pago (todo lo que queda al completarlo).
+    recargo = recargo_a_devolver(
+        monto_pago=pago.monto,
+        recargo_pago=pago.recargo_importe,
+        devuelto_antes=orden.resumen_pago.devuelto_de(pago.id),
+        recargo_devuelto_antes=orden.resumen_pago.recargo_devuelto_de(pago.id),
+        monto=monto,
+    )
     devolucion = DevolucionDinero(
         id=devolucion_id or nuevo_id("DEV"),
         pago_id=pago.id,
@@ -545,9 +551,16 @@ def registrar_devolucion_dinero(
         motivo=motivo,
         referencia=referencia,
         operacion_id=operacion_id,
+        recargo_importe=recargo,
+    )
+    con_recargo = (
+        f" + recargo ${recargo} (total ${devolucion.total_reintegrado})"
+        if recargo
+        else ""
     )
     observacion = (
-        f"Devuelve ${monto} · {medio_devolucion.id} · desde {pago.id}"
+        f"Devuelve ${monto}{con_recargo}"
+        f" · {medio_devolucion.id} · desde {pago.id}"
         f"{f' · ref. {referencia}' if referencia else ''}. Motivo: {motivo}"
     )
     nueva_orden = registrar_accion_funcional(

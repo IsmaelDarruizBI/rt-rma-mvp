@@ -80,6 +80,7 @@ def crear_orden(
     equipo: Equipo,
     datos_recepcion: DatosRecepcion | None = None,
     cliente_reutilizado: bool = False,
+    trabajo_inicial: str | None = None,
 ) -> OrdenReparacion:
     """Ingreso de un equipo de CLIENTE_EXTERNO (PROC-REP-010/030/040).
 
@@ -100,6 +101,7 @@ def crear_orden(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
     equipo = equipo_desde_catalogo(contexto, equipo)
+    tipo_inicial = _tipo_inicial(contexto, trabajo_inicial)
 
     with contexto.transaccion():
         # DEC-MI-11: reusar una identidad exige el mismo IMEI o serie.
@@ -120,9 +122,46 @@ def crear_orden(
             fecha=fecha,
             datos_recepcion=datos_recepcion,
         )
+        orden = _con_trabajo_inicial(orden, tipo_inicial, usuario, fecha)
         contexto.ordenes.guardar(orden)
 
     return orden
+
+
+def _tipo_inicial(
+    contexto: ApplicationContext, tipo_reparacion_id: str | None
+) -> TipoReparacion | None:
+    """DEC-UX-04: el Tipo del trabajo inicial, con las mismas validaciones
+    que al agregar un Detalle. «Otros» necesita descripcion y precio: se
+    carga en la Orden."""
+    if not tipo_reparacion_id:
+        return None
+    if tipo_reparacion_id == TIPO_REPARACION_OTROS:
+        raise PrecondicionInvalidaError(
+            "«Otros» se agrega desde la Orden, con su descripcion y precio."
+        )
+    return tipo_para_detalle(contexto, tipo_reparacion_id, None)
+
+
+def _con_trabajo_inicial(
+    orden: OrdenReparacion,
+    tipo: TipoReparacion | None,
+    usuario,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """DEC-UX-04: agrega el primer Detalle con el MISMO servicio que
+    ``definir_reparacion`` (evaluacion tecnica, autorizacion y estados
+    iguales), dentro de la transaccion del alta: si falla, no queda ni la
+    Orden ni el Detalle."""
+    if tipo is None:
+        return orden
+    return definir_reparacion_detail(
+        orden,
+        detalle_id=siguiente_detalle_id(orden),
+        tipo_reparacion=tipo,
+        usuario=usuario,
+        fecha=fecha,
+    )
 
 
 def crear_orden_rt(
@@ -132,6 +171,7 @@ def crear_orden_rt(
     equipo: Equipo,
     referencia_rt: str,
     datos_recepcion: DatosRecepcion | None = None,
+    trabajo_inicial: str | None = None,
 ) -> OrdenReparacion:
     """Ingreso de un equipo RT_INTERNO (PROC-REP-010/020/040, HP-REP-002).
 
@@ -144,6 +184,7 @@ def crear_orden_rt(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
     equipo = equipo_desde_catalogo(contexto, equipo)
+    tipo_inicial = _tipo_inicial(contexto, trabajo_inicial)
 
     with contexto.transaccion():
         validar_equipo_del_ingreso(contexto, equipo)
@@ -155,6 +196,7 @@ def crear_orden_rt(
             fecha=fecha,
             datos_recepcion=datos_recepcion,
         )
+        orden = _con_trabajo_inicial(orden, tipo_inicial, usuario, fecha)
         contexto.ordenes.guardar(orden)
 
     return orden

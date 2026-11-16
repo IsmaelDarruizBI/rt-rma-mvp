@@ -43,6 +43,7 @@ from app.domain.models import (
     Usuario,
     VersionRecepcion,
 )
+from app.domain.models.recepcion import estado_fisico_registrado
 from app.domain.politicas import politica_de
 
 from . import permisos
@@ -248,6 +249,7 @@ def normalizar_datos_recepcion(datos: DatosRecepcion | None) -> DatosRecepcion:
         observaciones=_texto(datos.observaciones),
         checkin=datos.checkin,
         notas_internas=_texto(datos.notas_internas),
+        observaciones_unificadas=datos.observaciones_unificadas,
     )
 
 
@@ -435,6 +437,7 @@ CAMPOS_DATOS = (
     "accesorios",
     "observaciones",
     "notas_internas",
+    "observaciones_unificadas",
 )
 
 
@@ -503,7 +506,7 @@ def confirmar_recepcion_fisica(
             "accesorios): la Orden es anterior al registro de recepcion."
         )
     _exigir_recepcion_modificable(orden)
-    if not recepcion.datos.estado_fisico:
+    if not estado_fisico_registrado(recepcion.datos):
         raise PrecondicionInvalidaError(
             "No se confirma la recepcion sin registrar el estado fisico del "
             "equipo."

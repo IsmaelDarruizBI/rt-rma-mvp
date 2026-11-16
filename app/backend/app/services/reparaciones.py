@@ -41,6 +41,7 @@ from app.domain.models import (
     TipoReparacionInsumos,
     Usuario,
 )
+from app.domain.models.recepcion import estado_fisico_registrado
 from app.domain.politicas import politica_de
 
 from . import permisos
@@ -169,7 +170,8 @@ def faltantes_para_ingreso(orden: OrdenReparacion) -> list[str]:
     ):
         faltan.append("cargar al menos un trabajo")
     datos = orden.recepcion.datos if orden.recepcion else None
-    if datos is None or not datos.estado_fisico:
+    # DEC-UX-03: en el formato unificado, las observaciones del equipo.
+    if not estado_fisico_registrado(datos):
         faltan.append("registrar el estado fisico del equipo")
     return faltan
 

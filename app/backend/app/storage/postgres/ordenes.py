@@ -287,11 +287,12 @@ _INSERTAR_PAGO = consulta(
         (codigo, orden_id, monto, tipo_pago, medio_pago_id, referencia,
          usuario_id, registrado_en, anulado_por, anulado_en,
          anulacion_motivo, operacion_id, posicion, recargo_porcentaje,
-         recargo_importe)
+         recargo_importe, recargo_distribucion)
     VALUES (%(codigo)s, %(orden)s, %(monto)s, %(tipo)s, %(medio)s,
             %(referencia)s, %(usuario)s, %(fecha)s, %(anulado_por)s,
             %(anulado_en)s, %(anulacion_motivo)s, %(operacion)s,
-            %(posicion)s, %(recargo_porcentaje)s, %(recargo_importe)s)
+            %(posicion)s, %(recargo_porcentaje)s, %(recargo_importe)s,
+            %(recargo_distribucion)s::jsonb)
     RETURNING id
     """,
     modo=ESCRITURA,
@@ -310,10 +311,11 @@ _INSERTAR_DEVOLUCION_DINERO = consulta(
     """
     INSERT INTO rma.devolucion_dinero
         (codigo, orden_id, pago_id, monto, medio_pago_id, motivo,
-         referencia, usuario_id, registrada_en, operacion_id, posicion)
+         referencia, usuario_id, registrada_en, operacion_id, posicion,
+         recargo_importe)
     VALUES (%(codigo)s, %(orden)s, %(pago)s, %(monto)s, %(medio)s,
             %(motivo)s, %(referencia)s, %(usuario)s, %(fecha)s,
-            %(operacion)s, %(posicion)s)
+            %(operacion)s, %(posicion)s, %(recargo_importe)s)
     """,
     modo=ESCRITURA,
 )
@@ -618,13 +620,15 @@ _INSERTAR_RECEPCION = consulta(
         (orden_id, registro, estado_fisico, accesorios, observaciones,
          notas_internas, checkin_ingreso, registrado_por, registrado_en,
          confirmada_por, confirmada_en, confirmacion_observaciones,
-         no_recibido_por, no_recibido_en, no_recibido_motivo)
+         no_recibido_por, no_recibido_en, no_recibido_motivo,
+         observaciones_unificadas)
     VALUES
         (%(orden)s, %(registro)s, %(estado_fisico)s, %(accesorios)s,
          %(observaciones)s, %(notas_internas)s, %(checkin)s,
          %(registrado_por)s, %(registrado_en)s, %(confirmada_por)s,
          %(confirmada_en)s, %(confirmacion_observaciones)s,
-         %(no_recibido_por)s, %(no_recibido_en)s, %(no_recibido_motivo)s)
+         %(no_recibido_por)s, %(no_recibido_en)s, %(no_recibido_motivo)s,
+         %(observaciones_unificadas)s)
     """,
     modo=ESCRITURA,
 )
@@ -642,7 +646,8 @@ _ACTUALIZAR_RECEPCION = consulta(
         confirmacion_observaciones = %(confirmacion_observaciones)s,
         no_recibido_por = %(no_recibido_por)s,
         no_recibido_en = %(no_recibido_en)s,
-        no_recibido_motivo = %(no_recibido_motivo)s
+        no_recibido_motivo = %(no_recibido_motivo)s,
+        observaciones_unificadas = %(observaciones_unificadas)s
     WHERE orden_id = %(orden)s
     """,
     modo=ESCRITURA,
@@ -2029,6 +2034,15 @@ class _Guardado:
                     "recargo_importe": _escala(
                         pago.recargo_importe, _DOS_DECIMALES, "recargo"
                     ),
+                    "recargo_distribucion": _json(
+                        [
+                            {
+                                "detalle_id": a.detalle_id,
+                                "importe": str(a.importe),
+                            }
+                            for a in pago.recargo_distribucion
+                        ]
+                    ),
                 },
             ).id
 
@@ -2076,6 +2090,9 @@ class _Guardado:
                     "fecha": devolucion.fecha,
                     "operacion": devolucion.operacion_id,
                     "posicion": posicion,
+                    "recargo_importe": _escala(
+                        devolucion.recargo_importe, _DOS_DECIMALES, "recargo"
+                    ),
                 },
             )
 
@@ -2760,6 +2777,7 @@ def _fila_recepcion(
         "accesorios": list(datos.accesorios),
         "observaciones": datos.observaciones,
         "notas_internas": datos.notas_internas,
+        "observaciones_unificadas": datos.observaciones_unificadas,
         "checkin": checkin_ingreso,
         "registrado_por": recepcion.registrado_por,
         "registrado_en": recepcion.registrado_en,
@@ -2779,7 +2797,7 @@ def _dominio_json(modelo: BaseModel) -> dict[str, Any]:
     return modelo.model_dump(mode="json", exclude_computed_fields=True)
 
 
-def _json(valor: dict[str, Any]) -> str:
+def _json(valor: dict[str, Any] | list[Any]) -> str:
     return json.dumps(valor, ensure_ascii=False)
 
 

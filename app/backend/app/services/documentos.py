@@ -362,6 +362,9 @@ def contenido_comprobante_recepcion(
         estado_fisico=recepcion.datos.estado_fisico if recepcion else None,
         accesorios=list(recepcion.datos.accesorios) if recepcion else [],
         observaciones=recepcion.datos.observaciones if recepcion else None,
+        observaciones_unificadas=(
+            recepcion.datos.observaciones_unificadas if recepcion else False
+        ),
         notas=_notas_visibles(recepcion),
         registrado_por=(
             _usuario(contexto, recepcion.registrado_por) if recepcion else None
@@ -477,6 +480,9 @@ def contenido_comprobante_entrega(
     cobrable = _es_cobrable(orden)
     resumen = orden.resumen_pago
 
+    # DEC-UX-13: el recargo neto, repartido entre los trabajos elegibles.
+    recargos = orden.recargo_por_detalle() if cobrable else {}
+
     def trabajo(detalle) -> dict:
         return {
             "detalle_id": detalle.id,
@@ -504,6 +510,7 @@ def contenido_comprobante_entrega(
         trabajos_realizados=[
             TrabajoRealizadoEnDocumento(
                 **trabajo(detalle),
+                recargo=recargos.get(detalle.id, Decimal("0")),
                 garantia_dias=detalle.garantia_dias,
                 garantia_vence=vencimiento_garantia(
                     orden.entrega.fecha if orden.entrega else None,
@@ -546,6 +553,13 @@ def contenido_comprobante_entrega(
         pagado=resumen.pagado if cobrable else None,
         devuelto=resumen.devuelto if cobrable else None,
         saldo=orden.saldo if cobrable else None,
+        recargo_incorporado=(
+            sum(recargos.values(), Decimal("0")) if cobrable else Decimal("0")
+        ),
+        recargo_cobrado=resumen.recargo_cobrado if cobrable else Decimal("0"),
+        recargo_devuelto=(
+            resumen.recargo_devuelto if cobrable else Decimal("0")
+        ),
         pagos=[
             PagoEnDocumento(
                 id=pago.id,
@@ -554,6 +568,7 @@ def contenido_comprobante_entrega(
                 medio=contexto.medios.get(pago.metodo, pago.metodo),
                 monto=pago.monto,
                 referencia=pago.referencia,
+                recargo=pago.recargo_importe,
             )
             for pago in resumen.pagos
             if cobrable and pago.vigente
@@ -566,6 +581,7 @@ def contenido_comprobante_entrega(
                 medio=contexto.medios.get(devolucion.medio, devolucion.medio),
                 monto=devolucion.monto,
                 motivo=devolucion.motivo,
+                recargo=devolucion.recargo_importe,
             )
             for devolucion in resumen.devoluciones
             if cobrable
@@ -703,6 +719,9 @@ def contenido_comprobante_ingreso(
         estado_fisico=datos.estado_fisico if datos else None,
         accesorios=list(datos.accesorios) if datos else [],
         observaciones=datos.observaciones if datos else None,
+        observaciones_unificadas=(
+            datos.observaciones_unificadas if datos else False
+        ),
         notas=_notas_visibles(recepcion),
         registrado_por=(
             _usuario(contexto, recepcion.registrado_por) if recepcion else None

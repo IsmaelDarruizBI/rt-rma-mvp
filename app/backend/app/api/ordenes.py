@@ -534,6 +534,7 @@ def post_crear_orden(
         datos_recepcion=(
             cuerpo.recepcion.a_dominio() if cuerpo.recepcion else None
         ),
+        trabajo_inicial=cuerpo.trabajo_inicial,
     )
     return _salida(orden, contexto)
 
@@ -557,6 +558,7 @@ def post_crear_orden_rt(
         datos_recepcion=(
             cuerpo.recepcion.a_dominio() if cuerpo.recepcion else None
         ),
+        trabajo_inicial=cuerpo.trabajo_inicial,
     )
     return _salida(orden, contexto)
 
