@@ -17,6 +17,7 @@ import re
 
 import pytest
 
+from app.application.documentos_pdf import pdf_comprobante_autorizacion
 from tests.fixtures.api_salidas import (
     BATERIA,
     PANTALLA,
@@ -27,6 +28,8 @@ from tests.fixtures.api_salidas import (
     ok,
 )
 from tests.fixtures.ingreso_inicial import del_tipo, generar_ingreso
+from tests.test_pdf import ARGENTINA
+from tests.test_pdf import _documento as _documento_autorizacion
 
 TEXTO = "No carga. Rayon en la tapa. Sin chip."
 
@@ -254,3 +257,51 @@ def test_ux06_comprobante_con_dni_identificador_y_firma(cliente):
 def test_ux06_sin_dni_lo_dice_y_no_lo_inventa(cliente):
     pdf = _pdf(cliente, _crear(cliente)["id"])
     assert "(sin DNI) Tj" in pdf
+
+
+# --- Cierre: rotulo del comprobante de autorizacion --------------------------
+
+
+def _pdf_autorizacion(unificadas: bool | None) -> str:
+    """El PDF de un comprobante de autorizacion; ``None``: una copia
+    anterior a DEC-UX-03 (sin el campo)."""
+    documento = _documento_autorizacion(1)
+    datos = documento.contenido.model_dump()
+    if unificadas is None:
+        datos.pop("observaciones_unificadas")
+    else:
+        datos["observaciones_unificadas"] = unificadas
+    documento = documento.model_copy(
+        update={"contenido": type(documento.contenido)(**datos)}
+    )
+    return pdf_comprobante_autorizacion(
+        documento, zona_horaria=ARGENTINA
+    ).decode("cp1252")
+
+
+def test_autorizacion_rotula_el_texto_unico():
+    pdf = _pdf_autorizacion(True)
+    assert "Observaciones del equipo: No carga." in pdf
+    assert "Falla declarada" not in pdf
+
+
+@pytest.mark.parametrize("unificadas", [False, None])
+def test_autorizacion_anterior_conserva_falla_declarada(unificadas):
+    pdf = _pdf_autorizacion(unificadas)
+    assert "Falla declarada: No carga." in pdf
+    assert "Observaciones del equipo" not in pdf
+
+
+def test_la_copia_de_autorizacion_lleva_la_marca_del_ingreso(cliente):
+    """El contenido que se guardaria al emitirlo copia la marca."""
+    from app.application.documentos import contexto_documentos
+    from app.services.documentos import contenido_comprobante_autorizacion
+
+    orden_id = _crear(cliente)["id"]
+    agregar(cliente, orden_id, BATERIA)
+    contexto = cliente.app.state.contexto
+    orden = contexto.ordenes.obtener(orden_id)
+    contenido = contenido_comprobante_autorizacion(
+        orden, contexto_documentos(contexto, orden)
+    )
+    assert contenido.observaciones_unificadas is True

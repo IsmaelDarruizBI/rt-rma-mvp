@@ -1207,7 +1207,15 @@ function CuerpoAutorizacion({
 }) {
   return (
     <>
-      <Dato etiqueta="Falla declarada" valor={contenido.equipo.falla_reportada} />
+      {/* DEC-UX-03: con el texto único se rotula como tal. */}
+      <Dato
+        etiqueta={
+          contenido.observaciones_unificadas
+            ? "Observaciones del equipo"
+            : "Falla declarada"
+        }
+        valor={contenido.equipo.falla_reportada}
+      />
       <Titulo>Trabajos autorizados por el cliente</Titulo>
       <Tabla
         columnas={["Trabajo", "Autorización", "Precio"]}

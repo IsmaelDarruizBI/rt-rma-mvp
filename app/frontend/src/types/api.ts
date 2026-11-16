@@ -456,6 +456,8 @@ export interface ContenidoAutorizacion extends ContenidoBase {
   descuento?: DescuentoEnDocumento | null;
   total_autorizado: string;
   leyenda: string;
+  /** DEC-UX-03 (ausente en los documentos anteriores). */
+  observaciones_unificadas?: boolean;
 }
 
 /**

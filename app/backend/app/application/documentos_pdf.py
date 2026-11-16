@@ -206,7 +206,9 @@ def _cliente_y_equipo(hoja: _Hoja, contenido, zona: tzinfo) -> None:
     hoja.y = y - 13 * max(len(izquierda), len(derecha)) - 4
     if observaciones_unificadas(contenido):
         # DEC-UX-03: un solo texto para lo declarado y lo observado.
-        texto = contenido.observaciones or equipo.falla_reportada
+        texto = (
+            getattr(contenido, "observaciones", None) or equipo.falla_reportada
+        )
         hoja.parrafo(f"Observaciones del equipo: {texto}", tamano=9)
     else:
         hoja.parrafo(f"Falla declarada: {equipo.falla_reportada}", tamano=9)

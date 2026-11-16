@@ -691,6 +691,9 @@ def contenido_comprobante_autorizacion(
         descuento=descuento,
         total_autorizado=subtotal - (descuento.importe if descuento else 0),
         leyenda=LEYENDA_AUTORIZACION,
+        observaciones_unificadas=bool(
+            orden.recepcion and orden.recepcion.datos.observaciones_unificadas
+        ),
     )
 
 

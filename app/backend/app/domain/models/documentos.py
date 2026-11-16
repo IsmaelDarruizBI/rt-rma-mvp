@@ -286,6 +286,10 @@ class ContenidoComprobanteAutorizacion(_ContenidoBase):
     descuento: DescuentoEnDocumento | None = None
     total_autorizado: Decimal
     leyenda: str
+    # DEC-UX-03: el ingreso se registro con el texto unico; la falla
+    # declarada se rotula «Observaciones del equipo». False en los
+    # documentos anteriores (conservan «Falla declarada»).
+    observaciones_unificadas: bool = False
 
 
 class ContenidoComprobanteIngreso(_ContenidoBase):
