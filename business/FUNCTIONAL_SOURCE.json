@@ -2,9 +2,9 @@
   "notice": "Copia GENERADA de la definicion funcional. No editar a mano: los cambios se hacen en el repositorio de origen y se vuelve a generar la copia (DC02).",
   "generated_by": "rt-rma-app/scripts/export-functional-copy.ts",
   "source_repository": "https://github.com/IsmaelDarruizBI/rt-rma-app.git",
-  "source_commit": "a6ce9976f7029d51734a2108915235a413ea4f47",
-  "source_ref": "a6ce9976f7029d51734a2108915235a413ea4f47",
-  "generated_at": "2026-11-16T13:17:16.817Z",
+  "source_commit": "ebd084071ed8b59e7b50e4db12c83a1f60d88b62",
+  "source_ref": "ebd084071ed8b59e7b50e4db12c83a1f60d88b62",
+  "generated_at": "2026-11-16T16:18:28.974Z",
   "files": [
     {
       "path": "actors/actors.yaml",
@@ -13,8 +13,8 @@
     },
     {
       "path": "decisions/decision-log-v1.4.yaml",
-      "bytes": 104734,
-      "sha256": "377cbb619183af7895f655bc87a99c91da9c1ef205abf5119ebe12874955671b"
+      "bytes": 110092,
+      "sha256": "3e79f8788fa8566a73c26ed2f6a58b7f6d1a306f40ab3b84f41d8c460a1ef3d4"
     },
     {
       "path": "features/repair-management-features-v1.3.yaml",
@@ -53,8 +53,8 @@
     },
     {
       "path": "rules/business-rules-v1.4.yaml",
-      "bytes": 137120,
-      "sha256": "a5bde2d392e9072c77e04d40d5d2a386c7d26d9be5c46440b4f898599ad03937"
+      "bytes": 138082,
+      "sha256": "79dafb1f7bf95988b7a7983a3ee1fa9ba865aaee076c65326b07a306115f488f"
     },
     {
       "path": "rules/business-rules.yaml",
@@ -68,8 +68,8 @@
     },
     {
       "path": "scenarios/repair-management-scenarios-v1.4.yaml",
-      "bytes": 230324,
-      "sha256": "045e20e27b8a1c50625e61f1329384c6b28c2fbe73eb106604cecd9c0cb91d02"
+      "bytes": 230953,
+      "sha256": "039519c1a87da312312ae6362864ca231e1b4721b75172386ee54de9c863d889"
     },
     {
       "path": "schemas/feature.schema.json",

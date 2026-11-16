@@ -2,13 +2,13 @@
 
 La baseline funcional vigente es PROC-REP V1.4, aprobada en DC01 y sincronizada desde `rt-rma-app` (DC02):
 
-- Commit de origen: `a6ce9976f7029d51734a2108915235a413ea4f47` (rama `spec/ux-recepcion`: las decisiones DEC-UX-01 a 12 de la iteración de UX de Recepción, sobre `spec/macro-integral` `9854046`, con DEC-MI-01 a 16, DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
+- Commit de origen: `ebd084071ed8b59e7b50e4db12c83a1f60d88b62` (rama `spec/ux-recepcion`, publicada: las decisiones DEC-UX-01 a 14 de la iteración de UX de Recepción, sobre `spec/macro-integral` `9854046`, con DEC-MI-01 a 16, DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
 - Contenido funcional aprobado en `b6cc3a5`.
 - Manifiesto de procedencia: `business/FUNCTIONAL_SOURCE.json`.
 
 Este documento lista lo que el producto todavía no hace como dice la baseline, y lo que el producto hace sin que la baseline lo defina. **No son fallas de la sincronización documental**: la copia de `business/` es idéntica a la fuente. Son trabajo de implementación o decisiones pendientes.
 
-DC02 no modificó servicios, dominio, endpoints ni frontend. El código evaluado es el de `mvp-v2` en `f270a84`, salvo las decisiones de la sección G, revisadas en la rama `feat/iteracion-1-alineacion-v14` (iteración 1, 11/11/2026), las de la sección H, revisadas en `feat/macro-v14` (macroiteración, 12/11/2026), las de la sección I, revisadas en `feat/macro-integral` (macroiteración integral, 13/11/2026), y DEC-UX-01 a 12, revisadas en `feat/ux-recepcion` (iteración de UX de Recepción, 16/11/2026).
+DC02 no modificó servicios, dominio, endpoints ni frontend. El código evaluado es el de `mvp-v2` en `f270a84`, salvo las decisiones de la sección G, revisadas en la rama `feat/iteracion-1-alineacion-v14` (iteración 1, 11/11/2026), las de la sección H, revisadas en `feat/macro-v14` (macroiteración, 12/11/2026), las de la sección I, revisadas en `feat/macro-integral` (macroiteración integral, 13/11/2026), y DEC-UX-01 a 14, revisadas en `feat/ux-recepcion` (iteración de UX de Recepción, 16/11/2026; DEC-UX-08, 13 y 14 implementadas, con ABI-44 y ABI-45 cerrados).
 
 Fuente de los estados de implementación: `business/decisions/decision-log-v1.4.yaml` (`implementation`). Las rutas de evidencia son relativas a `app/backend/app`, salvo que digan otra cosa.
 
@@ -27,14 +27,13 @@ Las tres que figuraban (DC06, DC07 y DC11) se alinearon en la iteración 1: ver 
 | DEC-UX-01 | Los modelos del catálogo técnico vienen de Ventas; se completan con una exportación nueva, sin inventar ni duplicar | El catálogo técnico es la copia de la exportación de Ventas del 21/10/2026 (36 modelos, sin la línea iPhone 18); el modelo que falta se carga a mano. Sin cambios de código | ABI-43 |
 | DC02 | `rt-rma-mvp/business` es una copia generada y verificada | **Implementada por esta sincronización.** El registro de `rt-rma-app` todavía dice NO_IMPLEMENTADO porque se evaluó antes; corresponde actualizarlo en la fuente | - |
 
-## C. Decisiones implementadas en parte (5)
+## C. Decisiones implementadas en parte (4)
 
 | Decisión | Qué dice la baseline | Qué hay en el producto | Qué falta | Pendientes |
 |---|---|---|---|---|
 | DC18 | Cuatro situaciones de custodia con eventos y responsables | `domain/models/enums.py:303-327`: seis valores calculados | Unificar el modelo y registrar cada evento con responsable | - |
 | DC12 | Checklist configurable por tipo de equipo, opcional, con advertencia por información faltante | Preguntas configurables con vigencia y orden, auditadas; checklist opcional con copia del tipo y de las preguntas y versiones con motivo; advertencia que nunca bloquea (`c8cd64f`, `ef79e45`) | **Dependencia pendiente (ABI-42):** sin tipos de equipo (ver DEC-MI-16) el checklist no se ofrece ni se pide | - |
 | DEC-MI-16 | El Tipo de Equipo viene del catálogo de Ventas de Gestión RT; RMA configura solo las preguntas; la Orden conserva el tipo elegido | Tipos copiados del catálogo de Ventas con el origen de solo lectura existente, sin alta ni edición en RMA; identificador de Ventas y descripción en la Orden; la copia no cambia si el origen falla (`ef79e45`) | **Dependencia pendiente (ABI-42):** qué dato del catálogo de Ventas es el Tipo de Equipo. La tabla que RMA lee no tiene esa entidad y ninguna columna equivale sin ambigüedad; `RMA_TIPO_EQUIPO_CAMPO` queda sin definir | - |
-| DEC-UX-08 | Recargo porcentual por medio de pago, copiado en cada pago y cobrado aparte del saldo | `medio_pago.recargo_porcentaje` (Transferencia 2 %) configurable con auditoría; el pago guarda porcentaje e importe; vista previa al cobrar (`b39daea`, `864c599`) | Si el recargo se devuelve en una devolución de dinero y si figura en los comprobantes: las devoluciones siguen sobre importes y los comprobantes no lo muestran | ABI-44, ABI-45 |
 | GLO-01 | Estación = Mesa de trabajo, con «Mesa de trabajo» como nombre visible | Una sola entidad; la interfaz dice «Estación de trabajo» | Texto visible | - |
 
 ## D. Diferencias de recorrido entre el grafo V1.4 y lo que registra el backend

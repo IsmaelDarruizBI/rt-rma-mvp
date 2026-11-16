@@ -4,11 +4,11 @@
 
 | Ítem | Valor |
 |---|---|
-| Fuente | `rt-rma-app`, rama `spec/ux-recepcion` (decisiones DEC-UX-01 a 12 sobre `spec/macro-integral`: DEC-MI-01 a 16, V1.4 con DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`) |
-| Commit de origen | `a6ce9976f7029d51734a2108915235a413ea4f47` |
+| Fuente | `rt-rma-app`, rama `spec/ux-recepcion`, publicada (decisiones DEC-UX-01 a 14 sobre `spec/macro-integral`: DEC-MI-01 a 16, V1.4 con DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`) |
+| Commit de origen | `ebd084071ed8b59e7b50e4db12c83a1f60d88b62` |
 | Contenido funcional aprobado | `b6cc3a5` (DC01, 24/10/2026) |
 | Manifiesto | `business/FUNCTIONAL_SOURCE.json`: repositorio, commit, etiqueta y SHA-256 de cada archivo |
-| Sincronizado | 16/11/2026 (DEC-UX-01 a 12: iteración de UX de Recepción, rama local sin publicar); antes, 15/11/2026 (DEC-MI-16: tipo de equipo desde el catálogo de Ventas, ABI-42); antes, 13/11/2026 (macroiteración integral: DEC-MI-01 a 15); antes, 12/11/2026 (macroiteración: estado de implementación); antes, 11/11/2026 (iteración 1: DEC-IT1-01 a 05), 10/11/2026 (DC31, `ab928b6`) y 24/10/2026, rama `sync/functional-v1.4` |
+| Sincronizado | 16/11/2026 (DEC-UX-01 a 14: iteración de UX de Recepción, con ABI-44 y ABI-45 cerrados por DEC-UX-14 y 13); antes, 15/11/2026 (DEC-MI-16: tipo de equipo desde el catálogo de Ventas, ABI-42); antes, 13/11/2026 (macroiteración integral: DEC-MI-01 a 15); antes, 12/11/2026 (macroiteración: estado de implementación); antes, 11/11/2026 (iteración 1: DEC-IT1-01 a 05), 10/11/2026 (DC31, `ab928b6`) y 24/10/2026, rama `sync/functional-v1.4` |
 
 ## Qué contiene `business/`
 

@@ -5069,7 +5069,10 @@ scenarios:
       (PROC-REP-270, independiente del dinero, BR-REP-033) y la Orden finaliza
       tras la verificacion previa al fin (PROC-REP-268, sin saldo a favor
       pendiente). Recorrido completo de la Orden hasta su cierre, no solo la
-      regla.
+      regla. DEC-UX-14: si el anticipo se hubiera pagado con un medio con
+      recargo, la devolucion total reintegraria tambien todo ese recargo
+      (por ejemplo, $5.000 por transferencia al 2 %: $5.100); el Saldo se
+      calcula sobre los importes.
 
     trigger:
       node: PROC-REP-068
@@ -5259,7 +5262,12 @@ scenarios:
       devolucion de $4.000 deja Saldo = 0 y PROC-REP-265 aprueba; siguen el
       comprobante final, la devolucion fisica y el fin (280 -> 270 -> 268 ->
       fin). Quedan registradas las dos devoluciones y los pagos originales
-      intactos.
+      intactos. DEC-UX-13 y DEC-UX-14: si los anticipos se pagan con medios
+      distintos, el recargo de cada uno se reparte entre los Detalles en
+      proporcion a sus importes y el comprobante final presenta cada
+      trabajo con su importe final, sin linea de recargo; cada devolucion
+      parcial reintegra la parte proporcional del recargo de su pago. El
+      Saldo sigue sobre los importes.
 
     trigger:
       node: PROC-REP-265

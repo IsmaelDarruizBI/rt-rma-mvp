@@ -1064,14 +1064,19 @@ decisions:
     notes: >
       Aprobada el 16/11/2026 (UX-03). Recepcion carga un solo texto con lo que
       declara el cliente, el problema, el estado estetico y otras
-      observaciones; se registra como falla declarada, estado fisico y
-      observacion visible, de modo que las exigencias del comprobante y de la
-      recepcion no cambian. Las notas internas siguen aparte. Las Ordenes
-      anteriores conservan sus datos y su significado: se muestran por
-      separado, con sus nombres. No se agregan ni se borran datos.
+      observaciones. Revisada el 16/11/2026 para no presentar la declaracion
+      del cliente como una constatacion de Recepcion: el texto se registra
+      como observacion visible con una marca explicita de formato unificado y
+      como falla declarada (el problema que trae el cliente), y NO se copia al
+      estado fisico. Con esa marca, el texto cumple el requisito de describir
+      como se recibio el equipo (comprobante de ingreso y confirmacion de la
+      recepcion); sin ella, el requisito sigue siendo el estado fisico. Las
+      notas internas siguen aparte. Lo registrado antes conserva sus datos y
+      su significado: se muestra por separado, con sus nombres. No se borra
+      ningun dato.
     implementation:
       status: IMPLEMENTADO
-      evidence: "rt-rma-mvp feat/ux-recepcion d0f7868 (el comprobante muestra el texto unico una vez y las Ordenes anteriores sus datos separados) y 864c599 (alta y correccion con el texto unico)"
+      evidence: "rt-rma-mvp feat/ux-recepcion d0f7868 y 864c599 (texto unico en el alta, la Orden y el comprobante); 3c96320 y 0a4c5ad (marca observaciones_unificadas en la recepcion y en las copias de los documentos, sin copia al estado fisico; migracion 20261116000200)"
 
   - id: DEC-UX-04
     block: UX
@@ -1085,11 +1090,13 @@ decisions:
       opcional entre los Tipos de Reparacion activos; se agrega con el mismo
       comando que en la Orden, con su evaluacion tecnica, autorizacion,
       reserva, auditoria y estados. Sin trabajo la Orden se crea igual
-      (BR-REP-026). Si el trabajo no puede agregarse, la Orden queda creada y
-      se informa el motivo. Otros (BR-REP-047) se carga en la Orden.
+      (BR-REP-026). Otros (BR-REP-047) se carga en la Orden. Revisada el
+      16/11/2026: el alta y el trabajo inicial son una sola operacion; si el
+      trabajo no puede agregarse no se crea nada (ni Orden ni trabajo), lo
+      cargado se conserva en la pantalla y el reintento no duplica.
     implementation:
       status: IMPLEMENTADO
-      evidence: "rt-rma-mvp feat/ux-recepcion 864c599 (alta con trabajo inicial; probado en navegador contra PostgreSQL local)"
+      evidence: "rt-rma-mvp feat/ux-recepcion 864c599 (alta con trabajo inicial) y 3c96320 (crear_orden y crear_orden_rt agregan el trabajo con definir_reparacion_detail dentro de la misma transaccion; el reintento usa la clave de idempotencia del alta)"
 
   - id: DEC-UX-05
     block: UX
@@ -1158,12 +1165,12 @@ decisions:
       saldo de la Orden, como hasta ahora; el recargo se cobra aparte. Cambiar
       el porcentaje no recalcula pagos registrados; los anteriores quedan sin
       recargo. Pagos parciales, varios medios, ajustes, saldo a favor y
-      devoluciones siguen operando sobre los importes imputados.
+      devoluciones siguen operando sobre los importes imputados. Completada el
+      16/11/2026 por DEC-UX-13 (presentacion en los comprobantes, ABI-45) y
+      DEC-UX-14 (devoluciones, ABI-44).
     implementation:
-      status: PARCIAL
-      evidence: "rt-rma-mvp feat/ux-recepcion b39daea (medio_pago.recargo_porcentaje, copia en el pago, auditoria MEDIO_PAGO, migracion 20261116000100) y 864c599 (vista previa al cobrar, recargo en los movimientos, configuracion por Administracion)"
-      gap: "sin decidir si el recargo se devuelve en una devolucion de dinero (ABI-44) ni si figura en los comprobantes (ABI-45): las devoluciones siguen sobre importes y los comprobantes no lo muestran."
-    open: [ABI-44, ABI-45]
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ux-recepcion b39daea (medio_pago.recargo_porcentaje, copia en el pago, auditoria MEDIO_PAGO, migracion 20261116000100), 864c599 (vista previa al cobrar, configuracion por Administracion) y 3c96320 (DEC-UX-13 y 14)"
 
   - id: DEC-UX-09
     block: UX
@@ -1227,6 +1234,72 @@ decisions:
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/ux-recepcion 864c599 (subtituloOrden)"
+
+  - id: DEC-UX-13
+    block: UX
+    title: El recargo por medio de pago se incorpora al importe final de cada Detalle, sin linea aparte en el comprobante
+    status: CONFIRMADA
+    rules: [BR-REP-017, BR-REP-038, BR-REP-016]
+    nodes: [PROC-REP-265, PROC-REP-280]
+    features: [FEAT-REP-007, FEAT-REP-008]
+    scenarios: [VAR-REP-031]
+    notes: >
+      Aprobada el 16/11/2026; resuelve ABI-45. (1) Cada medio de pago tiene un
+      recargo porcentual que configura Administracion (inicial: Transferencia
+      2 %). (2) El precio base de cada Detalle sigue registrado y el
+      catalogo no cambia. (3) El recargo se calcula sobre el importe
+      efectivamente pagado con ese medio. (4) Se reparte entre los Detalles
+      en proporcion a sus importes elegibles: los no cancelados, con su
+      precio menos su propio Ajuste Comercial (el de la Orden no se
+      prorratea, DEC-MI-03); nunca a un unico trabajo ni a importes no
+      cobrados. (5) El comprobante de cobro presenta cada trabajo con su
+      importe final (precio mas su parte del recargo), el total y el total
+      cobrado, con el medio de cada pago, sin una linea de recargo. (6) Se
+      conservan, como copia, el porcentaje, el importe y el reparto de cada
+      pago; los pagos historicos no se recalculan. (7) Importes en decimal,
+      redondeo al centavo deterministico (resto mayor, en el orden de los
+      Detalles) sin alterar el total. (8) El saldo de la Orden sigue sobre
+      los importes base: el recargo se suma al total presentado y a lo
+      cobrado, asi que el saldo presentado es el mismo; no hay un segundo
+      saldo. Lo presentado reparte el recargo cobrado y no devuelto entre los
+      Detalles vigentes al emitir el comprobante. Ejemplos aprobados: A
+      $100.000 y B $50.000 pagados por transferencia: A $102.000, B $51.000,
+      total cobrado $153.000; A y B de $100.000 con $100.000 en efectivo y
+      $100.000 por transferencia: $1.000 de recargo para cada uno, $101.000
+      cada uno y $202.000 cobrados. Una sena cobrada antes de definir los
+      Detalles guarda su recargo sin reparto y se presenta repartido entre
+      los Detalles al emitir el comprobante. El comprobante de ingreso y
+      autorizacion no es de cobro: muestra los precios autorizados.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ux-recepcion 3c96320 (domain/recargos.py distribuir; Pago.recargo_distribucion; OrdenReparacion.recargo_por_detalle; comprobante de entrega con recargo por trabajo, pago y totales; pago.recargo_distribucion inmutable, migracion 20261116000200) y 0a4c5ad (presentacion de los importes finales)"
+
+  - id: DEC-UX-14
+    block: UX
+    title: Al devolver dinero se devuelve la parte proporcional del recargo cobrado en ese pago
+    status: CONFIRMADA
+    rules: [BR-REP-038, BR-REP-017]
+    nodes: [PROC-REP-267]
+    features: [FEAT-REP-007]
+    scenarios: [VAR-REP-030, VAR-REP-031]
+    notes: >
+      Aprobada el 16/11/2026; resuelve ABI-44. Cada devolucion sigue vinculada
+      a un pago (BR-REP-038) y reintegra, ademas del importe, la parte del
+      recargo de ese pago proporcional a lo devuelto, al centavo; la
+      devolucion que completa el importe del pago reintegra todo el recargo
+      que queda, de modo que nunca se devuelve mas recargo que el cobrado ni
+      quedan centavos. Se conservan el importe base y el recargo devueltos.
+      El importe es lo que se imputa al saldo a favor, como hasta ahora: el
+      saldo y sus controles (no devolver mas que el credito ni mas que lo
+      que queda del pago, sin duplicados, motivo, permisos) no cambian.
+      Ejemplos aprobados: devolucion total de $100.000 pagados por
+      transferencia al 2 %: $102.000; devolucion de $50.000 de ese pago:
+      $51.000. Como cada devolucion corresponde a un unico pago, no hay
+      devoluciones que agrupen pagos de distintos medios. Los pagos
+      historicos no cambian.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ux-recepcion 3c96320 (domain/recargos.py recargo_a_devolver; DevolucionDinero.recargo_importe; devolucion_dinero.recargo_importe con tope en devolucion_dinero_validar, migracion 20261116000200) y 0a4c5ad (vista previa del recargo y del total a reintegrar)"
 
   # ------------------------------------------------------------------ Baseline y sincronizacion
   - id: DC01
@@ -2057,7 +2130,13 @@ open_items:
   - id: ABI-44
     title: Si el recargo por medio de pago se devuelve cuando se devuelve dinero
     impact: POSTERIOR
-    decisions: [DEC-UX-08]
+    status: CERRADO
+    closed_by: DEC-UX-14
+    closed_on: "2026-11-16"
+    resolution: >
+      Se devuelve la parte proporcional del recargo cobrado en el pago desde
+      el que se devuelve (todo lo que queda al completar el pago).
+    decisions: [DEC-UX-08, DEC-UX-14]
     rules: [BR-REP-017, BR-REP-038]
     features: [FEAT-REP-007]
     needed: >
@@ -2068,7 +2147,13 @@ open_items:
   - id: ABI-45
     title: Si el recargo por medio de pago figura en los comprobantes
     impact: POSTERIOR
-    decisions: [DEC-UX-08]
+    status: CERRADO
+    closed_by: DEC-UX-13
+    closed_on: "2026-11-16"
+    resolution: >
+      Se incorpora al importe final de cada Detalle, repartido en proporcion
+      a sus importes; el comprobante no lo muestra como linea aparte.
+    decisions: [DEC-UX-08, DEC-UX-13]
     rules: [BR-REP-017, BR-REP-046]
     features: [FEAT-REP-007]
     needed: >

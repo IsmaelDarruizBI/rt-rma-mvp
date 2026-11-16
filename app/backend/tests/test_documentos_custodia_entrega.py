@@ -294,6 +294,8 @@ def test_1_datos_fisicos_de_recepcion(cliente):
         "observaciones": "El cliente pide conservar los datos.",
         "notas_internas": None,
         "checkin": None,
+        # DEC-UX-03: registrado con los datos separados (sin texto unico).
+        "observaciones_unificadas": False,
     }
     assert recepcion["registrado_por"] == RECEPCION
     assert recepcion["registrado_en"].startswith("2026-10-01T13:00")
@@ -862,6 +864,8 @@ def test_16_comprobante_final(cliente, reloj):
             "detalle_origen_id": None,
             "garantia_dias": 90,
             "garantia_vence": "2027-01-01",
+            # DEC-UX-13: pagado sin recargo (efectivo).
+            "recargo": "0",
         }
     ]
     assert contenido["cobrable"] is True

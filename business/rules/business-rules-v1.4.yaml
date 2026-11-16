@@ -678,7 +678,12 @@ rules:
       guarda la copia del porcentaje y del importe del recargo, calculado al
       centavo sobre su importe; al saldo se imputa el importe y el recargo se
       cobra aparte. Cambiar el porcentaje no recalcula pagos registrados.
-      Devolucion y comprobantes: ABI-44 y ABI-45.
+      DEC-UX-13 (16/11/2026, ABI-45): el recargo de cada pago se reparte
+      entre los Detalles elegibles en proporcion a sus importes y el
+      comprobante de cobro presenta cada trabajo con su importe final y el
+      total cobrado, sin linea de recargo; el saldo sigue sobre los importes
+      base. DEC-UX-14 (ABI-44): la devolucion reintegra tambien la parte
+      proporcional del recargo de su pago.
     status: approved
 
   - id: BR-REP-018
@@ -1657,6 +1662,12 @@ rules:
       habilita a disponer de nada. Pendientes: plazo o abandono si el cliente
       no retira el dinero cuando no hay un equipo por retirar y devoluciones
       posteriores a ENTREGADA.
+      DEC-UX-14 (16/11/2026): si el pago tuvo recargo por medio de pago, la
+      devolucion reintegra el importe y la parte del recargo de ese pago
+      proporcional a lo devuelto (todo lo que queda al completar el pago); el
+      importe es lo que se imputa al saldo a favor. Ejemplo: de $100.000
+      pagados por transferencia al 2 % se devuelven $102.000 en total o
+      $51.000 por la mitad.
     status: approved
 
   - id: BR-REP-039
@@ -1914,10 +1925,13 @@ rules:
       ya emitidos. Hasta cuando se admite la correccion sigue pendiente de
       decision.
       DEC-UX-03, DEC-UX-04 y DEC-UX-06 (16/11/2026): la recepcion carga un solo
-      texto de Observaciones del equipo, que se registra como falla declarada,
-      estado fisico y observacion visible (las notas internas siguen aparte);
-      el primer trabajo puede agregarse desde el alta con el mismo comando y
-      sus controles; el comprobante muestra el DNI del cliente (o que no se
+      texto de Observaciones del equipo, que se registra como observacion
+      visible con una marca de formato unificado y como falla declarada, sin
+      copiarse al estado fisico; con esa marca el texto cumple el requisito
+      de describir como se recibio el equipo (las notas internas siguen
+      aparte); el primer trabajo se agrega desde el alta en la misma
+      operacion, con el mismo comando y sus controles (si falla, no se crea
+      nada); el comprobante muestra el DNI del cliente (o que no se
       cargo), el identificador del equipo, las observaciones y un espacio de
       conformidad con firma, aclaracion y DNI. Imprimirlo usa el mismo PDF y no
       emite otro documento (DEC-UX-05).
