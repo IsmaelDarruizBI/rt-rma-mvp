@@ -7,7 +7,7 @@ el plazo vigente valen en los dos modos (en JSON, los valores iniciales).
 
 from decimal import Decimal
 
-from app.domain.models import Insumo, OrdenReparacion
+from app.domain.models import Insumo, MedioPago, OrdenReparacion
 from app.domain.models.lotes import ControlInsumo
 from app.domain.models.operativa import (
     PARAMETRO_PLAZO_RETIRO,
@@ -22,6 +22,7 @@ from app.services.exceptions import (
 from app.services.lotes import cambio_de_control
 from app.services.operativa import (
     cambio_de_parametro,
+    cambio_de_recargo,
     cambios_de_insumo,
     cambios_de_motivo,
     registrar_seguimiento_retiro,
@@ -112,6 +113,27 @@ def guardar_parametro(
         )
         repositorio.guardar_parametro(clave, cambio.valor_nuevo, cambio)
     return parametros(contexto)
+
+
+def guardar_recargo_medio_pago(
+    contexto: ApplicationContext,
+    *,
+    usuario_id: str,
+    medio_id: str,
+    porcentaje: Decimal,
+) -> MedioPago:
+    """UX-08: Administracion configura el recargo de un medio de pago, con
+    auditoria. Los pagos registrados no se recalculan."""
+    repositorio = _editable(contexto)
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+    with contexto.transaccion():
+        medio = contexto.catalogos.obtener_medio_pago(medio_id)
+        cambio = cambio_de_recargo(
+            medio, porcentaje, usuario=usuario, fecha=fecha
+        )
+        repositorio.guardar_recargo_medio_pago(medio.id, porcentaje, cambio)
+    return medio.model_copy(update={"recargo_porcentaje": porcentaje})
 
 
 def registrar_seguimiento(

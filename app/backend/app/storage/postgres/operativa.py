@@ -2,6 +2,7 @@
 auditoria en la misma transaccion (DEC-MI-13, 14 y 15)."""
 
 from collections.abc import Sequence
+from decimal import Decimal
 
 from app.domain.models import CambioConfiguracion, Insumo
 from app.domain.models.checklist import PreguntaChecklist, TipoEquipo
@@ -116,6 +117,14 @@ _ACTUALIZAR_INSUMO = consulta(
     modo=ESCRITURA,
 )
 
+_RECARGO_MEDIO_PAGO = consulta(
+    "operativa.recargo_medio_pago",
+    """
+    UPDATE rma.medio_pago SET recargo_porcentaje = %(porcentaje)s
+     WHERE codigo = %(codigo)s
+    """,
+    modo=ESCRITURA,
+)
 _TIPOS_EQUIPO = consulta(
     "operativa.tipos_equipo",
     "SELECT codigo, nombre, activo, campo_origen, sincronizado_en "
@@ -270,6 +279,23 @@ class PostgresConfiguracionOperativa:
                 "el identificador ya existe."
             )
         self._auditoria._auditar(ejecutor, cambios)
+
+    def guardar_recargo_medio_pago(
+        self, medio_id: str, porcentaje: Decimal, cambio: CambioConfiguracion
+    ) -> None:
+        self._exigir_transaccion()
+        ejecutor = self._unidad.ejecutor()
+        if (
+            ejecutor.ejecutar(
+                _RECARGO_MEDIO_PAGO,
+                {"codigo": medio_id, "porcentaje": porcentaje},
+            )
+            != 1
+        ):
+            raise EntidadPersistidaNoEncontradaError(
+                f"No existe el medio de pago {medio_id}"
+            )
+        self._auditoria._auditar(ejecutor, [cambio])
 
     def listar_tipos_equipo(self) -> list[TipoEquipo]:
         with self._unidad.lectura() as lector:

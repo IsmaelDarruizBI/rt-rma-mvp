@@ -31,7 +31,7 @@ son del MVP, como ACC-REP-020 y ACC-REP-049: la SoT todavia no los asigna.
 
 from collections.abc import Sequence
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from app.domain.models import (
     MEDIOS_PAGO_PREDETERMINADOS,
@@ -214,6 +214,20 @@ def _buscar_pago(orden: OrdenReparacion, pago_id: str) -> Pago:
 # --- Pagos -------------------------------------------------------------------
 
 
+def recargo_de(monto: Decimal, porcentaje: Decimal) -> Decimal:
+    """UX-08: el recargo de un cobro, redondeado al centavo (mitad hacia
+    arriba). No se imputa al saldo: se suma a lo que paga el cliente."""
+    if porcentaje <= 0:
+        return Decimal("0")
+    recargo = (monto * porcentaje / Decimal("100")).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    # Sin ceros decimales de mas, como lo devuelve PostgreSQL (200, 6.7).
+    if recargo == recargo.to_integral_value():
+        return recargo.quantize(Decimal(1))
+    return recargo.normalize()
+
+
 def descripcion_de_pago(pago: Pago) -> str:
     """Resumen legible del Pago para el historial de la Orden.
 
@@ -221,6 +235,11 @@ def descripcion_de_pago(pago: Pago) -> str:
     -o el frontend- tenga que ir a buscar el Pago por su ID.
     """
     descripcion = f"{pago.tipo_pago.value} · {pago.metodo} · ${pago.monto}"
+    if pago.recargo_importe:
+        descripcion += (
+            f" + recargo {pago.recargo_porcentaje}% ${pago.recargo_importe}"
+            f" (total ${pago.total_cobrado})"
+        )
     if pago.referencia:
         descripcion += f" · ref. {pago.referencia}"
     return descripcion
@@ -344,6 +363,8 @@ def registrar_pago(
         fecha=fecha,
         referencia=referencia,
         operacion_id=operacion_id,
+        recargo_porcentaje=medio.recargo_porcentaje,
+        recargo_importe=recargo_de(monto, medio.recargo_porcentaje),
     )
 
     nueva_orden = registrar_accion_funcional(

@@ -9,6 +9,8 @@
     PUT  /api/admin/users/{codigo}/roles      roles de un usuario
     GET  /api/admin/permissions               permisos, predeterminados y hoy
     PUT  /api/admin/permissions/{codigo}      roles de un permiso (DC08)
+    GET  /api/admin/payment-methods           medios de pago y su recargo
+    PUT  /api/admin/payment-methods/{codigo}  recargo de un medio (UX-08)
 
 Solo Administracion (con sesion real, 403 para los demas roles; el caso de
 uso lo valida igual). Las escrituras exigen PostgreSQL (DC23).
@@ -33,6 +35,7 @@ from app.application.operativa import (
     guardar_insumo,
     guardar_motivo,
     guardar_parametro,
+    guardar_recargo_medio_pago,
     listar_motivos,
     parametros,
 )
@@ -54,7 +57,7 @@ from app.domain.models.operativa import MotivoOperativo, TipoMotivo
 from app.services.configuracion import ROLES_ADMINISTRACION_CONFIGURACION
 
 from .dependencias import ContextoDep
-from .schemas import UsuarioOut
+from .schemas import MedioPagoOut, UsuarioOut
 from .seguridad import exigir_rol
 
 router = APIRouter(
@@ -264,6 +267,37 @@ def put_parametro(
 ) -> dict[str, str]:
     return guardar_parametro(
         contexto, usuario_id=cuerpo.usuario_id, clave=clave, valor=cuerpo.valor
+    )
+
+
+class RecargoMedioPagoIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+    recargo_porcentaje: Decimal = Field(ge=0, le=100)
+
+
+@router.get("/payment-methods")
+def get_medios_pago_admin(contexto: ContextoDep) -> dict:
+    """UX-08: los medios de pago con su recargo, para Administracion."""
+    return {
+        "editable": contexto.operativa.editable,
+        "medios": [
+            MedioPagoOut.desde_dominio(m).model_dump(mode="json")
+            for m in contexto.catalogos.listar_medios_pago()
+        ],
+    }
+
+
+@router.put("/payment-methods/{codigo}")
+def put_recargo_medio_pago(
+    codigo: str, cuerpo: RecargoMedioPagoIn, contexto: ContextoDep
+) -> MedioPagoOut:
+    return MedioPagoOut.desde_dominio(
+        guardar_recargo_medio_pago(
+            contexto,
+            usuario_id=cuerpo.usuario_id,
+            medio_id=codigo,
+            porcentaje=cuerpo.recargo_porcentaje,
+        )
     )
 
 

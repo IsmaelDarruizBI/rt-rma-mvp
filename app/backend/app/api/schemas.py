@@ -188,6 +188,8 @@ class MedioPagoOut(BaseModel):
     nombre: str
     activo: bool
     admite_devolucion: bool
+    # UX-08: recargo porcentual del medio (0: sin recargo).
+    recargo_porcentaje: Decimal = Decimal("0")
 
     @classmethod
     def desde_dominio(cls, medio: MedioPago) -> "MedioPagoOut":
@@ -1332,6 +1334,11 @@ class PagoOut(BaseModel):
     anulacion: AnulacionPagoOut | None = None
     devuelto: Decimal = Decimal("0")
     devolvible: Decimal = Decimal("0")
+    # UX-08: recargo del medio al cobrar (copia) y lo que pago el cliente.
+    # ``monto`` es lo imputado al saldo.
+    recargo_porcentaje: Decimal = Decimal("0")
+    recargo_importe: Decimal = Decimal("0")
+    total_cobrado: Decimal = Decimal("0")
 
 
 class DevolucionDineroOut(BaseModel):
@@ -2297,6 +2304,7 @@ class OrdenOut(BaseModel):
             pagos=[
                 PagoOut(
                     **pago.model_dump(exclude={"operacion_id"}),
+                    total_cobrado=pago.total_cobrado,
                     vigente=pago.vigente,
                     devuelto=orden.resumen_pago.devuelto_de(pago.id),
                     devolvible=devolvible_de(orden, pago),

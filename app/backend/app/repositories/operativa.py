@@ -3,6 +3,7 @@
 en PostgreSQL se administra con auditoria."""
 
 from collections.abc import Sequence
+from decimal import Decimal
 from typing import Protocol
 
 from app.domain.models import CambioConfiguracion, Insumo
@@ -43,6 +44,11 @@ class ConfiguracionOperativaRepository(Protocol):
         *,
         nuevo: bool,
         cambios: Sequence[CambioConfiguracion],
+    ) -> None: ...
+
+    # UX-08: recargo porcentual de un medio de pago, con su auditoria.
+    def guardar_recargo_medio_pago(
+        self, medio_id: str, porcentaje: Decimal, cambio: CambioConfiguracion
     ) -> None: ...
 
     # DC12: copia de los tipos de equipo del catalogo de Ventas y

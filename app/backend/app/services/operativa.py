@@ -12,11 +12,13 @@
 
 from collections.abc import Iterable
 from datetime import datetime
+from decimal import Decimal
 
 from app.domain.models import (
     CambioConfiguracion,
     EntidadConfiguracion,
     Insumo,
+    MedioPago,
     OrdenReparacion,
     Usuario,
 )
@@ -123,6 +125,40 @@ def cambio_de_parametro(
         campo="valor",
         valor_anterior=anterior,
         valor_nuevo=nuevo,
+        usuario_id=usuario.id,
+        fecha=fecha,
+    )
+
+
+def cambio_de_recargo(
+    medio: MedioPago,
+    porcentaje: Decimal,
+    *,
+    usuario: Usuario,
+    fecha: datetime,
+) -> CambioConfiguracion:
+    """UX-08: Administracion cambia el recargo porcentual de un medio de
+    pago. Solo rige para los cobros siguientes: los pagos registrados
+    conservan la copia del recargo que se les aplico."""
+    validar_alguno_de(usuario, permisos.CONFIGURACION_ADMINISTRAR)
+    if porcentaje < 0 or porcentaje > 100:
+        raise PrecondicionInvalidaError(
+            "El recargo es un porcentaje entre 0 y 100."
+        )
+    if porcentaje != porcentaje.quantize(Decimal("0.01")):
+        raise PrecondicionInvalidaError(
+            "El recargo admite hasta dos decimales."
+        )
+    if porcentaje == medio.recargo_porcentaje:
+        raise PrecondicionInvalidaError(
+            f"El medio {medio.id} ya tiene ese recargo: no hay cambios."
+        )
+    return CambioConfiguracion(
+        entidad=EntidadConfiguracion.MEDIO_PAGO,
+        clave=medio.id,
+        campo="recargo_porcentaje",
+        valor_anterior=texto(medio.recargo_porcentaje),
+        valor_nuevo=texto(porcentaje),
         usuario_id=usuario.id,
         fecha=fecha,
     )

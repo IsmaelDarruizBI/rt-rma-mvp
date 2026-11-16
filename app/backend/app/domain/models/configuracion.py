@@ -22,6 +22,7 @@ class EntidadConfiguracion(str, Enum):
     PARAMETRO = "PARAMETRO"
     CHECKLIST = "CHECKLIST"
     PROVEEDOR = "PROVEEDOR"
+    MEDIO_PAGO = "MEDIO_PAGO"
 
 
 class CambioConfiguracion(BaseModel):

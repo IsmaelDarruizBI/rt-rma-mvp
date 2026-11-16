@@ -286,11 +286,12 @@ _INSERTAR_PAGO = consulta(
     INSERT INTO rma.pago
         (codigo, orden_id, monto, tipo_pago, medio_pago_id, referencia,
          usuario_id, registrado_en, anulado_por, anulado_en,
-         anulacion_motivo, operacion_id, posicion)
+         anulacion_motivo, operacion_id, posicion, recargo_porcentaje,
+         recargo_importe)
     VALUES (%(codigo)s, %(orden)s, %(monto)s, %(tipo)s, %(medio)s,
             %(referencia)s, %(usuario)s, %(fecha)s, %(anulado_por)s,
             %(anulado_en)s, %(anulacion_motivo)s, %(operacion)s,
-            %(posicion)s)
+            %(posicion)s, %(recargo_porcentaje)s, %(recargo_importe)s)
     RETURNING id
     """,
     modo=ESCRITURA,
@@ -2022,6 +2023,12 @@ class _Guardado:
                     "fecha": pago.fecha,
                     "operacion": pago.operacion_id,
                     "posicion": posicion,
+                    "recargo_porcentaje": _escala(
+                        pago.recargo_porcentaje, _DOS_DECIMALES, "recargo"
+                    ),
+                    "recargo_importe": _escala(
+                        pago.recargo_importe, _DOS_DECIMALES, "recargo"
+                    ),
                 },
             ).id
 

@@ -185,7 +185,7 @@ _USUARIO_POR_IDENTIDAD = consulta(
 _MEDIOS = consulta(
     "catalogos.medios_pago",
     """
-    SELECT codigo, nombre, activo, admite_devolucion
+    SELECT codigo, nombre, activo, admite_devolucion, recargo_porcentaje
     FROM rma.medio_pago
     ORDER BY orden, codigo COLLATE "C"
     """,
@@ -496,6 +496,7 @@ class PostgresCatalogosRepository:
                 nombre=f.nombre,
                 activo=f.activo,
                 admite_devolucion=f.admite_devolucion,
+                recargo_porcentaje=decimal_sin_ceros(f.recargo_porcentaje),
             )
             for f in filas
         ]

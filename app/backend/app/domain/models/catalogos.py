@@ -95,6 +95,11 @@ class MedioPago(BaseModel):
     nombre: str
     activo: bool = True
     admite_devolucion: bool = True
+    # UX-08: recargo porcentual que se suma a cada cobro con este medio
+    # (Administracion lo configura). Cero: sin recargo.
+    recargo_porcentaje: Decimal = Field(
+        default=Decimal("0"), ge=0, le=100, decimal_places=2
+    )
 
 
 class TipoReparacionEstacion(BaseModel):
@@ -128,7 +133,12 @@ class DatosEmpresa(BaseModel):
 # solo conoce IDs.
 MEDIOS_PAGO_PREDETERMINADOS = (
     MedioPago(id="EFECTIVO", nombre="Efectivo"),
-    MedioPago(id="TRANSFERENCIA", nombre="Transferencia"),
+    # UX-08: configuracion inicial aprobada, recargo del 2 %.
+    MedioPago(
+        id="TRANSFERENCIA",
+        nombre="Transferencia",
+        recargo_porcentaje=Decimal("2"),
+    ),
     MedioPago(id="TARJETA_DEBITO", nombre="Tarjeta de debito"),
     MedioPago(id="TARJETA_CREDITO", nombre="Tarjeta de credito"),
     MedioPago(id="OTRO", nombre="Otro"),

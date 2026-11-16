@@ -537,7 +537,8 @@ _PAGOS = consulta(
     SELECT p.orden_id, p.id, p.codigo, p.monto, p.tipo_pago,
            m.codigo AS metodo, u.codigo AS usuario, p.registrado_en,
            p.referencia, p.operacion_id, a.codigo AS anulado_por,
-           p.anulado_en, p.anulacion_motivo
+           p.anulado_en, p.anulacion_motivo, p.recargo_porcentaje,
+           p.recargo_importe
     FROM rma.pago p
     JOIN rma.medio_pago m ON m.id = p.medio_pago_id
     JOIN rma.usuario u ON u.id = p.usuario_id
@@ -1113,6 +1114,8 @@ def _pago(fila: Any) -> Pago:
         referencia=fila.referencia,
         operacion_id=fila.operacion_id,
         anulacion=anulacion,
+        recargo_porcentaje=decimal_sin_ceros(fila.recargo_porcentaje),
+        recargo_importe=decimal_sin_ceros(fila.recargo_importe),
     )
 
 

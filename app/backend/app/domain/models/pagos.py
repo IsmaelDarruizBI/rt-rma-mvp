@@ -58,11 +58,21 @@ class Pago(BaseModel):
     referencia: str | None = None
     operacion_id: str | None = None
     anulacion: AnulacionPago | None = None
+    # UX-08: copia del recargo del medio al cobrar. ``monto`` es lo que se
+    # imputa al saldo de la Orden; el recargo se cobra aparte. Los pagos
+    # anteriores quedan en cero (no se recalculan).
+    recargo_porcentaje: Decimal = Field(default=Decimal("0"), ge=0, le=100)
+    recargo_importe: Decimal = Field(default=Decimal("0"), ge=0)
 
     @property
     def vigente(self) -> bool:
         """El Pago cuenta como cobrado: no fue anulado."""
         return self.anulacion is None
+
+    @property
+    def total_cobrado(self) -> Decimal:
+        """Lo que pago el cliente: el importe mas el recargo."""
+        return self.monto + self.recargo_importe
 
 
 class DevolucionDinero(BaseModel):
