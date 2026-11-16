@@ -8,11 +8,19 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { Detalle, Orden, TipoReparacion } from "../src/types/api.ts";
+import type {
+  ContenidoEntrega,
+  Detalle,
+  Orden,
+  TipoReparacion,
+} from "../src/types/api.ts";
 import {
   avisoDni,
   datosObservacionesUnificadas,
+  estadoFisicoRegistrado,
+  importesPresentados,
   observacionesParaMostrar,
+  recargoADevolver,
   recargoDe,
   resultadoDeTrabajo,
   resultadoTecnico,
@@ -20,15 +28,16 @@ import {
   tiposParaTrabajoInicial,
 } from "../src/features/ordenes-reparacion/recepcionUx.ts";
 
-describe("UX-03 observaciones del equipo", () => {
-  test("el texto único va a falla, estado físico y observación visible", () => {
+describe("UX-03 observaciones del equipo (marca explícita)", () => {
+  test("el texto único va a la observación visible y a la falla, nunca al estado físico", () => {
     const datos = datosObservacionesUnificadas("  No carga. Rayón.  ", " ok ");
     assert.equal(datos.falla_reportada, "No carga. Rayón.");
     assert.deepEqual(datos.recepcion, {
-      estado_fisico: "No carga. Rayón.",
+      estado_fisico: null,
       accesorios: [],
       observaciones: "No carga. Rayón.",
       notas_internas: "ok",
+      observaciones_unificadas: true,
     });
   });
 
@@ -36,23 +45,45 @@ describe("UX-03 observaciones del equipo", () => {
     assert.equal(datosObservacionesUnificadas("x", "  ").recepcion.notas_internas, null);
   });
 
-  const orden = (falla: string, estado: string | null, obs: string | null) =>
+  const orden = (
+    falla: string,
+    estado: string | null,
+    obs: string | null,
+    unificadas?: boolean,
+  ) =>
     ({
       equipo: { falla_reportada: falla },
-      recepcion: { datos: { estado_fisico: estado, observaciones: obs } },
+      recepcion: {
+        datos: {
+          estado_fisico: estado,
+          observaciones: obs,
+          observaciones_unificadas: unificadas,
+        },
+      },
     }) as unknown as Orden;
 
-  test("Orden nueva: un solo dato", () => {
-    assert.deepEqual(observacionesParaMostrar(orden("No carga.", "No carga.", "No carga.")), [
+  test("con la marca: un solo dato", () => {
+    assert.deepEqual(observacionesParaMostrar(orden("No carga.", null, "No carga.", true)), [
       { etiqueta: "Observaciones del equipo", texto: "No carga." },
     ]);
   });
 
-  test("Orden anterior: cada dato con su nombre", () => {
-    assert.deepEqual(observacionesParaMostrar(orden("No carga.", "Rayado", null)), [
+  test("sin la marca (registro anterior): cada dato con su nombre, aunque coincidan", () => {
+    assert.deepEqual(observacionesParaMostrar(orden("No carga.", "Rayado", "No carga.")), [
       { etiqueta: "Falla declarada", texto: "No carga." },
       { etiqueta: "Estado físico", texto: "Rayado" },
+      { etiqueta: "Observaciones", texto: "No carga." },
     ]);
+  });
+
+  test("el requisito de estado físico, como el backend", () => {
+    const datos = (estado: string | null, obs: string | null, marca?: boolean) =>
+      ({ estado_fisico: estado, observaciones: obs, observaciones_unificadas: marca }) as never;
+    assert.equal(estadoFisicoRegistrado(datos("Golpe", null)), true);
+    assert.equal(estadoFisicoRegistrado(datos(null, "No carga.", true)), true);
+    assert.equal(estadoFisicoRegistrado(datos(null, "No carga.")), false);
+    assert.equal(estadoFisicoRegistrado(datos(null, "  ", true)), false);
+    assert.equal(estadoFisicoRegistrado(null), false);
   });
 });
 
@@ -143,5 +174,60 @@ describe("UX-12 cabecera", () => {
       subtituloOrden({ origen: "RT_INTERNO", cliente: null } as unknown as Orden),
       "Equipo RT interno",
     );
+  });
+});
+
+describe("DEC-UX-14 recargo a devolver", () => {
+  const base = { montoPago: "100000", recargoPago: "2000" };
+  test("proporcional, y todo lo que queda al completar el pago", () => {
+    assert.equal(recargoADevolver({ ...base, devueltoAntes: "0", recargoDevueltoAntes: "0", monto: "50000" }), 1000);
+    assert.equal(recargoADevolver({ ...base, devueltoAntes: "50000", recargoDevueltoAntes: "1000", monto: "50000" }), 1000);
+    assert.equal(recargoADevolver({ ...base, devueltoAntes: "0", recargoDevueltoAntes: "0", monto: "33333.33" }), 666.67);
+    assert.equal(
+      recargoADevolver({ ...base, devueltoAntes: "33333.33", recargoDevueltoAntes: "666.67", monto: "66666.67" }),
+      1333.33,
+    );
+  });
+  test("sin recargo o sin importe, cero", () => {
+    assert.equal(recargoADevolver({ montoPago: "100", recargoPago: "0", devueltoAntes: "0", recargoDevueltoAntes: "0", monto: "50" }), 0);
+    assert.equal(recargoADevolver({ ...base, devueltoAntes: "0", recargoDevueltoAntes: "0", monto: "" }), 0);
+  });
+});
+
+describe("DEC-UX-13 importes presentados en el comprobante de cobro", () => {
+  test("cada trabajo con su recargo y los totales incorporados, sin línea aparte", () => {
+    const contenido = {
+      trabajos_realizados: [
+        { detalle_id: "DET-001", precio: "100000", recargo: "2000" },
+        { detalle_id: "DET-002", precio: "50000", recargo: "1000" },
+      ],
+      subtotal: null,
+      total: "150000",
+      pagado: "150000",
+      devuelto: "0",
+      recargo_incorporado: "3000",
+      recargo_cobrado: "3000",
+      recargo_devuelto: "0",
+    } as unknown as ContenidoEntrega;
+    assert.deepEqual(importesPresentados(contenido), {
+      trabajos: { "DET-001": 102000, "DET-002": 51000 },
+      subtotal: null,
+      total: 153000,
+      pagado: 153000,
+      devuelto: 0,
+    });
+  });
+  test("un comprobante anterior, sin recargos, queda igual", () => {
+    const contenido = {
+      trabajos_realizados: [{ detalle_id: "DET-001", precio: "70000" }],
+      subtotal: "80000",
+      total: "70000",
+      pagado: "70000",
+      devuelto: "0",
+    } as unknown as ContenidoEntrega;
+    const presentados = importesPresentados(contenido);
+    assert.equal(presentados.trabajos["DET-001"], 70000);
+    assert.equal(presentados.subtotal, 80000);
+    assert.equal(presentados.total, 70000);
   });
 });

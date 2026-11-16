@@ -117,7 +117,7 @@ import {
   claveDeAccion,
   puedeEjecutar,
 } from "./presentacion";
-import { subtituloOrden } from "./recepcionUx";
+import { subtituloOrden, usaTextoUnico } from "./recepcionUx";
 import { Pendientes } from "./Pendientes";
 import {
   CODIGOS_ESPECIALES,
@@ -614,33 +614,6 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
     await ejecutarComando(() => api.tomarOrden(ordenId, idActor, estacionId));
   };
 
-  /**
-   * UX-04: crea la Orden y, si se eligió, agrega el trabajo inicial con el
-   * mismo comando de la Orden (mismas validaciones, evaluación técnica,
-   * autorización y reserva). Si el trabajo no se puede agregar, la Orden
-   * ya creada se abre igual y se muestra por qué (se agrega desde ahí).
-   */
-  const crearConTrabajo = async (
-    crear: () => Promise<Orden>,
-    trabajoInicial: string | null,
-  ) => {
-    let falloTrabajo: unknown = null;
-    let creada: Orden | null = null;
-    const hecho = await ejecutarComando(async () => {
-      creada = await crear();
-      if (!trabajoInicial) return creada;
-      try {
-        return await api.definirReparacion(creada.id, idActor, trabajoInicial);
-      } catch (fallo) {
-        falloTrabajo = fallo;
-        return creada;
-      }
-    });
-    if (hecho && falloTrabajo) {
-      setError(errorDe(falloTrabajo, creada, null, false, nombresConocidos.current));
-    }
-  };
-
   const abiertaPara = (seccion: Informativa) =>
     actor !== null &&
     rolesDe(actor).some((rol) => ABIERTA_POR_ROL[rol] === seccion);
@@ -882,11 +855,17 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                 actor={actor}
                 ocupado={ocupado}
                 tipos={tipos}
+                // DEC-UX-04: una sola operación con el trabajo inicial; si
+                // falla no se crea nada y el formulario conserva lo cargado.
                 onCrearClienteExterno={(datos, trabajoInicial) =>
-                  void crearConTrabajo(() => api.crearOrden(datos), trabajoInicial)
+                  void ejecutarComando(() =>
+                    api.crearOrden({ ...datos, trabajo_inicial: trabajoInicial }),
+                  )
                 }
                 onCrearRtInterno={(datos, trabajoInicial) =>
-                  void crearConTrabajo(() => api.crearOrdenRt(datos), trabajoInicial)
+                  void ejecutarComando(() =>
+                    api.crearOrdenRt({ ...datos, trabajo_inicial: trabajoInicial }),
+                  )
                 }
                 onCancelar={() => navegar({ pantalla: "ordenes" })}
               />
@@ -1427,7 +1406,10 @@ function resumenCliente(orden: Orden): string {
       ? `${orden.cliente.nombre_apellido} · ${orden.cliente.telefono}`
       : `Equipo interno RT · ${orden.referencia_rt ?? "—"}`,
     `Equipo: ${etiqueta(CUSTODIA, orden.custodia.estado).toLowerCase()}`,
-    orden.recepcion?.datos.estado_fisico,
+    // DEC-UX-03: con el texto único, ese texto (no hay estado aparte).
+    usaTextoUnico(orden.recepcion?.datos)
+      ? orden.recepcion?.datos.observaciones
+      : orden.recepcion?.datos.estado_fisico,
   ]
     .filter(Boolean)
     .join(" · ");

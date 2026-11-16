@@ -47,7 +47,7 @@ import type {
   Usuario,
 } from "../../types/api";
 import { nombreEquipo } from "./catalogoEquipos";
-import { avisoDni } from "./recepcionUx";
+import { avisoDni, importesPresentados } from "./recepcionUx";
 import { imprimirPdf } from "./impresion";
 import { nombreDeUsuario } from "./DetalleOrden";
 import { CANAL, etiqueta } from "./etiquetas";
@@ -1038,14 +1038,46 @@ function Accesorios({ accesorios }: { accesorios: string[] }) {
   return <Dato etiqueta="Accesorios recibidos" valor={accesorios.join(", ")} />;
 }
 
+/**
+ * DEC-UX-03: con el texto único (marca del ingreso) se muestra una vez
+ * como «Observaciones del equipo»; en lo registrado antes, falla declarada
+ * y estado físico por separado (las observaciones van más abajo).
+ */
+function DatosDelEquipoRecibido({
+  contenido,
+}: {
+  contenido: ContenidoRecepcion | ContenidoIngreso;
+}) {
+  if (contenido.observaciones_unificadas) {
+    return (
+      <>
+        <Dato
+          etiqueta="Observaciones del equipo"
+          valor={contenido.observaciones ?? contenido.equipo.falla_reportada}
+        />
+        {contenido.estado_fisico && (
+          <Dato etiqueta="Estado físico" valor={contenido.estado_fisico} />
+        )}
+      </>
+    );
+  }
+  return (
+    <>
+      <Dato etiqueta="Falla declarada" valor={contenido.equipo.falla_reportada} />
+      <Dato etiqueta="Estado físico" valor={contenido.estado_fisico ?? "No registrado"} />
+    </>
+  );
+}
+
 function CuerpoRecepcion({ contenido }: { contenido: ContenidoRecepcion }) {
   return (
     <>
       <Titulo>Recepción</Titulo>
-      <Dato etiqueta="Falla declarada" valor={contenido.equipo.falla_reportada} />
-      <Dato etiqueta="Estado físico" valor={contenido.estado_fisico ?? "No registrado"} />
+      <DatosDelEquipoRecibido contenido={contenido} />
       <Accesorios accesorios={contenido.accesorios} />
-      <Dato etiqueta="Observaciones" valor={contenido.observaciones ?? "—"} />
+      {!contenido.observaciones_unificadas && (
+        <Dato etiqueta="Observaciones" valor={contenido.observaciones ?? "—"} />
+      )}
       {contenido.notas.length > 0 && (
         <Dato etiqueta="Observaciones posteriores" valor={contenido.notas.join(" · ")} />
       )}
@@ -1113,8 +1145,7 @@ function CuerpoIngreso({ contenido }: { contenido: ContenidoIngreso }) {
   return (
     <>
       <Titulo>Recepción del equipo</Titulo>
-      <Dato etiqueta="Falla declarada" valor={contenido.equipo.falla_reportada} />
-      <Dato etiqueta="Estado físico" valor={contenido.estado_fisico ?? "No registrado"} />
+      <DatosDelEquipoRecibido contenido={contenido} />
       <Accesorios accesorios={contenido.accesorios} />
       {/* Solo en un comprobante anterior a UAT-009: hoy el check-in es del cierre. */}
       {contenido.checkin !== null && (
@@ -1123,7 +1154,9 @@ function CuerpoIngreso({ contenido }: { contenido: ContenidoIngreso }) {
           valor={contenido.checkin ? "Realizado" : "No realizado"}
         />
       )}
-      <Dato etiqueta="Observaciones" valor={contenido.observaciones ?? "—"} />
+      {!contenido.observaciones_unificadas && (
+        <Dato etiqueta="Observaciones" valor={contenido.observaciones ?? "—"} />
+      )}
       {contenido.notas.length > 0 && (
         <Dato etiqueta="Observaciones posteriores" valor={contenido.notas.join(" · ")} />
       )}
@@ -1243,6 +1276,11 @@ function CuerpoEntrega({
   porConfirmar?: boolean;
 }) {
   const devolucion = contenido.tipo_entrega === "DEVOLUCION_SIN_REPARACION";
+  // DEC-UX-13/14: importes finales, con el recargo incorporado a cada
+  // trabajo y a los totales (sin una línea aparte). El saldo no cambia.
+  const presentados = importesPresentados(contenido);
+  const conRecargo = (monto: string, recargo?: string) =>
+    importe(String(Math.round((Number(monto) + Number(recargo ?? "0")) * 100) / 100));
   // Un comprobante anterior no trae la garantía de cada trabajo.
   const conGarantia = contenido.trabajos_realizados.some(
     (trabajo) => trabajo.garantia_dias !== undefined && trabajo.garantia_dias !== null,
@@ -1297,7 +1335,9 @@ function CuerpoEntrega({
             ...(conGarantia
               ? [porConfirmar ? GARANTIA_POR_CONFIRMAR : textoGarantia(trabajo)]
               : []),
-            ...(contenido.cobrable ? [importe(trabajo.precio ?? "0")] : []),
+            ...(contenido.cobrable
+              ? [importe(String(presentados.trabajos[trabajo.detalle_id] ?? 0))]
+              : []),
           ])}
         />
       ) : (
@@ -1324,25 +1364,30 @@ function CuerpoEntrega({
       {contenido.cobrable ? (
         <>
           <Totales
-            subtotal={contenido.subtotal}
+            subtotal={
+              presentados.subtotal === null ? null : String(presentados.subtotal)
+            }
             descuento={contenido.descuento}
-            total={contenido.total ?? "0"}
+            total={String(presentados.total ?? 0)}
             etiquetaTotal="Total final"
           />
           {contenido.pagos.map((pago) => (
             <Dato
               key={pago.id}
               etiqueta={`Pago ${pago.tipo_pago.toLowerCase()}`}
-              valor={`${importe(pago.monto)} · ${pago.medio} · ${fechaHora(pago.fecha)}${
+              valor={`${conRecargo(pago.monto, pago.recargo)} · ${pago.medio} · ${fechaHora(pago.fecha)}${
                 pago.referencia ? ` · ref. ${pago.referencia}` : ""
               }`}
             />
           ))}
+          {presentados.pagado !== null && contenido.pagos.length > 0 && (
+            <Dato etiqueta="Total cobrado" valor={importe(String(presentados.pagado))} />
+          )}
           {contenido.devoluciones_dinero.map((devolucionDinero) => (
             <Dato
               key={devolucionDinero.id}
               etiqueta="Dinero devuelto"
-              valor={`${importe(devolucionDinero.monto)} · ${devolucionDinero.medio} · ${fechaHora(devolucionDinero.fecha)} · ${devolucionDinero.motivo}`}
+              valor={`${conRecargo(devolucionDinero.monto, devolucionDinero.recargo)} · ${devolucionDinero.medio} · ${fechaHora(devolucionDinero.fecha)} · ${devolucionDinero.motivo}`}
             />
           ))}
           <Dato

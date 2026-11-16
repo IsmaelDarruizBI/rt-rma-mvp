@@ -7,6 +7,8 @@
 
 import type {
   Cliente,
+  ContenidoEntrega,
+  DatosRecepcion,
   Detalle,
   Orden,
   TipoReparacion,
@@ -16,11 +18,13 @@ import { normalizarDni } from "./clientes.ts";
 // --- UX-03: observaciones del equipo -----------------------------------
 
 /**
- * El texto único «Observaciones del equipo» (lo que declara el cliente, el
- * problema, el estado estético y otras observaciones) se registra en los
- * tres datos que ya existen: falla declarada, estado físico y observación
- * visible. Así siguen valiendo las exigencias del comprobante y de la
- * recepción. Las notas internas van aparte y nunca salen en documentos.
+ * DEC-UX-03: el texto único «Observaciones del equipo» (lo que declara el
+ * cliente, el problema, el estado estético y otras observaciones) se
+ * registra como observación visible, con la marca `observaciones_unificadas`,
+ * y como falla declarada (el problema que trae el cliente). NO se copia al
+ * estado físico: no es una constatación aparte de Recepción. Con la marca,
+ * el backend acepta ese texto como descripción del estado del equipo. Las
+ * notas internas van aparte y nunca salen en documentos.
  */
 export function datosObservacionesUnificadas(
   observaciones: string,
@@ -28,28 +32,36 @@ export function datosObservacionesUnificadas(
 ): {
   falla_reportada: string;
   recepcion: {
-    estado_fisico: string | null;
+    estado_fisico: null;
     accesorios: string[];
     observaciones: string | null;
     notas_internas: string | null;
+    observaciones_unificadas: true;
   };
 } {
   const texto = observaciones.trim();
   return {
     falla_reportada: texto,
     recepcion: {
-      estado_fisico: texto || null,
+      estado_fisico: null,
       accesorios: [],
       observaciones: texto || null,
       notas_internas: notasInternas.trim() || null,
+      observaciones_unificadas: true,
     },
   };
 }
 
+/** El ingreso se registró con el texto único (marca explícita). */
+export function usaTextoUnico(
+  datos: Pick<DatosRecepcion, "observaciones_unificadas"> | null | undefined,
+): boolean {
+  return datos?.observaciones_unificadas === true;
+}
+
 /**
- * Lo que se muestra de la recepción de una Orden. Si falla declarada y
- * observaciones son el mismo texto (Órdenes nuevas), uno solo; en las
- * anteriores, cada dato con su nombre.
+ * Lo que se muestra de la recepción de una Orden: con la marca, el texto
+ * único una vez; en lo registrado antes, cada dato con su nombre.
  */
 export function observacionesParaMostrar(
   orden: Pick<Orden, "equipo" | "recepcion">,
@@ -58,18 +70,26 @@ export function observacionesParaMostrar(
   const datos = orden.recepcion?.datos;
   const observaciones = (datos?.observaciones ?? "").trim();
   const estado = (datos?.estado_fisico ?? "").trim();
-  if (falla && observaciones === falla) {
-    const lista = [{ etiqueta: "Observaciones del equipo", texto: falla }];
-    if (estado && estado !== falla) {
-      lista.push({ etiqueta: "Estado físico", texto: estado });
-    }
-    return lista;
+  if (usaTextoUnico(datos)) {
+    return [
+      { etiqueta: "Observaciones del equipo", texto: observaciones || falla },
+      { etiqueta: "Estado físico", texto: estado },
+    ].filter((dato) => dato.texto !== "");
   }
   return [
     { etiqueta: "Falla declarada", texto: falla },
     { etiqueta: "Estado físico", texto: estado },
     { etiqueta: "Observaciones", texto: observaciones },
   ].filter((dato) => dato.texto !== "");
+}
+
+/** El ingreso ya describe cómo se recibió el equipo (como el backend). */
+export function estadoFisicoRegistrado(
+  datos: DatosRecepcion | null | undefined,
+): boolean {
+  if (!datos) return false;
+  if ((datos.estado_fisico ?? "").trim()) return true;
+  return usaTextoUnico(datos) && (datos.observaciones ?? "").trim() !== "";
 }
 
 // --- UX-04: trabajo inicial ---------------------------------------------
@@ -129,6 +149,66 @@ export function recargoDe(
   return {
     recargo: recargoCentavos / 100,
     total: (centavos + recargoCentavos) / 100,
+  };
+}
+
+/**
+ * DEC-UX-14: la parte del recargo de un pago que se devuelve con `monto`
+ * (como el backend): proporcional al centavo, mitad hacia arriba; si con
+ * esta devolución se completa el pago, todo el recargo que queda.
+ */
+export function recargoADevolver(datos: {
+  montoPago: string;
+  recargoPago: string;
+  devueltoAntes: string;
+  recargoDevueltoAntes: string;
+  monto: string;
+}): number {
+  const c = (valor: string) => Math.round(Number(valor || "0") * 100);
+  const montoPago = c(datos.montoPago);
+  const recargoPago = c(datos.recargoPago);
+  const queda = recargoPago - c(datos.recargoDevueltoAntes);
+  const monto = c(datos.monto);
+  if (queda <= 0 || recargoPago <= 0 || montoPago <= 0 || monto <= 0) return 0;
+  if (c(datos.devueltoAntes) + monto >= montoPago) return queda / 100;
+  const proporcional = Math.floor((monto * recargoPago * 2 + montoPago) / (2 * montoPago));
+  return Math.min(proporcional, queda) / 100;
+}
+
+/**
+ * DEC-UX-13/14: los importes que el comprobante de cobro presenta al
+ * cliente: cada trabajo con su parte del recargo y los totales con el
+ * recargo incorporado, sin una línea aparte. El saldo no cambia. En un
+ * comprobante anterior (sin recargos) son los importes de siempre.
+ */
+export function importesPresentados(contenido: ContenidoEntrega): {
+  trabajos: Record<string, number>;
+  subtotal: number | null;
+  total: number | null;
+  pagado: number | null;
+  devuelto: number | null;
+} {
+  const n = (valor: string | null | undefined) => Number(valor ?? "0");
+  const suma = (a: number, b: number) => Math.round((a + b) * 100) / 100;
+  const incorporado = n(contenido.recargo_incorporado);
+  return {
+    trabajos: Object.fromEntries(
+      contenido.trabajos_realizados.map((t) => [
+        t.detalle_id,
+        suma(n(t.precio), n(t.recargo)),
+      ]),
+    ),
+    subtotal:
+      contenido.subtotal == null ? null : suma(n(contenido.subtotal), incorporado),
+    total: contenido.total == null ? null : suma(n(contenido.total), incorporado),
+    pagado:
+      contenido.pagado == null
+        ? null
+        : suma(n(contenido.pagado), n(contenido.recargo_cobrado)),
+    devuelto:
+      contenido.devuelto == null
+        ? null
+        : suma(n(contenido.devuelto), n(contenido.recargo_devuelto)),
   };
 }
 

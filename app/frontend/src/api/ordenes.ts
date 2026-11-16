@@ -102,6 +102,11 @@ export interface DatosNuevaOrden {
   equipo: DatosEquipo;
   /** Condiciones del ingreso; la recepción física se confirma aparte. */
   recepcion?: DatosRecepcion;
+  /**
+   * DEC-UX-04: Tipo del primer trabajo; se agrega en la misma operación
+   * (si falla, no se crea nada).
+   */
+  trabajo_inicial?: string | null;
 }
 
 /** PROC-REP-010 -> 030 -> 040 (Recepción). */
@@ -114,6 +119,8 @@ export interface DatosNuevaOrdenRt {
   equipo: DatosEquipo;
   referencia_rt: string;
   recepcion?: DatosRecepcion;
+  /** DEC-UX-04: como en `DatosNuevaOrden`. */
+  trabajo_inicial?: string | null;
 }
 
 /** PROC-REP-010 -> 020 -> 040 (Recepción, HP-REP-002). Sin Cliente. */

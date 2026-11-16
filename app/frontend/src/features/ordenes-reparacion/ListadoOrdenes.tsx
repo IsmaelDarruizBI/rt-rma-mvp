@@ -711,11 +711,12 @@ function CamposIngreso({
         }}
       >
         {clienteExterno
-          ? "El trabajo inicial se agrega al crearla, con las mismas " +
-            "validaciones que en la Orden; ahí se cargan los demás y «Otros». " +
+          ? "El trabajo inicial se agrega junto con la Orden, con las mismas " +
+            "validaciones que en ella (si no se puede, no se crea nada); en la " +
+            "Orden se cargan los demás y «Otros». " +
             "Después se genera el comprobante de ingreso y autorización, que " +
             "confirma la recepción del equipo."
-          : "El trabajo inicial se agrega al crearla. La recepción física " +
+          : "El trabajo inicial se agrega junto con la Orden. La recepción física " +
             "del equipo se confirma después, en la Orden."}
       </p>
     </>

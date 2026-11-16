@@ -33,7 +33,7 @@ import type {
 import { nombreDeUsuario } from "./DetalleOrden";
 import { ESTADO_PAGO, etiqueta } from "./etiquetas";
 import { TituloAccion, UbicacionAccion } from "./presentacion";
-import { recargoDe } from "./recepcionUx";
+import { recargoADevolver, recargoDe } from "./recepcionUx";
 import { tieneAlguno } from "../../lib/roles";
 
 interface Props {
@@ -621,7 +621,14 @@ function ListaMovimientos({
       medio: nombreDeMedio(medios, devolucion.medio),
       importe: `−${importe(devolucion.monto)}`,
       usuario: nombreDeUsuario(usuarios, devolucion.usuario_id),
-      detalle: [devolucion.motivo, devolucion.referencia]
+      // DEC-UX-14: el recargo reintegrado junto con el importe.
+      detalle: [
+        Number(devolucion.recargo_importe ?? 0) > 0
+          ? `Recargo devuelto ${importe(devolucion.recargo_importe ?? "0")} · total reintegrado ${importe(devolucion.total_reintegrado ?? devolucion.monto)}`
+          : "",
+        devolucion.motivo,
+        devolucion.referencia,
+      ]
         .filter(Boolean)
         .join(" · "),
       color: colores.error,
@@ -897,6 +904,20 @@ function FormularioDevolucionDinero({
     () => setConfirmando(false),
     [pagoId, monto, medio, motivo, referencia],
   );
+  // DEC-UX-14: con el importe se reintegra la parte proporcional del
+  // recargo cobrado en ese pago (como lo calcula el backend).
+  const recargo = pago
+    ? recargoADevolver({
+        montoPago: pago.monto,
+        recargoPago: pago.recargo_importe ?? "0",
+        devueltoAntes: pago.devuelto,
+        recargoDevueltoAntes: pago.recargo_devuelto ?? "0",
+        monto: monto.trim(),
+      })
+    : 0;
+  const totalReintegro = String(
+    Math.round((Number(monto || "0") + recargo) * 100) / 100,
+  );
 
   return (
     <Seccion titulo={accion.etiqueta} accion={accion} actor={actor}>
@@ -929,6 +950,24 @@ function FormularioDevolucionDinero({
           style={estiloInput}
         />
       </Campo>
+      {recargo > 0 && (
+        <div
+          role="status"
+          style={{
+            margin: "0 0 0.6rem",
+            padding: "0.5rem 0.7rem",
+            border: `1px solid ${colores.borde}`,
+            borderRadius: 6,
+            fontSize: "0.85rem",
+          }}
+        >
+          <div>Importe (se imputa al saldo): {importe(monto)}</div>
+          <div>Recargo cobrado que se devuelve: {importe(String(recargo))}</div>
+          <div>
+            <strong>Total a reintegrar: {importe(totalReintegro)}</strong>
+          </div>
+        </div>
+      )}
       <Campo etiqueta="Medio de devolución">
         <SelectorMedio
           medios={medios}
@@ -965,7 +1004,7 @@ function FormularioDevolucionDinero({
         </Boton>
       ) : (
         <Confirmacion
-          texto={`¿Confirmás que se devolvieron ${importe(monto)} al cliente desde ${pagoId}?`}
+          texto={`¿Confirmás que se devolvieron ${importe(totalReintegro)} al cliente desde ${pagoId}?`}
           ocupado={ocupado}
           onVolver={() => setConfirmando(false)}
           onConfirmar={() =>

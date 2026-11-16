@@ -34,7 +34,11 @@ import { Confirmacion, Seccion, habilitada } from "./PagosOrden";
 import { UbicacionAccion } from "./presentacion";
 import { datosDelEquipo, equipoElegidoDe } from "./modelosEquipo";
 import { SelectorEquipo, useModelosEquipo } from "./SelectorEquipo";
-import { observacionesParaMostrar } from "./recepcionUx";
+import {
+  estadoFisicoRegistrado,
+  observacionesParaMostrar,
+  usaTextoUnico,
+} from "./recepcionUx";
 
 interface Props {
   orden: Orden;
@@ -203,14 +207,14 @@ export function CustodiaOrden(props: Props) {
       <Fila etiqueta="Identificador del equipo" valor={equipo.id} />
       <Fila etiqueta="IMEI" valor={equipo.imei ?? "—"} />
       <Fila etiqueta="N.º de serie" valor={equipo.numero_serie ?? "—"} />
-      {/* UX-03: con el texto único se muestra una vez; en las Órdenes
-          anteriores, falla, estado físico y observaciones por separado. */}
+      {/* DEC-UX-03: con el texto único se muestra una vez; en lo
+          registrado antes, falla, estado físico y observaciones por separado. */}
       {observacionesParaMostrar(orden).map((dato) => (
         <Fila key={dato.etiqueta} etiqueta={dato.etiqueta} valor={dato.texto} />
       ))}
       {recepcion ? (
         <>
-          {!recepcion.datos.estado_fisico && (
+          {!estadoFisicoRegistrado(recepcion.datos) && (
             <Fila etiqueta="Estado físico" valor="No registrado" />
           )}
           {/* Solo si se registraron: ya no se piden al ingresar. */}
@@ -394,7 +398,7 @@ function FormularioConfirmacion({
   const [observaciones, setObservaciones] = useState("");
   const [confirmando, setConfirmando] = useState(false);
   const regularizacion = orden.recepcion?.registro === "REGULARIZACION";
-  const sinEstado = !orden.recepcion?.datos.estado_fisico;
+  const sinEstado = !estadoFisicoRegistrado(orden.recepcion?.datos);
   const deshabilitado = !habilitada(accion, actor) || ocupado || sinEstado;
   const faltaMotivo = regularizacion && !observaciones.trim();
 
@@ -463,15 +467,10 @@ function FormularioDatosIngreso({
     recepcion?.datos.notas_internas ?? "",
   );
   const [motivo, setMotivo] = useState("");
-  // UX-03: si la Orden usa el texto único, se corrige en un solo campo
-  // (que vuelve a ir a los tres datos); si no, cada uno por separado.
+  // DEC-UX-03: si el ingreso usa el texto único (o se regulariza uno sin
+  // datos), se corrige en un solo campo; si no, cada dato por separado.
   const [unificado] = useState(
-    () =>
-      recepcion === null ||
-      (observacionesParaMostrar(orden)[0]?.etiqueta ===
-        "Observaciones del equipo" &&
-        (recepcion.datos.estado_fisico ?? "").trim() ===
-          equipo.falla_reportada.trim()),
+    () => recepcion === null || usaTextoUnico(recepcion.datos),
   );
   const deshabilitado = !habilitada(accion, actor) || ocupado;
   const datosEquipo = datosDelEquipo(catalogo.modelos.length > 0, elegido);
@@ -535,10 +534,10 @@ function FormularioDatosIngreso({
       {unificado ? (
         campo(
           "Observaciones del equipo (salen en el comprobante)",
-          falla,
+          observaciones || falla,
           (valor) => {
+            // Falla declarada y observación visible; sin estado aparte.
             setFalla(valor);
-            setEstado(valor);
             setObservaciones(valor);
           },
         )
@@ -571,11 +570,12 @@ function FormularioDatosIngreso({
             datosEquipo &&
             onRegistrar(
               {
-                estado_fisico: estado.trim() || null,
+                estado_fisico: unificado ? null : estado.trim() || null,
                 // Ya no se editan: se conservan los registrados.
                 accesorios: recepcion?.datos.accesorios ?? [],
                 observaciones: observaciones.trim() || null,
                 notas_internas: notasInternas.trim() || null,
+                observaciones_unificadas: unificado,
               },
               {
                 ...datosEquipo,

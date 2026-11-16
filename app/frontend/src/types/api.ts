@@ -207,6 +207,11 @@ export interface DatosRecepcion {
   accesorios: string[];
   /** Observaciones visibles del equipo: salen en el comprobante. */
   observaciones: string | null;
+  /**
+   * DEC-UX-03: `observaciones` es el texto único «Observaciones del
+   * equipo»; no se copia al estado físico. `false` en lo registrado antes.
+   */
+  observaciones_unificadas?: boolean;
   /** Solo para el personal: nunca salen en un documento. */
   notas_internas?: string | null;
   /**
@@ -342,6 +347,8 @@ export interface ContenidoRecepcion extends ContenidoBase {
   estado_fisico: string | null;
   accesorios: string[];
   observaciones: string | null;
+  /** DEC-UX-03 (ausente en los documentos anteriores). */
+  observaciones_unificadas?: boolean;
   notas: string[];
   registrado_por: UsuarioEnDocumento | null;
   registrado_en: string | null;
@@ -367,6 +374,8 @@ export interface ContenidoEntrega extends ContenidoBase {
   trabajos_realizados: (TrabajoEnDocumento & {
     garantia_dias?: number | null;
     garantia_vence?: string | null;
+    /** DEC-UX-13: recargo incorporado; se presenta `precio + recargo`. */
+    recargo?: string;
   })[];
   trabajos_cancelados: (TrabajoEnDocumento & {
     motivo: string | null;
@@ -379,6 +388,14 @@ export interface ContenidoEntrega extends ContenidoBase {
   pagado: string | null;
   devuelto: string | null;
   saldo: string | null;
+  /**
+   * DEC-UX-13/14 (ausentes en los documentos anteriores): los importes de
+   * arriba no los incluyen; se presentan incorporados (total + incorporado,
+   * pagado + cobrado, devuelto + devuelto). El saldo no cambia.
+   */
+  recargo_incorporado?: string;
+  recargo_cobrado?: string;
+  recargo_devuelto?: string;
   pagos: {
     id: string;
     fecha: string;
@@ -386,6 +403,7 @@ export interface ContenidoEntrega extends ContenidoBase {
     medio: string;
     monto: string;
     referencia: string | null;
+    recargo?: string;
   }[];
   devoluciones_dinero: {
     id: string;
@@ -394,6 +412,7 @@ export interface ContenidoEntrega extends ContenidoBase {
     medio: string;
     monto: string;
     motivo: string;
+    recargo?: string;
   }[];
 }
 
@@ -449,6 +468,8 @@ export interface ContenidoIngreso extends ContenidoBase {
   estado_fisico: string | null;
   accesorios: string[];
   observaciones: string | null;
+  /** DEC-UX-03 (ausente en los documentos anteriores). */
+  observaciones_unificadas?: boolean;
   notas: string[];
   checkin: boolean | null;
   registrado_por: UsuarioEnDocumento | null;
@@ -903,6 +924,10 @@ export interface Pago {
   recargo_porcentaje?: string;
   recargo_importe?: string;
   total_cobrado?: string;
+  /** DEC-UX-13: reparto del recargo entre los trabajos al cobrar. */
+  recargo_distribucion?: { detalle_id: string; importe: string }[];
+  /** DEC-UX-14: recargo ya devuelto desde este pago. */
+  recargo_devuelto?: string;
 }
 
 /** Dinero devuelto al cliente desde un Pago (no es un pago negativo). */
@@ -915,6 +940,9 @@ export interface DevolucionDinero {
   fecha: string;
   motivo: string;
   referencia: string | null;
+  /** DEC-UX-14: recargo reintegrado y lo que recibió el cliente. */
+  recargo_importe?: string;
+  total_reintegrado?: string;
 }
 
 export interface Documento {
@@ -946,6 +974,10 @@ export interface ResumenComercial {
   descuento: DescuentoVigente | null;
   /** DC09, DEC-MI-03: los ajustes vigentes de cada trabajo. */
   ajustes_detalle?: DescuentoVigente[];
+  /** DEC-UX-13/14: recargos (internos; el saldo no los incluye). */
+  recargo_cobrado?: string;
+  recargo_devuelto?: string;
+  recargo_por_detalle?: Record<string, string>;
 }
 
 export type TipoDescuento = "PORCENTAJE" | "IMPORTE";
