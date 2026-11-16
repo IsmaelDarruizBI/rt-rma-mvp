@@ -136,7 +136,7 @@ Proyecto `rosariotecno-460217`, región `southamerica-east1`.
 | Recurso | Configuración |
 |---|---|
 | Bucket `gs://rt-rma-uat-respaldos` | Standard, acceso uniforme, acceso público bloqueado (un pedido anónimo recibe 403). **Retención de 30 días** en todo el bucket: ningún objeto se borra ni se sobrescribe antes. Ciclo de vida: borra `uat/` a los 35 días. `_herramientas/` queda excluida: si se borrara, el Job dejaría de funcionar. Borrado suave de 7 días |
-| `_herramientas/` | `respaldar.sh`, `restaurar.sh`, `ensayar_restauracion.sh`, `supabase-ca.crt` y `migraciones/` (las 23 del repositorio; la 21, la 22 y la 23 se agregaron el 12/11/2026, al aplicarlas en São Paulo) |
+| `_herramientas/` | `respaldar.sh`, `restaurar.sh`, `ensayar_restauracion.sh`, `supabase-ca.crt` y `migraciones/` (las 35 del repositorio; la 21 a la 23 se agregaron el 12/11/2026 y la 24 a la 35 el 16/11/2026, al aplicarlas en São Paulo) |
 | Cuenta de servicio `rt-rma-respaldo` | Sin roles en el proyecto. `storage.objectCreator` y `storage.objectViewer` solo en ese bucket: crea y lee, no borra ni sobrescribe. `secretAccessor` solo en su secreto. `run.invoker` solo en su Job |
 | Secreto `rma-uat-respaldo-db-url` | Versión 1. Solo la lee `rt-rma-respaldo`. Conexión de `rma_respaldo` (sección 2) |
 | Rol `rma_respaldo` en São Paulo | Sección 2 |
@@ -191,7 +191,7 @@ Revisar el costo al cargar datos reales.
 
 Cuando el UAT pase a datos reales, revisar la retención y considerar el plan Pro (copias físicas y PITR).
 
-## 6. Macroiteración integral: preparación (15/11/2026, sin cambios en GCP)
+## 6. Macroiteración integral (preparada el 15/11/2026, aplicada el 16/11/2026)
 
 **Scripts sin cambios.** `respaldar.sh`, `restaurar.sh` y `ensayar_restauracion.sh` recorren las tablas y secuencias de `rma` sin listas fijas: las 22 tablas nuevas entran solas en el volcado, el manifiesto, el vaciado y la verificación de conteos. `rma_respaldo` las lee por `pg_read_all_data`. No hace falta subir herramientas nuevas ni tocar el Job, el bucket, el Scheduler ni los secretos.
 
@@ -208,3 +208,16 @@ Hasta ese momento no se suben: el ensayo en la nube aplica todo lo que hay en es
 **Copias anteriores:** las de 23 migraciones (hasta la última antes de migrar) se restauran sobre una base con esas 23, que están en el historial de Git; no sobre una con 35. La retención no cambia (30 días inmutables, borrado a los 35).
 
 **Después de migrar:** respaldo y ensayo en la nube (`--args /respaldos/_herramientas/ensayar_restauracion.sh`), que tienen que informar 35 migraciones y 69 tablas.
+
+**Resultado del 16/11/2026:**
+
+| Momento | Ejecución | Resultado |
+|---|---|---|
+| Respaldo previo | `rt-rma-respaldo-db-5xtvh` | `uat/20261116T003920Z`: 23 migraciones, 47 tablas, `OR-000001` con su documento y 5 fotos, 4 cuentas; `SHA256SUMS` correcto |
+| Fotos de `OR-000001` | — | `gs://rt-rma-uat-respaldos/resguardo/OR-000001/20261116T004025Z/`: las 5, con el mismo tamaño, MD5 y CRC32C que los originales (sin cambios). Quedan fuera del ciclo de vida de `uat/`: se borran a mano, después de los 30 días de retención, cuando ya no hagan falta |
+| Herramientas | — | Las 12 migraciones nuevas en `_herramientas/migraciones/` (35, MD5 iguales al repositorio) |
+| Ensayo después de migrar | `rt-rma-respaldo-db-6k89g` | ENSAYO_RESTAURACION_OK: 35 migraciones, 69 tablas, secuencias y 4 cuentas |
+| Respaldo posterior | `rt-rma-respaldo-db-5p29r` | `uat/20261116T014847Z`: 35 migraciones, 69 tablas, `OR-000001` completa |
+| Ensayo final | `rt-rma-respaldo-db-bdgd5` | ENSAYO_RESTAURACION_OK |
+
+El respaldo diario sigue sin cambios de configuración.

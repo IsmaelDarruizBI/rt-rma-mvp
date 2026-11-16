@@ -80,16 +80,19 @@ Ninguno despliega ni usa secretos. Se activan al publicar la rama en GitHub. Com
 | Backend | `gcloud run services update-traffic … --to-revisions <revisión anterior>=100` | La anterior usa el mismo proyecto de Supabase y es compatible con el esquema (migraciones aditivas) |
 | Frontend | `vercel promote <despliegue anterior> --scope ismaeldarruizbis-projects` | Construido contra el mismo proyecto de Supabase que el backend al que se vuelve |
 
-**Pares vigentes (12/11/2026):**
+**Pares vigentes (16/11/2026):**
 
 | Uso | Backend | Frontend | Supabase |
 |---|---|---|---|
-| Público (macroiteración V1.4, desde el 12/11/2026 a las 15:14 UTC) | `rt-rma-uat-api-00029-kay` (etiqueta `v14-5c6137e`, código `5c6137e`) | `rt-rma-62sdml5sb…` (`dpl_CRXZubTCVE1ALhZmLe2wHhoZhbWR`) | São Paulo `pcdnmhzwhzymznojndrn` (23 migraciones) |
-| Vuelta atrás de la macroiteración | `rt-rma-uat-api-00027-sas` (etiqueta `it1-14108ef`, código `14108ef`) | `rt-rma-j00dbv3fc…` (`dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2`) | São Paulo `pcdnmhzwhzymznojndrn` (con las migraciones 22 y 23, compatible) |
+| Público (macroiteración integral, desde el 16/11/2026 a las 01:31 UTC) | `rt-rma-uat-api-00031-ror` (etiqueta `mi-9176921`, código `9176921`) | `rt-rma-bwwdm7cvz…` (`dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e`) | São Paulo `pcdnmhzwhzymznojndrn` (35 migraciones) |
+| Vuelta atrás de la macroiteración integral (con los controles de P1-15, sección 7.8) | `rt-rma-uat-api-00029-kay` (etiqueta `v14-5c6137e`, código `5c6137e`) | `rt-rma-62sdml5sb…` (`dpl_CRXZubTCVE1ALhZmLe2wHhoZhbWR`) | São Paulo `pcdnmhzwhzymznojndrn` (con las 35 migraciones, compatible: ensayado) |
+| Vuelta atrás de la macroiteración V1.4 (no probada sobre las 35 migraciones) | `rt-rma-uat-api-00027-sas` (etiqueta `it1-14108ef`, código `14108ef`) | `rt-rma-j00dbv3fc…` (`dpl_CdRi5ttvBwRnxfADjtM4yRVjUkS2`) | São Paulo `pcdnmhzwhzymznojndrn` (con las migraciones 22 y 23, compatible) |
 | Vuelta atrás de la iteración 1 | `rt-rma-uat-api-00024-top` (etiqueta `sp-d226fd2`, código `d226fd2`) | `rt-rma-pktu8ktbq…` (`dpl_6vsLwpAzxE2yS5K7RLHBMNVvETN8`) | São Paulo `pcdnmhzwhzymznojndrn` (con la migración 21, compatible; sobre la 22 y la 23 no se probó) |
 | Vuelta atrás de la migración, hasta el 25/11/2026 | `rt-rma-uat-api-00020-tux` (etiqueta `auth`, código `61e2a14`) | `rt-rma-n49rz9qgv…` (`dpl_F1M6Msv1FUHo3ghNYPVviYQtmztb`) | Oregón `okcscsglnujnxtgobjfw` |
 
-**Vuelta atrás de la macroiteración** (coordinada, sin tocar la base: las migraciones 22 y 23 son aditivas y las pruebas `tests/postgres` de `14108ef` pasan sobre ellas, salvo las 2 que cuentan las tablas del esquema):
+**Vuelta atrás vigente** (macroiteración integral → V1.4, `00029-kay` + `dpl_CRXZ…`): sección 7.8, con la consulta de control de P1-15 antes de los dos comandos.
+
+**Histórico, vuelta atrás de la macroiteración V1.4 a la iteración 1** (coordinada, sin tocar la base: las migraciones 22 y 23 son aditivas y las pruebas `tests/postgres` de `14108ef` pasan sobre ellas, salvo las 2 que cuentan las tablas del esquema):
 
 ```bash
 gcloud run services update-traffic rt-rma-uat-api --region southamerica-east1 --project rosariotecno-460217 --to-revisions rt-rma-uat-api-00027-sas=100
@@ -118,7 +121,9 @@ Los comandos de la vuelta atrás coordinada están en [`MIGRACION_SUPABASE_SAO_P
 - el despliegue `rt-rma-n49rz9qgv…`;
 - el proyecto de Oregón.
 
-## 7. Macroiteración integral: procedimiento preparado (15/11/2026, sin ejecutar)
+## 7. Macroiteración integral: procedimiento (preparado el 15/11/2026, ejecutado el 16/11/2026)
+
+**Resultado del 16/11/2026: publicado y validado.** Backend `00031-ror` (`9176921`), frontend `dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e`, São Paulo con 35 migraciones. Respaldos: antes `uat/20261116T003920Z`, después `uat/20261116T014847Z`; fotos de `OR-000001` en `resguardo/OR-000001/20261116T004025Z/`. E2E V1.4 67 de 67 e integral 68 de 68, cada uno con su limpieza selectiva; `OR-000001` intacta. Detalle en [`ESTADO_PROYECTO.md`](ESTADO_PROYECTO.md), sección B. Lo que sigue vale como procedimiento para el próximo despliegue con migraciones.
 
 Publica `mvp-v2` con la macroiteración integral sobre el par vigente (`00029-kay` y `dpl_CRXZ…`). **Cada paso con efecto externo necesita autorización explícita.** Ensayado completo en PostgreSQL local con [`ensayar_migracion_integral.py`](../supabase/scripts/validacion_uat/ensayar_migracion_integral.py): 56 de 56 ([`ESTADO_PROYECTO.md`](ESTADO_PROYECTO.md), sección B).
 
@@ -251,4 +256,4 @@ select (select count(*) from rma.movimiento_inventario where tipo = 'DESPERDICIO
 
 Todo lo demás (compras, lotes de otros insumos, devoluciones, descuentos por Detalle, comunicaciones, firmas, reclamos, identidad, permisos configurados) queda en la base y la versión anterior lo ignora. Sin datos reales, la vuelta atrás del UAT es: la limpieza de cada E2E (que conserva `OR-000001`), la consulta de arriba en cero, un rol por usuario y los dos comandos. Se ensayó así (fase 5c: lee, escribe e integridad sin problemas).
 
-**Pares de vuelta atrás después de publicar:** `00029-kay` + `dpl_CRXZ…` (macroiteración V1.4). `00027-sas` y anteriores no se probaron sobre las 35 migraciones.
+**Pares de vuelta atrás desde el 16/11/2026:** `00029-kay` + `dpl_CRXZ…` (macroiteración V1.4), ensayado sobre las 35 migraciones. Al cierre del despliegue los tres controles de la consulta de arriba daban 0. `00027-sas` y anteriores no se probaron sobre las 35 migraciones.

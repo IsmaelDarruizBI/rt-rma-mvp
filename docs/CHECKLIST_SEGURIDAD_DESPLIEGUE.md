@@ -65,6 +65,17 @@ Controles críticos para revisar antes y después de publicar. No es una auditor
 - **Hallazgo corregido en código (sin desplegar):** `/docs`, `/redoc` y `/openapi.json` eran públicos y mostraban 78 rutas; se corrige en `4af9854`. Queda pendiente para el próximo despliegue.
 - **Pendiente de confirmar en el panel:** el largo mínimo 10 en los dos proyectos.
 
+## Resultado de la revisión del 16/11/2026 (`00031-ror`, macroiteración integral, São Paulo)
+
+- **Correcto:**
+  - repositorio: escaneo de secretos sin hallazgos; CI en verde en `9176921`; las 12 migraciones son aditivas y no cambian roles;
+  - backend: plantilla heredada de `00029-kay` (14 variables, `RMA_AUTH_MODO=supabase` con el Auth de São Paulo, `RMA_DATABASE_URL` desde `rma-uat-sp-database-url:1`, CORS solo del frontend) y **sin `RMA_TIPO_EQUIPO_CAMPO`** (DC12 desactivada); 401 sin token y con token inválido, también en compras, administración, lotes y checklist; `/docs`, `/redoc` y `/openapi.json` 404; un origen ajeno no recibe CORS; registros sin errores, 5xx ni credenciales;
+  - base, después de migrar: `rma_backend` lee las 69 tablas, con DELETE solo en `usuario_rol` y `mesa_tipo_reparacion` y sin TRUNCATE; `rma_api` miembro solo de `rma_backend`, sin `SUPERUSER`, `BYPASSRLS` ni `CREATEROLE`, límite 20; `anon`, `authenticated` y `service_role` sin `usage` en `rma`; `rma_respaldo` lee las tablas nuevas; `verificar_integridad()` vacío;
+  - Supabase Auth: **largo mínimo de contraseña 10** (estaba en 6; lo cambió la persona responsable el 15/11/2026, y las cuatro contraseñas cumplen);
+  - frontend: solo la clave publicable, sin JWT ni `sb_secret_` con valor; mismo ref que el backend y el mismo servicio de Cloud Run; Vercel sin vínculo con Git.
+- **Verificado con sesiones reales:** `probar_entornos.py` contra la etiqueta y, ya publicado, los dos E2E con las cuatro cuentas: Recepción, Técnico y Coordinación reciben 403 donde corresponde (administración, permisos, compras, devoluciones, reclamos, comunicaciones), y consultar no habilita escribir.
+- **No verificado en esta revisión:** suplantación con una sesión real (el script usa siempre el token del actor del pedido); la pasada manual en un navegador real (P2-17).
+
 ## Resultado de la revisión del 12/11/2026 (`00029-kay`, macroiteración V1.4, São Paulo)
 
 - **Correcto:**
