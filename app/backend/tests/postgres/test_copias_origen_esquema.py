@@ -2,8 +2,10 @@
 """Bloque C, entrega 1: esquema de las copias de origenes externos.
 
 ``rma.sincronizacion_origen`` (registro de intentos y reserva) y
-``rma.catalogo_producto`` (copia del catalogo de Ventas), migracion
-``20261117000100_copias_origen_externo.sql``. Diseño en
+``rma.catalogo_producto`` (copia del catalogo de Ventas), migraciones
+``20261117000100_copias_origen_externo.sql`` y
+``20261117000200_propietario_sincronizacion.sql`` (solo el propietario de
+una reserva escribe la copia y finaliza el intento: QA C1, M3). Diseño en
 ``docs/persistencia-catalogos.md``.
 
 Una base propia por modulo (las filas de estas tablas no se borran) y un rol
@@ -30,7 +32,13 @@ from tests.postgres.base_local import (  # noqa: E402
 
 pytestmark = pytest.mark.postgres
 
-MIGRACION = "20261117000100_copias_origen_externo.sql"
+MIGRACIONES = (
+    "20261117000100_copias_origen_externo.sql",
+    "20261117000200_propietario_sincronizacion.sql",
+)
+# El secreto de las reservas de las pruebas y el de un intruso.
+SECRETO = "a" * 64
+AJENO = "b" * 64
 ROL = "rma_api_prueba"
 COPIA = "CATALOGO_VENTAS"
 
@@ -94,7 +102,9 @@ def _cerrar_en_curso(admin) -> None:
     """Deja la copia sin reserva vigente (cada prueba empieza limpia)."""
     admin.execute(
         "update rma.sincronizacion_origen set resultado = 'FALLIDA',"
-        " mensaje = 'cierre de la prueba' where resultado = 'EN_CURSO'"
+        " mensaje = 'cierre de la prueba', propietario = %s"
+        " where resultado = 'EN_CURSO'",
+        (SECRETO,),
     )
 
 
@@ -107,9 +117,17 @@ def _sin_reservas(admin):
 
 def _reservar(conexion, usuario, *, duracion="10 minutes", copia=COPIA):
     return conexion.execute(
-        "select id, resultado, iniciada_en, vence_en from rma.reservar_sincronizacion"
-        "(%s, %s, %s, %s, %s, %s::interval)",
-        (_sinc_id(), copia, usuario, "archivo de prueba", "", duracion),
+        "select r.id, 'EN_CURSO', r.iniciada_en, r.vence_en"
+        " from rma.reservar_sincronizacion(%s, %s, %s, %s, %s, %s::interval, %s) r",
+        (
+            _sinc_id(),
+            copia,
+            usuario,
+            "archivo de prueba",
+            "",
+            duracion,
+            SECRETO,
+        ),
     ).fetchone()
 
 
@@ -124,14 +142,17 @@ def _reserva_vencida(
         admin.execute("set local session_replication_role = replica")
         admin.execute(
             "insert into rma.sincronizacion_origen (id, copia, usuario_id,"
-            " origen, iniciada_en, vence_en) values (%s, %s, %s, %s,"
-            " now() - %s::interval, now() - %s::interval)",
-            (sinc, COPIA, usuario, origen, desde, hasta),
+            " origen, iniciada_en, vence_en, propietario_hash) values"
+            " (%s, %s, %s, %s, now() - %s::interval, now() - %s::interval,"
+            " rma.hash_propietario(%s))",
+            (sinc, COPIA, usuario, origen, desde, hasta, SECRETO),
         )
     return sinc
 
 
-def _producto(conexion, tp_id: str, sinc_id: str, **cambios) -> None:
+def _producto(
+    conexion, tp_id: str, sinc_id: str, propietario=SECRETO, **cambios
+) -> None:
     datos = {
         "descripcion": f"iPhone de prueba {tp_id}",
         "seleccionable": True,
@@ -144,18 +165,19 @@ def _producto(conexion, tp_id: str, sinc_id: str, **cambios) -> None:
         insert into rma.catalogo_producto (tipo_producto_id, descripcion,
           seleccionable, motivo_no_seleccionable, vigente, motivo_baja,
           valores_origen, primera_sincronizacion, ultima_sincronizacion,
-          sincronizacion_id)
+          sincronizacion_id, propietario)
         values (%(tp)s, %(descripcion)s, %(seleccionable)s,
           %(motivo_no_seleccionable)s, %(vigente)s, %(motivo_baja)s,
-          '{"tp_gb": "128gb"}', now(), now(), %(sinc)s)
+          '{"tp_gb": "128gb"}', now(), now(), %(sinc)s, %(propietario)s)
         on conflict (tipo_producto_id) do update set
           descripcion = excluded.descripcion,
           vigente = excluded.vigente,
           motivo_baja = excluded.motivo_baja,
           ultima_sincronizacion = excluded.ultima_sincronizacion,
-          sincronizacion_id = excluded.sincronizacion_id
+          sincronizacion_id = excluded.sincronizacion_id,
+          propietario = %(propietario)s
         """,
-        datos | {"tp": tp_id, "sinc": sinc_id},
+        datos | {"tp": tp_id, "sinc": sinc_id, "propietario": propietario},
     )
 
 
@@ -201,9 +223,10 @@ def test_permisos_minimos(admin):
                 "select has_table_privilege(%s, %s, 'SELECT')", (rol, tabla)
             ).fetchone()[0]
     # Del intento, solo su final; la reserva no se extiende ni se reescribe.
-    for columna in ("resultado", "mensaje", "contadores"):
+    for columna in ("resultado", "mensaje", "contadores", "propietario"):
         assert priv_col("rma.sincronizacion_origen", columna)
     for columna in (
+        "propietario_hash",
         "finalizada_en",
         "id",
         "copia",
@@ -217,9 +240,7 @@ def test_permisos_minimos(admin):
     for columna in ("tipo_producto_id", "primera_sincronizacion", "creado_en"):
         assert not priv_col("rma.catalogo_producto", columna)
     assert priv_col("rma.catalogo_producto", "vigente")
-    funcion = (
-        "rma.reservar_sincronizacion(text, text, uuid, text, text, interval)"
-    )
+    funcion = "rma.reservar_sincronizacion(text, text, uuid, text, text, interval, text)"
     assert admin.execute(
         "select has_function_privilege('rma_backend', %s, 'EXECUTE')",
         (funcion,),
@@ -350,10 +371,10 @@ def test_el_insert_directo_usa_la_hora_de_la_base_y_una_hora_como_maximo(
     sinc = _sinc_id()
     iniciada = backend.execute(
         "insert into rma.sincronizacion_origen (id, copia, usuario_id,"
-        " origen, iniciada_en, vence_en) values (%s, %s, %s, 'x',"
-        " now() - interval '1 day', now() + interval '5 minutes')"
+        " origen, iniciada_en, vence_en, propietario) values (%s, %s, %s, 'x',"
+        " now() - interval '1 day', now() + interval '5 minutes', %s)"
         " returning iniciada_en, now()",
-        (sinc, COPIA, usuario),
+        (sinc, COPIA, usuario, SECRETO),
     ).fetchone()
     assert iniciada[0] == iniciada[1]
 
@@ -387,8 +408,8 @@ def test_finaliza_una_sola_vez(backend, usuario):
     sinc = _reservar(backend, usuario)[0]
     backend.execute(
         "update rma.sincronizacion_origen set resultado = 'EXITOSA',"
-        " contadores = '{\"nuevos\": 3}' where id = %s",
-        (sinc,),
+        " contadores = '{\"nuevos\": 3}', propietario = %s where id = %s",
+        (SECRETO, sinc),
     )
     fila = backend.execute(
         "select resultado, finalizada_en is not null, contadores"
@@ -404,8 +425,9 @@ def test_finaliza_una_sola_vez(backend, usuario):
     for cambio in ("resultado = 'FALLIDA'", "mensaje = 'otro'"):
         with pytest.raises(psycopg.errors.RestrictViolation):
             backend.execute(
-                f"update rma.sincronizacion_origen set {cambio} where id = %s",
-                (sinc,),
+                f"update rma.sincronizacion_origen set {cambio},"
+                " propietario = %s where id = %s",
+                (SECRETO, sinc),
             )
 
 
@@ -421,9 +443,9 @@ def test_el_fin_lo_fija_la_base(admin, backend, usuario):
         )
     fin = admin.execute(
         "update rma.sincronizacion_origen set resultado = 'EXITOSA',"
-        " finalizada_en = '2099-01-01' where id = %s"
+        " finalizada_en = '2099-01-01', propietario = %s where id = %s"
         " returning finalizada_en = now()",
-        (sinc,),
+        (SECRETO, sinc),
     ).fetchone()
     assert fin == (True,)
 
@@ -431,15 +453,15 @@ def test_el_fin_lo_fija_la_base(admin, backend, usuario):
 def test_contadores_y_formato(backend, usuario):
     with pytest.raises(psycopg.errors.CheckViolation):
         backend.execute(
-            "select rma.reservar_sincronizacion(%s, %s, %s, 'x', '', '1 minute')",
-            ("SINC-NOHEX", COPIA, usuario),
+            "select rma.reservar_sincronizacion(%s, %s, %s, 'x', '', '1 minute', %s)",
+            ("SINC-NOHEX", COPIA, usuario, SECRETO),
         )
     sinc = _reservar(backend, usuario)[0]
     with pytest.raises(psycopg.errors.CheckViolation):
         backend.execute(
             "update rma.sincronizacion_origen set resultado = 'FALLIDA',"
-            " contadores = '[1]' where id = %s",
-            (sinc,),
+            " contadores = '[1]', propietario = %s where id = %s",
+            (SECRETO, sinc),
         )
 
 
@@ -460,8 +482,9 @@ def test_la_copia_se_escribe_dentro_de_la_reserva(backend, usuario):
 def test_la_copia_no_se_escribe_fuera_de_una_reserva(backend, usuario):
     sinc = _reservar(backend, usuario)[0]
     backend.execute(
-        "update rma.sincronizacion_origen set resultado = 'EXITOSA' where id = %s",
-        (sinc,),
+        "update rma.sincronizacion_origen set resultado = 'EXITOSA',"
+        " propietario = %s where id = %s",
+        (SECRETO, sinc),
     )
     with pytest.raises(psycopg.errors.RestrictViolation):
         _producto(backend, "TP-FUERA", sinc)
@@ -498,8 +521,9 @@ def test_aplicar_y_tomar_la_reserva_en_paralelo(admin, base, usuario):
         time.sleep(0.5)
         assert hilo.is_alive()
         a.execute(
-            "update rma.sincronizacion_origen set resultado = 'EXITOSA' where id = %s",
-            (a_id,),
+            "update rma.sincronizacion_origen set resultado = 'EXITOSA',"
+            " propietario = %s where id = %s",
+            (SECRETO, a_id),
         )
         a.commit()
         hilo.join(10)
@@ -523,8 +547,9 @@ def test_identidad_y_primera_sincronizacion_no_cambian(
         with pytest.raises(psycopg.errors.RestrictViolation):
             admin.execute(
                 f"update rma.catalogo_producto set {cambio},"
-                " sincronizacion_id = %s where tipo_producto_id = 'TP-ID'",
-                (sinc,),
+                " sincronizacion_id = %s, propietario = %s"
+                " where tipo_producto_id = 'TP-ID'",
+                (sinc, SECRETO),
             )
 
 
@@ -601,6 +626,74 @@ def test_coherencia_de_vigencia_y_seleccion(backend, usuario):
         _producto(backend, " TP-ESPACIO", sinc)
 
 
+# --- Propietario (QA C1, M3) ------------------------------------------------
+
+
+def test_solo_el_propietario_finaliza(backend, usuario):
+    sinc = _reservar(backend, usuario)[0]
+    for propietario in (None, AJENO, ""):
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            backend.execute(
+                "update rma.sincronizacion_origen set resultado = 'FALLIDA',"
+                " propietario = %s where id = %s",
+                (propietario, sinc),
+            )
+    backend.execute(
+        "update rma.sincronizacion_origen set resultado = 'FALLIDA',"
+        " propietario = %s where id = %s",
+        (SECRETO, sinc),
+    )
+
+
+def test_solo_el_propietario_escribe_la_copia(backend, usuario):
+    sinc = _reservar(backend, usuario)[0]
+    for propietario in (None, AJENO):
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            _producto(backend, "TP-INTRUSO", sinc, propietario=propietario)
+    _producto(backend, "TP-PROPIO", sinc)
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        _producto(backend, "TP-PROPIO", sinc, propietario=AJENO)  # update
+
+
+def test_el_secreto_nunca_se_guarda(admin, backend, usuario):
+    sinc = _reservar(backend, usuario)[0]
+    _producto(backend, "TP-SECRETO", sinc)
+    hash_, propietario = admin.execute(
+        "select propietario_hash, propietario from rma.sincronizacion_origen"
+        " where id = %s",
+        (sinc,),
+    ).fetchone()
+    assert propietario is None and len(hash_) == 64 and SECRETO not in hash_
+    assert admin.execute(
+        "select count(*) from rma.catalogo_producto where propietario is not null"
+    ).fetchone() == (0,)
+    assert admin.execute(
+        "select count(*) from rma.sincronizacion_origen where propietario is not null"
+    ).fetchone() == (0,)
+
+
+def test_una_reserva_sin_secreto_no_se_crea(backend, usuario):
+    for secreto in (None, "corto"):
+        with pytest.raises(psycopg.errors.CheckViolation):
+            backend.execute(
+                "select rma.reservar_sincronizacion(%s, %s, %s, 'x', '', '1 minute', %s)",
+                (_sinc_id(), COPIA, usuario, secreto),
+            )
+
+
+def test_la_toma_de_una_vencida_no_necesita_el_secreto(
+    admin, backend, usuario
+):
+    vencida = _reserva_vencida(
+        admin, usuario, "caida", "20 minutes", "1 second"
+    )
+    _reservar(backend, usuario)  # sin el secreto de la vencida
+    assert admin.execute(
+        "select resultado from rma.sincronizacion_origen where id = %s",
+        (vencida,),
+    ).fetchone() == ("INTERRUMPIDA",)
+
+
 # --- Respaldo y restauracion ------------------------------------------------
 
 
@@ -618,7 +711,8 @@ def test_la_restauracion_en_modo_replica_carga_lo_finalizado(admin, usuario):
             " now() - interval '2 days' + interval '1 minute', 'EXITOSA')",
             (sinc, COPIA, usuario),
         )
-        _producto(admin, "TP-RESTAURADO", sinc)
+        # Un respaldo nunca trae el secreto: la columna siempre esta vacia.
+        _producto(admin, "TP-RESTAURADO", sinc, propietario=None)
     assert admin.execute(
         "select sincronizacion_id from rma.catalogo_producto"
         " where tipo_producto_id = 'TP-RESTAURADO'"
@@ -639,8 +733,9 @@ def test_la_migracion_no_cambia_los_datos_existentes():
     nueva (dos veces) no cambia ninguna fila ni secuencia existente."""
     url_admin = _admin()
     todos = archivos_sql()
-    nueva = next(a for a in todos if a.name == MIGRACION)
-    url = crear_base(url_admin, [a for a in todos if a != nueva])
+    nuevas = [a for a in todos if a.name in MIGRACIONES]
+    assert [a.name for a in nuevas] == list(MIGRACIONES)
+    url = crear_base(url_admin, [a for a in todos if a not in nuevas])
     huella = """
         select c.relname, md5(coalesce((xpath('/row/h/text()', query_to_xml(format(
           'select string_agg(t::text, ''|'' order by t::text) as h from rma.%I t', c.relname),
@@ -655,7 +750,8 @@ def test_la_migracion_no_cambia_los_datos_existentes():
             sec_antes = conexion.execute(secuencias).fetchall()
             assert len(antes) == 69
             for _ in range(2):  # idempotente
-                conexion.execute(nueva.read_text(encoding="utf-8"))
+                for nueva in nuevas:
+                    conexion.execute(nueva.read_text(encoding="utf-8"))
             despues = dict(conexion.execute(huella).fetchall())
             assert {t: h for t, h in antes} == {
                 t: despues[t] for t, _ in antes

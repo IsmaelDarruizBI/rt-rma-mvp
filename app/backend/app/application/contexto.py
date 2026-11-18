@@ -166,11 +166,14 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
     (E8), con TLS ``verify-full``. Una sola unidad de trabajo por pool,
     compartida por todos los repositories (QA-E3-4). Si la base no
     responde, la app no arranca (nunca cae a JSON). Los datos de
-    dominio -Ordenes, catalogos, acciones y modelos tecnicos- van a la
-    base; la copia local del catalogo de Ventas y las
-    fotos conservan su almacenamiento propio.
+    dominio -Ordenes, catalogos, acciones, modelos tecnicos y la copia
+    del catalogo de Ventas (bloque C)- van a la base; las fotos
+    conservan su almacenamiento propio.
     """
     from app.storage.postgres.acciones import PostgresRegistroDeAcciones
+    from app.storage.postgres.catalogo_equipos import (
+        PostgresCatalogoEquiposRepository,
+    )
     from app.storage.postgres.catalogos import PostgresCatalogosRepository
     from app.storage.postgres.compras import PostgresComprasRepository
     from app.storage.postgres.conexion import HOSTS_LOCALES, servidor_unico
@@ -227,9 +230,9 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
             intervalo_minimo=settings.consulta_dni_intervalo_s,
             maximo_por_minuto=settings.consulta_dni_max_por_minuto,
         ),
-        catalogo_equipos=JsonCatalogoEquiposRepository(
-            settings.catalogo_equipos_dir
-        ),
+        # Bloque C: la copia del catalogo de Ventas en la base (antes, un
+        # archivo efimero del contenedor).
+        catalogo_equipos=PostgresCatalogoEquiposRepository(unidad),
         proveedor_catalogo=construir_proveedor_catalogo(settings),
         filtro_catalogo=filtro_catalogo(settings),
         reserva_sincronizacion=timedelta(

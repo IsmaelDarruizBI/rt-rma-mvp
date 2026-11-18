@@ -663,7 +663,13 @@ export interface ModeloEquipo {
 
 // --- Catálogo de equipos de Ventas (copia sincronizada) -----------------
 
-export type ResultadoSincronizacion = "EXITOSA" | "FALLIDA" | "RECHAZADA";
+// INTERRUMPIDA (bloque C): una reserva que vencio sin terminar (instancia
+// apagada a mitad); la marca la sincronizacion siguiente.
+export type ResultadoSincronizacion =
+  | "EXITOSA"
+  | "FALLIDA"
+  | "RECHAZADA"
+  | "INTERRUMPIDA";
 
 export interface SincronizacionCatalogo {
   id: string;
