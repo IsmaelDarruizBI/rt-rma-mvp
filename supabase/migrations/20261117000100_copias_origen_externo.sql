@@ -284,7 +284,10 @@ end;
 $$;
 
 grant select, insert on rma.sincronizacion_origen to rma_backend;
--- finalizada_en no: la fija el trigger con la hora de la base.
+-- finalizada_en no: la fija el trigger con la hora de la base. El revoke
+-- deja la concesion correcta aunque se vuelva a aplicar sobre una base que
+-- ya la tenia.
+revoke update (finalizada_en) on rma.sincronizacion_origen from rma_backend;
 grant update (resultado, mensaje, contadores) on rma.sincronizacion_origen to rma_backend;
 
 grant select, insert on rma.catalogo_producto to rma_backend;
