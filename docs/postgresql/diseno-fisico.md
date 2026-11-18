@@ -177,7 +177,8 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 
 - **`20261117000100_copias_origen_externo.sql`** (bloque C, entrega 1; solo local, sin aplicar en Supabase). Diseño en [`../persistencia-catalogos.md`](../persistencia-catalogos.md).
   - **`sincronizacion_origen`:** el registro de intentos.
-    - Nace `EN_CURSO` y termina una sola vez: EXITOSA, FALLIDA, RECHAZADA o INTERRUMPIDA (esta última solo si la reserva venció).
+    - Nace `EN_CURSO` con la hora de la base y una reserva de una hora como máximo, aunque el `insert` traiga otra cosa.
+    - Termina una sola vez, con la hora de la base: EXITOSA, FALLIDA, RECHAZADA o INTERRUMPIDA (esta última solo si la reserva venció).
     - No se borra.
     - El índice único parcial `sincronizacion_origen_en_curso` admite **una sola sincronización en curso por copia** entre todas las instancias.
     - `reservar_sincronizacion()` da por interrumpida una reserva vencida y crea la nueva con la hora de la base.
@@ -187,9 +188,9 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
     - El identificador y la primera sincronización no cambian.
   - **Permisos de `rma_backend`:**
     - lee e inserta en las dos tablas, sin `delete` ni `truncate`;
-    - del intento, actualiza solo el resultado, el fin, el mensaje y los contadores;
+    - del intento, actualiza solo el resultado, el mensaje y los contadores (el fin lo fija la base);
     - de la copia, actualiza todo menos su identidad y su primera sincronización;
-    - ejecuta `reservar_sincronizacion()`.
+    - ejecuta `reservar_sincronizacion()`; las funciones trigger no son ejecutables por `PUBLIC`.
   - **Clasificación:** maestras en `01_reiniciar.sql` y `06_limpiar_e2e.sql`.
   - **Compatibilidad:** sin clave foránea desde `orden.equipo_tipo_producto_id`. No cambia ninguna tabla existente; el backend publicado no las usa.
 

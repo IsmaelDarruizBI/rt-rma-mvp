@@ -82,6 +82,15 @@ begin
       raise exception 'Un intento de sincronización nace EN_CURSO.'
         using errcode = 'check_violation';
     end if;
+    -- La reserva usa la hora de la base y dura una hora como máximo, la
+    -- cree reservar_sincronizacion() o un INSERT directo: una reserva sin
+    -- vencimiento real bloquearía la copia para siempre.
+    new.iniciada_en := now();
+    if new.vence_en is null or new.vence_en <= new.iniciada_en
+       or new.vence_en > new.iniciada_en + interval '1 hour' then
+      raise exception 'La reserva debe vencer después de ahora y dentro de una hora.'
+        using errcode = 'check_violation';
+    end if;
     return new;
   end if;
   -- UPDATE
@@ -103,13 +112,14 @@ begin
     raise exception 'El intento % todavía no venció: no se puede dar por interrumpido.', old.id
       using errcode = 'restrict_violation';
   end if;
-  new.finalizada_en := coalesce(new.finalizada_en, now());
+  -- El fin es siempre la hora de la base al finalizar.
+  new.finalizada_en := now();
   return new;
 end;
 $$;
 
 comment on function rma.sincronizacion_origen_validar() is
-  'Un intento nace EN_CURSO, termina una sola vez (INTERRUMPIDA solo si venció) y no se borra.';
+  'Un intento nace EN_CURSO con la hora de la base y una reserva de una hora como máximo, termina una sola vez con la hora de la base (INTERRUMPIDA solo si venció) y no se borra. Que solo lo finalice quien lo reservó lo garantiza el motor de sincronización.';
 
 drop trigger if exists sincronizacion_origen_validar on rma.sincronizacion_origen;
 create trigger sincronizacion_origen_validar
@@ -274,7 +284,8 @@ end;
 $$;
 
 grant select, insert on rma.sincronizacion_origen to rma_backend;
-grant update (resultado, finalizada_en, mensaje, contadores) on rma.sincronizacion_origen to rma_backend;
+-- finalizada_en no: la fija el trigger con la hora de la base.
+grant update (resultado, mensaje, contadores) on rma.sincronizacion_origen to rma_backend;
 
 grant select, insert on rma.catalogo_producto to rma_backend;
 grant update (
@@ -285,3 +296,6 @@ grant update (
 
 revoke all on function rma.reservar_sincronizacion(text, text, uuid, text, text, interval) from public;
 grant execute on function rma.reservar_sincronizacion(text, text, uuid, text, text, interval) to rma_backend;
+-- Las funciones trigger, como en acceso (1100): sin ejecución para PUBLIC.
+revoke all on function rma.sincronizacion_origen_validar() from public;
+revoke all on function rma.catalogo_producto_validar() from public;

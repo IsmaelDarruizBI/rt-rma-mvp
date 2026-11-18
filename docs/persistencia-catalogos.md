@@ -40,59 +40,38 @@
 
 ### 3.1 Esquema
 
-Propuesta de la migración aditiva `supabase/migrations/<fecha>_copias_origen_externo.sql`, **no creada**.
+**Implementado** en `supabase/migrations/20261117000100_copias_origen_externo.sql` (entrega 1, 17/11/2026, commits locales), que es la fuente de verdad del detalle. Resumen:
 
-```sql
--- Registro de intentos, comun a todas las copias de origenes externos.
-create table rma.sincronizacion_origen (
-  id text primary key check (id ~ '^SINC-'),             -- nuevo_id("SINC"), como hoy
-  copia text not null check (copia in ('CATALOGO_VENTAS')), -- Productos RT agrega 'PRODUCTOS_RT'
-  usuario_id uuid not null references rma.usuario (id),
-  origen text not null,                                   -- descripcion sin secretos
-  filtro text not null default '',
-  iniciada_en timestamptz not null,
-  finalizada_en timestamptz,
-  vence_en timestamptz not null,                          -- reserva: despues de esta hora se da por interrumpida
-  resultado text not null check (resultado in
-    ('EN_CURSO', 'EXITOSA', 'FALLIDA', 'RECHAZADA', 'INTERRUMPIDA')),
-  mensaje text,                                           -- sin datos del origen ni credenciales
-  contadores jsonb not null default '{}',                 -- leidos, filtrados, nuevos, dados_de_baja, ...
-  check ((resultado = 'EN_CURSO') = (finalizada_en is null))
-);
--- Una sola sincronizacion en curso por copia, entre TODAS las instancias.
-create unique index sincronizacion_origen_en_curso
-  on rma.sincronizacion_origen (copia) where resultado = 'EN_CURSO';
-create index sincronizacion_origen_ultimas
-  on rma.sincronizacion_origen (copia, iniciada_en desc);
+| Tabla | Contenido |
+|---|---|
+| `rma.sincronizacion_origen` | Cada intento: `id` (`SINC-` + 12 hexadecimales, `nuevo_id("SINC")`), `copia` (`CATALOGO_VENTAS`; Productos RT agregará `PRODUCTOS_RT`), `usuario_id`, `origen` y `filtro` sin secretos, `iniciada_en`, `vence_en`, `finalizada_en`, `resultado` (`EN_CURSO`, `EXITOSA`, `FALLIDA`, `RECHAZADA`, `INTERRUMPIDA`), `mensaje` y `contadores` (objeto JSON). Índice único parcial `sincronizacion_origen_en_curso (copia) where resultado = 'EN_CURSO'`: **una sola en curso por copia entre todas las instancias** |
+| `rma.catalogo_producto` | La copia de `ProductoCatalogo` (`tipo_producto_id` tal cual, descripción, clasificación, características, `seleccionable` y su motivo, `vigente` y su motivo de baja, `valores_origen`, primera y última sincronización), más `sincronizacion_id` (el intento que escribió la fila), `creado_en` y `modificado_en` |
 
--- Copia del catalogo de Ventas (traceability/IMPLEMENTATION.md, ProductoCatalogo).
-create table rma.catalogo_producto (
-  tipo_producto_id text primary key check (btrim(tipo_producto_id) <> ''),
-  descripcion text not null,
-  categoria text, subcategoria text, grupo text,
-  marca text, modelo text, variante text, capacidad text, color text,
-  color_generico boolean not null default false,
-  seleccionable boolean not null,
-  motivo_no_seleccionable text check (motivo_no_seleccionable in ('GENERADOR', 'INCOMPLETO')),
-  vigente boolean not null default true,
-  motivo_baja text check (motivo_baja in ('NO_INFORMADO', 'ELIMINADO_EN_ORIGEN')),
-  valores_origen jsonb not null default '{}',
-  primera_sincronizacion timestamptz not null,
-  ultima_sincronizacion timestamptz not null,
-  sincronizacion_id text not null references rma.sincronizacion_origen (id),
-  check (vigente = (motivo_baja is null))
-);
-```
+**Reglas que impone la base** (triggers y `check`):
 
-**Triggers:**
+- **Un intento nace `EN_CURSO`** con la hora de la base (`iniciada_en := now()`, aunque el `insert` traiga otra) y con una reserva de **una hora como máximo**.
+- **Termina una sola vez**, con la hora de la base (`finalizada_en := now()`). `INTERRUMPIDA` se acepta solo si la reserva venció.
+- **Un intento finalizado no cambia más.** No se borra ningún intento ni ninguna fila de la copia.
+- **La copia solo se escribe dentro de un intento `EN_CURSO` de `CATALOGO_VENTAS`.** El trigger toma `FOR SHARE` sobre el intento: una toma de la reserva en paralelo espera, y una aplicación tardía de una reserva ya interrumpida se rechaza.
+- **No cambian:** el identificador, la primera sincronización y `creado_en` de un producto.
+- **`seleccionable` y `vigente`** son coherentes con sus motivos.
 
-- `catalogo_producto` y `sincronizacion_origen` **no se borran** (`rma.impedir_borrado`, como el resto).
-- Un intento finalizado es inmutable: solo `EN_CURSO` puede pasar a un resultado final, una vez.
+**`rma.reservar_sincronizacion(id, copia, usuario, origen, filtro, duración)`:**
 
-**Permisos:**
+- en una sola llamada, da por `INTERRUMPIDA` una reserva vencida de la copia y crea la nueva con `vence_en = now() + duración` (máximo una hora);
+- si hay otra vigente, el índice único la rechaza (`unique_violation`, que el motor traduce a 409).
 
-- `rma_backend`: `select`, `insert` y `update` en las dos tablas, sin `delete`.
-- `anon` y `authenticated`: sin acceso, como el resto del esquema `rma`.
+**Permisos de `rma_backend`:**
+
+| Objeto | Puede | No puede |
+|---|---|---|
+| Las dos tablas | `select` e `insert` | `delete` ni `truncate` |
+| El intento | Actualizar `resultado`, `mensaje` y `contadores` | El resto, incluido `finalizada_en`, que fija la base |
+| La copia | Actualizar todo lo demás | Identidad, primera sincronización y `creado_en` |
+| `reservar_sincronizacion` | Ejecutarla | — |
+
+- `anon`, `authenticated`, `service_role` y `PUBLIC` no tienen acceso, como el resto de `rma`; las funciones trigger no son ejecutables por `PUBLIC`.
+- La restauración de respaldos (`restaurar.sh`, en modo `replica`) carga intentos finalizados y la copia sin disparar los triggers.
 
 **Sin clave foránea desde `orden.equipo_tipo_producto_id`, a propósito.**
 
@@ -105,10 +84,9 @@ create table rma.catalogo_producto (
 Es el motor común (sección 4).
 
 ```
-1. RESERVAR (transaccion corta, se confirma)
-   insert sincronizacion_origen (EN_CURSO, vence_en = ahora + 10 min)
-   ├─ choca con el indice unico y la otra NO vencio → SincronizacionEnCursoError (HTTP 409)
-   └─ choca y la otra vencio (instancia apagada o caida a mitad) → se marca INTERRUMPIDA y se reintenta una vez
+1. RESERVAR (transaccion corta, se confirma): rma.reservar_sincronizacion(…, duracion = 10 min)
+   ├─ una reserva vencida de la copia (instancia apagada o caida a mitad) se marca INTERRUMPIDA en la misma llamada
+   └─ otra reserva vigente → unique_violation → SincronizacionEnCursoError (HTTP 409)
 2. LEER el origen FUERA de toda transaccion (Sheets, segundos)
    ├─ no responde → FINALIZAR FALLIDA (mensaje)            → la copia no cambia
    └─ datos no confiables (columnas, tp_id repetidos, vacio) → FINALIZAR RECHAZADA → la copia no cambia
@@ -123,7 +101,8 @@ Es el motor común (sección 4).
 ```
 
 - **Reserva.** El índice único parcial reemplaza al `threading.Lock`: vale entre instancias y sobrevive a un apagado.
-- **Vencimiento.** 10 minutos por defecto, configurable. Supera holgadamente el tiempo de lectura de Sheets (`catalogo_timeout_s` = 30 s) y el de aplicación.
+- **Vencimiento.** 10 minutos por defecto, configurable hasta una hora (límite de la base). Supera holgadamente el tiempo de lectura de Sheets (`catalogo_timeout_s` = 30 s) y el de aplicación. Lo calcula la base, nunca el reloj de la instancia.
+- **Solo quien reservó finaliza (QA C1, M3).** La base acepta que una sesión cierre como FALLIDA, EXITOSA o RECHAZADA un intento vigente ajeno; no se corrompe la copia (el `FOR SHARE` ordena las operaciones y una aplicación posterior se rechaza), pero sería un error del motor. El motor (C3) finaliza solo el `id` que reservó, y sus pruebas lo cubren.
 - **Lógica que no cambia:** `fusionar_catalogo`, `validar_informados`, los modelos (`ProductoCatalogo`, `SincronizacionCatalogo`) y los adaptadores de origen.
 
 ### 3.3 Repositorio
@@ -140,7 +119,7 @@ Es el motor común (sección 4).
 
 **Métodos nuevos del contrato,** que también implementa el repositorio JSON para el modo local:
 
-- `reservar_sincronizacion(id, usuario, iniciada_en, vence_en) -> None`: lanza `SincronizacionEnCursoError`. En JSON, con el candado en memoria actual.
+- `reservar_sincronizacion(id, usuario, duracion) -> None`: en PostgreSQL llama a `rma.reservar_sincronizacion` (la hora la pone la base) y traduce `unique_violation` a `SincronizacionEnCursoError`; en JSON, con el candado en memoria actual.
 - `ultima_exitosa()` y `ultima()`, para el estado sin leer todo el registro.
 
 **Contexto.** `_contexto_postgres` usa `PostgresCatalogoEquiposRepository`. El modo JSON (desarrollo local) conserva `JsonCatalogoEquiposRepository`.
@@ -401,3 +380,5 @@ Las cuentas y contraseñas las ingresa el usuario. El script recibe el token por
 | El UAT queda sin copia hasta la primera sincronización | Alta | Bajo | El alta no depende de la copia; paso explícito del procedimiento |
 | Vuelta atrás a `00036-jis` después de migrar | Baja | Bajo | Migración aditiva; ensayada en la entrega 4 |
 | Cambio del contrato del repositorio | Baja | Bajo | Solo se agregan métodos; el JSON los implementa |
+| Una sincronización entre la línea de base de un E2E y su limpieza hace abortar `06_limpiar_e2e.sql` (las tablas son maestras; QA C1) | Baja | Bajo | Aborta sin cambiar nada; no sincronizar durante los E2E. Se agrega a [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md) en la entrega 5 |
+| Una sesión cierra un intento vigente ajeno (QA C1, M3) | Baja | Bajo | La copia no se corrompe; el motor finaliza solo su propio intento (C3) |

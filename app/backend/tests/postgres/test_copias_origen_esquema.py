@@ -113,6 +113,24 @@ def _reservar(conexion, usuario, *, duracion="10 minutes", copia=COPIA):
     ).fetchone()
 
 
+def _reserva_vencida(
+    admin, usuario, origen: str, desde: str, hasta: str
+) -> str:
+    """Una reserva EN_CURSO vencida (instancia caida o lenta). La base fija
+    la hora de toda reserva nueva, asi que se arma como una restauracion:
+    en modo replica, sin triggers."""
+    sinc = _sinc_id()
+    with admin.transaction():
+        admin.execute("set local session_replication_role = replica")
+        admin.execute(
+            "insert into rma.sincronizacion_origen (id, copia, usuario_id,"
+            " origen, iniciada_en, vence_en) values (%s, %s, %s, %s,"
+            " now() - %s::interval, now() - %s::interval)",
+            (sinc, COPIA, usuario, origen, desde, hasta),
+        )
+    return sinc
+
+
 def _producto(conexion, tp_id: str, sinc_id: str, **cambios) -> None:
     datos = {
         "descripcion": f"iPhone de prueba {tp_id}",
@@ -183,9 +201,10 @@ def test_permisos_minimos(admin):
                 "select has_table_privilege(%s, %s, 'SELECT')", (rol, tabla)
             ).fetchone()[0]
     # Del intento, solo su final; la reserva no se extiende ni se reescribe.
-    for columna in ("resultado", "finalizada_en", "mensaje", "contadores"):
+    for columna in ("resultado", "mensaje", "contadores"):
         assert priv_col("rma.sincronizacion_origen", columna)
     for columna in (
+        "finalizada_en",
         "id",
         "copia",
         "usuario_id",
@@ -281,12 +300,8 @@ def test_dos_instancias_a_la_vez(base, usuario):
 def test_la_reserva_vencida_se_interrumpe_y_deja_lugar(
     admin, backend, usuario
 ):
-    vencida = _sinc_id()
-    admin.execute(
-        "insert into rma.sincronizacion_origen (id, copia, usuario_id, origen,"
-        " iniciada_en, vence_en) values (%s, %s, %s, 'instancia caida',"
-        " now() - interval '1 hour', now() - interval '50 minutes')",
-        (vencida, COPIA, usuario),
+    vencida = _reserva_vencida(
+        admin, usuario, "instancia caida", "1 hour", "50 minutes"
     )
     nueva, resultado, *_ = _reservar(backend, usuario)
     assert resultado == "EN_CURSO"
@@ -320,6 +335,41 @@ def test_copia_desconocida_rechazada(backend, usuario):
         _reservar(backend, usuario, copia="PRODUCTOS_RT")
 
 
+def test_el_insert_directo_usa_la_hora_de_la_base_y_una_hora_como_maximo(
+    backend, usuario
+):
+    """QA C1 M1: sin pasar por la funcion, la reserva tampoco elige su hora
+    ni dura mas de una hora."""
+    with pytest.raises(psycopg.errors.CheckViolation):
+        backend.execute(
+            "insert into rma.sincronizacion_origen (id, copia, usuario_id,"
+            " origen, vence_en) values (%s, %s, %s, 'x',"
+            " now() + interval '100 years')",
+            (_sinc_id(), COPIA, usuario),
+        )
+    sinc = _sinc_id()
+    iniciada = backend.execute(
+        "insert into rma.sincronizacion_origen (id, copia, usuario_id,"
+        " origen, iniciada_en, vence_en) values (%s, %s, %s, 'x',"
+        " now() - interval '1 day', now() + interval '5 minutes')"
+        " returning iniciada_en, now()",
+        (sinc, COPIA, usuario),
+    ).fetchone()
+    assert iniciada[0] == iniciada[1]
+
+
+def test_funciones_trigger_sin_public(admin):
+    """QA C1 M6: como en acceso (1100)."""
+    for funcion in (
+        "rma.sincronizacion_origen_validar()",
+        "rma.catalogo_producto_validar()",
+    ):
+        assert not admin.execute(
+            "select has_function_privilege('public', %s, 'EXECUTE')",
+            (funcion,),
+        ).fetchone()[0]
+
+
 # --- Ciclo del intento -----------------------------------------------------
 
 
@@ -346,12 +396,36 @@ def test_finaliza_una_sola_vez(backend, usuario):
         (sinc,),
     ).fetchone()
     assert fila == ("EXITOSA", True, {"nuevos": 3})
+    assert backend.execute(
+        "select finalizada_en between now() - interval '1 minute' and now()"
+        " from rma.sincronizacion_origen where id = %s",
+        (sinc,),
+    ).fetchone() == (True,)
     for cambio in ("resultado = 'FALLIDA'", "mensaje = 'otro'"):
         with pytest.raises(psycopg.errors.RestrictViolation):
             backend.execute(
                 f"update rma.sincronizacion_origen set {cambio} where id = %s",
                 (sinc,),
             )
+
+
+def test_el_fin_lo_fija_la_base(admin, backend, usuario):
+    """QA C1 M2: ni el backend (sin permiso) ni el duenio (el trigger)
+    eligen la hora de fin."""
+    sinc = _reservar(backend, usuario)[0]
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        backend.execute(
+            "update rma.sincronizacion_origen set resultado = 'EXITOSA',"
+            " finalizada_en = '2099-01-01' where id = %s",
+            (sinc,),
+        )
+    fin = admin.execute(
+        "update rma.sincronizacion_origen set resultado = 'EXITOSA',"
+        " finalizada_en = '2099-01-01' where id = %s"
+        " returning finalizada_en = now()",
+        (sinc,),
+    ).fetchone()
+    assert fin == (True,)
 
 
 def test_contadores_y_formato(backend, usuario):
@@ -398,12 +472,8 @@ def test_la_copia_no_se_escribe_fuera_de_una_reserva(backend, usuario):
 def test_una_reserva_interrumpida_ya_no_aplica(admin, backend, usuario):
     """Instancia lenta: su reserva vencio y otra la interrumpio; su
     aplicacion tardia se rechaza."""
-    lenta = _sinc_id()
-    admin.execute(
-        "insert into rma.sincronizacion_origen (id, copia, usuario_id, origen,"
-        " iniciada_en, vence_en) values (%s, %s, %s, 'lenta',"
-        " now() - interval '20 minutes', now() - interval '10 minutes')",
-        (lenta, COPIA, usuario),
+    lenta = _reserva_vencida(
+        admin, usuario, "lenta", "20 minutes", "10 minutes"
     )
     _reservar(backend, usuario)
     with pytest.raises(psycopg.errors.RestrictViolation):
@@ -414,13 +484,7 @@ def test_aplicar_y_tomar_la_reserva_en_paralelo(admin, base, usuario):
     """La aplicacion de A (reserva vencida pero todavia aplicando) y la
     toma de B no se pisan: B espera, y como A termina EXITOSA, B no la
     interrumpe y reserva despues."""
-    a_id = _sinc_id()
-    admin.execute(
-        "insert into rma.sincronizacion_origen (id, copia, usuario_id, origen,"
-        " iniciada_en, vence_en) values (%s, %s, %s, 'a',"
-        " now() - interval '20 minutes', now() - interval '1 second')",
-        (a_id, COPIA, usuario),
-    )
+    a_id = _reserva_vencida(admin, usuario, "a", "20 minutes", "1 second")
     resultados: dict[str, object] = {}
     with psycopg.connect(_como_rol(base)) as a:
         _producto(a, "TP-PARALELO", a_id)  # toma FOR SHARE del intento
@@ -451,11 +515,80 @@ def test_identidad_y_primera_sincronizacion_no_cambian(
 ):
     sinc = _reservar(backend, usuario)[0]
     _producto(backend, "TP-ID", sinc)
-    with pytest.raises(psycopg.errors.RestrictViolation):
-        admin.execute(
-            "update rma.catalogo_producto set tipo_producto_id = 'TP-OTRO'"
-            " where tipo_producto_id = 'TP-ID'"
-        )
+    for cambio in (
+        "tipo_producto_id = 'TP-OTRO'",
+        "primera_sincronizacion = primera_sincronizacion - interval '1 day'",
+        "creado_en = creado_en - interval '1 day'",
+    ):
+        with pytest.raises(psycopg.errors.RestrictViolation):
+            admin.execute(
+                f"update rma.catalogo_producto set {cambio},"
+                " sincronizacion_id = %s where tipo_producto_id = 'TP-ID'",
+                (sinc,),
+            )
+
+
+def test_la_toma_primero_y_la_aplicacion_tardia_despues(admin, base, usuario):
+    """QA C1 M5, orden inverso: B interrumpe la reserva vencida de A sin
+    confirmar; A intenta aplicar, espera y, cuando B confirma, se rechaza."""
+    a_id = _reserva_vencida(admin, usuario, "a", "20 minutes", "1 second")
+    resultados: dict[str, object] = {}
+    with psycopg.connect(_como_rol(base)) as b:
+        _reservar(b, usuario)  # interrumpe a A, sin confirmar
+
+        def aplicar_a():
+            with psycopg.connect(_como_rol(base), autocommit=True) as a:
+                try:
+                    _producto(a, "TP-TARDIO-2", a_id)
+                    resultados["a"] = "aplico"
+                except psycopg.errors.RestrictViolation:
+                    resultados["a"] = "rechazada"
+
+        hilo = threading.Thread(target=aplicar_a)
+        hilo.start()
+        time.sleep(0.5)
+        assert hilo.is_alive()  # espera la toma de B
+        b.commit()
+        hilo.join(10)
+    assert resultados == {"a": "rechazada"}
+    assert admin.execute(
+        "select count(*) from rma.catalogo_producto"
+        " where tipo_producto_id = 'TP-TARDIO-2'"
+    ).fetchone() == (0,)
+
+
+def test_dos_tomadores_de_una_reserva_vencida(admin, base, usuario):
+    """QA C1 M5: dos instancias toman a la vez la misma reserva vencida:
+    una sola queda EN_CURSO."""
+    vieja = _reserva_vencida(admin, usuario, "vieja", "20 minutes", "1 second")
+    resultados: dict[str, object] = {}
+    with psycopg.connect(_como_rol(base)) as b1:
+        _reservar(b1, usuario)
+
+        def segundo():
+            with psycopg.connect(_como_rol(base), autocommit=True) as b2:
+                try:
+                    _reservar(b2, usuario)
+                    resultados["b2"] = "reservo"
+                except psycopg.errors.UniqueViolation:
+                    resultados["b2"] = "rechazada"
+
+        hilo = threading.Thread(target=segundo)
+        hilo.start()
+        time.sleep(0.5)
+        assert hilo.is_alive()
+        b1.commit()
+        hilo.join(10)
+    assert resultados == {"b2": "rechazada"}
+    assert admin.execute(
+        "select count(*) from rma.sincronizacion_origen"
+        " where copia = %s and resultado = 'EN_CURSO'",
+        (COPIA,),
+    ).fetchone() == (1,)
+    assert admin.execute(
+        "select resultado from rma.sincronizacion_origen where id = %s",
+        (vieja,),
+    ).fetchone() == ("INTERRUMPIDA",)
 
 
 def test_coherencia_de_vigencia_y_seleccion(backend, usuario):
