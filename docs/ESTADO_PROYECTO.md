@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 16/11/2026.
+**Última actualización:** 18/11/2026.
 
 - **Hecho:**
   - autenticación real y DC31 desplegadas en UAT (10/11, `00020-tux`);
@@ -21,12 +21,13 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - **iteración de UX de Recepción cerrada** (16/11, `feat/ux-recepcion` sobre `614d167`, publicada y para integrar en `mvp-v2` por avance rápido con CI en verde; sin desplegar): UX-02 a UX-12, UX-01 documentada sin cambios de código, y las decisiones de cierre DEC-UX-13 (recargo incorporado a los trabajos, ABI-45) y DEC-UX-14 (recargo devuelto en proporción, ABI-44); UX-03 y UX-04 revisadas. Especificación en `rt-rma-app` `spec/ux-recepcion` `ebd0840` (publicada) y `business/` sincronizado. Dos migraciones aditivas, solo locales (`20261116000100` y `20261116000200`) ([`ux-recepcion.md`](ux-recepcion.md); sección B).
   - **iteración de UX de Recepción en UAT** (16/11): las migraciones `20261116000100` y `20261116000200` en São Paulo (37), Cloud Run `00033-fah` (`677dbb1`) y Vercel `dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`; E2E UX 47 de 47, V1.4 67 de 67 e integral 68 de 68, cada uno con limpieza selectiva; respaldos y ensayo de restauración en la nube correctos (sección B).
   - **UAT escalado a cero** (16/11, 22:54 UTC): sin etiquetas; mínimo 0 en el servicio y en la revisión publicada `00036-jis`, que tiene la misma imagen que `00033-fah`; control [`verificar_escalado_uat.py`](../supabase/scripts/validacion_uat/verificar_escalado_uat.py) después de cada publicación ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 9).
-  - **Bloque C, persistencia de copias de orígenes externos** (17/11, `feat/persistencia-catalogos`, commits locales, sin push ni despliegue): el catálogo de Ventas pasa a PostgreSQL con una reserva entre instancias y un propietario por sincronización (migraciones `20261117000100` y `20261117000200`), sobre un motor común reutilizable por Productos RT; ensayo local de reinicio, fallos y vuelta atrás 26 de 26; QA independiente por fase ([`persistencia-catalogos.md`](persistencia-catalogos.md)). C8 (UAT) espera autorización ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 10).
-  - **Reparación RT, especificación** (17/11): DEC-RT-01 a 07 y BR-REP-050 en `rt-rma-app` `spec/reparacion-rt` `168618a` (commit local, sin push); diseño en [`reparacion-rt-discovery.md`](reparacion-rt-discovery.md). La etapa 1 espera el bloque C en el UAT.
+  - **Bloque C, persistencia de copias de orígenes externos** (17/11, `feat/persistencia-catalogos`, integrada en `mvp-v2` en `fd434ef` con CI en verde): el catálogo de Ventas pasa a PostgreSQL con una reserva entre instancias y un propietario por sincronización (migraciones `20261117000100` y `20261117000200`), sobre un motor común reutilizable por Productos RT; ensayo local de reinicio, fallos y vuelta atrás 26 de 26; QA independiente por fase ([`persistencia-catalogos.md`](persistencia-catalogos.md)).
+  - **Bloque C en UAT, C8 aprobado** (18/11): las migraciones `20261117000100` y `20261117000200` en São Paulo (39 migraciones, 71 tablas), Cloud Run `00039-sen` (`fd434ef`), sin cambios en Vercel; la copia del catálogo de Ventas (1489 productos) sobrevive al escalado a cero; E2E UX 47 de 47, V1.4 67 de 67 e integral 68 de 68 con limpieza selectiva; respaldo y ensayo de restauración en la nube correctos ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 10.1; sección B).
+  - **Reparación RT, especificación** (17/11): DEC-RT-01 a 07 y BR-REP-050 en `rt-rma-app` `spec/reparacion-rt` `168618a` (publicada; `business/` sincronizado en `fd434ef`); diseño en [`reparacion-rt-discovery.md`](reparacion-rt-discovery.md). La etapa 1 ya no espera al bloque C; arranca con autorización.
 - **Falta:**
   - conseguir la exportación de Ventas de ABI-43 (modelos que faltan en el catálogo técnico);
   - ABI-42: que Gestión RT indique qué columna (o tabla) de su catálogo es el Tipo de Equipo; con una columna `tp_*` alcanza con fijar `RMA_TIPO_EQUIPO_CAMPO` y sincronizar;
-  - `OR-000001` sigue como Orden de prueba (cancelada desde la pantalla el 16/11); el UAT es solo de datos ficticios y su borrado o reinicio está autorizado cuando las pruebas lo requieran;
+  - el UAT tiene 6 Órdenes de prueba creadas a mano (`OR-000001` a `OR-000006`, al 18/11); es solo de datos ficticios y su borrado o reinicio está autorizado cuando las pruebas lo requieran;
   - una pasada manual en un navegador real de las pantallas nuevas (P2-17);
   - opcional: repetir `medir_api.py` (falló el inicio de sesión, HTTP 400, probablemente por la contraseña tipeada; solo mide tiempos);
   - integrar en `main` (P0-2).
@@ -45,16 +46,16 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | Tooling de la raíz | Node y TypeScript: validaciones, diagramas Mermaid y visor HTML (`package.json`) |
 | `app/backend/` | Python 3.11 o posterior, FastAPI y Pydantic v2. Capas `api → application → services → repositories ← storage` ([README](../app/backend/README.md)) |
 | `app/frontend/` | React, TypeScript y Vite ([README](../app/frontend/README.md)) |
-| `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). 37 aplicadas en `db-rt-rma` de las 39 del repositorio (las 2 del bloque C, `20261117000100` y `20261117000200`, sin aplicar) (São Paulo, `sa-east-1`): `20261116000100` y `20261116000200` (iteración de UX de Recepción, aditivas) el 16/11/2026; antes, las 12 de la macroiteración integral ese mismo día. Oregón (`rt-rma-db`, vuelta atrás de la migración) queda en 20 |
+| `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). 39 aplicadas en `db-rt-rma`, todas las del repositorio (São Paulo, `sa-east-1`): `20261117000100` y `20261117000200` (bloque C, aditivas) el 18/11/2026; `20261116000100` y `20261116000200` (iteración de UX de Recepción, aditivas) el 16/11/2026; antes, las 12 de la macroiteración integral ese mismo día. Oregón (`rt-rma-db`, vuelta atrás de la migración) queda en 20 |
 | Persistencia en uso | UAT: PostgreSQL en Supabase (`RMA_PERSISTENCIA=postgres`). JSON sigue siendo el valor por defecto local |
-| UAT publicado | Desde el 16/11/2026 a las 18:54 UTC, la iteración de UX de Recepción sobre Supabase São Paulo: backend en Cloud Run (`rt-rma-uat-api-00036-jis`, código `677dbb1`: desde las 22:54 UTC, la misma imagen que `00033-fah` con mínimo 0 instancias) y frontend en Vercel (`dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`). Vuelta atrás: `00031-ror` y `dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 8). Oregón sigue como vuelta atrás de la migración hasta el 25/11/2026 |
+| UAT publicado | Desde el 18/11/2026 a las 03:52 UTC, el bloque C sobre la iteración de UX de Recepción, en Supabase São Paulo: backend en Cloud Run (`rt-rma-uat-api-00039-sen`, código `fd434ef`, mínimo 0 instancias; vuelta atrás del backend: `00036-jis`, código `677dbb1`) y frontend en Vercel (`dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`). Vuelta atrás: `00031-ror` y `dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 8). Oregón sigue como vuelta atrás de la migración hasta el 25/11/2026 |
 
-**Rama de trabajo:** `mvp-v2`, con la iteración de UX de Recepción integrada; `business/` de `rt-rma-app` `ebd0840` (`spec/ux-recepcion`, publicada). Código desplegado en UAT: `677dbb1`, desde el 16/11/2026; los commits posteriores son documentación. `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
+**Rama de trabajo:** `mvp-v2`, con el bloque C integrado; `business/` de `rt-rma-app` `168618a` (`spec/reparacion-rt`, publicada). Código desplegado en UAT: `fd434ef`, desde el 18/11/2026; los commits posteriores son documentación. `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
 
-**Últimos commits de código:** `582d1bc` (rótulo del comprobante de autorización), `677dbb1` (E2E comercial y ensayo del despliegue), `3c96320` y `0a4c5ad` (ABI-44 y ABI-45, UX-03 y UX-04 revisadas) y los de la iteración de UX desde `b39daea`. Desplegado: `677dbb1`, desde el 16/11/2026. Ver `git log`.
+**Últimos commits de código:** los del bloque C, de `084b4d1` a `56b2446` (catálogo de Ventas en PostgreSQL, C1 a C7 y sus QA); antes, `582d1bc` (rótulo del comprobante de autorización), `677dbb1` (E2E comercial y ensayo del despliegue), `3c96320` y `0a4c5ad` (ABI-44 y ABI-45, UX-03 y UX-04 revisadas) y los de la iteración de UX desde `b39daea`. Desplegado: `fd434ef`, desde el 18/11/2026. Ver `git log`.
 
 **Estado de desarrollo:**
-- El MVP está en UAT sobre PostgreSQL, con autenticación real (Supabase Auth, usuario y contraseña), DC31 y la macroiteración integral, solo con datos ficticios: la Orden de prueba `OR-000001` (13/11/2026, con 5 fotos) y nada más ([`autenticacion.md`](autenticacion.md)).
+- El MVP está en UAT sobre PostgreSQL, con autenticación real (Supabase Auth, usuario y contraseña), DC31 y la macroiteración integral, solo con datos ficticios: las Órdenes de prueba `OR-000001` a `OR-000006`, creadas a mano, y la copia del catálogo de Ventas (bloque C) ([`autenticacion.md`](autenticacion.md)).
 - El UAT corre sobre São Paulo desde el 11/11/2026 ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16).
 - La migración a PostgreSQL tiene E0 a E7 terminadas: Bloque A (E4 + E5) y Bloque B (E6 + E7, B1 a B6). La app corre localmente sobre PostgreSQL, con los datos persistentes entre reinicios.
 - El frontend tiene el rediseño aprobado: sidebar, barra de acciones, modales y «Pendientes» (`fe655d7`).
@@ -81,6 +82,19 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Bloque C en UAT, C8 (18/11/2026): aprobado
+
+Procedimiento de [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 10, con autorización; resultado paso por paso en la sección 10.1. Sin cambios en producción, `main`, Gestión RT ni Vercel.
+
+- **Integración:** `rt-rma-app` `spec/reparacion-rt` `168618a` publicada; `business/` sincronizado (`fd434ef`); `feat/persistencia-catalogos` publicada e integrada en `mvp-v2` por avance rápido. CI en verde en las dos ramas.
+- **Base:** respaldo previo `uat/20261118T034246Z`; las dos migraciones aplicadas (39 migraciones, 71 tablas, integridad vacía, permisos de `rma_backend` como en el diseño) y subidas a `_herramientas/migraciones/`.
+- **Backend:** `rt-rma-uat-api-00039-sen`, probada sin tráfico por la etiqueta `c-fd434ef`, con el 100 % desde las 03:52:59 UTC, sin etiquetas y con mínimo 0 (`verificar_escalado_uat.py` OK).
+- **Persistencia:** sincronización `SINC-b535ab2598aa` EXITOSA desde el catálogo de Ventas vigente (1489 productos `IPHONE USADOS`, 1487 elegibles); después de 0 instancias y un arranque en frío, la misma copia y la misma última exitosa (RESULTADO: OK).
+- **E2E:** UX 47 de 47, V1.4 67 de 67 e integral 68 de 68, cada uno con su línea de base y limpieza selectiva. La primera corrida del integral falló (60 de 65) porque BAT-IP14 se había pasado a control por lote a mano ese día; se limpió, se volvió a `SIN_LOTE` con su registro de auditoría y se repitió con una línea de base nueva.
+- **Estado final del UAT:** las 6 Órdenes ficticias previas (`OR-000001` a `OR-000006`, creadas a mano), BAT-IP14 9/0 sin lote, Transferencia 2 %, copia del catálogo con 1489 productos y 1 intento, integridad vacía, sin esquemas temporales.
+- **Respaldos:** posterior `uat/20261118T221558Z` (39 migraciones, 71 tablas); ensayo de restauración en la nube `rt-rma-respaldo-db-8c7hq`: ENSAYO_RESTAURACION_OK.
+- **Vuelta atrás:** `update-traffic --to-revisions rt-rma-uat-api-00036-jis=100`; las migraciones quedan (son aditivas).
 
 ### Optimización de costos del backend del UAT (16/11/2026)
 
@@ -739,7 +753,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (17/11/2026):** autorizar la publicación de `feat/persistencia-catalogos` y `spec/reparacion-rt`, la integración en `mvp-v2` y C8 (bloque C en el UAT, [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 10); después, la etapa 1 de Reparación RT. **Antes (16/11/2026):** UAT operativo con la iteración de UX de Recepción, escalado a cero desde las 22:54 UTC (sección B). Cada publicación termina quitando su etiqueta temporal y con `verificar_escalado_uat.py` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 9). Siguen pendientes, con autorización: la pasada manual en un navegador real (P2-17, incluye el diálogo real de impresión y el desborde de «Pendientes» a 390 px), ABI-43 (exportación de Ventas), ABI-42 (para activar DC12) y la integración en `main` (P0-2).
+**Próximo paso (18/11/2026):** con el bloque C aprobado en el UAT (C8), autorizar la etapa 1 de Reparación RT ([`reparacion-rt-discovery.md`](reparacion-rt-discovery.md)). Pendientes del bloque C: mover el limitador por DNI a la base antes de permitir más de una instancia (P1-2) y, opcional, que el E2E integral compruebe el control por lote de BAT-IP14 en el escenario 0. **Antes (17/11/2026):** bloque C cerrado en local. **Antes (16/11/2026):** UAT operativo con la iteración de UX de Recepción, escalado a cero desde las 22:54 UTC (sección B). Cada publicación termina quitando su etiqueta temporal y con `verificar_escalado_uat.py` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 9). Siguen pendientes, con autorización: la pasada manual en un navegador real (P2-17, incluye el diálogo real de impresión y el desborde de «Pendientes» a 390 px), ABI-43 (exportación de Ventas), ABI-42 (para activar DC12) y la integración en `main` (P0-2).
 
 **Antes (12/11/2026):** la macroiteración está desplegada y validada en UAT, con los datos de prueba limpiados (sección B). Queda, opcional, repetir `medir_api.py`: solo mide tiempos y pide la contraseña de `administracion`. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
 

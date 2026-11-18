@@ -348,7 +348,7 @@ El costo real se ve en la consola de Facturación.
    - el resultado se anota en el registro del despliegue.
 5. **Comprobación con métricas** (opcional, tarda): en Cloud Monitoring, `run.googleapis.com/container/instance_count` por `revision_name`. Unos 15 minutos después de la última solicitud tiene que quedar en 0.
 
-## 10. Bloque C: copias de orígenes externos en PostgreSQL (preparado el 17/11/2026, sin ejecutar)
+## 10. Bloque C: copias de orígenes externos en PostgreSQL (preparado el 17/11/2026, ejecutado el 18/11/2026)
 
 **`/sync` sin clave de idempotencia.** La sincronización ya no usa `Idempotency-Key`: con clave correría en una sola transacción. Repetirla es inocuo y la reserva impide dos a la vez.
 
@@ -394,3 +394,20 @@ El costo real se ve en la consola de Facturación.
 - La revisión anterior vuelve a su copia JSON efímera.
 - La copia en la base queda guardada para cuando se vuelva a publicar.
 - No se borra ninguna tabla.
+
+### 10.1 Resultado de C8 (18/11/2026): aprobado
+
+Commit desplegado `fd434ef` (`mvp-v2`, CI en verde: `seguridad`, `frontend`, `funcional`, `backend` y `postgres`). Vercel sin cambios: no hubo despliegue de frontend.
+
+| Paso | Resultado |
+|---|---|
+| 1. Preflight | `00036-jis` con el 100 % y mínimo 0, `verificar_escalado_uat.py` OK; 37 migraciones y 69 tablas; el `--dry-run` listó solo `20261117000100` y `20261117000200`; el diff de la aplicación contra lo publicado son solo los 18 archivos del bloque C |
+| 2. Respaldo previo | `rt-rma-respaldo-db-zs5r5`, `uat/20261118T034246Z`: 37 migraciones, 69 tablas, 4 cuentas; `SHA256SUMS` correcto |
+| 3. Migraciones | 39 migraciones y 71 tablas; `verificar_integridad()` vacío; `catalogo_producto` vacía; `rma_backend` sin `DELETE` ni cambio de `finalizada_en`; `anon` y `authenticated` sin uso del esquema. Las dos migraciones subidas a `_herramientas/migraciones/` (39, MD5 iguales al repositorio). `00036-jis` siguió sana sobre las 39 |
+| 4. Backend sin tráfico | Revisión `rt-rma-uat-api-00039-sen`, etiqueta `c-fd434ef`: la misma configuración que `00036-jis` salvo la imagen. `/health` 200; 401 sin token y con un token inválido; `/docs`, `/openapi.json` y `/redoc` 404; CORS solo del frontend |
+| 5. Tráfico | 100 % en `00039-sen` a las 03:52:59 UTC; etiqueta quitada; `verificar_escalado_uat.py` OK (23 revisiones, mínimo 0) |
+| 6. Persistencia | Sincronización `SINC-b535ab2598aa` EXITOSA a las 13:38:33 UTC, desde el catálogo de Ventas vigente (DEC-MI-16): 3814 filas leídas, 1489 productos `IPHONE USADOS` vigentes, 1487 elegibles; sin secreto guardado. Revisión en 0 instancias desde las 13:55 UTC (Cloud Monitoring); `comprobar` después del arranque en frío: **RESULTADO: OK** (la misma última exitosa y las mismas cantidades). La sincronización fallida quedó cubierta por los tests automatizados y el ensayo local 26 de 26 (decisión del usuario) |
+| 7. E2E | UX 47 de 47, V1.4 67 de 67 e integral 68 de 68, cada uno con su línea de base y limpieza selectiva (ensayo y aplicación); sin sincronizar durante los E2E. Después de cada limpieza: las 6 Órdenes previas (`OR-000001` a `OR-000006`), BAT-IP14 en 9/0, copia de 1489 productos con 1 intento e integridad sin problemas |
+| 8. Respaldo posterior y ensayo | `rt-rma-respaldo-db-zd25s`, `uat/20261118T221558Z`: 39 migraciones, 71 tablas, 6 Órdenes, 1489 productos, 4 cuentas; `SHA256SUMS` correcto en el Job y en local. Ensayo en la nube `rt-rma-respaldo-db-8c7hq`: ENSAYO_RESTAURACION_OK (71 tablas con sus conteos, integridad, secuencias y 4 cuentas) |
+
+**Incidente en el E2E integral (resuelto).** La primera corrida dio 60 de 65: ese día se había configurado a mano, desde la interfaz del UAT, el insumo `INS-001` (BAT-IP14) con control por lote, y el escenario 4 (recepción de compras sin lote) y la comprobación del escenario 5 fallaron por esa precondición. Se limpió la corrida con `06_limpiar_e2e.sql` (ensayo y aplicación), se volvió BAT-IP14 a `SIN_LOTE` (sin lotes ni movimientos con lote; con su registro en `cambio_configuracion`, de `LOTE` a `SIN_LOTE`, a nombre de `ADMIN-001`, la cuenta del cambio original), se tomó una línea de base nueva y la repetición dio 68 de 68. **Antes de un E2E integral, BAT-IP14 tiene que estar `SIN_LOTE`:** el script lo comprueba recién en el escenario 5.

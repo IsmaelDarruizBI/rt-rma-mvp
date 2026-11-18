@@ -398,7 +398,8 @@ Las cuentas y contraseñas las ingresa el usuario. El script recibe el token por
 | C2, C5, C3 (fase A) | `47cb6b9`, `f555f4a` | Contrato con reserva y propietario; `LectorSheets` (`values.get`, `batchGet` por columnas, nombre de hoja por GID); motor `application/sincronizacion_origen.py`; reserva JSON con vencimiento (QA fase A, M1) |
 | C4 y M3 (fase B) | `187ab6a` | `PostgresCatalogoEquiposRepository` en el contexto PostgreSQL; migración `20261117000200`: solo el propietario de la reserva escribe la copia y finaliza el intento |
 | C6 | `aa21548` | `ensayar_persistencia_catalogo.py`: 26 de 26 |
-| C7 | (este cierre) | Suite completa, documentación y `probar_persistencia_catalogo.py` para C8 |
+| C7 | `d1b95c8`, `56b2446`, `66627b8` | Suite completa, documentación y `probar_persistencia_catalogo.py` para C8; correcciones del QA final |
+| C8 | `fd434ef` (desplegado) | UAT el 18/11/2026: revisión `00039-sen`, 39 migraciones, persistencia después del escalado a cero OK, E2E 47, 67 y 68 de 68, respaldo y ensayo de restauración OK ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 10.1) |
 
 **Diferencias con el diseño (secciones 3 a 5),** registradas en el QA:
 
