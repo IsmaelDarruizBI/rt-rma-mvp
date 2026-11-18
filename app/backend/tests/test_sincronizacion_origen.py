@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import threading
+import time
 import urllib.error
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, unquote, urlparse
@@ -32,7 +33,7 @@ from app.integraciones.origen import (
     OrigenNoDisponibleError,
 )
 from app.integraciones.sheets import LectorSheets, letra_de_columna
-from app.repositories import ReservaOcupadaError
+from app.repositories import PersistenciaError, ReservaOcupadaError
 from app.services import SincronizacionEnCursoError
 from app.storage.json.catalogo_equipos import JsonCatalogoEquiposRepository
 
@@ -346,6 +347,16 @@ def test_nombre_de_hoja_por_gid():
 
 
 @pytest.mark.parametrize(
+    "cuerpo",
+    [{"sheets": 5}, {"sheets": [{"properties": []}]}, {"sheets": ["x"]}],
+)
+def test_nombre_de_hoja_rechaza_respuestas_mal_formadas(cuerpo):
+    """QA C fase A, m4."""
+    with pytest.raises(OrigenInvalidoError, match="formato inesperado"):
+        _lector(Http(cuerpo)).nombre_de_hoja(1)
+
+
+@pytest.mark.parametrize(
     ("codigo", "texto"),
     [
         (403, "permiso de lectura sobre la planilla de prueba"),
@@ -415,12 +426,89 @@ def test_json_una_reserva_por_archivo_y_se_libera_al_finalizar(tmp_path):
         reserva.id,
         segunda.id,
     ]
-    # Liberar dos veces no libera la reserva de otro.
+    # Una reserva vieja no escribe ni libera la de otro.
     tercera = _reservar(repo, "SINC-000000000003")
-    repo.registrar_sincronizacion(_intento("SINC-000000000004"), reserva)
+    with pytest.raises(PersistenciaError, match="ya no está en curso"):
+        repo.registrar_sincronizacion(_intento("SINC-000000000004"), reserva)
     with pytest.raises(ReservaOcupadaError):
         _reservar(otro, "SINC-000000000005")
     repo.registrar_sincronizacion(_intento(tercera.id), tercera)
+
+
+def test_json_la_reserva_vence_y_la_vieja_ya_no_escribe(tmp_path):
+    """QA C fase A, M1: una reserva que nadie libero vence y se toma."""
+    repo = JsonCatalogoEquiposRepository(tmp_path)
+    vieja = repo.reservar_sincronizacion(
+        id="SINC-0000000000a1",
+        usuario_id="ADMIN-001",
+        origen="o",
+        filtro="f",
+        duracion=timedelta(milliseconds=50),
+        propietario="secreto",
+    )
+    with pytest.raises(ReservaOcupadaError):
+        _reservar(repo, "SINC-0000000000a2")
+    time.sleep(0.1)
+    nueva = _reservar(repo, "SINC-0000000000a3")
+    for escribir in (
+        lambda: repo.aplicar_sincronizacion(
+            _intento(vieja.id, "EXITOSA"), [], vieja
+        ),
+        lambda: repo.registrar_sincronizacion(_intento(vieja.id), vieja),
+    ):
+        with pytest.raises(PersistenciaError):
+            escribir()
+    with pytest.raises(ReservaOcupadaError):  # la vieja no libero la nueva
+        _reservar(repo, "SINC-0000000000a4")
+    repo.aplicar_sincronizacion(_intento(nueva.id, "EXITOSA"), [], nueva)
+    assert [s.id for s in repo.listar_sincronizaciones()] == [nueva.id]
+    _reservar(repo, "SINC-0000000000a5")
+
+
+def test_json_un_fallo_antes_del_repositorio_no_bloquea_para_siempre(
+    tmp_path, monkeypatch
+):
+    """QA C fase A, M1, en el camino real: si armar el intento falla, la
+    reserva no se libera, pero vence y la siguiente sincroniza."""
+    from dataclasses import replace
+
+    from app.application import catalogo_equipos as aplicacion
+    from app.application import sincronizar_catalogo_equipos
+    from app.core.config import Settings
+    from app.main import create_app
+    from tests.fixtures.api_salidas import ADMINISTRADOR, sembrar
+    from tests.fixtures.catalogo_ventas import escribir_csv
+
+    sembrar(tmp_path, "10")
+    csv = escribir_csv(tmp_path / "tipo_producto.csv")
+    app = create_app(
+        Settings(
+            _env_file=None,
+            data_dir=tmp_path,
+            catalogo_origen="archivo",
+            catalogo_archivo=csv,
+        )
+    )
+    contexto = replace(
+        app.state.contexto, reserva_sincronizacion=timedelta(milliseconds=200)
+    )
+
+    def falla(self, reserva):
+        raise TypeError("reloj sin zona horaria")
+
+    monkeypatch.setattr(aplicacion._CopiaCatalogoVentas, "_base", falla)
+    with pytest.raises(TypeError):
+        sincronizar_catalogo_equipos(contexto, usuario_id=ADMINISTRADOR)
+    monkeypatch.undo()
+    with pytest.raises(SincronizacionEnCursoError):
+        sincronizar_catalogo_equipos(contexto, usuario_id=ADMINISTRADOR)
+    time.sleep(0.3)
+    assert (
+        sincronizar_catalogo_equipos(
+            contexto, usuario_id=ADMINISTRADOR
+        ).resultado.value
+        == "EXITOSA"
+    )
 
 
 def test_json_otra_carpeta_es_otra_copia(tmp_path):

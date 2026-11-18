@@ -48,9 +48,13 @@ COPIA = "CATALOGO_VENTAS"
 
 # Una sincronizacion por vez por archivo, en todo el proceso (como el
 # candado de la aplicacion de antes): la segunda se rechaza, no espera.
+# Como en PostgreSQL, la reserva VENCE: si quien la tomo no la libero (un
+# error antes de llegar al repositorio), la siguiente la toma pasado
+# ``vence_en`` y la vieja ya no puede escribir (QA C fase A, M1).
 _GUARDA = threading.Lock()
 _CANDADOS: dict[Path, threading.Lock] = {}
-_TITULARES: dict[Path, str] = {}
+# Por archivo: (id de la reserva vigente, hasta cuando vale).
+_TITULARES: dict[Path, tuple[str, datetime]] = {}
 
 
 def _candado(ruta: Path) -> threading.Lock:
@@ -99,14 +103,27 @@ class JsonCatalogoEquiposRepository:
         duracion: timedelta,
         propietario: str,
     ) -> ReservaSincronizacion:
-        candado = _candado(self.ruta)
-        if not candado.acquire(blocking=False):
-            raise ReservaOcupadaError(
-                "Ya hay una sincronización del catálogo en curso."
-            )
-        with _GUARDA:
-            _TITULARES[self.ruta.resolve()] = id
+        ruta = self.ruta.resolve()
+        candado = _candado(ruta)
         iniciada = datetime.now(timezone.utc)
+        vence = iniciada + duracion
+        if candado.acquire(blocking=False):
+            try:
+                with _GUARDA:
+                    _TITULARES[ruta] = (id, vence)
+            except BaseException:
+                candado.release()
+                raise
+        else:
+            with _GUARDA:
+                titular = _TITULARES.get(ruta)
+                if titular is None or titular[1] > iniciada:
+                    raise ReservaOcupadaError(
+                        "Ya hay una sincronización del catálogo en curso."
+                    )
+                # La reserva anterior vencio sin liberarse: se toma (el
+                # candado sigue tomado, ahora a nombre de esta).
+                _TITULARES[ruta] = (id, vence)
         return ReservaSincronizacion(
             id=id,
             copia=COPIA,
@@ -114,7 +131,7 @@ class JsonCatalogoEquiposRepository:
             origen=origen,
             filtro=filtro,
             iniciada_en=iniciada,
-            vence_en=iniciada + duracion,
+            vence_en=vence,
             propietario=propietario,
         )
 
@@ -124,6 +141,7 @@ class JsonCatalogoEquiposRepository:
         reserva: ReservaSincronizacion | None = None,
     ) -> None:
         try:
+            self._exigir_vigente(reserva)
             with acceso_exclusivo():
                 self._cargar()
                 self._escribir(self._productos, sincronizacion)
@@ -137,6 +155,7 @@ class JsonCatalogoEquiposRepository:
         reserva: ReservaSincronizacion | None = None,
     ) -> None:
         try:
+            self._exigir_vigente(reserva)
             with acceso_exclusivo():
                 self._cargar()
                 self._escribir(list(productos), sincronizacion)
@@ -145,14 +164,28 @@ class JsonCatalogoEquiposRepository:
 
     # --- Internos ---
 
+    def _exigir_vigente(self, reserva: ReservaSincronizacion | None) -> None:
+        """Con reserva, solo escribe la vigente: una que vencio y otra tomo
+        ya no finaliza (como en PostgreSQL)."""
+        if reserva is None:
+            return
+        with _GUARDA:
+            titular = _TITULARES.get(self.ruta.resolve())
+        if titular is None or titular[0] != reserva.id:
+            raise PersistenciaError(
+                f"El intento {reserva.id} ya no está en curso: no se "
+                "finalizó (su reserva venció y otra sincronización la tomó)."
+            )
+
     def _liberar(self, reserva: ReservaSincronizacion | None) -> None:
-        """Libera la reserva si es la vigente (liberar dos veces no hace
-        nada)."""
+        """Libera la reserva si es la vigente (liberar dos veces, o una
+        reserva que otra ya tomo, no hace nada)."""
         if reserva is None:
             return
         ruta = self.ruta.resolve()
         with _GUARDA:
-            if _TITULARES.get(ruta) != reserva.id:
+            titular = _TITULARES.get(ruta)
+            if titular is None or titular[0] != reserva.id:
                 return
             del _TITULARES[ruta]
         _candado(ruta).release()

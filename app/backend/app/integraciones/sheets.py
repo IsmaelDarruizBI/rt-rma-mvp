@@ -140,10 +140,19 @@ class LectorSheets:
             {"fields": "sheets.properties(sheetId,title)"},
             hoja=f"GID {gid}",
         )
-        for hoja in cuerpo.get("sheets", []) or []:
-            propiedades = (
-                hoja.get("properties", {}) if isinstance(hoja, dict) else {}
+        hojas = cuerpo.get("sheets", [])
+        if not isinstance(hojas, list):
+            raise self._invalido(
+                "Google Sheets respondió con un formato inesperado."
             )
+        for hoja in hojas:
+            propiedades = (
+                hoja.get("properties") if isinstance(hoja, dict) else None
+            )
+            if not isinstance(propiedades, dict):
+                raise self._invalido(
+                    "Google Sheets respondió con un formato inesperado."
+                )
             if propiedades.get("sheetId") == gid:
                 titulo = propiedades.get("title")
                 if isinstance(titulo, str) and titulo:
