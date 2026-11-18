@@ -13,20 +13,27 @@ Para no reparsear ~1.500 productos en cada alta, lo leido se conserva en
 memoria mientras el archivo no cambie (misma fecha de modificacion y
 tamano).
 
-LIMITACION: en Cloud Run el disco es efimero; un redespliegue o un
-reinicio de la instancia borra la copia y hay que volver a sincronizar.
-Las Ordenes no pierden nada: cada Equipo guarda su ``tp_id`` y una copia
-de sus caracteristicas comerciales. La copia persistente es PostgreSQL.
+Solo para el modo JSON (desarrollo local): con ``RMA_PERSISTENCIA=postgres``
+la copia va a la base (``PostgresCatalogoEquiposRepository``), porque en
+Cloud Run el disco es efimero. La reserva de una sincronizacion es un
+candado del proceso por archivo: no hay otra instancia que coordinar, y si
+el proceso termina, el candado termina con el.
 """
 
+import threading
 from collections.abc import Sequence
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
-from app.domain.models import ProductoCatalogo, SincronizacionCatalogo
-from app.repositories.exceptions import PersistenciaError
+from app.domain.models import (
+    ProductoCatalogo,
+    ReservaSincronizacion,
+    SincronizacionCatalogo,
+)
+from app.repositories.exceptions import PersistenciaError, ReservaOcupadaError
 
 from .base import (
     acceso_exclusivo,
@@ -37,6 +44,18 @@ from .base import (
 
 ARCHIVO_CATALOGO_EQUIPOS = "catalogo_equipos.json"
 MAX_SINCRONIZACIONES = 100
+COPIA = "CATALOGO_VENTAS"
+
+# Una sincronizacion por vez por archivo, en todo el proceso (como el
+# candado de la aplicacion de antes): la segunda se rechaza, no espera.
+_GUARDA = threading.Lock()
+_CANDADOS: dict[Path, threading.Lock] = {}
+_TITULARES: dict[Path, str] = {}
+
+
+def _candado(ruta: Path) -> threading.Lock:
+    with _GUARDA:
+        return _CANDADOS.setdefault(ruta.resolve(), threading.Lock())
 
 
 class JsonCatalogoEquiposRepository:
@@ -70,23 +89,73 @@ class JsonCatalogoEquiposRepository:
             self._cargar()
             return list(self._sincronizaciones)
 
+    def reservar_sincronizacion(
+        self,
+        *,
+        id: str,
+        usuario_id: str,
+        origen: str,
+        filtro: str,
+        duracion: timedelta,
+        propietario: str,
+    ) -> ReservaSincronizacion:
+        candado = _candado(self.ruta)
+        if not candado.acquire(blocking=False):
+            raise ReservaOcupadaError(
+                "Ya hay una sincronización del catálogo en curso."
+            )
+        with _GUARDA:
+            _TITULARES[self.ruta.resolve()] = id
+        iniciada = datetime.now(timezone.utc)
+        return ReservaSincronizacion(
+            id=id,
+            copia=COPIA,
+            usuario_id=usuario_id,
+            origen=origen,
+            filtro=filtro,
+            iniciada_en=iniciada,
+            vence_en=iniciada + duracion,
+            propietario=propietario,
+        )
+
     def registrar_sincronizacion(
-        self, sincronizacion: SincronizacionCatalogo
+        self,
+        sincronizacion: SincronizacionCatalogo,
+        reserva: ReservaSincronizacion | None = None,
     ) -> None:
-        with acceso_exclusivo():
-            self._cargar()
-            self._escribir(self._productos, sincronizacion)
+        try:
+            with acceso_exclusivo():
+                self._cargar()
+                self._escribir(self._productos, sincronizacion)
+        finally:
+            self._liberar(reserva)
 
     def aplicar_sincronizacion(
         self,
         sincronizacion: SincronizacionCatalogo,
         productos: Sequence[ProductoCatalogo],
+        reserva: ReservaSincronizacion | None = None,
     ) -> None:
-        with acceso_exclusivo():
-            self._cargar()
-            self._escribir(list(productos), sincronizacion)
+        try:
+            with acceso_exclusivo():
+                self._cargar()
+                self._escribir(list(productos), sincronizacion)
+        finally:
+            self._liberar(reserva)
 
     # --- Internos ---
+
+    def _liberar(self, reserva: ReservaSincronizacion | None) -> None:
+        """Libera la reserva si es la vigente (liberar dos veces no hace
+        nada)."""
+        if reserva is None:
+            return
+        ruta = self.ruta.resolve()
+        with _GUARDA:
+            if _TITULARES.get(ruta) != reserva.id:
+                return
+            del _TITULARES[ruta]
+        _candado(ruta).release()
 
     def _escribir(
         self,

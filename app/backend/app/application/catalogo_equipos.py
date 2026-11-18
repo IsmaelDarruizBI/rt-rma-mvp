@@ -9,24 +9,25 @@
 
 La sincronizacion habla con el origen SOLO a traves de
 ``ProveedorCatalogo``: no sabe si es Google Sheets, un CSV o una base de
-datos. Si el origen falla o responde algo no confiable, el intento queda
-registrado y la copia no cambia (sigue la de la ultima sincronizacion
-exitosa). El alta de una Orden nunca consulta el origen: lee la copia.
+datos. El ciclo (reserva entre instancias, lectura fuera de la
+transaccion, aplicacion atomica, intentos fallidos registrados) es el del
+motor comun ``application.sincronizacion_origen``. Si el origen falla o
+responde algo no confiable, el intento queda registrado y la copia no
+cambia (sigue la de la ultima sincronizacion exitosa). El alta de una
+Orden nunca consulta el origen: lee la copia.
 """
 
-import threading
 from dataclasses import dataclass
+from datetime import timedelta
 
 from app.domain.models import (
     Equipo,
+    ReservaSincronizacion,
     ResultadoSincronizacion,
     SincronizacionCatalogo,
+    Usuario,
 )
-from app.integraciones.catalogo import (
-    CatalogoOrigenInvalidoError,
-    CatalogoOrigenNoDisponibleError,
-    LecturaCatalogo,
-)
+from app.integraciones.catalogo import LecturaCatalogo, ProveedorCatalogo
 from app.repositories import CatalogoEquiposRepository
 from app.services import (
     CAMPOS_COMERCIALES,
@@ -34,13 +35,11 @@ from app.services import (
     CatalogoRechazadoError,
     OpcionModelo,
     PrecondicionInvalidaError,
-    SincronizacionEnCursoError,
     equipo_carga_manual,
     equipo_con_modelo,
     equipo_con_producto,
     fusionar_catalogo,
     modelo_elegible,
-    nuevo_id,
     opciones_de_seleccion,
     producto_elegible,
     validar_alguno_de,
@@ -48,10 +47,7 @@ from app.services import (
 )
 
 from .contexto import ApplicationContext
-
-# Una sincronizacion por vez en el proceso (la lectura puede tardar unos
-# segundos): la segunda se rechaza en vez de esperar.
-_SINCRONIZANDO = threading.Lock()
+from .sincronizacion_origen import ejecutar_sincronizacion
 
 
 def _copia(contexto: ApplicationContext) -> CatalogoEquiposRepository:
@@ -69,7 +65,8 @@ def sincronizar_catalogo_equipos(
 
     Lanza ``CatalogoOrigenNoDisponibleError`` (no se pudo leer) o
     ``CatalogoRechazadoError`` (datos no confiables) DESPUES de registrar
-    el intento; en los dos casos la copia queda como estaba.
+    el intento; en los dos casos la copia queda como estaba. Con otra
+    sincronizacion en curso, ``SincronizacionEnCursoError``.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     validar_alguno_de(usuario, ROLES_SINCRONIZACION_CATALOGO)
@@ -80,52 +77,61 @@ def sincronizar_catalogo_equipos(
             "No hay un origen del catálogo configurado "
             "(RMA_CATALOGO_ORIGEN): no se puede sincronizar."
         )
-    if not _SINCRONIZANDO.acquire(blocking=False):
-        raise SincronizacionEnCursoError(
-            "Ya hay una sincronización del catálogo en curso."
-        )
-    try:
-        iniciada = contexto.ahora()
-        base = {
-            "id": nuevo_id("SINC"),
-            "usuario_id": usuario.id,
-            "origen": proveedor.descripcion,
-            "filtro": contexto.filtro_catalogo.descripcion,
-            "iniciada_en": iniciada,
-        }
-        lectura: LecturaCatalogo | None = None
-        try:
-            lectura = proveedor.leer(contexto.filtro_catalogo)
-            validar_informados(lectura.productos)
-        except CatalogoOrigenNoDisponibleError as error:
-            copia.registrar_sincronizacion(
-                _intento(
-                    base,
-                    contexto,
-                    ResultadoSincronizacion.FALLIDA,
-                    str(error),
-                    lectura,
-                )
-            )
-            raise
-        except (CatalogoOrigenInvalidoError, CatalogoRechazadoError) as error:
-            copia.registrar_sincronizacion(
-                _intento(
-                    base,
-                    contexto,
-                    ResultadoSincronizacion.RECHAZADA,
-                    str(error),
-                    lectura,
-                )
-            )
-            raise CatalogoRechazadoError(str(error)) from error
+    return ejecutar_sincronizacion(
+        _CopiaCatalogoVentas(contexto, copia, proveedor, usuario),
+        duracion=contexto.reserva_sincronizacion,
+    )
 
+
+class _CopiaCatalogoVentas:
+    """El catalogo de Ventas como ``CopiaSincronizable``."""
+
+    mensaje_en_curso = "Ya hay una sincronización del catálogo en curso."
+    rechazos = (CatalogoRechazadoError,)
+
+    def __init__(
+        self,
+        contexto: ApplicationContext,
+        repositorio: CatalogoEquiposRepository,
+        proveedor: ProveedorCatalogo,
+        usuario: Usuario,
+    ) -> None:
+        self._contexto = contexto
+        self._repositorio = repositorio
+        self._proveedor = proveedor
+        self._usuario = usuario
+
+    def rechazo(self, mensaje: str) -> Exception:
+        return CatalogoRechazadoError(mensaje)
+
+    def reservar(
+        self, *, id: str, propietario: str, duracion: timedelta
+    ) -> ReservaSincronizacion:
+        return self._repositorio.reservar_sincronizacion(
+            id=id,
+            usuario_id=self._usuario.id,
+            origen=self._proveedor.descripcion,
+            filtro=self._contexto.filtro_catalogo.descripcion,
+            duracion=duracion,
+            propietario=propietario,
+        )
+
+    def leer(self) -> LecturaCatalogo:
+        return self._proveedor.leer(self._contexto.filtro_catalogo)
+
+    def validar(self, lectura: LecturaCatalogo) -> None:
+        validar_informados(lectura.productos)
+
+    def aplicar(
+        self, reserva: ReservaSincronizacion, lectura: LecturaCatalogo
+    ) -> SincronizacionCatalogo:
         fusion = fusionar_catalogo(
-            copia.listar_productos(), lectura.productos, fecha=iniciada
+            self._repositorio.listar_productos(),
+            lectura.productos,
+            fecha=reserva.iniciada_en,
         )
         sincronizacion = SincronizacionCatalogo(
-            **base,
-            finalizada_en=contexto.ahora(),
+            **self._base(reserva),
             resultado=ResultadoSincronizacion.EXITOSA,
             leidos=lectura.leidos,
             filtrados=lectura.filtrados,
@@ -138,28 +144,39 @@ def sincronizar_catalogo_equipos(
             vigentes=fusion.vigentes,
             elegibles=fusion.elegibles,
         )
-        copia.aplicar_sincronizacion(sincronizacion, fusion.productos)
+        self._repositorio.aplicar_sincronizacion(
+            sincronizacion, fusion.productos, reserva
+        )
         return sincronizacion
-    finally:
-        _SINCRONIZANDO.release()
 
+    def finalizar(
+        self,
+        reserva: ReservaSincronizacion,
+        resultado: ResultadoSincronizacion,
+        mensaje: str,
+        lectura: LecturaCatalogo | None,
+    ) -> None:
+        self._repositorio.registrar_sincronizacion(
+            SincronizacionCatalogo(
+                **self._base(reserva),
+                resultado=resultado,
+                mensaje=mensaje,
+                leidos=lectura.leidos if lectura else 0,
+                filtrados=lectura.filtrados if lectura else 0,
+                descartados=lectura.descartados if lectura else 0,
+            ),
+            reserva,
+        )
 
-def _intento(
-    base: dict,
-    contexto: ApplicationContext,
-    resultado: ResultadoSincronizacion,
-    mensaje: str,
-    lectura: LecturaCatalogo | None,
-) -> SincronizacionCatalogo:
-    return SincronizacionCatalogo(
-        **base,
-        finalizada_en=contexto.ahora(),
-        resultado=resultado,
-        mensaje=mensaje,
-        leidos=lectura.leidos if lectura else 0,
-        filtrados=lectura.filtrados if lectura else 0,
-        descartados=lectura.descartados if lectura else 0,
-    )
+    def _base(self, reserva: ReservaSincronizacion) -> dict:
+        return {
+            "id": reserva.id,
+            "usuario_id": reserva.usuario_id,
+            "origen": reserva.origen,
+            "filtro": reserva.filtro,
+            "iniciada_en": reserva.iniciada_en,
+            "finalizada_en": max(self._contexto.ahora(), reserva.iniciada_en),
+        }
 
 
 @dataclass(frozen=True)

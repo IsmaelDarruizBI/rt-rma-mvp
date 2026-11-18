@@ -85,6 +85,12 @@ class PersistenciaResultadoInciertoError(PersistenciaError):
     codigo = "PERSISTENCIA_RESULTADO_INCIERTO"
 
 
+class ReservaOcupadaError(RepositoryError):
+    """Otra sincronizacion de la misma copia esta en curso (su reserva no
+    vencio): no se reserva ni se lee nada. La aplicacion lo traduce a su
+    propio error (409)."""
+
+
 class ClaveReutilizadaError(RepositoryError):
     """La clave de idempotencia ya se uso para otra operacion o con otros
     parametros (E6, DE6-3). La API responde 422: no es un reintento."""

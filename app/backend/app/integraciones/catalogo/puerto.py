@@ -17,9 +17,14 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.domain.models import ProductoInformado
+from app.integraciones.origen import (
+    OrigenExternoError,
+    OrigenInvalidoError,
+    OrigenNoDisponibleError,
+)
 
 
-class CatalogoOrigenError(Exception):
+class CatalogoOrigenError(OrigenExternoError):
     """El origen del catalogo no pudo dar un resultado confiable.
 
     El mensaje es apto para mostrar: nunca incluye tokens, credenciales ni
@@ -27,11 +32,13 @@ class CatalogoOrigenError(Exception):
     """
 
 
-class CatalogoOrigenNoDisponibleError(CatalogoOrigenError):
+class CatalogoOrigenNoDisponibleError(
+    CatalogoOrigenError, OrigenNoDisponibleError
+):
     """No se pudo leer: red, permisos, credencial o servicio caido."""
 
 
-class CatalogoOrigenInvalidoError(CatalogoOrigenError):
+class CatalogoOrigenInvalidoError(CatalogoOrigenError, OrigenInvalidoError):
     """Se leyo, pero la estructura no es la esperada (faltan columnas,
     respuesta vacia o con otro formato)."""
 

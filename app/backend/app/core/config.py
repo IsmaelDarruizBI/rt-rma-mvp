@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ``app/backend/data``: el directorio versionado con los catalogos DEMO
@@ -93,6 +93,11 @@ class Settings(BaseSettings):
     catalogo_sheets_cuenta: str | None = None
     catalogo_archivo: Path | None = None
     catalogo_timeout_s: float = 30.0
+    # Cuanto dura la reserva de una sincronizacion de una copia de un origen
+    # externo (catalogo de Ventas; despues, Productos RT). Pasado ese tiempo
+    # sin terminar (instancia apagada a mitad), la siguiente la marca
+    # INTERRUMPIDA. La base no admite mas de una hora.
+    sincronizacion_reserva_s: int = Field(default=600, ge=10, le=3600)
     # DC12: que columna del catalogo de Ventas es el Tipo de Equipo del
     # checklist. Vacia (por defecto): no esta definido y no se copian
     # tipos. Negocio no confirmo todavia cual corresponde (ninguna equivale

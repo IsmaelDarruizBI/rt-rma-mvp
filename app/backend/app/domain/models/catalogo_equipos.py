@@ -109,6 +109,9 @@ class ResultadoSincronizacion(str, Enum):
     # El origen respondio, pero sus datos no son confiables (faltan
     # columnas, ``tp_id`` repetidos, ningun producto): no se aplica nada.
     RECHAZADA = "RECHAZADA"
+    # La reserva vencio sin terminar (la instancia se apago o cayo a
+    # mitad): la marca la sincronizacion siguiente. No aplico nada.
+    INTERRUMPIDA = "INTERRUMPIDA"
 
 
 class SincronizacionCatalogo(BaseModel):

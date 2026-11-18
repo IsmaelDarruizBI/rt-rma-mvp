@@ -96,6 +96,8 @@ class ApplicationContext:
     )
     catalogo_equipos: CatalogoEquiposRepository | None = None
     proveedor_catalogo: ProveedorCatalogo | None = None
+    # Duracion de la reserva de una sincronizacion (bloque C).
+    reserva_sincronizacion: timedelta = timedelta(minutes=10)
     filtro_catalogo: FiltroCatalogo = FiltroCatalogo(("IPHONE USADOS",))
     # DC12: columna del catalogo de Ventas que da el Tipo de Equipo
     # (``RMA_TIPO_EQUIPO_CAMPO``); ``None``: sin definir.
@@ -230,6 +232,9 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
         ),
         proveedor_catalogo=construir_proveedor_catalogo(settings),
         filtro_catalogo=filtro_catalogo(settings),
+        reserva_sincronizacion=timedelta(
+            seconds=settings.sincronizacion_reserva_s
+        ),
         campo_tipo_equipo=settings.tipo_equipo_campo or None,
         modelos_equipo=PostgresModelosEquipoRepository(unidad),
         unidad_de_trabajo=unidad,
@@ -267,6 +272,9 @@ def construir_contexto(settings: Settings) -> ApplicationContext:
         ),
         proveedor_catalogo=construir_proveedor_catalogo(settings),
         filtro_catalogo=filtro_catalogo(settings),
+        reserva_sincronizacion=timedelta(
+            seconds=settings.sincronizacion_reserva_s
+        ),
         campo_tipo_equipo=settings.tipo_equipo_campo or None,
         modelos_equipo=JsonModelosEquipoRepository(
             settings.modelos_equipo_archivo

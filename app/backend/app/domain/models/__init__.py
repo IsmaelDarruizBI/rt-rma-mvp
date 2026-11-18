@@ -116,6 +116,7 @@ from .reparacion import (
     SolicitudDesistimiento,
     TomaOrden,
 )
+from .sincronizacion import ReservaSincronizacion
 from .workflow import HistorialWorkflow
 
 __all__ = [
@@ -160,6 +161,7 @@ __all__ = [
     "ProductoCatalogo",
     "ProductoInformado",
     "ResultadoSincronizacion",
+    "ReservaSincronizacion",
     "SincronizacionCatalogo",
     # Recepcion y custodia
     "FotoOrden",
