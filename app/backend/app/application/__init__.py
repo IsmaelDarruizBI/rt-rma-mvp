@@ -55,6 +55,7 @@ from .bandejas import (
 from .cancelacion import cancelar_detalle, cancelar_orden, registrar_devolucion
 from .catalogo_equipos import (
     EstadoCatalogoEquipos,
+    catalogo_con_estado,
     catalogo_para_seleccion,
     equipo_desde_catalogo,
     estado_catalogo_equipos,
@@ -193,6 +194,7 @@ __all__ = [
     "EstadoCatalogoEquipos",
     "catalogo_para_seleccion",
     "equipo_desde_catalogo",
+    "catalogo_con_estado",
     "estado_catalogo_equipos",
     "sincronizar_catalogo_equipos",
     # Catalogo tecnico de modelos de equipo

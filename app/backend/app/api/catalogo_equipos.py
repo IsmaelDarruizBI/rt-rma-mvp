@@ -18,8 +18,7 @@ from pydantic import BaseModel
 
 from app.application import (
     EstadoCatalogoEquipos,
-    catalogo_para_seleccion,
-    estado_catalogo_equipos,
+    catalogo_con_estado,
     sincronizar_catalogo_equipos,
 )
 from app.domain.models import ResultadoSincronizacion, SincronizacionCatalogo
@@ -150,14 +149,10 @@ class CatalogoEquiposOut(BaseModel):
 @router.get("")
 def get_catalogo_equipos(contexto: ContextoDep) -> CatalogoEquiposOut:
     """Selector del alta: Modelo -> Variante -> Capacidad -> Color."""
+    estado, opciones = catalogo_con_estado(contexto)
     return CatalogoEquiposOut(
-        estado=EstadoCatalogoOut.desde_dominio(
-            estado_catalogo_equipos(contexto)
-        ),
-        modelos=[
-            ModeloOut.desde_opcion(opcion)
-            for opcion in catalogo_para_seleccion(contexto)
-        ],
+        estado=EstadoCatalogoOut.desde_dominio(estado),
+        modelos=[ModeloOut.desde_opcion(opcion) for opcion in opciones],
     )
 
 

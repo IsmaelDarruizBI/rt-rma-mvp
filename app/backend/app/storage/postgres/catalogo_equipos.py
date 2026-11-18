@@ -21,7 +21,7 @@ a quien reservo (QA C1, M3). El secreto nunca se guarda ni se registra.
 
 import json
 from collections.abc import Sequence
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.domain.models import (
     MotivoBaja,
@@ -35,6 +35,8 @@ from app.repositories.exceptions import (
     ConflictoDeEscrituraError,
     PersistenciaError,
     ReservaOcupadaError,
+    ReservaPerdidaError,
+    RestriccionDeIntegridadError,
 )
 
 from .consultas import ESCRITURA, LECTURA, consulta
@@ -42,6 +44,9 @@ from .transaccion import UnidadDeTrabajoPostgres
 
 COPIA = "CATALOGO_VENTAS"
 INDICE_RESERVA = "sincronizacion_origen_en_curso"
+# restrict_violation: el trigger de la copia rechaza escribir con un intento
+# que ya no esta EN_CURSO (su reserva vencio y otra la tomo).
+SQLSTATE_INTENTO_TERMINADO = "23001"
 # Como la copia JSON: el estado mira los ultimos intentos.
 MAX_SINCRONIZACIONES = 100
 CONTADORES = (
@@ -228,8 +233,8 @@ class PostgresCatalogoEquiposRepository:
             usuario_id=usuario_id,
             origen=origen,
             filtro=filtro,
-            iniciada_en=fila.iniciada_en,
-            vence_en=fila.vence_en,
+            iniciada_en=_utc(fila.iniciada_en),
+            vence_en=_utc(fila.vence_en),
             propietario=propietario,
         )
 
@@ -253,14 +258,21 @@ class PostgresCatalogoEquiposRepository:
             raise PersistenciaError(
                 "Solo una sincronización EXITOSA cambia la copia."
             )
-        with self._unidad.transaccion():
-            ejecutor = self._unidad.ejecutor()
-            if productos:
-                ejecutor.ejecutar_lote(
-                    _GUARDAR_PRODUCTO,
-                    [_parametros(p, reserva) for p in productos],
-                )
-            self._finalizar(ejecutor, sincronizacion, reserva)
+        try:
+            with self._unidad.transaccion():
+                ejecutor = self._unidad.ejecutor()
+                if productos:
+                    ejecutor.ejecutar_lote(
+                        _GUARDAR_PRODUCTO,
+                        [_parametros(p, reserva) for p in productos],
+                    )
+                self._finalizar(ejecutor, sincronizacion, reserva)
+        except RestriccionDeIntegridadError as error:
+            if getattr(error, "sqlstate", None) == SQLSTATE_INTENTO_TERMINADO:
+                raise ReservaPerdidaError(
+                    _PERDIDA.format(reserva.id)
+                ) from None
+            raise
 
     # --- Internos -------------------------------------------------------
 
@@ -284,11 +296,19 @@ class PostgresCatalogoEquiposRepository:
             },
         )
         if finalizados != 1:
-            raise PersistenciaError(
-                f"El intento {reserva.id} ya no está en curso: no se "
-                "finalizó (su reserva venció y otra sincronización la "
-                "interrumpió)."
-            )
+            raise ReservaPerdidaError(_PERDIDA.format(reserva.id))
+
+
+_PERDIDA = (
+    "El intento {} ya no está en curso: su reserva venció y otra "
+    "sincronización la tomó. No se aplicó nada."
+)
+
+
+def _utc(momento: datetime) -> datetime:
+    """Como los demas repositorios: siempre en UTC, sea cual sea la zona
+    horaria de la sesion."""
+    return momento.astimezone(timezone.utc)
 
 
 def _exigir(
@@ -358,8 +378,8 @@ def _producto(f) -> ProductoCatalogo:
         vigente=f.vigente,
         motivo_baja=MotivoBaja(f.motivo_baja) if f.motivo_baja else None,
         valores_origen=dict(f.valores_origen),
-        primera_sincronizacion=f.primera_sincronizacion,
-        ultima_sincronizacion=f.ultima_sincronizacion,
+        primera_sincronizacion=_utc(f.primera_sincronizacion),
+        ultima_sincronizacion=_utc(f.ultima_sincronizacion),
     )
 
 
@@ -370,8 +390,8 @@ def _sincronizacion(f) -> SincronizacionCatalogo:
         usuario_id=f.usuario,
         origen=f.origen,
         filtro=f.filtro,
-        iniciada_en=f.iniciada_en,
-        finalizada_en=f.finalizada_en,
+        iniciada_en=_utc(f.iniciada_en),
+        finalizada_en=_utc(f.finalizada_en),
         resultado=ResultadoSincronizacion(f.resultado),
         mensaje=f.mensaje,
         **{c: int(contadores.get(c, 0)) for c in CONTADORES},

@@ -443,6 +443,87 @@ def test_dos_instancias_no_sincronizan_a_la_vez(abrir, base):
     assert ok(_sincronizar(cliente_b))["resultado"] == "EXITOSA"
 
 
+def test_una_aplicacion_tardia_responde_409_y_no_toca_la_copia(abrir, base):
+    """QA C fase B, menor 2: A tarda mas que su reserva; B la toma y aplica;
+    A recibe 409 y la copia es la de B."""
+    cliente_a, app_a = abrir("a")
+    cliente_b, _ = abrir("b")
+    bloqueo = threading.Event()
+
+    def lectura(tipo):
+        return LecturaCatalogo(
+            productos=(
+                ProductoInformado(
+                    tipo_producto_id=tipo,
+                    descripcion=tipo,
+                    marca="Apple",
+                    modelo="iPhone 12",
+                    capacidad="128 GB",
+                    color="Black",
+                ),
+            ),
+            leidos=1,
+            filtrados=1,
+        )
+
+    lento = ProveedorSimulado(resultado=lectura("A-LENTA"), bloqueo=bloqueo)
+    app_a.state.contexto = replace(
+        app_a.state.contexto,
+        proveedor_catalogo=lento,
+        reserva_sincronizacion=timedelta(seconds=1),
+    )
+    resultado = {}
+
+    def en_a():
+        try:
+            sincronizar_catalogo_equipos(
+                app_a.state.contexto, usuario_id=ADMINISTRADOR
+            )
+            resultado["a"] = "aplico"
+        except SincronizacionEnCursoError as error:
+            resultado["a"] = str(error)
+
+    hilo = threading.Thread(target=en_a)
+    hilo.start()
+    while lento.llamadas == 0:
+        time.sleep(0.01)
+    time.sleep(1.3)  # vence la reserva de A
+    assert ok(_sincronizar(cliente_b))["resultado"] == "EXITOSA"
+    huella = _huella(base)
+    bloqueo.set()
+    hilo.join(15)
+    assert "tardó más que su reserva" in resultado["a"]
+    assert _huella(base) == huella
+    assert "A-LENTA" not in {
+        p.tipo_producto_id
+        for p in app_a.state.contexto.catalogo_equipos.listar_productos()
+    }
+    assert [r for _, r in _intentos(base)] == ["INTERRUMPIDA", "EXITOSA"]
+
+
+def test_las_fechas_salen_en_utc_aunque_la_sesion_no_lo_este(
+    abrir, base, plantilla
+):
+    """QA C fase B, menor 1."""
+    admin, _ = plantilla
+    nombre = urlsplit(base).path.lstrip("/")
+    with psycopg.connect(base, autocommit=True) as conexion:
+        conexion.execute(
+            f"alter database {nombre} set timezone = 'America/Argentina/Buenos_Aires'"
+        )
+    cliente, app = abrir()
+    respuesta = ok(_sincronizar(cliente))
+    estado = _catalogo(cliente)["estado"]
+    for momento in (
+        estado["ultima"]["iniciada_en"],
+        estado["ultima"]["finalizada_en"],
+        respuesta["iniciada_en"],
+    ):
+        assert momento.endswith("Z") or momento.endswith("+00:00"), momento
+    producto = app.state.contexto.catalogo_equipos.listar_productos()[0]
+    assert producto.primera_sincronizacion.utcoffset() == timedelta(0)
+
+
 # --- El alta, con y sin copia -----------------------------------------------------
 
 

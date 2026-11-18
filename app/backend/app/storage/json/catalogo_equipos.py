@@ -33,7 +33,11 @@ from app.domain.models import (
     ReservaSincronizacion,
     SincronizacionCatalogo,
 )
-from app.repositories.exceptions import PersistenciaError, ReservaOcupadaError
+from app.repositories.exceptions import (
+    PersistenciaError,
+    ReservaOcupadaError,
+    ReservaPerdidaError,
+)
 
 from .base import (
     acceso_exclusivo,
@@ -172,7 +176,7 @@ class JsonCatalogoEquiposRepository:
         with _GUARDA:
             titular = _TITULARES.get(self.ruta.resolve())
         if titular is None or titular[0] != reserva.id:
-            raise PersistenciaError(
+            raise ReservaPerdidaError(
                 f"El intento {reserva.id} ya no está en curso: no se "
                 "finalizó (su reserva venció y otra sincronización la tomó)."
             )

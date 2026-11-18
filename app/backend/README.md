@@ -428,6 +428,7 @@ Variables de entorno con prefijo `RMA_` (ver `app/core/config.py`):
 | `RMA_AUTH_ALGORITMOS` | `["ES256"]` (solo asimetricos) |
 | `RMA_AUTH_AUDIENCIA` | `authenticated` |
 | `RMA_AUTH_MARGEN_RELOJ_S` | `10` |
+| `RMA_SINCRONIZACION_RESERVA_S` | `600` (10 a 3600): cuánto dura la reserva de una sincronización de una copia de un origen externo (catálogo de Ventas). Con `postgres`, la copia vive en la base ([`docs/persistencia-catalogos.md`](../../docs/persistencia-catalogos.md)) |
 
 `RMA_DATA_DIR` decide donde viven `ordenes/` y `catalogs/`. Los tests
 siempre usan `tmp_path`: nunca escriben sobre los catalogos DEMO

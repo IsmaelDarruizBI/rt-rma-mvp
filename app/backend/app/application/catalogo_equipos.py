@@ -196,10 +196,31 @@ def estado_catalogo_equipos(
     contexto: ApplicationContext,
 ) -> EstadoCatalogoEquipos:
     """Que hay en la copia y como termino la ultima sincronizacion."""
+    copia = contexto.catalogo_equipos
+    with contexto.lectura():
+        sincronizaciones = copia.listar_sincronizaciones() if copia else []
+        productos = copia.listar_productos() if copia else []
+    return _estado(contexto, sincronizaciones, productos)
+
+
+def catalogo_con_estado(
+    contexto: ApplicationContext,
+) -> tuple[EstadoCatalogoEquipos, tuple[OpcionModelo, ...]]:
+    """El estado y el arbol del selector, de UNA lectura consistente (un
+    solo instante y un solo viaje por consulta en PostgreSQL)."""
+    copia = contexto.catalogo_equipos
+    with contexto.lectura():
+        sincronizaciones = copia.listar_sincronizaciones() if copia else []
+        productos = copia.listar_productos() if copia else []
+    return (
+        _estado(contexto, sincronizaciones, productos),
+        opciones_de_seleccion(productos) if copia else (),
+    )
+
+
+def _estado(contexto, sincronizaciones, productos) -> EstadoCatalogoEquipos:
     proveedor = contexto.proveedor_catalogo
     copia = contexto.catalogo_equipos
-    sincronizaciones = copia.listar_sincronizaciones() if copia else []
-    productos = copia.listar_productos() if copia else []
     exitosas = [
         registro
         for registro in sincronizaciones

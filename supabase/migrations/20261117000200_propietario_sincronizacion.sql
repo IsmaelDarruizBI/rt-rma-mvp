@@ -43,7 +43,7 @@ comment on column rma.catalogo_producto.propietario is
 create or replace function rma.hash_propietario(p_propietario text)
 returns text
 language sql
-immutable
+stable
 set search_path = rma, pg_temp
 as $$
   select encode(sha256(convert_to(p_propietario, 'UTF8')), 'hex')
@@ -103,6 +103,8 @@ begin
       raise exception 'El intento % todavía no venció: no se puede dar por interrumpido.', old.id
         using errcode = 'restrict_violation';
     end if;
+    -- Quien toma una reserva abandonada no informa nada por ella.
+    new.contadores := '{}';
   elsif old.propietario_hash is null
         or new.propietario is null
         or rma.hash_propietario(new.propietario) <> old.propietario_hash then

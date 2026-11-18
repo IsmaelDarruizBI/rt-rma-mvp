@@ -22,6 +22,7 @@ from .exceptions import (
     PersistenciaSinConexionError,
     RepositoryError,
     ReservaOcupadaError,
+    ReservaPerdidaError,
     RestriccionDeIntegridadError,
     TransaccionInvalidadaError,
 )
@@ -46,6 +47,7 @@ __all__ = [
     "PersistenciaSinConexionError",
     "RepositoryError",
     "ReservaOcupadaError",
+    "ReservaPerdidaError",
     "RestriccionDeIntegridadError",
     "TransaccionInvalidadaError",
     "UnidadDeTrabajo",

@@ -17,6 +17,7 @@ import pytest
 from app.application.sincronizacion_origen import (
     MENSAJE_APLICACION,
     MENSAJE_LECTURA,
+    MENSAJE_RESERVA_PERDIDA,
     ejecutar_sincronizacion,
 )
 from app.domain.models import (
@@ -33,7 +34,7 @@ from app.integraciones.origen import (
     OrigenNoDisponibleError,
 )
 from app.integraciones.sheets import LectorSheets, letra_de_columna
-from app.repositories import PersistenciaError, ReservaOcupadaError
+from app.repositories import ReservaOcupadaError, ReservaPerdidaError
 from app.services import SincronizacionEnCursoError
 from app.storage.json.catalogo_equipos import JsonCatalogoEquiposRepository
 
@@ -218,6 +219,39 @@ def test_si_finalizar_tambien_falla_sigue_el_error_original(caplog):
         _sincronizar(copia)
     assert "INTERRUMPIDA" in caplog.text
     assert copia.reservas[0].propietario not in caplog.text
+
+
+def test_una_reserva_perdida_al_aplicar_responde_409_sin_finalizar():
+    """QA C fase B, menor 2: tardo mas que su reserva y otra la tomo."""
+    copia = CopiaDoble(aplicar=_falla(ReservaPerdidaError("perdida")))
+    with pytest.raises(
+        SincronizacionEnCursoError, match="tardó más que su reserva"
+    ):
+        _sincronizar(copia)
+    assert MENSAJE_RESERVA_PERDIDA.startswith("La sincronización tardó")
+    assert not any(c[0] == "finalizar" for c in copia.llamadas)
+
+
+def test_finalizar_una_reserva_perdida_solo_avisa(caplog):
+    copia = CopiaDoble(
+        leer=_falla(OrigenNoDisponibleError("sin red")),
+        finalizar=_falla(ReservaPerdidaError("perdida")),
+    )
+    with (
+        caplog.at_level(logging.WARNING),
+        pytest.raises(OrigenNoDisponibleError),
+    ):
+        _sincronizar(copia)
+    registro = [
+        r
+        for r in caplog.records
+        if "ya no es de esta sincronizacion" in r.getMessage()
+    ]
+    assert (
+        registro
+        and registro[0].levelno == logging.WARNING
+        and registro[0].exc_info is None
+    )
 
 
 # --- Lector de Google Sheets (C5) --------------------------------------------
@@ -428,7 +462,7 @@ def test_json_una_reserva_por_archivo_y_se_libera_al_finalizar(tmp_path):
     ]
     # Una reserva vieja no escribe ni libera la de otro.
     tercera = _reservar(repo, "SINC-000000000003")
-    with pytest.raises(PersistenciaError, match="ya no está en curso"):
+    with pytest.raises(ReservaPerdidaError, match="ya no está en curso"):
         repo.registrar_sincronizacion(_intento("SINC-000000000004"), reserva)
     with pytest.raises(ReservaOcupadaError):
         _reservar(otro, "SINC-000000000005")
@@ -456,7 +490,7 @@ def test_json_la_reserva_vence_y_la_vieja_ya_no_escribe(tmp_path):
         ),
         lambda: repo.registrar_sincronizacion(_intento(vieja.id), vieja),
     ):
-        with pytest.raises(PersistenciaError):
+        with pytest.raises(ReservaPerdidaError):
             escribir()
     with pytest.raises(ReservaOcupadaError):  # la vieja no libero la nueva
         _reservar(repo, "SINC-0000000000a4")

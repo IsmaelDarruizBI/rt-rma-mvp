@@ -34,7 +34,7 @@ from app.integraciones.origen import (
     OrigenInvalidoError,
     OrigenNoDisponibleError,
 )
-from app.repositories import ReservaOcupadaError
+from app.repositories import ReservaOcupadaError, ReservaPerdidaError
 from app.services import SincronizacionEnCursoError, nuevo_id
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,10 @@ L = TypeVar("L")
 R = TypeVar("R", covariant=True)
 
 MENSAJE_LECTURA = "Falló la lectura del origen: se conserva la copia anterior."
+MENSAJE_RESERVA_PERDIDA = (
+    "La sincronización tardó más que su reserva y otra la tomó: no se "
+    "aplicó nada y se conserva la copia vigente."
+)
 MENSAJE_APLICACION = (
     "No se pudo aplicar la sincronización: se conserva la copia anterior."
 )
@@ -131,6 +135,10 @@ def ejecutar_sincronizacion(
 
     try:
         return copia.aplicar(reserva, lectura)
+    except ReservaPerdidaError:
+        # Tardo mas que su reserva y otra sincronizacion la tomo: no se
+        # aplico nada y el intento ya no es nuestro (quedo INTERRUMPIDA).
+        raise SincronizacionEnCursoError(MENSAJE_RESERVA_PERDIDA) from None
     except BaseException:
         _finalizar(
             copia,
@@ -152,6 +160,13 @@ def _finalizar(
     """Finaliza un intento fallido sin tapar el error que lo causo."""
     try:
         copia.finalizar(reserva, resultado, mensaje, lectura)
+    except ReservaPerdidaError:
+        logger.warning(
+            "El intento %s ya no es de esta sincronizacion (su reserva vencio "
+            "y otra la tomo): no se registra como %s.",
+            reserva.id,
+            resultado.value,
+        )
     except Exception:
         logger.exception(
             "No se pudo registrar el intento %s como %s: la reserva vence "

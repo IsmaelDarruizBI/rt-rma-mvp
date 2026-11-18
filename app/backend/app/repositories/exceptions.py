@@ -91,6 +91,11 @@ class ReservaOcupadaError(RepositoryError):
     propio error (409)."""
 
 
+class ReservaPerdidaError(RepositoryError):
+    """La reserva de esta sincronizacion vencio y otra la tomo: ya no puede
+    escribir la copia ni finalizar el intento. No se aplico nada."""
+
+
 class ClaveReutilizadaError(RepositoryError):
     """La clave de idempotencia ya se uso para otra operacion o con otros
     parametros (E6, DE6-3). La API responde 422: no es un reintento."""
