@@ -1018,7 +1018,7 @@ Pruebas JSON de los endpoints con el decorador (pagos y devoluciones, inventario
 
 | # | Hallazgo | Propuesta |
 |---|---|---|
-| B1-1 | Resuelto en B2+B3: la foto y la sincronización del catálogo aceptan la clave; el id de la foto y su objeto salen de ella | — |
+| B1-1 | Resuelto en B2+B3: la foto y la sincronización del catálogo aceptan la clave; el id de la foto y su objeto salen de ella. Desde el bloque C (17/11/2026), la sincronización ya no la usa (se ignora) | — |
 | B1-2 | JSON ignora la clave: un reintento con clave duplica en JSON lo que en PostgreSQL no | Aceptado mientras JSON siga activo; B5 trata la diferencia |
 | B1-3 | El encabezado opcional y el 422 son un cambio aditivo de la API (DE6-1), informado al implementar B1 | Confirmar al aprobar B1 |
 | B1-4 | La respuesta repetida es la del momento de la operación: si la Orden cambió después, el reintento no lo muestra (DE6-4) | Aceptado: es el contrato |
@@ -1036,7 +1036,7 @@ Pruebas JSON de los endpoints con el decorador (pagos y devoluciones, inventario
 ### 21.2 B1-1: fotos y catálogo
 
 - **Foto:** con clave, `foto_id` (y por eso el nombre del objeto) es `FOT-` más los primeros 12 caracteres del SHA-256 de usuario y clave. La huella incluye el SHA-256 del contenido. Un reintento sobrescribe el mismo objeto y devuelve la misma respuesta; otro contenido con la clave da 422.
-- **Sincronización del catálogo** de equipos: decorada como las demás, con el usuario de la consulta.
+- **Sincronización del catálogo** de equipos: decorada como las demás, con el usuario de la consulta. **Revisado el 17/11/2026 (bloque C):** ya no usa la clave. Con clave correría en una sola transacción, y la sincronización necesita confirmar su reserva entre instancias, leer el origen fuera de toda transacción y registrar los intentos fallidos. Repetirla es inocuo; el encabezado se ignora ([`../persistencia-catalogos.md`](../persistencia-catalogos.md), sección 10).
 
 ### 21.3 B3: claves en la pantalla (H-4)
 
