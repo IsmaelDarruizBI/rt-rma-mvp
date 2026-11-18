@@ -1,6 +1,6 @@
 # Persistencia de las copias de orígenes externos (catálogo de Ventas y Productos RT)
 
-**Estado: diseño aprobado conceptualmente el 17/11/2026; plan de ejecución para aprobación.** Sin código, sin migraciones y sin despliegues. Resuelve la deuda P1-2 ([`DEUDA_TECNICA.md`](DEUDA_TECNICA.md)) y F-08 ([`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md)). Es la base de la copia de Productos RT ([`reparacion-rt-discovery.md`](reparacion-rt-discovery.md)).
+**Estado (17/11/2026): C1 a C7 implementados en `feat/persistencia-catalogos` (commits locales, sin push ni despliegue).** C8, la migración remota y la publicación en el UAT, espera autorización: [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 10. Lo implementado y sus diferencias con este diseño están en la sección 10. Sin código, sin migraciones y sin despliegues. Resuelve la deuda P1-2 ([`DEUDA_TECNICA.md`](DEUDA_TECNICA.md)) y F-08 ([`postgresql/integracion-pendientes.md`](postgresql/integracion-pendientes.md)). Es la base de la copia de Productos RT ([`reparacion-rt-discovery.md`](reparacion-rt-discovery.md)).
 
 ## 1. Problema
 
@@ -102,7 +102,8 @@ Es el motor común (sección 4).
 
 - **Reserva.** El índice único parcial reemplaza al `threading.Lock`: vale entre instancias y sobrevive a un apagado.
 - **Vencimiento.** 10 minutos por defecto, configurable hasta una hora (límite de la base). Supera holgadamente el tiempo de lectura de Sheets (`catalogo_timeout_s` = 30 s) y el de aplicación. Lo calcula la base, nunca el reloj de la instancia.
-- **Solo quien reservó finaliza (QA C1, M3).** La base acepta que una sesión cierre como FALLIDA, EXITOSA o RECHAZADA un intento vigente ajeno; no se corrompe la copia (el `FOR SHARE` ordena las operaciones y una aplicación posterior se rechaza), pero sería un error del motor. El motor (C3) finaliza solo el `id` que reservó, y sus pruebas lo cubren.
+- **Solo quien reservó finaliza (QA C1, M3; resuelto en la migración `20261117000200`).** La reserva entrega un secreto aleatorio y la base guarda su SHA-256. Escribir la copia o finalizar el intento exige el secreto; sin él, la base responde `insufficient_privilege`. Solo dar por INTERRUMPIDA una reserva **vencida** no lo exige.
+- **Reserva perdida.** Si una sincronización tarda más que su reserva y otra la toma, su aplicación tardía no escribe nada y responde 409 («tardó más que su reserva…»); su intento queda INTERRUMPIDA.
 - **Lógica que no cambia:** `fusionar_catalogo`, `validar_informados`, los modelos (`ProductoCatalogo`, `SincronizacionCatalogo`) y los adaptadores de origen.
 
 ### 3.3 Repositorio
@@ -381,4 +382,31 @@ Las cuentas y contraseñas las ingresa el usuario. El script recibe el token por
 | Vuelta atrás a `00036-jis` después de migrar | Baja | Bajo | Migración aditiva; ensayada en la entrega 4 |
 | Cambio del contrato del repositorio | Baja | Bajo | Solo se agregan métodos; el JSON los implementa |
 | Una sincronización entre la línea de base de un E2E y su limpieza hace abortar `06_limpiar_e2e.sql` (las tablas son maestras; QA C1) | Baja | Bajo | Aborta sin cambiar nada; no sincronizar durante los E2E. Se agrega a [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md) en la entrega 5 |
-| Una sesión cierra un intento vigente ajeno (QA C1, M3) | Baja | Bajo | La copia no se corrompe; el motor finaliza solo su propio intento (C3) |
+| ~~Una sesión cierra un intento vigente ajeno (QA C1, M3)~~ | — | — | Resuelto: solo el propietario (secreto) escribe la copia y finaliza el intento (migración `20261117000200`) |
+
+## 10. Lo implementado (17/11/2026)
+
+| Entrega | Commits | Qué quedó |
+|---|---|---|
+| C1 | `084b4d1`, `b0d26f0`, `578f1ea` | Migración `20261117000100`: registro de intentos con reserva y copia del catálogo; QA aprobado |
+| C2, C5, C3 (fase A) | `47cb6b9`, `f555f4a` | Contrato con reserva y propietario; `LectorSheets` (`values.get`, `batchGet` por columnas, nombre de hoja por GID); motor `application/sincronizacion_origen.py`; reserva JSON con vencimiento (QA fase A, M1) |
+| C4 y M3 (fase B) | `187ab6a` | `PostgresCatalogoEquiposRepository` en el contexto PostgreSQL; migración `20261117000200`: solo el propietario de la reserva escribe la copia y finaliza el intento |
+| C6 | `aa21548` | `ensayar_persistencia_catalogo.py`: 26 de 26 |
+| C7 | (este cierre) | Suite completa, documentación y `probar_persistencia_catalogo.py` para C8 |
+
+**Diferencias con el diseño (secciones 3 a 5),** registradas en el QA:
+
+- **M3, solo el propietario finaliza.** Al reservar se entrega un secreto aleatorio y la base guarda su SHA-256. Para escribir la copia y finalizar el intento, la sentencia trae el secreto en una columna transitoria `propietario`: el trigger lo verifica y lo vacía, y un `CHECK` asegura que nunca queda guardado. Se descartaron dos alternativas:
+  - `set_config`, porque el registro de consultas lo prohíbe;
+  - `SECURITY DEFINER`.
+- **Contrato del repositorio.** `reservar_sincronizacion` devuelve una `ReservaSincronizacion` (con el secreto, fuera de `repr`) y lanza `ReservaOcupadaError`, que el motor traduce a `SincronizacionEnCursoError` (409). `registrar_sincronizacion` y `aplicar_sincronizacion` reciben la reserva; es opcional en la firma, así que los usos anteriores siguen funcionando. No se agregaron `ultima()` ni `ultima_exitosa()`: el estado se calcula de `listar_sincronizaciones`, que devuelve solo intentos terminados, los últimos 100, como el JSON. El contrato genérico es `CopiaSincronizable` (en el motor), en lugar de un `repositories/sincronizacion_origen.py`.
+- **Resultado `EN_CURSO`.** No es un valor de `ResultadoSincronizacion`: solo existe en la base. Se agregó `INTERRUMPIDA`, que también suma el esquema OpenAPI y el tipo del frontend (cambio aditivo, QA fase A, m2).
+- **Correcciones del QA de la fase B:**
+  - fechas normalizadas a UTC en el repositorio PostgreSQL;
+  - aplicación tardía de una reserva perdida: 409, en lugar de un 500;
+  - `GET /api/catalogs/equipment` en una sola lectura consistente, con una sola lista de productos;
+  - en la migración `20261117000200`, `hash_propietario` es STABLE y la toma de una reserva vencida vacía sus contadores.
+- **Modo JSON.**
+  - La reserva es un candado del proceso por archivo, con vencimiento.
+  - Las fechas del intento salen del reloj del sistema (UTC) y no de `contexto.ahora`, que en producción es el mismo (QA fase A, m1).
+  - Un error inesperado al leer el origen ahora deja un intento FALLIDA. Antes no quedaba ningún registro; es un cambio intencional (QA fase A, m3).

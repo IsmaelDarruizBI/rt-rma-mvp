@@ -738,6 +738,7 @@ origen de Ventas --adaptador--> ProveedorCatalogo --> sincronizacion
 | `RMA_CATALOGO_SHEETS_CUENTA` | (vacia) | cuenta de servicio a impersonar (IAM Credentials) |
 | `RMA_CATALOGO_ARCHIVO` | (obligatoria con archivo) | ruta del CSV |
 | `RMA_CATALOGO_TIMEOUT_S` | `30` | espera maxima de la lectura |
+| `RMA_SINCRONIZACION_RESERVA_S` | `600` | duracion de la reserva de una sincronizacion (10 a 3600 s); vencida sin terminar, la siguiente la marca INTERRUMPIDA |
 | `RMA_TIPO_EQUIPO_CAMPO` | (vacia) | DEC-MI-16: columna de Ventas que es el Tipo de Equipo del checklist (`tp_categoria`, `tp_subcat_1` o `tp_gp`). Vacia: no se copian tipos (decision pendiente, ABI-42) |
 
 Una configuracion incompleta impide arrancar el backend (en Cloud Run la
@@ -819,13 +820,24 @@ claves JSON.
 
 ### Persistencia y limitaciones
 
-- **La copia es JSON efimero en Cloud Run** (`RMA_DATA_DIR/catalogo_equipos/
-  catalogo_equipos.json`): un redespliegue o un reinicio de la instancia
-  la borra junto con el registro de sincronizaciones, y hay que volver a
-  sincronizar. Mientras tanto, el alta funciona a mano. Las Ordenes no
-  pierden nada: cada Equipo guarda su `tp_id` y su copia de los datos.
-- Hacia PostgreSQL (mismo contrato `CatalogoEquiposRepository`, cada
-  operacion una transaccion):
+- **Bloque C (17/11/2026, `feat/persistencia-catalogos`, sin desplegar):**
+  con `RMA_PERSISTENCIA=postgres` la copia vive en `rma.catalogo_producto`
+  y cada intento en `rma.sincronizacion_origen`
+  (`PostgresCatalogoEquiposRepository`, migraciones `20261117000100` y
+  `20261117000200`). Sobrevive a reinicios, redespliegues y al escalado a
+  cero; una sola sincronizacion por copia entre instancias (reserva con
+  vencimiento); solo quien reservo escribe la copia y finaliza el intento
+  (secreto del propietario, la base guarda su hash). El ciclo es el motor
+  comun `application/sincronizacion_origen.py`, reutilizable por la copia
+  de Productos RT. Diseno: `docs/persistencia-catalogos.md`.
+- **En modo JSON (desarrollo local)** la copia sigue en
+  `RMA_DATA_DIR/catalogo_equipos/catalogo_equipos.json`, con la reserva
+  como candado del proceso (tambien con vencimiento). Las Ordenes no
+  pierden nada si la copia falta: cada Equipo guarda su `tp_id` y su copia
+  de los datos.
+- Diseno original hacia PostgreSQL (el implementado agrega `sincronizacion_id`,
+  `creado_en`, `modificado_en`, la reserva y el propietario; la fuente de
+  verdad son las migraciones):
 
 ```sql
 CREATE TABLE catalogo_producto (

@@ -347,3 +347,46 @@ El costo real se ve en la consola de Facturación.
    - falla si hay mínimo de servicio o de plantilla, si el tráfico no está 100 % en la revisión esperada, si queda alguna etiqueta (salvo `--permitir-etiquetas` durante las pruebas) o si una revisión referenciada tiene mínimo;
    - el resultado se anota en el registro del despliegue.
 5. **Comprobación con métricas** (opcional, tarda): en Cloud Monitoring, `run.googleapis.com/container/instance_count` por `revision_name`. Unos 15 minutos después de la última solicitud tiene que quedar en 0.
+
+## 10. Bloque C: copias de orígenes externos en PostgreSQL (preparado el 17/11/2026, sin ejecutar)
+
+**Qué se publica.** El catálogo de Ventas pasa del JSON efímero del contenedor a la base, con la reserva de sincronización entre instancias y el propietario de cada sincronización ([`persistencia-catalogos.md`](persistencia-catalogos.md)). Tiene dos migraciones aditivas, `20261117000100_copias_origen_externo` y `20261117000200_propietario_sincronizacion`, y ninguna variable nueva obligatoria: `RMA_SINCRONIZACION_RESERVA_S` vale 600 por defecto. No cambian la API ni el frontend publicado.
+
+**Requisitos (con autorización):**
+
+- `feat/persistencia-catalogos` integrada en `mvp-v2` con el CI en verde;
+- sesiones de `gcloud` y de Supabase;
+- la contraseña de Administración, que ingresa el usuario.
+
+**Procedimiento:**
+
+1. **Preflight, de solo lectura:**
+   - `verificar_escalado_uat.py --esperada rt-rma-uat-api-00036-jis` OK;
+   - São Paulo con 37 migraciones;
+   - `npx -y supabase@3.1.0 db push --remote=pcdnmhzwhzymznojndrn --dry-run` lista **solo** las dos migraciones nuevas.
+2. **Respaldo previo:** `gcloud run jobs execute rt-rma-respaldo-db --region southamerica-east1 --project rosariotecno-460217 --wait` (desde PowerShell) y verificación de la copia ([`RESPALDOS.md`](RESPALDOS.md)).
+3. **Migraciones:** `db push --remote=… --yes`. Después tiene que haber:
+   - 39 migraciones y 71 tablas;
+   - `rma.catalogo_producto` vacía;
+   - `rma_backend` sin `DELETE` en las dos tablas nuevas;
+   - `select * from rma.verificar_integridad()` vacío.
+
+   **La revisión publicada sigue funcionando sobre las 39:** no usa las tablas nuevas, y está ensayado con `ensayar_persistencia_catalogo.py`, paso 5.
+4. **Backend sin tráfico:**
+   - exportación limpia del commit integrado;
+   - `gcloud run deploy … --no-traffic --tag c-<sha corto>`, que hereda mínimo 0 (sección 9);
+   - por la etiqueta: `/health` 200, 401 sin token, `/docs` 404 y CORS solo del frontend.
+5. **Tráfico:** `update-traffic --to-revisions <nueva>=100`, `--remove-tags c-<sha corto>` y `verificar_escalado_uat.py --esperada <nueva>` OK.
+6. **Primera sincronización y prueba de escalado a cero:**
+   1. `probar_persistencia_catalogo.py --fase sincronizar --estado $env:TEMP\catalogo-c8.json`. Pide la contraseña de Administración. Tiene que dar EXITOSA, con las cantidades del catálogo `IPHONE USADOS`.
+   2. Esperar a que `run.googleapis.com/container/instance_count` de la revisión nueva llegue a 0, unos 15 minutos sin solicitudes (sección 9).
+   3. `probar_persistencia_catalogo.py --fase comprobar --estado $env:TEMP\catalogo-c8.json`. El pedido provoca el arranque en frío y tiene que dar **RESULTADO: OK**: la misma última exitosa y las mismas cantidades.
+7. **E2E de la iteración vigente,** cada uno con su línea de base y su limpieza (sección 8). **No sincronizar el catálogo mientras corren:** `catalogo_producto` y `sincronizacion_origen` son maestras, y una sincronización entre la línea de base y la limpieza hace abortar `06_limpiar_e2e.sql`, sin cambiar nada.
+8. **Respaldo posterior,** con el ensayo de restauración en la nube. `restaurar.sh` carga las tablas nuevas en modo `replica`.
+
+**Vuelta atrás:** `update-traffic --to-revisions rt-rma-uat-api-00036-jis=100`.
+
+- Las migraciones quedan: son aditivas y la revisión anterior las ignora.
+- La revisión anterior vuelve a su copia JSON efímera.
+- La copia en la base queda guardada para cuando se vuelva a publicar.
+- No se borra ninguna tabla.
