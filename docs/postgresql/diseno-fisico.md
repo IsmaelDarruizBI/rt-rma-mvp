@@ -192,6 +192,12 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
     - de la copia, actualiza todo menos su identidad y su primera sincronización;
     - ejecuta `reservar_sincronizacion()`; las funciones trigger no son ejecutables por `PUBLIC`.
   - **Clasificación:** maestras en `01_reiniciar.sql` y `06_limpiar_e2e.sql`.
+- **`20261117000200_propietario_sincronizacion.sql`** (bloque C, QA C1 M3; solo local). Solo el propietario de una reserva escribe la copia y finaliza el intento:
+  - `sincronizacion_origen.propietario_hash` guarda el SHA-256 del secreto que entrega la reserva;
+  - `propietario` es una columna transitoria en las dos tablas: la sentencia trae el secreto, el trigger lo verifica (`rma.hash_propietario`, STABLE) y lo vacía, y un `CHECK (propietario is null)` asegura que nunca se guarda;
+  - `rma.reservar_sincronizacion(…, p_propietario)` reemplaza a la de 6 parámetros;
+  - `rma_backend` suma `update (propietario)` en las dos tablas, y del intento actualiza solo el resultado, el mensaje, los contadores y esa columna transitoria;
+  - dar por INTERRUMPIDA una reserva vencida no exige el secreto y vacía sus contadores.
   - **Compatibilidad:** sin clave foránea desde `orden.equipo_tipo_producto_id`. No cambia ninguna tabla existente; el backend publicado no las usa.
 
 Con ellas el esquema `rma` tiene 71 tablas y 8 vistas (`tests/postgres/test_base_local.py`, `supabase/tests/10_esquema.sql`).

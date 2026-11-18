@@ -17,8 +17,9 @@ Dos fases, con la espera entre medio (``docs/DESPLIEGUE_UAT.md``, seccion 10):
 
 La contrasena de Administracion se pide sin eco y no se guarda. Contra una API
 local en modo demo: ``--api http://127.0.0.1:8000 --sin-autenticacion``.
-Solo lee el catalogo de Ventas (la hoja que el UAT ya lee): no crea Ordenes
-ni datos.
+Lee el catalogo de Ventas (la hoja que el UAT ya lee) y actualiza su copia:
+crea un intento de sincronizacion y las filas de la copia, como el boton de
+sincronizar. No crea Ordenes ni otros datos.
 """
 
 from __future__ import annotations

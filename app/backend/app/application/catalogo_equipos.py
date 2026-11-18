@@ -68,6 +68,13 @@ def sincronizar_catalogo_equipos(
     el intento; en los dos casos la copia queda como estaba. Con otra
     sincronizacion en curso, ``SincronizacionEnCursoError``.
     """
+    if contexto.unidad_de_trabajo.en_curso():
+        # La reserva se confirma sola y el origen se lee fuera de toda
+        # transaccion: dentro de una, la reserva no se veria desde otras
+        # instancias y un intento fallido se revertiria.
+        raise RuntimeError(
+            "La sincronización no puede correr dentro de una transacción."
+        )
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     validar_alguno_de(usuario, ROLES_SINCRONIZACION_CATALOGO)
     copia = _copia(contexto)

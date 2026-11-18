@@ -158,13 +158,14 @@ class JsonCatalogoEquiposRepository:
         productos: Sequence[ProductoCatalogo],
         reserva: ReservaSincronizacion | None = None,
     ) -> None:
-        try:
-            self._exigir_vigente(reserva)
-            with acceso_exclusivo():
-                self._cargar()
-                self._escribir(list(productos), sincronizacion)
-        finally:
-            self._liberar(reserva)
+        # Si la escritura falla, la reserva sigue tomada: el motor registra
+        # el intento FALLIDA con ``registrar_sincronizacion``, que la libera
+        # (QA final del bloque C, menor 1).
+        self._exigir_vigente(reserva)
+        with acceso_exclusivo():
+            self._cargar()
+            self._escribir(list(productos), sincronizacion)
+        self._liberar(reserva)
 
     # --- Internos ---
 

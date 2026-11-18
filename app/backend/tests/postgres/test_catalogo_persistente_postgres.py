@@ -550,6 +550,81 @@ def test_el_alta_funciona_con_la_copia_vacia_y_con_la_copia(abrir):
     assert orden["equipo"]["capacidad"] == "256 GB"
 
 
+def test_con_clave_de_idempotencia_la_sincronizacion_sigue_su_ciclo(
+    abrir, base
+):
+    """QA final del bloque C, mayor 1: el encabezado Idempotency-Key no mete
+    la sincronizacion en una transaccion (el intento fallido queda y la
+    reserva se ve desde otra instancia)."""
+    cliente_a, app_a = abrir("a")
+    cliente_b, _ = abrir("b")
+    clave = {"Idempotency-Key": "sync-1"}
+    ok(
+        cliente_a.post(
+            "/api/catalogs/equipment/sync",
+            params={"usuario_id": ADMINISTRADOR},
+            headers=clave,
+        )
+    )
+    # La misma clave otra vez: se vuelve a sincronizar (inocuo, sin cambios).
+    repetida = ok(
+        cliente_a.post(
+            "/api/catalogs/equipment/sync",
+            params={"usuario_id": ADMINISTRADOR},
+            headers=clave,
+        )
+    )
+    assert repetida["sin_cambios"] == 12
+    _con_proveedor(
+        app_a,
+        ProveedorSimulado(error=CatalogoOrigenNoDisponibleError("sin red")),
+    )
+    r = cliente_a.post(
+        "/api/catalogs/equipment/sync",
+        params={"usuario_id": ADMINISTRADOR},
+        headers={"Idempotency-Key": "sync-2"},
+    )
+    assert r.status_code == 503
+    assert [r for _, r in _intentos(base)] == ["EXITOSA", "EXITOSA", "FALLIDA"]
+    bloqueo = threading.Event()
+    lento = ProveedorSimulado(
+        error=CatalogoOrigenNoDisponibleError("tarde"), bloqueo=bloqueo
+    )
+    _con_proveedor(app_a, lento)
+    hilo = threading.Thread(
+        target=lambda: cliente_a.post(
+            "/api/catalogs/equipment/sync",
+            params={"usuario_id": ADMINISTRADOR},
+            headers={"Idempotency-Key": "sync-3"},
+        )
+    )
+    hilo.start()
+    while lento.llamadas == 0:
+        time.sleep(0.01)
+    with psycopg.connect(base) as conexion:  # la reserva ya se ve desde afuera
+        assert conexion.execute(
+            "select count(*) from rma.sincronizacion_origen where resultado = 'EN_CURSO'"
+        ).fetchone() == (1,)
+    otra = cliente_b.post(
+        "/api/catalogs/equipment/sync",
+        params={"usuario_id": ADMINISTRADOR},
+        headers={"Idempotency-Key": "sync-4"},
+    )
+    assert conflicto(otra, "SINCRONIZACION_EN_CURSO")
+    bloqueo.set()
+    hilo.join(15)
+
+
+def test_no_corre_dentro_de_una_transaccion(abrir):
+    _, app = abrir()
+    contexto = app.state.contexto
+    with (
+        contexto.transaccion(),
+        pytest.raises(RuntimeError, match="dentro de una transacción"),
+    ):
+        sincronizar_catalogo_equipos(contexto, usuario_id=ADMINISTRADOR)
+
+
 def test_sin_permiso_no_se_registra_ningun_intento(abrir, base):
     cliente, _ = abrir()
     conflicto(_sincronizar(cliente, RECEPCION))

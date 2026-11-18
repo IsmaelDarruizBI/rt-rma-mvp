@@ -545,6 +545,56 @@ def test_json_un_fallo_antes_del_repositorio_no_bloquea_para_siempre(
     )
 
 
+def test_json_si_falla_la_aplicacion_queda_el_intento_fallida(
+    tmp_path, monkeypatch
+):
+    """QA final del bloque C, menor 1."""
+    from app.core.config import Settings
+    from app.main import create_app
+    from app.storage.json import catalogo_equipos as almacen
+    from tests.fixtures.api_salidas import ADMINISTRADOR, sembrar
+    from tests.fixtures.catalogo_ventas import escribir_csv
+
+    sembrar(tmp_path, "10")
+    csv = escribir_csv(tmp_path / "tipo_producto.csv")
+    app = create_app(
+        Settings(
+            _env_file=None,
+            data_dir=tmp_path,
+            catalogo_origen="archivo",
+            catalogo_archivo=csv,
+        )
+    )
+    contexto = app.state.contexto
+    original = almacen.JsonCatalogoEquiposRepository._escribir
+    llamadas = {"n": 0}
+
+    def falla_la_primera(self, productos, sincronizacion):
+        llamadas["n"] += 1
+        if llamadas["n"] == 1:
+            raise OSError("disco lleno")
+        original(self, productos, sincronizacion)
+
+    monkeypatch.setattr(
+        almacen.JsonCatalogoEquiposRepository, "_escribir", falla_la_primera
+    )
+    from app.application import sincronizar_catalogo_equipos
+
+    with pytest.raises(OSError):
+        sincronizar_catalogo_equipos(contexto, usuario_id=ADMINISTRADOR)
+    (intento,) = contexto.catalogo_equipos.listar_sincronizaciones()
+    assert (intento.resultado.value, intento.mensaje) == (
+        "FALLIDA",
+        MENSAJE_APLICACION,
+    )
+    assert (
+        sincronizar_catalogo_equipos(
+            contexto, usuario_id=ADMINISTRADOR
+        ).resultado.value
+        == "EXITOSA"
+    )
+
+
 def test_json_otra_carpeta_es_otra_copia(tmp_path):
     a = _reservar(JsonCatalogoEquiposRepository(tmp_path / "a"))
     b = _reservar(JsonCatalogoEquiposRepository(tmp_path / "b"))
@@ -560,6 +610,8 @@ def test_json_sin_reserva_sigue_funcionando_como_antes(tmp_path):
 def test_json_la_reserva_se_libera_aunque_falle_la_escritura(
     tmp_path, monkeypatch
 ):
+    """Si aplicar falla, la reserva sigue tomada para registrar el FALLIDA;
+    si registrarlo tambien falla, igual se libera."""
     repo = JsonCatalogoEquiposRepository(tmp_path)
     reserva = _reservar(repo)
 
@@ -571,8 +623,12 @@ def test_json_la_reserva_se_libera_aunque_falle_la_escritura(
         repo.aplicar_sincronizacion(
             _intento(reserva.id, "EXITOSA"), [], reserva
         )
+    with pytest.raises(ReservaOcupadaError):  # todavia es de quien la tomo
+        _reservar(repo, "SINC-000000000002")
+    with pytest.raises(OSError):
+        repo.registrar_sincronizacion(_intento(reserva.id), reserva)
     monkeypatch.undo()
-    _reservar(repo, "SINC-000000000002")  # quedo libre
+    _reservar(repo, "SINC-000000000003")  # quedo libre
 
 
 def test_json_dos_hilos_no_reservan_a_la_vez(tmp_path):

@@ -91,7 +91,8 @@ Es el motor común (sección 4).
    ├─ no responde → FINALIZAR FALLIDA (mensaje)            → la copia no cambia
    └─ datos no confiables (columnas, tp_id repetidos, vacio) → FINALIZAR RECHAZADA → la copia no cambia
 3. APLICAR (UNA transaccion)
-   leer la copia actual (dentro de la transaccion) → fusionar_catalogo (sin cambios) →
+   leer la copia actual (antes de abrirla: solo el titular de la reserva puede escribirla) →
+   fusionar_catalogo (sin cambios) →
    upsert de cada producto (insert ... on conflict do update; nunca delete) →
    update del intento a EXITOSA con contadores → commit
    └─ cualquier error → rollback (la copia queda como estaba) →
@@ -148,17 +149,17 @@ Es el motor común (sección 4).
 ## 4. Arquitectura reutilizable (Productos RT)
 
 ```
-application/sincronizacion_origen.py   ejecutar_sincronizacion(contexto, definicion, usuario_id)
-                                        reservar → leer fuera de la transaccion → validar →
-                                        aplicar en una transaccion → finalizar; maneja FALLIDA,
-                                        RECHAZADA, INTERRUMPIDA y 409
-domain/models/sincronizacion.py         ResultadoSincronizacion (+ EN_CURSO, INTERRUMPIDA),
-                                        IntentoSincronizacion (copia, contadores genericos)
-repositories/sincronizacion_origen.py   protocolo: reservar, finalizar, aplicar(filas, intento),
-                                        ultima, ultima_exitosa
+(implementado; ver la seccion 10)
+application/sincronizacion_origen.py   ejecutar_sincronizacion(copia, duracion) y el protocolo
+                                        CopiaSincronizable (reservar, leer, validar, aplicar,
+                                        finalizar): FALLIDA, RECHAZADA, reserva perdida y 409
+domain/models/sincronizacion.py         ReservaSincronizacion (con el secreto del propietario)
+integraciones/origen.py                 OrigenNoDisponibleError, OrigenInvalidoError
 integraciones/sheets.py                 LectorSheets: values.get, values:batchGet por columnas,
-                                        resolver GID → nombre de hoja, errores HTTP; credenciales de
+                                        nombre de hoja por GID, errores HTTP; credenciales de
                                         integraciones/catalogo/credenciales.py
+SQL                                     rma.sincronizacion_origen, rma.reservar_sincronizacion(copia, …),
+                                        rma.hash_propietario
 ```
 
 | Copia | `copia` | Definición (lee, valida, fusiona) | Tabla |
@@ -166,7 +167,12 @@ integraciones/sheets.py                 LectorSheets: values.get, values:batchGe
 | Catálogo de Ventas | `CATALOGO_VENTAS` | `ProveedorCatalogo`, `validar_informados` y `fusionar_catalogo` (existentes) | `rma.catalogo_producto` |
 | Productos RT (etapa 1 de Reparación RT) | `PRODUCTOS_RT` | `ProveedorProductosRt` y el contrato de columnas de [`reparacion-rt-discovery.md`](reparacion-rt-discovery.md), sección 2 | `rma.producto_rt` |
 
-- **Lo que agrega Productos RT:** su tabla, su definición y `'PRODUCTOS_RT'` en el `check` de `copia`.
+- **Lo que agrega Productos RT** (evaluación del QA final):
+  - una migración con `'PRODUCTOS_RT'` en el `check` de `copia` (`sincronizacion_origen_copia_check`), su tabla con la columna transitoria `propietario` y su trigger (hoy una copia de `catalogo_producto_validar` para su copia), y la clasificación en los scripts de reinicio;
+  - su modelo de intento (`SincronizacionCatalogo` tiene los contadores del catálogo);
+  - su repositorio;
+  - su `CopiaSincronizable`.
+- **Pendiente para Productos RT:** conviene extraer de `PostgresCatalogoEquiposRepository` un `storage/postgres/sincronizacion_origen.py` parametrizado por `copia` (reservar, finalizar, reserva perdida, UTC), para no duplicar unas 120 líneas. También mover `ResultadoSincronizacion` y `SincronizacionEnCursoError` a módulos neutrales.
 - **Lo que reutiliza:** registro, reserva, motor, lector de Sheets, estado («última actualización») y las pruebas de la sección 6, con el mismo esqueleto.
 
 ## 5. Plan de ejecución del bloque C

@@ -350,6 +350,8 @@ El costo real se ve en la consola de Facturación.
 
 ## 10. Bloque C: copias de orígenes externos en PostgreSQL (preparado el 17/11/2026, sin ejecutar)
 
+**`/sync` sin clave de idempotencia.** La sincronización ya no usa `Idempotency-Key`: con clave correría en una sola transacción. Repetirla es inocuo y la reserva impide dos a la vez.
+
 **Qué se publica.** El catálogo de Ventas pasa del JSON efímero del contenedor a la base, con la reserva de sincronización entre instancias y el propietario de cada sincronización ([`persistencia-catalogos.md`](persistencia-catalogos.md)). Tiene dos migraciones aditivas, `20261117000100_copias_origen_externo` y `20261117000200_propietario_sincronizacion`, y ninguna variable nueva obligatoria: `RMA_SINCRONIZACION_RESERVA_S` vale 600 por defecto. No cambian la API ni el frontend publicado.
 
 **Requisitos (con autorización):**
@@ -371,6 +373,8 @@ El costo real se ve en la consola de Facturación.
    - `rma_backend` sin `DELETE` en las dos tablas nuevas;
    - `select * from rma.verificar_integridad()` vacío.
 
+   - **Subir las dos migraciones a la carpeta del ensayo de restauración en la nube** ([`RESPALDOS.md`](RESPALDOS.md)): `gcloud storage cp supabase/migrations/20261117000100_copias_origen_externo.sql supabase/migrations/20261117000200_propietario_sincronizacion.sql gs://rt-rma-uat-respaldos/_herramientas/migraciones/`. Después la carpeta tiene 39 archivos; comparar sus MD5 con los del repositorio. Sin esto, el ensayo del paso 8 aborta («Las migraciones del destino no son las del respaldo»).
+
    **La revisión publicada sigue funcionando sobre las 39:** no usa las tablas nuevas, y está ensayado con `ensayar_persistencia_catalogo.py`, paso 5.
 4. **Backend sin tráfico:**
    - exportación limpia del commit integrado;
@@ -382,7 +386,7 @@ El costo real se ve en la consola de Facturación.
    2. Esperar a que `run.googleapis.com/container/instance_count` de la revisión nueva llegue a 0, unos 15 minutos sin solicitudes (sección 9).
    3. `probar_persistencia_catalogo.py --fase comprobar --estado $env:TEMP\catalogo-c8.json`. El pedido provoca el arranque en frío y tiene que dar **RESULTADO: OK**: la misma última exitosa y las mismas cantidades.
 7. **E2E de la iteración vigente,** cada uno con su línea de base y su limpieza (sección 8). **No sincronizar el catálogo mientras corren:** `catalogo_producto` y `sincronizacion_origen` son maestras, y una sincronización entre la línea de base y la limpieza hace abortar `06_limpiar_e2e.sql`, sin cambiar nada.
-8. **Respaldo posterior,** con el ensayo de restauración en la nube. `restaurar.sh` carga las tablas nuevas en modo `replica`.
+8. **Respaldo posterior,** con el ensayo de restauración en la nube. Tiene que informar 39 migraciones y 71 tablas. `restaurar.sh` carga las tablas nuevas en modo `replica`.
 
 **Vuelta atrás:** `update-traffic --to-revisions rt-rma-uat-api-00036-jis=100`.
 

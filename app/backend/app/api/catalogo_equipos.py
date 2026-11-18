@@ -9,6 +9,13 @@
 
 El GET lee la copia local: nunca consulta el origen. El POST es el unico
 que lo lee, a traves del adaptador configurado.
+
+El POST no usa la clave de idempotencia (bloque C, QA final, mayor 1): con
+clave, ``con_clave`` correria todo en UNA transaccion, y la sincronizacion
+necesita leer el origen fuera de toda transaccion, confirmar su reserva
+enseguida (para que otra instancia la vea) y registrar los intentos
+fallidos aunque el comando falle. Repetirla es inocuo (da «sin cambios») y
+la reserva ya impide dos a la vez. El encabezado, si llega, se ignora.
 """
 
 from datetime import datetime
@@ -25,7 +32,6 @@ from app.domain.models import ResultadoSincronizacion, SincronizacionCatalogo
 from app.services import ROLES_SINCRONIZACION_CATALOGO, OpcionModelo
 
 from .dependencias import ContextoDep
-from .idempotencia import idempotente
 from .seguridad import exigir_rol
 
 router = APIRouter(prefix="/api/catalogs/equipment", tags=["catalogos"])
@@ -157,7 +163,6 @@ def get_catalogo_equipos(contexto: ContextoDep) -> CatalogoEquiposOut:
 
 
 @router.post("/sync", dependencies=[exigir_rol(ROLES_SINCRONIZACION_CATALOGO)])
-@idempotente("SINCRONIZAR_CATALOGO_EQUIPOS")
 def post_sincronizar(
     usuario_id: str, contexto: ContextoDep
 ) -> SincronizacionOut:
