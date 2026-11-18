@@ -38,7 +38,9 @@ with tablas (grupo, tabla) as (
     ('maestra', 'tipo_evento'), ('maestra', 'equivalencia_historial'),
     ('maestra', 'usuario_rol'),
     -- Macroiteración integral.
-    ('maestra', 'proveedor'), ('maestra', 'tipo_equipo'), ('maestra', 'permiso')
+    ('maestra', 'proveedor'), ('maestra', 'tipo_equipo'), ('maestra', 'permiso'),
+    -- Copias de orígenes externos (bloque C, 20261117000100).
+    ('maestra', 'catalogo_producto'), ('maestra', 'sincronizacion_origen')
 )
 select 'esquema' as grupo, 'migraciones' as tabla, count(*) as filas
   from supabase_migrations.schema_migrations

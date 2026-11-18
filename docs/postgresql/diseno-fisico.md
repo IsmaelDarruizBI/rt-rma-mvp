@@ -175,7 +175,25 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 - **`20261116000100_recargos_medio_pago.sql`** (iteración de UX de Recepción, DEC-UX-08; solo local, sin aplicar en Supabase): `medio_pago.recargo_porcentaje numeric(5,2)` (0 a 100, Transferencia 2) y, en `pago`, `recargo_porcentaje numeric(5,2)` y `recargo_importe numeric(14,2)`, con valor 0 en los pagos existentes y control de rango. `pago_validar()` suma las dos columnas a lo que no cambia después del alta (y `rma_backend` sigue sin poder actualizarlas). El CHECK de `cambio_configuracion.entidad` admite `MEDIO_PAGO`. Sin tablas nuevas: el esquema sigue en 69 tablas y 8 vistas. Transferencia queda en 2 % en cualquier base porque los medios ya los carga `e4_agregado`; la carga de referencia no toca el recargo de un medio existente.
 - **`20261116000200_recargo_detalles_devoluciones.sql`** (DEC-UX-13, DEC-UX-14 y DEC-UX-03; solo local, sin aplicar en Supabase): `pago.recargo_distribucion jsonb` (lista `[{detalle_id, importe}]`, vacía por defecto) e inmutable en `pago_validar()`; `devolucion_dinero.recargo_importe numeric(14,2)` (0 por defecto, no negativo) con el tope «recargo devuelto ≤ recargo del pago» en `devolucion_dinero_validar()`; `recepcion.observaciones_unificadas boolean` (false por defecto). Sin tablas nuevas: sigue en 69 tablas y 8 vistas.
 
-Con ellas el esquema `rma` tiene 69 tablas y 8 vistas (`tests/postgres/test_base_local.py`, `supabase/tests/10_esquema.sql`).
+- **`20261117000100_copias_origen_externo.sql`** (bloque C, entrega 1; solo local, sin aplicar en Supabase). Diseño en [`../persistencia-catalogos.md`](../persistencia-catalogos.md).
+  - **`sincronizacion_origen`:** el registro de intentos.
+    - Nace `EN_CURSO` y termina una sola vez: EXITOSA, FALLIDA, RECHAZADA o INTERRUMPIDA (esta última solo si la reserva venció).
+    - No se borra.
+    - El índice único parcial `sincronizacion_origen_en_curso` admite **una sola sincronización en curso por copia** entre todas las instancias.
+    - `reservar_sincronizacion()` da por interrumpida una reserva vencida y crea la nueva con la hora de la base.
+  - **`catalogo_producto`:** la copia del catálogo de Ventas.
+    - Solo se escribe dentro de una sincronización `EN_CURSO` de su copia, con `FOR SHARE` sobre el intento. Así, una aplicación tardía de una reserva interrumpida se rechaza.
+    - No se borra.
+    - El identificador y la primera sincronización no cambian.
+  - **Permisos de `rma_backend`:**
+    - lee e inserta en las dos tablas, sin `delete` ni `truncate`;
+    - del intento, actualiza solo el resultado, el fin, el mensaje y los contadores;
+    - de la copia, actualiza todo menos su identidad y su primera sincronización;
+    - ejecuta `reservar_sincronizacion()`.
+  - **Clasificación:** maestras en `01_reiniciar.sql` y `06_limpiar_e2e.sql`.
+  - **Compatibilidad:** sin clave foránea desde `orden.equipo_tipo_producto_id`. No cambia ninguna tabla existente; el backend publicado no las usa.
+
+Con ellas el esquema `rma` tiene 71 tablas y 8 vistas (`tests/postgres/test_base_local.py`, `supabase/tests/10_esquema.sql`).
 
 Las dos se aplicaron en São Paulo el 12/11/2026, con 23 migraciones y 47 tablas ([`ESTADO_PROYECTO.md`](../ESTADO_PROYECTO.md), sección B).
 

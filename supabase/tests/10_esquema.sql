@@ -11,13 +11,14 @@ declare
     'insumo', 'movimiento_inventario', 'override_recursos', 'override_insumo',
     'pago', 'devolucion_dinero', 'descuento', 'documento_emitido',
     'accion_usuario', 'evento_negocio', 'tipo_evento', 'equivalencia_historial', 'auditoria_tecnica', 'cambio_configuracion', 'permiso', 'reclamo_garantia', 'motivo_operativo', 'parametro', 'seguimiento_retiro', 'plantilla_mensaje', 'comunicacion_cliente', 'comunicacion_confirmacion', 'consentimiento_comunicacion', 'firma_documento', 'correccion_vinculo_equipo', 'lote_insumo', 'proveedor', 'solicitud_compra', 'orden_compra', 'orden_compra_item', 'recepcion_compra', 'recepcion_compra_linea', 'tipo_equipo', 'checklist_pregunta', 'checklist_registro', 'informacion_faltante_confirmacion',
+    'sincronizacion_origen', 'catalogo_producto',
     'usuario', 'rol', 'usuario_rol', 'mesa_trabajo', 'mesa_tipo_reparacion', 'tipo_reparacion',
     'tipo_reparacion_insumo', 'medio_pago', 'tipo_documento', 'motivo_ajuste', 'empresa', 'texto_legal'
   ];
   v_faltan text[];
   v_sobran text[];
 begin
-  perform rma_pruebas.debe_ser(cardinality(v_esperadas), 69, 'el diseño lógico tiene 69 entidades');
+  perform rma_pruebas.debe_ser(cardinality(v_esperadas), 71, 'el diseño lógico tiene 71 entidades');
   select array_agg(t) into v_faltan from unnest(v_esperadas) t
    where not exists (select 1 from information_schema.tables
                       where table_schema = 'rma' and table_name = t and table_type = 'BASE TABLE');
@@ -111,6 +112,11 @@ begin
   perform rma_pruebas.debe_ser(has_column_privilege('rma_backend', 'rma.insumo', 'stock_fisico', 'UPDATE'), false, 'el stock solo cambia por movimientos');
   perform rma_pruebas.debe_ser(has_table_privilege('rma_backend', 'rma.tipo_evento', 'INSERT'), false, 'los tipos de evento se cargan por migración');
   perform rma_pruebas.debe_ser(has_table_privilege('rma_backend', 'rma.pago', 'SELECT'), true, 'el backend lee pagos');
+  -- Copias de orígenes externos (bloque C): sin borrado y el intento solo se finaliza.
+  perform rma_pruebas.debe_ser(has_table_privilege('rma_backend', 'rma.catalogo_producto', 'DELETE'), false, 'la copia del catálogo no se borra');
+  perform rma_pruebas.debe_ser(has_table_privilege('rma_backend', 'rma.sincronizacion_origen', 'DELETE'), false, 'los intentos no se borran');
+  perform rma_pruebas.debe_ser(has_column_privilege('rma_backend', 'rma.sincronizacion_origen', 'vence_en', 'UPDATE'), false, 'la reserva no se extiende');
+  perform rma_pruebas.debe_ser(has_column_privilege('rma_backend', 'rma.catalogo_producto', 'primera_sincronizacion', 'UPDATE'), false, 'la primera sincronización no cambia');
 end;
 $$;
 

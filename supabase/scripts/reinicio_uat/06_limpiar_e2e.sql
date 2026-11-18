@@ -75,7 +75,9 @@ declare
     'tipo_reparacion_insumo', 'usuario', 'usuario_rol',
     -- Macroiteración integral.
     'checklist_pregunta', 'motivo_operativo', 'parametro', 'permiso',
-    'plantilla_mensaje', 'proveedor', 'tipo_equipo'
+    'plantilla_mensaje', 'proveedor', 'tipo_equipo',
+    -- Copias de orígenes externos (bloque C): se conservan como las maestras.
+    'catalogo_producto', 'sincronizacion_origen'
   ];
 
   v_tabla text;
