@@ -900,7 +900,9 @@ decisions:
       corrigen Recepcion, Coordinacion RMA o Administracion, con motivo y
       auditoria. El Equipo conserva su historial completo: Ordenes,
       reparaciones, garantias, reingresos y custodia. Excluida toda
-      integracion con Gestion RT.
+      integracion con Gestion RT, salvo los vinculos verificables con el
+      Producto de Gestion RT de DEC-RT-01; una coincidencia de IMEI con un
+      Producto nunca vincula por si sola (DEC-RT-03).
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/macro-integral c4ca1fd (domain/identidad.py: por IMEI y despues serie, sin similitud; services/identidad.py: reuso validado y correccion con motivo; GET /api/equipment/{id}/orders)"
@@ -1006,7 +1008,9 @@ decisions:
       integracion. El catalogo de Ventas que RMA lee (raw_TipoProducto) no tiene
       una entidad Tipo de Equipo: sus clasificaciones son comerciales
       (tp_categoria, tp_subcat_1, tp_gp) y ninguna equivale sin ambiguedad;
-      que dato corresponde queda en ABI-42.
+      que dato corresponde queda en ABI-42. DEC-RT-01 amplia la lectura
+      autorizada a los Productos de Gestion RT para Reparacion RT; el
+      alcance de esta decision para el checklist no cambia.
     implementation:
       status: PARCIAL
       evidence: "rt-rma-mvp feat/macro-integral ef79e45 (application/checklist.py sincronizar_tipos_equipo: lectura con el ProveedorCatalogo existente fuera de la transaccion, copia en rma.tipo_equipo sin borrar, auditada; RMA_TIPO_EQUIPO_CAMPO sin definir por defecto; migracion 20261115000100)"
@@ -1300,6 +1304,166 @@ decisions:
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/ux-recepcion 3c96320 (domain/recargos.py recargo_a_devolver; DevolucionDinero.recargo_importe; devolucion_dinero.recargo_importe con tope en devolucion_dinero_validar, migracion 20261116000200) y 0a4c5ad (vista previa del recargo y del total a reintegrar)"
+
+  # ------------------------------------------------------------------ Reparacion RT (17/11/2026)
+  - id: DEC-RT-01
+    block: RT
+    title: Reparacion RT lee los Productos de Gestion RT, mantiene una copia de consulta y relaciona cada Producto con Equipos y Ordenes RT_INTERNO mediante vinculos verificables
+    status: CONFIRMADA
+    rules: [BR-REP-050, BR-REP-022, BR-REP-048]
+    nodes: [PROC-REP-020, PROC-REP-040, PROC-REP-290]
+    features: [FEAT-REP-001]
+    notes: >
+      Aprobada el 17/11/2026. Amplia DEC-MI-11 y DEC-MI-16, y lo que la
+      macroiteracion integral dejo fuera de alcance, solo en lo que sigue.
+      (1) RMA lee, en solo lectura, la tabla Producto de Gestion RT (hoja de la
+      planilla de Gestion RT) y su relacion con el catalogo de Ventas
+      (Producto.producto_tp = TipoProducto.tp_id). (2) Mantiene una copia de
+      consulta en su base: identifica cada producto por producto_id, nunca
+      borra, conserva la ultima copia valida si la lectura falla, registra
+      fecha, usuario y resultado de cada sincronizacion y copia solo las
+      columnas que usa: nunca producto_passcode ni datos comerciales o de
+      personas (precios, venta, documento, quien creo o elimino). La copia es
+      de consulta: no es una sincronizacion de inventario ni cambia stock en
+      RMA ni en Gestion RT. (3) Los Productos con producto_status Reparacion se
+      consultan en el modulo Reparacion RT, con busqueda por producto_id, IMEI
+      y modelo, filtro por sede (producto_sede: Alippi, Centro, eCommerce,
+      Fisherton, RMA), sus Ordenes vinculadas y sus coincidencias sugeridas.
+      (4) Una Orden RT_INTERNO puede crearse desde un Producto: el equipo se
+      precarga desde la copia y la Orden y su Equipo quedan vinculados al
+      Producto. (5) Producto de Gestion RT y Equipo de RMA son entidades
+      distintas: nunca se fusionan y se relacionan solo mediante vinculos
+      verificables, que registran como, quien y cuando se establecieron y que
+      ninguna sincronizacion modifica. (6) Las reglas del origen RT_INTERNO no
+      cambian, salvo las observaciones opcionales de DEC-RT-06. (7) RMA nunca
+      escribe en Gestion RT: el estado del Producto lo cambia Gestion RT, e
+      informar el resultado (PROC-REP-290) sigue registrandose en RMA sin
+      escribir en Gestion RT; hacerlo automaticamente requiere otra decision.
+      Siguen excluidos consultar Ordenes de venta, sincronizar inventario o
+      stock y cualquier otra integracion.
+    implementation:
+      status: NO_IMPLEMENTADO
+      gap: "etapa 1 (copia, busqueda, filtros, ficha) y etapa 2 (Orden desde el Producto y vinculos) segun rt-rma-mvp docs/reparacion-rt-discovery.md"
+    open: [ABI-52]
+
+  - id: DEC-RT-02
+    block: RT
+    title: Un Producto de Gestion RT no puede tener dos Ordenes RMA abiertas vinculadas; las cerradas o canceladas no bloquean
+    status: CONFIRMADA
+    rules: [BR-REP-050]
+    nodes: [PROC-REP-040]
+    features: [FEAT-REP-001]
+    notes: >
+      Aprobada el 17/11/2026; resuelve ABI-46. Bloquea una Orden vinculada al
+      Producto que esta abierta: no llego al fin operativo EVT-REP-999
+      (BR-REP-012) ni esta ENTREGADA, y no esta CANCELADA. Mientras exista, no
+      se crea ni se vincula otra Orden al mismo Producto; el intento se
+      rechaza indicando esa Orden y que falta para cerrarla (por ejemplo,
+      registrar la devolucion a Gestion RT). No bloquean: una Orden cerrada
+      por entrega, por devolucion a Gestion RT, por cierre sin reparacion o
+      por cancelacion (incluido el desistimiento, que cancela, DC31); una
+      Orden CANCELADA que todavia espera su devolucion o su dinero (circuito
+      anterior a DC31), que no admite trabajos nuevos; y una Orden que solo
+      coincide por referencia RT o por IMEI, que no esta vinculada y se decide
+      segun DEC-RT-03. Una Orden abierta con todos sus Detalles cancelados
+      (PROC-REP-307) admite trabajos nuevos y si bloquea.
+    implementation:
+      status: NO_IMPLEMENTADO
+      gap: "etapa 2 segun rt-rma-mvp docs/reparacion-rt-discovery.md"
+
+  - id: DEC-RT-03
+    block: RT
+    title: Una coincidencia por referencia RT o por IMEI es solo una sugerencia; vincular exige una validacion explicita y nunca se fusionan Equipos
+    status: CONFIRMADA
+    rules: [BR-REP-050, BR-REP-022]
+    nodes: [PROC-REP-020, PROC-REP-040]
+    features: [FEAT-REP-001, FEAT-REP-011]
+    notes: >
+      Aprobada el 17/11/2026; resuelve ABI-47. Una Orden RT_INTERNO cuya
+      referencia RT es igual al producto_id, o una Orden o un Equipo de RMA
+      (de otro Producto o de un cliente) con el mismo IMEI, es una coincidencia
+      sugerida: nunca vincula, reutiliza ni fusiona por si sola. Para
+      vincularla, una persona autorizada la valida en forma explicita, con
+      motivo, y queda registrado quien, cuando y con que criterio; con los
+      mismos roles y controles que la correccion de la vinculacion del Equipo
+      (DEC-MI-11). Al crear una Orden desde un Producto con coincidencias, se
+      muestran y se exige decidir explicitamente (vincular una o seguir sin
+      vincular), y esa decision queda registrada. Estas exigencias se
+      validan en el servidor, no solo en la pantalla: la API rechaza crear
+      una Orden desde un Producto con coincidencias sin la decision
+      explicita, y rechaza una validacion sin motivo o sin el permiso
+      correspondiente. La consulta distingue siempre los vinculos de las
+      coincidencias sugeridas.
+    implementation:
+      status: NO_IMPLEMENTADO
+      gap: "etapa 1 (vinculos y coincidencias sugeridas, por separado) y etapa 2 (validacion explicita y registro) segun rt-rma-mvp docs/reparacion-rt-discovery.md"
+
+  - id: DEC-RT-04
+    block: RT
+    title: Se mantiene el alta RT_INTERNO sin Producto de Gestion RT; su referencia RT no vincula por si sola
+    status: CONFIRMADA
+    rules: [BR-REP-050]
+    nodes: [PROC-REP-020]
+    features: [FEAT-REP-001]
+    notes: >
+      Aprobada el 17/11/2026; resuelve ABI-48. El alta RT_INTERNO actual, con el
+      equipo y la referencia de Gestion RT cargados a mano, sigue disponible
+      junto con el alta desde un Producto de Reparacion RT. La referencia que
+      se carga no crea un vinculo con el Producto: si coincide con uno, es una
+      coincidencia sugerida (DEC-RT-03).
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp application/ingreso.py crear_orden_rt (POST /api/orders/rt-interno), sin cambios"
+
+  - id: DEC-RT-05
+    block: RT
+    title: La copia de Productos RT se sincroniza a pedido; Administracion la controla inicialmente
+    status: CONFIRMADA
+    rules: [BR-REP-050, BR-REP-039]
+    features: [FEAT-REP-001, FEAT-REP-011]
+    notes: >
+      Aprobada el 17/11/2026; resuelve ABI-49 y, en lo que hace a la
+      sincronizacion, ABI-51. La copia se actualiza solo a pedido, con un
+      permiso configurable que inicialmente tiene solo Administracion; la
+      pantalla muestra siempre la fecha de la ultima sincronizacion exitosa.
+      Automatizarla queda para despues (ABI-52).
+    implementation:
+      status: NO_IMPLEMENTADO
+      gap: "etapa 1 segun rt-rma-mvp docs/reparacion-rt-discovery.md"
+
+  - id: DEC-RT-06
+    block: RT
+    title: Las observaciones del equipo son opcionales en el ingreso RT_INTERNO
+    status: CONFIRMADA
+    rules: [BR-REP-050, BR-REP-046]
+    nodes: [PROC-REP-020, PROC-REP-040]
+    features: [FEAT-REP-001]
+    notes: >
+      Aprobada el 17/11/2026; resuelve ABI-50 (UX-15). En RT_INTERNO, desde un
+      Producto o con el alta manual, la Orden puede crearse sin observaciones
+      del equipo, como ya admite PROC-REP-040: las validaciones se adaptan y
+      RMA no completa ningun texto en su lugar (no inventa una falla ni un
+      estado fisico). Los demas origenes no cambian (BR-REP-046 sigue
+      aplicando a CLIENTE_EXTERNO).
+    implementation:
+      status: NO_IMPLEMENTADO
+      gap: "etapa 2 segun rt-rma-mvp docs/reparacion-rt-discovery.md (la base exige hoy orden.falla_reportada)"
+
+  - id: DEC-RT-07
+    block: RT
+    title: Recepcion, Coordinacion RMA y Administracion consultan Reparacion RT
+    status: CONFIRMADA
+    rules: [BR-REP-050, BR-REP-039]
+    features: [FEAT-REP-001, FEAT-REP-011]
+    notes: >
+      Aprobada el 17/11/2026; resuelve ABI-51. Permiso configurable de consulta,
+      inicialmente para Recepcion, Coordinacion RMA y Administracion; la
+      sincronizacion, solo Administracion (DEC-RT-05). Crear la Orden sigue
+      siendo el permiso de crear Ordenes, y validar una coincidencia el de
+      corregir la vinculacion del Equipo (DEC-RT-03).
+    implementation:
+      status: NO_IMPLEMENTADO
+      gap: "etapa 1 segun rt-rma-mvp docs/reparacion-rt-discovery.md"
 
   # ------------------------------------------------------------------ Baseline y sincronizacion
   - id: DC01
@@ -2160,6 +2324,111 @@ open_items:
       Alternativas: solo en el pago y en los cobros de la Orden, o tambien en
       los comprobantes. Mientras tanto se muestra en los cobros y en el
       historial del pago, y los comprobantes no cambian.
+
+  - id: ABI-46
+    title: Si un Producto de Gestion RT admite mas de una Orden RMA activa
+    impact: BLOQUEA_IMPLEMENTACION
+    status: CERRADO
+    closed_by: DEC-RT-02
+    closed_on: "2026-11-17"
+    resolution: >
+      Se bloquea una segunda Orden vinculada mientras haya una abierta (ni
+      cerrada ni CANCELADA); una Orden que solo coincide por referencia RT o
+      por IMEI no bloquea y es una coincidencia sugerida (DEC-RT-03).
+    decisions: [DEC-RT-01, DEC-RT-02]
+    rules: [BR-REP-050]
+    features: [FEAT-REP-001]
+    needed: >
+      Bloquear o advertir una segunda Orden activa del mismo producto_id, y que
+      pasa si otra Orden coincide por IMEI sin estar vinculada.
+
+  - id: ABI-47
+    title: Como se resuelve una coincidencia entre un Producto RT y una Orden o un Equipo de RMA
+    impact: BLOQUEA_IMPLEMENTACION
+    status: CERRADO
+    closed_by: DEC-RT-03
+    closed_on: "2026-11-17"
+    resolution: >
+      Nunca se vincula ni se fusiona automaticamente: es una coincidencia
+      sugerida y vincularla exige una validacion explicita y registrada.
+    decisions: [DEC-RT-01, DEC-RT-03, DEC-MI-11]
+    rules: [BR-REP-022, BR-REP-050]
+    features: [FEAT-REP-001]
+    needed: >
+      La referencia RT o el IMEI coinciden con una Orden o un Equipo de RMA (de
+      otro Producto o de un cliente): si se vincula, se bloquea o se pide
+      revision.
+
+  - id: ABI-48
+    title: Si se mantiene el alta RT_INTERNO sin Producto de Gestion RT
+    impact: POSTERIOR
+    status: CERRADO
+    closed_by: DEC-RT-04
+    closed_on: "2026-11-17"
+    resolution: >
+      Se mantiene; su referencia RT no vincula por si sola.
+    decisions: [DEC-RT-01, DEC-RT-04]
+    rules: [BR-REP-050]
+    features: [FEAT-REP-001]
+    needed: >
+      Mantenerla, validarla contra la copia o retirarla.
+
+  - id: ABI-49
+    title: Como y cada cuanto se sincroniza la copia de Productos RT
+    impact: POSTERIOR
+    status: CERRADO
+    closed_by: DEC-RT-05
+    closed_on: "2026-11-17"
+    resolution: >
+      A pedido, inicialmente por Administracion; la automatizacion queda en
+      ABI-52.
+    decisions: [DEC-RT-01, DEC-RT-05]
+    rules: [BR-REP-050]
+    features: [FEAT-REP-001]
+    needed: >
+      A pedido, al abrir el modulo o programada; quien sincroniza.
+
+  - id: ABI-50
+    title: Que registra la Orden RT_INTERNO cuando las observaciones del equipo quedan vacias (UX-15)
+    impact: POSTERIOR
+    status: CERRADO
+    closed_by: DEC-RT-06
+    closed_on: "2026-11-17"
+    resolution: >
+      Son opcionales en RT_INTERNO; las validaciones se adaptan sin completar
+      ningun texto.
+    decisions: [DEC-RT-01, DEC-RT-06]
+    rules: [BR-REP-046, BR-REP-050]
+    features: [FEAT-REP-001]
+    needed: >
+      UX-15 hace opcionales las observaciones; la Orden exige hoy una falla
+      reportada.
+
+  - id: ABI-51
+    title: Que roles consultan Reparacion RT y quien sincroniza la copia de Productos
+    impact: POSTERIOR
+    status: CERRADO
+    closed_by: DEC-RT-07
+    closed_on: "2026-11-17"
+    resolution: >
+      Consultan Recepcion, Coordinacion RMA y Administracion; sincroniza
+      Administracion, inicialmente.
+    decisions: [DEC-RT-01, DEC-RT-05, DEC-RT-07, DEC-MI-12]
+    rules: [BR-REP-039, BR-REP-050]
+    features: [FEAT-REP-001]
+    needed: >
+      Roles predeterminados de consulta y de sincronizacion.
+
+  - id: ABI-52
+    title: Cuando y como se automatiza la sincronizacion de la copia de Productos RT
+    impact: POSTERIOR
+    decisions: [DEC-RT-01, DEC-RT-05]
+    rules: [BR-REP-050]
+    features: [FEAT-REP-001]
+    needed: >
+      Hoy la copia se sincroniza solo a pedido (DEC-RT-05). Alternativas: al
+      abrir el modulo si la copia tiene mas de N minutos, o programada; con
+      que frecuencia y que antiguedad maxima admite crear una Orden.
 
 improvements:
 

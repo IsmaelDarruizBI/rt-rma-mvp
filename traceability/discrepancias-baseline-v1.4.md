@@ -2,7 +2,7 @@
 
 La baseline funcional vigente es PROC-REP V1.4, aprobada en DC01 y sincronizada desde `rt-rma-app` (DC02):
 
-- Commit de origen: `ebd084071ed8b59e7b50e4db12c83a1f60d88b62` (rama `spec/ux-recepcion`, publicada: las decisiones DEC-UX-01 a 14 de la iteración de UX de Recepción, sobre `spec/macro-integral` `9854046`, con DEC-MI-01 a 16, DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
+- Commit de origen: `168618ad9ea6d08ec2c2ba450eb3a60393ef7ccd` (rama `spec/reparacion-rt`, publicada: DEC-RT-01 a 07 y BR-REP-050, Reparación RT, sobre `spec/ux-recepcion` `ebd0840`, con DEC-UX-01 a 14, DEC-MI-01 a 16, DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
 - Contenido funcional aprobado en `b6cc3a5`.
 - Manifiesto de procedencia: `business/FUNCTIONAL_SOURCE.json`.
 
@@ -18,13 +18,19 @@ Fuente de los estados de implementación: `business/decisions/decision-log-v1.4.
 
 Las tres que figuraban (DC06, DC07 y DC11) se alinearon en la iteración 1: ver la sección G.
 
-## B. Decisiones no implementadas (4)
+## B. Decisiones no implementadas (10)
 
 | Decisión | Qué dice la baseline | Situación en el producto | Pendientes |
 |---|---|---|---|
 | DC19 | Registrar Minorista/Mayorista sin cambios automáticos de precio | `domain/models/personas.py` (Cliente sin clasificación) | - |
 | DC27C | Supabase Auth; usuarios, roles y permisos en PostgreSQL | Sin autenticación | - |
 | DEC-UX-01 | Los modelos del catálogo técnico vienen de Ventas; se completan con una exportación nueva, sin inventar ni duplicar | El catálogo técnico es la copia de la exportación de Ventas del 21/10/2026 (36 modelos, sin la línea iPhone 18); el modelo que falta se carga a mano. Sin cambios de código | ABI-43 |
+| DEC-RT-01 | Reparación RT: leer los Productos de Gestión RT, copia de consulta y vínculos verificables con Equipos y Órdenes | Sin implementar: solo está el mecanismo común de copias del bloque C (`application/sincronizacion_origen.py`, `rma.sincronizacion_origen`), que la copia de Productos RT reutilizará | Etapa 1 de Reparación RT ([`docs/reparacion-rt-discovery.md`](../docs/reparacion-rt-discovery.md)); ABI-52 |
+| DEC-RT-02 | Un Producto no admite dos Órdenes abiertas vinculadas | Sin implementar (no hay vínculo Producto-Orden) | Etapa 2 |
+| DEC-RT-03 | Las coincidencias por referencia RT o IMEI son solo sugerencias; vincular exige validación explícita y registrada, exigida por el servidor | Sin implementar | Etapas 1 (sugerencias) y 2 (validación) |
+| DEC-RT-05 | La copia de Productos RT se sincroniza a pedido, controlada por Administración | Sin implementar | Etapa 1 |
+| DEC-RT-06 | Observaciones del equipo opcionales en RT_INTERNO | Sin implementar: la base exige `orden.falla_reportada` | Etapa 2 |
+| DEC-RT-07 | Consultan Reparación RT Recepción, Coordinación RMA y Administración | Sin implementar (no hay módulo) | Etapa 1 |
 | DC02 | `rt-rma-mvp/business` es una copia generada y verificada | **Implementada por esta sincronización.** El registro de `rt-rma-app` todavía dice NO_IMPLEMENTADO porque se evaluó antes; corresponde actualizarlo en la fuente | - |
 
 ## C. Decisiones implementadas en parte (4)

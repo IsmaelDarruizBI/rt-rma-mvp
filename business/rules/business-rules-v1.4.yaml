@@ -866,7 +866,10 @@ rules:
       Recepcion, Coordinacion RMA o Administracion, con motivo y auditoria. El
       Equipo conserva su historial completo: Ordenes, reparaciones, garantias,
       reingresos y custodia. La vinculacion o integracion con equipos de
-      Gestion RT queda fuera de alcance.
+      Gestion RT queda fuera de alcance, salvo los vinculos verificables con
+      el Producto de Gestion RT de DEC-RT-01: Producto y Equipo son entidades
+      distintas y una coincidencia de referencia RT o de IMEI nunca vincula
+      por si sola (DEC-RT-03, BR-REP-050).
       DEC-UX-02 (16/11/2026): sin IMEI ni numero de serie el equipo se
       identifica con el identificador interno de su identidad, unico, que se
       muestra en la Orden y en el comprobante de ingreso; nunca un IMEI
@@ -1983,6 +1986,8 @@ rules:
       DEC-UX-01 (16/11/2026): el catalogo tecnico de modelos del alta es una
       copia de una exportacion de Ventas; se completa volviendo a generarla
       desde una exportacion nueva, sin inventar ni duplicar modelos (ABI-43).
+      DEC-RT-01: ademas de este catalogo, RMA lee los Productos de Gestion RT
+      para Reparacion RT (BR-REP-050), con la misma politica de copia.
     status: approved
 
   - id: BR-REP-049
@@ -2031,4 +2036,34 @@ rules:
       costo real lo registra quien recibe y solo Administracion configura
       precios. Los proveedores tienen datos basicos. Fuera de alcance:
       inventarios fisicos periodicos.
+    status: approved
+
+  - id: BR-REP-050
+    name: Productos de Gestion RT en reparacion
+    description: >
+      DEC-RT-01 a DEC-RT-07 (17/11/2026). RMA consulta los Productos de Gestion
+      RT con producto_status Reparacion desde una copia local de solo lectura
+      de la tabla Producto, con la misma politica que el catalogo de Ventas
+      (BR-REP-048): valida estructura, encabezados y unicidad de producto_id;
+      nunca borra (un Producto que deja de estar en Reparacion o de venir del
+      origen queda marcado, no se elimina); conserva la ultima copia valida si
+      la lectura falla; registra fecha, usuario y resultado de cada intento; y
+      copia solo las columnas que usa, nunca producto_passcode ni datos
+      comerciales o de personas. La copia se sincroniza a pedido, con el
+      permiso que inicialmente tiene Administracion, y no es una
+      sincronizacion de inventario. El modelo, la capacidad y el color se
+      obtienen del TipoProducto del Producto (producto_tp = tp_id). Producto
+      y Equipo son entidades distintas, relacionadas solo mediante vinculos
+      verificables (como, quien y cuando). Una coincidencia por referencia RT
+      o por IMEI es solo una sugerencia, que la consulta distingue de los
+      vinculos y que nunca vincula ni fusiona por si sola: vincular exige una
+      validacion explicita y registrada, que el servidor exige (no solo la
+      pantalla). Una Orden RT_INTERNO creada desde un
+      Producto precarga el equipo desde la copia, queda vinculada al Producto
+      junto con su Equipo y conserva las reglas de su origen, con
+      observaciones del equipo opcionales; mientras tenga una Orden vinculada
+      abierta (ni cerrada ni CANCELADA), el Producto no admite otra. El alta RT_INTERNO sin Producto
+      se mantiene y su referencia no vincula. Una sincronizacion posterior no
+      reescribe Ordenes, Equipos, vinculos ni documentos. RMA nunca escribe en
+      Gestion RT.
     status: approved

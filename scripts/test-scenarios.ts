@@ -1144,8 +1144,8 @@ if (REVISION === "v1.4") {
 
   // Reglas de V1.3 que V1.4 cambia, cada una con su motivo: las iteraciones V1.4 (012, 017, 019) y las
   // decisiones de la consolidacion del 23/10/2026 (DCxx). Todas las demas deben seguir identicas a V1.3.
-  // Reglas nuevas de la consolidacion del 23/10/2026, en orden.
-  const CONSOLIDATION_RULES = Array.from({ length: 11 }, (_, i) => `BR-REP-0${39 + i}`);
+  // Reglas nuevas de la consolidacion del 23/10/2026, en orden (BR-REP-050: DEC-RT-01).
+  const CONSOLIDATION_RULES = Array.from({ length: 12 }, (_, i) => `BR-REP-0${39 + i}`);
   const V13_RULES_CHANGED_IN_V14: Record<string, string> = {
     "BR-REP-003": "DC06: el tecnico redefine (PROC-REP-127); redaccion del estado DEFINIDO (DC17)",
     "BR-REP-004": "DC07B: interrumpir para cancelar registra estado, materiales y reversibilidad; motivo de interrupcion (UAT)",

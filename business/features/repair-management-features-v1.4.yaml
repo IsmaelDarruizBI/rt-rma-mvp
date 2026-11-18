@@ -164,11 +164,13 @@ features:
       - BR-REP-040
       - BR-REP-041
       - BR-REP-048
+      - BR-REP-050
 
     scope:
       includes:
         - Identificar el origen de la Orden de Reparacion
         - Obtener contexto de equipos internos de Rosario Tecno
+        - Consultar los Productos de Gestion RT en Reparacion y crear una Orden RT_INTERNO desde uno de ellos (DEC-RT-01)
         - Recibir referencias de garantias de venta
         - Registrar o identificar cliente y equipo
         - Buscar un Cliente existente por DNI en la base propia y reutilizarlo
@@ -237,7 +239,8 @@ features:
           autorizado (BR-REP-021)
         - Administrar las preguntas del checklist, el catalogo de equipos y las
           politicas de garantia (FEAT-REP-010)
-        - Integrar o vincular equipos con Gestion RT (DEC-MI-11)
+        - Integrar o vincular equipos con Gestion RT (DEC-MI-11), salvo los vinculos verificables Producto-Equipo de Reparacion RT (DEC-RT-01)
+        - Escribir en Gestion RT o cambiar el estado de sus Productos (DEC-RT-01)
         - Validar factibilidad o disponibilidad de recursos
         - Ejecutar Detalles de Reparacion
         - Gestionar comercialmente la Orden (precio, pagos, saldo)
