@@ -105,7 +105,7 @@ Con autorización: discovery, diseño aprobado (D1 a D8, DF-1 a DF-5) e implemen
   - altas y ediciones en ventana, sin campos de código;
   - Compras por acción, Permisos con dependencias, crear Orden por `ORDEN_CREAR`.
 - **Pruebas:**
-  - backend sin PostgreSQL: 2055 pasadas;
+  - backend sin PostgreSQL: 2022 pasadas (29 salteadas);
   - `tests/postgres`: 569 pasadas;
   - frontend: 197 pruebas y build correcto;
   - compatibilidad con `fd434ef`: 24 de 24;
