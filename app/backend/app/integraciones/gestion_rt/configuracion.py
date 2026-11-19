@@ -9,10 +9,17 @@ Sin secretos (docs/reparacion-rt-discovery.md, seccion 3.2):
     RMA_PRODUCTOS_RT_ARCHIVO       CSV de Producto (archivo)
     RMA_PRODUCTOS_RT_TIPOS_ARCHIVO CSV de TipoProducto (archivo); por
                                    defecto, RMA_CATALOGO_ARCHIVO
+    RMA_PRODUCTOS_RT_TIPOS_PLANILLA planilla de TipoProducto (google_sheets);
+                                   por defecto, RMA_CATALOGO_SHEETS_PLANILLA
+    RMA_PRODUCTOS_RT_TIPOS_HOJA    hoja de TipoProducto (google_sheets); por
+                                   defecto, RMA_CATALOGO_SHEETS_HOJA
 
-La hoja de TipoProducto y la credencial son las del catalogo de Ventas
-(``RMA_CATALOGO_SHEETS_*``). En el UAT, la planilla de Producto es una
-planilla de PRUEBA con filas ficticias: nunca la real (seccion 3.3).
+La credencial es la del catalogo de Ventas (``RMA_CATALOGO_SHEETS_*``), y
+por defecto tambien la hoja de TipoProducto. En el UAT, la planilla de
+Producto es una planilla de PRUEBA con filas ficticias: nunca la real
+(seccion 3.3); su hoja de TipoProducto ficticia se indica con
+``RMA_PRODUCTOS_RT_TIPOS_*``, asi los productos de prueba no se mezclan con
+el catalogo real.
 """
 
 from datetime import timedelta, timezone
@@ -44,14 +51,22 @@ def construir_proveedor_productos_rt(
     if origen == ORIGEN_NINGUNO:
         return None
     if origen == ORIGEN_GOOGLE_SHEETS:
+        planilla_tipos = (
+            settings.productos_rt_tipos_planilla
+            or settings.catalogo_sheets_planilla
+        )
+        hoja_tipos = (
+            settings.productos_rt_tipos_hoja or settings.catalogo_sheets_hoja
+        )
         faltan = [
             variable
             for variable, valor in (
                 ("RMA_PRODUCTOS_RT_PLANILLA", settings.productos_rt_planilla),
                 ("RMA_PRODUCTOS_RT_GID", settings.productos_rt_gid),
                 (
+                    "RMA_PRODUCTOS_RT_TIPOS_PLANILLA o "
                     "RMA_CATALOGO_SHEETS_PLANILLA",
-                    settings.catalogo_sheets_planilla,
+                    planilla_tipos,
                 ),
             )
             if valor in (None, "")
@@ -65,8 +80,8 @@ def construir_proveedor_productos_rt(
         return ProveedorProductosRtSheets(
             planilla_id=settings.productos_rt_planilla,
             gid=settings.productos_rt_gid,
-            planilla_tipos_id=settings.catalogo_sheets_planilla,
-            hoja_tipos=settings.catalogo_sheets_hoja,
+            planilla_tipos_id=planilla_tipos,
+            hoja_tipos=hoja_tipos,
             credencial=credencial_sheets(settings),
             marcas=settings.catalogo_marcas,
             zona=zona,

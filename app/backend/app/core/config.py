@@ -111,6 +111,12 @@ class Settings(BaseSettings):
     productos_rt_archivo: Path | None = None
     # TipoProducto en modo archivo; sin el, ``catalogo_archivo``.
     productos_rt_tipos_archivo: Path | None = None
+    # Planilla y hoja de TipoProducto para Productos RT (google_sheets). Por
+    # defecto, las del catalogo de Ventas. En el UAT apuntan a la hoja de
+    # TipoProducto FICTICIA de la planilla de prueba: los productos de prueba
+    # se leen con sus tipos de prueba, sin mezclarse con el catalogo real.
+    productos_rt_tipos_planilla: str | None = None
+    productos_rt_tipos_hoja: str | None = None
     # ``producto_status`` de los productos en reparacion: comparacion exacta
     # sin espacios al borde (otras variantes se informan como aviso).
     productos_rt_estado: str = "Reparacion"

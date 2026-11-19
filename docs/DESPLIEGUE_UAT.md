@@ -419,7 +419,7 @@ Publica la pantalla Reparación RT con la copia de los Productos de Gestión RT 
 **Requisitos (con autorización):**
 
 - `feat/reparacion-rt-etapa1` integrada en `mvp-v2` con el CI en verde;
-- **B3, la planilla de prueba** (la crea el usuario): una planilla nueva, con una hoja cargada con `producto.csv` de [`generar_productos_rt_ficticios.py`](../supabase/scripts/validacion_uat/generar_productos_rt_ficticios.py), compartida como Lector con la cuenta de servicio del UAT. Se necesitan su ID y el GID de esa hoja. **Nunca la planilla real** (`1uzGqHgmtynZW8RakCJEB_DuGNy2QQMl8ByNkIpxzPE0`): el UAT es solo de datos ficticios;
+- **B3, la planilla de prueba** (la crea el usuario): una planilla nueva con **dos hojas**, `Producto` (importar `producto.csv`) y `TipoProducto` (importar `tipo_producto.csv`), los dos de [`generar_productos_rt_ficticios.py`](../supabase/scripts/validacion_uat/generar_productos_rt_ficticios.py), compartida como **Lector** con `rt-rma-uat-api@rosariotecno-460217.iam.gserviceaccount.com`. Se necesitan su ID y el GID de la hoja `Producto`. Los tipos se leen de su hoja ficticia (`RMA_PRODUCTOS_RT_TIPOS_*`), no del catálogo real: los productos de prueba no se mezclan con el catálogo de Ventas. **Nunca la planilla real** (`1uzGqHgmtynZW8RakCJEB_DuGNy2QQMl8ByNkIpxzPE0`): el UAT es solo de datos ficticios;
 - sesiones de `gcloud`, Supabase y Vercel, y la contraseña de Administración, que ingresa el usuario.
 
 **Procedimiento:**
@@ -429,7 +429,8 @@ Publica la pantalla Reparación RT con la copia de los Productos de Gestión RT 
 3. **Migración:** `db push --yes`. Después: 40 migraciones y 72 tablas; `rma.producto_rt` vacía; `rma_backend` sin `DELETE` sobre ella; `verificar_integridad()` vacío; la restricción `sincronizacion_origen_copia` admite `PRODUCTOS_RT`. Subir la migración a `_herramientas/migraciones/` (40 archivos, MD5 iguales al repositorio). `00039-sen` sigue funcionando sobre las 40 (ensayado con [`ensayar_reparacion_rt.py`](../supabase/scripts/validacion_uat/ensayar_reparacion_rt.py)).
 4. **Backend sin tráfico,** desde una exportación limpia del commit integrado, con las variables nuevas, sin secretos:
    - `RMA_PRODUCTOS_RT_ORIGEN=google_sheets`;
-   - `RMA_PRODUCTOS_RT_PLANILLA=<ID de la planilla de prueba>` y `RMA_PRODUCTOS_RT_GID=<GID de su hoja>`. **Antes de seguir, comparar el ID con el de la planilla real: tienen que ser distintos.**
+   - `RMA_PRODUCTOS_RT_PLANILLA=<ID de la planilla de prueba>` y `RMA_PRODUCTOS_RT_GID=<GID de la hoja Producto>`;
+   - `RMA_PRODUCTOS_RT_TIPOS_PLANILLA=<el mismo ID>` y `RMA_PRODUCTOS_RT_TIPOS_HOJA=TipoProducto`. **Antes de seguir, comparar el ID con el de la planilla real: tienen que ser distintos.**
 
    Por la etiqueta: `/health` 200; 401 en `/api/rt-products` sin token; `/docs` 404; CORS solo del frontend.
 5. **Frontend sin publicar** (7.5): el bundle con la sección Reparación RT.

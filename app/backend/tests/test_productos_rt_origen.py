@@ -491,3 +491,32 @@ def test_sheets_configurado_con_gid_cero():
     )
     assert isinstance(proveedor, ProveedorProductosRtSheets)
     assert proveedor.descripcion == "Google Sheets (hoja con GID 0)"
+
+
+def test_sheets_lee_los_tipos_del_catalogo_por_defecto():
+    proveedor = construir_proveedor_productos_rt(
+        _settings(
+            productos_rt_origen="google_sheets",
+            productos_rt_planilla="PLANILLA-PRUEBA",
+            productos_rt_gid=5,
+            catalogo_sheets_planilla="PLANILLA-VENTAS",
+        )
+    )
+    assert proveedor._tipos._planilla == "PLANILLA-VENTAS"
+    assert proveedor._hoja_tipos == "raw_TipoProducto"
+
+
+def test_sheets_puede_leer_los_tipos_de_la_planilla_de_prueba():
+    """UAT: los productos ficticios con sus tipos ficticios, sin mezclarse
+    con el catalogo real (y sin exigir la planilla del catalogo)."""
+    proveedor = construir_proveedor_productos_rt(
+        _settings(
+            productos_rt_origen="google_sheets",
+            productos_rt_planilla="PLANILLA-PRUEBA",
+            productos_rt_gid=5,
+            productos_rt_tipos_planilla="PLANILLA-PRUEBA",
+            productos_rt_tipos_hoja="TipoProducto",
+        )
+    )
+    assert proveedor._tipos._planilla == "PLANILLA-PRUEBA"
+    assert proveedor._hoja_tipos == "TipoProducto"

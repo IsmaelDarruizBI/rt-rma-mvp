@@ -432,6 +432,7 @@ Variables de entorno con prefijo `RMA_` (ver `app/core/config.py`):
 | `RMA_PRODUCTOS_RT_ORIGEN` | `ninguno` (por defecto), `google_sheets` o `archivo`: origen de los Productos de Gestión RT en reparación (Reparación RT, solo con `postgres`; [`docs/reparacion-rt-discovery.md`](../../docs/reparacion-rt-discovery.md), sección 10) |
 | `RMA_PRODUCTOS_RT_PLANILLA` / `RMA_PRODUCTOS_RT_GID` | con `google_sheets`: la planilla y el GID de la hoja Producto. En el UAT, la **planilla de prueba**, nunca la real. TipoProducto y la credencial son los del catálogo (`RMA_CATALOGO_SHEETS_*`) |
 | `RMA_PRODUCTOS_RT_ARCHIVO` / `RMA_PRODUCTOS_RT_TIPOS_ARCHIVO` | con `archivo`: los CSV de Producto y de TipoProducto (este último, por defecto, `RMA_CATALOGO_ARCHIVO`) |
+| `RMA_PRODUCTOS_RT_TIPOS_PLANILLA` y `RMA_PRODUCTOS_RT_TIPOS_HOJA` | Planilla y hoja de TipoProducto para Productos RT con `google_sheets`; por defecto, las del catálogo de Ventas. En el UAT, la hoja `TipoProducto` ficticia de la planilla de prueba |
 | `RMA_PRODUCTOS_RT_ESTADO` | `Reparacion`: el `producto_status` que cuenta como en reparación (comparación exacta) |
 | `RMA_PRODUCTOS_RT_SEDES` | `["Alippi","Centro","eCommerce","Fisherton","RMA"]`: sedes confirmadas (otra se guarda y se avisa) |
 | `RMA_PRODUCTOS_RT_UMBRAL_DESAPARICION` / `RMA_PRODUCTOS_RT_MINIMO_PROTECCION` | `0.5` / `10`: si una lectura no trae más de esa fracción de los productos presentes (con al menos ese mínimo), se rechaza |
