@@ -32,6 +32,10 @@ from app.integraciones.catalogo import (
     construir_proveedor_catalogo,
     filtro_catalogo,
 )
+from app.integraciones.gestion_rt import (
+    ProveedorProductosRt,
+    construir_proveedor_productos_rt,
+)
 from app.repositories import (
     CatalogoEquiposRepository,
     CatalogosRepository,
@@ -48,7 +52,9 @@ from app.repositories.operativa import (
     ConsentimientosRepository,
     FirmasRepository,
 )
+from app.repositories.productos_rt import ProductosRtRepository
 from app.repositories.reclamos import ReclamosRepository
+from app.services.productos_rt import ReglasProductosRt
 from app.storage import (
     AlmacenFotos,
     AlmacenFotosDirectorio,
@@ -126,6 +132,13 @@ class ApplicationContext:
     lotes: LotesRepository | None = None
     # Compras (DEC-MI-09): solo PostgreSQL (DC23).
     compras: ComprasRepository | None = None
+    # Reparacion RT (DEC-RT-01): copia de los Productos de Gestion RT en
+    # reparacion. Solo PostgreSQL (como Compras); ``proveedor_productos_rt``
+    # es el origen que se lee al sincronizar (sin el, no se sincroniza).
+    productos_rt: ProductosRtRepository | None = None
+    proveedor_productos_rt: ProveedorProductosRt | None = None
+    reglas_productos_rt: ReglasProductosRt = ReglasProductosRt()
+    antiguedad_aviso_productos_rt: timedelta = timedelta(hours=24)
     # Cierre de los recursos de la persistencia (el pool de PostgreSQL).
     cerrar: Callable[[], None] | None = None
 
@@ -192,6 +205,9 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
         PostgresConfiguracionOperativa,
     )
     from app.storage.postgres.ordenes import PostgresOrdenReparacionRepository
+    from app.storage.postgres.productos_rt import (
+        PostgresProductosRtRepository,
+    )
     from app.storage.postgres.reclamos import PostgresReclamosRepository
     from app.storage.postgres.transaccion import (
         UnidadDeTrabajoPostgres,
@@ -249,7 +265,26 @@ def _contexto_postgres(settings: Settings) -> ApplicationContext:
         firmas=PostgresFirmasRepository(unidad),
         lotes=PostgresLotesRepository(unidad),
         compras=PostgresComprasRepository(unidad),
+        # Reparacion RT: la copia de Productos de Gestion RT en la base.
+        productos_rt=PostgresProductosRtRepository(unidad),
+        proveedor_productos_rt=construir_proveedor_productos_rt(settings),
+        reglas_productos_rt=reglas_productos_rt(settings),
+        antiguedad_aviso_productos_rt=timedelta(
+            hours=settings.productos_rt_antiguedad_aviso_h
+        ),
         cerrar=lambda: cerrar_pool(pool),
+    )
+
+
+def reglas_productos_rt(settings: Settings) -> ReglasProductosRt:
+    """Las reglas de la copia de Productos RT (``RMA_PRODUCTOS_RT_*``)."""
+    return ReglasProductosRt(
+        estado=settings.productos_rt_estado.strip(),
+        sedes=tuple(
+            s.strip() for s in settings.productos_rt_sedes if s.strip()
+        ),
+        umbral_desaparicion=settings.productos_rt_umbral_desaparicion,
+        minimo_proteccion=settings.productos_rt_minimo_proteccion,
     )
 
 

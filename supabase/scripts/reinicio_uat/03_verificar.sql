@@ -40,7 +40,9 @@ with tablas (grupo, tabla) as (
     -- Macroiteración integral.
     ('maestra', 'proveedor'), ('maestra', 'tipo_equipo'), ('maestra', 'permiso'),
     -- Copias de orígenes externos (bloque C, 20261117000100).
-    ('maestra', 'catalogo_producto'), ('maestra', 'sincronizacion_origen')
+    ('maestra', 'catalogo_producto'), ('maestra', 'sincronizacion_origen'),
+    -- Reparación RT, etapa 1 (20261119000100).
+    ('maestra', 'producto_rt')
 )
 select 'esquema' as grupo, 'migraciones' as tabla, count(*) as filas
   from supabase_migrations.schema_migrations

@@ -352,8 +352,9 @@ def test_duracion_de_la_reserva_acotada(backend, usuario):
 
 
 def test_copia_desconocida_rechazada(backend, usuario):
+    # PRODUCTOS_RT es una copia valida desde Reparacion RT (20261119000100).
     with pytest.raises(psycopg.errors.CheckViolation):
-        _reservar(backend, usuario, copia="PRODUCTOS_RT")
+        _reservar(backend, usuario, copia="OTRA_COPIA")
 
 
 def test_el_insert_directo_usa_la_hora_de_la_base_y_una_hora_como_maximo(
@@ -735,7 +736,15 @@ def test_la_migracion_no_cambia_los_datos_existentes():
     todos = archivos_sql()
     nuevas = [a for a in todos if a.name in MIGRACIONES]
     assert [a.name for a in nuevas] == list(MIGRACIONES)
-    url = crear_base(url_admin, [a for a in todos if a not in nuevas])
+    # Sin las del bloque C ni las posteriores (que dependen de ellas).
+    ultima = max(a.name for a in nuevas)
+    anteriores = [
+        a
+        for a in todos
+        if a not in nuevas
+        and not (a.parent.name == "migrations" and a.name > ultima)
+    ]
+    url = crear_base(url_admin, anteriores)
     huella = """
         select c.relname, md5(coalesce((xpath('/row/h/text()', query_to_xml(format(
           'select string_agg(t::text, ''|'' order by t::text) as h from rma.%I t', c.relname),

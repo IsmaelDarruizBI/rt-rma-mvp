@@ -5,7 +5,13 @@
  * Atrás y Adelante funcionan en cualquier hosting estático (Vercel
  * incluido) sin reglas de reescritura ni librerías de routing. Navegar solo
  * cambia el hash: nunca envía comandos al backend.
+ *
+ * Reparación RT lleva sus filtros en la consulta del hash
+ * (`#/reparacion-rt?sede=Centro`) y la ficha abierta en la ruta
+ * (`#/reparacion-rt/900001?...`), siempre en forma canónica.
  */
+
+import { normalizarConsultaRt } from "../reparacion-rt/filtros.ts";
 
 export type Ruta =
   | { pantalla: "inicio" }
@@ -16,16 +22,16 @@ export type Ruta =
   | { pantalla: "inventario" }
   | { pantalla: "reportes" }
   | { pantalla: "compras" }
-  | { pantalla: "configuracion" };
+  | { pantalla: "configuracion" }
+  | { pantalla: "reparacion-rt"; consulta: string; productoId?: string };
 
 /** Al entrar: las tareas del usuario. */
 export const RUTA_INICIAL: Ruta = { pantalla: "inicio" };
 
 /** `#/ordenes/OR-000001` -> la ruta; lo desconocido va al inicio. */
 export function parsearRuta(hash: string): Ruta {
-  const partes = hash
-    .replace(/^#/, "")
-    .split("?")[0]
+  const [camino, ...resto] = hash.replace(/^#/, "").split("?");
+  const partes = camino
     .split("/")
     .filter(Boolean)
     .map((parte) => {
@@ -42,6 +48,13 @@ export function parsearRuta(hash: string): Ruta {
     if (partes[0] === "reportes") return { pantalla: "reportes" };
     if (partes[0] === "compras") return { pantalla: "compras" };
     if (partes[0] === "configuracion") return { pantalla: "configuracion" };
+  }
+  if (partes[0] === "reparacion-rt" && partes.length <= 2) {
+    const consulta = normalizarConsultaRt(resto.join("?"));
+    const productoId = partes[1]?.trim();
+    return productoId
+      ? { pantalla: "reparacion-rt", consulta, productoId }
+      : { pantalla: "reparacion-rt", consulta };
   }
   if (partes[0] === "ordenes") {
     if (partes.length === 1) return { pantalla: "ordenes" };
@@ -76,6 +89,12 @@ export function hashDe(ruta: Ruta): string {
       return "#/compras";
     case "configuracion":
       return "#/configuracion";
+    case "reparacion-rt": {
+      const producto = ruta.productoId
+        ? `/${encodeURIComponent(ruta.productoId)}`
+        : "";
+      return `#/reparacion-rt${producto}${ruta.consulta ? `?${ruta.consulta}` : ""}`;
+    }
   }
 }
 

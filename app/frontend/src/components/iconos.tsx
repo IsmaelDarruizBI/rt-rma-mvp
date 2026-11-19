@@ -36,6 +36,15 @@ export const IconoOrdenes = () => (
   </Icono>
 );
 
+/** Reparación RT: un celular con una llave (productos de Gestión RT). */
+export const IconoReparacionRt = () => (
+  <Icono>
+    <rect x="5" y="2.5" width="10" height="19" rx="2" />
+    <path d="M9 18.5h2" />
+    <path d="M19.5 9.5a2.5 2.5 0 0 1-3.3 2.4l-2.7 2.7-1.1-1.1 2.7-2.7a2.5 2.5 0 0 1 3.1-3.2l-1.4 1.4.9.9 1.4-1.4c.3.3.4.6.4 1z" />
+  </Icono>
+);
+
 export const IconoTaller = () => (
   <Icono>
     <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z" />

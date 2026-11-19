@@ -30,6 +30,7 @@ from app.api import (
     mantenimiento,
     modelos_equipo,
     ordenes,
+    productos_rt,
     reclamos,
     seguridad,
     trabajo,
@@ -141,6 +142,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         firmas,
         identidad,
         compras,
+        productos_rt,
     ):
         application.include_router(modulo.router, dependencies=protegido)
 

@@ -36,7 +36,7 @@ from typing import Protocol
 from app.domain.identidad import normalizar
 from app.domain.models import ProductoInformado, ProductoRt
 
-from .exceptions import PrecondicionInvalidaError
+from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 
 # Cuantos ``producto_id`` se nombran en un aviso (el resto se cuenta).
 MAX_IDS_EN_AVISO = 20
@@ -69,7 +69,9 @@ class ProductosRtNoHabilitadoError(PrecondicionInvalidaError):
     codigo = "PRODUCTOS_RT_NO_HABILITADO"
 
 
-class ProductoRtNoEncontradoError(PrecondicionInvalidaError):
+class ProductoRtNoEncontradoError(EntidadNoEncontradaError):
+    """No hay un producto con ese ``producto_id`` en la copia (404)."""
+
     codigo = "PRODUCTO_RT_NO_ENCONTRADO"
 
 

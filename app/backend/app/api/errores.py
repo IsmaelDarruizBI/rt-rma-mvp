@@ -21,6 +21,8 @@ Correspondencia:
     AlmacenFotosError                  -> 503  (almacenamiento de fotos)
     CatalogoOrigenNoDisponibleError    -> 503  (no se pudo leer el origen
                                                 del catalogo de Ventas)
+    ProductosRtOrigenNoDisponibleError -> 503  (no se pudo leer el origen
+                                                de Productos RT)
 
 Las especializaciones de ``PrecondicionInvalidaError`` (Orden cerrada,
 toma de otro tecnico, confirmacion requerida) siguen siendo 409, pero
@@ -42,6 +44,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.integraciones.catalogo import CatalogoOrigenNoDisponibleError
+from app.integraciones.gestion_rt import ProductosRtOrigenNoDisponibleError
 from app.repositories import (
     ClaveReutilizadaError,
     ConflictoDeEscrituraError,
@@ -172,6 +175,20 @@ def registrar_manejadores_de_error(application: FastAPI) -> None:
         return _respuesta(
             "CATALOGO_ORIGEN_NO_DISPONIBLE",
             f"{error} Se conserva el catálogo anterior.",
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    @application.exception_handler(ProductosRtOrigenNoDisponibleError)
+    async def _origen_productos_rt(
+        _: Request,
+        error: ProductosRtOrigenNoDisponibleError,
+    ) -> JSONResponse:
+        """El origen de Productos RT no respondio: el intento ya quedo
+        registrado y la copia no cambio. El mensaje no tiene secretos."""
+        logger.warning("Origen de Productos RT: %s", error)
+        return _respuesta(
+            "PRODUCTOS_RT_ORIGEN_NO_DISPONIBLE",
+            f"{error} Se conservan los datos anteriores.",
             status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 

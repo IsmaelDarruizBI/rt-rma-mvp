@@ -27,6 +27,7 @@ import {
   IconoMas,
   IconoMenu,
   IconoOrdenes,
+  IconoReparacionRt,
   IconoSalir,
   IconoTaller,
 } from "./iconos";
@@ -35,6 +36,7 @@ export type Seccion =
   | "inicio"
   | "ordenes"
   | "taller"
+  | "reparacion-rt"
   | "inventario"
   | "reportes"
   | "compras"
@@ -48,10 +50,18 @@ const SECCIONES: readonly {
   soloAdministracion?: boolean;
   /** DEC-MI-09: solo con el permiso de consultar compras. */
   soloCompras?: boolean;
+  /** DEC-RT-07: solo con el permiso de consultar los Productos RT. */
+  soloProductosRt?: boolean;
 }[] = [
   { clave: "inicio", nombre: "Inicio", icono: IconoInicio },
   { clave: "ordenes", nombre: "Órdenes", icono: IconoOrdenes },
   { clave: "taller", nombre: "Taller", icono: IconoTaller },
+  {
+    clave: "reparacion-rt",
+    nombre: "Reparación RT",
+    icono: IconoReparacionRt,
+    soloProductosRt: true,
+  },
   { clave: "inventario", nombre: "Inventario", icono: IconoInventario },
   { clave: "reportes", nombre: "Reportes", icono: IconoReportes },
   { clave: "compras", nombre: "Compras", icono: IconoCompras, soloCompras: true },
@@ -95,6 +105,7 @@ export function Layout({
     rol: string;
     esAdministracion?: boolean;
     puedeComprar?: boolean;
+    puedeConsultarProductosRt?: boolean;
   };
   onCerrarSesion: () => void;
   barra: Barra;
@@ -132,7 +143,8 @@ export function Layout({
           {SECCIONES.filter(
             (s) =>
               (!s.soloAdministracion || usuario.esAdministracion) &&
-              (!s.soloCompras || usuario.puedeComprar),
+              (!s.soloCompras || usuario.puedeComprar) &&
+              (!s.soloProductosRt || usuario.puedeConsultarProductosRt),
           ).map(({ clave, nombre, icono: Icono }) => (
             <button
               key={clave}

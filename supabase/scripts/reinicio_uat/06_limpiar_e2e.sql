@@ -76,8 +76,9 @@ declare
     -- Macroiteración integral.
     'checklist_pregunta', 'motivo_operativo', 'parametro', 'permiso',
     'plantilla_mensaje', 'proveedor', 'tipo_equipo',
-    -- Copias de orígenes externos (bloque C): se conservan como las maestras.
-    'catalogo_producto', 'sincronizacion_origen'
+    -- Copias de orígenes externos (bloque C y Reparación RT): se conservan
+    -- como las maestras.
+    'catalogo_producto', 'sincronizacion_origen', 'producto_rt'
   ];
 
   v_tabla text;

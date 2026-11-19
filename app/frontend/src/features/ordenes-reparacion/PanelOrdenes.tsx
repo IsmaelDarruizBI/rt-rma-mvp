@@ -53,6 +53,7 @@ import {
 import { InventarioPanel } from "../inventario/Inventario";
 import { ReportesPanel } from "../reportes/Reportes";
 import { ComprasPanel } from "../compras/Compras";
+import { ReparacionRtPanel } from "../reparacion-rt/ReparacionRt";
 import { ReclamoRechazado } from "./ReclamoRechazado";
 import { RetiroDemorado } from "./RetiroDemorado";
 import { ComunicacionesOrden } from "./ComunicacionesOrden";
@@ -695,6 +696,11 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
       ? { titulo: "Inicio", subtitulo: "Tus tareas de hoy" }
       : ruta.pantalla === "taller"
         ? { titulo: "Taller", subtitulo: "Cola de trabajo y órdenes en reparación" }
+        : ruta.pantalla === "reparacion-rt"
+        ? {
+            titulo: "Reparación RT",
+            subtitulo: "Productos de Gestión RT en reparación",
+          }
         : ruta.pantalla === "inventario"
           ? { titulo: "Inventario", subtitulo: "Stock, reservas y movimientos" }
           : ruta.pantalla === "reportes"
@@ -779,7 +785,11 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
       seccion={seccion}
       onNavegar={(destino) => {
         setError(null);
-        navegar({ pantalla: destino });
+        navegar(
+          destino === "reparacion-rt"
+            ? { pantalla: "reparacion-rt", consulta: "" }
+            : { pantalla: destino },
+        );
       }}
       usuario={{
         nombre: actor.nombre,
@@ -788,6 +798,12 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
           .join(" · "),
         esAdministracion: tieneRol(actor, "ADMINISTRADOR"),
         puedeComprar: puede(actor, "COMPRAS_CONSULTAR", [
+          "RECEPCION",
+          "COORDINADOR_RMA",
+          "ADMINISTRADOR",
+        ]),
+        // DEC-RT-07: Recepción, Coordinación RMA y Administración.
+        puedeConsultarProductosRt: puede(actor, "PRODUCTOS_RT_CONSULTAR", [
           "RECEPCION",
           "COORDINADOR_RMA",
           "ADMINISTRADOR",
@@ -825,6 +841,15 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
           ocupado={ocupado}
           onIr={(pantalla) => navegar({ pantalla })}
           onTomar={tomarDesdeCola}
+        />
+      ) : ruta.pantalla === "reparacion-rt" ? (
+        <ReparacionRtPanel
+          actor={actor}
+          consulta={ruta.consulta}
+          productoId={ruta.productoId}
+          onNavegar={(consulta, productoId) =>
+            navegar({ pantalla: "reparacion-rt", consulta, productoId })
+          }
         />
       ) : ruta.pantalla === "inventario" ? (
         <InventarioPanel actor={actor} usuarios={usuarios} />
