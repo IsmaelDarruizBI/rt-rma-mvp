@@ -26,13 +26,13 @@ declare
 begin
   select string_agg(detalle, '; ') into v_choques
   from (
-    select 'tipo_reparacion.codigo ' || string_agg(codigo, ', ' order by codigo) as detalle
+    select 'tipo_reparacion.codigo ' || string_agg(codigo, ', ' order by codigo collate "C") as detalle
       from rma.tipo_reparacion group by upper(codigo) having count(*) > 1
     union all
-    select 'insumo.clave ' || string_agg(clave, ', ' order by clave)
+    select 'insumo.clave ' || string_agg(clave, ', ' order by clave collate "C")
       from rma.insumo group by upper(clave) having count(*) > 1
     union all
-    select 'insumo.codigo ' || string_agg(codigo, ', ' order by codigo)
+    select 'insumo.codigo ' || string_agg(codigo, ', ' order by codigo collate "C")
       from rma.insumo group by upper(codigo) having count(*) > 1
   ) choques;
   if v_choques is not null then

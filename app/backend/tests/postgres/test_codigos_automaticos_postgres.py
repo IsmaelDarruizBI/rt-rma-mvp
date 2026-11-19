@@ -287,6 +287,7 @@ def test_la_migracion_se_detiene_si_hay_codigos_que_solo_difieren_en_mayusculas(
             )
             with pytest.raises(psycopg.errors.UniqueViolation) as error:
                 conexion.execute(_migracion().read_text(encoding="utf-8"))
+            # Orden binario (collate "C"): igual en cualquier servidor.
             assert "TR-050, tr-050" in str(error.value)
             # No corrigio nada por su cuenta.
             assert (
