@@ -1489,7 +1489,8 @@ features:
         - Configurar las politicas de garantia (DC15A), por Tipo de
           Reparacion, el plazo con check-in realizado y no realizado y la
           politica de los trabajos hechos dentro de una garantia RMA
-          (BR-REP-041, DEC-MI-01)
+          (BR-REP-041, DEC-MI-01); la pantalla muestra solo los plazos con y
+          sin check-in (DEC-CFG-06)
         - Administrar las Mesas de trabajo (Estaciones) y sus tipos de
           reparacion habilitados
         - Administrar Tipos de Reparacion, Insumos, plantillas de WhatsApp,
@@ -1500,10 +1501,20 @@ features:
           DEC-MI-13)
         - Sincronizar manualmente el catalogo de equipos de Ventas
           (BR-REP-048)
+        - Generar los codigos de los registros de cada catalogo, unicos sin
+          distinguir mayusculas y que nunca cambian, y organizar Configuracion
+          por funcionalidad, con altas breves sin campos de codigo y cada
+          seccion visible con su permiso (BR-REP-040, DEC-CFG-01, DEC-CFG-05)
+        - Conservar sin pantalla, con su valor y sus reglas, el plazo generico
+          de garantia y la politica RMA de cada Tipo, el plazo del retiro
+          demorado y las plantillas que no se ofrecen (DEC-CFG-06 a DEC-CFG-08)
       excludes:
         - Modificar condiciones ya registradas en Ordenes, Detalles o
           documentos
         - Mantener el catalogo de productos, que pertenece a Ventas
+        - Organizar los insumos en una jerarquia (categorias, subcategorias,
+          productos y tipos de insumo) y su compatibilidad con modelos de
+          equipo, pendiente de decision (ABI-53)
         - Implementar la administracion sobre los archivos JSON del MVP (se
           implementa sobre la persistencia definitiva, DC28)
 
@@ -1588,7 +1599,16 @@ features:
           registrar en cada accion el usuario y el rol que la habilito; e
           impedir cualquier cambio que deje el sistema sin un administrador
           autorizado (BR-REP-039, DEC-MI-12)
+        - Exigir en el servidor el permiso de cada accion y consulta; dar a
+          cada catalogo operativo y a los precios su permiso, inicialmente de
+          Administracion, y a cada accion de Compras el suyo; mantener fijos
+          para Administracion usuarios, roles y permisos, parametros del
+          sistema, recargos y la auditoria completa; exigir la consulta de cada
+          accion y no dejar un permiso sin roles (BR-REP-039, DEC-CFG-02 a
+          DEC-CFG-04)
       excludes:
+        - Permisos individuales por usuario; los permisos se asignan solo por
+          rol (DEC-CFG-02)
         - Autenticacion y almacenamiento de usuarios, roles y permisos
           (decision de arquitectura DC27C, fuera de las Features)
         - Habilitar acciones que una regla de negocio impide, cualquiera sea el

@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 20/11/2026.
+**Última actualización:** 19/11/2026.
 
 - **Hecho:**
   - autenticación real y DC31 desplegadas en UAT (10/11, `00020-tux`);
@@ -85,7 +85,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ## B. Últimos avances
 
-### Configuración v2 (20/11/2026), rama `feat/configuracion-v2`
+### Configuración v2 (19/11/2026), rama `feat/configuracion-v2`
 
 Con autorización: discovery, diseño aprobado (D1 a D8, DF-1 a DF-5) e implementación de CFG-01 a CFG-08 en fases A a E, solo en local. Sin migraciones en el UAT, sin despliegue, sin cambios en Gestión RT, `main` ni `mvp-v2`. Detalle, decisiones, pruebas y riesgos en [`configuracion-discovery.md`](configuracion-discovery.md), sección 12.
 
@@ -794,7 +794,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (20/11/2026):** autorizar el push de `feat/configuracion-v2` y su integración en `mvp-v2`, y la publicación conjunta de Reparación RT etapa 1 y Configuración v2 en el UAT ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12). Antes hace falta la planilla de prueba (B3).
+**Próximo paso (19/11/2026):** autorizar el push de `feat/configuracion-v2` y su integración en `mvp-v2`, y la publicación conjunta de Reparación RT etapa 1 y Configuración v2 en el UAT ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12). Antes hace falta la planilla de prueba (B3).
 
 **Antes (19/11/2026):** con la etapa 1 de Reparación RT lista en local, crear la planilla de prueba (B3) y autorizar la integración en `mvp-v2` y el despliegue en el UAT ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 11). **Antes (18/11/2026):** bloque C aprobado en el UAT (C8). Pendientes del bloque C: mover el limitador por DNI a la base antes de permitir más de una instancia (P1-2) y, opcional, que el E2E integral compruebe el control por lote de BAT-IP14 en el escenario 0. **Antes (17/11/2026):** bloque C cerrado en local. **Antes (16/11/2026):** UAT operativo con la iteración de UX de Recepción, escalado a cero desde las 22:54 UTC (sección B). Cada publicación termina quitando su etiqueta temporal y con `verificar_escalado_uat.py` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 9). Siguen pendientes, con autorización: la pasada manual en un navegador real (P2-17, incluye el diálogo real de impresión y el desborde de «Pendientes» a 390 px), ABI-43 (exportación de Ventas), ABI-42 (para activar DC12) y la integración en `main` (P0-2).
 

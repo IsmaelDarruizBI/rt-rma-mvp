@@ -104,7 +104,7 @@ La Ejecución conserva lo que el técnico informó como utilizado; los movimient
 
 ## P-07. Jerarquía y compatibilidad de insumos
 
-Registrado el 20/11/2026 (Configuración v2, mejora futura, no implementada).
+Registrado el 19/11/2026 (Configuración v2, mejora futura, no implementada).
 
 **Pedido.** Organizar los insumos con categorías, subcategorías, productos y tipos de insumo, y registrar la compatibilidad de un insumo con varios modelos de equipo.
 

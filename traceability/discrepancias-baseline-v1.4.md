@@ -2,7 +2,7 @@
 
 La baseline funcional vigente es PROC-REP V1.4, aprobada en DC01 y sincronizada desde `rt-rma-app` (DC02):
 
-- Commit de origen: `168618ad9ea6d08ec2c2ba450eb3a60393ef7ccd` (rama `spec/reparacion-rt`, publicada: DEC-RT-01 a 07 y BR-REP-050, Reparación RT, sobre `spec/ux-recepcion` `ebd0840`, con DEC-UX-01 a 14, DEC-MI-01 a 16, DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
+- Commit de origen: `7fb75cd519e42217b897525626765241176bdd30` (rama `spec/configuracion-v2`, publicada: DEC-CFG-01 a 08 y ABI-53, Configuración v2, y el estado de implementación de la etapa 1 de Reparación RT, sobre `spec/reparacion-rt` `168618a`, con DEC-RT-01 a 07 y BR-REP-050, sobre `spec/ux-recepcion` `ebd0840`, con DEC-UX-01 a 14, DEC-MI-01 a 16, DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
 - Contenido funcional aprobado en `b6cc3a5`.
 - Manifiesto de procedencia: `business/FUNCTIONAL_SOURCE.json`.
 

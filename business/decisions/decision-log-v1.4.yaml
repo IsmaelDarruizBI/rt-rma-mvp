@@ -701,7 +701,10 @@ decisions:
       mayor a cero (criterio de garantia aplicable). Cada Detalle tiene un
       plazo calculado y trazable. No decide cual de las tres politicas RMA es
       la inicial de cada Tipo (ABI-38) ni que plazo rige cuando el check-in no
-      es exigible fuera de la garantia RMA (ABI-39).
+      es exigible fuera de la garantia RMA (ABI-39). DEC-CFG-06 (19/11/2026):
+      Configuracion muestra solo los plazos con y sin check-in; el plazo
+      generico y la politica RMA de cada Tipo se conservan sin pantalla, con
+      sus reglas.
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/macro-integral cc46121 (domain/garantia.py garantia_sugerida con los plazos del Tipo; TipoReparacion.garantia_con_checkin, garantia_sin_checkin y politica_garantia_rma; services/documentos.py aplicar_politica_garantia_rma; check-in exigible solo con garantia mayor a cero)"
@@ -837,7 +840,10 @@ decisions:
       evidencia de un proveedor. Las comunicaciones operativas se distinguen
       de las comerciales; el marketing exige consentimiento expreso, revocable,
       con usuario, fecha, canal y origen, y se respetan las preferencias. Los
-      envios automaticos de marketing quedan fuera del alcance.
+      envios automaticos de marketing quedan fuera del alcance. DEC-CFG-08
+      (19/11/2026): Configuracion y la Orden ofrecen solo ingreso de equipo y
+      equipo listo para retirar; las otras tres plantillas se conservan, sin
+      borrarse ni desactivarse.
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/macro-integral b4dd52c (services/comunicaciones.py y application/comunicaciones.py: cinco plantillas editables, mensaje editable antes de abrir WhatsApp, intento y confirmacion manual, nunca entregado ni leido; consentimiento por finalidad y canal como historial)"
@@ -861,7 +867,12 @@ decisions:
       sin duplicados y con registro de diferencias. El ultimo costo de compra
       es la referencia operativa; cada recepcion conserva su costo historico;
       solo Administracion configura precios; el costo real lo registra quien
-      recibe. Proveedores con datos basicos.
+      recibe. Proveedores con datos basicos. DEC-CFG-04 (19/11/2026): cada
+      accion de Compras tiene su permiso, con esos tres roles como
+      predeterminados, y los proveedores el suyo, inicialmente de
+      Administracion; los precios, el permiso de precios de DEC-CFG-03,
+      inicialmente de Administracion. Los codigos los genera el sistema
+      (DEC-CFG-01).
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/macro-integral 3434453 (services/compras.py, application/compras.py y la pantalla Compras: solicitudes manuales o sugeridas por faltante y confirmadas, ordenes de compra sin aprobacion con creador y confirmador, recepciones parciales sin superar lo pendiente que generan ingresos con lote o serie, ultimo costo e historico; proveedores en Configuracion; solo PostgreSQL)"
@@ -925,6 +936,12 @@ decisions:
       configuracion inicial; los permisos de consulta de reportes,
       antecedentes y operaciones administrativas son configurables; ningun
       cambio puede dejar el sistema sin un administrador autorizado.
+      DEC-CFG-02 y DEC-CFG-03 (19/11/2026): los permisos siguen siendo por
+      rol, sin permisos individuales; cada catalogo operativo y los precios
+      tienen su permiso, inicialmente de Administracion; usuarios, roles y
+      permisos, parametros del sistema, recargos por medio de pago y la
+      auditoria completa quedan fijos para Administracion; una accion requiere
+      su consulta y ningun permiso queda sin roles.
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/macro-integral c47903e (services/permisos.py: catalogo de permisos con los roles predeterminados; varios roles por usuario; rol habilitante en el historial; Configuracion > Usuarios y roles y Permisos; nunca sin un Administrador)"
@@ -941,7 +958,10 @@ decisions:
       por tipo de equipo, plantillas de WhatsApp, motivos de cancelacion y de
       interrupcion, parametros operativos, precios y costos. Cada cambio
       respeta permisos, se audita, preserva las referencias historicas y no
-      cambia precios de Ordenes existentes.
+      cambia precios de Ordenes existentes. DEC-CFG-01, DEC-CFG-03 y
+      DEC-CFG-05 (19/11/2026): los codigos los genera el sistema; cada
+      catalogo tiene su permiso; Configuracion se organiza por funcionalidad,
+      con altas sin campos de codigo.
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/macro-integral (Configuracion: Tipos de Reparacion, Mesas, politicas de garantia por Tipo cc46121, permisos c47903e, motivos y parametros ac7a56d, plantillas b4dd52c e insumos 5c0536d, todos auditados en rma.cambio_configuracion); rt-rma-mvp feat/macro-integral 3434453 (proveedores) y c8cd64f (checklist por tipo de equipo); 8699dbd (control y precio de insumos)"
@@ -961,7 +981,9 @@ decisions:
       comunicaciones; la Orden sigue abierta y nunca se cierra, declara
       abandono ni dispone del equipo por vencimiento. Las devoluciones de
       dinero posteriores a ENTREGADA y el dinero no retirado cuando no hay un
-      equipo por retirar no se decidieron (ABI-40).
+      equipo por retirar no se decidieron (ABI-40). DEC-CFG-07 (19/11/2026):
+      el plazo sale de la pantalla de Configuracion y sigue rigiendo con su
+      valor; solo Administracion lo cambia, sin pantalla.
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/macro-integral ac7a56d (domain/retiro.py: demora desde el aviso de equipo listo con PLAZO_RETIRO_DIAS, 30 por defecto; bandeja RETIRO_DEMORADO y seguimientos inmutables; nunca cierra la Orden)"
@@ -1342,8 +1364,9 @@ decisions:
       Siguen excluidos consultar Ordenes de venta, sincronizar inventario o
       stock y cualquier otra integracion.
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "etapa 1 (copia, busqueda, filtros, ficha) y etapa 2 (Orden desde el Producto y vinculos) segun rt-rma-mvp docs/reparacion-rt-discovery.md"
+      status: PARCIAL
+      evidence: "rt-rma-mvp feat/reparacion-rt-etapa1 dc9bd3b, 1b0a483, a7d0d6e, 0e0135f y f3036ca, local (etapa 1: copia de consulta de Productos en Reparacion con las columnas permitidas, sin producto_passcode ni datos comerciales o de personas, que nunca borra y conserva la ultima copia valida, services/productos_rt.py y migracion 20261119000100; GET /api/rt-products con busqueda por producto_id, IMEI y modelo, filtros por sede y por coincidencias, y ficha; pantalla Reparacion RT; ninguna escritura en Gestion RT)"
+      gap: "etapa 2 (Orden RT_INTERNO desde el Producto y vinculos verificables) segun rt-rma-mvp docs/reparacion-rt-discovery.md"
     open: [ABI-52]
 
   - id: DEC-RT-02
@@ -1395,8 +1418,9 @@ decisions:
       correspondiente. La consulta distingue siempre los vinculos de las
       coincidencias sugeridas.
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "etapa 1 (vinculos y coincidencias sugeridas, por separado) y etapa 2 (validacion explicita y registro) segun rt-rma-mvp docs/reparacion-rt-discovery.md"
+      status: PARCIAL
+      evidence: "rt-rma-mvp feat/reparacion-rt-etapa1 1b0a483 y 0e0135f, local (etapa 1: coincidencias sugeridas por referencia RT o por IMEI, cada una con su criterio, separadas del historial del Producto; nunca vinculan ni cuentan como Orden activa)"
+      gap: "etapa 2 (vinculos verificables, validacion explicita con motivo, registrada y exigida por el servidor) segun rt-rma-mvp docs/reparacion-rt-discovery.md"
 
   - id: DEC-RT-04
     block: RT
@@ -1428,8 +1452,8 @@ decisions:
       pantalla muestra siempre la fecha de la ultima sincronizacion exitosa.
       Automatizarla queda para despues (ABI-52).
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "etapa 1 segun rt-rma-mvp docs/reparacion-rt-discovery.md"
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/reparacion-rt-etapa1 dc9bd3b y 1b0a483, local (POST /api/rt-products/sync a pedido con PRODUCTOS_RT_SINCRONIZAR, inicialmente Administracion; cada intento registra fecha, usuario y resultado; la pantalla muestra la fecha de la ultima copia valida y el error de la ultima sincronizacion fallida)"
 
   - id: DEC-RT-06
     block: RT
@@ -1462,8 +1486,236 @@ decisions:
       siendo el permiso de crear Ordenes, y validar una coincidencia el de
       corregir la vinculacion del Equipo (DEC-RT-03).
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "etapa 1 segun rt-rma-mvp docs/reparacion-rt-discovery.md"
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/reparacion-rt-etapa1 dc9bd3b y 1b0a483, local (services/permisos.py PRODUCTOS_RT_CONSULTAR: Recepcion, Coordinacion RMA y Administracion; PRODUCTOS_RT_SINCRONIZAR: Administracion; ambos configurables). Crear la Orden desde un Producto y validar una coincidencia llegan con la etapa 2 (DEC-RT-01, DEC-RT-03)"
+
+  # ------------------------------------------------------------------ Configuracion v2 (19/11/2026)
+  # Aprobadas por el responsable de producto el 19/11/2026 para la iteracion
+  # Configuracion v2 de rt-rma-mvp (rama feat/configuracion-v2): D1 a D8, los
+  # ajustes 1 a 8 de la revision y DF-1 a DF-5 de rt-rma-mvp
+  # docs/configuracion-discovery.md (CFG-01 a CFG-08). No agregan nodos,
+  # aristas ni estados: cambian como se identifican los registros, quien
+  # administra cada catalogo y que ofrece la pantalla, y conservan el
+  # comportamiento vigente de lo que se deja de mostrar.
+  - id: DEC-CFG-01
+    block: CFG
+    title: Los codigos de los catalogos, de las compras, de los reclamos de garantia y de las preguntas del checklist los genera el sistema; son unicos sin distinguir mayusculas y nunca cambian
+    status: CONFIRMADA
+    rules: [BR-REP-040, BR-REP-049]
+    features: [FEAT-REP-010, FEAT-REP-003]
+    notes: >
+      Aprobada el 19/11/2026 (CFG-01; D4, D6 y los ajustes 1 y 7). (1) El
+      sistema genera el codigo de los Tipos de Reparacion, de los motivos de
+      cancelacion y de interrupcion (con un prefijo segun el tipo de motivo) y
+      de los insumos, cuyo identificador y codigo son iguales por defecto; la
+      pantalla no pide codigos. Tambien genera, con los formatos vigentes, los
+      de los proveedores, las preguntas del checklist, las solicitudes y las
+      ordenes de compra y los reclamos de garantia. (2) Cada codigo es unico
+      sin distinguir mayusculas de minusculas y nunca cambia despues del alta.
+      (3) La numeracion puede tener huecos (un alta que falla pierde su
+      numero): lo que importa es la unicidad, que dos altas simultaneas nunca
+      reciban el mismo codigo y que el codigo no cambie. (4) Ningun codigo
+      existente cambia ni se reutiliza: la numeracion sigue despues del mayor
+      existente y saltea los ya usados, y los codigos reservados o que no
+      siguen el formato (por ejemplo, el del Tipo "Otros") se conservan. (5)
+      El codigo que informa un cliente anterior (la pantalla publicada o un
+      script) se respeta si es valido y unico; si ya existe, el alta se
+      rechaza como duplicada. El codigo no pasa a ser obligatorio. Ordenes,
+      Detalles, comunicaciones y documentos conservan su numeracion.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/configuracion-v2 1d59a83, local (migracion 20261120000100: una secuencia por prefijo y rma.siguiente_codigo, trigger rma.impedir_cambio_codigo e indices unicos sin distinguir mayusculas en tipo_reparacion e insumo; codigo opcional en las altas de tipos, motivos e insumos; un duplicado responde 409, no 500) y 928012c (altas sin campos de codigo)"
+
+  - id: DEC-CFG-02
+    block: CFG
+    title: Los permisos se asignan solo por rol y cada accion o consulta exige su permiso en el servidor; las acciones que dependian de un rol fijo pasan a su permiso con el mismo predeterminado
+    status: CONFIRMADA
+    rules: [BR-REP-039]
+    features: [FEAT-REP-011]
+    notes: >
+      Aprobada el 19/11/2026 (CFG-02; D1 y el ajuste 5). Precisa DEC-MI-12.
+      (1) Los permisos se asignan por rol, como hasta ahora; no hay permisos
+      individuales por usuario, que quedan para otra iteracion. (2) Cada
+      accion y cada consulta exige su permiso en el servidor, no solo en la
+      pantalla, y la pantalla ofrece solo lo que el usuario puede hacer segun
+      sus permisos, no segun un rol fijo. Un cambio de permisos rige desde la
+      operacion siguiente, y la pantalla de quien lo hace se actualiza sin
+      volver a ingresar. (3) Las acciones que exigian un rol fijo pasan a su
+      permiso configurable, con el mismo predeterminado, sin dar ni quitar
+      accesos: enviar la Orden a revision, crear la Orden de garantia RMA (su
+      permiso, sin exigir ademas el rol de Recepcion), crear una Orden, limpiar
+      las fotografias sin Orden y sincronizar los tipos de equipo del
+      checklist (el permiso del checklist, DEC-CFG-03). (4) Consultar
+      fotografias, firmas, mensajes preparados, consentimientos y bandejas
+      exige el permiso de consultar Ordenes, no el de cargar fotografias. Las
+      restricciones de contexto de cada regla se mantienen.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/configuracion-v2 8c3bdcd, local (cada ruta con su permiso en la API y en el servicio; brechas 1, 2, 3, 8, 9, 10, 12, 13 y 22 de docs/configuracion-discovery.md; tests/test_matriz_permisos.py exige clasificar toda ruta y verifica el 403) y 928012c (menu, Configuracion, Compras y crear Orden por permiso; los permisos propios se releen al cambiarlos). Las brechas de prioridad C (rutas de eventos de sistema sin usuario, bandejas por puesto) quedan en rt-rma-mvp docs/DEUDA_TECNICA.md P1-16"
+
+  - id: DEC-CFG-03
+    block: CFG
+    title: Cada catalogo operativo tiene su permiso configurable, inicialmente solo de Administracion; los precios tienen un permiso aparte; lo sensible del sistema queda fijo para Administracion; una accion exige su consulta y ningun permiso queda sin roles
+    status: CONFIRMADA
+    rules: [BR-REP-039, BR-REP-040, BR-REP-015]
+    features: [FEAT-REP-010, FEAT-REP-011]
+    notes: >
+      Aprobada el 19/11/2026 (CFG-03; D2, D3 y D8). Amplia DEC-MI-12 y
+      DEC-MI-13. (1) Tipos de Reparacion (alta, nombre, puntaje, garantias y
+      vigencia), tipos habilitados por Mesa de trabajo, motivos de cancelacion
+      y de interrupcion, insumos (alta, nombre, unidad, control por lote y
+      vigencia), plantillas de WhatsApp y checklist de recepcion (preguntas y
+      sincronizacion de los tipos de equipo) tienen cada uno un permiso
+      configurable, que inicialmente tiene solo Administracion: nadie gana un
+      acceso sin que Administracion lo decida (D2). El alta y la edicion de
+      un catalogo van juntas. Los proveedores: DEC-CFG-04. (2) Fijar o
+      modificar el precio de los Tipos de Reparacion y de los insumos es un
+      permiso aparte, inicialmente de Administracion (D3). Crear un Tipo de
+      Reparacion exige los dos permisos, porque su precio es obligatorio; un
+      insumo se crea sin precio con el permiso de insumos y el precio lo
+      completa quien tiene el de precios; quien gestiona un catalogo sin el
+      permiso de precios los ve sin poder cambiarlos. (3) Quedan fijos para
+      Administracion, no configurables: usuarios, roles y la matriz de
+      permisos; los parametros del sistema; los recargos por medio de pago; y
+      la auditoria completa de la configuracion. Cada seccion muestra su
+      propio historial de cambios. (4) Un permiso de accion requiere su
+      permiso de consulta (las acciones de Compras, consultar Compras; la de
+      insumos, consultar el inventario): la pantalla marca la consulta junto
+      con la accion y el servidor rechaza un cambio que deje a un rol con la
+      accion y sin la consulta. (5) Ningun permiso puede quedar sin roles, y
+      ningun cambio deja el sistema sin un administrador autorizado
+      (DEC-MI-12).
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/configuracion-v2 8c3bdcd, local (services/permisos.py, grupo Configuracion operativa: TIPO_REPARACION_GESTIONAR, PRECIOS_GESTIONAR, MESA_TIPOS_GESTIONAR, MOTIVO_GESTIONAR, INSUMO_GESTIONAR, PLANTILLA_GESTIONAR y CHECKLIST_GESTIONAR, predeterminado Administracion; requiere; services/roles.py rechaza una lista de roles vacia o una accion sin su consulta; CONFIGURACION_ADMINISTRAR y ROLES_ADMINISTRAR no configurables), 6683bcf (la API de permisos informa requiere) y 928012c (pantalla Permisos con grupos y dependencias; precio editable solo con PRECIOS_GESTIONAR)"
+
+  - id: DEC-CFG-04
+    block: CFG
+    title: Compras se habilita por accion (solicitar, crear, confirmar y cancelar ordenes de compra, recibir y gestionar proveedores) con los roles que tenia la gestion de Compras; quien crea ordenes de compra puede descartar su propio borrador
+    status: CONFIRMADA
+    rules: [BR-REP-049, BR-REP-039]
+    features: [FEAT-REP-003, FEAT-REP-011]
+    notes: >
+      Aprobada el 19/11/2026 (CFG-03; D5, DF-4 y DF-5). Amplia DEC-MI-09 solo
+      en quien hace cada accion. (1) El permiso unico de gestionar Compras se
+      divide en: crear y descartar solicitudes de compra; crear ordenes de
+      compra; confirmarlas; cancelar ordenes de compra confirmadas; registrar
+      recepciones, que ingresan stock; y dar de alta y editar proveedores. (2)
+      Las cinco primeras heredan los roles vigentes del permiso anterior
+      (inicialmente Recepcion, Coordinacion RMA y Administracion), de modo que
+      nadie pierde un acceso (DF-4), y lo que se hubiera configurado para el
+      permiso anterior se copia a ellas; los proveedores siguen inicialmente
+      solo de Administracion. (3) Confirmar y cancelar una orden confirmada
+      son permisos distintos. Quien puede crear ordenes de compra puede
+      descartar su propio borrador, que no tiene efecto externo; el permiso de
+      cancelar alcanza para una orden confirmada y para cualquier borrador
+      (DF-5). El servidor lo controla segun el estado de la orden. (4) Todos
+      requieren el permiso de consultar Compras. Las ordenes de compra siguen
+      sin aprobacion, con quien crea y quien confirma registrados, y
+      registrar una recepcion ingresa stock sin exigir ademas el permiso de
+      ingresos y ajustes manuales (DEC-MI-09).
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/configuracion-v2 8c3bdcd, local (COMPRA_SOLICITAR, OC_CREAR, OC_CONFIRMAR, OC_CANCELAR, COMPRA_RECIBIR y PROVEEDOR_GESTIONAR; migracion 20261120000200 copia lo configurado de COMPRAS_GESTIONAR sin borrar esa fila; alias de lectura COMPRAS_GESTIONAR para la pantalla publicada; services/compras.py cancela segun el estado de la orden) y 928012c (Compras con un permiso por accion y descarte del borrador propio)"
+
+  - id: DEC-CFG-05
+    block: CFG
+    title: Configuracion se organiza por funcionalidad, cada seccion visible con su permiso; las altas se hacen en formularios breves, sin campos de codigo
+    status: CONFIRMADA
+    rules: [BR-REP-040, BR-REP-039]
+    features: [FEAT-REP-010, FEAT-REP-011]
+    notes: >
+      Aprobada el 19/11/2026 (CFG-04 y CFG-05; D4). (1) Configuracion se
+      agrupa por funcionalidad: Taller (Tipos de Reparacion, Mesas de
+      trabajo, motivos y checklist), Inventario y compras (insumos y
+      proveedores), Comunicacion (plantillas de WhatsApp) y Sistema (usuarios
+      y roles, permisos, recargos por medio de pago y auditoria). (2) Cada
+      seccion se ve con su permiso (DEC-CFG-03, DEC-CFG-04): Configuracion
+      aparece en el menu si el usuario tiene alguno, y una seccion sin
+      permiso lo informa. Inventario y Reportes aparecen en el menu segun sus
+      permisos de consulta. (3) Cada catalogo ofrece un alta en un formulario
+      breve que no pide codigo (DEC-CFG-01): al guardar se informa el codigo
+      asignado y se actualiza el listado; si falla, el formulario conserva lo
+      cargado y muestra el error. La edicion usa el mismo formulario. (4)
+      Campos de cada alta: Tipo de Reparacion (nombre, precio, puntaje,
+      garantia con y sin check-in y Mesas habilitadas, opcionales), motivo
+      (tipo, nombre y si exige descripcion), insumo (nombre, unidad, control
+      por lote y precio), proveedor (sus datos basicos) y pregunta del
+      checklist (tipo de equipo, texto y opciones); las plantillas solo se
+      editan (DEC-CFG-08). (5) Organizar los insumos en categorias,
+      subcategorias, productos y tipos de insumo, y su compatibilidad con
+      varios modelos de equipo, queda para despues (ABI-53).
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/configuracion-v2 928012c, local (Configuracion con un indice agrupado y una ruta y un permiso por subseccion; FormularioModal sin campos de codigo, con el listado actualizado con lo que devuelve la API y el error dentro de la ventana; menu por permisos)"
+    open: [ABI-53]
+
+  - id: DEC-CFG-06
+    block: CFG
+    title: Los Tipos de Reparacion muestran solo la garantia con y sin check-in; el plazo generico y la politica para trabajos dentro de una garantia RMA se conservan sin pantalla y con sus reglas
+    status: CONFIRMADA
+    rules: [BR-REP-041, BR-REP-040]
+    features: [FEAT-REP-010, FEAT-REP-008]
+    notes: >
+      Aprobada el 19/11/2026 (CFG-06; el ajuste 2 y el 8, DF-1 y DF-2). Ajusta
+      DEC-MI-01 solo en lo que muestra Configuracion. (1) El alta y la edicion
+      de un Tipo de Reparacion muestran solo la garantia con check-in y la
+      garantia sin check-in, en dias. (2) El plazo generico del Tipo, el que
+      se aplica a un Detalle sin check-in registrado, sale de la pantalla y se
+      conserva: los Tipos existentes mantienen su valor, que la edicion no
+      cambia, y un Tipo nuevo lo inicializa con el valor de la garantia con
+      check-in (DF-1). (3) La politica para los trabajos hechos dentro de una
+      garantia RMA sale de la pantalla y se conserva con las reglas vigentes:
+      la edicion no cambia la guardada y un Tipo nuevo queda sin politica
+      definida, como hasta ahora (DF-2). (4) Nada se borra ni se recalcula: los
+      Detalles conservan la garantia que se les aplico. No resuelve ABI-38
+      (politica inicial de cada Tipo) ni ABI-39 (que plazo rige cuando el
+      check-in no es exigible): solo fija como se conserva y se inicializa el
+      valor que hoy se aplica en esos casos.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/configuracion-v2 6683bcf, local (garantia_dias y politica_garantia_rma opcionales en la API: se conservan en la edicion y, en el alta, el plazo generico toma el de con check-in; prueba de los Detalles historicos) y 928012c (Tipos con solo los dos plazos)"
+    open: [ABI-38, ABI-39]
+
+  - id: DEC-CFG-07
+    block: CFG
+    title: El plazo del retiro demorado sale de la pantalla de Configuracion y sigue rigiendo con su valor
+    status: CONFIRMADA
+    rules: [BR-REP-033, BR-REP-040]
+    nodes: [PROC-REP-260, PROC-REP-270]
+    features: [FEAT-REP-010, FEAT-REP-008]
+    notes: >
+      Aprobada el 19/11/2026 (CFG-07; los ajustes 3 y 8). Ajusta DEC-MI-14
+      solo en donde se configura. El plazo deja de mostrarse en Configuracion;
+      se conserva con su valor actual (30 dias desde el aviso de equipo listo,
+      si no se cambio), sigue marcando el retiro demorado en las bandejas y en
+      la Orden con las mismas reglas, y solo Administracion puede cambiarlo,
+      sin una pantalla para hacerlo. Ningun valor cambia. La seccion de
+      parametros pasa a ser la de recargos por medio de pago.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/configuracion-v2 6683bcf y 928012c, local (PLAZO_RETIRO_DIAS y su efecto sin cambios; GET/PUT /api/admin/parameters solo de Administracion y sin pantalla; Configuracion sin el plazo)"
+
+  - id: DEC-CFG-08
+    block: CFG
+    title: Configuracion y la Orden ofrecen solo las plantillas de WhatsApp de ingreso de equipo y de equipo listo para retirar; las demas se conservan
+    status: CONFIRMADA
+    rules: [BR-REP-044, BR-REP-040]
+    nodes: [PROC-REP-260]
+    features: [FEAT-REP-008, FEAT-REP-010]
+    notes: >
+      Aprobada el 19/11/2026 (CFG-08; los ajustes 4 y 8, DF-3). Ajusta
+      DEC-MI-08 y DEC-UX-11 solo en las plantillas que se ofrecen. (1)
+      Configuracion muestra solo las plantillas de ingreso de equipo y de
+      equipo listo para retirar, que se editan (texto y vigencia); no ofrece
+      el alta de plantillas nuevas. (2) Las acciones de la Orden ofrecen solo
+      esas dos. (3) Autorizacion pendiente, recordatorio de retiro y garantia
+      no se borran ni se desactivan: dejan de ofrecerse en pantalla. Las
+      comunicaciones ya registradas conservan su mensaje y su historial
+      completo. El resto del envio asistido no cambia (DEC-MI-08).
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/configuracion-v2 6683bcf, local (las plantillas informan visible, solo INGRESO y LISTO_PARA_RETIRAR; ninguna se borra ni se desactiva) y 928012c (Configuracion y las comunicaciones de la Orden muestran solo las visibles)"
 
   # ------------------------------------------------------------------ Baseline y sincronizacion
   - id: DC01
@@ -2429,6 +2681,22 @@ open_items:
       Hoy la copia se sincroniza solo a pedido (DEC-RT-05). Alternativas: al
       abrir el modulo si la copia tiene mas de N minutos, o programada; con
       que frecuencia y que antiguedad maxima admite crear una Orden.
+
+  # ---------------------------------------- Configuracion v2 (19/11/2026)
+  - id: ABI-53
+    title: Jerarquia de insumos y compatibilidad de un insumo con varios modelos de equipo
+    impact: POSTERIOR
+    decisions: [DEC-CFG-05, DEC-MI-13, DEC-MI-10]
+    rules: [BR-REP-049, BR-REP-040, BR-REP-048]
+    features: [FEAT-REP-003, FEAT-REP-010]
+    needed: >
+      Mejora futura pedida en Configuracion v2, no implementada: organizar los
+      insumos en categorias, subcategorias, productos y tipos de insumo, y
+      registrar con que modelos de equipo es compatible cada insumo (uno o
+      varios). Falta definir los niveles de la jerarquia, de que catalogo
+      salen los modelos (por ejemplo, el catalogo tecnico de Ventas,
+      BR-REP-048) y para que se usa la compatibilidad. El identificador del
+      insumo se conserva (DEC-CFG-01), de modo que no la impide.
 
 improvements:
 

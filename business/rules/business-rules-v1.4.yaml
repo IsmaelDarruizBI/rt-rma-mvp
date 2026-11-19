@@ -1329,6 +1329,9 @@ rules:
       por eso una Orden cancelada ya no espera la devolucion: es terminal.
       Las Ordenes que quedaron CANCELADA y abiertas por la regla anterior
       conservan ese circuito hasta cerrarse.
+      DEC-CFG-07 (19/11/2026): el plazo del retiro demorado deja de mostrarse
+      en Configuracion; se conserva con su valor y sus efectos, y solo
+      Administracion puede cambiarlo, sin una pantalla para hacerlo.
     status: approved
 
   - id: BR-REP-034
@@ -1745,6 +1748,22 @@ rules:
       de mensajes Administracion (DEC-MI-08, BR-REP-044).
       La autenticacion y el almacenamiento de usuarios, roles y permisos son
       una decision de arquitectura (DC27C), no de esta regla.
+      Configuracion v2 (DEC-CFG-02 a DEC-CFG-04, 19/11/2026): los permisos se
+      asignan solo por rol, sin permisos individuales por usuario; cada accion
+      y cada consulta exige su permiso en el servidor, y las acciones que
+      dependian de un rol fijo usan su permiso con el mismo predeterminado.
+      Cada catalogo operativo (Tipos de Reparacion, tipos habilitados por Mesa
+      de trabajo, motivos, insumos, plantillas de WhatsApp y checklist) tiene
+      su permiso, y fijar o modificar precios tiene uno aparte; todos empiezan
+      solo con Administracion, y crear un Tipo de Reparacion exige los dos.
+      Compras se habilita por accion: solicitar, crear ordenes de compra (y
+      descartar el borrador propio), confirmarlas, cancelar las confirmadas,
+      recibir y gestionar proveedores; las cinco primeras con los roles que
+      tenia la gestion de Compras y proveedores con Administracion. Usuarios,
+      roles y permisos, los parametros del sistema, los recargos por medio de
+      pago y la auditoria completa quedan fijos para Administracion. Un
+      permiso de accion requiere su permiso de consulta y ningun permiso puede
+      quedar sin roles.
     status: approved
 
   - id: BR-REP-040
@@ -1773,6 +1792,19 @@ rules:
       Del checklist, Administracion configura las preguntas, sus opciones,
       su vigencia y su orden; los tipos de equipo los define Gestion RT y no
       se modifican desde RMA (DEC-MI-16).
+      Configuracion v2 (DEC-CFG-01, DEC-CFG-03 y DEC-CFG-05, 19/11/2026): el
+      sistema genera los codigos de los Tipos de Reparacion, los motivos, los
+      insumos (identificador y codigo iguales por defecto), los proveedores,
+      las preguntas del checklist, las solicitudes y ordenes de compra y los
+      reclamos de garantia; cada codigo es unico sin distinguir mayusculas y
+      nunca cambia, la numeracion admite huecos, los codigos existentes no se
+      modifican ni se reutilizan y el que informa un cliente anterior se
+      respeta si es valido y unico. Cada catalogo se administra con su propio
+      permiso (BR-REP-039) y muestra su historial de cambios; la auditoria
+      completa es de Administracion. Configuracion se organiza por
+      funcionalidad, cada seccion visible con su permiso, y las altas se hacen
+      en formularios breves que no piden codigo. Lo que la pantalla deja de
+      mostrar se conserva con su valor y sus reglas (DEC-CFG-06 a DEC-CFG-08).
     status: approved
 
   - id: BR-REP-041
@@ -1807,6 +1839,14 @@ rules:
       trazabilidad, y esa condicion es la que valida PROC-REP-036 en un
       reclamo de garantia RMA (BR-REP-019). El comprobante final informa el
       plazo definitivo y el vencimiento de cada Detalle.
+      DEC-CFG-06 (19/11/2026): Configuracion muestra de cada Tipo de
+      Reparacion solo la garantia con check-in y sin check-in, en dias. El
+      plazo generico del Tipo, el que se aplica a un Detalle sin check-in
+      registrado, se conserva sin pantalla: los Tipos existentes mantienen su
+      valor y uno nuevo lo inicializa con el de la garantia con check-in. La
+      politica para los trabajos hechos dentro de una garantia RMA tambien se
+      conserva sin pantalla, con sus reglas; un Tipo nuevo queda sin politica
+      definida. Los pendientes de arriba no cambian.
     status: approved
 
   - id: BR-REP-042
@@ -1864,6 +1904,11 @@ rules:
       de un proveedor.
       Etapa 2 (DC25): proveedor oficial, con estados de envio y reintentos.
       Pendiente: el proveedor de la etapa 2.
+      DEC-CFG-08 (19/11/2026): Configuracion y la Orden ofrecen solo las
+      plantillas de ingreso de equipo y de equipo listo para retirar, que se
+      editan pero no se agregan nuevas; autorizacion pendiente, recordatorio
+      de retiro y garantia no se borran ni se desactivan, y las comunicaciones
+      registradas conservan su mensaje.
     status: approved
 
   - id: BR-REP-045
@@ -2036,6 +2081,18 @@ rules:
       costo real lo registra quien recibe y solo Administracion configura
       precios. Los proveedores tienen datos basicos. Fuera de alcance:
       inventarios fisicos periodicos.
+      Configuracion v2 (DEC-CFG-01 y DEC-CFG-04, 19/11/2026): cada accion de
+      Compras tiene su permiso -solicitar, crear ordenes de compra, confirmar,
+      cancelar las confirmadas, recibir y gestionar proveedores- y todas
+      requieren el de consultar Compras; las cinco primeras empiezan con
+      Recepcion, Coordinacion RMA y Administracion, y proveedores con
+      Administracion. Quien crea ordenes de compra puede descartar su propio
+      borrador; cancelar una orden confirmada exige el permiso de cancelar.
+      Los precios se fijan con el permiso de precios, inicialmente de
+      Administracion (BR-REP-039). Los codigos de los insumos, los
+      proveedores y las solicitudes y ordenes de compra los genera el
+      sistema (BR-REP-040). Organizar los insumos en una jerarquia y su
+      compatibilidad con modelos de equipo queda pendiente.
     status: approved
 
   - id: BR-REP-050

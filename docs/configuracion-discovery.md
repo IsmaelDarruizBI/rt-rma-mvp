@@ -1,10 +1,10 @@
 # Configuración v2: identificadores, permisos y catálogos operativos
 
-> **Estado:** implementado en local (20/11/2026), fases A a E, con QA independiente por fase y QA integral; sin push ni despliegue. Implementación y resultados en la sección 12.
+> **Estado:** implementado en local (19/11/2026), fases A a E, con QA independiente por fase y QA integral; sin push ni despliegue. Implementación y resultados en la sección 12.
 >
 > **Rama:** `feat/configuracion-v2`, creada desde `feat/reparacion-rt-etapa1` (`f3036ca`). Las referencias `archivo:línea` apuntan a esa base. Las del backend son relativas a `app/backend/app/` y las del frontend a `app/frontend/src/`.
 >
-> **Decisiones:** D1 a D8 y DF-1 a DF-5 aprobadas el 20/11/2026 (sección 10).
+> **Decisiones:** D1 a D8 y DF-1 a DF-5 aprobadas el 19/11/2026 (sección 10).
 
 ## Decisiones aprobadas
 
@@ -539,7 +539,7 @@ Dos migraciones aditivas, posteriores a la de Reparación RT: `20261120000100_co
 
 | # | Decisión | Opciones | Recomendación |
 |---|---|---|---|
-| DF-1 | Valor del plazo oculto `garantia_dias`: rige sin check-in registrado, es decir en RT interno, garantía RMA y la asignación provisoria | a) igual a «con check-in»; b) igual a «sin check-in»; c) conservar el valor y no tocarlo en la edición | **Aprobado (20/11/2026):** conservar los existentes; en el alta, el valor de con check-in |
+| DF-1 | Valor del plazo oculto `garantia_dias`: rige sin check-in registrado, es decir en RT interno, garantía RMA y la asignación provisoria | a) igual a «con check-in»; b) igual a «sin check-in»; c) conservar el valor y no tocarlo en la edición | **Aprobado (19/11/2026):** conservar los existentes; en el alta, el valor de con check-in |
 | DF-2 | Política de garantía RMA del tipo | a) ocultarla y conservar los valores; b) seguir mostrándola | **Aprobado:** a), conservando la información y las reglas actuales |
 | DF-3 | Qué plantillas son «ingreso y retiro», y dónde se ocultan las demás | Plantillas: `INGRESO` + `LISTO_PARA_RETIRAR`, o sumar `RECORDATORIO_RETIRO`. Lugar: solo Configuración, o también el selector de la Orden | **Aprobado:** `INGRESO` y `LISTO_PARA_RETIRAR`, en Configuración y en la Orden; sin `RECORDATORIO_RETIRO`; nada se borra ni se desactiva |
 | DF-4 | Roles iniciales de los permisos que resultan de dividir `COMPRAS_GESTIONAR` | a) heredan sus roles vigentes (RECEP, COORD, ADMIN); b) solo ADMIN, como D2 | **Aprobado:** a), sin quitar accesos existentes |
@@ -624,7 +624,7 @@ Dos migraciones aditivas, posteriores a la de Reparación RT: `20261120000100_co
 
 ---
 
-## 12. Implementación (20/11/2026)
+## 12. Implementación (19/11/2026)
 
 Rama `feat/configuracion-v2`, desde `feat/reparacion-rt-etapa1` (`f3036ca`). Commits locales, sin push, sin integrar y sin cambios en el UAT, Gestión RT ni `main`.
 

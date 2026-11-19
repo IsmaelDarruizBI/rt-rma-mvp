@@ -442,7 +442,7 @@ Publica la pantalla Reparación RT con la copia de los Productos de Gestión RT 
 
 **Vuelta atrás:** `update-traffic --to-revisions rt-rma-uat-api-00039-sen=100` y `vercel promote dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`. La migración queda: es aditiva y el backend anterior no usa `producto_rt` (ensayado). La copia queda guardada para la próxima publicación; no se borra ninguna tabla.
 
-## 12. Publicación conjunta: Reparación RT etapa 1 + Configuración v2 (preparado el 20/11/2026, sin ejecutar)
+## 12. Publicación conjunta: Reparación RT etapa 1 + Configuración v2 (preparado el 19/11/2026, sin ejecutar)
 
 Publica en un solo paso la sección 11 (Reparación RT) y Configuración v2 ([`configuracion-discovery.md`](configuracion-discovery.md), sección 12) sobre el par vigente `00039-sen` (`fd434ef`) + `dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`. Es la sección 11 con estas diferencias.
 

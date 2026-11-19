@@ -25,7 +25,7 @@ La copia de los Tipos de Equipo desde el catálogo de Ventas (`POST /api/admin/e
 
 `CONFIGURACION_ADMINISTRAR` y `ROLES_ADMINISTRAR` (Administración) no se configuran.
 
-## Configuración v2 (20/11/2026, rama `feat/configuracion-v2`)
+## Configuración v2 (19/11/2026, rama `feat/configuracion-v2`)
 
 Diseño y decisiones en [`configuracion-discovery.md`](configuracion-discovery.md). Matriz de todas las rutas en `app/backend/tests/test_matriz_permisos.py` (una ruta sin clasificar hace fallar la prueba).
 
