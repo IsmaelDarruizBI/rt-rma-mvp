@@ -662,7 +662,7 @@ def marcar_orden_en_revision(
     *,
     usuario: Usuario,
     fecha: datetime,
-    roles: Sequence[RolUsuario] = (RolUsuario.RECEPCION,),
+    roles: Sequence[RolUsuario] | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-045 ("No") -> PROC-REP-055 (VAR-REP-001/002, HP-REP-003).
 
@@ -680,9 +680,12 @@ def marcar_orden_en_revision(
     PROC-REP-055 es ACT-SYSTEM: queda sin actor humano. La intencion que
     lo dispara es de Recepcion, salvo en la garantia RMA admitida por
     excepcion (VAR-REP-039): alli la dispara el usuario que la autorizo
-    (``roles``).
+    (``roles``). Sin ``roles`` rige ``ENVIAR_A_REVISION`` (configurable;
+    antes el rol fijo RECEPCION, su predeterminado: CFG-02, brecha 1).
     """
-    validar_alguno_de(usuario, roles)
+    validar_alguno_de(
+        usuario, permisos.ENVIAR_A_REVISION if roles is None else roles
+    )
 
     if orden.estado_workflow is not EstadoWorkflow.REQUERIMIENTO:
         raise PrecondicionInvalidaError(

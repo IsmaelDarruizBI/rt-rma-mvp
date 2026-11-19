@@ -24,7 +24,7 @@ from app.services.checklist import (
     registrar_checklist,
     tipos_informados,
 )
-from app.services.permisos import CONFIGURACION_ADMINISTRAR
+from app.services.permisos import CHECKLIST_GESTIONAR
 
 from .codigos import con_reintento_de_codigo
 from .contexto import ApplicationContext
@@ -105,7 +105,7 @@ def sincronizar_tipos_equipo(
     consultandose con lo que ya tenian."""
     repositorio = _editable(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    validar_alguno_de(usuario, CONFIGURACION_ADMINISTRAR)
+    validar_alguno_de(usuario, CHECKLIST_GESTIONAR)
     campo = contexto.campo_tipo_equipo
     if campo is None:
         raise PrecondicionInvalidaError(DECISION_PENDIENTE)
@@ -157,7 +157,7 @@ def guardar_pregunta(
     repositorio = _editable(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     # El permiso antes de reservar un codigo: un rechazo no consume numeros.
-    validar_alguno_de(usuario, CONFIGURACION_ADMINISTRAR)
+    validar_alguno_de(usuario, CHECKLIST_GESTIONAR)
     codigo_informado = codigo
 
     def intento():

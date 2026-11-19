@@ -134,8 +134,15 @@ def roles_y_permisos(c, ctx):
             )
         )
     }
+    # Configuracion v2 (CFG-03): COMPRAS_GESTIONAR se dividio por accion;
+    # el backend anterior lo sigue informando.
+    anotar(
+        "2",
+        "permiso de crear OC en el catálogo",
+        "OC_CREAR" in permisos or "COMPRAS_GESTIONAR" in permisos,
+        str(sorted(permisos))[:200],
+    )
     for codigo in (
-        "COMPRAS_GESTIONAR",
         "COMPRAS_CONSULTAR",
         "DEVOLUCION_STOCK",
         "ORDENES_CONSULTAR",

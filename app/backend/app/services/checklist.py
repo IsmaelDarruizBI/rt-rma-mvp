@@ -45,7 +45,7 @@ def _valor(objeto, campo):
 
 
 def _cambios(entidad_clave, campos, anterior, nuevo, usuario, fecha):
-    validar_alguno_de(usuario, permisos.CONFIGURACION_ADMINISTRAR)
+    validar_alguno_de(usuario, permisos.CHECKLIST_GESTIONAR)
     cambios = [
         CambioConfiguracion(
             entidad=EntidadConfiguracion.CHECKLIST,
@@ -129,7 +129,7 @@ def fusionar_tipos_equipo(
     (nuevos o reactivados) con la fecha de esta sincronizacion; los que
     ya no vienen, o venian de otra columna, quedan no vigentes. Nada se
     borra: las preguntas y los checklists siguen referenciandolos."""
-    validar_alguno_de(usuario, permisos.CONFIGURACION_ADMINISTRAR)
+    validar_alguno_de(usuario, permisos.CHECKLIST_GESTIONAR)
     anteriores = {tipo.id: tipo for tipo in existentes}
     vigentes = set(informados)
     tipos: list[TipoEquipo] = []

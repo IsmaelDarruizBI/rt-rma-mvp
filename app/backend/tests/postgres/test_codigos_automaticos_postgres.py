@@ -74,7 +74,17 @@ def test_cada_prefijo_tiene_su_formato_y_no_trunca(base):
     with psycopg.connect(base, autocommit=True) as conexion:
         codigos = {
             p: _siguiente(conexion, p)
-            for p in ("TR", "CANC", "INT", "INS", "PRV", "CHK", "SC", "OC", "RGA")
+            for p in (
+                "TR",
+                "CANC",
+                "INT",
+                "INS",
+                "PRV",
+                "CHK",
+                "SC",
+                "OC",
+                "RGA",
+            )
         }
         # El seed tiene TR-001, TR-002 y TR-OTROS; INS-001 (BAT-IP14).
         assert codigos["TR"] == "TR-003"
@@ -101,7 +111,9 @@ def test_cada_prefijo_tiene_su_formato_y_no_trunca(base):
             _siguiente(conexion, "XYZ")
 
 
-def test_dos_transacciones_abiertas_reciben_codigos_distintos_sin_esperarse(base):
+def test_dos_transacciones_abiertas_reciben_codigos_distintos_sin_esperarse(
+    base,
+):
     with (
         psycopg.connect(base) as primera,
         psycopg.connect(base) as segunda,
@@ -217,7 +229,9 @@ def _admin_url() -> str:
 
 def _base_anterior(admin: str) -> str:
     anteriores = [
-        a for a in archivos_sql() if "migrations" in a.parts and a.name < MIGRACION
+        a
+        for a in archivos_sql()
+        if "migrations" in a.parts and a.name < MIGRACION
     ]
     return crear_base(admin, anteriores)
 
@@ -250,7 +264,10 @@ def test_la_migracion_continua_los_codigos_existentes_e_ignora_los_otros():
             assert _siguiente(conexion, "CANC") == "CANC-001"
             # Ningun codigo existente cambio.
             assert {
-                r[0] for r in conexion.execute("select codigo from rma.tipo_reparacion")
+                r[0]
+                for r in conexion.execute(
+                    "select codigo from rma.tipo_reparacion"
+                )
             } == {"TR-OTROS", "TR-OFF", "TR-041", "TR-9"}
             # Repetir la migracion no retrocede las secuencias.
             conexion.execute(_migracion().read_text(encoding="utf-8"))
@@ -272,9 +289,12 @@ def test_la_migracion_se_detiene_si_hay_codigos_que_solo_difieren_en_mayusculas(
                 conexion.execute(_migracion().read_text(encoding="utf-8"))
             assert "TR-050, tr-050" in str(error.value)
             # No corrigio nada por su cuenta.
-            assert conexion.execute(
-                "select count(*) from rma.tipo_reparacion where upper(codigo) = 'TR-050'"
-            ).fetchone()[0] == 2
+            assert (
+                conexion.execute(
+                    "select count(*) from rma.tipo_reparacion where upper(codigo) = 'TR-050'"
+                ).fetchone()[0]
+                == 2
+            )
     finally:
         borrar_base(admin, urlsplit(url).path.lstrip("/"))
 
@@ -308,7 +328,9 @@ def _tipo(**cambios):
     }
 
 
-def test_alta_de_tipo_sin_codigo_lo_genera_y_el_informado_se_respeta(cliente, base):
+def test_alta_de_tipo_sin_codigo_lo_genera_y_el_informado_se_respeta(
+    cliente, base
+):
     generado = f.ok(cliente.post("/api/admin/repair-types", json=_tipo()))
     assert generado["id"] == "TR-003"
     # Un cliente anterior que manda el codigo: se respeta.
@@ -340,21 +362,32 @@ def test_un_rechazo_por_permiso_no_consume_codigos(cliente):
             "/api/admin/repair-types", json=_tipo(usuario_id=f.RECEPCION)
         )
     )
-    assert f.ok(cliente.post("/api/admin/repair-types", json=_tipo()))["id"] == "TR-003"
+    assert (
+        f.ok(cliente.post("/api/admin/repair-types", json=_tipo()))["id"]
+        == "TR-003"
+    )
 
 
 def test_alta_de_motivos_e_insumos_sin_codigo(cliente):
     motivo = f.ok(
         cliente.post(
             "/api/admin/reasons",
-            json={"usuario_id": f.ADMINISTRADOR, "tipo": "CANCELACION", "nombre": "Sin repuesto"},
+            json={
+                "usuario_id": f.ADMINISTRADOR,
+                "tipo": "CANCELACION",
+                "nombre": "Sin repuesto",
+            },
         )
     )
     assert motivo["codigo"] == "CANC-001"
     interrupcion = f.ok(
         cliente.post(
             "/api/admin/reasons",
-            json={"usuario_id": f.ADMINISTRADOR, "tipo": "INTERRUPCION", "nombre": "Falta luz"},
+            json={
+                "usuario_id": f.ADMINISTRADOR,
+                "tipo": "INTERRUPCION",
+                "nombre": "Falta luz",
+            },
         )
     )
     assert interrupcion["codigo"] == "INT-001"
@@ -398,14 +431,22 @@ def test_alta_de_motivos_e_insumos_sin_codigo(cliente):
     assert "nombre" in f.conflicto(
         cliente.post(
             "/api/admin/reasons",
-            json={"usuario_id": f.ADMINISTRADOR, "tipo": "CANCELACION", "nombre": "   "},
+            json={
+                "usuario_id": f.ADMINISTRADOR,
+                "tipo": "CANCELACION",
+                "nombre": "   ",
+            },
         )
     )
 
     insumo = f.ok(
         cliente.post(
             "/api/admin/supplies",
-            json={"usuario_id": f.ADMINISTRADOR, "nombre": "Pantalla A54", "unidad": "unidad"},
+            json={
+                "usuario_id": f.ADMINISTRADOR,
+                "nombre": "Pantalla A54",
+                "unidad": "unidad",
+            },
         )
     )
     assert insumo["id"].startswith("INS-") and insumo["codigo"] == insumo["id"]
@@ -414,7 +455,11 @@ def test_alta_de_motivos_e_insumos_sin_codigo(cliente):
     editado = f.ok(
         cliente.put(
             f"/api/admin/supplies/{clave}",
-            json={"usuario_id": f.ADMINISTRADOR, "nombre": "Pantalla Samsung A54", "unidad": "unidad"},
+            json={
+                "usuario_id": f.ADMINISTRADOR,
+                "nombre": "Pantalla Samsung A54",
+                "unidad": "unidad",
+            },
         )
     )
     assert editado["codigo"] == clave
@@ -434,13 +479,21 @@ def test_alta_de_motivos_e_insumos_sin_codigo(cliente):
     assert "Ya existe" in f.conflicto(
         cliente.post(
             "/api/admin/supplies",
-            json={"usuario_id": f.ADMINISTRADOR, "clave": "ins-500", "nombre": "Otro"},
+            json={
+                "usuario_id": f.ADMINISTRADOR,
+                "clave": "ins-500",
+                "nombre": "Otro",
+            },
         )
     )
     assert "codigo" in f.conflicto(
         cliente.post(
             "/api/admin/supplies",
-            json={"usuario_id": f.ADMINISTRADOR, "codigo": "flex-a54", "nombre": "Otro"},
+            json={
+                "usuario_id": f.ADMINISTRADOR,
+                "codigo": "flex-a54",
+                "nombre": "Otro",
+            },
         )
     )
 

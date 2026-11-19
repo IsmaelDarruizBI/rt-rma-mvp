@@ -17,7 +17,7 @@ from app.application.firmas import (
     registrar_firma,
 )
 from app.domain.models.firmas import FirmaDocumento, FormaFirma
-from app.services import ROLES_FOTOS, PrecondicionInvalidaError
+from app.services import PrecondicionInvalidaError, permisos
 from app.services.fotos import MAX_BYTES_FOTO
 
 from .dependencias import ContextoDep
@@ -25,7 +25,8 @@ from .seguridad import exigir_rol
 
 router = APIRouter(prefix="/api/orders", tags=["firmas"])
 # Las imagenes de las firmas las ven quienes ven las fotos del equipo.
-_ver = [exigir_rol(ROLES_FOTOS)]
+# CFG-02 (brecha 10): ver firmas es consultar la Orden, no cargar fotos.
+_ver = [exigir_rol(permisos.ORDENES_CONSULTAR)]
 
 
 @router.get("/{orden_id}/signatures", dependencies=_ver)

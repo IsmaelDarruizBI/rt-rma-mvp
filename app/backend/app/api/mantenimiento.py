@@ -12,7 +12,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.application import limpiar_fotos_huerfanas
-from app.domain.models import RolUsuario
+from app.services import permisos
 
 from .dependencias import ContextoDep
 from .seguridad import exigir_rol
@@ -30,7 +30,8 @@ class LimpiezaFotosOut(BaseModel):
 
 
 @router.post(
-    "/photos/cleanup", dependencies=[exigir_rol((RolUsuario.ADMINISTRADOR,))]
+    "/photos/cleanup",
+    dependencies=[exigir_rol(permisos.FOTOS_ADMINISTRAR)],
 )
 def post_limpiar_fotos(
     usuario_id: str,

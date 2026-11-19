@@ -34,7 +34,6 @@ from app.domain.models import (
     DatosRecepcion,
     Equipo,
     OrdenReparacion,
-    RolUsuario,
     TipoReparacion,
 )
 from app.services import (
@@ -57,6 +56,7 @@ from app.services import (
     hay_detalles_para_factibilidad,
     marcar_orden_en_revision,
     marcar_pendiente_autorizacion,
+    permisos,
     registrar_finalizacion_sin_reparacion,
     tipo_reparacion_otros,
     validar_factibilidad_detalles,
@@ -458,7 +458,9 @@ def iniciar_garantia_rma(
             roles=(
                 ROLES_EXCEPCION_GARANTIA
                 if any(v.excepcion for v in orden.vigencia_garantia_origen)
-                else (RolUsuario.RECEPCION,)
+                # CFG-02 (brecha 2): el permiso configurable, no el rol
+                # fijo RECEPCION (su predeterminado).
+                else permisos.GARANTIA_RMA_CREAR
             ),
         )
         orden = generar_comprobante_recepcion(orden, fecha=fecha)

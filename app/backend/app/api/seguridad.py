@@ -120,24 +120,46 @@ async def exigir_identidad(request: Request, contexto: ContextoDep) -> None:
             )
 
 
-def exigir_rol(roles: Sequence[RolUsuario]):
-    """Ruta administrativa: con sesion real, solo esos roles (403).
+def exigir_rol(*permitidos: Sequence[RolUsuario]):
+    """Ruta protegida: con sesion real, solo quien tiene ALGUNO de esos
+    permisos (403). Cada argumento es un ``Permiso`` configurable o una
+    tupla fija de roles.
 
-    Son los mismos roles que ya valida el caso de uso; aca se corta antes,
-    sin ejecutar nada. En modo ``demo`` no hace nada.
+    Son los mismos permisos que valida el caso de uso; aca se corta antes,
+    sin ejecutar nada. En modo ``demo`` no hace nada. La dependencia lleva
+    sus permisos en ``permisos`` para la prueba de la matriz de rutas
+    (CFG-02).
     """
 
     def dependencia(request: Request, contexto: ContextoDep) -> None:
         usuario = _usuario_del_token(request, contexto)
-        # ``roles`` puede ser un Permiso configurable: se resuelve en cada
-        # pedido, con la politica vigente.
-        if usuario is not None and not usuario.tiene_alguno(tuple(roles)):
+        # Un Permiso configurable se resuelve en cada pedido, con la
+        # politica vigente.
+        if usuario is not None and not any(
+            usuario.tiene_alguno(tuple(roles)) for roles in permitidos
+        ):
             raise AccesoDenegadoError(
                 "ROL_NO_AUTORIZADO",
                 "Tu rol no puede usar esta funcion.",
             )
 
+    dependencia.permisos = permitidos
     return Depends(dependencia)
+
+
+def verificar_permiso(
+    request: Request, contexto, *permitidos: Sequence[RolUsuario]
+) -> None:
+    """Como ``exigir_rol``, dentro de una ruta: cuando el permiso depende
+    de un parametro (la auditoria de una entidad, CFG-03)."""
+    usuario = _usuario_del_token(request, contexto)
+    if usuario is not None and not any(
+        usuario.tiene_alguno(tuple(roles)) for roles in permitidos
+    ):
+        raise AccesoDenegadoError(
+            "ROL_NO_AUTORIZADO",
+            "Tu rol no puede usar esta funcion.",
+        )
 
 
 router = APIRouter(prefix="/api", tags=["sesion"])

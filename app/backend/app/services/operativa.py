@@ -72,7 +72,7 @@ def cambios_de_motivo(
     usuario: Usuario,
     fecha: datetime,
 ) -> list[CambioConfiguracion]:
-    validar_alguno_de(usuario, permisos.CONFIGURACION_ADMINISTRAR)
+    validar_alguno_de(usuario, permisos.MOTIVO_GESTIONAR)
     if anterior is not None and anterior.tipo is not nuevo.tipo:
         raise PrecondicionInvalidaError("El tipo de un motivo no cambia.")
     cambios = [
@@ -210,8 +210,19 @@ def cambios_de_insumo(
     fecha: datetime,
 ) -> list[CambioConfiguracion]:
     """Alta o edicion de un insumo (DEC-MI-13). El stock no se edita aca:
-    solo cambia con movimientos del inventario."""
-    validar_alguno_de(usuario, permisos.CONFIGURACION_ADMINISTRAR)
+    solo cambia con movimientos del inventario. El precio exige ademas
+    ``PRECIOS_GESTIONAR`` (D3) cuando se fija o cambia."""
+    validar_alguno_de(usuario, permisos.INSUMO_GESTIONAR)
+    if nuevo.precio is not None and nuevo.precio != nuevo.precio.quantize(
+        Decimal("0.01")
+    ):
+        # QA B, M1: la base guarda dos decimales; uno mas cambiaria el
+        # precio por redondeo sin pasar por PRECIOS_GESTIONAR.
+        raise PrecondicionInvalidaError(
+            "El precio admite hasta dos decimales."
+        )
+    if texto(anterior.precio if anterior else None) != texto(nuevo.precio):
+        validar_alguno_de(usuario, permisos.PRECIOS_GESTIONAR)
     if not nuevo.id.strip() or not nuevo.codigo.strip():
         raise PrecondicionInvalidaError(
             "El insumo necesita un identificador y un codigo."

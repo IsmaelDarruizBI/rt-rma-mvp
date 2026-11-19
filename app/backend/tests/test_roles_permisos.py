@@ -177,14 +177,21 @@ def test_otro_administrador_permite_quitar_el_rol():
 
 def test_configurar_un_permiso():
     nuevos, cambio = cambio_de_permiso(
-        permisos.DESCUENTO, [], usuario=ADMIN, fecha=FECHA
+        permisos.DESCUENTO,
+        [RolUsuario.ADMINISTRADOR],
+        usuario=ADMIN,
+        fecha=FECHA,
     )
-    assert nuevos == ()
+    assert nuevos == (RolUsuario.ADMINISTRADOR,)
     assert (cambio.valor_anterior, cambio.valor_nuevo) == (
         # DEC-MI-03: Recepcion, Coordinacion RMA y Administracion.
         "ADMINISTRADOR, COORDINADOR_RMA, RECEPCION",
-        "(ninguno)",
+        "ADMINISTRADOR",
     )
+    # Configuracion v2 (CFG-02, brecha 14, aprobada en D8): un permiso no
+    # queda sin roles (antes lo impedia solo el frontend).
+    with pytest.raises(PrecondicionInvalidaError, match="al menos un rol"):
+        cambio_de_permiso(permisos.DESCUENTO, [], usuario=ADMIN, fecha=FECHA)
     with pytest.raises(PrecondicionInvalidaError, match="no se configura"):
         cambio_de_permiso(
             permisos.ROLES_ADMINISTRAR, [], usuario=ADMIN, fecha=FECHA

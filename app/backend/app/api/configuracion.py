@@ -18,7 +18,7 @@ uso lo valida igual). Las escrituras exigen PostgreSQL (DC23).
 
 from decimal import Decimal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from app.application.checklist import catalogo as catalogo_checklist
@@ -54,17 +54,44 @@ from app.domain.models import (
 )
 from app.domain.models.lotes import ControlInsumo
 from app.domain.models.operativa import MotivoOperativo, TipoMotivo
-from app.services.configuracion import ROLES_ADMINISTRACION_CONFIGURACION
+from app.services import permisos
 
 from .dependencias import ContextoDep
 from .schemas import MedioPagoOut, UsuarioOut
-from .seguridad import exigir_rol
+from .seguridad import exigir_rol, verificar_permiso
 
-router = APIRouter(
-    prefix="/api/admin",
-    tags=["administracion"],
-    dependencies=[exigir_rol(ROLES_ADMINISTRACION_CONFIGURACION)],
-)
+router = APIRouter(prefix="/api/admin", tags=["administracion"])
+
+# CFG-03: cada catalogo con su permiso (configurable); lo sensible sigue
+# siendo de Administracion (no configurable).
+_tipos = [exigir_rol(permisos.TIPO_REPARACION_GESTIONAR)]
+_catalogo = [
+    exigir_rol(
+        permisos.TIPO_REPARACION_GESTIONAR, permisos.MESA_TIPOS_GESTIONAR
+    )
+]
+_mesas = [exigir_rol(permisos.MESA_TIPOS_GESTIONAR)]
+_motivos = [exigir_rol(permisos.MOTIVO_GESTIONAR)]
+_insumos = [exigir_rol(permisos.INSUMO_GESTIONAR)]
+_checklist = [exigir_rol(permisos.CHECKLIST_GESTIONAR)]
+_roles = [exigir_rol(permisos.ROLES_ADMINISTRAR)]
+_sistema = [exigir_rol(permisos.CONFIGURACION_ADMINISTRAR)]
+
+# La auditoria de una entidad la ve quien la administra; la completa,
+# Administracion.
+PERMISO_DE_ENTIDAD = {
+    EntidadConfiguracion.TIPO_REPARACION: (
+        permisos.TIPO_REPARACION_GESTIONAR,
+    ),
+    EntidadConfiguracion.MESA_TRABAJO: (permisos.MESA_TIPOS_GESTIONAR,),
+    EntidadConfiguracion.MOTIVO: (permisos.MOTIVO_GESTIONAR,),
+    EntidadConfiguracion.INSUMO: (permisos.INSUMO_GESTIONAR,),
+    EntidadConfiguracion.PLANTILLA: (permisos.PLANTILLA_GESTIONAR,),
+    EntidadConfiguracion.CHECKLIST: (permisos.CHECKLIST_GESTIONAR,),
+    EntidadConfiguracion.PROVEEDOR: (permisos.PROVEEDOR_GESTIONAR,),
+    EntidadConfiguracion.USUARIO: (permisos.ROLES_ADMINISTRAR,),
+    EntidadConfiguracion.PERMISO: (permisos.ROLES_ADMINISTRAR,),
+}
 
 
 class TipoReparacionIn(BaseModel):
@@ -96,7 +123,7 @@ class RolesIn(BaseModel):
     roles: list[RolUsuario]
 
 
-@router.get("/catalog")
+@router.get("/catalog", dependencies=_catalogo)
 def get_catalogo(contexto: ContextoDep) -> dict:
     catalogos = contexto.catalogos
     habilitados: dict[str, list[str]] = {}
@@ -120,13 +147,13 @@ def get_catalogo(contexto: ContextoDep) -> dict:
     }
 
 
-@router.post("/repair-types")
+@router.post("/repair-types", dependencies=_tipos)
 def post_tipo(cuerpo: AltaTipoReparacionIn, contexto: ContextoDep) -> dict:
     tipo = guardar_tipo_reparacion(contexto, **cuerpo.model_dump(), nuevo=True)
     return tipo.model_dump(mode="json")
 
 
-@router.put("/repair-types/{codigo}")
+@router.put("/repair-types/{codigo}", dependencies=_tipos)
 def put_tipo(
     codigo: str, cuerpo: TipoReparacionIn, contexto: ContextoDep
 ) -> dict:
@@ -136,7 +163,7 @@ def put_tipo(
     return tipo.model_dump(mode="json")
 
 
-@router.put("/stations/{codigo}/repair-types")
+@router.put("/stations/{codigo}/repair-types", dependencies=_mesas)
 def put_tipos_de_mesa(
     codigo: str, cuerpo: TiposDeMesaIn, contexto: ContextoDep
 ) -> CambioConfiguracion:
@@ -150,14 +177,23 @@ def put_tipos_de_mesa(
 
 @router.get("/config-changes")
 def get_cambios(
+    request: Request,
     contexto: ContextoDep,
     entidad: EntidadConfiguracion | None = None,
     clave: str | None = None,
 ) -> list[CambioConfiguracion]:
+    """La auditoria: la de una entidad, para quien la administra (CFG-03);
+    la completa (o la de parametros y recargos), solo Administracion."""
+    verificar_permiso(
+        request,
+        contexto,
+        permisos.CONFIGURACION_ADMINISTRAR,
+        *PERMISO_DE_ENTIDAD.get(entidad, ()),
+    )
     return historial_de_cambios(contexto, entidad=entidad, clave=clave)
 
 
-@router.get("/users")
+@router.get("/users", dependencies=_roles)
 def get_usuarios_y_roles(contexto: ContextoDep) -> list[UsuarioOut]:
     return [
         UsuarioOut.desde_dominio(u)
@@ -165,7 +201,7 @@ def get_usuarios_y_roles(contexto: ContextoDep) -> list[UsuarioOut]:
     ]
 
 
-@router.put("/users/{codigo}/roles")
+@router.put("/users/{codigo}/roles", dependencies=_roles)
 def put_roles_de_usuario(
     codigo: str, cuerpo: RolesIn, contexto: ContextoDep
 ) -> UsuarioOut:
@@ -179,12 +215,12 @@ def put_roles_de_usuario(
     )
 
 
-@router.get("/permissions")
+@router.get("/permissions", dependencies=_roles)
 def get_permisos(contexto: ContextoDep) -> list[VistaPermiso]:
     return listar_permisos(contexto)
 
 
-@router.put("/permissions/{codigo}")
+@router.put("/permissions/{codigo}", dependencies=_roles)
 def put_permiso(
     codigo: str, cuerpo: RolesIn, contexto: ContextoDep
 ) -> VistaPermiso:
@@ -214,7 +250,7 @@ class ParametroIn(BaseModel):
     valor: str = Field(min_length=1)
 
 
-@router.get("/reasons")
+@router.get("/reasons", dependencies=_motivos)
 def get_motivos_admin(contexto: ContextoDep) -> dict:
     return {
         "editable": contexto.operativa.editable,
@@ -222,14 +258,14 @@ def get_motivos_admin(contexto: ContextoDep) -> dict:
     }
 
 
-@router.post("/reasons")
+@router.post("/reasons", dependencies=_motivos)
 def post_motivo(
     cuerpo: AltaMotivoIn, contexto: ContextoDep
 ) -> MotivoOperativo:
     return guardar_motivo(contexto, **cuerpo.model_dump(), nuevo=True)
 
 
-@router.put("/reasons/{codigo}")
+@router.put("/reasons/{codigo}", dependencies=_motivos)
 def put_motivo(
     codigo: str, cuerpo: MotivoIn, contexto: ContextoDep
 ) -> MotivoOperativo:
@@ -238,7 +274,7 @@ def put_motivo(
     )
 
 
-@router.get("/parameters")
+@router.get("/parameters", dependencies=_sistema)
 def get_parametros(contexto: ContextoDep) -> dict:
     return {
         "editable": contexto.operativa.editable,
@@ -246,7 +282,7 @@ def get_parametros(contexto: ContextoDep) -> dict:
     }
 
 
-@router.put("/parameters/{clave}")
+@router.put("/parameters/{clave}", dependencies=_sistema)
 def put_parametro(
     clave: str, cuerpo: ParametroIn, contexto: ContextoDep
 ) -> dict[str, str]:
@@ -260,7 +296,7 @@ class RecargoMedioPagoIn(BaseModel):
     recargo_porcentaje: Decimal = Field(ge=0, le=100)
 
 
-@router.get("/payment-methods")
+@router.get("/payment-methods", dependencies=_sistema)
 def get_medios_pago_admin(contexto: ContextoDep) -> dict:
     """UX-08: los medios de pago con su recargo, para Administracion."""
     return {
@@ -272,7 +308,7 @@ def get_medios_pago_admin(contexto: ContextoDep) -> dict:
     }
 
 
-@router.put("/payment-methods/{codigo}")
+@router.put("/payment-methods/{codigo}", dependencies=_sistema)
 def put_recargo_medio_pago(
     codigo: str, cuerpo: RecargoMedioPagoIn, contexto: ContextoDep
 ) -> MedioPagoOut:
@@ -304,7 +340,7 @@ class AltaInsumoIn(InsumoIn):
     clave: str | None = None
 
 
-@router.get("/supplies")
+@router.get("/supplies", dependencies=_insumos)
 def get_insumos_admin(contexto: ContextoDep) -> dict:
     return {
         "editable": contexto.operativa.editable,
@@ -315,7 +351,7 @@ def get_insumos_admin(contexto: ContextoDep) -> dict:
     }
 
 
-@router.post("/supplies")
+@router.post("/supplies", dependencies=_insumos)
 def post_insumo(cuerpo: AltaInsumoIn, contexto: ContextoDep) -> dict:
     return guardar_insumo(
         contexto,
@@ -331,7 +367,7 @@ def post_insumo(cuerpo: AltaInsumoIn, contexto: ContextoDep) -> dict:
     ).model_dump(mode="json")
 
 
-@router.put("/supplies/{clave}")
+@router.put("/supplies/{clave}", dependencies=_insumos)
 def put_insumo(clave: str, cuerpo: InsumoIn, contexto: ContextoDep) -> dict:
     return guardar_insumo(
         contexto,
@@ -360,12 +396,12 @@ class PreguntaChecklistIn(BaseModel):
     orden: int = 0
 
 
-@router.get("/checklist")
+@router.get("/checklist", dependencies=_checklist)
 def get_checklist_admin(contexto: ContextoDep) -> dict:
     return catalogo_checklist(contexto, solo_vigentes=False)
 
 
-@router.post("/equipment-types/sync")
+@router.post("/equipment-types/sync", dependencies=_checklist)
 def post_sincronizar_tipos(
     cuerpo: SincronizarTiposIn, contexto: ContextoDep
 ) -> dict:
@@ -401,12 +437,12 @@ def _pregunta(contexto, codigo, cuerpo: PreguntaChecklistIn) -> dict:
     ).model_dump()
 
 
-@router.post("/checklist-questions")
+@router.post("/checklist-questions", dependencies=_checklist)
 def post_pregunta(cuerpo: PreguntaChecklistIn, contexto: ContextoDep) -> dict:
     return _pregunta(contexto, None, cuerpo)
 
 
-@router.put("/checklist-questions/{codigo}")
+@router.put("/checklist-questions/{codigo}", dependencies=_checklist)
 def put_pregunta(
     codigo: str, cuerpo: PreguntaChecklistIn, contexto: ContextoDep
 ) -> dict:

@@ -21,9 +21,16 @@ quedan configurables sin cambiar.
 La politica vigente la fija la capa de API para cada pedido
 (``politica_vigente``); sin politica (pruebas, scripts, modo JSON) rigen
 los predeterminados. Los permisos ``configurable=False`` no se cambian
-nunca: gestionar roles y permisos y administrar la configuracion son de
-Administracion, para que ningun cambio deje el sistema sin quien lo
-administre.
+nunca: gestionar roles y permisos y administrar la configuracion del
+sistema son de Administracion, para que ningun cambio deje el sistema sin
+quien lo administre.
+
+Configuracion v2 (CFG-03): los catalogos operativos (tipos de reparacion,
+precios, Mesas, motivos, insumos, plantillas, checklist, proveedores) tienen
+permisos propios y configurables, inicialmente solo de Administracion (D2);
+Compras se divide por accion y hereda los roles de ``COMPRAS_GESTIONAR``
+(DF-4). Un permiso puede ``requerir`` otro (su consulta): la configuracion
+no deja a un rol con la accion y sin lo que necesita para verla.
 """
 
 from __future__ import annotations
@@ -53,6 +60,7 @@ class Permiso:
         "predeterminados",
         "configurable",
         "consulta",
+        "requiere",
     )
 
     def __init__(
@@ -64,6 +72,7 @@ class Permiso:
         grupo: str,
         configurable: bool = True,
         consulta: bool = False,
+        requiere: tuple[str, ...] = (),
     ) -> None:
         self.codigo = codigo
         self.descripcion = descripcion
@@ -71,6 +80,7 @@ class Permiso:
         self.predeterminados = tuple(predeterminados)
         self.configurable = configurable
         self.consulta = consulta
+        self.requiere = tuple(requiere)
 
     @property
     def roles(self) -> tuple[RolUsuario, ...]:
@@ -121,6 +131,7 @@ def _definir(
     *,
     configurable: bool = True,
     consulta: bool = False,
+    requiere: tuple[str, ...] = (),
 ) -> Permiso:
     if codigo in REGISTRO:
         raise ValueError(f"Permiso duplicado: {codigo}")
@@ -131,6 +142,7 @@ def _definir(
         grupo=grupo,
         configurable=configurable,
         consulta=consulta,
+        requiere=requiere,
     )
     REGISTRO[codigo] = permiso
     return permiso
@@ -198,7 +210,7 @@ DETALLE_DEFINIR_RECEPCION = _definir(
 )
 ENVIAR_A_REVISION = _definir(
     "ENVIAR_A_REVISION",
-    "Enviar a revisión técnica y finalizar sin reparación",
+    "Enviar a revisión técnica y finalizar la revisión sin reparación",
     (RECEP,),
     INGRESO,
 )
@@ -351,7 +363,7 @@ CORTESIA = _definir(
 SALIDA = "Custodia, check-in y entrega"
 CUSTODIA = _definir(
     "CUSTODIA",
-    "Recepción física, no recibido y devolución sin reparar",
+    "Recepción física, equipo no recibido y notas de la recepción",
     (RECEP, ADMIN),
     SALIDA,
 )
@@ -365,7 +377,12 @@ RETIRO_SEGUIMIENTO = _definir(
     (RECEP, ADMIN),
     SALIDA,
 )
-ENTREGA = _definir("ENTREGA", "Entregar el equipo", (ADMIN, RECEP), SALIDA)
+ENTREGA = _definir(
+    "ENTREGA",
+    "Entregar el equipo, devolverlo sin reparar o a RT",
+    (ADMIN, RECEP),
+    SALIDA,
+)
 
 # --- Inventario y catalogos ---
 INVENTARIO = "Inventario y catálogos"
@@ -389,14 +406,6 @@ DEVOLUCION_STOCK = _definir(
     (ADMIN, COORD),
     INVENTARIO,
 )
-# DEC-MI-09: Recepcion, Coordinacion RMA y Administracion crean, confirman
-# y reciben ordenes de compra (sin aprobacion).
-COMPRAS_GESTIONAR = _definir(
-    "COMPRAS_GESTIONAR",
-    "Solicitudes, órdenes de compra y recepciones",
-    (RECEP, COORD, ADMIN),
-    INVENTARIO,
-)
 CATALOGO_EQUIPOS_SINCRONIZAR = _definir(
     "CATALOGO_EQUIPOS_SINCRONIZAR",
     "Sincronizar el catálogo de equipos de Ventas",
@@ -409,6 +418,108 @@ PRODUCTOS_RT_SINCRONIZAR = _definir(
     "Sincronizar los Productos de Gestión RT en reparación",
     (ADMIN,),
     INVENTARIO,
+)
+
+# --- Compras (CFG-03, D5; DEC-MI-09) ---
+# Antes un solo permiso, COMPRAS_GESTIONAR. Cada accion hereda sus roles
+# (DF-4: nadie pierde acceso; la migracion copia lo configurado).
+COMPRAS = "Compras"
+ROLES_COMPRAS = (RECEP, COORD, ADMIN)
+COMPRA_SOLICITAR = _definir(
+    "COMPRA_SOLICITAR",
+    "Crear y descartar solicitudes de compra",
+    ROLES_COMPRAS,
+    COMPRAS,
+    requiere=("COMPRAS_CONSULTAR",),
+)
+OC_CREAR = _definir(
+    "OC_CREAR",
+    "Crear órdenes de compra (y descartar el borrador propio)",
+    ROLES_COMPRAS,
+    COMPRAS,
+    requiere=("COMPRAS_CONSULTAR",),
+)
+OC_CONFIRMAR = _definir(
+    "OC_CONFIRMAR",
+    "Confirmar órdenes de compra",
+    ROLES_COMPRAS,
+    COMPRAS,
+    requiere=("COMPRAS_CONSULTAR",),
+)
+# DF-5: cancelar una OC confirmada (y cualquier borrador).
+OC_CANCELAR = _definir(
+    "OC_CANCELAR",
+    "Cancelar órdenes de compra confirmadas o borradores ajenos",
+    ROLES_COMPRAS,
+    COMPRAS,
+    requiere=("COMPRAS_CONSULTAR",),
+)
+COMPRA_RECIBIR = _definir(
+    "COMPRA_RECIBIR",
+    "Registrar recepciones de compra (ingresan stock)",
+    ROLES_COMPRAS,
+    COMPRAS,
+    requiere=("COMPRAS_CONSULTAR",),
+)
+PROVEEDOR_GESTIONAR = _definir(
+    "PROVEEDOR_GESTIONAR",
+    "Dar de alta y editar proveedores",
+    (ADMIN,),
+    COMPRAS,
+    requiere=("COMPRAS_CONSULTAR",),
+)
+
+# Alias de lectura para el frontend publicado antes de CFG-03: lo informa
+# ``permisos_de`` a quien puede crear OC. No es un permiso: no se configura
+# ni habilita nada en el backend.
+ALIAS_COMPRAS_GESTIONAR = "COMPRAS_GESTIONAR"
+
+# --- Configuracion operativa (CFG-03, D2 y D3) ---
+# Antes, CONFIGURACION_ADMINISTRAR (fijo). Configurables y, al inicio, solo
+# de Administracion: nadie gana acceso sin que Administracion lo decida.
+OPERATIVA = "Configuración operativa"
+TIPO_REPARACION_GESTIONAR = _definir(
+    "TIPO_REPARACION_GESTIONAR",
+    "Tipos de reparación: alta, nombre, puntaje, garantías y vigencia",
+    (ADMIN,),
+    OPERATIVA,
+)
+PRECIOS_GESTIONAR = _definir(
+    "PRECIOS_GESTIONAR",
+    "Precios de los tipos de reparación y de los insumos",
+    (ADMIN,),
+    OPERATIVA,
+)
+MESA_TIPOS_GESTIONAR = _definir(
+    "MESA_TIPOS_GESTIONAR",
+    "Tipos de reparación habilitados en cada Mesa de trabajo",
+    (ADMIN,),
+    OPERATIVA,
+)
+MOTIVO_GESTIONAR = _definir(
+    "MOTIVO_GESTIONAR",
+    "Motivos de cancelación e interrupción",
+    (ADMIN,),
+    OPERATIVA,
+)
+INSUMO_GESTIONAR = _definir(
+    "INSUMO_GESTIONAR",
+    "Insumos: alta, nombre, unidad, control por lote y vigencia",
+    (ADMIN,),
+    OPERATIVA,
+    requiere=("INVENTARIO_CONSULTAR",),
+)
+PLANTILLA_GESTIONAR = _definir(
+    "PLANTILLA_GESTIONAR",
+    "Plantillas de WhatsApp",
+    (ADMIN,),
+    OPERATIVA,
+)
+CHECKLIST_GESTIONAR = _definir(
+    "CHECKLIST_GESTIONAR",
+    "Checklist de recepción y tipos de equipo",
+    (ADMIN,),
+    OPERATIVA,
 )
 
 # --- Consultas (DC27B) ---
@@ -446,7 +557,7 @@ COMPRAS_CONSULTAR = _definir(
     "COMPRAS_CONSULTAR",
     "Consultar compras, proveedores y costos",
     (RECEP, COORD, ADMIN),
-    CONSULTAS,
+    COMPRAS,
     consulta=True,
 )
 # Reparacion RT (DEC-RT-07).
@@ -467,9 +578,11 @@ ANTECEDENTES_CONSULTAR = _definir(
 
 # --- Administracion (no configurables) ---
 ADMINISTRACION = "Administración"
+# CFG-03: queda para lo sensible del sistema; los catalogos operativos
+# tienen sus permisos (grupo "Configuracion operativa").
 CONFIGURACION_ADMINISTRAR = _definir(
     "CONFIGURACION_ADMINISTRAR",
-    "Administrar catálogos y configuración",
+    "Parámetros del sistema, recargos por medio de pago y auditoría",
     (ADMIN,),
     ADMINISTRACION,
     configurable=False,
@@ -485,6 +598,20 @@ ROLES_ADMINISTRAR = _definir(
 
 def configurables() -> list[Permiso]:
     return [p for p in REGISTRO.values() if p.configurable]
+
+
+def requeridos_por(codigo: str) -> list[Permiso]:
+    """Los permisos que requieren ``codigo`` (sus acciones dependen de el)."""
+    return [p for p in REGISTRO.values() if codigo in p.requiere]
+
+
+for _permiso in REGISTRO.values():
+    for _requerido in _permiso.requiere:
+        if _requerido not in REGISTRO:
+            raise ValueError(
+                f"{_permiso.codigo} requiere un permiso inexistente: "
+                f"{_requerido}"
+            )
 
 
 # --- Politica vigente del pedido ---

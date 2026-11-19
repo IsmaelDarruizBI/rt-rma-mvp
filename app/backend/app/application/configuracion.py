@@ -18,7 +18,8 @@ from app.domain.models import (
 from app.repositories.configuracion import ConfiguracionRepository
 from app.services.autorizacion import validar_alguno_de
 from app.services.configuracion import (
-    ROLES_ADMINISTRACION_CONFIGURACION,
+    ROLES_PRECIOS,
+    ROLES_TIPO_REPARACION,
     cambio_de_tipos_habilitados,
     cambios_de_tipo,
 )
@@ -66,7 +67,9 @@ def guardar_tipo_reparacion(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
     # El permiso antes de reservar un codigo: un rechazo no consume numeros.
-    validar_alguno_de(usuario, ROLES_ADMINISTRACION_CONFIGURACION)
+    validar_alguno_de(usuario, ROLES_TIPO_REPARACION)
+    if nuevo:
+        validar_alguno_de(usuario, ROLES_PRECIOS)  # D3: el alta fija precio
     codigo = (codigo or "").strip() or None
     if not nuevo and codigo is None:
         raise PrecondicionInvalidaError("Falta el codigo del Tipo a editar.")

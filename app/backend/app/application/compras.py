@@ -88,7 +88,7 @@ def guardar_proveedor(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
     # El permiso antes de reservar un codigo: un rechazo no consume numeros.
-    validar_alguno_de(usuario, permisos.CONFIGURACION_ADMINISTRAR)
+    validar_alguno_de(usuario, permisos.PROVEEDOR_GESTIONAR)
     codigo_informado = codigo
 
     def intento():
@@ -133,7 +133,7 @@ def crear_solicitud(
     """Manual, o confirmando una sugerencia por faltante (``FALTANTE``)."""
     repo = _repo(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    validar_alguno_de(usuario, permisos.COMPRAS_GESTIONAR)
+    validar_alguno_de(usuario, permisos.COMPRA_SOLICITAR)
     with contexto.transaccion():
         solicitud = nueva_solicitud(
             solicitud_id=repo.siguiente_codigo("SC"),
@@ -234,7 +234,7 @@ def crear_orden_compra(
 ) -> OrdenCompra:
     repo = _repo(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    validar_alguno_de(usuario, permisos.COMPRAS_GESTIONAR)
+    validar_alguno_de(usuario, permisos.OC_CREAR)
     with contexto.transaccion():
         proveedores = {p.id: p for p in repo.listar_proveedores()}
         if proveedor_id not in proveedores:
@@ -360,7 +360,7 @@ def recibir(
                     confirmado=True,
                     lote=lote,
                     origen_lote=OrigenLote.COMPRA,
-                    roles=permisos.COMPRAS_GESTIONAR,
+                    roles=permisos.COMPRA_RECIBIR,
                 )
                 movimientos.append(resultado.movimiento.id)
             con_movimientos.append(

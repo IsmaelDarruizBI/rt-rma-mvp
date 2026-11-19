@@ -110,6 +110,13 @@ def cambio_de_permiso(
         )
     presentes = set(pedidos)
     nuevos = tuple(r for r in ORDEN_ROLES if r in presentes)
+    if not nuevos:
+        # Brecha 14: un permiso sin roles deja la accion sin nadie que la
+        # haga (antes solo lo impedia el frontend).
+        raise PrecondicionInvalidaError(
+            f"El permiso {permiso.codigo} necesita al menos un rol."
+        )
+    _validar_dependencias(permiso, nuevos)
     if set(nuevos) == set(permiso.roles):
         raise PrecondicionInvalidaError(
             f"El permiso {permiso.codigo} ya tiene esos roles: no hay cambios."
@@ -125,10 +132,41 @@ def cambio_de_permiso(
     )
 
 
+def _validar_dependencias(
+    permiso: Permiso, nuevos: tuple[RolUsuario, ...]
+) -> None:
+    """CFG-03: un rol no queda con una accion y sin la consulta que la
+    accion requiere (por ejemplo, crear OC sin ver Compras)."""
+    for requerido in permiso.requiere:
+        consulta = permisos.REGISTRO[requerido]
+        faltan = [r for r in nuevos if r not in consulta.roles]
+        if faltan:
+            raise PrecondicionInvalidaError(
+                f"{permiso.codigo} requiere {consulta.codigo}: primero "
+                f"habilitalo para {texto_roles(faltan)}."
+            )
+    for dependiente in permisos.requeridos_por(permiso.codigo):
+        quedan = [r for r in dependiente.roles if r not in nuevos]
+        if quedan:
+            raise PrecondicionInvalidaError(
+                f"{dependiente.codigo} requiere {permiso.codigo}: primero "
+                f"quitaselo a {texto_roles(quedan)}."
+            )
+
+
 def permisos_de(usuario: Usuario) -> list[str]:
-    """Los codigos de permiso que el usuario tiene hoy (union de roles)."""
-    return [
+    """Los codigos de permiso que el usuario tiene hoy (union de roles).
+
+    Incluye el alias ``COMPRAS_GESTIONAR`` para quien puede crear OC: el
+    frontend publicado antes de CFG-03 habilita Compras con ese codigo.
+    """
+    if not usuario.activo:
+        return []
+    codigos = [
         codigo
         for codigo, permiso in permisos.REGISTRO.items()
-        if usuario.activo and usuario.tiene_alguno(permiso.roles)
+        if usuario.tiene_alguno(permiso.roles)
     ]
+    if permisos.OC_CREAR.codigo in codigos:
+        codigos.append(permisos.ALIAS_COMPRAS_GESTIONAR)
+    return codigos

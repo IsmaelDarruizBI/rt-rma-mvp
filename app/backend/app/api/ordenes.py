@@ -1599,9 +1599,7 @@ async def post_agregar_foto(
     )
 
 
-@router.get(
-    "/{orden_id}/photos/{foto_id}", dependencies=[exigir_rol(ROLES_FOTOS)]
-)
+@router.get("/{orden_id}/photos/{foto_id}", dependencies=_consulta)
 def get_foto(
     orden_id: str,
     foto_id: str,

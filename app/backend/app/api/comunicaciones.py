@@ -31,12 +31,18 @@ from app.domain.models.comunicaciones import (
     FinalidadComunicacion,
     PlantillaMensaje,
 )
+from app.services import permisos
 
 from .dependencias import ContextoDep
 from .ordenes import _salida
 from .schemas import OrdenOut
+from .seguridad import exigir_rol
 
 router = APIRouter(prefix="/api", tags=["comunicaciones"])
+# CFG-02 (brechas 8 y 9): las plantillas de Administracion y las lecturas de
+# datos de la Orden o del cliente tambien se controlan en la API.
+_gestion_plantillas = [exigir_rol(permisos.PLANTILLA_GESTIONAR)]
+_consulta = [exigir_rol(permisos.ORDENES_CONSULTAR)]
 
 
 class PlantillasOut(BaseModel):
@@ -109,7 +115,7 @@ def get_plantillas(contexto: ContextoDep) -> PlantillasOut:
     return _plantillas(contexto)
 
 
-@router.get("/orders/{orden_id}/messages/prepare")
+@router.get("/orders/{orden_id}/messages/prepare", dependencies=_consulta)
 def get_mensaje_preparado(
     orden_id: str, plantilla: str, contexto: ContextoDep
 ) -> MensajePreparadoOut:
@@ -158,7 +164,7 @@ def post_confirmacion(
     return _salida(orden, contexto)
 
 
-@router.get("/clients/{cliente_id}/consents")
+@router.get("/clients/{cliente_id}/consents", dependencies=_consulta)
 def get_consentimientos(
     cliente_id: str, contexto: ContextoDep
 ) -> ConsentimientosOut:
@@ -191,12 +197,12 @@ def _plantilla(codigo: str, cuerpo: PlantillaIn) -> PlantillaMensaje:
     )
 
 
-@router.get("/admin/message-templates")
+@router.get("/admin/message-templates", dependencies=_gestion_plantillas)
 def get_plantillas_admin(contexto: ContextoDep) -> PlantillasOut:
     return _plantillas(contexto)
 
 
-@router.post("/admin/message-templates")
+@router.post("/admin/message-templates", dependencies=_gestion_plantillas)
 def post_plantilla(
     cuerpo: AltaPlantillaIn, contexto: ContextoDep
 ) -> PlantillaMensaje:
@@ -208,7 +214,9 @@ def post_plantilla(
     )
 
 
-@router.put("/admin/message-templates/{codigo}")
+@router.put(
+    "/admin/message-templates/{codigo}", dependencies=_gestion_plantillas
+)
 def put_plantilla(
     codigo: str, cuerpo: PlantillaIn, contexto: ContextoDep
 ) -> PlantillaMensaje:

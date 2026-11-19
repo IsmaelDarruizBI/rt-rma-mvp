@@ -10,11 +10,18 @@ nada: delega en ``app.application``.
 from fastapi import APIRouter
 
 from app.application import bandejas_de_inicio, bandejas_de_taller
+from app.services import permisos
 
 from .dependencias import ContextoDep
 from .schemas_trabajo import BandejasOut
+from .seguridad import exigir_rol
 
-router = APIRouter(prefix="/api/work", tags=["bandejas"])
+# CFG-02 (brecha 9): las bandejas muestran Ordenes: exigen consultarlas.
+router = APIRouter(
+    prefix="/api/work",
+    tags=["bandejas"],
+    dependencies=[exigir_rol(permisos.ORDENES_CONSULTAR)],
+)
 
 
 @router.get("/inbox")

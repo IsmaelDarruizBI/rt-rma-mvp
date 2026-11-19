@@ -56,7 +56,16 @@ from .seguridad import exigir_rol
 
 router = APIRouter(tags=["compras"])
 _consulta = [exigir_rol(permisos.COMPRAS_CONSULTAR)]
-_admin = [exigir_rol(permisos.CONFIGURACION_ADMINISTRAR)]
+# CFG-03 (D5, DF-5): cada accion de Compras con su permiso, tambien en la
+# API (antes solo el servicio controlaba los comandos).
+_solicitar = [exigir_rol(permisos.COMPRA_SOLICITAR)]
+_crear_oc = [exigir_rol(permisos.OC_CREAR)]
+_confirmar_oc = [exigir_rol(permisos.OC_CONFIRMAR)]
+# Cancelar: OC_CANCELAR, o OC_CREAR para el borrador propio (el servicio
+# decide segun el estado y quien la creo).
+_cancelar_oc = [exigir_rol(permisos.OC_CANCELAR, permisos.OC_CREAR)]
+_recibir = [exigir_rol(permisos.COMPRA_RECIBIR)]
+_admin = [exigir_rol(permisos.PROVEEDOR_GESTIONAR)]
 
 
 class ProveedorIn(BaseModel):
@@ -135,7 +144,7 @@ def get_solicitudes(contexto: ContextoDep) -> list[SolicitudCompra]:
     return listar_solicitudes(contexto)
 
 
-@router.post("/api/purchases/requests")
+@router.post("/api/purchases/requests", dependencies=_solicitar)
 def post_solicitud(
     cuerpo: SolicitudIn, contexto: ContextoDep
 ) -> SolicitudCompra:
@@ -150,7 +159,9 @@ def post_solicitud(
     )
 
 
-@router.post("/api/purchases/requests/{solicitud_id}/discard")
+@router.post(
+    "/api/purchases/requests/{solicitud_id}/discard", dependencies=_solicitar
+)
 def post_descartar(
     solicitud_id: str, cuerpo: MotivoIn, contexto: ContextoDep
 ) -> SolicitudCompra:
@@ -177,7 +188,7 @@ def get_orden(orden_id: str, contexto: ContextoDep) -> OrdenCompra:
     return obtener_orden_compra(contexto, orden_id)
 
 
-@router.post("/api/purchases/orders")
+@router.post("/api/purchases/orders", dependencies=_crear_oc)
 def post_orden(cuerpo: OrdenCompraIn, contexto: ContextoDep) -> OrdenCompra:
     return crear_orden_compra(
         contexto,
@@ -189,14 +200,18 @@ def post_orden(cuerpo: OrdenCompraIn, contexto: ContextoDep) -> OrdenCompra:
     )
 
 
-@router.post("/api/purchases/orders/{orden_id}/confirm")
+@router.post(
+    "/api/purchases/orders/{orden_id}/confirm", dependencies=_confirmar_oc
+)
 def post_confirmar(
     orden_id: str, cuerpo: UsuarioIn, contexto: ContextoDep
 ) -> OrdenCompra:
     return confirmar(contexto, usuario_id=cuerpo.usuario_id, orden_id=orden_id)
 
 
-@router.post("/api/purchases/orders/{orden_id}/cancel")
+@router.post(
+    "/api/purchases/orders/{orden_id}/cancel", dependencies=_cancelar_oc
+)
 def post_cancelar(
     orden_id: str, cuerpo: MotivoIn, contexto: ContextoDep
 ) -> OrdenCompra:
@@ -208,7 +223,9 @@ def post_cancelar(
     )
 
 
-@router.post("/api/purchases/orders/{compra_id}/receipts")
+@router.post(
+    "/api/purchases/orders/{compra_id}/receipts", dependencies=_recibir
+)
 @idempotente("RECIBIR_COMPRA")
 def post_recepcion(
     compra_id: str, cuerpo: RecepcionIn, contexto: ContextoDep

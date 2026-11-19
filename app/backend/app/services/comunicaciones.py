@@ -256,7 +256,7 @@ def cambios_de_plantilla(
     usuario: Usuario,
     fecha: datetime,
 ) -> list[CambioConfiguracion]:
-    validar_alguno_de(usuario, permisos.CONFIGURACION_ADMINISTRAR)
+    validar_alguno_de(usuario, permisos.PLANTILLA_GESTIONAR)
     desconocidas = [v for v in variables_de(nueva.texto) if v not in VARIABLES]
     if desconocidas:
         raise PrecondicionInvalidaError(

@@ -63,7 +63,7 @@ def cambios_de_proveedor(
     usuario: Usuario,
     fecha: datetime,
 ) -> list[CambioConfiguracion]:
-    validar_alguno_de(usuario, permisos.CONFIGURACION_ADMINISTRAR)
+    validar_alguno_de(usuario, permisos.PROVEEDOR_GESTIONAR)
     cambios = [
         CambioConfiguracion(
             entidad=EntidadConfiguracion.PROVEEDOR,
@@ -104,7 +104,7 @@ def nueva_solicitud(
     usuario: Usuario,
     fecha: datetime,
 ) -> SolicitudCompra:
-    validar_alguno_de(usuario, permisos.COMPRAS_GESTIONAR)
+    validar_alguno_de(usuario, permisos.COMPRA_SOLICITAR)
     if not insumo.activo:
         raise PrecondicionInvalidaError(
             f"El insumo {insumo.id} no esta vigente: no se compra."
@@ -133,7 +133,7 @@ def descartar_solicitud(
     usuario: Usuario,
     fecha: datetime,
 ) -> SolicitudCompra:
-    validar_alguno_de(usuario, permisos.COMPRAS_GESTIONAR)
+    validar_alguno_de(usuario, permisos.COMPRA_SOLICITAR)
     if solicitud.estado is not EstadoSolicitud.PENDIENTE:
         raise PrecondicionInvalidaError(
             f"La solicitud {solicitud.id} ya no esta pendiente."
@@ -196,7 +196,7 @@ def nueva_orden_compra(
     usuario: Usuario,
     fecha: datetime,
 ) -> OrdenCompra:
-    validar_alguno_de(usuario, permisos.COMPRAS_GESTIONAR)
+    validar_alguno_de(usuario, permisos.OC_CREAR)
     if not proveedor.activo:
         raise PrecondicionInvalidaError(
             f"El proveedor {proveedor.nombre} no esta vigente."
@@ -248,7 +248,7 @@ def confirmar_orden_compra(
 ) -> OrdenCompra:
     """Sin aprobacion: confirmar registra quien y cuando, y la deja lista
     para recibir."""
-    validar_alguno_de(usuario, permisos.COMPRAS_GESTIONAR)
+    validar_alguno_de(usuario, permisos.OC_CONFIRMAR)
     if orden.estado is not EstadoOrdenCompra.BORRADOR:
         raise PrecondicionInvalidaError(
             f"La orden de compra {orden.id} ya no es un borrador."
@@ -261,7 +261,18 @@ def confirmar_orden_compra(
 def cancelar_orden_compra(
     orden: OrdenCompra, *, motivo: str, usuario: Usuario, fecha: datetime
 ) -> OrdenCompra:
-    validar_alguno_de(usuario, permisos.COMPRAS_GESTIONAR)
+    """DF-5: cancelar una OC confirmada (o un borrador ajeno) exige
+    ``OC_CANCELAR``; quien puede crear OC descarta su propio borrador."""
+    propio = (
+        orden.estado is EstadoOrdenCompra.BORRADOR
+        and orden.creada_por == usuario.id
+    )
+    validar_alguno_de(
+        usuario,
+        tuple(dict.fromkeys((*permisos.OC_CANCELAR, *permisos.OC_CREAR)))
+        if propio
+        else permisos.OC_CANCELAR,
+    )
     if orden.estado not in (
         EstadoOrdenCompra.BORRADOR,
         EstadoOrdenCompra.CONFIRMADA,
@@ -294,7 +305,7 @@ def nueva_recepcion(
 ) -> RecepcionCompra:
     """Una recepcion parcial o total; los movimientos los agrega el
     llamador al registrar los ingresos."""
-    validar_alguno_de(usuario, permisos.COMPRAS_GESTIONAR)
+    validar_alguno_de(usuario, permisos.COMPRA_RECIBIR)
     if orden.estado not in (
         EstadoOrdenCompra.CONFIRMADA,
         EstadoOrdenCompra.PARCIAL,

@@ -90,7 +90,7 @@ def guardar_motivo(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
     # El permiso antes de reservar un codigo: un rechazo no consume numeros.
-    validar_alguno_de(usuario, permisos.CONFIGURACION_ADMINISTRAR)
+    validar_alguno_de(usuario, permisos.MOTIVO_GESTIONAR)
     codigo = (codigo or "").strip().upper() or None
     if not nuevo and codigo is None:
         raise PrecondicionInvalidaError("Falta el codigo del motivo a editar.")
@@ -226,7 +226,10 @@ def guardar_insumo(
     repositorio = _editable(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
-    validar_alguno_de(usuario, permisos.CONFIGURACION_ADMINISTRAR)
+    validar_alguno_de(usuario, permisos.INSUMO_GESTIONAR)
+    if nuevo and precio is not None:
+        # D3, antes de reservar el codigo: un rechazo no consume numeros.
+        validar_alguno_de(usuario, permisos.PRECIOS_GESTIONAR)
     clave = (clave or "").strip() or None
     codigo = (codigo or "").strip() or None
     if not nuevo and clave is None:

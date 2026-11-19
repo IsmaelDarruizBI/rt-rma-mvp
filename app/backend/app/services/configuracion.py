@@ -4,8 +4,9 @@ Reglas puras: quien administra, que se valida y que cambios se auditan. La
 persistencia (el catalogo y su auditoria en la misma transaccion) es del
 repository.
 
-- Administra Administracion (ACT-ADMIN). La delegacion por permisos
-  configurables (BR-REP-039, DC08) sigue pendiente.
+- Permisos configurables (CFG-03): ``TIPO_REPARACION_GESTIONAR`` para el
+  Tipo y ``PRECIOS_GESTIONAR`` para su precio (D3: un alta fija el precio,
+  asi que exige los dos); ``MESA_TIPOS_GESTIONAR`` para las Mesas.
 - Un Tipo de Reparacion no se borra: se desactiva. Su codigo no cambia y
   ``TR-OTROS`` esta reservado.
 - Cada campo que cambia deja un ``CambioConfiguracion`` con el valor
@@ -31,6 +32,9 @@ from .autorizacion import validar_alguno_de
 from .exceptions import PrecondicionInvalidaError
 
 ROLES_ADMINISTRACION_CONFIGURACION = permisos.CONFIGURACION_ADMINISTRAR
+ROLES_TIPO_REPARACION = permisos.TIPO_REPARACION_GESTIONAR
+ROLES_PRECIOS = permisos.PRECIOS_GESTIONAR
+ROLES_MESA_TIPOS = permisos.MESA_TIPOS_GESTIONAR
 CAMPOS_TIPO = (
     "nombre",
     "precio",
@@ -87,7 +91,16 @@ def cambios_de_tipo(
     fecha: datetime,
 ) -> list[CambioConfiguracion]:
     """Los cambios auditables de un alta (``anterior`` None) o una edicion."""
-    validar_alguno_de(usuario, ROLES_ADMINISTRACION_CONFIGURACION)
+    validar_alguno_de(usuario, ROLES_TIPO_REPARACION)
+    if nuevo.precio != nuevo.precio.quantize(Decimal("0.01")):
+        # QA B, M1: la base guarda dos decimales; uno mas cambiaria el
+        # precio por redondeo sin pasar por PRECIOS_GESTIONAR.
+        raise PrecondicionInvalidaError(
+            "El precio admite hasta dos decimales."
+        )
+    if anterior is None or texto(anterior.precio) != texto(nuevo.precio):
+        # D3: fijar o cambiar el precio es aparte.
+        validar_alguno_de(usuario, ROLES_PRECIOS)
     _validar_tipo(nuevo)
     if anterior is not None and anterior.id != nuevo.id:
         raise PrecondicionInvalidaError("El codigo de un Tipo no cambia.")
@@ -127,7 +140,7 @@ def cambio_de_tipos_habilitados(
     fecha: datetime,
 ) -> CambioConfiguracion:
     """Los Tipos que una Mesa de trabajo puede trabajar (BR-REP-011)."""
-    validar_alguno_de(usuario, ROLES_ADMINISTRACION_CONFIGURACION)
+    validar_alguno_de(usuario, ROLES_MESA_TIPOS)
     conocidos = {tipo.id for tipo in tipos_existentes}
     desconocidos = sorted(set(nuevos) - conocidos)
     if desconocidos:
