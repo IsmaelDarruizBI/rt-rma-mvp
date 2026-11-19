@@ -17,7 +17,7 @@
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class FinalidadComunicacion(str, Enum):
@@ -41,12 +41,26 @@ VARIABLES = {
 }
 
 
+# CFG-08 (DF-3): la interfaz muestra solo estas plantillas, en Configuracion
+# y en las acciones de la Orden. Las demas no se borran ni se desactivan:
+# siguen en la base y en la API, y las comunicaciones ya registradas
+# conservan su texto.
+PLANTILLAS_VISIBLES = ("INGRESO", "LISTO_PARA_RETIRAR")
+
+
 class PlantillaMensaje(BaseModel):
     codigo: str = Field(pattern=r"^[A-Z0-9][A-Z0-9_-]*$")
     nombre: str = Field(min_length=1)
     finalidad: FinalidadComunicacion = FinalidadComunicacion.OPERATIVA
     texto: str = Field(min_length=1)
     activa: bool = True
+
+    @computed_field
+    @property
+    def visible(self) -> bool:
+        """Si la interfaz la ofrece (CFG-08). Un frontend anterior ignora
+        el campo y sigue mostrando todas."""
+        return self.codigo in PLANTILLAS_VISIBLES
 
 
 PLANTILLAS_INICIALES = (

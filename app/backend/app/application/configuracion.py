@@ -42,6 +42,18 @@ def _repositorio(contexto: ApplicationContext) -> ConfiguracionRepository:
     return contexto.configuracion
 
 
+class _Conservar:
+    """Un campo que el cliente no informo (CFG-06)."""
+
+    def __repr__(self) -> str:
+        return "CONSERVAR"
+
+
+CONSERVAR = _Conservar()
+GARANTIA_CON_CHECKIN_INICIAL = 90
+GARANTIA_SIN_CHECKIN_INICIAL = 30
+
+
 def guardar_tipo_reparacion(
     contexto: ApplicationContext,
     *,
@@ -50,10 +62,10 @@ def guardar_tipo_reparacion(
     nombre: str,
     precio: Decimal,
     puntaje: int,
-    garantia_dias: int,
-    garantia_con_checkin: int = 90,
-    garantia_sin_checkin: int = 30,
-    politica_garantia_rma: PoliticaGarantiaRma | None = None,
+    garantia_dias: int | _Conservar = CONSERVAR,
+    garantia_con_checkin: int | _Conservar = CONSERVAR,
+    garantia_sin_checkin: int | _Conservar = CONSERVAR,
+    politica_garantia_rma: PoliticaGarantiaRma | None | _Conservar = CONSERVAR,
     activo: bool = True,
     nuevo: bool,
 ) -> TipoReparacion:
@@ -62,6 +74,13 @@ def guardar_tipo_reparacion(
     CFG-01: en el alta el codigo es opcional. Sin codigo lo genera la base
     (``TR-NNN``); un codigo informado (clientes anteriores, scripts) se
     respeta si no existe otro igual sin distinguir mayusculas.
+
+    CFG-06 (DF-1 y DF-2): la pantalla solo muestra los plazos con y sin
+    check-in. Un campo de garantia que no viene (``CONSERVAR``) conserva
+    el valor del Tipo en la edicion; en el alta, el plazo generico
+    (``garantia_dias``, el que rige sin check-in registrado) toma el plazo
+    con check-in, los plazos 90 y 30 dias y la politica RMA queda sin
+    definir. Lo que manda un cliente anterior se respeta.
     """
     repositorio = _repositorio(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
@@ -90,15 +109,34 @@ def guardar_tipo_reparacion(
                 raise CodigoDuplicadoError(
                     f"Ya existe un Tipo de Reparacion {codigo}."
                 )
+
+            def elegir(valor, campo, inicial):
+                if valor is not CONSERVAR:
+                    return valor
+                return getattr(anterior, campo) if anterior else inicial
+
+            con_checkin = elegir(
+                garantia_con_checkin,
+                "garantia_con_checkin",
+                GARANTIA_CON_CHECKIN_INICIAL,
+            )
             tipo = TipoReparacion(
                 id=codigo,
                 nombre=nombre.strip(),
                 precio=precio,
                 puntaje=puntaje,
-                garantia_dias=garantia_dias,
-                garantia_con_checkin=garantia_con_checkin,
-                garantia_sin_checkin=garantia_sin_checkin,
-                politica_garantia_rma=politica_garantia_rma,
+                garantia_dias=elegir(
+                    garantia_dias, "garantia_dias", con_checkin
+                ),
+                garantia_con_checkin=con_checkin,
+                garantia_sin_checkin=elegir(
+                    garantia_sin_checkin,
+                    "garantia_sin_checkin",
+                    GARANTIA_SIN_CHECKIN_INICIAL,
+                ),
+                politica_garantia_rma=elegir(
+                    politica_garantia_rma, "politica_garantia_rma", None
+                ),
                 activo=activo,
             )
             cambios = cambios_de_tipo(

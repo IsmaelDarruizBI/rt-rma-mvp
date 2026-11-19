@@ -27,6 +27,7 @@ from app.application.checklist import (
     sincronizar_tipos_equipo,
 )
 from app.application.configuracion import (
+    CONSERVAR,
     guardar_tipo_reparacion,
     habilitar_tipos_en_mesa,
     historial_de_cambios,
@@ -99,12 +100,36 @@ class TipoReparacionIn(BaseModel):
     nombre: str = Field(min_length=1)
     precio: Decimal = Field(ge=0)
     puntaje: int = Field(ge=0)
-    garantia_dias: int = Field(ge=0)
     activo: bool = True
     # DEC-MI-01: plazos segun el check-in y politica RMA (ABI-38).
-    garantia_con_checkin: int = Field(default=90, ge=0)
-    garantia_sin_checkin: int = Field(default=30, ge=0)
+    # CFG-06 (DF-1, DF-2): todos opcionales. El que no viene se conserva en
+    # la edicion; en el alta, el plazo generico toma el de con check-in.
+    garantia_dias: int | None = Field(default=None, ge=0)
+    garantia_con_checkin: int | None = Field(default=None, ge=0)
+    garantia_sin_checkin: int | None = Field(default=None, ge=0)
     politica_garantia_rma: PoliticaGarantiaRma | None = None
+
+
+GARANTIAS = (
+    "garantia_dias",
+    "garantia_con_checkin",
+    "garantia_sin_checkin",
+    "politica_garantia_rma",
+)
+
+
+def _datos_de_tipo(cuerpo: TipoReparacionIn) -> dict:
+    """Los campos de garantia que no vinieron se conservan (CFG-06). Un
+    plazo en null tampoco cambia nada; la politica en null es «sin
+    definir», como antes."""
+    datos = cuerpo.model_dump()
+    for campo in GARANTIAS:
+        informado = campo in cuerpo.model_fields_set
+        if not informado or (
+            datos[campo] is None and campo != "politica_garantia_rma"
+        ):
+            datos[campo] = CONSERVAR
+    return datos
 
 
 class AltaTipoReparacionIn(TipoReparacionIn):
@@ -149,7 +174,9 @@ def get_catalogo(contexto: ContextoDep) -> dict:
 
 @router.post("/repair-types", dependencies=_tipos)
 def post_tipo(cuerpo: AltaTipoReparacionIn, contexto: ContextoDep) -> dict:
-    tipo = guardar_tipo_reparacion(contexto, **cuerpo.model_dump(), nuevo=True)
+    tipo = guardar_tipo_reparacion(
+        contexto, **_datos_de_tipo(cuerpo), nuevo=True
+    )
     return tipo.model_dump(mode="json")
 
 
@@ -158,7 +185,7 @@ def put_tipo(
     codigo: str, cuerpo: TipoReparacionIn, contexto: ContextoDep
 ) -> dict:
     tipo = guardar_tipo_reparacion(
-        contexto, codigo=codigo, **cuerpo.model_dump(), nuevo=False
+        contexto, codigo=codigo, **_datos_de_tipo(cuerpo), nuevo=False
     )
     return tipo.model_dump(mode="json")
 

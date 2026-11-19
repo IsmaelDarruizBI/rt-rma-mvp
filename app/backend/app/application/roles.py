@@ -27,6 +27,8 @@ class VistaPermiso:
     configurable: bool
     predeterminados: tuple[RolUsuario, ...]
     vigentes: tuple[RolUsuario, ...]
+    # CFG-03: los permisos de consulta que la accion necesita.
+    requiere: tuple[str, ...] = ()
 
 
 def _vista(permiso: permisos.Permiso) -> VistaPermiso:
@@ -38,6 +40,7 @@ def _vista(permiso: permisos.Permiso) -> VistaPermiso:
         configurable=permiso.configurable,
         predeterminados=permiso.predeterminados,
         vigentes=permiso.roles,
+        requiere=permiso.requiere,
     )
 
 
