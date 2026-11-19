@@ -81,7 +81,9 @@ class TipoReparacionIn(BaseModel):
 
 
 class AltaTipoReparacionIn(TipoReparacionIn):
-    codigo: str = Field(min_length=1)
+    # CFG-01: opcional. Sin codigo lo genera la base (TR-NNN); el que
+    # informa un cliente anterior o un script se respeta.
+    codigo: str | None = None
 
 
 class TiposDeMesaIn(BaseModel):
@@ -203,22 +205,13 @@ class MotivoIn(BaseModel):
 
 
 class AltaMotivoIn(MotivoIn):
-    codigo: str = Field(min_length=1)
+    # CFG-01: opcional; sin codigo lo genera la base (CANC-NNN o INT-NNN).
+    codigo: str | None = None
 
 
 class ParametroIn(BaseModel):
     usuario_id: str = Field(min_length=1)
     valor: str = Field(min_length=1)
-
-
-def _motivo(codigo: str, cuerpo: MotivoIn) -> MotivoOperativo:
-    return MotivoOperativo(
-        codigo=codigo.strip().upper(),
-        tipo=cuerpo.tipo,
-        nombre=cuerpo.nombre.strip(),
-        activo=cuerpo.activo,
-        requiere_descripcion=cuerpo.requiere_descripcion,
-    )
 
 
 @router.get("/reasons")
@@ -233,12 +226,7 @@ def get_motivos_admin(contexto: ContextoDep) -> dict:
 def post_motivo(
     cuerpo: AltaMotivoIn, contexto: ContextoDep
 ) -> MotivoOperativo:
-    return guardar_motivo(
-        contexto,
-        usuario_id=cuerpo.usuario_id,
-        motivo=_motivo(cuerpo.codigo, cuerpo),
-        nuevo=True,
-    )
+    return guardar_motivo(contexto, **cuerpo.model_dump(), nuevo=True)
 
 
 @router.put("/reasons/{codigo}")
@@ -246,10 +234,7 @@ def put_motivo(
     codigo: str, cuerpo: MotivoIn, contexto: ContextoDep
 ) -> MotivoOperativo:
     return guardar_motivo(
-        contexto,
-        usuario_id=cuerpo.usuario_id,
-        motivo=_motivo(codigo, cuerpo),
-        nuevo=False,
+        contexto, codigo=codigo, **cuerpo.model_dump(), nuevo=False
     )
 
 
@@ -303,7 +288,9 @@ def put_recargo_medio_pago(
 
 class InsumoIn(BaseModel):
     usuario_id: str = Field(min_length=1)
-    codigo: str = Field(min_length=1)
+    # CFG-01 (D4): opcional. En el alta, sin codigo se usa el identificador;
+    # en la edicion no cambia (si se informa, debe ser el mismo).
+    codigo: str | None = None
     nombre: str = Field(min_length=1)
     unidad: str | None = None
     activo: bool = True
@@ -313,7 +300,8 @@ class InsumoIn(BaseModel):
 
 
 class AltaInsumoIn(InsumoIn):
-    clave: str = Field(min_length=1)
+    # CFG-01 (D4): opcional; sin identificador lo genera la base (INS-NNN).
+    clave: str | None = None
 
 
 @router.get("/supplies")

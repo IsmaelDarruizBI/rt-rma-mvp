@@ -13,6 +13,7 @@ from .catalogo_equipos import CatalogoEquiposRepository
 from .catalogos import CatalogosRepository
 from .exceptions import (
     ClaveReutilizadaError,
+    CodigoExistenteError,
     ConflictoDeEscrituraError,
     DatosInvalidosError,
     EntidadPersistidaNoEncontradaError,
@@ -33,6 +34,7 @@ from .unidad_de_trabajo import UnidadDeTrabajo
 __all__ = [
     "CatalogoEquiposRepository",
     "ClaveReutilizadaError",
+    "CodigoExistenteError",
     "RegistroDeAcciones",
     "RespuestaGuardada",
     "CatalogosRepository",

@@ -16,12 +16,18 @@ from app.domain.models import (
     TipoReparacion,
 )
 from app.repositories.configuracion import ConfiguracionRepository
+from app.services.autorizacion import validar_alguno_de
 from app.services.configuracion import (
+    ROLES_ADMINISTRACION_CONFIGURACION,
     cambio_de_tipos_habilitados,
     cambios_de_tipo,
 )
-from app.services.exceptions import PrecondicionInvalidaError
+from app.services.exceptions import (
+    CodigoDuplicadoError,
+    PrecondicionInvalidaError,
+)
 
+from .codigos import con_reintento_de_codigo
 from .contexto import ApplicationContext
 
 
@@ -39,7 +45,7 @@ def guardar_tipo_reparacion(
     contexto: ApplicationContext,
     *,
     usuario_id: str,
-    codigo: str,
+    codigo: str | None = None,
     nombre: str,
     precio: Decimal,
     puntaje: int,
@@ -50,34 +56,59 @@ def guardar_tipo_reparacion(
     activo: bool = True,
     nuevo: bool,
 ) -> TipoReparacion:
+    """Alta o edicion de un Tipo, con auditoria.
+
+    CFG-01: en el alta el codigo es opcional. Sin codigo lo genera la base
+    (``TR-NNN``); un codigo informado (clientes anteriores, scripts) se
+    respeta si no existe otro igual sin distinguir mayusculas.
+    """
     repositorio = _repositorio(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
-    tipo = TipoReparacion(
-        id=codigo.strip(),
-        nombre=nombre.strip(),
-        precio=precio,
-        puntaje=puntaje,
-        garantia_dias=garantia_dias,
-        garantia_con_checkin=garantia_con_checkin,
-        garantia_sin_checkin=garantia_sin_checkin,
-        politica_garantia_rma=politica_garantia_rma,
-        activo=activo,
-    )
-    with contexto.transaccion():
-        anterior = None
-        if not nuevo:
-            anterior = contexto.catalogos.obtener_tipo_reparacion(tipo.id)
-        elif any(
-            t.id == tipo.id
-            for t in contexto.catalogos.listar_tipos_reparacion()
-        ):
-            raise PrecondicionInvalidaError(
-                f"Ya existe un Tipo de Reparacion {tipo.id}."
+    # El permiso antes de reservar un codigo: un rechazo no consume numeros.
+    validar_alguno_de(usuario, ROLES_ADMINISTRACION_CONFIGURACION)
+    codigo = (codigo or "").strip() or None
+    if not nuevo and codigo is None:
+        raise PrecondicionInvalidaError("Falta el codigo del Tipo a editar.")
+    codigo_informado = codigo
+
+    def intento():
+        codigo = codigo_informado
+        with contexto.transaccion():
+            anterior = None
+            if not nuevo:
+                anterior = contexto.catalogos.obtener_tipo_reparacion(codigo)
+            elif codigo is None:
+                codigo = repositorio.reservar_codigo("TR")
+            elif any(
+                t.id.upper() == codigo.upper()
+                for t in contexto.catalogos.listar_tipos_reparacion()
+            ):
+                raise CodigoDuplicadoError(
+                    f"Ya existe un Tipo de Reparacion {codigo}."
+                )
+            tipo = TipoReparacion(
+                id=codigo,
+                nombre=nombre.strip(),
+                precio=precio,
+                puntaje=puntaje,
+                garantia_dias=garantia_dias,
+                garantia_con_checkin=garantia_con_checkin,
+                garantia_sin_checkin=garantia_sin_checkin,
+                politica_garantia_rma=politica_garantia_rma,
+                activo=activo,
             )
-        cambios = cambios_de_tipo(anterior, tipo, usuario=usuario, fecha=fecha)
-        repositorio.guardar_tipo_reparacion(tipo, nuevo=nuevo, cambios=cambios)
-    return tipo
+            cambios = cambios_de_tipo(
+                anterior, tipo, usuario=usuario, fecha=fecha
+            )
+            repositorio.guardar_tipo_reparacion(
+                tipo, nuevo=nuevo, cambios=cambios
+            )
+        return tipo
+
+    return con_reintento_de_codigo(
+        intento, generado=nuevo and codigo_informado is None
+    )
 
 
 def habilitar_tipos_en_mesa(

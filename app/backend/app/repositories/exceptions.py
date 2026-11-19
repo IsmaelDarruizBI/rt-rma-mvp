@@ -25,6 +25,12 @@ class EntidadPersistidaNoEncontradaError(RepositoryError):
     """La entidad pedida no existe en el almacenamiento."""
 
 
+class CodigoExistenteError(RepositoryError):
+    """La base rechazo un alta porque su codigo ya existe (sin distinguir
+    mayusculas). Es un conflicto esperable, no un fallo: la API responde
+    409 (Configuracion v2, CFG-01)."""
+
+
 class PersistenciaError(RepositoryError):
     """No se pudo leer o escribir: contenido invalido o error de E/S."""
 

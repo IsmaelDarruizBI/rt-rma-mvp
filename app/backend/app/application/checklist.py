@@ -26,6 +26,7 @@ from app.services.checklist import (
 )
 from app.services.permisos import CONFIGURACION_ADMINISTRAR
 
+from .codigos import con_reintento_de_codigo
 from .contexto import ApplicationContext
 from .modificacion import orden_para_modificar
 from .operativa import _editable
@@ -94,15 +95,6 @@ class ResultadoTiposEquipo:
     sin_cambios: int
 
 
-def _siguiente(existentes: Sequence[str], prefijo: str) -> str:
-    numeros = [
-        int(codigo.split("-")[-1])
-        for codigo in existentes
-        if codigo.split("-")[-1].isdigit()
-    ]
-    return f"{prefijo}-{max(numeros, default=0) + 1:04d}"
-
-
 def sincronizar_tipos_equipo(
     contexto: ApplicationContext, *, usuario_id: str
 ) -> ResultadoTiposEquipo:
@@ -164,35 +156,47 @@ def guardar_pregunta(
 ) -> PreguntaChecklist:
     repositorio = _editable(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    with contexto.transaccion():
-        tipos = {t.id for t in repositorio.listar_tipos_equipo()}
-        if tipo_equipo_id not in tipos:
-            raise EntidadNoEncontradaError(
-                f"No existe el tipo de equipo {tipo_equipo_id}"
+    # El permiso antes de reservar un codigo: un rechazo no consume numeros.
+    validar_alguno_de(usuario, CONFIGURACION_ADMINISTRAR)
+    codigo_informado = codigo
+
+    def intento():
+        codigo = codigo_informado
+        with contexto.transaccion():
+            tipos = {t.id for t in repositorio.listar_tipos_equipo()}
+            if tipo_equipo_id not in tipos:
+                raise EntidadNoEncontradaError(
+                    f"No existe el tipo de equipo {tipo_equipo_id}"
+                )
+            existentes = {
+                p.id: p for p in repositorio.listar_preguntas_checklist()
+            }
+            nuevo = codigo is None
+            # CFG-01: el codigo lo genera la base (CHK-NNNN), seguro ante
+            # altas concurrentes.
+            codigo = codigo or repositorio.reservar_codigo("CHK")
+            anterior = existentes.get(codigo)
+            if not nuevo and anterior is None:
+                raise EntidadNoEncontradaError(
+                    f"No existe la pregunta {codigo}"
+                )
+            pregunta = PreguntaChecklist(
+                id=codigo,
+                tipo_equipo_id=tipo_equipo_id,
+                texto=texto.strip(),
+                opciones=list(opciones),
+                activa=activa,
+                orden=orden,
             )
-        existentes = {
-            p.id: p for p in repositorio.listar_preguntas_checklist()
-        }
-        nuevo = codigo is None
-        codigo = codigo or _siguiente(list(existentes), "CHK")
-        anterior = existentes.get(codigo)
-        if not nuevo and anterior is None:
-            raise EntidadNoEncontradaError(f"No existe la pregunta {codigo}")
-        pregunta = PreguntaChecklist(
-            id=codigo,
-            tipo_equipo_id=tipo_equipo_id,
-            texto=texto.strip(),
-            opciones=list(opciones),
-            activa=activa,
-            orden=orden,
-        )
-        cambios = cambios_de_pregunta(
-            anterior, pregunta, usuario=usuario, fecha=contexto.ahora()
-        )
-        repositorio.guardar_pregunta_checklist(
-            pregunta, nuevo=nuevo, cambios=cambios
-        )
-    return pregunta
+            cambios = cambios_de_pregunta(
+                anterior, pregunta, usuario=usuario, fecha=contexto.ahora()
+            )
+            repositorio.guardar_pregunta_checklist(
+                pregunta, nuevo=nuevo, cambios=cambios
+            )
+        return pregunta
+
+    return con_reintento_de_codigo(intento, generado=codigo_informado is None)
 
 
 def registrar_checklist_de_orden(

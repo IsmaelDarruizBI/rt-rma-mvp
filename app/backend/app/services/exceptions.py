@@ -41,6 +41,14 @@ class ConfirmacionRequeridaError(PrecondicionInvalidaError):
     codigo = "CONFIRMACION_REQUERIDA"
 
 
+class CodigoDuplicadoError(PrecondicionInvalidaError):
+    """El codigo pedido ya existe, sin distinguir mayusculas (CFG-01).
+
+    Es un conflicto esperable: 409, nunca 500. Conserva el codigo de error
+    PRECONDICION_INVALIDA que ya devolvian estas altas, para no cambiar el
+    contrato de los clientes publicados."""
+
+
 class RecursoNoDisponibleError(DomainError):
     """No hay disponibilidad suficiente para completar la operacion."""
 

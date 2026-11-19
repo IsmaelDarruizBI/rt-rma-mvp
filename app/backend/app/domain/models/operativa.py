@@ -29,6 +29,12 @@ class MotivoOperativo(BaseModel):
     requiere_descripcion: bool = False
 
 
+# CFG-01: prefijo de los codigos que genera la base para cada tipo.
+PREFIJO_MOTIVO = {
+    TipoMotivo.CANCELACION: "CANC",
+    TipoMotivo.INTERRUPCION: "INT",
+}
+
 MOTIVOS_INICIALES = (
     MotivoOperativo(
         codigo="CANC-OTRO",

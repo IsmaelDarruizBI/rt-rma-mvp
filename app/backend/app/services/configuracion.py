@@ -58,7 +58,7 @@ def texto(valor: object) -> str | None:
 
 
 def _validar_tipo(tipo: TipoReparacion) -> None:
-    if tipo.id == TIPO_REPARACION_OTROS:
+    if tipo.id.upper() == TIPO_REPARACION_OTROS:
         raise PrecondicionInvalidaError(
             f"{TIPO_REPARACION_OTROS} esta reservado para la reparacion no "
             "tipificada: no se administra como un Tipo del catalogo."

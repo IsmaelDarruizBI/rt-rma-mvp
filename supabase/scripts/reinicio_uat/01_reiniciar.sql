@@ -179,6 +179,15 @@ begin
   if v_modo = 'aplicar' then
     -- La próxima Orden será OR-000001. En el ensayo no se toca.
     alter sequence rma.orden_numero_seq restart with 1;
+    -- Configuración v2 (CFG-01): solicitudes, órdenes de compra y reclamos
+    -- también vuelven a empezar (sus tablas se vaciaron). Las secuencias de
+    -- los catálogos (maestras) no se tocan. Una restauración posterior no
+    -- repite códigos: rma.siguiente_codigo saltea los existentes.
+    if to_regclass('rma.codigo_sc_seq') is not null then
+      alter sequence rma.codigo_sc_seq restart with 1;
+      alter sequence rma.codigo_oc_seq restart with 1;
+      alter sequence rma.codigo_rga_seq restart with 1;
+    end if;
   end if;
 
   -- 4. Stock inicial -----------------------------------------------------------

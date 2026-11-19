@@ -17,6 +17,11 @@ from app.domain.models import (
 
 
 class ConfiguracionRepository(Protocol):
+    def reservar_codigo(self, prefijo: str) -> str:
+        """El codigo siguiente libre de ``prefijo`` (CFG-01), dentro de la
+        transaccion del alta."""
+        ...
+
     def guardar_tipo_reparacion(
         self,
         tipo: TipoReparacion,

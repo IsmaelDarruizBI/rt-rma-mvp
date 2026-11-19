@@ -14,6 +14,7 @@ Correspondencia:
     RecursoNoDisponibleError           -> 409  (no alcanza el stock)
     RequestValidationError             -> 422  (el request esta mal formado)
     ConflictoDeEscrituraError          -> 409  (la Orden cambio: recargar)
+    CodigoExistenteError               -> 409  (el codigo del alta ya existe)
     ClaveReutilizadaError              -> 422  (clave de idempotencia de
                                                otra operacion, E6)
     PersistenciaNoDisponibleError      -> 503  (sin conexion libre a la base)
@@ -47,6 +48,7 @@ from app.integraciones.catalogo import CatalogoOrigenNoDisponibleError
 from app.integraciones.gestion_rt import ProductosRtOrigenNoDisponibleError
 from app.repositories import (
     ClaveReutilizadaError,
+    CodigoExistenteError,
     ConflictoDeEscrituraError,
     EntidadPersistidaNoEncontradaError,
     PersistenciaNoDisponibleError,
@@ -95,6 +97,18 @@ def registrar_manejadores_de_error(application: FastAPI) -> None:
     ) -> JSONResponse:
         return _respuesta(
             "NO_ENCONTRADO", str(error), status.HTTP_404_NOT_FOUND
+        )
+
+    @application.exception_handler(CodigoExistenteError)
+    async def _codigo_existente(
+        _: Request,
+        error: CodigoExistenteError,
+    ) -> JSONResponse:
+        """CFG-01: un alta con un codigo que ya existe es un conflicto
+        esperable (409), nunca un fallo interno. Mismo codigo de error que
+        el control previo del caso de uso (PRECONDICION_INVALIDA)."""
+        return _respuesta(
+            "PRECONDICION_INVALIDA", str(error), status.HTTP_409_CONFLICT
         )
 
     @application.exception_handler(GarantiaVencidaError)

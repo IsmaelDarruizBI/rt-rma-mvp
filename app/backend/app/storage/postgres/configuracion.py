@@ -14,10 +14,12 @@ from app.domain.models import (
     TipoReparacion,
 )
 from app.repositories.exceptions import (
+    CodigoExistenteError,
     EntidadPersistidaNoEncontradaError,
     PersistenciaError,
 )
 
+from .codigos import reservar_codigo
 from .consultas import ESCRITURA, LECTURA, consulta
 from .transaccion import UnidadDeTrabajoPostgres
 
@@ -30,7 +32,7 @@ _INSERTAR_TIPO = consulta(
     VALUES (%(codigo)s, %(nombre)s, %(precio)s, %(puntaje)s,
             %(garantia_dias)s, %(activo)s, %(con_checkin)s,
             %(sin_checkin)s, %(politica_rma)s)
-    ON CONFLICT (codigo) DO NOTHING
+    ON CONFLICT DO NOTHING
     RETURNING id
     """,
     modo=ESCRITURA,
@@ -148,6 +150,12 @@ class PostgresConfiguracionRepository:
     def __init__(self, unidad: UnidadDeTrabajoPostgres) -> None:
         self._unidad = unidad
 
+    def reservar_codigo(self, prefijo: str) -> str:
+        """CFG-01: el codigo siguiente libre del prefijo, generado por la
+        base dentro de la transaccion del alta."""
+        self._exigir_transaccion()
+        return reservar_codigo(self._unidad, prefijo)
+
     def guardar_tipo_reparacion(
         self,
         tipo: TipoReparacion,
@@ -174,7 +182,7 @@ class PostgresConfiguracionRepository:
         }
         if nuevo:
             if ejecutor.fila(_INSERTAR_TIPO, parametros) is None:
-                raise PersistenciaError(
+                raise CodigoExistenteError(
                     f"Ya existe un Tipo de Reparacion {tipo.id}."
                 )
         elif ejecutor.ejecutar(_ACTUALIZAR_TIPO, parametros) != 1:

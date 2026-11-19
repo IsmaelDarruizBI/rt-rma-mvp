@@ -9,10 +9,12 @@ from app.domain.models.checklist import PreguntaChecklist, TipoEquipo
 from app.domain.models.comunicaciones import PlantillaMensaje
 from app.domain.models.operativa import MotivoOperativo, TipoMotivo
 from app.repositories.exceptions import (
+    CodigoExistenteError,
     EntidadPersistidaNoEncontradaError,
     PersistenciaError,
 )
 
+from .codigos import reservar_codigo
 from .configuracion import PostgresConfiguracionRepository
 from .consultas import ESCRITURA, LECTURA, consulta
 from .transaccion import UnidadDeTrabajoPostgres
@@ -35,7 +37,7 @@ _INSERTAR_MOTIVO = consulta(
     SELECT %(codigo)s, %(tipo)s, %(nombre)s, %(activo)s, %(requiere)s,
            coalesce(max(orden), 0) + 1
       FROM rma.motivo_operativo
-    ON CONFLICT (codigo) DO NOTHING
+    ON CONFLICT DO NOTHING
     """,
     modo=ESCRITURA,
 )
@@ -80,7 +82,7 @@ _INSERTAR_PLANTILLA = consulta(
     SELECT %(codigo)s, %(nombre)s, %(finalidad)s, %(texto)s, %(activa)s,
            coalesce(max(orden), 0) + 1
       FROM rma.plantilla_mensaje
-    ON CONFLICT (codigo) DO NOTHING
+    ON CONFLICT DO NOTHING
     """,
     modo=ESCRITURA,
 )
@@ -166,7 +168,7 @@ _INSERTAR_PREGUNTA = consulta(
     SELECT %(codigo)s, t.id, %(texto)s, %(opciones)s, %(activa)s,
            %(orden)s
       FROM rma.tipo_equipo t WHERE t.codigo = %(tipo)s
-    ON CONFLICT (codigo) DO NOTHING
+    ON CONFLICT DO NOTHING
     """,
     modo=ESCRITURA,
 )
@@ -188,6 +190,12 @@ class PostgresConfiguracionOperativa:
     def __init__(self, unidad: UnidadDeTrabajoPostgres) -> None:
         self._unidad = unidad
         self._auditoria = PostgresConfiguracionRepository(unidad)
+
+    def reservar_codigo(self, prefijo: str) -> str:
+        """CFG-01: el codigo siguiente libre del prefijo (CANC, INT, INS,
+        CHK), generado por la base dentro de la transaccion del alta."""
+        self._exigir_transaccion()
+        return reservar_codigo(self._unidad, prefijo)
 
     def listar_motivos(
         self, tipo: TipoMotivo | None = None
@@ -225,7 +233,7 @@ class PostgresConfiguracionOperativa:
         }
         if nuevo:
             if ejecutor.ejecutar(_INSERTAR_MOTIVO, parametros) != 1:
-                raise PersistenciaError(
+                raise CodigoExistenteError(
                     f"Ya existe el motivo {motivo.codigo}."
                 )
         elif ejecutor.ejecutar(_ACTUALIZAR_MOTIVO, parametros) != 1:
@@ -272,11 +280,15 @@ class PostgresConfiguracionOperativa:
             "control": insumo.control.value,
             "precio": insumo.precio,
         }
-        consulta_sql = _INSERTAR_INSUMO if nuevo else _ACTUALIZAR_INSUMO
-        if ejecutor.ejecutar(consulta_sql, parametros) != 1:
-            raise PersistenciaError(
-                f"No se pudo guardar el insumo {insumo.id}: el codigo o "
-                "el identificador ya existe."
+        if nuevo:
+            if ejecutor.ejecutar(_INSERTAR_INSUMO, parametros) != 1:
+                raise CodigoExistenteError(
+                    f"No se pudo dar de alta el insumo {insumo.id}: el "
+                    "codigo o el identificador ya existe."
+                )
+        elif ejecutor.ejecutar(_ACTUALIZAR_INSUMO, parametros) != 1:
+            raise EntidadPersistidaNoEncontradaError(
+                f"No existe el insumo {insumo.id}"
             )
         self._auditoria._auditar(ejecutor, cambios)
 
@@ -366,8 +378,13 @@ class PostgresConfiguracionOperativa:
             "orden": pregunta.orden,
         }
         if ejecutor.ejecutar(consulta_sql, parametros) != 1:
-            raise PersistenciaError(
-                f"No se pudo guardar la pregunta {pregunta.id}."
+            if nuevo:
+                raise CodigoExistenteError(
+                    f"No se pudo dar de alta la pregunta {pregunta.id}: el "
+                    "codigo ya existe o el tipo de equipo no existe."
+                )
+            raise EntidadPersistidaNoEncontradaError(
+                f"No existe la pregunta {pregunta.id}"
             )
         self._auditoria._auditar(ejecutor, cambios)
 
@@ -401,10 +418,14 @@ class PostgresConfiguracionOperativa:
             "texto": plantilla.texto,
             "activa": plantilla.activa,
         }
-        consulta_sql = _INSERTAR_PLANTILLA if nuevo else _ACTUALIZAR_PLANTILLA
-        if ejecutor.ejecutar(consulta_sql, parametros) != 1:
+        if nuevo:
+            if ejecutor.ejecutar(_INSERTAR_PLANTILLA, parametros) != 1:
+                raise CodigoExistenteError(
+                    f"Ya existe la plantilla {plantilla.codigo}."
+                )
+        elif ejecutor.ejecutar(_ACTUALIZAR_PLANTILLA, parametros) != 1:
             raise EntidadPersistidaNoEncontradaError(
-                f"No se pudo guardar la plantilla {plantilla.codigo}"
+                f"No existe la plantilla {plantilla.codigo}"
             )
         self._auditoria._auditar(ejecutor, cambios)
 

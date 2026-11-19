@@ -120,6 +120,11 @@ begin
   -- Reparación RT (etapa 1): la copia de Productos RT tampoco se borra.
   perform rma_pruebas.debe_ser(has_table_privilege('rma_backend', 'rma.producto_rt', 'DELETE'), false, 'la copia de Productos RT no se borra');
   perform rma_pruebas.debe_ser(has_column_privilege('rma_backend', 'rma.producto_rt', 'producto_id', 'UPDATE'), false, 'el ID de un producto RT no cambia');
+  -- Configuración v2 (CFG-01): solo el backend genera códigos.
+  perform rma_pruebas.debe_ser(has_function_privilege('rma_backend', 'rma.siguiente_codigo(text)', 'EXECUTE'), true, 'el backend genera códigos');
+  perform rma_pruebas.debe_ser(has_function_privilege('anon', 'rma.siguiente_codigo(text)', 'EXECUTE'), false, 'anon no genera códigos');
+  perform rma_pruebas.debe_ser(has_function_privilege('authenticated', 'rma.siguiente_codigo(text)', 'EXECUTE'), false, 'authenticated no genera códigos');
+  perform rma_pruebas.debe_ser(has_sequence_privilege('anon', 'rma.codigo_tr_seq', 'USAGE'), false, 'anon no usa las secuencias de códigos');
 end;
 $$;
 

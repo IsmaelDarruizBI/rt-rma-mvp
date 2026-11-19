@@ -32,6 +32,7 @@ from app.services import (
     reservas_externas_a,
     situacion_inventario,
 )
+from app.services.autorizacion import validar_alguno_de
 from app.services.compras import (
     cambios_de_proveedor,
     cancelar_orden_compra,
@@ -45,6 +46,7 @@ from app.services.compras import (
     sugerencias,
 )
 
+from .codigos import con_reintento_de_codigo
 from .contexto import ApplicationContext
 from .inventario import _registrar_movimiento
 
@@ -85,19 +87,29 @@ def guardar_proveedor(
     repo = _repo(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
-    with contexto.transaccion():
-        existentes = {p.id: p for p in repo.listar_proveedores()}
-        nuevo = codigo is None
-        codigo = codigo or repo.siguiente_codigo("PRV")
-        anterior = existentes.get(codigo)
-        if not nuevo and anterior is None:
-            raise EntidadNoEncontradaError(f"No existe el proveedor {codigo}")
-        guardado = Proveedor(id=codigo, **datos)
-        cambios = cambios_de_proveedor(
-            anterior, guardado, usuario=usuario, fecha=fecha
-        )
-        repo.guardar_proveedor(guardado, nuevo=nuevo, cambios=cambios)
-    return guardado
+    # El permiso antes de reservar un codigo: un rechazo no consume numeros.
+    validar_alguno_de(usuario, permisos.CONFIGURACION_ADMINISTRAR)
+    codigo_informado = codigo
+
+    def intento():
+        codigo = codigo_informado
+        with contexto.transaccion():
+            existentes = {p.id: p for p in repo.listar_proveedores()}
+            nuevo = codigo is None
+            codigo = codigo or repo.siguiente_codigo("PRV")
+            anterior = existentes.get(codigo)
+            if not nuevo and anterior is None:
+                raise EntidadNoEncontradaError(
+                    f"No existe el proveedor {codigo}"
+                )
+            guardado = Proveedor(id=codigo, **datos)
+            cambios = cambios_de_proveedor(
+                anterior, guardado, usuario=usuario, fecha=fecha
+            )
+            repo.guardar_proveedor(guardado, nuevo=nuevo, cambios=cambios)
+        return guardado
+
+    return con_reintento_de_codigo(intento, generado=codigo_informado is None)
 
 
 # --- Solicitudes y sugerencias -----------------------------------------------
@@ -121,6 +133,7 @@ def crear_solicitud(
     """Manual, o confirmando una sugerencia por faltante (``FALTANTE``)."""
     repo = _repo(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    validar_alguno_de(usuario, permisos.COMPRAS_GESTIONAR)
     with contexto.transaccion():
         solicitud = nueva_solicitud(
             solicitud_id=repo.siguiente_codigo("SC"),
@@ -221,6 +234,7 @@ def crear_orden_compra(
 ) -> OrdenCompra:
     repo = _repo(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    validar_alguno_de(usuario, permisos.COMPRAS_GESTIONAR)
     with contexto.transaccion():
         proveedores = {p.id: p for p in repo.listar_proveedores()}
         if proveedor_id not in proveedores:

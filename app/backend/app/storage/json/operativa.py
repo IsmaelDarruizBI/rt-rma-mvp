@@ -13,6 +13,9 @@ from app.domain.models.operativa import (
 class JsonConfiguracionOperativa:
     editable = False
 
+    def reservar_codigo(self, prefijo: str) -> str:
+        raise NotImplementedError
+
     def listar_motivos(
         self, tipo: TipoMotivo | None = None
     ) -> list[MotivoOperativo]:

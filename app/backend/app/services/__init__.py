@@ -142,6 +142,7 @@ from .ejecuciones import (
     reservar_insumos_e_iniciar_ejecucion,
 )
 from .exceptions import (
+    CodigoDuplicadoError,
     ConfirmacionRequeridaError,
     DomainError,
     EntidadNoEncontradaError,
@@ -381,6 +382,7 @@ __all__ = [
     "OrdenCerradaError",
     "GarantiaVencidaError",
     "PrecondicionInvalidaError",
+    "CodigoDuplicadoError",
     "RecursoNoDisponibleError",
     "TomaDeOtroTecnicoError",
     # Trazabilidad e identificadores

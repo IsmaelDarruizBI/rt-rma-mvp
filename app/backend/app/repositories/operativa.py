@@ -19,6 +19,11 @@ from app.domain.models.operativa import MotivoOperativo, TipoMotivo
 class ConfiguracionOperativaRepository(Protocol):
     editable: bool
 
+    def reservar_codigo(self, prefijo: str) -> str:
+        """CFG-01: el codigo siguiente libre de ``prefijo`` (CANC, INT, INS,
+        CHK) dentro de la transaccion del alta."""
+        ...
+
     def listar_motivos(
         self, tipo: TipoMotivo | None = None
     ) -> list[MotivoOperativo]: ...

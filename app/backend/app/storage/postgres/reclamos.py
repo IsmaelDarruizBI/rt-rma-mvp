@@ -14,6 +14,7 @@ from app.repositories.exceptions import (
     PersistenciaError,
 )
 
+from .codigos import reservar_codigo
 from .consultas import ESCRITURA, LECTURA, consulta
 from .transaccion import UnidadDeTrabajoPostgres
 
@@ -37,11 +38,6 @@ _RECLAMOS = consulta(
 _RECLAMO = consulta(
     "reclamos.obtener",
     _COLUMNAS + " WHERE r.codigo = %(codigo)s",
-    modo=LECTURA,
-)
-_ULTIMO = consulta(
-    "reclamos.ultimo",
-    "SELECT max(codigo) AS codigo FROM rma.reclamo_garantia",
     modo=LECTURA,
 )
 _INSERTAR = consulta(
@@ -100,10 +96,13 @@ class PostgresReclamosRepository:
         self._unidad = unidad
 
     def siguiente_id(self) -> str:
-        with self._unidad.lectura() as lector:
-            fila = lector.fila(_ULTIMO)
-        ultimo = int(fila.codigo.split("-")[1]) if fila and fila.codigo else 0
-        return f"RGA-{ultimo + 1:06d}"
+        """CFG-01: ``RGA-NNNNNN`` generado por la base dentro de la
+        transaccion del alta (antes max+1, no seguro ante concurrencia)."""
+        if not self._unidad.en_curso():
+            raise PersistenciaError(
+                "Numerar un reclamo exige una transaccion."
+            )
+        return reservar_codigo(self._unidad, "RGA")
 
     def guardar(self, reclamo: ReclamoGarantia) -> None:
         if not self._unidad.en_curso():

@@ -112,7 +112,7 @@ rma.siguiente_codigo(prefijo text) -> text
 - **Unicidad aunque haya códigos cargados por otros medios** (SQL o un script):
   - el backend pide el siguiente número mientras el código ya exista, igual que `reservar_codigo` de la Orden;
   - el `INSERT` usa `ON CONFLICT DO NOTHING` y, si no inserta, reintenta;
-  - si se agotan los reintentos, responde **409 `CODIGO_DUPLICADO`**, nunca 500.
+  - si se agotan los reintentos, responde **409**, nunca 500, con el mismo código de error que estas altas ya devolvían ante un duplicado (`PRECONDICION_INVALIDA`), para no cambiar el contrato de los clientes publicados (decisión de implementación, QA de la fase A).
 - **Inicialización en la migración:** cada secuencia arranca después del mayor sufijo numérico que sigue el patrón `^PREFIJO-[0-9]{1,18}$`. Se ignoran los códigos que no lo siguen: `TR-OTROS`, `CANC-OTRO`, `PRV-ABC` y los de pruebas como `TR-OFF` o `INS-S`. Así nada cambia ni se reutiliza.
 
 | Prefijo | Tabla y columna | Ancho mínimo | Ejemplo siguiente |
@@ -558,7 +558,7 @@ Una migración aditiva, `20261120000100_configuracion_v2.sql`, posterior a la de
 ### Fase A: generador e identificadores (CFG-01 y D6)
 
 1. La migración: secuencias, función, triggers, índices sin distinguir mayúsculas y su verificación previa.
-2. `siguiente_codigo` en el repositorio, con salto de los códigos existentes y 409 `CODIGO_DUPLICADO`.
+2. `siguiente_codigo` en el repositorio, con salto de los códigos existentes, reintento de las altas con código generado y 409 `PRECONDICION_INVALIDA` ante un duplicado.
 3. Altas de tipo, motivo e insumo con código opcional. Proveedor, SC, OC, RGA y CHK pasan al generador.
 4. **Pruebas:**
    - altas concurrentes en dos conexiones;

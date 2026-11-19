@@ -19,24 +19,21 @@ from app.domain.models.compras import (
     SolicitudCompra,
 )
 from app.repositories.exceptions import (
+    CodigoExistenteError,
     EntidadPersistidaNoEncontradaError,
     PersistenciaError,
 )
 
+from .codigos import reservar_codigo
 from .configuracion import PostgresConfiguracionRepository
 from .consultas import ESCRITURA, LECTURA, consulta
 from .mapeo import decimal_sin_ceros
 from .transaccion import UnidadDeTrabajoPostgres
 
-_TABLAS = {"PRV": "proveedor", "SC": "solicitud_compra", "OC": "orden_compra"}
-_ULTIMOS = {
-    prefijo: consulta(
-        f"compras.ultimo_{tabla}",
-        f"SELECT max(codigo) AS codigo FROM rma.{tabla}",
-        modo=LECTURA,
-    )
-    for prefijo, tabla in _TABLAS.items()
-}
+# CFG-01: los codigos PRV, SC y OC los genera la base (secuencia por
+# prefijo). El max(codigo)+1 anterior no era seguro ante altas concurrentes
+# y se repetia despues de PRV-9999 (el maximo era lexicografico).
+_PREFIJOS = frozenset({"PRV", "SC", "OC"})
 _PROVEEDORES = consulta(
     "compras.proveedores",
     """
@@ -52,7 +49,7 @@ _INSERTAR_PROVEEDOR = consulta(
         (codigo, nombre, cuit, telefono, email, contacto, activo)
     VALUES (%(codigo)s, %(nombre)s, %(cuit)s, %(telefono)s, %(email)s,
             %(contacto)s, %(activo)s)
-    ON CONFLICT (codigo) DO NOTHING
+    ON CONFLICT DO NOTHING
     """,
     modo=ESCRITURA,
 )
@@ -252,12 +249,12 @@ class PostgresComprasRepository:
         return self._unidad.ejecutor()
 
     def siguiente_codigo(self, prefijo: str) -> str:
-        with self._unidad.lectura() as lector:
-            fila = lector.fila(_ULTIMOS[prefijo])
-        ultimo = fila.codigo if fila and fila.codigo else None
-        numero = int(ultimo.split("-")[-1]) if ultimo else 0
-        ancho = 4 if prefijo == "PRV" else 6
-        return f"{prefijo}-{numero + 1:0{ancho}d}"
+        """El codigo siguiente libre de PRV, SC u OC, dentro de la
+        transaccion del alta (CFG-01)."""
+        if prefijo not in _PREFIJOS:
+            raise ValueError(f"Prefijo de compras desconocido: {prefijo}")
+        self._ejecutor()
+        return reservar_codigo(self._unidad, prefijo)
 
     # --- Proveedores ---------------------------------------------------------
 
@@ -287,10 +284,14 @@ class PostgresComprasRepository:
         ejecutor = self._ejecutor()
         parametros = {"codigo": proveedor.id, **proveedor.model_dump()}
         parametros.pop("id")
-        consulta_sql = _INSERTAR_PROVEEDOR if nuevo else _ACTUALIZAR_PROVEEDOR
-        if ejecutor.ejecutar(consulta_sql, parametros) != 1:
-            raise PersistenciaError(
-                f"No se pudo guardar el proveedor {proveedor.id}."
+        if nuevo:
+            if ejecutor.ejecutar(_INSERTAR_PROVEEDOR, parametros) != 1:
+                raise CodigoExistenteError(
+                    f"Ya existe el proveedor {proveedor.id}."
+                )
+        elif ejecutor.ejecutar(_ACTUALIZAR_PROVEEDOR, parametros) != 1:
+            raise EntidadPersistidaNoEncontradaError(
+                f"No existe el proveedor {proveedor.id}"
             )
         self._auditoria._auditar(ejecutor, cambios)
 
