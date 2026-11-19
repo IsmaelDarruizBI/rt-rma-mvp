@@ -117,7 +117,8 @@ def sincronizar(cliente: httpx.Client, ficticios) -> dict | None:
     centro = set(ids(cliente.get(RUTA, params={"sede": "Centro"}).json()))
     anotar("filtro de sede", centro == {"900003", "900004", "900005"}, f"{sorted(centro)}")
     fuera = cliente.get(RUTA, params={"incluir_fuera": "true", "tamano": 100}).json()
-    anotar("«mostrar los que salieron» no agrega otros estados", fuera["total"] == ficticios.EN_REPARACION, str(fuera["total"]))
+    # Con historia previa en la copia puede haber más (los que salieron).
+    anotar("«mostrar los que salieron» incluye a los que están en reparación", fuera["total"] >= ficticios.EN_REPARACION, str(fuera["total"]))
     con = cliente.get(RUTA, params={"orden_rma": "CON_SUGERENCIAS"}).json()
     sin = cliente.get(RUTA, params={"orden_rma": "SIN_COINCIDENCIAS"}).json()
     anotar("los filtros de Orden RMA se reparten el total", con["total"] + sin["total"] == ficticios.EN_REPARACION, f"{con['total']} + {sin['total']}")

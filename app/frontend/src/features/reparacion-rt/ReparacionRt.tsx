@@ -21,7 +21,6 @@ import {
   useState,
 } from "react";
 
-import { ApiError } from "../../api/client";
 import {
   type CoincidenciaSugerida,
   type EstadoCopiaRt,
@@ -63,6 +62,7 @@ import {
   parametrosApi,
   resumenCoincidencias,
   resumenSincronizacion,
+  sedesVisibles,
   textoAviso,
   textoCoincidencia,
   totalPaginas,
@@ -93,6 +93,7 @@ export function ReparacionRtPanel({
     useState<SincronizacionProductosRt | null>(null);
   const [errorSync, setErrorSync] = useState<string | null>(null);
   const [recarga, setRecarga] = useState(0);
+  const [cargando, setCargando] = useState(true);
   const sincroniza = puede(actor, "PRODUCTOS_RT_SINCRONIZAR", [
     "ADMINISTRADOR",
   ]);
@@ -103,12 +104,16 @@ export function ReparacionRtPanel({
   useEffect(() => {
     let vigente = true;
     setError(null);
+    setCargando(true);
     listarProductosRt(parametrosApi(filtrosDeConsulta(consulta)))
       .then((respuesta) => {
         if (vigente) setListado(respuesta);
       })
       .catch((causa: unknown) => {
         if (vigente) setError(mensajeDe(causa));
+      })
+      .finally(() => {
+        if (vigente) setCargando(false);
       });
     return () => {
       vigente = false;
@@ -127,13 +132,7 @@ export function ReparacionRtPanel({
     setErrorSync(null);
     sincronizarProductosRt(actor.id)
       .then((intento) => setResultado(intento))
-      .catch((causa: unknown) => {
-        setErrorSync(
-          causa instanceof ApiError && causa.codigo === "SINCRONIZACION_EN_CURSO"
-            ? "Ya hay una actualización en curso: esperá a que termine."
-            : mensajeDe(causa),
-        );
-      })
+      .catch((causa: unknown) => setErrorSync(mensajeDe(causa)))
       .finally(() => {
         setSincronizando(false);
         setRecarga((n) => n + 1);
@@ -215,7 +214,7 @@ export function ReparacionRtPanel({
           >
             Todas {totalSedes}
           </Chip>
-          {listado.sedes.map((s) => {
+          {sedesVisibles(listado.sedes, filtros.sedes).map((s) => {
             const valor = s.sede ?? "";
             return (
               <Chip
@@ -224,7 +223,7 @@ export function ReparacionRtPanel({
                 onClick={() => aplicar(alternarSede(filtros, valor))}
                 aviso={!s.confirmada}
               >
-                {s.confirmada ? "" : "Otra: "}
+                {s.confirmada || s.sede === null ? "" : "Otra: "}
                 {nombreSede(s.sede)} {s.cantidad}
               </Chip>
             );
@@ -288,10 +287,11 @@ export function ReparacionRtPanel({
           style={{ margin: "0 0 0.4rem", fontSize: "0.85rem", color: colores.suave }}
           aria-live="polite"
         >
-          {listado.total === 1
-            ? "1 producto"
-            : `${listado.total} productos`}
-          {filtros.incluirFuera ? " (incluye los que salieron)" : " en reparación"}
+          {cargando
+            ? "Buscando…"
+            : `${listado.total === 1 ? "1 producto" : `${listado.total} productos`}${
+                filtros.incluirFuera ? " (incluye los que salieron)" : " en reparación"
+              }`}
         </p>
         {listado.productos.length === 0 ? (
           <p style={{ color: colores.suave }}>

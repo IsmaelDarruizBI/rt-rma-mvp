@@ -26,6 +26,7 @@ Los avisos nunca incluyen IMEI ni valores del origen.
 
 import hashlib
 import json
+import re
 import unicodedata
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -38,6 +39,7 @@ from app.domain.models import ProductoInformado, ProductoRt
 
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 
+_DIGITOS_ASCII = re.compile(r"[0-9]+")
 # Cuantos ``producto_id`` se nombran en un aviso (el resto se cuenta).
 MAX_IDS_EN_AVISO = 20
 # Los contadores de un intento EXITOSA (siempre todos, aunque sean cero).
@@ -135,7 +137,9 @@ def analizar_imei(valor: str | None) -> tuple[str | None, bool, bool | None]:
     normalizado = normalizar(valor)
     if normalizado is None:
         return None, False, None
-    if len(normalizado) != 15 or not normalizado.isdigit():
+    # Solo digitos ASCII: ``isdigit`` acepta tambien los de ancho completo o
+    # los superindices, que la base (``^[0-9]{15}$``) rechazaria (QA, menor 1).
+    if len(normalizado) != 15 or not _DIGITOS_ASCII.fullmatch(normalizado):
         return normalizado, False, None
     return normalizado, True, _luhn(normalizado)
 
@@ -194,10 +198,30 @@ def fusionar_productos_rt(
     """La copia completa despues de aplicar la lectura (modulo)."""
     por_id = {producto.producto_id: producto for producto in actuales}
     repeticiones = Counter(fila.producto_id for fila in filas)
-    en_conflicto = {pid for pid, veces in repeticiones.items() if veces > 1}
     vistos = set(repeticiones)
+    # Un ID repetido solo importa si alguna de sus filas se aplicaria (en
+    # Reparacion, o ya en la copia): repetido solo en el inventario no se
+    # copia ni se informa (QA, observacion 3).
+    aplicables = {
+        fila.producto_id
+        for fila in filas
+        if fila.estado == reglas.estado or fila.producto_id in por_id
+    }
+    en_conflicto = {
+        pid
+        for pid, veces in repeticiones.items()
+        if veces > 1 and pid in aplicables
+    }
 
     presentes = [p for p in actuales if p.presente_en_origen]
+    if presentes and not vistos:
+        # Una hoja con encabezado y sin filas no es confiable, aunque la
+        # copia sea chica (QA, menor 3; seccion 2.4).
+        raise ProductosRtRechazadoError(
+            "La lectura no trae ningún producto y la copia tiene "
+            f"{len(presentes)}: parece vacía o incompleta y no se aplica. Se "
+            "conserva la copia anterior."
+        )
     desaparecidos = [p for p in presentes if p.producto_id not in vistos]
     if len(presentes) >= reglas.minimo_proteccion and len(
         desaparecidos
@@ -217,6 +241,7 @@ def fusionar_productos_rt(
     variantes: list[str] = []
     sedes_desconocidas: set[str] = set()
     sin_tipo: list[str] = []
+    sin_sede: list[str] = []
     fechas_invalidas: list[str] = []
     cambios_identidad: list[str] = []
     resultado: dict[str, ProductoRt] = {}
@@ -236,19 +261,20 @@ def fusionar_productos_rt(
             # nuevo no se agrega.
             continue
         datos = _datos(fila, tipos)
-        if datos["sede"] and datos["sede"] not in reglas.sedes:
+        if not datos["sede"]:
+            sin_sede.append(pid)
+        elif datos["sede"] not in reglas.sedes:
             sedes_desconocidas.add(datos["sede"])
         if fila.tipo_producto_id and not datos["tipo_producto_encontrado"]:
             sin_tipo.append(pid)
         if fila.creado_en_invalido:
             fechas_invalidas.append(pid)
+        if anterior is not None and _cambio_identidad(anterior, datos):
+            # Cada cambio se avisa, tambien el segundo (QA, observacion 1).
+            cambios_identidad.append(pid)
         producto = _aplicar(
             pid, anterior, datos, en_reparacion, fecha, contadores
         )
-        if producto.cambio_identidad and (
-            anterior is None or not anterior.cambio_identidad
-        ):
-            cambios_identidad.append(pid)
         resultado[pid] = producto
 
     conflictos_nuevos: list[str] = []
@@ -290,6 +316,7 @@ def fusionar_productos_rt(
         conflictos_nuevos=conflictos_nuevos,
         variantes=variantes,
         sedes=sorted(sedes_desconocidas),
+        sin_sede=sin_sede,
         sin_tipo=sin_tipo,
         fechas_invalidas=fechas_invalidas,
         cambios_identidad=cambios_identidad,
@@ -444,15 +471,16 @@ def _contar_cambio(
 
 
 def _marcar_imei_repetidos(productos: list[ProductoRt]) -> list[ProductoRt]:
-    """``imei_repetido`` en todos los productos presentes y no eliminados
-    que comparten un IMEI valido (y en ninguno mas)."""
+    """``imei_repetido`` en los productos EN REPARACION (presentes y no
+    eliminados) que comparten un IMEI valido, y en ninguno mas.
+
+    Solo entre los que estan en Reparacion: el mismo equipo que vuelve con
+    un ID nuevo despues de salir con el anterior no es un repetido, y asi el
+    resultado depende de lo que informa el origen hoy, no de la historia de
+    la copia (QA, menor 4)."""
 
     def cuenta(p: ProductoRt) -> bool:
-        return (
-            p.imei_valido
-            and p.presente_en_origen
-            and not p.eliminado_en_origen
-        )
+        return p.imei_valido and p.listable
 
     veces = Counter(p.imei_normalizado for p in productos if cuenta(p))
     marcados = []
@@ -477,6 +505,7 @@ def _avisos(
     conflictos_nuevos: Sequence[str],
     variantes: Sequence[str],
     sedes: Sequence[str],
+    sin_sede: Sequence[str],
     sin_tipo: Sequence[str],
     fechas_invalidas: Sequence[str],
     cambios_identidad: Sequence[str],
@@ -507,6 +536,10 @@ def _avisos(
         )
     if sedes:
         avisos.append("Sedes no confirmadas: " + ", ".join(sedes) + ".")
+    if sin_sede:
+        avisos.append(
+            f"{len(sin_sede)} productos no tienen sede: {_lista(sin_sede)}."
+        )
     if sin_tipo:
         avisos.append(
             f"{len(sin_tipo)} productos tienen un TipoProducto que no está "

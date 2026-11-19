@@ -17,6 +17,7 @@ import type {
   CriterioCoincidencia,
   EstadoCopiaRt,
   ProductoRtResumen,
+  SedeRt,
 } from "../../api/productosRt";
 import { ESTADO_WORKFLOW, ORIGEN, etiqueta } from "../ordenes-reparacion/etiquetas.ts";
 
@@ -146,6 +147,26 @@ export function imeiAbreviado(imei: string | null): string {
   return `…${limpio.slice(-5, -4)} ${limpio.slice(-4)}`;
 }
 
+/** Las sedes del filtro: las que informa el backend y, aunque no tengan
+ *  productos con los demás filtros, las que ya están elegidas (para poder
+ *  quitarlas). */
+export function sedesVisibles(
+  sedes: SedeRt[],
+  elegidas: string[],
+): SedeRt[] {
+  const visibles = [...sedes];
+  for (const elegida of elegidas) {
+    if (!visibles.some((s) => (s.sede ?? "") === elegida)) {
+      visibles.push({
+        sede: elegida === "" ? null : elegida,
+        cantidad: 0,
+        confirmada: false,
+      });
+    }
+  }
+  return visibles;
+}
+
 /** El valor de un filtro de sede, con su nombre. */
 export function nombreSede(sede: string | null): string {
   return sede === null || sede === "" ? "Sin sede" : sede;
@@ -199,6 +220,7 @@ export const AVISO: Record<AvisoProductoRt, string> = {
   TIPO_NO_ENCONTRADO:
     "El TipoProducto no está en el catálogo de Ventas: faltan modelo, capacidad y color.",
   TIPO_ELIMINADO: "El TipoProducto está eliminado en Ventas.",
+  SIN_SEDE: "Gestión RT no informa la sede.",
   SEDE_NO_CONFIRMADA: "La sede no es una de las confirmadas.",
   CONFLICTO_ORIGEN:
     "El ID vino repetido en Gestión RT: se muestran los datos anteriores.",

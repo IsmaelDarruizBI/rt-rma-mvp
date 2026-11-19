@@ -28,6 +28,7 @@ import {
   parametrosApi,
   resumenCoincidencias,
   resumenSincronizacion,
+  sedesVisibles,
   textoAviso,
   textoCoincidencia,
   textoCriterios,
@@ -273,6 +274,22 @@ describe("rótulos", () => {
     assert.equal(hace("2026-11-19T14:30:00Z", ahora), "hace 30 min");
     assert.equal(hace("2026-11-19T12:00:00Z", ahora), "hace 3 h");
     assert.equal(hace("2026-11-16T15:00:00Z", ahora), "hace 3 días");
+  });
+});
+
+describe("sedes del filtro", () => {
+  test("una sede elegida sin productos sigue visible para poder quitarla", () => {
+    const sedes = [{ sede: "Centro", cantidad: 3, confirmada: true }];
+    assert.deepEqual(sedesVisibles(sedes, []), sedes);
+    assert.deepEqual(sedesVisibles(sedes, ["Centro", "Rosario Norte", ""]), [
+      ...sedes,
+      { sede: "Rosario Norte", cantidad: 0, confirmada: false },
+      { sede: null, cantidad: 0, confirmada: false },
+    ]);
+  });
+
+  test("sin sede tiene su aviso", () => {
+    assert.match(textoAviso("SIN_SEDE"), /no informa la sede/);
   });
 });
 

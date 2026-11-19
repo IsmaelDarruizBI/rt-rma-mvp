@@ -284,9 +284,101 @@ def test_una_lectura_truncada_se_rechaza():
 def test_la_proteccion_no_rige_con_pocos_productos():
     reglas = ReglasProductosRt(minimo_proteccion=100)
     primera = _fusionar([], reglas=reglas)
-    fusion = _fusionar(list(primera.productos), [], fecha=T2, reglas=reglas)
-    assert fusion.contadores["ausentes"] == ficticios.EN_REPARACION
-    assert fusion.contadores["en_reparacion"] == 0
+    una = [producto("900001", imei=imei_ficticio(1), sede="Alippi")]
+    fusion = _fusionar(list(primera.productos), una, fecha=T2, reglas=reglas)
+    assert fusion.contadores["ausentes"] == ficticios.EN_REPARACION - 1
+    assert fusion.contadores["en_reparacion"] == 1
+
+
+def test_una_lectura_sin_productos_se_rechaza_aunque_la_copia_sea_chica():
+    """QA, menor 3: una hoja con encabezado y sin filas no vacia la copia."""
+    reglas = ReglasProductosRt(minimo_proteccion=100)
+    primera = _fusionar([], reglas=reglas)
+    with pytest.raises(ProductosRtRechazadoError, match="ningún producto"):
+        _fusionar(list(primera.productos), [], fecha=T2, reglas=reglas)
+    # Sin copia, una lectura vacia no rechaza nada.
+    assert _fusionar([], []).contadores["en_reparacion"] == 0
+
+
+@pytest.mark.parametrize(
+    "imei",
+    [
+        "３５９９９９００００００１２３",  # digitos de ancho completo
+        "35999900000001²",  # superindice
+        "٣٥٩٩٩٩٠٠٠٠٠٠١٢٣",  # digitos arabigo-indicos
+    ],
+)
+def test_un_imei_con_digitos_no_ascii_es_invalido_y_no_rompe(imei):
+    """QA, menor 1: no queda valido (la base lo rechazaria) ni lanza."""
+    _, valido, luhn = analizar_imei(imei)
+    assert (valido, luhn) == (False, None)
+    fusion = _fusionar([], [producto("900001", imei=imei, sede="Alippi")])
+    assert not fusion.productos[0].imei_valido
+
+
+def test_un_id_repetido_solo_en_el_inventario_no_se_informa():
+    """QA, observacion 3: dos filas «Vendido» con el mismo ID no se copian
+    ni cuentan como conflicto."""
+    filas = [
+        *ficticios.productos_base(),
+        producto("900077", imei=imei_ficticio(77), status="Vendido"),
+        producto("900077", imei=imei_ficticio(78), status="Vendido"),
+    ]
+    fusion = _fusionar([], filas)
+    assert fusion.contadores["duplicados"] == 1  # solo 900018
+    assert "900077" not in " ".join(fusion.avisos)
+
+
+def test_imei_repetido_solo_entre_los_que_estan_en_reparacion():
+    """QA, menor 4: el mismo equipo que vuelve con un ID nuevo despues de
+    salir con el anterior no es un repetido."""
+    imei = imei_ficticio(60)
+    a1 = producto("900060", imei=imei, sede="RMA")
+    primera = _fusionar([], [*ficticios.productos_base(), a1])
+    a1_sale = producto("900060", imei=imei, sede="RMA", status="Vendido")
+    a2 = producto("900061", imei=imei, sede="RMA")
+    segunda = _fusionar(
+        list(primera.productos),
+        [*ficticios.productos_base(), a1_sale, a2],
+        fecha=T2,
+    )
+    productos = _por_id(segunda)
+    assert not productos["900061"].imei_repetido
+    assert not productos["900060"].imei_repetido
+    # El mismo resultado que si el origen se leyera por primera vez.
+    directa = _por_id(
+        _fusionar([], [*ficticios.productos_base(), a1_sale, a2])
+    )
+    assert not directa["900061"].imei_repetido
+
+
+def test_cada_cambio_de_identidad_se_avisa():
+    """QA, observacion 1: tambien el segundo."""
+    primera = _fusionar([])
+    cambio = {"900001": {"producto_imei": imei_ficticio(55)}}
+    uno = _fusionar(list(primera.productos), _con_cambios(cambio), fecha=T2)
+    otro = {"900001": {"producto_imei": imei_ficticio(56)}}
+    dos = _fusionar(list(uno.productos), _con_cambios(otro), fecha=T3)
+    assert "900001" in " ".join(dos.avisos)
+    assert _por_id(dos)["900001"].identidad_anterior["imei"] == imei_ficticio(
+        55
+    )
+    # Sin cambios, no hay aviso aunque la marca siga puesta.
+    tres = _fusionar(list(dos.productos), _con_cambios(otro), fecha=T3)
+    assert "cambiaron de IMEI" not in " ".join(tres.avisos)
+    assert _por_id(tres)["900001"].cambio_identidad
+
+
+def test_un_producto_sin_sede_se_avisa():
+    """QA, menor 5."""
+    fusion = _fusionar(
+        [], [*ficticios.productos_base(), producto("900070", sede="")]
+    )
+    assert _por_id(fusion)["900070"].sede is None
+    assert any(
+        "no tienen sede" in aviso and "900070" in aviso
+        for aviso in fusion.avisos
+    )
 
 
 def test_umbral_configurable():

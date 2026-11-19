@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (clase de espacios del SQL)
 """``ProductosRtRepository`` sobre PostgreSQL (Reparacion RT, etapa 1).
 
 La copia vive en ``rma.producto_rt`` y cada intento en
@@ -22,6 +23,12 @@ sin espacios al borde, es el ``producto_id``) y por IMEI (Orden de
 cualquier origen cuyo ``equipo_imei`` normalizado -sin espacios, en
 mayusculas, como ``domain.identidad.normalizar``- es el IMEI valido y no
 repetido del producto). Nunca son vinculos (DEC-RT-03).
+
+La normalizacion en SQL quita los mismos espacios que ``str.split()`` de
+Python (la clase de espacios de la expresion regular, el NBSP, los
+espacios Unicode y los separadores U+001C a U+001F y U+0085), con los
+escapes de caracter Unicode de las expresiones regulares de PostgreSQL
+(QA, menor 2).
 """
 
 import json
@@ -256,7 +263,7 @@ _FILTRADOS = """
         FROM base b
         JOIN rma.orden o
           ON b.imei_valido AND NOT b.imei_repetido
-         AND upper(regexp_replace(coalesce(o.equipo_imei, ''), '\\s', '', 'g'))
+         AND upper(regexp_replace(coalesce(o.equipo_imei, ''), '[\\s\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\u001c-\\u001f]', '', 'g'))
              = b.imei_normalizado
     ),
     filtrados AS (
@@ -346,7 +353,7 @@ _COINCIDENCIAS = consulta(
         FROM productos p
         JOIN rma.orden o
           ON p.imei_valido AND NOT p.imei_repetido
-         AND upper(regexp_replace(coalesce(o.equipo_imei, ''), '\\s', '', 'g'))
+         AND upper(regexp_replace(coalesce(o.equipo_imei, ''), '[\\s\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\u001c-\\u001f]', '', 'g'))
              = p.imei_normalizado
     )
     SELECT pr.producto_id, o.codigo, o.origen, o.estado_workflow,

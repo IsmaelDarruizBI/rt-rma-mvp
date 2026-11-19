@@ -854,7 +854,10 @@ def test_permisos_por_rol(abrir, base):
     # sincroniza en nombre de otro.
     ajena = _sincronizar(cliente, RECEPCION, **sesion(ADMINISTRADOR))
     assert ajena.status_code == 403, ajena.text
-    assert len(ok(cliente.get(f"{RUTA}/syncs", headers=sesion(ADMINISTRADOR)))) == 1
+    assert (
+        len(ok(cliente.get(f"{RUTA}/syncs", headers=sesion(ADMINISTRADOR))))
+        == 1
+    )
 
 
 # --- Modo sin origen ---------------------------------------------------------
@@ -908,3 +911,76 @@ def test_un_producto_nuevo_en_el_origen_aparece(abrir, archivos):
     contadores = ok(_sincronizar(cliente))["contadores"]
     assert contadores["nuevos"] == 1 and contadores["en_reparacion"] == 15
     assert "900099" in _ids(_listar(cliente, sede=["RMA"]))
+
+
+# --- Correcciones del QA de la etapa 1 ---------------------------------------
+
+
+def test_la_normalizacion_del_imei_en_sql_es_la_de_python(base):
+    """QA, menor 2: todo caracter que ``str.split()`` toma como espacio lo
+    quita tambien el SQL de las coincidencias (y nada mas)."""
+    from app.domain.identidad import normalizar
+    from app.storage.postgres.productos_rt import _COINCIDENCIAS
+
+    sql = _COINCIDENCIAS.sql
+    inicio = sql.index("regexp_replace(coalesce(o.equipo_imei, ''), ") + len(
+        "regexp_replace(coalesce(o.equipo_imei, ''), "
+    )
+    patron = sql[inicio : sql.index(", '', 'g')", inicio)]
+    espacios = [chr(c) for c in range(0x3001) if chr(c).isspace()]
+    for caracter in [*espacios, "-", ".", "​", "a"]:
+        valor = f"35999{caracter}9000000224"
+        obtenido = _sql(
+            base,
+            f"select upper(regexp_replace(%s, {patron}, '', 'g'))",
+            (valor,),
+        )[0][0]
+        assert obtenido == normalizar(valor), hex(ord(caracter))
+
+
+def test_coincidencia_por_imei_con_espacio_duro(abrir):
+    cliente, _ = abrir()
+    ok(_sincronizar(cliente))
+    imei = ficticios.IMEI_CON_ORDEN
+    orden = _crear_orden_cliente(cliente, f"{imei[:5]} {imei[5:]}")
+    ficha = ok(cliente.get(f"{RUTA}/{ficticios.ID_CON_REFERENCIA}"))[
+        "producto"
+    ]
+    assert [
+        (c["orden_id"], c["criterios"])
+        for c in ficha["coincidencias_sugeridas"]
+    ] == [(orden, ["IMEI"])]
+
+
+def test_sin_sede_tiene_su_aviso(abrir, archivos):
+    cliente, _ = abrir()
+    archivos.escribir(
+        [
+            *ficticios.productos_base(),
+            producto("900070", imei=imei_ficticio(70), sede=""),
+        ]
+    )
+    exitosa = ok(_sincronizar(cliente))
+    assert any("no tienen sede" in a for a in exitosa["avisos"])
+    p = ok(cliente.get(f"{RUTA}/900070"))["producto"]
+    assert p["sede"] is None and p["avisos"] == ["SIN_SEDE"]
+    assert _ids(_listar(cliente, sede=[""])) == ["900070"]
+    sedes = {s["sede"]: s for s in _listar(cliente)["sedes"]}
+    assert sedes[None]["cantidad"] == 1 and not sedes[None]["confirmada"]
+
+
+def test_una_hoja_sin_filas_se_rechaza_con_una_copia_chica(
+    abrir, base, archivos
+):
+    cliente, _ = abrir()
+    archivos.escribir(ficticios.productos_base()[:2])
+    ok(_sincronizar(cliente))
+    antes = _huella(base)
+    archivos.escribir([])
+    respuesta = _sincronizar(cliente)
+    assert respuesta.status_code == 409, respuesta.text
+    assert (
+        respuesta.json()["error"]["codigo"] == "PRODUCTOS_RT_ORIGEN_INVALIDO"
+    )
+    assert _huella(base) == antes
+    assert _listar(cliente)["total"] == 2

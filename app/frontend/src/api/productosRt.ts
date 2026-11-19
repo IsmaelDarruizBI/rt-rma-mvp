@@ -60,6 +60,7 @@ export type AvisoProductoRt =
   | "IMEI_REPETIDO"
   | "TIPO_NO_ENCONTRADO"
   | "TIPO_ELIMINADO"
+  | "SIN_SEDE"
   | "SEDE_NO_CONFIRMADA"
   | "CONFLICTO_ORIGEN"
   | "CAMBIO_IDENTIDAD"

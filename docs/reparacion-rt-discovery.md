@@ -552,10 +552,12 @@ Rama `feat/reparacion-rt-etapa1` sobre `mvp-v2` (`54feadf`). Solo local: sin mig
 - **`/sync` sin clave de idempotencia**, como el del catálogo después del QA final del bloque C (la sección 6.1 decía «idempotencia existente»). La sincronización lee el origen fuera de toda transacción y registra los intentos fallidos; repetirla es inocuo y la reserva impide dos a la vez.
 - **TipoProducto** se lee de la planilla y la hoja del catálogo de Ventas (`RMA_CATALOGO_SHEETS_*`), completa y sin el filtro `IPHONE USADOS`. Con `archivo`, de `RMA_PRODUCTOS_RT_TIPOS_ARCHIVO` (o el CSV del catálogo).
 - **Columnas:** además de las obligatorias, una columna copiada **repetida** rechaza la lectura (no hay cómo saber cuál es la buena). Antes del `batchGet` se lee solo la fila 1; si una columna pedida no vuelve con su encabezado (alguien movió columnas entre los dos pedidos), se rechaza.
-- **Protección contra lecturas truncadas:** rige con al menos 10 productos presentes (`RMA_PRODUCTOS_RT_MINIMO_PROTECCION`), para no bloquear copias chicas; el umbral es `RMA_PRODUCTOS_RT_UMBRAL_DESAPARICION` (0,5).
-- **Ausente del origen:** queda `presente_en_origen = false` y deja de listarse; `en_reparacion` no cambia (no se sabe si salió). Si reaparece, sigue su período.
-- **Cambio de identidad:** solo si cambia un IMEI o un TipoProducto que ya tenía valor; completar uno que faltaba no lo es. La marca queda puesta y `identidad_anterior` guarda los valores previos.
-- **IMEI:** normalizado igual que el del Equipo (`domain/identidad.normalizar`: sin espacios y en mayúsculas), para que la coincidencia sea la misma; un IMEI con guiones u otros separadores queda **no válido** (no sugiere). Válido: 15 dígitos; el verificador se informa. Repetido: entre los productos presentes y no eliminados.
+- **Protección contra lecturas truncadas:** una lectura **sin ningún producto** se rechaza siempre que la copia tenga productos presentes. La regla del 50 % (`RMA_PRODUCTOS_RT_UMBRAL_DESAPARICION`) rige con al menos 10 presentes (`RMA_PRODUCTOS_RT_MINIMO_PROTECCION`), para no bloquear copias chicas.
+- **ID repetido:** cuenta como conflicto solo si alguna de sus filas se aplicaría (en Reparación, o ya en la copia); un ID repetido solo en el inventario no se informa.
+- **Ausente del origen o eliminado:** queda `presente_en_origen = false` o `eliminado_en_origen = true` y deja de listarse; `en_reparacion` no cambia (no se sabe si salió). Si reaparece o deja de estar eliminado, sigue su período: solo una salida de Reparación vista en el origen abre uno nuevo al volver.
+- **Cambio de identidad:** solo si cambia un IMEI o un TipoProducto que ya tenía valor; completar uno que faltaba no lo es. Cada cambio genera un aviso; la marca queda puesta y `identidad_anterior` guarda los valores previos al último.
+- **IMEI:** normalizado igual que el del Equipo (`domain/identidad.normalizar`: sin espacios y en mayúsculas), para que la coincidencia sea la misma; un IMEI con guiones u otros separadores queda **no válido** (no sugiere). Válido: 15 dígitos ASCII; el verificador se informa. Repetido: solo entre los productos **en Reparación** (presentes y no eliminados), así el mismo equipo que vuelve con un ID nuevo no pierde las sugerencias y el resultado depende solo de lo que informa el origen. En SQL, el IMEI de la Orden se normaliza quitando los mismos espacios que Python (incluido el NBSP).
+- **Sede vacía:** aviso propio (`SIN_SEDE`) en la ficha y en la sincronización, y filtro «Sin sede» (`sede=` vacío).
 - **Fechas de alta:** número de serie de Sheets, texto ISO o dd/mm/aaaa, en la hora de Gestión RT (`RMA_UTC_OFFSET_HORAS`); otra cosa queda vacía con aviso.
 - **Avisos de una sincronización:** se guardan en `contadores.avisos` del intento; solo columnas, sedes y `producto_id`, nunca IMEI ni valores.
 - **Listado:** orden por `en_reparacion_desde` y `producto_id`; las cantidades por sede no dependen del filtro de sede; `sede=` (vacío) filtra los productos sin sede; búsqueda por palabras con `strpos` sobre `texto_busqueda` (sin comodines).
@@ -567,13 +569,32 @@ Rama `feat/reparacion-rt-etapa1` sobre `mvp-v2` (`54feadf`). Solo local: sin mig
 
 | Prueba | Resultado |
 |---|---|
-| Unitarias del contrato, los adaptadores, la fusión y los permisos | 88 de 88 |
-| PostgreSQL de punta a punta por la API (`tests/postgres/test_productos_rt_postgres.py`) | 20 de 20 |
-| Suite completa del backend (sin PostgreSQL) | 2019 aprobadas, 535 salteadas |
-| Frontend: `typecheck`, pruebas y `build` | 181 de 181 |
+| Unitarias del contrato, los adaptadores, la fusión y los permisos | 96 de 96 |
+| PostgreSQL de punta a punta por la API (`tests/postgres/test_productos_rt_postgres.py`) | 24 de 24 |
+| Suite completa del backend y suite completa de `tests/postgres` | ver [`ESTADO_PROYECTO.md`](ESTADO_PROYECTO.md), sección B |
+| Frontend: `typecheck`, pruebas y `build` | 183 de 183 |
 | Ensayo local con procesos reales y el backend publicado `fd434ef` (`ensayar_reparacion_rt.py`) | 21 de 21 |
 | E2E contra una API local (`probar_reparacion_rt.py --sin-autenticacion`) | 23 de 23 y 1 de 1 |
 | Recorrido en el navegador con el archivo ficticio, en escritorio y a 390 px, como Administración, Recepción y Técnico | Sin desborde; estados nunca sincronizada, al día y error con copia anterior |
+
+**QA independiente (19/11/2026):** sin hallazgos mayores; 5 menores, corregidos con su prueba:
+
+1. un IMEI con dígitos no ASCII (ancho completo, superíndices) quedaba válido y la base rechazaba toda la sincronización: ahora es no válido;
+2. el SQL de las coincidencias no quitaba el NBSP del IMEI de la Orden: ahora quita los mismos espacios que Python (prueba carácter por carácter);
+3. una hoja sin filas vaciaba una copia de menos de 10 productos: ahora se rechaza;
+4. `imei_repetido` dependía de la historia de la copia: ahora se cuenta entre los que están en Reparación;
+5. un producto sin sede se rotulaba «sede no confirmada»: ahora tiene su aviso.
+
+Observaciones corregidas: el segundo cambio de identidad se avisa; un ID repetido solo en el inventario no se informa; en la pantalla, una sede elegida sin productos sigue visible, hay indicador de carga al filtrar y el mensaje de una reserva perdida es el del backend; el E2E admite una copia con historia.
+
+**Riesgos que quedan** (no bloquean la etapa 1):
+
+- la búsqueda va en la URL del `GET` (`q`): un IMEI buscado puede quedar en los registros de acceso de Cloud Run. La sección 2.8 se refiere a los registros de la sincronización; si se quiere evitar, la búsqueda puede pasar a un `POST`;
+- el nombre de una hoja con apóstrofo no se escapa en el lector común de Sheets (bloque C): daría FALLIDA, sin dañar la copia. El GID evita depender del nombre, pero el rango lo usa;
+- un `producto_id` con «/» no llega a la ficha (el formato real del ID es [NV], B4);
+- la búsqueda es por subcadena: más amplia que «prefijo o últimos dígitos», nunca menos;
+- las consultas se validan con el permiso en la API (como Compras); en el modo demo local no hay control;
+- sin índice de expresión sobre `orden.equipo_imei` (sección 6.2): se mide con la planilla de prueba.
 
 **Pendiente para el UAT:** B3 (la planilla de prueba, compartida como Lector con la cuenta del UAT) y B4 (el formato real de las columnas «Copiar»: sin confirmar, la validación avisa y no adivina). Procedimiento en [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 11.
 

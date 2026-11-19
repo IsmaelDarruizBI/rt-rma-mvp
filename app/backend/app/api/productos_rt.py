@@ -70,6 +70,7 @@ class AvisoProducto(str, Enum):
     IMEI_REPETIDO = "IMEI_REPETIDO"
     TIPO_NO_ENCONTRADO = "TIPO_NO_ENCONTRADO"
     TIPO_ELIMINADO = "TIPO_ELIMINADO"
+    SIN_SEDE = "SIN_SEDE"
     SEDE_NO_CONFIRMADA = "SEDE_NO_CONFIRMADA"
     CONFLICTO_ORIGEN = "CONFLICTO_ORIGEN"
     CAMBIO_IDENTIDAD = "CAMBIO_IDENTIDAD"
@@ -94,7 +95,9 @@ def _avisos(
         avisos.append(AvisoProducto.TIPO_NO_ENCONTRADO)
     elif producto.tipo_producto_eliminado:
         avisos.append(AvisoProducto.TIPO_ELIMINADO)
-    if producto.sede not in sedes:
+    if producto.sede is None:
+        avisos.append(AvisoProducto.SIN_SEDE)
+    elif producto.sede not in sedes:
         avisos.append(AvisoProducto.SEDE_NO_CONFIRMADA)
     if producto.conflicto_origen:
         avisos.append(AvisoProducto.CONFLICTO_ORIGEN)
