@@ -1,119 +1,157 @@
-# Configuración: identificadores, permisos y catálogos operativos (discovery)
+# Configuración v2: identificadores, permisos y catálogos operativos
 
-> **Estado:** discovery para revisión (19/11/2026). No incluye código, migraciones ni cambios en UAT. Las decisiones abiertas están en la sección 8. La implementación espera su aprobación.
+> **Estado:** diseño final para aprobación (19/11/2026). No incluye código, migraciones ni cambios en UAT.
 >
-> **Base relevada:** rama `feat/reparacion-rt-etapa1` (`f3036ca`), que incluye los dos permisos de Reparación RT. Las referencias `archivo:línea` apuntan a esa rama. Las rutas del backend son relativas a `app/backend/app/` y las del frontend a `app/frontend/src/`.
+> **Rama:** `feat/configuracion-v2`, creada desde `feat/reparacion-rt-etapa1` (`f3036ca`). Las referencias `archivo:línea` apuntan a esa base. Las del backend son relativas a `app/backend/app/` y las del frontend a `app/frontend/src/`.
+>
+> **Pendiente:** antes de programar hacen falta las decisiones funcionales de la sección 10. La implementación espera su aprobación.
+
+## Decisiones aprobadas
+
+| # | Decisión aprobada | Cómo queda en el diseño |
+|---|---|---|
+| D1 | Permisos por rol, sin permisos individuales | Sección 3. Las concesiones por usuario quedan para otra iteración |
+| D2 | Los permisos nuevos empiezan solo con Administración | Sección 3.2. La división de Compras es un caso particular: DF-4 |
+| D3 | Separar la modificación de precios | `PRECIOS_GESTIONAR` (sección 3.2) |
+| D4 | El identificador y el código del insumo son automáticos; los personalizados no se piden por defecto | Sección 1.4. La pantalla no tiene campos de código |
+| D5 | Separar los permisos de Compras y evaluar si confirmar y cancelar van por separado | Sección 3.3. Se recomienda separarlos (DF-5) |
+| D6 | Códigos únicos sin distinguir mayúsculas | Secciones 1.3 y 7 |
+| D7 | Rama `feat/configuracion-v2` desde `feat/reparacion-rt-etapa1` | Creada. El discovery está en `109666b` |
+| D8 | Resolver las brechas críticas y las de bajo costo; registrar el resto | Sección 2.3 |
+
+**Ajustes pedidos en la revisión:**
+
+| # | Ajuste | Dónde se aplica |
+|---|---|---|
+| 1 | La numeración puede tener huecos; lo importante es unicidad, seguridad ante concurrencia e inmutabilidad | Generador con secuencias de PostgreSQL (1.3) |
+| 2 | **CFG-06** Garantías: mostrar solo días con y sin check-in | Sección 5 |
+| 3 | **CFG-07** Retirar de la interfaz el plazo de retiro; el backend lo conserva | Sección 6 |
+| 4 | **CFG-08** Mostrar solo las plantillas de ingreso y retiro | Sección 6 |
+| 5 | Verificar que cada permiso se aplique en el backend y en el frontend | Sección 8 |
+| 6 | Compatibilidad con versiones anteriores y datos históricos | Sección 9 |
+| 7 | Los códigos automáticos no se vuelven obligatorios | 1.4: opcionales en la API y sin restricciones nuevas en la base |
+| 8 | Nada se oculta cambiando parámetros ni borrando plantillas | Secciones 5 y 6: se oculta solo en la interfaz |
 
 ## Resumen
 
 1. **Identificadores (CFG-01).**
-   - Toda tabla tiene un `uuid` técnico y un `codigo` visible.
-   - Hoy se escriben a mano cinco códigos: tipo de reparación, motivo, plantilla y los dos del insumo (`clave` INS-… y `codigo` BAT-…).
-   - Proveedor, solicitud, OC, reclamo y pregunta de checklist ya son automáticos, pero con `max(codigo)+1`. Eso no es seguro ante concurrencia y falla al pasar de 9999 o 999999 (el máximo es lexicográfico).
-   - La propuesta es un único generador transaccional en la base que conserva los formatos actuales.
-2. **Permisos (CFG-02).**
-   - Hay 54 permisos, todos en uso.
-   - Toda la administración de catálogos cuelga de `CONFIGURACION_ADMINISTRAR`, que no es configurable.
-   - `COMPRAS_GESTIONAR` sí es configurable y aparece en la pantalla, pero tiene cuatro problemas:
-     - agrupa seis acciones;
-     - solo se asigna por rol;
-     - está en un grupo poco visible;
-     - sin `COMPRAS_CONSULTAR` la pantalla no se ve.
-   - Se encontraron 22 brechas, entre ellas cinco roles fijos (tres en el backend y dos en el frontend) que contradicen permisos configurables.
-3. **Configuración operativa (CFG-03).** Se proponen siete permisos configurables nuevos para catálogos y cinco para Compras (incluidos los proveedores). Por defecto mantienen a los roles que hoy tienen acceso, así que nadie gana acceso sin que Administración lo decida. Usuarios, roles, permisos y parámetros del sistema siguen siendo de Administración, fijos.
-4. **Altas (CFG-04).** Un botón «+ Nuevo …» abre un modal sin campo de código. Al guardar se actualiza solo el listado afectado.
-5. **Estructura (CFG-05).** Configuración pasa a ser un índice por funcionalidad: cada subsección se ve según su permiso y tiene su propia URL.
+   - Se crea un generador en la base con una secuencia por prefijo. No bloquea filas y puede dejar huecos.
+   - Lo usan tipos de reparación, motivos, insumos, proveedores, solicitudes y órdenes de compra, reclamos y preguntas de checklist.
+   - Los formatos actuales se conservan y ningún código existente cambia.
+   - El código queda protegido contra cambios en la base.
+   - La unicidad no distingue mayúsculas.
+2. **Permisos (CFG-02 y CFG-03).**
+   - Siete permisos configurables nuevos para catálogos, que empiezan con Administración.
+   - Seis permisos de Compras en lugar de `COMPRAS_GESTIONAR`.
+   - Dependencias entre permisos de acción y de consulta.
+   - Se corrigen las brechas A y B.
+   - Una prueba de la matriz recorre **todas** las rutas del backend y otra recorre los controles del frontend.
+3. **Altas (CFG-04).** Un botón «+ Nuevo …» abre un modal sin campos de código. Al guardar se actualiza solo el listado afectado.
+4. **Estructura (CFG-05).** Configuración se organiza por funcionalidad. Cada subsección tiene su ruta y su permiso.
+5. **CFG-06, CFG-07 y CFG-08.** Solo cambia la interfaz; la base de datos y el comportamiento del backend se conservan.
+   - Los tipos muestran únicamente los plazos con y sin check-in.
+   - El plazo de retiro desaparece de la pantalla y sigue rigiendo con su valor actual.
+   - Solo se ven las plantillas de ingreso y de retiro.
 
 ---
 
-## 1. Inventario de entidades, IDs y códigos (CFG-01)
+## 1. Identificadores y códigos (CFG-01)
 
 ### 1.1 Convención vigente
 
 | Tipo | Qué es | Ejemplo | Quién lo genera |
 |---|---|---|---|
-| **Clave técnica interna** | `id uuid` de cada tabla, usado por las FK. El backend nunca lo expone y traduce código → uuid (`storage/postgres/ordenes.py:198-213`) | `9f1c…` | La base (`gen_random_uuid()`) |
-| **Código funcional visible** | `codigo` único, el «id» del dominio en la API y la pantalla | `OR-000123`, `TR-001`, `INS-001` | Varía según la entidad (tabla 1.2) |
-| **Clave única de negocio** | Dato del negocio único que no es el identificador | email del usuario, documento del cliente, (marca, modelo, variante), número de lote por insumo, remito por OC | El usuario o el origen |
+| **Clave técnica interna** | `id uuid` de cada tabla, usado en las FK. El backend nunca lo expone y traduce código → uuid (`storage/postgres/ordenes.py:198-213`) | `9f1c…` | La base (`gen_random_uuid()`) |
+| **Código funcional visible** | `codigo` único: es el «id» del dominio en la API y en pantalla | `OR-000123`, `TR-001`, `INS-001` | Depende de la entidad (1.2) |
+| **Clave única de negocio** | Dato de negocio único que no es el identificador | email del usuario, documento del cliente, (marca, modelo, variante), número de lote por insumo, remito por OC | El usuario o el origen |
 
-`services/identificadores.nuevo_id(prefijo)` genera `PREFIJO-<12 hex>`. Se guarda en `codigo`, no en la PK.
+`services/identificadores.nuevo_id(prefijo)` genera `PREFIJO-<12 hex>` y se guarda en `codigo`, no en la PK.
 
-### 1.2 Entidades con código visible
+### 1.2 Inventario y propuesta
 
-**Catálogos de Configuración:**
+**Catálogos de Configuración**
 
-| Entidad (tabla) | Código hoy | Generación | Concurrencia | Propuesta |
+| Entidad (tabla) | Código hoy | Generación hoy | Problema | Propuesta |
 |---|---|---|---|---|
-| Tipo de reparación (`tipo_reparacion`) | `codigo` sin regex; seed `TR-001`, `TR-002`; `TR-OTROS` reservado | **A mano**, sin pasar a mayúsculas (`application/configuracion.py:57`) | Si dos altas chocan, `ON CONFLICT DO NOTHING` da **500** (`storage/postgres/configuracion.py:24-37,176-179`) | **Automático `TR-NNN`** |
-| Motivo de cancelación o interrupción (`motivo_operativo`) | `^[A-Z0-9][A-Z0-9_-]*$`; `CANC-OTRO`, `INT-OTRO` | **A mano**, pasado a mayúsculas | Choque → 500 | **Automático `CANC-NNN` / `INT-NNN`** según el tipo |
-| Insumo, identificador (`insumo.clave`) | Seed `INS-001`, sin regex | **A mano** («Identificador») | Choque → 500 | **Automático `INS-NNN`** |
-| Insumo, código operativo (`insumo.codigo`) | Seed `BAT-IP14`, tipo SKU | **A mano** («Código») | Choque → 500 | **Automático, igual a la clave, salvo que se informe uno** (D4) |
-| Plantilla de mensaje (`plantilla_mensaje`) | Semántico: `INGRESO`, `LISTO_PARA_RETIRAR` | **A mano**, pasado a mayúsculas | Choque → 500 | Automático `PLT-NNN` para las nuevas; las existentes no cambian |
-| Proveedor (`proveedor`) | `PRV-0001` | Automático, `max(codigo)+1` (`storage/postgres/compras.py:31-38,254-259`) | **No seguro**: choque → 500; falla después de `PRV-9999` | Mismo formato, generador nuevo |
-| Pregunta de checklist (`checklist_pregunta`) | `CHK-0001` | Automático, máximo calculado en Python (`application/checklist.py:97-103`) | No seguro | Mismo formato, generador nuevo |
-| Mesa de trabajo, usuario, medio de pago, modelo de equipo, tipo de equipo | `EST-001`, `RECEP-001`, `EFECTIVO`, `MOD-0001`, valor de Ventas | Seed, script o sincronización. No tienen alta en la aplicación | — | Sin cambios |
+| Tipo de reparación (`tipo_reparacion.codigo`) | Sin regex. Seed `TR-001`, `TR-002`. `TR-OTROS` reservado | **A mano**, distingue mayúsculas (`application/configuracion.py:57`) | Si dos altas chocan da **500** (`storage/postgres/configuracion.py:24-37,176-179`) | **Automático `TR-NNN`** |
+| Motivo (`motivo_operativo.codigo`) | `^[A-Z0-9][A-Z0-9_-]*$`. `CANC-OTRO`, `INT-OTRO` | **A mano**, pasado a mayúsculas | Choque: 500 | **Automático `CANC-NNN` o `INT-NNN`**, según el tipo |
+| Insumo, identificador (`insumo.clave`) | Seed `INS-001` | **A mano** («Identificador») | Choque: 500 | **Automático `INS-NNN`** |
+| Insumo, código operativo (`insumo.codigo`) | Seed `BAT-IP14` | **A mano** («Código») | Choque: 500 | **Automático: igual a la clave** (D4) |
+| Plantilla (`plantilla_mensaje.codigo`) | Semántico (`INGRESO`, …) | A mano | — | **Sin cambios**: con CFG-08 la interfaz ya no da altas (sección 6) |
+| Proveedor (`proveedor.codigo`) | `PRV-0001` | Automático con `max(codigo)+1` (`storage/postgres/compras.py:31-38,254-259`) | **No es seguro**: choque da 500; el máximo es lexicográfico, así que se repite después de `PRV-9999` | Mismo formato, generador nuevo |
+| Pregunta de checklist (`checklist_pregunta.codigo`) | `CHK-0001` | Automático con el máximo en Python (`application/checklist.py:97-103`) | No es seguro | Mismo formato, generador nuevo |
+| Mesa, usuario, medio de pago, modelo de equipo, tipo de equipo | `EST-001`, `RECEP-001`, `EFECTIVO`, `MOD-0001`, valor de Ventas | Seed, script o sincronización. No tienen alta en la aplicación | — | Sin cambios |
 
-**Operaciones** (CFG-01 no las cambia salvo que se indique):
+**Operaciones**
 
-| Entidad | Código | Generación | ¿Seguro? | Propuesta |
+| Entidad | Código | Generación | Problema | Propuesta |
 |---|---|---|---|---|
-| Orden | `OR-000001` | Secuencia SQL + `formatear_numero_orden` + bucle que saltea códigos usados (`storage/postgres/ordenes.py:183-196`) | Sí | **Modelo a imitar.** Sin cambios |
-| Detalle, comunicación, recepción de compra, documento | `DET-001`, `COM-001`, `REC-01`, `{OR}-{SIGLA}-{vv}` | Correlativo por padre, con el padre bloqueado | Sí | Sin cambios |
-| Solicitud y orden de compra | `SC-000001`, `OC-000001` | `max(codigo)+1` | **No**: choque → 409; falla después de 999999 | Mismo formato, generador nuevo |
-| Reclamo de garantía | `RGA-000001` | `max(codigo)+1` (`storage/postgres/reclamos.py:43-46,102-106`) | **No**: choque → 500 | Mismo formato, generador nuevo |
-| Cliente, equipo, toma, ejecución, movimiento, pago, devolución, foto, firma, lote | `CLI-`, `EQP-`, `TOM-`, `EJE-`, `MOV-`/`MST-`, `PAG-`, `DEV-`, `FOT-`, `FIR-`, `LOT-` + 12 hex | `nuevo_id` | Sí (aleatorio) | Sin cambios. `sincronizacion_origen.id` tiene un CHECK atado al formato de `nuevo_id` (`^SINC-[0-9a-f]{12}$`), así que ese formato no se toca |
+| Orden | `OR-000001` | Secuencia, formato y salto de códigos usados (`storage/postgres/ordenes.py:183-196`) | Ninguno | **Es el modelo a imitar.** Sin cambios |
+| Detalle, comunicación, recepción de compra, documento | `DET-001`, `COM-001`, `REC-01`, `{OR}-{SIGLA}-{vv}` | Correlativo por padre, con el padre bloqueado | Ninguno | Sin cambios |
+| Solicitud y orden de compra | `SC-000001`, `OC-000001` | `max(codigo)+1` | **No es seguro**: choque da 409; se repite después de 999999 | Mismo formato, generador nuevo |
+| Reclamo de garantía | `RGA-000001` | `max(codigo)+1` (`storage/postgres/reclamos.py:43-46,102-106`) | **No es seguro**: choque da 500 | Mismo formato, generador nuevo |
+| Cliente, equipo, toma, ejecución, movimiento, pago, devolución, foto, firma, lote | `CLI-`, `EQP-`, `TOM-`, `EJE-`, `MOV-`/`MST-`, `PAG-`, `DEV-`, `FOT-`, `FIR-`, `LOT-` + 12 hex | `nuevo_id` (aleatorio) | Ninguno | Sin cambios. `sincronizacion_origen.id` tiene un CHECK atado a ese formato (`^SINC-[0-9a-f]{12}$`) |
 
-### 1.3 Diseño del generador
+### 1.3 Generador (con huecos permitidos)
 
-Se crea una tabla de contadores en la base y una función que entrega el siguiente código **dentro de la transacción del alta**:
+Se crea una **secuencia de PostgreSQL por prefijo** y una función de formato, como ya se hace con la Orden:
 
 ```text
-rma.contador_codigo (prefijo PK, ultimo bigint >= 0, ancho smallint)
-rma.siguiente_codigo(prefijo) -> text
-  UPDATE ... SET ultimo = ultimo + 1 WHERE prefijo = $1 RETURNING ...
-  formatea con ceros a la izquierda SIN truncar (lpad trunca: hay que evitarlo,
-  como ya hace formatear_numero_orden)
+rma.codigo_tr_seq, codigo_canc_seq, codigo_int_seq, codigo_ins_seq,
+codigo_prv_seq, codigo_chk_seq, codigo_sc_seq, codigo_oc_seq, codigo_rga_seq
+
+rma.siguiente_codigo(prefijo text) -> text
+  CASE fijo prefijo -> secuencia y ancho (sin SQL dinámico);
+  nextval(...) y ceros a la izquierda SIN truncar (lpad trunca: se usa el
+  mismo criterio que formatear_numero_orden).
 ```
 
-**Por qué un contador en tabla y no una secuencia por catálogo:**
-- El `UPDATE` bloquea la fila hasta el commit, así que dos altas simultáneas reciben números distintos.
-- Si el alta falla, el número vuelve atrás: no quedan huecos.
-- Para catálogos (pocas altas por día) la espera es despreciable. Para OC, SC y RGA también.
-- Es un solo objeto para todos los prefijos, fácil de inicializar y de auditar.
+**Propiedades:**
+- **Concurrencia:** `nextval` nunca entrega dos veces el mismo número y no bloquea filas. Dos altas simultáneas reciben números distintos, sin esperas.
+- **Huecos:** si un alta falla, ese número se pierde. Está aceptado (ajuste 1).
+- **Unicidad aunque haya códigos cargados por otros medios** (SQL o un script):
+  - el backend pide el siguiente número mientras el código ya exista, igual que `reservar_codigo` de la Orden;
+  - el `INSERT` usa `ON CONFLICT DO NOTHING` y, si no inserta, reintenta;
+  - si se agotan los reintentos, responde **409 `CODIGO_DUPLICADO`**, nunca 500.
+- **Inicialización en la migración:** cada secuencia arranca después del mayor sufijo numérico que sigue el patrón `^PREFIJO-[0-9]{1,18}$`. Se ignoran los códigos que no lo siguen: `TR-OTROS`, `CANC-OTRO`, `PRV-ABC` y los de pruebas como `TR-OFF` o `INS-S`. Así nada cambia ni se reutiliza.
 
-**Inicialización (en la migración).** Para cada prefijo, `ultimo` toma el mayor sufijo numérico de los códigos que siguen el patrón `^PREFIJO-[0-9]{1,18}$`. Se ignoran los códigos que no lo siguen: `TR-OTROS`, `CANC-OTRO`, `INGRESO`, `PRV-ABC`, y los de las pruebas como `TR-OFF` o `INS-S`. Así ningún código existente cambia ni se reutiliza.
-
-| Prefijo | Tabla y columna | Ancho mínimo | Inicializado desde |
+| Prefijo | Tabla y columna | Ancho mínimo | Ejemplo siguiente |
 |---|---|---|---|
-| `TR` | `tipo_reparacion.codigo` | 3 | `TR-001`, `TR-002` → 2 |
-| `CANC` y `INT` | `motivo_operativo.codigo` según el tipo | 3 | 0 (los `*-OTRO` no son numéricos) |
-| `INS` | `insumo.clave` | 3 | `INS-001` → 1 |
-| `PLT` | `plantilla_mensaje.codigo` | 3 | 0 |
-| `PRV` | `proveedor.codigo` | 4 | máximo actual |
-| `CHK` | `checklist_pregunta.codigo` | 4 | máximo actual |
-| `SC`, `OC` y `RGA` | `solicitud_compra`, `orden_compra`, `reclamo_garantia` | 6 | máximo actual |
+| `TR` | `tipo_reparacion.codigo` | 3 | `TR-003` |
+| `CANC` y `INT` | `motivo_operativo.codigo`, según el tipo | 3 | `CANC-001` |
+| `INS` | `insumo.clave` (y `insumo.codigo`, D4) | 3 | `INS-002` |
+| `PRV` | `proveedor.codigo` | 4 | `PRV-0002` |
+| `CHK` | `checklist_pregunta.codigo` | 4 | `CHK-0004` |
+| `SC`, `OC` y `RGA` | `solicitud_compra`, `orden_compra`, `reclamo_garantia` | 6 | `OC-000013` |
 
-**Robustez:**
-- Si alguien carga un código a mano por SQL o script y el generador lo alcanza, el alta reintenta con el siguiente número (hasta 5 veces), igual que `reservar_codigo` de la Orden.
-- Una violación de unicidad pasa a ser **409 `CODIGO_DUPLICADO`**, no 500. Esto corrige los cinco altas que hoy responden 500.
-- `TR-OTROS` sigue reservado. El generador nunca produce un sufijo no numérico.
-
-**Inmutabilidad.**
-- **En la base:** un trigger `impedir_cambio_codigo` en `tipo_reparacion`, `motivo_operativo`, `plantilla_mensaje`, `proveedor`, `checklist_pregunta` y `mesa_trabajo`. Hoy solo lo impide el servicio (el backend tiene `UPDATE` sobre toda la tabla).
-- **Insumo:** ya está protegido por grants de columna.
-- **OC y SC:** ya están protegidas por trigger.
-- **Historia:** no se modifica ningún identificador histórico.
-
-**Opcional (requiere revisar el UAT antes).** Unicidad sin distinguir mayúsculas (`upper(codigo)`) en `tipo_reparacion`, `insumo.clave` e `insumo.codigo`. Hoy `tr-010` y `TR-010` pueden convivir. La migración tiene que verificar que no haya choques y detenerse si los hay.
+**Otras reglas:**
+- `TR-OTROS` sigue reservado: el generador nunca produce sufijos que no sean números.
+- **Inmutabilidad en la base:**
+  - Un trigger nuevo, `rma.impedir_cambio_codigo()`, en `tipo_reparacion`, `motivo_operativo`, `plantilla_mensaje`, `proveedor`, `checklist_pregunta` y `mesa_trabajo`. Hoy solo lo impide el servicio.
+  - El insumo ya está protegido por permisos de columna, y la OC y la SC por triggers.
+  - No se modifica ningún identificador histórico.
+- **Sin distinguir mayúsculas (D6):** índices únicos `upper(codigo)` en `tipo_reparacion`, y `upper(clave)` y `upper(codigo)` en `insumo`.
+  - Motivos, proveedores, preguntas y plantillas ya exigen mayúsculas por CHECK, así que no necesitan índice.
+  - Si hay choques, la migración **se detiene con la lista** y no corrige nada sola. Antes del UAT se corre una consulta de solo lectura (sección 11).
+- **Sin restricciones nuevas de formato:** no se agregan CHECK que rompan los códigos existentes, ni columnas obligatorias (ajuste 7).
 
 ### 1.4 Contrato de la API
 
-- **El código pasa a ser opcional en los cuatro POST:** `repair-types`, `reasons`, `supplies` (`clave` y `codigo`) y `message-templates`.
-  - Si no viene, se genera.
-  - Si viene, se valida (formato, mayúsculas, unicidad) y se respeta. Esto existe solo por compatibilidad con el frontend publicado durante la publicación coordinada y con los scripts de UAT: `probar_macro_v14.py:796` crea un tipo con código fijo.
-  - La pantalla nueva no lo envía.
-- **La respuesta del alta devuelve la entidad creada con su código,** para que la pantalla la agregue al listado y la nombre en la confirmación («Se creó TR-003 Cambio de pantalla»).
-- **Las rutas de edición siguen usando el código:** `PUT /repair-types/{codigo}` y `PUT /supplies/{clave}`. No cambian.
+| Endpoint | Hoy | Propuesta |
+|---|---|---|
+| `POST /api/admin/repair-types` | `codigo` obligatorio | `codigo` **opcional**: si no viene se genera; si viene se respeta (validado y único sin distinguir mayúsculas) |
+| `POST /api/admin/reasons` | `codigo` obligatorio | ídem, con prefijo según el tipo |
+| `POST /api/admin/supplies` | `clave` y `codigo` obligatorios | los dos **opcionales**. Sin clave se genera `INS-NNN`; sin código se usa la clave |
+| `PUT /api/admin/supplies/{clave}` | `codigo` obligatorio en el cuerpo, aunque no se puede cambiar | opcional y se ignora, como hoy en la práctica |
+| `POST /api/admin/message-templates` | `codigo` obligatorio | **Sin cambios.** La interfaz deja de ofrecer el alta (CFG-08) |
+| Altas de proveedor, solicitud, OC, reclamo y pregunta | ya automáticas | mismo contrato, generador nuevo |
+
+- **El alta devuelve la entidad creada con su código.** La pantalla la agrega al listado y lo informa: «Se creó TR-003 Cambio de pantalla».
+- **El código opcional se respeta por compatibilidad:**
+  - el frontend publicado lo manda durante la publicación coordinada;
+  - los scripts del UAT crean entidades con código fijo (`probar_macro_v14.py:796`);
+  - hay pruebas existentes que lo usan.
+- La pantalla nueva **no** lo envía (D4).
 
 ---
 
@@ -121,41 +159,42 @@ rma.siguiente_codigo(prefijo) -> text
 
 ### 2.1 Cómo se aplica hoy
 
-- **Modelo:** solo **rol → permiso**. No hay concesiones por usuario. Un usuario puede tener varios roles. Los cambios se guardan en `rma.permiso` (sin fila rige el predeterminado del código) y se auditan en `cambio_configuracion`.
-- **Capa de API:** `exigir_rol(permiso)` (`api/seguridad.py:123-140`). En modo demo no controla nada.
-- **Capa de servicio:** `validar_alguno_de(usuario, permiso)`. Controla en los dos modos.
+- **Modelo:** solo **rol → permiso**, con varios roles por usuario. Lo configurado se guarda en `rma.permiso`; sin fila rige el predeterminado del código. Cada cambio se audita en `cambio_configuracion`.
+- **API:** `exigir_rol(permiso)` (`api/seguridad.py:123-140`). En modo demo no controla nada.
+- **Servicio:** `validar_alguno_de(usuario, permiso)`, en los dos modos.
   - Las consultas se protegen solo en la API.
-  - Los comandos de Órdenes y Compras se protegen solo en el servicio.
-- **No configurables:** `CONFIGURACION_ADMINISTRAR` y `ROLES_ADMINISTRAR`, ambos solo de Administración.
+  - Los comandos de Órdenes y Compras, solo en el servicio.
+- **No configurables:** `CONFIGURACION_ADMINISTRAR` y `ROLES_ADMINISTRAR`, los dos solo de Administración.
 - **Frontend:**
-  - Lee `usuario.permisos` del catálogo de usuarios, una sola vez al montar. Usa `puede(actor, permiso, rolesPorDefecto)` con roles escritos en el código como respaldo.
-  - **Un cambio de permisos no se ve en la sesión abierta hasta recargar la página.**
+  - lee `usuario.permisos` una vez al montar;
+  - usa `puede(actor, permiso, rolesDeRespaldo)`;
+  - **un cambio de permisos no se ve hasta recargar la página.**
 
-### 2.2 Matriz por módulo
+### 2.2 Matriz
 
-La columna «Config.» indica si la pantalla Permisos permite cambiar quién lo tiene.
+En la columna «Config.», «Sí» significa que se cambia desde la pantalla Permisos.
 
 **Configuración y catálogos**
 
 | Acción | Endpoint | Permiso actual | Roles | Config. | Se aplica en |
 |---|---|---|---|---|---|
-| Ver catálogo de tipos y Mesas | `GET /api/admin/catalog` | CONFIGURACION_ADMINISTRAR | ADMIN | No (fijo) | API |
-| Alta y edición de tipo de reparación, incluido el precio | `POST/PUT /api/admin/repair-types` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API + servicio |
+| Ver tipos y Mesas | `GET /api/admin/catalog` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API |
+| Alta y edición de tipo, con precio | `POST/PUT /api/admin/repair-types` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API + servicio |
 | Tipos habilitados por Mesa | `PUT /api/admin/stations/{c}/repair-types` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API + servicio |
-| Motivos de cancelación e interrupción | `GET/POST/PUT /api/admin/reasons` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API + servicio |
-| Insumos, incluido el precio | `GET/POST/PUT /api/admin/supplies` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API + servicio |
+| Motivos | `GET/POST/PUT /api/admin/reasons` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API + servicio |
+| Insumos, con precio | `GET/POST/PUT /api/admin/supplies` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API + servicio |
 | Proveedores | `GET/POST/PUT /api/admin/suppliers` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API + servicio |
-| Plantillas de WhatsApp | `GET/POST/PUT /api/admin/message-templates` | CONFIGURACION_ADMINISTRAR | ADMIN | No | **Solo servicio. La GET está abierta a cualquier sesión** (brecha 8) |
-| Checklist (preguntas) | `POST/PUT /api/admin/checklist-questions` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API + servicio |
-| Sincronizar tipos de equipo desde Ventas | `POST /api/admin/equipment-types/sync` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API + servicio |
+| Plantillas | `GET/POST/PUT /api/admin/message-templates` | CONFIGURACION_ADMINISTRAR | ADMIN | No | **Solo servicio; la GET queda abierta** (brecha 8) |
+| Preguntas de checklist | `POST/PUT /api/admin/checklist-questions` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API + servicio |
+| Sincronizar tipos de equipo | `POST /api/admin/equipment-types/sync` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API + servicio |
 | Parámetros (plazo de retiro) | `GET/PUT /api/admin/parameters` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API + servicio |
 | Recargo por medio de pago | `GET/PUT /api/admin/payment-methods` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API + servicio |
-| Auditoría de cambios | `GET /api/admin/config-changes` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API |
-| Roles de un usuario | `PUT /api/admin/users/{c}/roles` | API: CONFIGURACION_ADMINISTRAR; servicio: ROLES_ADMINISTRAR | ADMIN | No | Las dos capas, con permisos distintos (brecha 12) |
-| Roles de un permiso | `PUT /api/admin/permissions/{c}` | Ídem | ADMIN | No | Ídem; **acepta una lista vacía** (brecha 14) |
-| Sincronizar el catálogo de equipos de Ventas | `POST /api/catalogs/equipment/sync` | CATALOGO_EQUIPOS_SINCRONIZAR | ADMIN, COORD | Sí | API + servicio. **Sin botón en la interfaz** |
+| Auditoría | `GET /api/admin/config-changes` | CONFIGURACION_ADMINISTRAR | ADMIN | No | API |
+| Roles de un usuario | `PUT /api/admin/users/{c}/roles` | API: CONFIGURACION_ADMINISTRAR. Servicio: ROLES_ADMINISTRAR | ADMIN | No | Las dos capas, con permisos distintos (brecha 12) |
+| Roles de un permiso | `PUT /api/admin/permissions/{c}` | ídem | ADMIN | No | Ídem. **Acepta una lista vacía** (brecha 14) |
+| Sincronizar el catálogo de Ventas | `POST /api/catalogs/equipment/sync` | CATALOGO_EQUIPOS_SINCRONIZAR | ADMIN, COORD | Sí | API + servicio. Sin botón en la interfaz |
 | Sincronizar Productos RT | `POST /api/rt-products/sync` | PRODUCTOS_RT_SINCRONIZAR | ADMIN | Sí | API + servicio |
-| Limpiar fotos sin Orden | `POST /api/maintenance/photos/cleanup` | API: **rol fijo ADMIN**; servicio: FOTOS_ADMINISTRAR | ADMIN | Solo en apariencia | Brecha 3 |
+| Limpiar fotos sin Orden | `POST /api/maintenance/photos/cleanup` | API: **rol fijo ADMIN**. Servicio: FOTOS_ADMINISTRAR | ADMIN | Solo en apariencia | Brecha 3 |
 
 **Compras**
 
@@ -165,224 +204,202 @@ La columna «Config.» indica si la pantalla Permisos permite cambiar quién lo 
 | Crear y descartar solicitudes | `POST /api/purchases/requests[/{id}/discard]` | COMPRAS_GESTIONAR | RECEP, COORD, ADMIN | Sí | Servicio (`services/compras.py:107,136`) |
 | **Crear OC** | `POST /api/purchases/orders` | COMPRAS_GESTIONAR | ídem | Sí | Servicio (`:199`) |
 | Confirmar OC | `POST /orders/{id}/confirm` | COMPRAS_GESTIONAR | ídem | Sí | Servicio (`:251`) |
-| Cancelar OC | `POST /orders/{id}/cancel` | COMPRAS_GESTIONAR | ídem | Sí | Servicio (`:264`) |
-| Recibir mercadería (ingresa stock, lote y costo) | `POST /orders/{id}/receipts` | COMPRAS_GESTIONAR, **sin STOCK_GESTIONAR** | ídem | Sí | Servicio (`:297`) |
-| Alta y edición de proveedores | `/api/admin/suppliers` | CONFIGURACION_ADMINISTRAR | ADMIN | **No** | API + servicio |
+| Cancelar OC (en borrador o confirmada sin recepciones) | `POST /orders/{id}/cancel` | COMPRAS_GESTIONAR | ídem | Sí | Servicio (`:264`) |
+| Recibir (ingresa stock, lote y costo) | `POST /orders/{id}/receipts` | COMPRAS_GESTIONAR, **sin STOCK_GESTIONAR** | ídem | Sí | Servicio (`:297`) |
+| Proveedores | `/api/admin/suppliers` | CONFIGURACION_ADMINISTRAR | ADMIN | **No** | API + servicio |
 
-**Por qué «no se puede configurar quién crea OC».** El permiso existe y se puede cambiar por rol, pero en la práctica no sirve para eso, por seis motivos:
+**Por qué hoy no se puede configurar quién crea OC.** El permiso existe y se puede cambiar por rol, pero en la práctica no alcanza:
 
-1. Un solo permiso cubre seis acciones: no se puede dar «crear OC» sin confirmar, cancelar y recibir.
-2. Se asigna por rol, no por usuario.
-3. Está en el grupo «Inventario y catálogos» con una descripción que no dice «crear».
-4. Sin `COMPRAS_CONSULTAR`, el menú oculta Compras y las GET responden 403.
-5. Sin un proveedor no se puede crear una OC, y los proveedores son solo de Administración, fijo.
+1. Cubre seis acciones juntas.
+2. Se asigna por rol, no por persona.
+3. Está en el grupo «Inventario y catálogos» y su descripción no dice «crear».
+4. Sin `COMPRAS_CONSULTAR` la sección no aparece.
+5. Sin proveedor no hay OC, y los proveedores son solo de Administración.
 6. El cambio no se ve hasta recargar la página.
 
-**Inventario e ingreso de stock**
+**Inventario**
 
 | Acción | Endpoint | Permiso | Roles | Config. | Se aplica en |
 |---|---|---|---|---|---|
 | Consultar inventario, movimientos y lotes | `GET /api/inventory/*` | INVENTARIO_CONSULTAR | todos | Sí | API |
 | Ingreso y ajuste manual | `POST /api/inventory/{id}/receipts`, `/adjustments` | STOCK_GESTIONAR | ADMIN, COORD | Sí | API + servicio |
 | Revalidar recursos | `POST /api/inventory/revalidate-orders` | RECURSOS_REVALIDAR | ADMIN, COORD | Sí | API + servicio |
-| Devolver un consumo al stock | `POST /api/orders/{id}/consumptions/{c}/return` | DEVOLUCION_STOCK | ADMIN, COORD | Sí | Servicio |
+| Devolver un consumo | `POST /api/orders/{id}/consumptions/{c}/return` | DEVOLUCION_STOCK | ADMIN, COORD | Sí | Servicio |
 
 **Órdenes (66 rutas).**
-- **Consultas:** `ORDENES_CONSULTAR` en la API.
-- **Comandos:** cada uno tiene su permiso en el servicio (ORDEN_CREAR, DETALLE_DEFINIR_*, CUSTODIA, ENTREGA, PAGO_*, CANCELACION, etc.), todos configurables.
-- **El detalle por ruta** está en el anexo A. Allí figuran las excepciones: roles fijos, rutas sin usuario y acciones que exigen varios permisos.
+- Las consultas exigen `ORDENES_CONSULTAR` en la API.
+- Cada comando tiene su permiso configurable en el servicio.
+- El anexo A lo detalla ruta por ruta, con las excepciones: roles fijos, rutas sin usuario y acciones que exigen varios permisos.
 
 **Consultas y otras**
 
 | Acción | Endpoint | Permiso | Se aplica en |
 |---|---|---|---|
 | Reportes | `GET /api/reports/operational` | REPORTES_CONSULTAR | API |
-| Antecedentes del equipo | `GET /api/equipment/history`, `/identify` | ANTECEDENTES_CONSULTAR | API |
+| Antecedentes | `GET /api/equipment/history`, `/identify` | ANTECEDENTES_CONSULTAR | API |
 | Reclamos rechazados | `GET /api/warranty-claims` | RECLAMOS_CONSULTAR | API |
-| Buscar cliente por DNI | `GET /api/clients/lookup` | CLIENTE_BUSCAR | API + servicio |
+| Buscar cliente | `GET /api/clients/lookup` | CLIENTE_BUSCAR | API + servicio |
 | Productos RT | `GET /api/rt-products` | PRODUCTOS_RT_CONSULTAR | API |
-| Bandejas de trabajo | `GET /api/work/*` | **Solo la sesión**; el contenido depende del rol fijo | — |
-| Usuarios con roles y permisos | `GET /api/catalogs/users` | **Solo la sesión**: cualquier usuario ve los permisos de todos | — |
+| Bandejas | `GET /api/work/*` | **solo la sesión**; el contenido depende del rol fijo | — |
+| Usuarios con roles y permisos | `GET /api/catalogs/users` | **solo la sesión** | — |
 
-### 2.3 Brechas y recomendaciones
+### 2.3 Brechas
 
-Prioridad: **A** se corrige en esta iteración porque impide configurar o contradice la configuración. **B** conviene corregirla en esta iteración porque es de bajo costo. **C** se registra en `DEUDA_TECNICA.md`.
+**Prioridad:**
+- **A:** crítica, se corrige en esta iteración.
+- **B:** bajo costo, también se corrige ahora (D8).
+- **C:** se registra en `DEUDA_TECNICA.md`.
 
-| # | Brecha | Dónde | Prio. | Recomendación |
+| # | Brecha | Dónde | Prio. | Corrección |
 |---|---|---|---|---|
-| 1 | El envío a revisión usa el **rol fijo RECEPCION**, no `ENVIAR_A_REVISION` | `services/ordenes.py:665,685` | A | Usar el permiso. Su predeterminado es RECEP, así que el comportamiento no cambia |
-| 2 | La garantía RMA sin excepción exige el **rol fijo RECEPCION** además de `GARANTIA_RMA_CREAR` | `application/ingreso.py:457-462` | A | Usar solo el permiso, previa verificación en `business/` de que no sea una regla deliberada |
+| 1 | Enviar a revisión usa el **rol fijo RECEPCION**, no `ENVIAR_A_REVISION` | `services/ordenes.py:665,685` | A | Usar el permiso. Su predeterminado es RECEP, así que nada cambia |
+| 2 | La garantía RMA sin excepción exige el **rol fijo RECEPCION** además de `GARANTIA_RMA_CREAR` | `application/ingreso.py:457-462` | A | Solo el permiso, después de verificar en `business/` que no es una regla deliberada |
 | 3 | La limpieza de fotos tiene el **rol fijo ADMIN** en la API y `FOTOS_ADMINISTRAR` en el servicio | `api/mantenimiento.py:33` | A | `exigir_rol(FOTOS_ADMINISTRAR)` |
-| 4 | Toda la administración de catálogos y proveedores depende de un permiso **no configurable** | `api/configuracion.py:63-66`, `api/compras.py:59` | A | Permisos operativos (sección 3) |
-| 5 | `COMPRAS_GESTIONAR` agrupa seis acciones | `services/compras.py:107-297` | A | Separarlo (sección 3.3) |
-| 6 | La recepción de compra ingresa stock sin `STOCK_GESTIONAR` | `application/compras.py:349` | C | Decisión deliberada (DEC-MI-09); documentarla |
-| 7 | Gestionar sin consultar deja Compras invisible | `PanelOrdenes.tsx:800`, `api/compras.py:58` | A | Dependencias entre permisos (sección 3.4) |
-| 8 | Plantillas `/api/admin/message-templates` sin `exigir_rol` | `api/comunicaciones.py:194,199,211` | A | `exigir_rol(PLANTILLA_GESTIONAR)` |
-| 9 | Lecturas de Orden o cliente sin `ORDENES_CONSULTAR`: mensaje preparado, consentimientos y bandejas | `api/comunicaciones.py:112,161`, `api/trabajo.py:20,29` | B | Agregar `exigir_rol(ORDENES_CONSULTAR)` |
-| 10 | Ver fotos y firmas exige el permiso de **carga** | `api/ordenes.py:1602`, `api/firmas.py:28` | B | Usar `ORDENES_CONSULTAR` |
-| 11 | Rutas que cambian estado sin usuario: espera de recursos, revalidar e informar a RT | `api/ordenes.py:751,765,1667` | C | Analizarlas aparte: son «eventos de sistema» por diseño |
-| 12 | Usuarios y permisos usan un permiso en la API y otro en el servicio | `api/configuracion.py:66`, `services/roles.py:65,105` | B | `exigir_rol(ROLES_ADMINISTRAR)` en esas rutas |
-| 13 | La sincronización de Tipos de Equipo usa un permiso fijo; las análogas usan permisos configurables | `application/checklist.py:116` | A | `CHECKLIST_GESTIONAR` |
-| 14 | `PUT /permissions` acepta una lista de roles vacía | `services/roles.py:104-116` | B | Rechazarla en el servicio, como ya hace el frontend |
-| 15 | Hay acciones que exigen varios permisos: decisión con rechazos, comprobante de ingreso, continuar reclamo, evaluación técnica | anexo A | B | Documentarlas en la pantalla Permisos («también requiere …») |
-| 16 | Bandejas y responsable de la situación por rol fijo | `application/bandejas.py:845-850`, `situacion.py:900` | C | Fuera de alcance: son vistas por puesto, no acciones |
-| 17 | En modo demo las consultas no controlan nada y se puede suplantar al usuario | `api/seguridad.py:134` | C | Por diseño; Cloud Run ya bloquea el modo demo |
-| 18 | **Frontend:** Configuración por rol fijo ADMIN; crear Orden por rol fijo RECEPCION (contradice `ORDEN_CREAR`, que es configurable) | `Configuracion.tsx:304`, `PanelOrdenes.tsx:799`, `ListadoOrdenes.tsx:943,1095` | A | Usar `puede(...)` con el permiso |
-| 19 | **Frontend:** el respaldo usa el rol inexistente `"ADMINISTRACION"` | `RetiroDemorado.tsx:37` | B | Corregirlo a `ADMINISTRADOR` |
-| 20 | **Frontend:** los permisos no se refrescan después de cambiarlos | `PanelOrdenes.tsx:268-302` | A | Volver a pedir el usuario actual después de guardar roles o permisos |
-| 21 | `GET /api/catalogs/users` expone los permisos de todos los usuarios a cualquiera con sesión | `api/catalogos.py:51` | C | Separar «mis permisos» (`/api/me`) del selector de demo |
-| 22 | Descripciones inexactas: `CUSTODIA` dice que incluye la devolución sin reparar (usa `ENTREGA`); `ENVIAR_A_REVISION` | `permisos.py:352` | B | Corregir los textos |
+| 4 | Toda la administración de catálogos depende de un permiso **no configurable** | `api/configuracion.py:63-66`, `api/compras.py:59` | A | Sección 3.2 |
+| 5 | `COMPRAS_GESTIONAR` agrupa seis acciones | `services/compras.py:107-297` | A | Sección 3.3 |
+| 6 | La recepción de compra ingresa stock sin `STOCK_GESTIONAR` | `application/compras.py:349` | C | Es deliberado (DEC-MI-09); se documenta |
+| 7 | Gestionar sin consultar deja Compras invisible | `PanelOrdenes.tsx:800`, `api/compras.py:58` | A | Dependencias (3.4) |
+| 8 | Plantillas sin `exigir_rol` | `api/comunicaciones.py:194,199,211` | A | `exigir_rol(PLANTILLA_GESTIONAR)` |
+| 9 | Mensaje preparado, consentimientos y bandejas sin `ORDENES_CONSULTAR` | `api/comunicaciones.py:112,161`, `api/trabajo.py:20,29` | B | Agregar el `exigir_rol` |
+| 10 | Ver fotos y firmas exige el permiso de **carga** | `api/ordenes.py:1602`, `api/firmas.py:28` | B | `ORDENES_CONSULTAR` |
+| 11 | Rutas que cambian estado sin usuario (esperar y revalidar recursos, informar a RT) | `api/ordenes.py:751,765,1667` | C | Análisis aparte: son eventos de sistema |
+| 12 | Usuarios y permisos usan un permiso en la API y otro en el servicio | `api/configuracion.py:66`, `services/roles.py:65,105` | B | `exigir_rol(ROLES_ADMINISTRAR)` |
+| 13 | La sincronización de Tipos de Equipo usa un permiso fijo; las análogas, uno configurable | `application/checklist.py:116` | A | `CHECKLIST_GESTIONAR` |
+| 14 | `PUT /permissions` acepta cero roles | `services/roles.py:104-116` | B | Rechazarlo en el servicio |
+| 15 | Acciones que exigen varios permisos | anexo A | B | Nota «también requiere …» en la pantalla Permisos |
+| 16 | Bandejas y responsable de la situación por rol fijo | `application/bandejas.py:845-850`, `situacion.py:900` | C | Son vistas por puesto, no acciones |
+| 17 | Modo demo sin control en las consultas | `api/seguridad.py:134` | C | Es por diseño; Cloud Run lo bloquea |
+| 18 | **Frontend:** Configuración por rol fijo ADMIN; crear Orden por rol fijo RECEPCION, aunque `ORDEN_CREAR` es configurable | `Configuracion.tsx:304`, `PanelOrdenes.tsx:799`, `ListadoOrdenes.tsx:943,1095` | A | `puede(...)` con el permiso |
+| 19 | **Frontend:** el rol de respaldo `"ADMINISTRACION"` no existe | `RetiroDemorado.tsx:37` | B | Se elimina junto con los respaldos (sección 8) |
+| 20 | **Frontend:** los permisos no se refrescan | `PanelOrdenes.tsx:268-302` | A | Volver a pedir el usuario después de cambiar roles o permisos |
+| 21 | `GET /api/catalogs/users` expone los permisos de todos | `api/catalogos.py:51` | C | Separar «mis permisos» del selector de demo |
+| 22 | Descripciones inexactas (`CUSTODIA`, `ENVIAR_A_REVISION`) | `permisos.py:352` | B | Corregir los textos |
+| 23 | **Frontend:** Inventario y Reportes no se controlan en el menú (el backend sí responde 403) | `layout.tsx:46-75` | B | Controlar por `INVENTARIO_CONSULTAR` y `REPORTES_CONSULTAR` |
 
 ---
 
-## 3. Diseño de permisos operativos (CFG-03)
+## 3. Permisos operativos (CFG-03)
 
 ### 3.1 Principios
 
-1. **Por defecto nadie gana acceso nuevo.**
-   - Cada permiso nuevo arranca con los roles que hoy pueden hacer esa acción: Administración en los catálogos; Recepción, Coordinación RMA y Administración en Compras.
-   - Administración decide después, desde Permisos, a quién se lo da. Es la misma regla que DEC-MI-10.
-   - La alternativa está en D2.
-2. **Separar de lo sensible.**
-   - Siguen fijos de Administración (`configurable=False`):
-     - usuarios y roles, y la matriz de permisos (`ROLES_ADMINISTRAR`);
-     - parámetros del sistema y recargos por medio de pago;
-     - auditoría completa (`CONFIGURACION_ADMINISTRAR`, cuyo alcance se reduce a eso).
-   - Un error ahí afecta a toda la operación o a quién puede administrarla.
-3. **Un permiso por catálogo, con alta y edición juntas.** El precio es la excepción (D3).
-4. **Cada permiso se aplica en las dos capas:** `exigir_rol` en la API y `validar_alguno_de` en el servicio.
+1. **Nadie gana acceso sin una decisión de Administración (D2).** Los permisos nuevos de catálogos empiezan solo con Administración, que después los extiende desde Permisos. La división de un permiso existente hereda sus roles vigentes (DF-4), así nadie pierde un acceso.
+2. **Lo sensible queda fijo para Administración.**
+   - `ROLES_ADMINISTRAR`: usuarios, roles y la matriz de permisos.
+   - `CONFIGURACION_ADMINISTRAR`: parámetros del sistema, recargos por medio de pago y la auditoría completa.
+3. **Un permiso por catálogo, con alta y edición juntas.** La excepción es el precio (D3).
+4. **Cada permiso se aplica en las dos capas:** la API (`exigir_rol`) y el servicio (`validar_alguno_de`).
 
-### 3.2 Permisos nuevos de catálogos
-
-**Grupo nuevo: «Configuración operativa».**
-
-| Permiso | Cubre | Predeterminado | Reemplaza a |
-|---|---|---|---|
-| `INSUMO_GESTIONAR` | Alta de insumo; nombre, unidad, control por lote y vigencia | ADMIN | CONFIGURACION_ADMINISTRAR |
-| `TIPO_REPARACION_GESTIONAR` | Alta de tipo; nombre, puntaje, garantía y vigencia | ADMIN | ídem |
-| `PRECIOS_GESTIONAR` (D3) | Precio de los tipos de reparación y de los insumos, en el alta y en la edición | ADMIN | ídem |
-| `MESA_TIPOS_GESTIONAR` | Tipos habilitados por Mesa de trabajo | ADMIN | ídem |
-| `MOTIVO_GESTIONAR` | Motivos de cancelación e interrupción | ADMIN | ídem |
-| `PLANTILLA_GESTIONAR` | Plantillas de WhatsApp | ADMIN | ídem (y cierra la brecha 8) |
-| `CHECKLIST_GESTIONAR` | Preguntas del checklist y sincronización de Tipos de Equipo | ADMIN | ídem |
-
-**Siguen siendo de Administración y no se configuran:**
-
-| Permiso | Cubre |
-|---|---|
-| `ROLES_ADMINISTRAR` | Roles de cada usuario y la matriz de permisos |
-| `CONFIGURACION_ADMINISTRAR` | Parámetros del sistema, recargos por medio de pago y auditoría completa |
-
-**Lectura.** Los GET de cada catálogo (`/api/admin/supplies`, `/reasons`, etc.) exigen el permiso de gestión de ese catálogo. Los selectores operativos (`/api/catalogs/*`) siguen abiertos a cualquier sesión, como hoy. Cada subsección muestra **su propio** historial de cambios, filtrando `cambio_configuracion` por entidad. La auditoría completa sigue siendo de Administración.
-
-### 3.3 Compras
-
-**Grupo nuevo: «Compras».** `COMPRAS_GESTIONAR` se divide en:
+### 3.2 Catálogos: grupo nuevo «Configuración operativa»
 
 | Permiso | Cubre | Predeterminado |
 |---|---|---|
-| `COMPRAS_CONSULTAR` (existe) | Ver la sección, solicitudes, OC, sugerencias y costos | RECEP, COORD, ADMIN |
-| `COMPRA_SOLICITAR` | Crear y descartar solicitudes | los vigentes de COMPRAS_GESTIONAR |
-| `OC_CREAR` | Crear OC en borrador | ídem |
-| `OC_CONFIRMAR` | Confirmar y cancelar OC | ídem |
-| `COMPRA_RECIBIR` | Registrar recepciones (ingresa stock) | ídem |
-| `PROVEEDOR_GESTIONAR` | Alta y edición de proveedores (hoy fijo de ADMIN) | ADMIN |
+| `TIPO_REPARACION_GESTIONAR` | Alta de tipo; nombre, puntaje, plazos de garantía y vigencia | ADMIN |
+| `PRECIOS_GESTIONAR` | Precio de tipos e insumos, en el alta y en la edición | ADMIN |
+| `MESA_TIPOS_GESTIONAR` | Tipos habilitados por Mesa | ADMIN |
+| `MOTIVO_GESTIONAR` | Motivos de cancelación e interrupción | ADMIN |
+| `INSUMO_GESTIONAR` | Alta de insumo; nombre, unidad, control por lote y vigencia | ADMIN |
+| `PLANTILLA_GESTIONAR` | Texto y vigencia de las plantillas visibles | ADMIN |
+| `CHECKLIST_GESTIONAR` | Preguntas del checklist y sincronización de Tipos de Equipo | ADMIN |
+
+**Precio (D3):**
+- **Alta de tipo de reparación:** exige `TIPO_REPARACION_GESTIONAR` **y** `PRECIOS_GESTIONAR`, porque el precio es obligatorio.
+- **Alta de insumo:** el precio es opcional. Con solo `INSUMO_GESTIONAR` se crea sin precio, y quien tenga `PRECIOS_GESTIONAR` lo completa después.
+- **Quien gestiona un catálogo ve los precios en solo lectura.**
+
+**Lectura y auditoría:**
+- El GET de cada catálogo de administración exige su permiso de gestión.
+- Los selectores operativos (`/api/catalogs/*`) no cambian.
+- Cada subsección muestra su propio historial: `cambio_configuracion` filtrado por entidad.
+- La auditoría completa sigue siendo de Administración.
+
+### 3.3 Compras: grupo nuevo «Compras» (D5)
+
+| Permiso | Cubre | Predeterminado |
+|---|---|---|
+| `COMPRAS_CONSULTAR` (existe) | Ver la sección | RECEP, COORD, ADMIN (sin cambios) |
+| `COMPRA_SOLICITAR` | Crear y descartar solicitudes | roles vigentes de `COMPRAS_GESTIONAR` (DF-4) |
+| `OC_CREAR` | Crear OC en borrador y cancelar un **borrador** | ídem |
+| `OC_CONFIRMAR` | Confirmar una OC | ídem |
+| `OC_CANCELAR` | Cancelar una OC **confirmada** (y cualquier borrador) | ídem |
+| `COMPRA_RECIBIR` | Registrar recepciones (ingresan stock) | ídem |
+| `PROVEEDOR_GESTIONAR` | Alta y edición de proveedores | ADMIN (como hoy) |
+
+**Evaluación de confirmar y cancelar (D5): se recomienda separarlos.**
+- **Confirmar** compromete la compra con el proveedor y deja la OC lista para recibir.
+- **Cancelar una OC confirmada** deshace ese compromiso. Es una decisión de otra naturaleza, y conviene poder reservarla a quien gestiona la relación con el proveedor.
+- **Cancelar un borrador** no tiene efecto externo. Quien lo creó tiene que poder descartarlo aunque no pueda cancelar OC confirmadas; por eso `OC_CREAR` también alcanza para un borrador.
+- La regla queda en el servicio, según el estado de la OC (DF-5).
 
 **Migración de lo configurado:**
-- Si el UAT tiene una fila de `COMPRAS_GESTIONAR` en `rma.permiso`, la migración la copia a los cuatro permisos nuevos.
-- La fila original **no se borra**, para que un backend anterior siga funcionando si hay que volver atrás.
-- El registro del código deja de definir `COMPRAS_GESTIONAR`. Una fila sin permiso correspondiente se ignora.
+- Si `rma.permiso` tiene una fila de `COMPRAS_GESTIONAR`, se copia a los cinco permisos nuevos, con su auditoría.
+- La fila original se **conserva**, para que un backend anterior siga funcionando si hay vuelta atrás.
 
-**Alcance de la división.** Si se prefiere menos granularidad, la mínima que resuelve el pedido es dos permisos: `OC_CREAR` y `COMPRAS_GESTIONAR` para todo lo demás (D5).
+**Compatibilidad del frontend anterior:**
+- `permisos_de(usuario)` sigue informando el código `COMPRAS_GESTIONAR` como alias de lectura cuando el usuario tiene `OC_CREAR`. Así el frontend publicado no oculta los botones de Compras durante la publicación coordinada.
+- El alias no se muestra en la pantalla Permisos y no se configura.
 
 ### 3.4 Dependencias entre permisos
 
-Cada `Permiso` declara los permisos que **requiere**. Por ejemplo, `OC_CREAR` requiere `COMPRAS_CONSULTAR` e `INSUMO_GESTIONAR` requiere `INVENTARIO_CONSULTAR`.
+Cada `Permiso` declara los permisos que **requiere**:
 
-- **En la pantalla Permisos:** al marcar un rol en un permiso de acción, también se marca su consulta. Si se intenta quitar una consulta de la que depende otro permiso del mismo rol, aparece un aviso.
-- **En el backend:** `PUT /permissions` rechaza un cambio que deje a un rol con una acción y sin la consulta que esa acción requiere (409 con el motivo).
-- **Resultado:** se evita el caso de Compras invisible (brecha 7).
+| Permiso | Requiere |
+|---|---|
+| Los de Compras | `COMPRAS_CONSULTAR` |
+| `INSUMO_GESTIONAR` | `INVENTARIO_CONSULTAR` |
+| `PRECIOS_GESTIONAR` | ninguno (se usa junto con el de su catálogo) |
 
-### 3.5 ¿Por rol o por usuario? (D1)
-
-El pedido menciona «qué usuarios crean OC». Hoy el modelo es solo por rol.
-
-**Opción A (recomendada para esta iteración): seguir por rol.**
-- Con los permisos separados, Administración da `OC_CREAR` a un rol y asigna ese rol a quien corresponda. Un usuario ya puede tener varios roles.
-- Su limitación: no sirve para darle a una sola persona de Recepción algo que el resto de Recepción no tiene.
-
-**Opción B: concesiones adicionales por usuario.**
-- Una tabla `rma.usuario_permiso`, solo para agregar permisos, nunca para quitar.
-- Resuelve el caso puntual, pero toca el corazón de la autorización:
-  - `validar_alguno_de`;
-  - las `AccionDisponible.roles` que recibe el frontend, que tendrían que pasar a un `permitida` calculado por usuario;
-  - la pantalla Permisos;
-  - la auditoría.
-- Duplica aproximadamente el alcance del backend de esta iteración. Se recomienda dejarla como iteración siguiente si la opción A no alcanza.
+**Cómo se aplican:**
+- **Pantalla Permisos:** al marcar un rol en una acción, también se marca su consulta. Si se quiere quitar una consulta de la que depende otra acción del mismo rol, aparece un aviso.
+- **Backend:** `PUT /permissions` rechaza con 409 un cambio que deje a un rol con una acción sin su consulta, con el motivo. También rechaza una lista de roles vacía (brecha 14).
 
 ---
 
 ## 4. Formularios y navegación (CFG-04 y CFG-05)
 
-### 4.1 Situación actual
-
-- Todas las altas son formularios fijos debajo del listado; ninguna usa modal.
-- Después de guardar, cada pantalla vuelve a pedir su lista completa, y la pestaña Catálogos además pide la auditoría.
-- **Errores existentes:**
-  - el alta de insumo **vacía el formulario aunque falle** (`Insumos.tsx:210`);
-  - el alta de tipo de reparación **no se limpia** al terminar.
-- Tipos de reparación, motivos, plantillas e insumos piden el código a mano; el insumo pide dos.
-- No hay componente de pestañas ni de tabla. Cada pantalla repite su propio `error`, `aviso`, `ocupado` y `ejecutar`.
-
-### 4.2 Propuesta de alta y edición (CFG-04)
+### 4.1 Alta y edición
 
 ```text
 ┌ Insumos ───────────────────────────── [ + Nuevo insumo ] ┐
 │ Buscar…                                                   │
 │ INS-014  Batería iPhone 14   unidad   Lote ✓  $ 25.000  ✎ │
-│ INS-013  Pantalla A54        unidad   Lote ✗  $ 41.000  ✎ │
 └───────────────────────────────────────────────────────────┘
-          ┌ Nuevo insumo ──────────────────── ✕ ┐
+          ┌ Nuevo insumo ─────────────────── ✕ ┐
           │ Nombre*          [               ]  │
           │ Unidad           [ unidad        ]  │
           │ Control por lote [ ]                │
-          │ Precio           [               ]  │  ← solo con PRECIOS_GESTIONAR
-          │ Código operativo [ (automático)  ]  │  ← opcional (D4)
-          │ El identificador se asigna al guardar.│
-          │              [Cancelar] [Crear insumo]│
+          │ Precio           [               ]  │ ← editable solo con PRECIOS_GESTIONAR
+          │ El código se asigna al guardar.     │
+          │             [Cancelar] [Crear insumo]│
           └─────────────────────────────────────┘
 ```
 
 **Comportamiento:**
-- El botón «+ Nuevo …» va en el encabezado de cada listado y solo aparece si el usuario tiene el permiso.
-- Se usa el `Modal` existente con el patrón de Inventario:
-  - el modal se cierra solo si el alta salió bien;
-  - el error se muestra dentro del modal y conserva lo escrito;
-  - el foco va al primer campo y Escape cierra.
-- **No hay campo de código.** La confirmación lo informa: «Se creó INS-014 Batería iPhone 14».
-- **El listado se actualiza sin recargar la pantalla:** se inserta en la lista la entidad que devuelve el POST y se resalta la fila nueva. No se vuelve a pedir el catálogo completo ni la auditoría.
-- La **edición** también usa el modal (botón ✎). Los interruptores de una sola acción (vigente, control por lote) se mantienen en la fila.
-- Los campos que el usuario no puede editar se muestran en solo lectura, por ejemplo el precio sin `PRECIOS_GESTIONAR`.
+- **El botón «+ Nuevo …»** va en el encabezado del listado y solo aparece con el permiso.
+- **El modal** reutiliza `Modal` con el patrón de Inventario:
+  - se cierra solo si el alta salió bien;
+  - si falla, muestra el error adentro y conserva lo escrito;
+  - pone el foco en el primer campo y se cierra con Escape.
+- **No hay campos de código (D4).** La confirmación informa el código asignado.
+- **Se actualiza solo el listado afectado:** la entidad que devuelve el POST se agrega a la lista y su fila queda resaltada. No se pide de nuevo el catálogo completo ni la auditoría.
+- **La edición también usa el modal** (✎). Los interruptores de una sola acción (vigente, control por lote) siguen en la fila.
+- **Se corrigen dos errores actuales:**
+  - el alta de insumo vacía el formulario aunque falle (`Insumos.tsx:210`);
+  - el alta de tipo no se limpia al terminar.
 
-**Catálogos y campos del modal:**
+**Campos del modal:**
 
 | Catálogo | Campos del modal |
 |---|---|
-| Tipo de reparación | Nombre, precio, puntaje, garantía en días y Mesas habilitadas (opcional) |
+| Tipo de reparación | Nombre, precio, puntaje, **garantía con check-in y sin check-in** (CFG-06) y Mesas habilitadas (opcional) |
 | Motivo | Tipo (Cancelación o Interrupción), nombre y «exige descripción» |
-| Insumo | Nombre, unidad, control por lote, precio y código operativo (opcional) |
-| Plantilla | Nombre, finalidad y texto con variables |
-| Proveedor | Igual que hoy, pero en un modal |
+| Insumo | Nombre, unidad, control por lote y precio |
+| Proveedor | Los campos actuales |
 | Pregunta de checklist | Tipo de equipo, texto y opciones |
+| Plantilla | Solo edición: nombre, texto y vigencia (CFG-08) |
 
-**Piezas compartidas nuevas:**
-- `FormularioModal`: el modal con los botones Cancelar y Confirmar, el estado de ocupado y el error.
-- Un hook `useComando`, que unifica `error`, `aviso`, `ocupado` y `ejecutar`.
-- Un componente `Pestanas`, que reemplaza las dos barras de pestañas hechas a mano.
+**Piezas compartidas nuevas:** `FormularioModal`, el hook `useComando` (unifica `error`, `aviso`, `ocupado` y `ejecutar`) y `Pestanas`.
 
-### 4.3 Estructura de Configuración (CFG-05)
-
-Configuración pasa a ser un índice agrupado por funcionalidad. Cada subsección se ve si el usuario tiene **su** permiso, y la sección del menú aparece si tiene al menos uno.
+### 4.2 Estructura de Configuración
 
 | Grupo | Subsección | Permiso | Ruta |
 |---|---|---|---|
@@ -392,147 +409,238 @@ Configuración pasa a ser un índice agrupado por funcionalidad. Cada subsecció
 | Taller | Checklist | CHECKLIST_GESTIONAR | `#/configuracion/checklist` |
 | Inventario y compras | Insumos | INSUMO_GESTIONAR | `#/configuracion/insumos` |
 | Inventario y compras | Proveedores | PROVEEDOR_GESTIONAR | `#/configuracion/proveedores` |
-| Comunicación | Plantillas | PLANTILLA_GESTIONAR | `#/configuracion/plantillas` |
-| Sistema (Administración) | Usuarios y roles; Permisos | ROLES_ADMINISTRAR | `#/configuracion/usuarios`, `#/configuracion/permisos` |
-| Sistema (Administración) | Parámetros y recargos; Auditoría | CONFIGURACION_ADMINISTRAR | `#/configuracion/parametros`, `#/configuracion/auditoria` |
+| Comunicación | Plantillas de WhatsApp | PLANTILLA_GESTIONAR | `#/configuracion/plantillas` |
+| Sistema | Usuarios y roles; Permisos | ROLES_ADMINISTRAR | `#/configuracion/usuarios`, `/permisos` |
+| Sistema | Recargos por medio de pago; Auditoría | CONFIGURACION_ADMINISTRAR | `#/configuracion/recargos`, `/auditoria` |
 
-- **Navegación:**
-  - `#/configuracion` lleva a la primera subsección permitida;
-  - una subsección sin permiso muestra «No tenés permiso para …» (el backend igual responde 403);
-  - las pestañas pasan a la URL, así que se pueden recargar y compartir.
+- **Menú:** Configuración aparece si el usuario tiene al menos uno de esos permisos.
+- **`#/configuracion`** lleva a la primera subsección permitida.
+- **Subsección sin permiso:** muestra «No tenés permiso para …». El backend igual responde 403.
 - **Pantalla Permisos:**
-  - suma los grupos «Compras» y «Configuración operativa»;
-  - muestra las dependencias de cada permiso;
-  - incluye la nota «también requiere …» de las acciones compuestas (brecha 15);
-  - corrige las descripciones (brecha 22).
-- **Fuera de alcance, para evaluar después:** accesos directos desde Inventario («+ Nuevo insumo») y desde Compras («+ Nuevo proveedor»). Reutilizarían el mismo modal y el mismo permiso; la gestión queda en un solo lugar.
+  - grupos «Compras» y «Configuración operativa»;
+  - dependencias marcadas;
+  - nota «también requiere …» en las acciones compuestas;
+  - descripciones corregidas.
+- **Después de guardar roles o permisos** se refrescan los permisos del usuario actual (brecha 20).
 
 ---
 
-## 5. Cambios de base de datos
+## 5. Garantías del tipo de reparación (CFG-06)
 
-Una migración aditiva, `2026112xxxxxxx_configuracion_operativa.sql`:
+### 5.1 Situación actual
 
-1. **Generador de códigos.**
-   - Tabla `rma.contador_codigo` y función `rma.siguiente_codigo(prefijo)` sin truncar.
-   - Inicialización desde los máximos numéricos de la sección 1.3.
-   - Grants: `select` y `update` sobre el contador y `execute` sobre la función para `rma_backend`; revocados para `anon`, `authenticated`, `service_role` y `public`.
-2. **Inmutabilidad del código:** función `rma.impedir_cambio_codigo()` y su trigger en `tipo_reparacion`, `motivo_operativo`, `plantilla_mensaje`, `proveedor`, `checklist_pregunta` y `mesa_trabajo`.
-3. **Permisos:** copiar la fila de `COMPRAS_GESTIONAR` de `rma.permiso`, si existe, a `COMPRA_SOLICITAR`, `OC_CREAR`, `OC_CONFIRMAR` y `COMPRA_RECIBIR`, con su auditoría en `cambio_configuracion`. No se borra nada.
-4. **Opcional (D6):** índices únicos con `upper(codigo)` y una verificación previa que se detiene si hay choques.
-5. **Sin cambios** en las tablas de operación, en los formatos de `nuevo_id` ni en los identificadores existentes.
-6. **Pruebas del esquema a actualizar** (cambian el inventario de objetos, no el comportamiento):
-   - `supabase/tests/10_esquema.sql`, que pasa a 73 entidades;
-   - `tests/postgres/test_base_local.py`;
-   - `docs/postgresql/diseno-logico.md` y `diseno-fisico.md`;
-   - los scripts de reinicio del UAT (`01_reiniciar.sql`, `03_verificar.sql`), donde `contador_codigo` es una tabla maestra que **no** se reinicia.
+El tipo tiene tres plazos y una política, y la pantalla muestra los cuatro (`Configuracion.tsx:172-220`):
 
----
-
-## 6. Riesgos de compatibilidad
-
-| Riesgo | Mitigación |
-|---|---|
-| El frontend publicado manda `codigo` en los POST de alta durante la publicación coordinada | El código es opcional y, si viene, se respeta (sección 1.4) |
-| Los scripts del UAT crean entidades con código fijo (`probar_macro_v14.py:796`) | Ídem. Los scripts no cambian |
-| Pruebas que esperan códigos tipeados (`TR-OFF`, `INS-S`, `CANC-PRECIO`…) | Siguen siendo válidas porque el código opcional se respeta. Se agregan pruebas del generador |
-| Pruebas que fijan formatos (`PRV-0001`, `RGA-000001`, `OC-…`) | Los formatos no cambian |
-| Una fila de `COMPRAS_GESTIONAR` en `rma.permiso` y la vuelta atrás a un backend anterior | Se copia y se conserva. El backend anterior la sigue leyendo |
-| Hay roles en el código del frontend como respaldo (`puede(..., [roles])`) para los permisos renombrados | Actualizar los respaldos. Las pruebas `macro-integral.test.ts` y `roles.test.ts` lo cubren |
-| La ruta `#/configuracion` cambia a subrutas | `#/configuracion` sigue siendo válida y redirige. Se actualiza `rutas.test.ts` |
-| Un rol con un permiso nuevo y sin su consulta | Dependencias (sección 3.4) |
-| El generador y un código cargado a mano por SQL que «adelanta» al contador | Reintento con el siguiente número y error 409 en lugar de 500 |
-| Cambiar los roles fijos (brechas 1 a 3) cambia el comportamiento | No lo cambia mientras los permisos tengan sus predeterminados, porque coinciden con el rol fijo. Hay que confirmar en `business/` que la garantía RMA no exige Recepción por regla |
-| Orden respecto de Reparación RT (rama sin integrar, con la migración `20261119000100`) | D7 |
-| Ver precios sin poder editarlos: la pantalla debe mostrar el precio a quien gestiona el catálogo | El GET de cada catálogo exige su permiso de gestión, no el de precios |
-
----
-
-## 7. Plan de implementación (una iteración, CFG-01 a CFG-05)
-
-Mismo esquema de fases que Reparación RT: implementación, pruebas, QA independiente, correcciones y commits locales por fase, sin push ni UAT.
-
-**Fase A: base y generador (CFG-01)**
-1. Migración: contador, función, triggers de inmutabilidad y copia de permisos.
-2. Repositorio `siguiente_codigo` con reintento y mapeo de 23505 a 409 `CODIGO_DUPLICADO`.
-3. Altas de tipo de reparación, motivo, insumo y plantilla con código opcional.
-4. Proveedor, SC, OC, RGA y CHK pasan al generador, con los mismos formatos.
-5. **Pruebas:**
-   - alta concurrente (dos conexiones, códigos distintos);
-   - la reversión no deja huecos;
-   - salto de un código cargado a mano;
-   - `PRV-9999` → `PRV-10000`;
-   - los códigos no numéricos se ignoran;
-   - `TR-OTROS` sigue reservado;
-   - el código es inmutable en la base;
-   - el código informado se respeta.
-
-**Fase B: permisos (CFG-02 y CFG-03, backend)**
-1. Permisos nuevos y división de Compras; `CONFIGURACION_ADMINISTRAR` queda reducido; dependencias.
-2. Cada router con el `exigir_rol` de su permiso y su servicio con `validar_alguno_de`.
-3. Brechas A y B: 1, 2, 3, 8, 9, 10, 12, 13, 14, 19, 22.
-4. **Pruebas:**
-   - una matriz parametrizada (permiso × rol → 200/403) que recorre **todas** las rutas registradas y falla si aparece una ruta sin clasificar. Queda como control permanente de la auditoría;
-   - JWT real;
-   - un permiso reconfigurado rige desde el pedido siguiente;
-   - el respaldo con la fila anterior de `COMPRAS_GESTIONAR`.
-
-**Fase C: frontend (CFG-04 y CFG-05)**
-1. `FormularioModal`, `useComando` y `Pestanas`.
-2. Configuración por subsecciones con rutas, cada una con su permiso; sin `tieneRol`.
-3. Modales de alta y edición para los seis catálogos; el listado se actualiza en el lugar.
-4. Permisos agrupados con dependencias; los permisos del usuario se refrescan después de guardar (brecha 20).
-5. Crear Orden por `ORDEN_CREAR` (brecha 18).
-6. **Pruebas:** rutas, visibilidad por permiso, lógica de dependencias y reducción del listado; recorrido en el navegador con los cuatro roles, en escritorio y a 390 px.
-
-**Fase D: cierre**
-1. Suites completas: backend, `tests/postgres`, frontend y build.
-2. Ensayo local de la migración sobre una base con el backend publicado.
-3. QA independiente.
-4. Documentación: este documento, `contratos-macro-integral.md` (permisos), `DEUDA_TECNICA.md` (brechas C), `ESTADO_PROYECTO.md` y el procedimiento de UAT.
-
-**Futuro (no se implementa).** Jerarquía de insumos:
-- categorías y subcategorías;
-- productos;
-- tipos de insumo;
-- compatibilidad de un insumo con varios modelos de equipo.
-
-Se registra en `docs/pendientes-producto.md` al aprobar este documento. El diseño de esta iteración no la impide: el insumo sigue con su `uuid` y su `clave`, y la compatibilidad sería una tabla `insumo_modelo_equipo` nueva.
-
----
-
-## 8. Decisiones abiertas
-
-| # | Decisión | Recomendación |
+| Campo | Etiqueta actual | Cuándo rige (`domain/garantia.py:23-43`) |
 |---|---|---|
-| D1 | ¿Permisos por rol o también por usuario? | Por rol en esta iteración; concesiones por usuario en la siguiente si hacen falta (sección 3.5) |
-| D2 | Roles predeterminados de los permisos nuevos | Los que hoy tienen acceso (ADMIN en catálogos), y que Administración los extienda desde Permisos. Alternativa: dar desde el inicio Insumos, Motivos y Tipos a Coordinación RMA y Recepción |
-| D3 | ¿Separar el precio (tipos e insumos) en `PRECIOS_GESTIONAR`? | Sí: el precio de un tipo es el precio al cliente. Un alta exige también ese permiso porque el precio es obligatorio |
-| D4 | Código operativo del insumo (`codigo`, tipo SKU) | Automático igual a la clave (`INS-014`) salvo que se informe uno en el alta. Después no se puede cambiar, como hoy |
-| D5 | Granularidad de Compras | Cuatro permisos (sección 3.3). La mínima es separar solo `OC_CREAR` |
-| D6 | ¿Unicidad sin distinguir mayúsculas? | Sí, con verificación previa en el UAT |
-| D7 | Rama base y orden respecto de Reparación RT | Partir de `feat/reparacion-rt-etapa1`, así el catálogo de permisos ya incluye Reparación RT y la migración va después de `20261119000100`. Integrar las dos en `mvp-v2` juntas o en ese orden |
-| D8 | ¿Brechas B en esta iteración? | Sí, son de bajo costo. Las C van a `DEUDA_TECNICA.md` |
+| `garantia_con_checkin` | «Garantía con check-in realizado» | Check-in de entrega realizado |
+| `garantia_sin_checkin` | «Garantía con check-in no realizado» | Check-in registrado como no realizado |
+| `garantia_dias` | «Garantía sin check-in exigible» | **Sin check-in registrado:** RT interno, garantía RMA y la asignación provisoria hasta el check-in. También es el plazo de la política RMA `NUEVO_PLAZO` o sin definir (`services/documentos.py:181-215`). La regla funcional está abierta (ABI-39) |
+| `politica_garantia_rma` | «Trabajos hechos dentro de una garantía RMA» | Garantía de un trabajo hecho dentro de una garantía RMA. La inicial está abierta (ABI-38) |
+
+### 5.2 Propuesta
+
+- **La pantalla** (listado y modal) muestra solo **«Garantía con check-in (días)»** y **«Garantía sin check-in (días)»**.
+- **`garantia_dias` y `politica_garantia_rma` siguen en la base y en el backend.** No se borran ni se cambian los valores existentes (ajuste 8). Los Detalles guardan su propia copia, así que lo histórico no se toca.
+- **`garantia_dias` en la API:** pasa a ser opcional. Si no viene:
+  - **en el alta** toma el plazo **con check-in**: el seed tiene `garantia_dias = 90 = con check-in`, así que repite el comportamiento actual;
+  - **en la edición** se mantiene sincronizado con el plazo con check-in (DF-1).
+
+  Si viene, porque lo manda el frontend anterior o un script, se respeta.
+- **`politica_garantia_rma` en la API:** pasa a ser opcional. Si no viene, se conserva el valor guardado; en un alta queda vacía, que es el comportamiento vigente (DF-2).
+- **Antes del UAT** se corre una consulta de solo lectura que lista los tipos cuyo `garantia_dias` difiere de `garantia_con_checkin`, o que tienen política RMA definida. Así la decisión DF-1 se toma con los datos reales.
 
 ---
 
-## Anexo A. Órdenes: permisos por comando
+## 6. Plazo de retiro y plantillas (CFG-07 y CFG-08)
+
+### 6.1 Plazo de retiro (CFG-07)
+
+- `PLAZO_RETIRO_DIAS` define cuándo un retiro pasa a «demorado» en las bandejas y en la Orden (`application/operativa.py:96`, `bandejas.py:195`). Vale 30 por defecto.
+- **Se quita de la interfaz.** La subsección «Parámetros» pasa a ser «Recargos por medio de pago».
+- **Se conserva** el parámetro en la base con su valor actual, su lectura y su efecto en el backend. También el endpoint `GET/PUT /api/admin/parameters`, que queda sin pantalla y solo para Administración.
+- No se cambia ningún valor (ajuste 8).
+
+### 6.2 Plantillas de WhatsApp (CFG-08)
+
+**Hoy hay cinco plantillas:** `INGRESO`, `AUTORIZACION_PENDIENTE`, `LISTO_PARA_RETIRAR`, `RECORDATORIO_RETIRO` y `GARANTIA`. La Orden ofrece todas las activas (`ComunicacionesOrden.tsx:60-61`).
+
+**Propuesta:**
+- **Lista de plantillas visibles en el backend** (`PLANTILLAS_VISIBLES`, en el dominio): **`INGRESO` y `LISTO_PARA_RETIRAR`** (DF-3).
+- **La API agrega `visible: bool`** a cada plantilla. El frontend nuevo muestra solo las visibles. El anterior ignora el campo y sigue mostrando todas (compatibilidad).
+- **Dónde se aplica:**
+  - en Configuración, con edición de texto y vigencia, sin alta de plantillas nuevas;
+  - en el selector de la Orden, si se confirma DF-3.
+- **No se desactiva ni se borra ninguna plantilla** (ajuste 8).
+- **Historia:** las comunicaciones ya registradas guardan su texto (`comunicacion_cliente.mensaje`, inmutable), así que su historial se sigue viendo completo.
+- **Endpoints:** el POST de alta queda solo en la API, para compatibilidad. Preparar un mensaje con una plantilla oculta sigue funcionando en el backend; solo deja de ofrecerse en pantalla.
+
+---
+
+## 7. Cambios de base de datos
+
+Una migración aditiva, `20261120000100_configuracion_v2.sql`, posterior a la de Reparación RT:
+
+1. **Secuencias** `rma.codigo_*_seq`, inicializadas desde los máximos numéricos (1.3), y la función `rma.siguiente_codigo(prefijo)`.
+   - `rma_backend` recibe `usage` sobre las secuencias y `execute` sobre la función.
+   - Se revocan para `public`, `anon`, `authenticated` y `service_role`.
+2. **Trigger** `rma.impedir_cambio_codigo()` en seis tablas.
+3. **Índices únicos sin distinguir mayúsculas** en `tipo_reparacion` e `insumo`, con una verificación previa que aborta y lista los choques.
+4. **Copia** de la fila de `COMPRAS_GESTIONAR` de `rma.permiso` a los cinco permisos nuevos, con una fila de auditoría. Nada se borra.
+5. **Sin cambios** en:
+   - columnas y tablas de operación;
+   - parámetros y plantillas;
+   - `garantia_dias` y la política RMA;
+   - los formatos de `nuevo_id`.
+6. **Inventario de objetos:**
+   - no cambia la cantidad de tablas (72), porque no hay tablas nuevas;
+   - `supabase/tests/10_esquema.sql` incorpora las secuencias, la función y los triggers;
+   - los scripts de reinicio del UAT conservan las secuencias (no las reinician).
+
+---
+
+## 8. Verificación de cada permiso en el backend y el frontend
+
+**Backend: prueba de matriz de rutas** (`tests/test_matriz_permisos.py`)
+- Recorre `app.routes` y exige que **cada** ruta esté clasificada en una tabla de la prueba: su permiso o una excepción justificada (pública, solo sesión, evento de sistema).
+- Una ruta nueva sin clasificar hace fallar la prueba, así que es un control permanente.
+- Para cada ruta con permiso, contra PostgreSQL y con JWT real:
+  - un rol sin el permiso recibe 403 **en la API**;
+  - el servicio también lo rechaza cuando se lo invoca directo;
+  - un rol con el permiso pasa.
+- Se repite con una política reconfigurada: el permiso dado a otro rol rige desde el pedido siguiente.
+
+**Frontend: prueba estática de controles**
+- Ningún `tieneRol(...)` se usa para habilitar acciones. Las excepciones quedan listadas, por ejemplo el selector de demo.
+- Todo código usado en `puede(actor, "X")` existe en el registro del backend. Se compara con una lista exportada por el backend en la prueba.
+- Cada sección del menú y cada subsección de Configuración declara su permiso.
+- Se eliminan los respaldos por rol de `puede()`: el backend siempre envía `permisos`. Eso elimina además el error `"ADMINISTRACION"` (brecha 19).
+
+**Recorrido en el navegador:** los cuatro roles y un rol con permisos reconfigurados, que debe ver exactamente lo que el backend le permite.
+
+---
+
+## 9. Compatibilidad
+
+| Caso | Cómo se garantiza | Cómo se prueba |
+|---|---|---|
+| El frontend publicado manda códigos y `garantia_dias` en las altas | Son opcionales y, si vienen, se respetan | Pruebas de contrato con el cuerpo anterior |
+| El frontend publicado usa `COMPRAS_GESTIONAR` | Alias de lectura en `permisos_de` | Prueba de contrato |
+| El backend publicado (vuelta atrás) sobre la base migrada | La migración solo agrega; la fila de `COMPRAS_GESTIONAR` se conserva; las secuencias no molestan al `max()+1` anterior | Ensayo local con el backend publicado, igual que en Reparación RT |
+| Vuelta al backend nuevo después de altas hechas por el anterior | El generador saltea los códigos que ya existen | Prueba: códigos creados «por fuera» y luego altas nuevas |
+| Scripts del UAT con códigos fijos (`probar_macro_v14.py`) | Código opcional respetado | Se corren sin cambios |
+| Pruebas que esperan formatos (`PRV-0001`, `RGA-000001`) y códigos tipeados (`TR-OFF`, `INS-S`) | Formatos iguales; código informado respetado | Las suites existentes sin cambios de expectativas |
+| Datos históricos: Detalles, comunicaciones, auditoría | No se reescribe nada; los Detalles y las comunicaciones guardan sus copias | Pruebas de lectura sobre datos anteriores |
+| Ruta `#/configuracion` | Sigue siendo válida y redirige | `rutas.test.ts` actualizado |
+
+---
+
+## 10. Decisiones funcionales necesarias antes de programar
+
+| # | Decisión | Opciones | Recomendación |
+|---|---|---|---|
+| DF-1 | Valor del plazo oculto `garantia_dias`: rige sin check-in registrado, es decir en RT interno, garantía RMA y la asignación provisoria | a) igual a «con check-in»; b) igual a «sin check-in»; c) conservar el valor y no tocarlo en la edición | **a)** Es lo que hoy tiene el seed (90 = con check-in), así que el comportamiento no cambia. Se confirma con la consulta previa del UAT (5.2) |
+| DF-2 | Política de garantía RMA del tipo | a) ocultarla y conservar los valores; b) seguir mostrándola | **a)** Lo pedido es «solo con y sin check-in». Los tipos nuevos quedan «sin definir», el comportamiento vigente |
+| DF-3 | Qué plantillas son «ingreso y retiro», y dónde se ocultan las demás | Plantillas: `INGRESO` + `LISTO_PARA_RETIRAR`, o sumar `RECORDATORIO_RETIRO`. Lugar: solo Configuración, o también el selector de la Orden | **`INGRESO` y `LISTO_PARA_RETIRAR`, ocultas en los dos lugares**, sin alta de plantillas nuevas |
+| DF-4 | Roles iniciales de los permisos que resultan de dividir `COMPRAS_GESTIONAR` | a) heredan sus roles vigentes (RECEP, COORD, ADMIN); b) solo ADMIN, como D2 | **a)** Con b) Recepción y Coordinación perderían Compras el día del despliegue. D2 se aplica a los permisos de catálogos, que hoy son solo de ADMIN |
+| DF-5 | Cancelación de OC | a) `OC_CANCELAR` para confirmadas y `OC_CREAR` también alcanza para un borrador; b) `OC_CANCELAR` para todo; c) junto con confirmar | **a)** (3.3) |
+
+---
+
+## 11. Plan de implementación (CFG-01 a CFG-08)
+
+**Cómo se trabaja:**
+- Rama `feat/configuracion-v2`.
+- Cada fase pasa por implementación, pruebas, QA independiente, correcciones y commits locales.
+- Sin push, merge ni UAT.
+- Pruebas focalizadas durante el desarrollo; la suite `tests/postgres` completa, al cierre.
+
+### Fase A: generador e identificadores (CFG-01 y D6)
+
+1. La migración: secuencias, función, triggers, índices sin distinguir mayúsculas y su verificación previa.
+2. `siguiente_codigo` en el repositorio, con salto de los códigos existentes y 409 `CODIGO_DUPLICADO`.
+3. Altas de tipo, motivo e insumo con código opcional. Proveedor, SC, OC, RGA y CHK pasan al generador.
+4. **Pruebas:**
+   - altas concurrentes en dos conexiones;
+   - la reversión no repite códigos;
+   - se saltean los códigos cargados por fuera;
+   - `PRV-9999` → `PRV-10000`;
+   - se ignoran los códigos no numéricos;
+   - `TR-OTROS` sigue reservado;
+   - la base rechaza cambiar un código;
+   - `tr-010` frente a `TR-010`;
+   - la migración aborta si hay choques.
+
+### Fase B: permisos en el backend (CFG-02 y CFG-03)
+
+1. Permisos de catálogos, precio y Compras; dependencias; alias `COMPRAS_GESTIONAR`; copia de lo configurado.
+2. Cada router con su `exigir_rol` y cada servicio con su `validar_alguno_de`, incluida la regla de cancelación por estado (DF-5).
+3. Brechas A y B del backend: 1, 2, 3, 8, 9, 10, 12, 13, 14, 22.
+4. **Pruebas:** la matriz de rutas (sección 8), reconfiguración y vuelta atrás con la fila anterior.
+
+### Fase C: garantías, plazo de retiro y plantillas en el backend (CFG-06, CFG-07 y CFG-08)
+
+1. `garantia_dias` y `politica_garantia_rma` opcionales, con las reglas de DF-1 y DF-2.
+2. El campo `visible` de las plantillas según DF-3.
+3. **Pruebas:**
+   - cuerpo anterior y cuerpo nuevo;
+   - los Detalles históricos no cambian;
+   - el plazo de retiro sigue rigiendo en las bandejas;
+   - una plantilla oculta sigue funcionando por API.
+
+### Fase D: frontend (CFG-04, CFG-05 y la parte visible de CFG-06 a CFG-08)
+
+1. `FormularioModal`, `useComando` y `Pestanas`.
+2. Configuración por subsecciones con rutas y permisos; menú controlado por permisos; se quitan los respaldos por rol.
+3. Modales de alta y edición de los seis catálogos, sin campos de código, con el listado actualizado en el lugar.
+4. Garantías con dos plazos, sin el plazo de retiro, y plantillas filtradas en Configuración y en la Orden.
+5. Pantalla Permisos con grupos, dependencias y refresco de los permisos propios.
+6. Crear Orden controlado por `ORDEN_CREAR`.
+7. **Pruebas:**
+   - prueba estática de controles (sección 8);
+   - rutas y lógica de dependencias;
+   - recorrido en el navegador con los cuatro roles y un rol reconfigurado, en escritorio y a 390 px.
+
+### Fase E: compatibilidad y cierre
+
+1. Suites completas: backend, `tests/postgres`, frontend y build.
+2. **Ensayo de compatibilidad local:**
+   - backend publicado sobre la base migrada;
+   - frontend publicado contra el backend nuevo, con pruebas de contrato;
+   - vuelta al backend nuevo después de altas hechas por el anterior;
+   - scripts de UAT existentes.
+3. QA independiente de toda la iteración.
+4. **Documentación:**
+   - este documento;
+   - `contratos-macro-integral.md` (permisos);
+   - `DEUDA_TECNICA.md` (brechas C);
+   - `pendientes-producto.md` (jerarquía de insumos);
+   - `ESTADO_PROYECTO.md`;
+   - un procedimiento de UAT con las consultas previas de solo lectura: choques de mayúsculas (D6), plazos de garantía (DF-1) y filas de `rma.permiso`.
+
+**Mejora futura de insumos (no se implementa).**
+- Alcance: categorías, subcategorías, productos, tipos de insumo y compatibilidad de un insumo con varios modelos de equipo.
+- Este diseño no la impide: el insumo conserva su `uuid` y su `clave`, y la compatibilidad sería una tabla `insumo_modelo_equipo` nueva.
+
+---
+
+## Anexo A. Órdenes: permiso de cada comando
 
 | Ruta (`/api/orders/...`) | Permiso en el servicio |
 |---|---|
 | `POST ""`, `/rt-interno` | ORDEN_CREAR (+ DETALLE_DEFINIR_RECEPCION si hay trabajo inicial) |
-| `/details`, `/definition/finalize` | DETALLE_DEFINIR_RECEPCION o DETALLE_DEFINIR_TECNICO, según el estado |
-| `/warranty-rma` | GARANTIA_RMA_CREAR o GARANTIA_EXCEPCION, **+ rol fijo RECEPCION** sin excepción (brecha 2) |
+| `/details`, `/definition/finalize` | DETALLE_DEFINIR_RECEPCION o DETALLE_DEFINIR_TECNICO según el estado |
+| `/warranty-rma` | GARANTIA_RMA_CREAR o GARANTIA_EXCEPCION, **más el rol fijo RECEPCION** sin excepción (brecha 2) |
 | `/send-to-review` | **rol fijo RECEPCION** (brecha 1) |
 | `/review/without-repair` | ENVIAR_A_REVISION |
 | `/technical-review` | REVISION_TECNICA |
 | `/review/details`, `/details/{d}/technical-review`, `/redefine` | DETALLE_DEFINIR_TECNICO |
 | `/details/{d}/resources/override` | RECURSOS_OVERRIDE |
-| `/resources/wait`, `/resources/revalidate`, `/inform-rt` | **ninguno, sin usuario** (brecha 11) |
+| `/resources/wait`, `/resources/revalidate`, `/inform-rt` | **ninguno: sin usuario** (brecha 11) |
 | `/queue` | PRIORIDAD_DEFINIR |
 | `/priority` | PRIORIDAD_CAMBIAR |
 | `/take`, `/details/{d}/start` | ORDEN_TOMAR |
-| `/release` | ORDEN_TOMAR (propia) o LIBERACION_AJENA |
+| `/release` | ORDEN_TOMAR (la propia) o LIBERACION_AJENA |
 | `/details/{d}/evaluation` | EVALUACION_TECNICA + ORDEN_TOMAR (+ DETALLE_ADICIONAL) |
 | `/details/additional` | DETALLE_ADICIONAL |
 | `/executions/{e}/complete`, `/interrupt`, `/requires-redefinition` | EJECUCION |
@@ -541,7 +649,7 @@ Se registra en `docs/pendientes-producto.md` al aprobar este documento. El dise�
 | `/authorizations` | DECISION_CLIENTE (+ CANCELACION si hay rechazos) |
 | `/withdrawal`, `/details/{d}/withdrawal` | DECISION_CLIENTE + CANCELACION |
 | `/return-equipment`, `/deliver`, `/return-rt` | ENTREGA |
-| `PUT /reception`, `/reception/confirm`, `/not-received`, `/notes`, `/documents/reception-receipt` | CUSTODIA (INGRESO_CORREGIR si corrige datos ya registrados) |
+| `PUT /reception`, `/reception/confirm`, `/not-received`, `/notes`, `/documents/reception-receipt` | CUSTODIA (INGRESO_CORREGIR si corrige datos registrados) |
 | `/documents/intake-receipt` | DETALLE_DEFINIR_RECEPCION + CUSTODIA + DECISION_CLIENTE + COMPROBANTE_AUTORIZACION |
 | `/documents/authorization-receipt` | COMPROBANTE_AUTORIZACION |
 | `/discount` | DESCUENTO o CORTESIA |
