@@ -157,6 +157,8 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 
 - **`20261112000100_evaluacion_tecnica.sql`:** `detalle.origen_diagnostico`, que admite vacío (RECEPCION o REVISION_TECNICA; vacío en los Detalles anteriores); DESCARTE_TECNICO en `cancelacion_origen`; la tabla inmutable `evaluacion_tecnica`; equivalencias de 182, 183, 184 y 128.
 - **`20261112000200_configuracion_auditada.sql`:** la tabla inmutable `cambio_configuracion`, con `secuencia` identity; la vista `historial_precio`; DELETE en `mesa_tipo_reparacion` para `rma_backend`.
+- **`20261120000100_codigos_automaticos.sql`** (Configuración v2, CFG-01): una secuencia por prefijo (`codigo_tr_seq` … `codigo_rga_seq`) y `rma.siguiente_codigo(prefijo)`, que formatea sin truncar y saltea los códigos usados sin distinguir mayúsculas (puede dejar huecos); trigger `impedir_cambio_codigo` en seis catálogos; índices únicos `upper(codigo)` en `tipo_reparacion` e `insumo` (`clave` y `codigo`). Sin tablas nuevas.
+- **`20261120000200_permisos_operativos.sql`** (CFG-03): copia la fila de `COMPRAS_GESTIONAR` de `rma.permiso`, si existe, a los cinco permisos de Compras, con auditoría; no borra la fila anterior.
 
 **Macroiteración integral (rama `feat/macro-integral`, aditivas, aplicadas solo en la base local; ninguna en Supabase):**
 

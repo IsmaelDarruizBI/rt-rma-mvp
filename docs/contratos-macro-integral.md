@@ -25,6 +25,28 @@ La copia de los Tipos de Equipo desde el catálogo de Ventas (`POST /api/admin/e
 
 `CONFIGURACION_ADMINISTRAR` y `ROLES_ADMINISTRAR` (Administración) no se configuran.
 
+## Configuración v2 (20/11/2026, rama `feat/configuracion-v2`)
+
+Diseño y decisiones en [`configuracion-discovery.md`](configuracion-discovery.md). Matriz de todas las rutas en `app/backend/tests/test_matriz_permisos.py` (una ruta sin clasificar hace fallar la prueba).
+
+**Permisos.** `COMPRAS_GESTIONAR` se reemplaza por los de abajo; `CONFIGURACION_ADMINISTRAR` queda para parámetros, recargos y la auditoría completa. Todos configurables salvo los dos de Administración.
+
+| Permiso | Roles iniciales | Requiere | Para qué |
+|---|---|---|---|
+| `COMPRA_SOLICITAR`, `OC_CREAR`, `OC_CONFIRMAR`, `OC_CANCELAR`, `COMPRA_RECIBIR` | Los de `COMPRAS_GESTIONAR` (Recepción, Coordinación, Administración; la migración `20261120000200` copia lo configurado) | `COMPRAS_CONSULTAR` | Cada acción de Compras; `OC_CREAR` también descarta el borrador propio (DF-5) |
+| `PROVEEDOR_GESTIONAR` | Administración | `COMPRAS_CONSULTAR` | Alta y edición de proveedores |
+| `TIPO_REPARACION_GESTIONAR`, `PRECIOS_GESTIONAR`, `MESA_TIPOS_GESTIONAR`, `MOTIVO_GESTIONAR`, `PLANTILLA_GESTIONAR`, `CHECKLIST_GESTIONAR` | Administración | — | Cada catálogo; el precio aparte (un alta de tipo exige los dos) |
+| `INSUMO_GESTIONAR` | Administración | `INVENTARIO_CONSULTAR` | Insumos (el precio, con `PRECIOS_GESTIONAR`) |
+
+`GET /api/admin/permissions` informa `requiere`; `PUT /api/admin/permissions/{codigo}` rechaza (409) una lista vacía y un cambio que deje una acción sin su consulta. `permisos_de` (y `GET /api/me`, `GET /api/catalogs/users`) informa además el alias `COMPRAS_GESTIONAR` a quien tiene `OC_CREAR`, para el frontend anterior. `GET /api/admin/config-changes?entidad=X` lo ve quien administra esa entidad; sin `entidad`, Administración.
+
+**Contratos que cambian (compatibles):**
+
+- **Códigos automáticos (CFG-01):** `codigo` es opcional en `POST /api/admin/repair-types` (`TR-NNN`) y `POST /api/admin/reasons` (`CANC-NNN` o `INT-NNN`); `clave` y `codigo` en `POST /api/admin/supplies` (`INS-NNN`, el código igual a la clave) y `codigo` en `PUT /api/admin/supplies/{clave}`. Si vienen, se respetan. Duplicados sin distinguir mayúsculas: 409 `PRECONDICION_INVALIDA`, nunca 500. Proveedor, solicitud, OC, reclamo y pregunta usan el mismo generador con sus formatos.
+- **Garantías del Tipo (CFG-06):** `garantia_dias`, `garantia_con_checkin`, `garantia_sin_checkin` y `politica_garantia_rma` son opcionales: lo que no viene se conserva al editar; en el alta el genérico toma el de con check-in.
+- **Plantillas (CFG-08):** cada plantilla informa `visible` (solo `INGRESO` y `LISTO_PARA_RETIRAR`).
+- **Rutas que ahora controlan el permiso en la API:** las de Compras por acción; `/api/admin/*` por catálogo; plantillas de Administración; mensaje preparado, consentimientos, bandejas, fotos y firmas con `ORDENES_CONSULTAR`; limpieza de fotos con `FOTOS_ADMINISTRAR`.
+
 ## Rutas por módulo
 
 | Módulo | Rutas |

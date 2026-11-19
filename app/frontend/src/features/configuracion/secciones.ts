@@ -31,7 +31,12 @@ export interface DefinicionSeccion {
   permisos: readonly string[];
 }
 
-/** Con una API anterior a CFG-03 (sin estos códigos) decidía el rol. */
+/**
+ * Respaldo solo para una API que no manda la lista de permisos. El backend
+ * publicado antes de CFG-03 sí la manda (sin estos códigos): con él, el
+ * frontend nuevo no muestra los catálogos operativos. Backend y frontend se
+ * publican y se vuelven atrás juntos (DEUDA_TECNICA, P1-17).
+ */
 const SOLO_ADMINISTRACION = ["ADMINISTRADOR"] as const;
 
 export const SECCIONES_CONFIGURACION: readonly DefinicionSeccion[] = [

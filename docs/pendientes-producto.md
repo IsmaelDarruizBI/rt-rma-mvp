@@ -102,6 +102,16 @@ La Ejecución conserva lo que el técnico informó como utilizado; los movimient
 2. Si en la realidad se usó una pieza que no estaba cargada en el sistema, el conteo físico va a diferir del sistema. Se corrige con un ajuste de inventario; definir si hace falta un procedimiento.
 3. Sigue existiendo, fuera del override, un caso de stock negativo: el consumo de una reserva propia después de un ajuste manual que dejó el físico por debajo de lo reservado. No se cambió.
 
+## P-07. Jerarquía y compatibilidad de insumos
+
+Registrado el 20/11/2026 (Configuración v2, mejora futura, no implementada).
+
+**Pedido.** Organizar los insumos con categorías, subcategorías, productos y tipos de insumo, y registrar la compatibilidad de un insumo con varios modelos de equipo.
+
+**Hoy.** Cada insumo tiene identificador (`INS-NNN`, generado), código, nombre, unidad, control por lote y precio; la compatibilidad no existe.
+
+**Falta.** Definirlo en `business/` primero. El diseño actual no lo impide: el insumo conserva su identificador técnico y su clave, y la compatibilidad sería una tabla nueva entre insumo y modelo de equipo.
+
 ## Nota técnica: `capacidad` como texto
 
 `Equipo.capacidad` se guarda como texto libre (por ejemplo «256 GB», copiado del catálogo de Ventas en las Órdenes anteriores). Se mantiene así por compatibilidad con las Órdenes existentes.

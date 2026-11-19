@@ -1,10 +1,10 @@
 # Configuración v2: identificadores, permisos y catálogos operativos
 
-> **Estado:** diseño final para aprobación (19/11/2026). No incluye código, migraciones ni cambios en UAT.
+> **Estado:** implementado en local (20/11/2026), fases A a E, con QA independiente por fase y QA integral; sin push ni despliegue. Implementación y resultados en la sección 12.
 >
 > **Rama:** `feat/configuracion-v2`, creada desde `feat/reparacion-rt-etapa1` (`f3036ca`). Las referencias `archivo:línea` apuntan a esa base. Las del backend son relativas a `app/backend/app/` y las del frontend a `app/frontend/src/`.
 >
-> **Pendiente:** antes de programar hacen falta las decisiones funcionales de la sección 10. La implementación espera su aprobación.
+> **Decisiones:** D1 a D8 y DF-1 a DF-5 aprobadas el 20/11/2026 (sección 10).
 
 ## Decisiones aprobadas
 
@@ -444,7 +444,7 @@ El tipo tiene tres plazos y una política, y la pantalla muestra los cuatro (`Co
 - **`garantia_dias` y `politica_garantia_rma` siguen en la base y en el backend.** No se borran ni se cambian los valores existentes (ajuste 8). Los Detalles guardan su propia copia, así que lo histórico no se toca.
 - **`garantia_dias` en la API:** pasa a ser opcional. Si no viene:
   - **en el alta** toma el plazo **con check-in**: el seed tiene `garantia_dias = 90 = con check-in`, así que repite el comportamiento actual;
-  - **en la edición** se mantiene sincronizado con el plazo con check-in (DF-1).
+  - **en la edición** se conserva el valor del Tipo (DF-1 aprobado: «conservar los valores existentes»).
 
   Si viene, porque lo manda el frontend anterior o un script, se respeta.
 - **`politica_garantia_rma` en la API:** pasa a ser opcional. Si no viene, se conserva el valor guardado; en un alta queda vacía, que es el comportamiento vigente (DF-2).
@@ -470,7 +470,7 @@ El tipo tiene tres plazos y una política, y la pantalla muestra los cuatro (`Co
 - **La API agrega `visible: bool`** a cada plantilla. El frontend nuevo muestra solo las visibles. El anterior ignora el campo y sigue mostrando todas (compatibilidad).
 - **Dónde se aplica:**
   - en Configuración, con edición de texto y vigencia, sin alta de plantillas nuevas;
-  - en el selector de la Orden, si se confirma DF-3.
+  - en el selector de la Orden (DF-3 aprobada).
 - **No se desactiva ni se borra ninguna plantilla** (ajuste 8).
 - **Historia:** las comunicaciones ya registradas guardan su texto (`comunicacion_cliente.mensaje`, inmutable), así que su historial se sigue viendo completo.
 - **Endpoints:** el POST de alta queda solo en la API, para compatibilidad. Preparar un mensaje con una plantilla oculta sigue funcionando en el backend; solo deja de ofrecerse en pantalla.
@@ -479,7 +479,7 @@ El tipo tiene tres plazos y una política, y la pantalla muestra los cuatro (`Co
 
 ## 7. Cambios de base de datos
 
-Una migración aditiva, `20261120000100_configuracion_v2.sql`, posterior a la de Reparación RT:
+Dos migraciones aditivas, posteriores a la de Reparación RT: `20261120000100_codigos_automaticos.sql` (puntos 1 a 3) y `20261120000200_permisos_operativos.sql` (punto 4). Las secuencias permiten huecos (ajuste 1), en lugar del contador sin huecos descrito arriba:
 
 1. **Secuencias** `rma.codigo_*_seq`, inicializadas desde los máximos numéricos (1.3), y la función `rma.siguiente_codigo(prefijo)`.
    - `rma_backend` recibe `usage` sobre las secuencias y `execute` sobre la función.
@@ -495,7 +495,7 @@ Una migración aditiva, `20261120000100_configuracion_v2.sql`, posterior a la de
 6. **Inventario de objetos:**
    - no cambia la cantidad de tablas (72), porque no hay tablas nuevas;
    - `supabase/tests/10_esquema.sql` incorpora las secuencias, la función y los triggers;
-   - los scripts de reinicio del UAT conservan las secuencias (no las reinician).
+   - el reinicio del UAT (`01_reiniciar.sql`) reinicia solo `codigo_sc_seq`, `codigo_oc_seq` y `codigo_rga_seq`, porque vacía esas tablas; las de los catálogos (maestras) se conservan. La línea de base y la limpieza de los E2E restauran todas.
 
 ---
 
@@ -514,7 +514,7 @@ Una migración aditiva, `20261120000100_configuracion_v2.sql`, posterior a la de
 - Ningún `tieneRol(...)` se usa para habilitar acciones. Las excepciones quedan listadas, por ejemplo el selector de demo.
 - Todo código usado en `puede(actor, "X")` existe en el registro del backend. Se compara con una lista exportada por el backend en la prueba.
 - Cada sección del menú y cada subsección de Configuración declara su permiso.
-- Se eliminan los respaldos por rol de `puede()`: el backend siempre envía `permisos`. Eso elimina además el error `"ADMINISTRACION"` (brecha 19).
+- Los respaldos por rol de `puede()` se conservan solo para una API sin lista de permisos (el backend nuevo siempre la manda). El rol inexistente `"ADMINISTRACION"` se corrigió (brecha 19).
 
 **Recorrido en el navegador:** los cuatro roles y un rol con permisos reconfigurados, que debe ver exactamente lo que el backend le permite.
 
@@ -539,11 +539,11 @@ Una migración aditiva, `20261120000100_configuracion_v2.sql`, posterior a la de
 
 | # | Decisión | Opciones | Recomendación |
 |---|---|---|---|
-| DF-1 | Valor del plazo oculto `garantia_dias`: rige sin check-in registrado, es decir en RT interno, garantía RMA y la asignación provisoria | a) igual a «con check-in»; b) igual a «sin check-in»; c) conservar el valor y no tocarlo en la edición | **a)** Es lo que hoy tiene el seed (90 = con check-in), así que el comportamiento no cambia. Se confirma con la consulta previa del UAT (5.2) |
-| DF-2 | Política de garantía RMA del tipo | a) ocultarla y conservar los valores; b) seguir mostrándola | **a)** Lo pedido es «solo con y sin check-in». Los tipos nuevos quedan «sin definir», el comportamiento vigente |
-| DF-3 | Qué plantillas son «ingreso y retiro», y dónde se ocultan las demás | Plantillas: `INGRESO` + `LISTO_PARA_RETIRAR`, o sumar `RECORDATORIO_RETIRO`. Lugar: solo Configuración, o también el selector de la Orden | **`INGRESO` y `LISTO_PARA_RETIRAR`, ocultas en los dos lugares**, sin alta de plantillas nuevas |
-| DF-4 | Roles iniciales de los permisos que resultan de dividir `COMPRAS_GESTIONAR` | a) heredan sus roles vigentes (RECEP, COORD, ADMIN); b) solo ADMIN, como D2 | **a)** Con b) Recepción y Coordinación perderían Compras el día del despliegue. D2 se aplica a los permisos de catálogos, que hoy son solo de ADMIN |
-| DF-5 | Cancelación de OC | a) `OC_CANCELAR` para confirmadas y `OC_CREAR` también alcanza para un borrador; b) `OC_CANCELAR` para todo; c) junto con confirmar | **a)** (3.3) |
+| DF-1 | Valor del plazo oculto `garantia_dias`: rige sin check-in registrado, es decir en RT interno, garantía RMA y la asignación provisoria | a) igual a «con check-in»; b) igual a «sin check-in»; c) conservar el valor y no tocarlo en la edición | **Aprobado (20/11/2026):** conservar los existentes; en el alta, el valor de con check-in |
+| DF-2 | Política de garantía RMA del tipo | a) ocultarla y conservar los valores; b) seguir mostrándola | **Aprobado:** a), conservando la información y las reglas actuales |
+| DF-3 | Qué plantillas son «ingreso y retiro», y dónde se ocultan las demás | Plantillas: `INGRESO` + `LISTO_PARA_RETIRAR`, o sumar `RECORDATORIO_RETIRO`. Lugar: solo Configuración, o también el selector de la Orden | **Aprobado:** `INGRESO` y `LISTO_PARA_RETIRAR`, en Configuración y en la Orden; sin `RECORDATORIO_RETIRO`; nada se borra ni se desactiva |
+| DF-4 | Roles iniciales de los permisos que resultan de dividir `COMPRAS_GESTIONAR` | a) heredan sus roles vigentes (RECEP, COORD, ADMIN); b) solo ADMIN, como D2 | **Aprobado:** a), sin quitar accesos existentes |
+| DF-5 | Cancelación de OC | a) `OC_CANCELAR` para confirmadas y `OC_CREAR` también alcanza para un borrador; b) `OC_CANCELAR` para todo; c) junto con confirmar | **Aprobado:** a), con los controles desde el backend |
 
 ---
 
@@ -623,6 +623,58 @@ Una migración aditiva, `20261120000100_configuracion_v2.sql`, posterior a la de
 - Este diseño no la impide: el insumo conserva su `uuid` y su `clave`, y la compatibilidad sería una tabla `insumo_modelo_equipo` nueva.
 
 ---
+
+## 12. Implementación (20/11/2026)
+
+Rama `feat/configuracion-v2`, desde `feat/reparacion-rt-etapa1` (`f3036ca`). Commits locales, sin push, sin integrar y sin cambios en el UAT, Gestión RT ni `main`.
+
+| Fase | Commit | Contenido |
+|---|---|---|
+| Discovery y diseño | `109666b`, `1b79802` | Este documento |
+| A. Códigos automáticos (CFG-01, D6) | `1d59a83` | Migración `20261120000100`; generador en la base; códigos opcionales en la API; 409 en vez de 500 |
+| B. Permisos (CFG-02, CFG-03) | `8c3bdcd` | Permisos de catálogos y de Compras; dependencias; migración `20261120000200`; matriz de rutas |
+| C. Garantías, plazo de retiro y plantillas (CFG-06 a CFG-08) | `6683bcf` | Plazos opcionales que se conservan; `visible` en plantillas |
+| D. Frontend (CFG-03 a CFG-08) | `928012c` | Configuración por funcionalidad, altas en ventana, Compras por acción, Permisos con dependencias |
+| E. Compatibilidad y cierre | este commit | Ensayo de compatibilidad, consultas previas, documentación |
+
+**Decisiones de implementación** (dentro de lo aprobado):
+
+- **Errores de duplicado:** 409 con el código `PRECONDICION_INVALIDA` que estas altas ya devolvían, no un código nuevo, para no cambiar el contrato de los clientes publicados.
+- **Dos migraciones**, una por fase, en lugar de una.
+- **Secuencias con huecos** (ajuste 1). Un alta con código generado que choca con uno cargado en paralelo se reintenta; uno informado por el cliente responde 409.
+- **Permiso antes del código:** un rechazo por permiso no consume números.
+- **Escritura de insumos y tipos:** exige el permiso del catálogo. `PRECIOS_GESTIONAR` se suma para fijar o cambiar el precio; quien gestiona el catálogo ve el precio en solo lectura. Los precios con más de dos decimales se rechazan, porque la base los redondearía sin pasar por el permiso.
+- **Garantías:** un plazo enviado en null también se conserva; la política enviada en null es «sin definir», como antes.
+- **Respaldos por rol de `puede()`:** se conservan solo para una API sin lista de permisos.
+- **Reinicio del UAT:** reinicia también las secuencias de SC, OC y RGA.
+
+**Pruebas:**
+
+| Suite | Resultado |
+|---|---|
+| Backend sin PostgreSQL (árbol final) | 2022 pasadas, 29 salteadas, 0 fallas; `ruff check` limpio |
+| `tests/postgres` completa | 569 pasadas, 0 fallas |
+| Frontend | `tsc` sin errores, 197 pruebas, build correcto |
+| Ensayo de compatibilidad `ensayar_configuracion_v2.py --anterior fd434ef` | 24 de 24 |
+| Ensayo de Reparación RT sobre las 42 migraciones | 21 de 21 |
+| Recorrido en el navegador (Administración, Recepción con insumos delegados, Técnico; escritorio y 390 px) | Sin desbordes; altas sin código; dependencias; secciones por permiso |
+
+**QA independiente:** una por fase y una integral. Ninguna encontró hallazgos bloqueantes ni mayores. Se corrigieron todos los menores:
+
+- A: 3;
+- B: 2;
+- C: 1, más una prueba;
+- D: 3;
+- integral: 5, de documentación.
+
+**Riesgos y pendientes:**
+
+- **Vuelta atrás conjunta:** backend y frontend se vuelven atrás juntos. Lo cambiado en Compras con los permisos nuevos no llega a la fila de `COMPRAS_GESTIONAR` ([`DEUDA_TECNICA.md`](DEUDA_TECNICA.md), P1-17).
+- **Brechas C registradas** en P1-16.
+- **Mejoras de pantalla fuera de alcance** en P2-19.
+- **Jerarquía de insumos:** queda para más adelante ([`pendientes-producto.md`](pendientes-producto.md), P-07).
+- **Trazabilidad:** las decisiones D1 a D8 y DF-1 a DF-5 están en este documento. Si negocio las quiere en `business/` (fuente `rt-rma-app`), hay que registrarlas allí como DEC-CFG.
+- **Antes de migrar el UAT:** las consultas de [`precheck_configuracion_v2.sql`](../supabase/scripts/validacion_uat/precheck_configuracion_v2.sql), según [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12.
 
 ## Anexo A. Órdenes: permiso de cada comando
 

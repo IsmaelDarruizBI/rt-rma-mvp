@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 19/11/2026.
+**Última actualización:** 20/11/2026.
 
 - **Hecho:**
   - autenticación real y DC31 desplegadas en UAT (10/11, `00020-tux`);
@@ -25,6 +25,7 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - **Bloque C en UAT, C8 aprobado** (18/11): las migraciones `20261117000100` y `20261117000200` en São Paulo (39 migraciones, 71 tablas), Cloud Run `00039-sen` (`fd434ef`), sin cambios en Vercel; la copia del catálogo de Ventas (1489 productos) sobrevive al escalado a cero; E2E UX 47 de 47, V1.4 67 de 67 e integral 68 de 68 con limpieza selectiva; respaldo y ensayo de restauración en la nube correctos ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 10.1; sección B).
   - **Reparación RT, especificación** (17/11): DEC-RT-01 a 07 y BR-REP-050 en `rt-rma-app` `spec/reparacion-rt` `168618a` (publicada; `business/` sincronizado en `fd434ef`); diseño en [`reparacion-rt-discovery.md`](reparacion-rt-discovery.md). La etapa 1 ya no espera al bloque C.
   - **Reparación RT, etapa 1, en local** (19/11, `feat/reparacion-rt-etapa1`, commits locales, sin push ni despliegue): copia de consulta de los Productos de Gestión RT en reparación en PostgreSQL (migración `20261119000100`, `rma.producto_rt`) sobre el motor del bloque C, sincronización a pedido de Administración, API `/api/rt-products` y pantalla Reparación RT con búsqueda, filtros, ficha y coincidencias sugeridas (nunca vínculos); solo las 13 columnas permitidas, nunca `producto_passcode` ([`reparacion-rt-discovery.md`](reparacion-rt-discovery.md), sección 10; sección B).
+  - **Configuración v2, en local** (20/11, `feat/configuracion-v2` sobre `feat/reparacion-rt-etapa1`, commits locales, sin push ni despliegue): CFG-01 a CFG-08. Códigos automáticos en la base, seguros ante concurrencia. Permisos operativos configurables, con precios aparte y Compras por acción. Matriz de permisos de todas las rutas. Configuración por funcionalidad con altas en ventana. Garantías con solo los plazos con y sin check-in. Sin plazo de retiro en pantalla y solo dos plantillas de WhatsApp visibles. Dos migraciones aditivas ([`configuracion-discovery.md`](configuracion-discovery.md), sección 12; sección B).
 - **Falta:**
   - conseguir la exportación de Ventas de ABI-43 (modelos que faltan en el catálogo técnico);
   - ABI-42: que Gestión RT indique qué columna (o tabla) de su catálogo es el Tipo de Equipo; con una columna `tp_*` alcanza con fijar `RMA_TIPO_EQUIPO_CAMPO` y sincronizar;
@@ -83,6 +84,34 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Configuración v2 (20/11/2026), rama `feat/configuracion-v2`
+
+Con autorización: discovery, diseño aprobado (D1 a D8, DF-1 a DF-5) e implementación de CFG-01 a CFG-08 en fases A a E, solo en local. Sin migraciones en el UAT, sin despliegue, sin cambios en Gestión RT, `main` ni `mvp-v2`. Detalle, decisiones, pruebas y riesgos en [`configuracion-discovery.md`](configuracion-discovery.md), sección 12.
+
+- **Base:**
+  - `20261120000100_codigos_automaticos`: una secuencia por prefijo, `rma.siguiente_codigo`, códigos de catálogo inmutables y unicidad sin distinguir mayúsculas;
+  - `20261120000200_permisos_operativos`: copia lo configurado de `COMPRAS_GESTIONAR`;
+  - siguen siendo 72 tablas.
+- **Backend:**
+  - altas con código opcional, con 409 y nunca 500 ante un duplicado;
+  - permisos de catálogos (al inicio solo de Administración) y de Compras por acción (heredan los roles anteriores);
+  - dependencias entre permisos;
+  - roles fijos reemplazados por permisos con el mismo valor predeterminado;
+  - plazos de garantía que se conservan;
+  - plantillas con `visible`.
+- **Frontend:**
+  - Configuración por funcionalidad, con rutas y permisos por subsección;
+  - altas y ediciones en ventana, sin campos de código;
+  - Compras por acción, Permisos con dependencias, crear Orden por `ORDEN_CREAR`.
+- **Pruebas:**
+  - backend sin PostgreSQL: 2055 pasadas;
+  - `tests/postgres`: 569 pasadas;
+  - frontend: 197 pruebas y build correcto;
+  - compatibilidad con `fd434ef`: 24 de 24;
+  - Reparación RT sobre las 42 migraciones: 21 de 21.
+- **QA independiente** por fase y QA integral, sin hallazgos bloqueantes ni mayores.
+- **Para el UAT:** publicación conjunta con Reparación RT ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12), con las consultas previas de solo lectura.
 
 ### Reparación RT, etapa 1 (19/11/2026), rama `feat/reparacion-rt-etapa1`
 
@@ -765,7 +794,9 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (19/11/2026):** con la etapa 1 de Reparación RT lista en local, crear la planilla de prueba (B3) y autorizar la integración en `mvp-v2` y el despliegue en el UAT ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 11). **Antes (18/11/2026):** bloque C aprobado en el UAT (C8). Pendientes del bloque C: mover el limitador por DNI a la base antes de permitir más de una instancia (P1-2) y, opcional, que el E2E integral compruebe el control por lote de BAT-IP14 en el escenario 0. **Antes (17/11/2026):** bloque C cerrado en local. **Antes (16/11/2026):** UAT operativo con la iteración de UX de Recepción, escalado a cero desde las 22:54 UTC (sección B). Cada publicación termina quitando su etiqueta temporal y con `verificar_escalado_uat.py` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 9). Siguen pendientes, con autorización: la pasada manual en un navegador real (P2-17, incluye el diálogo real de impresión y el desborde de «Pendientes» a 390 px), ABI-43 (exportación de Ventas), ABI-42 (para activar DC12) y la integración en `main` (P0-2).
+**Próximo paso (20/11/2026):** autorizar el push de `feat/configuracion-v2` y su integración en `mvp-v2`, y la publicación conjunta de Reparación RT etapa 1 y Configuración v2 en el UAT ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12). Antes hace falta la planilla de prueba (B3).
+
+**Antes (19/11/2026):** con la etapa 1 de Reparación RT lista en local, crear la planilla de prueba (B3) y autorizar la integración en `mvp-v2` y el despliegue en el UAT ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 11). **Antes (18/11/2026):** bloque C aprobado en el UAT (C8). Pendientes del bloque C: mover el limitador por DNI a la base antes de permitir más de una instancia (P1-2) y, opcional, que el E2E integral compruebe el control por lote de BAT-IP14 en el escenario 0. **Antes (17/11/2026):** bloque C cerrado en local. **Antes (16/11/2026):** UAT operativo con la iteración de UX de Recepción, escalado a cero desde las 22:54 UTC (sección B). Cada publicación termina quitando su etiqueta temporal y con `verificar_escalado_uat.py` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 9). Siguen pendientes, con autorización: la pasada manual en un navegador real (P2-17, incluye el diálogo real de impresión y el desborde de «Pendientes» a 390 px), ABI-43 (exportación de Ventas), ABI-42 (para activar DC12) y la integración en `main` (P0-2).
 
 **Antes (12/11/2026):** la macroiteración está desplegada y validada en UAT, con los datos de prueba limpiados (sección B). Queda, opcional, repetir `medir_api.py`: solo mide tiempos y pide la contraseña de `administracion`. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
 

@@ -440,3 +440,32 @@ Publica la pantalla Reparación RT con la copia de los Productos de Gestión RT 
 10. **Respaldo posterior** y ensayo de restauración en la nube: 40 migraciones y 72 tablas.
 
 **Vuelta atrás:** `update-traffic --to-revisions rt-rma-uat-api-00039-sen=100` y `vercel promote dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`. La migración queda: es aditiva y el backend anterior no usa `producto_rt` (ensayado). La copia queda guardada para la próxima publicación; no se borra ninguna tabla.
+
+## 12. Publicación conjunta: Reparación RT etapa 1 + Configuración v2 (preparado el 20/11/2026, sin ejecutar)
+
+Publica en un solo paso la sección 11 (Reparación RT) y Configuración v2 ([`configuracion-discovery.md`](configuracion-discovery.md), sección 12) sobre el par vigente `00039-sen` (`fd434ef`) + `dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`. Es la sección 11 con estas diferencias.
+
+**Requisitos (con autorización):**
+
+- `feat/configuracion-v2` (que contiene `feat/reparacion-rt-etapa1`) integrada en `mvp-v2` con el CI en verde;
+- los de la sección 11 (B3, planilla de prueba, y las sesiones que ingresa el usuario).
+
+**Procedimiento (cambios respecto de la sección 11):**
+
+1. **Preflight, de solo lectura:** como en 11.1, pero `db push --dry-run` lista **tres** migraciones: `20261119000100_productos_rt`, `20261120000100_codigos_automaticos` y `20261120000200_permisos_operativos`. Además, correr [`precheck_configuracion_v2.sql`](../supabase/scripts/validacion_uat/precheck_configuracion_v2.sql) (solo lectura) y revisar:
+   - bloque 1 vacío: si hay códigos que solo difieren en mayúsculas, **detenerse** (la migración también se detendría) y decidir con el usuario qué código queda;
+   - bloque 2: tipos con plazo genérico distinto del plazo con check-in o con política RMA; se conservan tal cual (DF-1, DF-2);
+   - bloques 3 y 4: si `COMPRAS_GESTIONAR` tiene fila, sus roles se copian a los cinco permisos nuevos (DF-4); si un rol queda con acciones de Compras y sin la consulta, se corrige desde Permisos después.
+2. **Respaldo previo** (igual).
+3. **Migraciones:** `db push --yes` aplica las tres. **Desde aquí hasta el paso 6, no cambiar nada en Configuración > Permisos:** la copia de `COMPRAS_GESTIONAR` ya se hizo y un cambio con la versión anterior no llegaría a los permisos nuevos. Después: 42 migraciones y 72 tablas (Configuración v2 no agrega tablas); `rma.siguiente_codigo` ejecutable solo por `rma_backend`; nueve secuencias `rma.codigo_*_seq`; triggers `*_codigo_fijo`; `verificar_integridad()` vacío. Subir las tres a `_herramientas/migraciones/` (42 archivos, MD5 iguales al repositorio). `00039-sen` sigue funcionando sobre las 42 (ensayado: [`ensayar_reparacion_rt.py`](../supabase/scripts/validacion_uat/ensayar_reparacion_rt.py) y [`ensayar_configuracion_v2.py`](../supabase/scripts/validacion_uat/ensayar_configuracion_v2.py), 24/24).
+4. **Backend sin tráfico:** igual que 11.4 (sin variables nuevas para Configuración v2). Por la etiqueta, además: `GET /api/admin/permissions` sin token 401.
+5. a 7. Como en la sección 11.
+8. **E2E de la iteración vigente** (UX, V1.4 e integral) con su línea de base y su limpieza: corren sin cambios (aceptan códigos informados; `probar_macro_integral.py` ya acepta el catálogo de permisos nuevo). Las secuencias nuevas entran en la línea de base y la limpieza las restaura.
+9. **Pasada en el navegador:** además de la sección 11, Configuración por subsección con Administración; delegar `INSUMO_GESTIONAR` a Recepción y comprobar que ve solo Insumos y da altas sin código ni precio; volver a dejarlo como estaba; plantillas: solo dos; tipos: solo plazos con y sin check-in; a 390 px.
+10. **Respaldo posterior** y ensayo de restauración: 42 migraciones y 72 tablas.
+
+**Vuelta atrás:** la de la sección 11 (backend `00039-sen` y frontend `dpl_Agpv37…`). Las tres migraciones quedan: son aditivas y el backend anterior funciona sobre ellas (ensayado, incluso con altas de las dos versiones intercaladas). Matices:
+
+- lo que se cambie en Compras con los permisos nuevos **no** se refleja en la fila de `COMPRAS_GESTIONAR`: al volver atrás rige esa fila (o su predeterminado). Revisar Permisos después de volver;
+- los permisos de catálogos delegados con la versión nueva no existen en la anterior: vuelven a ser solo de Administración;
+- los códigos generados mientras tanto quedan; la versión anterior los lista y sigue dando altas con su `max()+1`, y la nueva saltea lo que la anterior creó.
