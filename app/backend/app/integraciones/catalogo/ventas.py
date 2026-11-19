@@ -73,6 +73,12 @@ def _verdadero(valor: str) -> bool:
     return valor.casefold() in _VERDADEROS
 
 
+# Las mismas convenciones de celda para las otras tablas de Gestion RT
+# (Producto, en Reparacion RT).
+texto_de_celda = _texto
+es_verdadero = _verdadero
+
+
 def etiqueta_capacidad(valor: str) -> str | None:
     """«128gb» -> «128 GB», «1tb» -> «1 TB»; otro formato, tal cual."""
     if not valor:
@@ -178,34 +184,11 @@ def lectura_desde_tabla(
     Las filas vacias se ignoran; las que pasan el filtro sin ``tp_id``, se
     descartan y se cuentan.
     """
-    nombres = [_texto(encabezado) for encabezado in encabezados]
-    faltan = [columna for columna in COLUMNAS if columna not in nombres]
-    if faltan:
-        raise CatalogoOrigenInvalidoError(
-            "Al catálogo de Ventas le faltan columnas: "
-            + ", ".join(faltan)
-            + "."
-        )
-    repetidas = sorted(
-        {columna for columna in COLUMNAS if nombres.count(columna) > 1}
-    )
-    if repetidas:
-        raise CatalogoOrigenInvalidoError(
-            "El catálogo de Ventas repite columnas: "
-            + ", ".join(repetidas)
-            + "."
-        )
-    indices = {columna: nombres.index(columna) for columna in COLUMNAS}
+    indices = _indices(encabezados, CatalogoOrigenInvalidoError)
 
     productos: list[ProductoInformado] = []
     leidos = filtrados = descartados = 0
-    for fila in filas:
-        valores = {
-            columna: _texto(fila[indice]) if indice < len(fila) else ""
-            for columna, indice in indices.items()
-        }
-        if not any(valores.values()):
-            continue
+    for valores in _registros(filas, indices):
         leidos += 1
         if not filtro.admite(valores[COLUMNA_SUBCATEGORIA]):
             continue
@@ -220,3 +203,67 @@ def lectura_desde_tabla(
         filtrados=filtrados,
         descartados=descartados,
     )
+
+
+def tipos_producto_desde_tabla(
+    encabezados: Sequence[Any],
+    filas: Iterable[Sequence[Any]],
+    *,
+    marcas: Mapping[str, str],
+    error: type[Exception] = CatalogoOrigenInvalidoError,
+) -> dict[str, ProductoInformado]:
+    """TODA la tabla TipoProducto por ``tp_id``, sin filtro de subcategoria.
+
+    La usan los Productos de Gestion RT (``producto_tp = tp_id``): un
+    producto puede ser de cualquier subcategoria. Las mismas reglas de
+    columnas que ``lectura_desde_tabla``; ``error`` es el de quien lee, para
+    que cada copia conserve sus errores. Las filas sin ``tp_id`` no se
+    pueden referenciar y se ignoran; con un ``tp_id`` repetido vale la
+    primera fila (Ventas no los repite; si pasara, el resultado es estable).
+    """
+    indices = _indices(encabezados, error)
+    tipos: dict[str, ProductoInformado] = {}
+    for valores in _registros(filas, indices):
+        if valores[COLUMNA_ID] and valores[COLUMNA_ID] not in tipos:
+            tipos[valores[COLUMNA_ID]] = producto_desde_valores(
+                valores, marcas=marcas
+            )
+    return tipos
+
+
+def _indices(
+    encabezados: Sequence[Any], error: type[Exception]
+) -> dict[str, int]:
+    """La posicion de cada columna que usa RMA, por NOMBRE: Ventas puede
+    agregar o reordenar columnas. Si falta o se repite una, ``error``."""
+    nombres = [_texto(encabezado) for encabezado in encabezados]
+    faltan = [columna for columna in COLUMNAS if columna not in nombres]
+    if faltan:
+        raise error(
+            "Al catálogo de Ventas le faltan columnas: "
+            + ", ".join(faltan)
+            + "."
+        )
+    repetidas = sorted(
+        {columna for columna in COLUMNAS if nombres.count(columna) > 1}
+    )
+    if repetidas:
+        raise error(
+            "El catálogo de Ventas repite columnas: "
+            + ", ".join(repetidas)
+            + "."
+        )
+    return {columna: nombres.index(columna) for columna in COLUMNAS}
+
+
+def _registros(
+    filas: Iterable[Sequence[Any]], indices: Mapping[str, int]
+) -> Iterable[dict[str, str]]:
+    """Cada fila con datos, como texto y solo con las columnas de RMA."""
+    for fila in filas:
+        valores = {
+            columna: _texto(fila[indice]) if indice < len(fila) else ""
+            for columna, indice in indices.items()
+        }
+        if any(valores.values()):
+            yield valores

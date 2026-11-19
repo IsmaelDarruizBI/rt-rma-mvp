@@ -58,6 +58,10 @@ def _credencial_sheets(settings: Settings):
     return CredencialCloudRun()
 
 
+# La misma credencial lee los Productos de Gestion RT (Reparacion RT).
+credencial_sheets = _credencial_sheets
+
+
 def construir_proveedor_catalogo(
     settings: Settings,
 ) -> ProveedorCatalogo | None:

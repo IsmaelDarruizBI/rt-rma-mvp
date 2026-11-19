@@ -6,6 +6,7 @@ con un token de alcance ``spreadsheets.readonly`` (``credencial``: ver
 ``integraciones/catalogo/credenciales.py``):
 
     valores(hoja)                  ``values.get`` de la hoja completa
+    encabezado(hoja)               ``values.get`` de la fila 1 sola
     valores_por_columnas(hoja, c)  ``values:batchGet`` SOLO de las columnas
                                    pedidas (por letra): lo demas, incluido
                                    un dato sensible, nunca sale de Google
@@ -90,6 +91,32 @@ class LectorSheets:
                 "Google Sheets respondió con un formato inesperado."
             )
         return valores
+
+    def encabezado(self, hoja: str) -> list[Any]:
+        """Solo la fila 1 de ``hoja``: los nombres de las columnas, sin
+        ningun dato. Vacia si la hoja no tiene encabezado."""
+        cuerpo = self._pedir(
+            URL_VALORES.format(
+                planilla=quote(self._planilla, safe=""),
+                rango=quote(f"'{hoja}'!1:1", safe=""),
+            ),
+            {
+                "valueRenderOption": "UNFORMATTED_VALUE",
+                "majorDimension": "ROWS",
+            },
+            hoja=hoja,
+        )
+        valores = cuerpo.get("values", [])
+        if not isinstance(valores, list) or len(valores) > 1:
+            raise self._invalido(
+                "Google Sheets respondió con un formato inesperado."
+            )
+        fila = valores[0] if valores else []
+        if not isinstance(fila, list):
+            raise self._invalido(
+                "Google Sheets respondió con un formato inesperado."
+            )
+        return fila
 
     def valores_por_columnas(
         self, hoja: str, columnas: Sequence[str]

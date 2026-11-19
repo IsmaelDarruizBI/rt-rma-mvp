@@ -403,6 +403,13 @@ CATALOGO_EQUIPOS_SINCRONIZAR = _definir(
     (ADMIN, COORD),
     INVENTARIO,
 )
+# Reparacion RT (DEC-RT-05): a pedido, inicialmente solo Administracion.
+PRODUCTOS_RT_SINCRONIZAR = _definir(
+    "PRODUCTOS_RT_SINCRONIZAR",
+    "Sincronizar los Productos de Gestión RT en reparación",
+    (ADMIN,),
+    INVENTARIO,
+)
 
 # --- Consultas (DC27B) ---
 CONSULTAS = "Consultas"
@@ -438,6 +445,14 @@ INVENTARIO_CONSULTAR = _definir(
 COMPRAS_CONSULTAR = _definir(
     "COMPRAS_CONSULTAR",
     "Consultar compras, proveedores y costos",
+    (RECEP, COORD, ADMIN),
+    CONSULTAS,
+    consulta=True,
+)
+# Reparacion RT (DEC-RT-07).
+PRODUCTOS_RT_CONSULTAR = _definir(
+    "PRODUCTOS_RT_CONSULTAR",
+    "Consultar los Productos de Gestión RT en reparación",
     (RECEP, COORD, ADMIN),
     CONSULTAS,
     consulta=True,

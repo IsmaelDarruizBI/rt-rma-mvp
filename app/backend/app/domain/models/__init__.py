@@ -94,6 +94,12 @@ from .pagos import (
     ResumenPago,
 )
 from .personas import Cliente, Usuario
+from .productos_rt import (
+    CoincidenciaSugerida,
+    CriterioCoincidencia,
+    ProductoRt,
+    SincronizacionProductosRt,
+)
 from .recepcion import (
     CambioDatoIngreso,
     ConfirmacionRecepcion,
@@ -163,6 +169,11 @@ __all__ = [
     "ResultadoSincronizacion",
     "ReservaSincronizacion",
     "SincronizacionCatalogo",
+    # Reparacion RT (DEC-RT-01)
+    "CoincidenciaSugerida",
+    "CriterioCoincidencia",
+    "ProductoRt",
+    "SincronizacionProductosRt",
     # Recepcion y custodia
     "FotoOrden",
     "ConfirmacionRecepcion",

@@ -98,6 +98,37 @@ class Settings(BaseSettings):
     # sin terminar (instancia apagada a mitad), la siguiente la marca
     # INTERRUMPIDA. La base no admite mas de una hora.
     sincronizacion_reserva_s: int = Field(default=600, ge=10, le=3600)
+
+    # Reparacion RT (DEC-RT-01 a 07): copia de consulta de los Productos de
+    # Gestion RT en reparacion, sincronizada a pedido (Administracion). Solo
+    # lectura de Gestion RT; ver ``integraciones.gestion_rt.configuracion``.
+    # En el UAT, la planilla es una de PRUEBA con filas ficticias.
+    productos_rt_origen: Literal["ninguno", "google_sheets", "archivo"] = (
+        "ninguno"
+    )
+    productos_rt_planilla: str | None = None
+    productos_rt_gid: int | None = Field(default=None, ge=0)
+    productos_rt_archivo: Path | None = None
+    # TipoProducto en modo archivo; sin el, ``catalogo_archivo``.
+    productos_rt_tipos_archivo: Path | None = None
+    # ``producto_status`` de los productos en reparacion: comparacion exacta
+    # sin espacios al borde (otras variantes se informan como aviso).
+    productos_rt_estado: str = "Reparacion"
+    # Sedes confirmadas; otra se guarda igual y se informa.
+    productos_rt_sedes: list[str] = [
+        "Alippi",
+        "Centro",
+        "eCommerce",
+        "Fisherton",
+        "RMA",
+    ]
+    # Proteccion contra una lectura truncada: si desaparece mas de esta
+    # fraccion de los productos presentes, la sincronizacion se rechaza.
+    # Solo con al menos ``productos_rt_minimo_proteccion`` presentes.
+    productos_rt_umbral_desaparicion: float = Field(default=0.5, gt=0, le=1)
+    productos_rt_minimo_proteccion: int = Field(default=10, ge=1)
+    # Aviso de copia antigua (sin sincronizacion automatica, DEC-RT-05).
+    productos_rt_antiguedad_aviso_h: int = Field(default=24, ge=1)
     # DC12: que columna del catalogo de Ventas es el Tipo de Equipo del
     # checklist. Vacia (por defecto): no esta definido y no se copian
     # tipos. Negocio no confirmo todavia cual corresponde (ninguna equivale
