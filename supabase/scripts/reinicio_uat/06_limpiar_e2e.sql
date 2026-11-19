@@ -26,8 +26,13 @@
 --   - las Órdenes y los clientes nuevos son todos ficticios del E2E;
 --   - ninguna fila previa de una tabla operativa cambió ni desapareció;
 --   - las tablas maestras no cambiaron, salvo el stock de insumo (que vuelve
---     al de la línea de base) y el «Proveedor Ficticio E2E», que el E2E
---     reutiliza y deja inactivo (no admite borrado);
+--     al de la línea de base), el «Proveedor Ficticio E2E», que el E2E
+--     reutiliza y deja inactivo (no admite borrado), y las filas de catálogo
+--     que crea el E2E de Configuración v2 (probar_configuracion_v2.py) para
+--     probar los códigos automáticos: tipos de reparación, motivos, insumos
+--     y proveedores con nombre «Ficticio E2E…», que se conservan y TIENEN que
+--     quedar inactivos (los catálogos no admiten borrado; los códigos no se
+--     reutilizan);
 --   - después de borrar: cada tabla es idéntica a la línea de base (sin contar
 --     sellos de tiempo y versión), verificar_integridad() vacío, el
 --     inventario concilia y los usuarios siguen vinculados.
@@ -48,6 +53,9 @@ declare
   -- Marcas de los datos ficticios del E2E.
   c_cliente_ficticio constant text := 'Cliente Ficticio E2E%';
   c_proveedor_ficticio constant text := 'Proveedor Ficticio E2E';
+  -- Configuración v2: catálogos de prueba de los códigos automáticos.
+  c_catalogo_ficticio constant text := 'Ficticio E2E%';
+  c_catalogos_ficticios constant text[] := array['tipo_reparacion', 'motivo_operativo', 'insumo', 'proveedor'];
   -- Columnas que cambian sin cambiar el dato.
   c_volatiles constant text[] := array['modificado_en', 'actualizado_en', 'version'];
   c_stock constant text[] := array['stock_fisico', 'stock_reservado'];
@@ -150,8 +158,13 @@ begin
   foreach v_tabla in array c_operativas || c_maestras loop
     select cond into v_cond from _pk where tabla = v_tabla;
     v_excluir := c_volatiles || case when v_tabla = 'insumo' then c_stock else '{}' end;
+    -- El filtro pasa otra vez por format(): el % del LIKE va escapado.
     v_filtro := case when v_tabla = 'proveedor'
-                     then format('and %s.nombre <> %L', '%s', c_proveedor_ficticio) else '' end;
+                     then format('and %s.nombre <> %L and %s.nombre not like %s', '%1$s', c_proveedor_ficticio, '%1$s',
+                                 replace(quote_literal(c_catalogo_ficticio), '%', '%%'))
+                     when v_tabla = any (c_catalogos_ficticios)
+                     then format('and %s.nombre not like %s', '%1$s', replace(quote_literal(c_catalogo_ficticio), '%', '%%'))
+                     else '' end;
 
     -- Filas nuevas (no estaban en la línea de base).
     execute format('select count(*) from rma.%I r where not exists (select 1 from %I.%I b where %s) %s',
@@ -176,6 +189,15 @@ begin
   if cardinality(v_cambios) > 0 then
     raise exception 'Cambios fuera de lo que crea el E2E (no se borra nada): %', array_to_string(v_cambios, '; ');
   end if;
+
+  -- Los catálogos ficticios de Configuración v2 se conservan solo inactivos.
+  foreach v_tabla in array c_catalogos_ficticios loop
+    execute format('select count(*) from rma.%I r where r.nombre like %L and r.activo', v_tabla, c_catalogo_ficticio)
+      into v_n;
+    if v_n > 0 then
+      raise exception '% filas «Ficticio E2E» activas en %: el E2E tiene que dejarlas inactivas. No se borra nada.', v_n, v_tabla;
+    end if;
+  end loop;
 
   execute format('select count(*) from rma.orden r where not exists (select 1 from %I.orden b where b.id = r.id)
                     and coalesce(r.cliente_nombre, '''') not like %L', c_base, c_cliente_ficticio) into v_n;
@@ -236,7 +258,10 @@ begin
 
   -- 4. Verificaciones -------------------------------------------------------------
   foreach v_tabla in array c_operativas || c_maestras loop
-    v_filtro := case when v_tabla = 'proveedor' then format('where x.nombre <> %L', c_proveedor_ficticio) else '' end;
+    v_filtro := case when v_tabla = 'proveedor'
+                     then format('where x.nombre <> %L and x.nombre not like %L', c_proveedor_ficticio, c_catalogo_ficticio)
+                     when v_tabla = any (c_catalogos_ficticios)
+                     then format('where x.nombre not like %L', c_catalogo_ficticio) else '' end;
     execute format(
       'select (select md5(coalesce(string_agg((to_jsonb(x) - %1$L::text[])::text, E''\n'' order by (to_jsonb(x) - %1$L::text[])::text), '''')) from rma.%2$I x %4$s)
             = (select md5(coalesce(string_agg((to_jsonb(x) - %1$L::text[])::text, E''\n'' order by (to_jsonb(x) - %1$L::text[])::text), '''')) from %3$I.%2$I x %4$s)',
@@ -265,7 +290,13 @@ begin
     'ordenes_conservadas', (select coalesce(jsonb_agg(codigo order by codigo), '[]') from rma.orden),
     'filas_borradas', v_borradas,
     'fotos_nuevas_a_borrar_del_bucket', v_fotos,
-    'proveedor_ficticio_conservado', exists (select 1 from rma.proveedor where nombre = c_proveedor_ficticio)
+    'proveedor_ficticio_conservado', exists (select 1 from rma.proveedor where nombre = c_proveedor_ficticio),
+    'catalogos_ficticios_conservados', (
+      select jsonb_object_agg(t, n) from (
+        select 'tipo_reparacion' as t, count(*) as n from rma.tipo_reparacion where nombre like c_catalogo_ficticio
+        union all select 'motivo_operativo', count(*) from rma.motivo_operativo where nombre like c_catalogo_ficticio
+        union all select 'insumo', count(*) from rma.insumo where nombre like c_catalogo_ficticio
+        union all select 'proveedor', count(*) from rma.proveedor where nombre like c_catalogo_ficticio) x)
   );
 
   if v_modo = 'ensayo' then

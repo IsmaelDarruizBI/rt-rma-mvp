@@ -9,14 +9,19 @@ base y el servidor de ``ensayar_migracion_integral.py``:
 2. Una Orden PREVIA con un cliente que no es del E2E y una foto registrada,
    como ``OR-000001`` en el UAT.
 3. Los E2E no escriben si las Órdenes existentes no son las declaradas.
-4. Para ``probar_macro_v14.py`` y para ``probar_macro_integral.py``, cada uno
-   con su línea de base: ``05_linea_base_e2e.sql``, el E2E con
+4. Para ``probar_macro_v14.py``, ``probar_macro_integral.py`` y
+   ``probar_configuracion_v2.py``, cada uno con su línea de base: ``05_linea_base_e2e.sql``, el E2E con
    ``--ordenes-previas``, ``06_limpiar_e2e.sql`` en ensayo (no cambia nada) y
    aplicado. Al final cada tabla de rma es igual a la de antes del E2E (sin
    sellos de tiempo ni versión), las secuencias vuelven a su valor, la Orden
    previa y su foto siguen y la línea de base ya no existe.
-5. Guardas de ``06_limpiar_e2e.sql``: una Orden nueva que no es del E2E y una
-   fila previa modificada abortan sin borrar nada.
+5. Guardas de ``06_limpiar_e2e.sql``: una Orden nueva que no es del E2E, una
+   fila previa modificada y un catálogo «Ficticio E2E» activo abortan sin
+   borrar nada.
+
+Los catálogos «Ficticio E2E» que deja inactivos ``probar_configuracion_v2.py``
+(tipos, motivos, insumos y proveedores con códigos generados) se conservan:
+la huella de cada tabla no los cuenta, como al «Proveedor Ficticio E2E».
 
     app/backend/.venv/Scripts/python supabase/scripts/validacion_uat/ensayar_limpieza_e2e.py --informe <archivo.json>
 
@@ -44,6 +49,8 @@ VALIDACION = RAIZ / "supabase" / "scripts" / "validacion_uat"
 PREVIA = "OR-000001"
 VOLATILES = ("modificado_en", "actualizado_en", "version")
 PROVEEDOR = "Proveedor Ficticio E2E"
+CATALOGO_FICTICIO = "Ficticio E2E%"
+CATALOGOS_FICTICIOS = ("tipo_reparacion", "motivo_operativo", "insumo", "proveedor")
 anotar = em.anotar
 
 
@@ -88,7 +95,13 @@ def huella(url: str) -> dict:
     volatiles = "array[" + ", ".join(f"'{v}'" for v in VOLATILES) + "]"
     resultado = {}
     for t in tablas:
-        filtro = f"where x.nombre <> '{PROVEEDOR}'" if t == "proveedor" else ""
+        filtro = (
+            f"where x.nombre <> '{PROVEEDOR}' and x.nombre not like '{CATALOGO_FICTICIO}'"
+            if t == "proveedor"
+            else f"where x.nombre not like '{CATALOGO_FICTICIO}'"
+            if t in CATALOGOS_FICTICIOS
+            else ""
+        )
         (resultado[t],) = em.filas(
             url,
             f"select count(*) || ':' || coalesce(md5(string_agg((to_jsonb(x) - {volatiles}::text[])::text, E'\\n' order by (to_jsonb(x) - {volatiles}::text[])::text)), '-') from rma.{t} x {filtro}",
@@ -286,6 +299,22 @@ def guardas(paso: str, url: str, api: str) -> None:
     )
     em.ejecutar(url, "drop schema rma_linea_base_e2e cascade")
 
+    # Configuración v2: un catálogo «Ficticio E2E» que quedó activo.
+    ok, error, _ = correr_sql(url, sql("05_linea_base_e2e.sql"))
+    em.ejecutar(
+        url,
+        "insert into rma.tipo_reparacion (codigo, nombre, precio, puntaje, garantia_dias)"
+        " values (rma.siguiente_codigo('TR'), 'Ficticio E2E guarda', 1, 0, 0)",
+    )
+    ok, error, _ = correr_sql(url, limpieza("ensayo"))
+    anotar(
+        paso,
+        "06 aborta: un catálogo «Ficticio E2E» quedó activo",
+        not ok and "activas en tipo_reparacion" in error,
+        error,
+    )
+    em.ejecutar(url, "drop schema rma_linea_base_e2e cascade")
+
 
 def main() -> int:
     p = argparse.ArgumentParser(
@@ -321,8 +350,8 @@ def main() -> int:
         v = verificar(url)
         anotar(
             "1",
-            "03_verificar.sql con 35 migraciones",
-            v["migraciones"] == 35
+            f"03_verificar.sql con {23 + len(em.archivos_nuevos())} migraciones",
+            v["migraciones"] == 23 + len(em.archivos_nuevos())
             and v["ausentes"] == []
             and v["ordenes"] == 0,
             str(v),
@@ -375,6 +404,27 @@ def main() -> int:
 
             ciclo("4a", "probar_macro_v14.py", url, api, antes, registro)
             ciclo("4b", "probar_macro_integral.py", url, api, antes, registro)
+            ciclo("4c", "probar_configuracion_v2.py", url, api, antes, registro)
+            (activos,) = em.filas(
+                url,
+                " + ".join(
+                    f"(select count(*) from rma.{c} where nombre like '{CATALOGO_FICTICIO}' and activo)"
+                    for c in CATALOGOS_FICTICIOS
+                ).join(("select ", "")),
+            )[0]
+            (conservados,) = em.filas(
+                url,
+                " + ".join(
+                    f"(select count(*) from rma.{c} where nombre like '{CATALOGO_FICTICIO}')"
+                    for c in CATALOGOS_FICTICIOS
+                ).join(("select ", "")),
+            )[0]
+            anotar(
+                "4c",
+                "los catálogos ficticios de Configuración v2 se conservan inactivos",
+                conservados > 0 and activos == 0,
+                f"{conservados} conservados, {activos} activos",
+            )
             v = verificar(url)
             anotar(
                 "4",
