@@ -1,19 +1,28 @@
 /**
- * Proveedores (DEC-MI-09): datos básicos que administra Administración, con
- * auditoría. No se borran: se desactivan. Solo sobre PostgreSQL.
+ * Proveedores (DEC-MI-09; Configuración v2, CFG-03 y CFG-04): datos
+ * básicos con auditoría, con el permiso PROVEEDOR_GESTIONAR. Alta y edición
+ * en una ventana; el código lo genera la API (PRV-NNNN). No se borran: se
+ * desactivan. Solo sobre PostgreSQL.
  */
 
 import { useCallback, useEffect, useState } from "react";
 
 import * as api from "../../api/compras";
 import type { Proveedor } from "../../api/compras";
+import {
+  EncabezadoListado,
+  FormularioModal,
+  Mensajes,
+  mensajeDe,
+  useComando,
+} from "../../components/FormularioModal";
 import { Boton, Campo, colores, estiloInput } from "../../components/ui";
 import type { Usuario } from "../../types/api";
+import { conElemento } from "./listados";
 
-const mensaje = (causa: unknown) =>
-  causa instanceof Error ? causa.message : String(causa);
+type Editable = Omit<Proveedor, "id"> & { id?: string };
 
-const VACIO: Omit<Proveedor, "id"> & { id?: string } = {
+const VACIO: Editable = {
   nombre: "",
   cuit: null,
   telefono: null,
@@ -32,20 +41,19 @@ const CAMPOS = [
 
 export function ProveedoresAdmin({ actor }: { actor: Usuario }) {
   const [datos, setDatos] = useState<{ editable: boolean; proveedores: Proveedor[] } | null>(null);
-  const [editado, setEditado] = useState<typeof VACIO | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
-  const [ocupado, setOcupado] = useState(false);
+  const [editado, setEditado] = useState<Editable | null>(null);
+  const [resaltado, setResaltado] = useState<string | null>(null);
+  const { error, setError, aviso, setAviso } = useComando();
 
   const cargar = useCallback(() => {
     api
       .proveedoresAdmin()
       .then(setDatos)
-      .catch((causa: unknown) => setError(mensaje(causa)));
-  }, []);
+      .catch((causa: unknown) => setError(mensajeDe(causa)));
+  }, [setError]);
   useEffect(cargar, [cargar]);
 
-  if (!datos) return error ? <p role="alert">{error}</p> : null;
+  if (!datos) return <Mensajes error={error} aviso={aviso} />;
   if (!datos.editable) {
     return (
       <p style={{ color: colores.suave }}>
@@ -54,65 +62,58 @@ export function ProveedoresAdmin({ actor }: { actor: Usuario }) {
     );
   }
 
-  const guardar = () => {
-    if (!editado) return;
-    setOcupado(true);
-    setError(null);
-    setAviso(null);
-    api
-      .guardarProveedor(actor.id, editado)
-      .then((p) => {
-        setAviso(`Se guardó el proveedor ${p.nombre} (${p.id}).`);
-        setEditado(null);
-        cargar();
-      })
-      .catch((causa: unknown) => setError(mensaje(causa)))
-      .finally(() => setOcupado(false));
-  };
-
   return (
     <section>
-      <h3 style={{ margin: "0 0 0.5rem" }}>Proveedores</h3>
-      {error && (
-        <p role="alert" style={{ color: colores.error, fontSize: "0.85rem" }}>
-          {error}
-        </p>
-      )}
-      {aviso && (
-        <p role="status" style={{ color: colores.ok, fontSize: "0.85rem" }}>
-          {aviso}
-        </p>
-      )}
+      <EncabezadoListado
+        titulo="Proveedores"
+        nuevo="Nuevo proveedor"
+        onNuevo={() => setEditado({ ...VACIO })}
+      />
+      <Mensajes error={error} aviso={aviso} />
       <ul style={{ paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
         {datos.proveedores.map((p) => (
-          <li key={p.id} style={{ marginBottom: "0.3rem" }}>
+          <li
+            key={p.id}
+            style={{ marginBottom: "0.3rem", background: resaltado === p.id ? "#eff6ff" : undefined }}
+          >
             <strong>{p.nombre}</strong> ({p.id}
             {p.activo ? "" : " · no vigente"})
             {p.telefono ? ` · ${p.telefono}` : ""}
             {p.email ? ` · ${p.email}` : ""}
             {p.contacto ? ` · ${p.contacto}` : ""}{" "}
-            <Boton variante="secundario" disabled={ocupado} onClick={() => setEditado({ ...p })}>
+            <Boton variante="secundario" onClick={() => setEditado({ ...p })}>
               Editar
             </Boton>
           </li>
         ))}
-        {datos.proveedores.length === 0 && (
-          <li style={{ color: colores.suave }}>Sin proveedores.</li>
-        )}
+        {datos.proveedores.length === 0 && <li style={{ color: colores.suave }}>Sin proveedores.</li>}
       </ul>
-      {!editado && (
-        <Boton disabled={ocupado} onClick={() => setEditado({ ...VACIO })}>
-          Nuevo proveedor
-        </Boton>
-      )}
       {editado && (
-        <div style={{ maxWidth: 420, marginTop: "0.6rem" }}>
+        <FormularioModal
+          titulo={editado.id ? `Editar ${editado.id}` : "Nuevo proveedor"}
+          textoConfirmar={editado.id ? "Guardar" : "Crear proveedor"}
+          listo={editado.nombre.trim() !== ""}
+          onCerrar={() => setEditado(null)}
+          onConfirmar={async () => {
+            const proveedor = await api.guardarProveedor(actor.id, editado);
+            setDatos({
+              ...datos,
+              proveedores: conElemento(datos.proveedores, proveedor, (x) => x.id),
+            });
+            setResaltado(proveedor.id);
+            setError(null);
+            setAviso(
+              editado.id
+                ? `Se guardó el proveedor ${proveedor.nombre} (${proveedor.id}).`
+                : `Se creó el proveedor ${proveedor.id} ${proveedor.nombre}.`,
+            );
+          }}
+        >
           {CAMPOS.map(([campo, etiqueta]) => (
             <Campo key={campo} etiqueta={etiqueta}>
               <input
                 value={editado[campo] ?? ""}
                 onChange={(e) => setEditado({ ...editado, [campo]: e.target.value })}
-                disabled={ocupado}
                 style={estiloInput}
               />
             </Campo>
@@ -122,19 +123,15 @@ export function ProveedoresAdmin({ actor }: { actor: Usuario }) {
               type="checkbox"
               checked={editado.activo}
               onChange={(e) => setEditado({ ...editado, activo: e.target.checked })}
-              disabled={ocupado}
             />
             Vigente
           </label>
-          <div style={{ display: "flex", gap: "0.4rem" }}>
-            <Boton disabled={ocupado || !editado.nombre.trim()} onClick={guardar}>
-              Guardar
-            </Boton>
-            <Boton variante="secundario" disabled={ocupado} onClick={() => setEditado(null)}>
-              Cancelar
-            </Boton>
-          </div>
-        </div>
+          {!editado.id && (
+            <p style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: colores.suave }}>
+              El código se asigna al guardar.
+            </p>
+          )}
+        </FormularioModal>
       )}
     </section>
   );

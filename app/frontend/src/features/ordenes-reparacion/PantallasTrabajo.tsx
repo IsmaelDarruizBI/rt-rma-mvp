@@ -38,7 +38,7 @@ import {
 import { ROL, hace } from "./etiquetas";
 import { colorDeSituacion, nombreDe } from "./ListadoOrdenes";
 import { hashDe } from "./rutas";
-import { rolesDe } from "../../lib/roles";
+import { puede, rolesDe } from "../../lib/roles";
 
 /** A dónde se puede ir desde una bandeja, además de cada Orden. */
 type Destino = "nueva" | "taller" | "inventario";
@@ -125,7 +125,8 @@ export function PantallaInicio({
             </p>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            {(datos.roles ?? [datos.rol]).includes("RECEPCION") && (
+            {/* CFG-02 (brecha 18): el permiso configurable, no el rol. */}
+            {puede(actor, "ORDEN_CREAR", ["RECEPCION"]) && (
               <Boton onClick={() => onIr("nueva")}>+ Nueva orden</Boton>
             )}
             {(datos.roles ?? [datos.rol]).some(

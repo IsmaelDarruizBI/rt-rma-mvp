@@ -46,8 +46,12 @@ const SECCIONES: readonly {
   clave: Seccion;
   nombre: string;
   icono: () => ReactNode;
-  /** Solo para Administración (DC23); el backend lo valida igual. */
-  soloAdministracion?: boolean;
+  /** CFG-05: con algún permiso de configuración; el backend lo valida igual. */
+  soloConfiguracion?: boolean;
+  /** CFG-02 (brecha 23): con el permiso de consultar el inventario. */
+  soloInventario?: boolean;
+  /** CFG-02 (brecha 23): con el permiso de consultar los reportes. */
+  soloReportes?: boolean;
   /** DEC-MI-09: solo con el permiso de consultar compras. */
   soloCompras?: boolean;
   /** DEC-RT-07: solo con el permiso de consultar los Productos RT. */
@@ -62,14 +66,14 @@ const SECCIONES: readonly {
     icono: IconoReparacionRt,
     soloProductosRt: true,
   },
-  { clave: "inventario", nombre: "Inventario", icono: IconoInventario },
-  { clave: "reportes", nombre: "Reportes", icono: IconoReportes },
+  { clave: "inventario", nombre: "Inventario", icono: IconoInventario, soloInventario: true },
+  { clave: "reportes", nombre: "Reportes", icono: IconoReportes, soloReportes: true },
   { clave: "compras", nombre: "Compras", icono: IconoCompras, soloCompras: true },
   {
     clave: "configuracion",
     nombre: "Configuración",
     icono: IconoConfiguracion,
-    soloAdministracion: true,
+    soloConfiguracion: true,
   },
 ];
 
@@ -103,7 +107,9 @@ export function Layout({
   usuario: {
     nombre: string;
     rol: string;
-    esAdministracion?: boolean;
+    puedeConfigurar?: boolean;
+    puedeConsultarInventario?: boolean;
+    puedeConsultarReportes?: boolean;
     puedeComprar?: boolean;
     puedeConsultarProductosRt?: boolean;
   };
@@ -142,7 +148,9 @@ export function Layout({
         <nav className="rt-sidebar__nav">
           {SECCIONES.filter(
             (s) =>
-              (!s.soloAdministracion || usuario.esAdministracion) &&
+              (!s.soloConfiguracion || usuario.puedeConfigurar) &&
+              (!s.soloInventario || usuario.puedeConsultarInventario !== false) &&
+              (!s.soloReportes || usuario.puedeConsultarReportes !== false) &&
               (!s.soloCompras || usuario.puedeComprar) &&
               (!s.soloProductosRt || usuario.puedeConsultarProductosRt),
           ).map(({ clave, nombre, icono: Icono }) => (

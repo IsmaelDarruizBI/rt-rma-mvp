@@ -30,9 +30,10 @@ export function listarMotivosAdmin(): Promise<MotivosAdmin> {
   return get<MotivosAdmin>("/api/admin/reasons");
 }
 
+/** CFG-01: el código lo genera la API (CANC-NNN o INT-NNN). */
 export function crearMotivo(
   usuarioId: string,
-  motivo: MotivoOperativo,
+  motivo: Omit<MotivoOperativo, "codigo">,
 ): Promise<MotivoOperativo> {
   return post<MotivoOperativo>("/api/admin/reasons", {
     usuario_id: usuarioId,

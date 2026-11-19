@@ -11,6 +11,10 @@
  * (`#/reparacion-rt/900001?...`), siempre en forma canónica.
  */
 
+import {
+  esSeccionConfiguracion,
+  type SeccionConfiguracion,
+} from "../configuracion/secciones.ts";
 import { normalizarConsultaRt } from "../reparacion-rt/filtros.ts";
 
 export type Ruta =
@@ -22,7 +26,7 @@ export type Ruta =
   | { pantalla: "inventario" }
   | { pantalla: "reportes" }
   | { pantalla: "compras" }
-  | { pantalla: "configuracion" }
+  | { pantalla: "configuracion"; seccion?: SeccionConfiguracion }
   | { pantalla: "reparacion-rt"; consulta: string; productoId?: string };
 
 /** Al entrar: las tareas del usuario. */
@@ -48,6 +52,14 @@ export function parsearRuta(hash: string): Ruta {
     if (partes[0] === "reportes") return { pantalla: "reportes" };
     if (partes[0] === "compras") return { pantalla: "compras" };
     if (partes[0] === "configuracion") return { pantalla: "configuracion" };
+  }
+  // CFG-05: cada subsección de Configuración tiene su ruta.
+  if (
+    partes[0] === "configuracion" &&
+    partes.length === 2 &&
+    esSeccionConfiguracion(partes[1])
+  ) {
+    return { pantalla: "configuracion", seccion: partes[1] };
   }
   if (partes[0] === "reparacion-rt" && partes.length <= 2) {
     const consulta = normalizarConsultaRt(resto.join("?"));
@@ -88,7 +100,9 @@ export function hashDe(ruta: Ruta): string {
     case "compras":
       return "#/compras";
     case "configuracion":
-      return "#/configuracion";
+      return ruta.seccion
+        ? `#/configuracion/${ruta.seccion}`
+        : "#/configuracion";
     case "reparacion-rt": {
       const producto = ruta.productoId
         ? `/${encodeURIComponent(ruta.productoId)}`

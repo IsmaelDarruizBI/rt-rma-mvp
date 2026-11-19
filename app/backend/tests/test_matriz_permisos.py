@@ -454,3 +454,95 @@ def test_cada_permiso_requerido_existe_y_es_consulta():
     for permiso in permisos.REGISTRO.values():
         for codigo in permiso.requiere:
             assert permisos.REGISTRO[codigo].consulta, (permiso.codigo, codigo)
+
+
+# --- El frontend (CFG-02, seccion 8) ------------------------------------------
+
+FRONTEND = Path(__file__).resolve().parents[2] / "frontend" / "src"
+
+
+def _fuentes_frontend():
+    for archivo in FRONTEND.rglob("*.ts*"):
+        yield archivo, archivo.read_text(encoding="utf-8")
+
+
+def test_el_frontend_usa_solo_permisos_que_existen():
+    """Todo codigo de ``puede(usuario, "X")`` y de las secciones de
+    Configuracion existe en el registro (o es el alias de Compras para una
+    API anterior)."""
+    if not FRONTEND.exists():
+        pytest.skip("Sin el frontend junto al backend.")
+    validos = set(permisos.REGISTRO) | {permisos.ALIAS_COMPRAS_GESTIONAR}
+    usados: dict[str, str] = {}
+    for archivo, texto in _fuentes_frontend():
+        for codigo in re.findall(r'puede\([^,()]+,\s*"([A-Z_]+)"', texto):
+            usados[codigo] = archivo.name
+        if archivo.name in ("secciones.ts", "recepcion.ts"):
+            for codigo in re.findall(r'"([A-Z][A-Z_]{4,})"', texto):
+                if codigo.endswith(
+                    (
+                        "_GESTIONAR",
+                        "_ADMINISTRAR",
+                        "_CREAR",
+                        "_CONFIRMAR",
+                        "_CANCELAR",
+                        "_RECIBIR",
+                        "_SOLICITAR",
+                    )
+                ):
+                    usados[codigo] = archivo.name
+    desconocidos = {c: a for c, a in usados.items() if c not in validos}
+    assert desconocidos == {}
+    assert usados, "no se encontraron permisos en el frontend"
+
+
+def test_el_frontend_no_habilita_acciones_por_rol_fijo():
+    """CFG-02 (brecha 18): ninguna pantalla habilita por ``tieneRol``; los
+    ``tieneAlguno`` que quedan usan los roles que manda la API para cada
+    accion (``accion.roles``, con la politica vigente)."""
+    if not FRONTEND.exists():
+        pytest.skip("Sin el frontend junto al backend.")
+    hallados = []
+    for archivo, texto in _fuentes_frontend():
+        if archivo.name == "roles.ts" and archivo.parent.name == "lib":
+            continue
+        for numero, linea in enumerate(texto.splitlines(), 1):
+            if "tieneRol(" in linea:
+                hallados.append(f"{archivo.name}:{numero}")
+            if (
+                "tieneAlguno(" in linea
+                and "roles" not in linea.split("tieneAlguno(")[1]
+            ):
+                hallados.append(f"{archivo.name}:{numero}")
+    assert hallados == []
+
+
+# Comparaciones con un rol escrito en el codigo que NO habilitan acciones.
+COMPARACIONES_DE_ROL_PERMITIDAS = {
+    # Regla de la pantalla de roles: nunca queda el sistema sin un
+    # Administrador activo (la API la valida igual).
+    "roles.ts",
+    # Atajo de navegacion por puesto ("Ver el taller"): no es una accion;
+    # la pantalla de destino aplica sus permisos (como la brecha 16).
+    "PantallasTrabajo.tsx",
+}
+
+
+def test_el_frontend_no_compara_roles_para_habilitar_acciones():
+    """QA D, M2: tampoco ``.includes("RECEPCION")`` ni ``=== "TECNICO"``
+    para mostrar una accion: se usa el permiso."""
+    if not FRONTEND.exists():
+        pytest.skip("Sin el frontend junto al backend.")
+    roles = "RECEPCION|TECNICO|COORDINADOR_RMA|ADMINISTRADOR"
+    patron = re.compile(
+        rf'(includes\("({roles})"\)|===\s*"({roles})"|"({roles})"\s*===)'
+    )
+    hallados = [
+        f"{archivo.name}:{numero}"
+        for archivo, texto in _fuentes_frontend()
+        if archivo.name not in COMPARACIONES_DE_ROL_PERMITIDAS
+        and not (archivo.name == "roles.ts" and archivo.parent.name == "lib")
+        for numero, linea in enumerate(texto.splitlines(), 1)
+        if patron.search(linea)
+    ]
+    assert hallados == []

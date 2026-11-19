@@ -63,6 +63,7 @@ import { AdvertenciaFaltante, ChecklistRecepcion } from "./ChecklistRecepcion";
 import { IdentidadDeLaOrden } from "./IdentidadEquipo";
 import { registrarSeguimientoRetiro } from "../../api/operativa";
 import { ConfiguracionPanel } from "../configuracion/Configuracion";
+import { puedeConfigurar } from "../configuracion/secciones";
 import { AntecedentesEquipo } from "./AntecedentesEquipo";
 import { AutorizacionClienteOrden } from "./AutorizacionCliente";
 import {
@@ -127,7 +128,7 @@ import {
 } from "./acciones";
 import { Layout, MenuAcciones, type Seccion } from "../../components/layout";
 import { Modal } from "../../components/Modal";
-import { puede, rolesDe, tieneRol } from "../../lib/roles";
+import { puede, rolesDe } from "../../lib/roles";
 
 type Informativa =
   | "cliente"
@@ -143,6 +144,9 @@ const ABIERTA_POR_ROL: Partial<Record<RolUsuario, Informativa>> = {
 };
 
 // Búsqueda y filtros del listado: duran lo que la sesión del navegador.
+/** Respaldo de `puede` con una API sin permisos: las consultas eran de todos. */
+const TODOS_LOS_ROLES = ["RECEPCION", "TECNICO", "COORDINADOR_RMA", "ADMINISTRADOR"];
+
 const CLAVE_FILTROS = "rt-rma.filtrosOrdenes";
 
 function leerFiltros(): FiltrosListado {
@@ -265,6 +269,20 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
     navegar({ pantalla: "inicio" });
     sesion?.cerrar();
   }, [navegar, sesion]);
+
+  /**
+   * CFG-03: después de cambiar permisos, roles o tipos en Configuración, la
+   * app vuelve a leer los usuarios (sus permisos rigen desde el pedido
+   * siguiente) y los tipos de reparación que ofrece el alta de Órdenes.
+   */
+  const recargarCatalogos = useCallback(() => {
+    void Promise.all([api.listarUsuarios(), api.listarTiposReparacion()])
+      .then(([listaUsuarios, listaTipos]) => {
+        setUsuarios(listaUsuarios);
+        setTipos(listaTipos);
+      })
+      .catch((fallo: unknown) => setError(errorDe(fallo, null)));
+  }, []);
 
   useEffect(() => {
     async function cargar() {
@@ -687,9 +705,10 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
   const tituloOrdenes = {
     titulo: "Órdenes",
     subtitulo: "Órdenes de reparación",
-    acciones: (
+    // CFG-02 (brecha 18): solo con el permiso de crear Órdenes.
+    acciones: puede(actor, "ORDEN_CREAR", ["RECEPCION"]) ? (
       <Boton onClick={() => navegar({ pantalla: "nueva" })}>+ Nueva orden</Boton>
-    ),
+    ) : undefined,
   };
   const barra =
     ruta.pantalla === "inicio"
@@ -713,7 +732,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
           : ruta.pantalla === "configuracion"
           ? {
               titulo: "Configuración",
-              subtitulo: "Tipos de reparación, Mesas de trabajo y auditoría",
+              subtitulo: "Catálogos, permisos y auditoría",
             }
           : ruta.pantalla === "orden"
             ? {
@@ -796,7 +815,11 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
         rol: rolesDe(actor)
           .map((r) => ROL[r] ?? r)
           .join(" · "),
-        esAdministracion: tieneRol(actor, "ADMINISTRADOR"),
+        // CFG-05: Configuración, con algún permiso de configuración.
+        puedeConfigurar: puedeConfigurar(actor),
+        // CFG-02 (brecha 23): el menú sigue los permisos de consulta.
+        puedeConsultarInventario: puede(actor, "INVENTARIO_CONSULTAR", TODOS_LOS_ROLES),
+        puedeConsultarReportes: puede(actor, "REPORTES_CONSULTAR", TODOS_LOS_ROLES),
         puedeComprar: puede(actor, "COMPRAS_CONSULTAR", [
           "RECEPCION",
           "COORDINADOR_RMA",
@@ -858,7 +881,12 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
       ) : ruta.pantalla === "compras" ? (
         <ComprasPanel actor={actor} />
       ) : ruta.pantalla === "configuracion" ? (
-        <ConfiguracionPanel actor={actor} />
+        <ConfiguracionPanel
+          actor={actor}
+          seccion={ruta.seccion}
+          onNavegar={(seccion) => navegar({ pantalla: "configuracion", seccion })}
+          onCambio={recargarCatalogos}
+        />
       ) : ruta.pantalla === "ordenes" || ruta.pantalla === "nueva" ? (
         <>
           <PantallaOrdenes

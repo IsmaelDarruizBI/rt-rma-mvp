@@ -27,6 +27,7 @@ import type { Orden, Usuario } from "../../types/api";
 import { estadoDeComunicacion, textoConsentimiento } from "./comunicaciones";
 import { nombreDeUsuario } from "./DetalleOrden";
 import { enlaceWhatsapp, telefonoParaWhatsapp } from "./whatsapp";
+import { esPlantillaVisible } from "../configuracion/listados";
 
 const POR_DEFECTO = ["RECEPCION", "COORDINADOR_RMA", "ADMINISTRADOR"];
 
@@ -58,7 +59,10 @@ export function ComunicacionesOrden({
   useEffect(() => {
     api
       .listarPlantillas()
-      .then((datos) => setPlantillas(datos.plantillas.filter((p) => p.activa)))
+      // CFG-08 (DF-3): solo Ingreso y Equipo listo para retirar.
+      .then((datos) =>
+        setPlantillas(datos.plantillas.filter((p) => p.activa && esPlantillaVisible(p))),
+      )
       .catch((causa: unknown) => setError(mensajeDe(causa)));
   }, []);
 

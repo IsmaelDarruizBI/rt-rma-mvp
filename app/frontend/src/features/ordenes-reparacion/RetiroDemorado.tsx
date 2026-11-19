@@ -34,7 +34,7 @@ export function RetiroDemorado({
   if (dias === null && seguimientos.length === 0) return null;
   const habilitado =
     dias !== null &&
-    puede(actor, "RETIRO_SEGUIMIENTO", ["RECEPCION", "ADMINISTRACION"]);
+    puede(actor, "RETIRO_SEGUIMIENTO", ["RECEPCION", "ADMINISTRADOR"]);
 
   return (
     <section

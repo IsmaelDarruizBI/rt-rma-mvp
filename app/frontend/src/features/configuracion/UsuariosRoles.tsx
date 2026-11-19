@@ -68,6 +68,7 @@ export function UsuariosRoles({
       </p>
       {error && <p role="alert">{error}</p>}
       {aviso && <p role="status">{aviso}</p>}
+      <div style={{ overflowX: "auto" }}>
       <table style={{ borderCollapse: "collapse", fontSize: "0.85rem" }}>
         <thead>
           <tr>
@@ -128,6 +129,7 @@ export function UsuariosRoles({
           })}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }

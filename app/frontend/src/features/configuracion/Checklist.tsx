@@ -5,12 +5,17 @@
  * ni se editan. Administración configura las preguntas de cada tipo, su
  * vigencia y su orden. Todo queda auditado; lo ya registrado en las
  * Órdenes no cambia. Solo sobre PostgreSQL.
+ *
+ * Configuración v2: se administra con CHECKLIST_GESTIONAR (CFG-03); la
+ * pregunta nueva va en una ventana, su código lo genera la API (CHK-NNNN) y
+ * el listado se actualiza sin volver a pedirlo (CFG-01 y CFG-04).
  */
 
 import { useCallback, useEffect, useState } from "react";
 
 import * as api from "../../api/checklist";
 import type { CatalogoChecklist, PreguntaChecklist } from "../../api/checklist";
+import { FormularioModal } from "../../components/FormularioModal";
 import { Boton, Campo, colores, estiloInput } from "../../components/ui";
 import type { Usuario } from "../../types/api";
 import {
@@ -18,6 +23,7 @@ import {
   preguntasDelTipo,
   textoOrigen,
 } from "../ordenes-reparacion/checklist";
+import { conElemento } from "./listados";
 
 const mensaje = (causa: unknown) =>
   causa instanceof Error ? causa.message : String(causa);
@@ -27,6 +33,7 @@ export function ChecklistAdmin({ actor }: { actor: Usuario }) {
   const [tipo, setTipo] = useState("");
   const [texto, setTexto] = useState("");
   const [opciones, setOpciones] = useState("");
+  const [nueva, setNueva] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -75,8 +82,22 @@ export function ChecklistAdmin({ actor }: { actor: Usuario }) {
     .filter(Boolean);
   const origen = datos.origen;
 
-  const cambiarPregunta = (p: PreguntaChecklist, cambio: Partial<PreguntaChecklist>) =>
-    ejecutar(() => api.guardarPregunta(actor.id, { ...p, ...cambio }), `Se guardó «${p.texto}».`);
+  const conPregunta = (pregunta: PreguntaChecklist) =>
+    setDatos({ ...datos, preguntas: conElemento(datos.preguntas, pregunta, (x) => x.id) });
+
+  const cambiarPregunta = (p: PreguntaChecklist, cambio: Partial<PreguntaChecklist>) => {
+    setOcupado(true);
+    setError(null);
+    setAviso(null);
+    api
+      .guardarPregunta(actor.id, { ...p, ...cambio })
+      .then((guardada) => {
+        conPregunta(guardada);
+        setAviso(`Se guardó «${p.texto}».`);
+      })
+      .catch((causa: unknown) => setError(mensaje(causa)))
+      .finally(() => setOcupado(false));
+  };
 
   const mover = (p: PreguntaChecklist, sentido: -1 | 1) => {
     const cambios = moverPregunta(preguntas, p.id, sentido);
@@ -177,37 +198,41 @@ export function ChecklistAdmin({ actor }: { actor: Usuario }) {
             ))}
             {preguntas.length === 0 && <li style={{ color: colores.suave }}>Sin preguntas.</li>}
           </ul>
-          <div style={{ maxWidth: 420 }}>
-            <Campo etiqueta="Nueva pregunta">
-              <input value={texto} onChange={(e) => setTexto(e.target.value)} style={estiloInput} />
-            </Campo>
-            <Campo etiqueta="Opciones (separadas por coma; al menos dos)">
-              <input value={opciones} onChange={(e) => setOpciones(e.target.value)} style={estiloInput} />
-            </Campo>
-            <Boton
-              disabled={ocupado || !texto.trim() || listaOpciones.length < 2}
-              onClick={() =>
-                void ejecutar(
-                  () =>
-                    api.guardarPregunta(actor.id, {
-                      tipo_equipo_id: tipo,
-                      texto: texto.trim(),
-                      opciones: listaOpciones,
-                      activa: true,
-                      orden: preguntas.length + 1,
-                    }),
-                  "Se agregó la pregunta.",
-                ).then((ok) => {
-                  if (ok) {
-                    setTexto("");
-                    setOpciones("");
-                  }
-                })
-              }
+          <Boton disabled={ocupado} onClick={() => setNueva(true)}>
+            + Nueva pregunta
+          </Boton>
+          {nueva && (
+            <FormularioModal
+              titulo="Nueva pregunta"
+              textoConfirmar="Crear pregunta"
+              listo={texto.trim() !== "" && listaOpciones.length >= 2}
+              onCerrar={() => setNueva(false)}
+              onConfirmar={async () => {
+                const creada = await api.guardarPregunta(actor.id, {
+                  tipo_equipo_id: tipo,
+                  texto: texto.trim(),
+                  opciones: listaOpciones,
+                  activa: true,
+                  orden: preguntas.length + 1,
+                });
+                conPregunta(creada);
+                setError(null);
+                setAviso(`Se agregó la pregunta ${creada.id}.`);
+                setTexto("");
+                setOpciones("");
+              }}
             >
-              Agregar pregunta
-            </Boton>
-          </div>
+              <Campo etiqueta="Pregunta">
+                <input value={texto} onChange={(e) => setTexto(e.target.value)} style={estiloInput} />
+              </Campo>
+              <Campo etiqueta="Opciones (separadas por coma; al menos dos)">
+                <input value={opciones} onChange={(e) => setOpciones(e.target.value)} style={estiloInput} />
+              </Campo>
+              <p style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: colores.suave }}>
+                El código se asigna al guardar.
+              </p>
+            </FormularioModal>
+          )}
         </div>
       )}
     </section>

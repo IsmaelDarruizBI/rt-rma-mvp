@@ -48,3 +48,56 @@ export function puedeGuardarPermiso(
 ): boolean {
   return permiso.configurable && propuestos.length > 0 && !mismosRoles(propuestos, permiso.vigentes);
 }
+
+/** Lo mínimo de un permiso para sus dependencias (CFG-03). */
+export interface PermisoConDependencias {
+  codigo: string;
+  descripcion: string;
+  vigentes: RolUsuario[];
+  requiere?: string[];
+}
+
+/**
+ * Las consultas que una acción requiere y que hay que habilitar primero
+ * para los roles propuestos (por ejemplo, ver Compras antes de crear OC).
+ * La API rechaza el orden inverso: así no queda una acción sin su consulta.
+ */
+export function consultasAHabilitar(
+  permiso: PermisoConDependencias,
+  propuestos: RolUsuario[],
+  todos: PermisoConDependencias[],
+): { codigo: string; descripcion: string; roles: RolUsuario[] }[] {
+  const resultado: { codigo: string; descripcion: string; roles: RolUsuario[] }[] = [];
+  for (const codigo of permiso.requiere ?? []) {
+    const consulta = todos.find((p) => p.codigo === codigo);
+    if (!consulta) continue;
+    const faltan = propuestos.filter((rol) => !consulta.vigentes.includes(rol));
+    if (faltan.length > 0) {
+      resultado.push({
+        codigo,
+        descripcion: consulta.descripcion,
+        roles: ROLES.filter((r) => consulta.vigentes.includes(r) || faltan.includes(r)),
+      });
+    }
+  }
+  return resultado;
+}
+
+/**
+ * Las acciones que requieren este permiso y que todavía tiene un rol que
+ * se le quita: primero hay que quitarle esas acciones.
+ */
+export function accionesQueLoRequieren(
+  permiso: PermisoConDependencias,
+  propuestos: RolUsuario[],
+  todos: PermisoConDependencias[],
+): string[] {
+  const quitados = permiso.vigentes.filter((rol) => !propuestos.includes(rol));
+  return todos
+    .filter(
+      (p) =>
+        (p.requiere ?? []).includes(permiso.codigo) &&
+        p.vigentes.some((rol) => quitados.includes(rol)),
+    )
+    .map((p) => p.descripcion);
+}

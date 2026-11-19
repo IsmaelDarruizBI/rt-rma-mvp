@@ -61,7 +61,7 @@ import {
   filtrosActivos,
 } from "./listado";
 import { hashDe } from "./rutas";
-import { puede, rolesDe, tieneRol } from "../../lib/roles";
+import { puede, rolesDe } from "../../lib/roles";
 
 const ATAJOS: { valor: FiltroRapido; texto: string }[] = [
   { valor: "TODAS", texto: "Todas" },
@@ -940,7 +940,8 @@ export function FormularioNuevaOrden({
   const [equipo, setEquipo] = useState<EquipoElegido>(EQUIPO_VACIO);
   const [ingreso, setIngreso] = useState<Ingreso>(ingresoInicial);
 
-  const esRecepcion = tieneRol(actor, "RECEPCION");
+  // CFG-02 (brecha 18): el permiso configurable ORDEN_CREAR, no el rol.
+  const esRecepcion = puede(actor, "ORDEN_CREAR", ["RECEPCION"]);
   const dniNormalizado = normalizarDni(dni);
   const dniInvalido = dni.trim() !== "" && dniNormalizado === null;
   const datosEquipo = datosDelEquipo(catalogo.modelos.length > 0, equipo);
@@ -1025,7 +1026,7 @@ export function FormularioNuevaOrden({
             color: colores.alerta,
           }}
         >
-          La crea Recepción: elegí ese usuario arriba para cargarla.
+          Tu usuario no tiene el permiso para crear Órdenes.
         </p>
       )}
       <BusquedaPorDni
@@ -1118,7 +1119,8 @@ export function FormularioNuevaOrdenRt({
   const [referenciaRt, setReferenciaRt] = useState("RT-INGRESO-0001");
   const [ingreso, setIngreso] = useState<Ingreso>(ingresoInicial);
 
-  const esRecepcion = tieneRol(actor, "RECEPCION");
+  // CFG-02 (brecha 18): el permiso configurable ORDEN_CREAR, no el rol.
+  const esRecepcion = puede(actor, "ORDEN_CREAR", ["RECEPCION"]);
   const completo =
     marca && modelo && ingreso.observaciones.trim() && referenciaRt;
 
@@ -1132,7 +1134,7 @@ export function FormularioNuevaOrdenRt({
             color: colores.alerta,
           }}
         >
-          La crea Recepción: elegí ese usuario arriba para cargarla.
+          Tu usuario no tiene el permiso para crear Órdenes.
         </p>
       )}
       <Campo etiqueta="Referencia de Gestión RT">

@@ -10,6 +10,7 @@ import type {
   LineaRecepcion,
   OrdenCompra,
 } from "../../api/compras";
+import { type ConRoles, puede } from "../../lib/roles.ts";
 import type { RolUsuario } from "../../types/api";
 
 export const GESTORES: RolUsuario[] = ["RECEPCION", "COORDINADOR_RMA", "ADMINISTRADOR"];
@@ -117,4 +118,52 @@ export function avanceDeOrden(orden: OrdenCompra): { pedido: number; recibido: n
     }),
     { pedido: 0, recibido: 0, pendiente: 0 },
   );
+}
+
+/**
+ * Lo que el usuario puede hacer en Compras (Configuración v2, CFG-03, D5 y
+ * DF-5). Con una API anterior (solo `COMPRAS_GESTIONAR`) ese permiso
+ * habilita todo, como antes; sin lista de permisos deciden los roles.
+ */
+export interface AccionesCompras {
+  solicitar: boolean;
+  crearOc: boolean;
+  confirmar: boolean;
+  cancelar: boolean;
+  recibir: boolean;
+}
+
+const CODIGOS_COMPRAS = {
+  solicitar: "COMPRA_SOLICITAR",
+  crearOc: "OC_CREAR",
+  confirmar: "OC_CONFIRMAR",
+  cancelar: "OC_CANCELAR",
+  recibir: "COMPRA_RECIBIR",
+} as const;
+
+export function accionesDeCompras(usuario: ConRoles | null): AccionesCompras {
+  const permisos = usuario?.permisos;
+  const nuevos = Object.values(CODIGOS_COMPRAS) as string[];
+  const apiAnterior =
+    permisos !== undefined && !permisos.some((codigo) => nuevos.includes(codigo));
+  const todo = puede(usuario, "COMPRAS_GESTIONAR", GESTORES);
+  const resultado = {} as AccionesCompras;
+  for (const [accion, codigo] of Object.entries(CODIGOS_COMPRAS)) {
+    resultado[accion as keyof AccionesCompras] = apiAnterior
+      ? todo
+      : puede(usuario, codigo, GESTORES);
+  }
+  return resultado;
+}
+
+/** DF-5: cancelar una OC confirmada (o un borrador ajeno) exige cancelar;
+ * quien crea OC descarta su propio borrador. Sin recepciones, siempre. */
+export function puedeCancelarOrden(
+  acciones: AccionesCompras,
+  orden: Pick<OrdenCompra, "estado" | "creada_por">,
+  usuarioId: string,
+): boolean {
+  if (orden.estado !== "BORRADOR" && orden.estado !== "CONFIRMADA") return false;
+  if (acciones.cancelar) return true;
+  return acciones.crearOc && orden.estado === "BORRADOR" && orden.creada_por === usuarioId;
 }

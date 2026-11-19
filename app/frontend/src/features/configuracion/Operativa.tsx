@@ -1,110 +1,87 @@
 /**
- * Motivos y parámetros operativos (DEC-MI-13, 14 y 15). Solo
- * Administración los cambia, y cada cambio queda auditado. Desactivar un
- * motivo no cambia lo registrado: cada cancelación o interrupción guardó
- * el texto del motivo de ese momento. En la persistencia JSON (demo) son
- * de solo lectura.
+ * Motivos de cancelación e interrupción y recargos por medio de pago
+ * (DEC-MI-13 y 15; UX-08). Cada cambio queda auditado. Desactivar un motivo
+ * no cambia lo registrado: cada cancelación o interrupción guardó el texto
+ * del motivo de ese momento. En la persistencia JSON (demo) son de solo
+ * lectura.
+ *
+ * Configuración v2: el alta y la edición de motivos van en una ventana y
+ * el código lo genera la API (CANC-NNN o INT-NNN, CFG-01 y CFG-04). El
+ * plazo de retiro ya no se muestra (CFG-07): sigue rigiendo en el backend
+ * con su valor.
  */
 
 import { useCallback, useEffect, useState } from "react";
 
 import * as api from "../../api/operativa";
 import type { MotivoOperativo, TipoMotivo } from "../../api/operativa";
+import {
+  EncabezadoListado,
+  FormularioModal,
+  Mensajes,
+  mensajeDe,
+  useComando,
+} from "../../components/FormularioModal";
 import { Boton, Campo, colores, estiloInput } from "../../components/ui";
 import type { Usuario } from "../../types/api";
+import { conElemento } from "./listados";
 
 const TIPOS: { valor: TipoMotivo; texto: string }[] = [
   { valor: "CANCELACION", texto: "Cancelación" },
   { valor: "INTERRUPCION", texto: "Interrupción" },
 ];
 
-const PARAMETROS: Record<string, { texto: string; ayuda: string }> = {
-  PLAZO_RETIRO_DIAS: {
-    texto: "Plazo de retiro (días)",
-    ayuda:
-      "Días desde el aviso de equipo listo hasta marcar el retiro como " +
-      "demorado. Nunca cierra la Orden.",
-  },
-};
-
-const mensaje = (causa: unknown) =>
-  causa instanceof Error ? causa.message : String(causa);
-
-function useEstado() {
-  const [error, setError] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
-  const [ocupado, setOcupado] = useState(false);
-  const ejecutar = (accion: () => Promise<unknown>, exito: string, despues: () => void) => {
-    setOcupado(true);
-    setError(null);
-    setAviso(null);
-    accion()
-      .then(() => {
-        setAviso(exito);
-        despues();
-      })
-      .catch((causa: unknown) => setError(mensaje(causa)))
-      .finally(() => setOcupado(false));
-  };
-  return { error, setError, aviso, ocupado, ejecutar };
-}
-
-function Mensajes({ error, aviso }: { error: string | null; aviso: string | null }) {
-  return (
-    <>
-      {error && (
-        <p role="alert" style={{ color: colores.error, fontSize: "0.85rem" }}>
-          {error}
-        </p>
-      )}
-      {aviso && (
-        <p role="status" style={{ color: colores.ok, fontSize: "0.85rem" }}>
-          {aviso}
-        </p>
-      )}
-    </>
-  );
-}
+type Ventana = { motivo: MotivoOperativo | null; datos: Omit<MotivoOperativo, "codigo"> };
 
 export function MotivosOperativos({ actor }: { actor: Usuario }) {
   const [datos, setDatos] = useState<api.MotivosAdmin | null>(null);
-  const { error, setError, aviso, ocupado, ejecutar } = useEstado();
-  const [nuevo, setNuevo] = useState<MotivoOperativo>({
-    codigo: "",
-    tipo: "CANCELACION",
-    nombre: "",
-    activo: true,
-    requiere_descripcion: false,
-  });
+  const [ventana, setVentana] = useState<Ventana | null>(null);
+  const [resaltado, setResaltado] = useState<string | null>(null);
+  const { error, setError, aviso, setAviso, ocupado, ejecutar } = useComando();
 
   const cargar = useCallback(() => {
     api
       .listarMotivosAdmin()
       .then(setDatos)
-      .catch((causa: unknown) => setError(mensaje(causa)));
+      .catch((causa: unknown) => setError(mensajeDe(causa)));
   }, [setError]);
   useEffect(cargar, [cargar]);
 
   if (!datos) return <Mensajes error={error} aviso={aviso} />;
   const bloqueado = ocupado || !datos.editable;
 
+  const guardado = (motivo: MotivoOperativo, texto: string) => {
+    setDatos({ ...datos, motivos: conElemento(datos.motivos, motivo, (m) => m.codigo) });
+    setResaltado(motivo.codigo);
+    setError(null);
+    setAviso(texto);
+  };
+
   const editar = (motivo: MotivoOperativo, cambio: Partial<MotivoOperativo>) =>
-    ejecutar(
+    void ejecutar(
       () => api.editarMotivo(actor.id, { ...motivo, ...cambio }),
       `Se guardó el motivo ${motivo.codigo}.`,
-      cargar,
-    );
+    ).then((m) => m && guardado(m, `Se guardó el motivo ${m.codigo}.`));
 
   return (
     <section>
-      <h3 style={{ margin: "0 0 0.5rem" }}>Motivos de cancelación e interrupción</h3>
+      <EncabezadoListado
+        titulo="Motivos de cancelación e interrupción"
+        nuevo={datos.editable ? "Nuevo motivo" : undefined}
+        onNuevo={() =>
+          setVentana({
+            motivo: null,
+            datos: { tipo: "CANCELACION", nombre: "", activo: true, requiere_descripcion: false },
+          })
+        }
+      />
       <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
         Cada catálogo es independiente. «Otro» exige una descripción. Desactivar
         un motivo no cambia lo ya registrado.
       </p>
       <Mensajes error={error} aviso={aviso} />
       {TIPOS.map((tipo) => (
-        <div key={tipo.valor} style={{ margin: "0 0 0.8rem" }}>
+        <div key={tipo.valor} style={{ margin: "0 0 0.8rem", overflowX: "auto" }}>
           <h4 style={{ margin: "0 0 0.3rem" }}>{tipo.texto}</h4>
           <table style={{ borderCollapse: "collapse", fontSize: "0.85rem" }}>
             <thead>
@@ -112,14 +89,18 @@ export function MotivosOperativos({ actor }: { actor: Usuario }) {
                 <th style={{ textAlign: "left", paddingRight: "0.8rem" }}>Código</th>
                 <th style={{ textAlign: "left", paddingRight: "0.8rem" }}>Nombre</th>
                 <th style={{ paddingRight: "0.8rem" }}>Exige descripción</th>
-                <th>Vigente</th>
+                <th style={{ paddingRight: "0.8rem" }}>Vigente</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {datos.motivos
                 .filter((m) => m.tipo === tipo.valor)
                 .map((motivo) => (
-                  <tr key={motivo.codigo}>
+                  <tr
+                    key={motivo.codigo}
+                    style={{ background: resaltado === motivo.codigo ? "#eff6ff" : undefined }}
+                  >
                     <td style={{ paddingRight: "0.8rem" }}>{motivo.codigo}</td>
                     <td style={{ paddingRight: "0.8rem" }}>{motivo.nombre}</td>
                     <td style={{ textAlign: "center" }}>
@@ -129,9 +110,7 @@ export function MotivosOperativos({ actor }: { actor: Usuario }) {
                         checked={motivo.requiere_descripcion}
                         disabled={bloqueado}
                         onChange={(evento) =>
-                          editar(motivo, {
-                            requiere_descripcion: evento.target.checked,
-                          })
+                          editar(motivo, { requiere_descripcion: evento.target.checked })
                         }
                       />
                     </td>
@@ -141,10 +120,22 @@ export function MotivosOperativos({ actor }: { actor: Usuario }) {
                         aria-label={`${motivo.nombre}: vigente`}
                         checked={motivo.activo}
                         disabled={bloqueado}
-                        onChange={(evento) =>
-                          editar(motivo, { activo: evento.target.checked })
-                        }
+                        onChange={(evento) => editar(motivo, { activo: evento.target.checked })}
                       />
+                    </td>
+                    <td style={{ paddingLeft: "0.6rem" }}>
+                      {datos.editable && (
+                        <Boton
+                          variante="secundario"
+                          disabled={bloqueado}
+                          onClick={() => {
+                            const { codigo: _codigo, ...resto } = motivo;
+                            setVentana({ motivo, datos: resto });
+                          }}
+                        >
+                          Editar
+                        </Boton>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -152,16 +143,35 @@ export function MotivosOperativos({ actor }: { actor: Usuario }) {
           </table>
         </div>
       ))}
-      {datos.editable && (
-        <div style={{ maxWidth: 420 }}>
-          <h4 style={{ margin: "0 0 0.3rem" }}>Nuevo motivo</h4>
+      {ventana && (
+        <FormularioModal
+          titulo={ventana.motivo ? `Editar ${ventana.motivo.codigo}` : "Nuevo motivo"}
+          textoConfirmar={ventana.motivo ? "Guardar" : "Crear motivo"}
+          listo={ventana.datos.nombre.trim() !== ""}
+          onCerrar={() => setVentana(null)}
+          onConfirmar={async () => {
+            const limpio = { ...ventana.datos, nombre: ventana.datos.nombre.trim() };
+            const motivo = ventana.motivo
+              ? await api.editarMotivo(actor.id, { ...limpio, codigo: ventana.motivo.codigo })
+              : await api.crearMotivo(actor.id, limpio);
+            guardado(
+              motivo,
+              ventana.motivo
+                ? `Se guardó el motivo ${motivo.codigo}.`
+                : `Se creó el motivo ${motivo.codigo} «${motivo.nombre}».`,
+            );
+          }}
+        >
           <Campo etiqueta="Catálogo">
             <select
-              value={nuevo.tipo}
+              value={ventana.datos.tipo}
+              disabled={ventana.motivo !== null}
               onChange={(evento) =>
-                setNuevo({ ...nuevo, tipo: evento.target.value as TipoMotivo })
+                setVentana({
+                  ...ventana,
+                  datos: { ...ventana.datos, tipo: evento.target.value as TipoMotivo },
+                })
               }
-              disabled={bloqueado}
               style={estiloInput}
             >
               {TIPOS.map((tipo) => (
@@ -171,108 +181,35 @@ export function MotivosOperativos({ actor }: { actor: Usuario }) {
               ))}
             </select>
           </Campo>
-          <Campo etiqueta="Código">
-            <input
-              value={nuevo.codigo}
-              onChange={(evento) => setNuevo({ ...nuevo, codigo: evento.target.value })}
-              disabled={bloqueado}
-              style={estiloInput}
-            />
-          </Campo>
           <Campo etiqueta="Nombre">
             <input
-              value={nuevo.nombre}
-              onChange={(evento) => setNuevo({ ...nuevo, nombre: evento.target.value })}
-              disabled={bloqueado}
+              value={ventana.datos.nombre}
+              onChange={(evento) =>
+                setVentana({ ...ventana, datos: { ...ventana.datos, nombre: evento.target.value } })
+              }
               style={estiloInput}
             />
           </Campo>
           <label style={{ display: "flex", gap: "0.4rem", margin: "0 0 0.6rem", fontSize: "0.85rem" }}>
             <input
               type="checkbox"
-              checked={nuevo.requiere_descripcion}
+              checked={ventana.datos.requiere_descripcion}
               onChange={(evento) =>
-                setNuevo({ ...nuevo, requiere_descripcion: evento.target.checked })
+                setVentana({
+                  ...ventana,
+                  datos: { ...ventana.datos, requiere_descripcion: evento.target.checked },
+                })
               }
-              disabled={bloqueado}
             />
             Exige descripción
           </label>
-          <Boton
-            disabled={bloqueado || !nuevo.codigo.trim() || !nuevo.nombre.trim()}
-            onClick={() =>
-              ejecutar(
-                () => api.crearMotivo(actor.id, nuevo),
-                `Se agregó el motivo ${nuevo.codigo.trim().toUpperCase()}.`,
-                () => {
-                  setNuevo({ ...nuevo, codigo: "", nombre: "", requiere_descripcion: false });
-                  cargar();
-                },
-              )
-            }
-          >
-            Agregar motivo
-          </Boton>
-        </div>
-      )}
-    </section>
-  );
-}
-
-export function ParametrosOperativos({ actor }: { actor: Usuario }) {
-  const [datos, setDatos] = useState<api.ParametrosAdmin | null>(null);
-  const [valores, setValores] = useState<Record<string, string>>({});
-  const { error, setError, aviso, ocupado, ejecutar } = useEstado();
-
-  const cargar = useCallback(() => {
-    api
-      .leerParametros()
-      .then((leidos) => {
-        setDatos(leidos);
-        setValores(leidos.parametros);
-      })
-      .catch((causa: unknown) => setError(mensaje(causa)));
-  }, [setError]);
-  useEffect(cargar, [cargar]);
-
-  if (!datos) return <Mensajes error={error} aviso={aviso} />;
-  const bloqueado = ocupado || !datos.editable;
-
-  return (
-    <section style={{ maxWidth: 420 }}>
-      <h3 style={{ margin: "0 0 0.5rem" }}>Parámetros</h3>
-      <Mensajes error={error} aviso={aviso} />
-      {Object.entries(datos.parametros).map(([clave, actual]) => (
-        <div key={clave} style={{ margin: "0 0 0.6rem" }}>
-          <Campo etiqueta={PARAMETROS[clave]?.texto ?? clave}>
-            <input
-              value={valores[clave] ?? ""}
-              onChange={(evento) =>
-                setValores({ ...valores, [clave]: evento.target.value })
-              }
-              disabled={bloqueado}
-              style={estiloInput}
-            />
-          </Campo>
-          {PARAMETROS[clave] && (
-            <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", color: colores.suave }}>
-              {PARAMETROS[clave].ayuda}
+          {!ventana.motivo && (
+            <p style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: colores.suave }}>
+              El código se asigna al guardar.
             </p>
           )}
-          <Boton
-            disabled={bloqueado || (valores[clave] ?? "").trim() === actual}
-            onClick={() =>
-              ejecutar(
-                () => api.guardarParametro(actor.id, clave, (valores[clave] ?? "").trim()),
-                "Se guardó el parámetro.",
-                cargar,
-              )
-            }
-          >
-            Guardar
-          </Boton>
-        </div>
-      ))}
+        </FormularioModal>
+      )}
     </section>
   );
 }
@@ -285,7 +222,9 @@ export function ParametrosOperativos({ actor }: { actor: Usuario }) {
 export function RecargosMedioPago({ actor }: { actor: Usuario }) {
   const [datos, setDatos] = useState<api.MediosPagoAdmin | null>(null);
   const [valores, setValores] = useState<Record<string, string>>({});
-  const { error, setError, aviso, ocupado, ejecutar } = useEstado();
+  const { error, setError, aviso, ocupado, ejecutar: ejecutarComando } = useComando();
+  const ejecutar = (accion: () => Promise<unknown>, exito: string, despues: () => void) =>
+    void ejecutarComando(accion, exito).then((r) => r !== undefined && despues());
 
   const cargar = useCallback(() => {
     api
@@ -298,7 +237,7 @@ export function RecargosMedioPago({ actor }: { actor: Usuario }) {
           ),
         );
       })
-      .catch((causa: unknown) => setError(mensaje(causa)));
+      .catch((causa: unknown) => setError(mensajeDe(causa)));
   }, [setError]);
   useEffect(cargar, [cargar]);
 
@@ -306,7 +245,7 @@ export function RecargosMedioPago({ actor }: { actor: Usuario }) {
   const bloqueado = ocupado || !datos.editable;
 
   return (
-    <section style={{ maxWidth: 420, marginTop: "1.2rem" }}>
+    <section style={{ maxWidth: 420 }}>
       <h3 style={{ margin: "0 0 0.3rem" }}>Recargo por medio de pago</h3>
       <p style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: colores.suave }}>
         Porcentaje que se suma a cada cobro con ese medio. Al saldo de la

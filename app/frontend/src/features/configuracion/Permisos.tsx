@@ -4,6 +4,12 @@
  * permiso es necesario pero no suficiente: siguen valiendo las reglas de
  * cada caso (el técnico titular de la toma, el estado de la Orden...). Los
  * permisos de administración no se configuran. Cada cambio queda auditado.
+ *
+ * Configuración v2 (CFG-03): una acción puede requerir una consulta (crear
+ * OC requiere ver Compras). Al habilitar la acción para un rol, primero se
+ * habilita su consulta; quitar una consulta que otra acción del rol
+ * necesita se impide, con el motivo. Después de guardar, la app vuelve a
+ * leer los permisos del usuario (rigen desde el pedido siguiente).
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -13,7 +19,14 @@ import type { PermisoConfigurable } from "../../api/configuracion";
 import { Boton, colores } from "../../components/ui";
 import type { RolUsuario, Usuario } from "../../types/api";
 import { ROL } from "../ordenes-reparacion/etiquetas";
-import { ROLES, alternarRol, mismosRoles as igual, puedeGuardarPermiso } from "./roles";
+import {
+  ROLES,
+  accionesQueLoRequieren,
+  alternarRol,
+  consultasAHabilitar,
+  mismosRoles as igual,
+  puedeGuardarPermiso,
+} from "./roles";
 
 export function Permisos({
   actor,
@@ -47,16 +60,29 @@ export function Permisos({
     setOcupado(true);
     setError(null);
     setAviso(null);
-    api
-      .guardarPermiso(actor.id, permiso.codigo, roles)
+    const previas = consultasAHabilitar(permiso, roles, permisos);
+    (async () => {
+      for (const consulta of previas) {
+        await api.guardarPermiso(actor.id, consulta.codigo, consulta.roles);
+      }
+      await api.guardarPermiso(actor.id, permiso.codigo, roles);
+    })()
       .then(() => {
-        setAviso(`Se guardó «${permiso.descripcion}».`);
+        setAviso(
+          `Se guardó «${permiso.descripcion}».` +
+            (previas.length
+              ? ` También se habilitó «${previas.map((c) => c.descripcion).join("», «")}», que lo requiere.`
+              : ""),
+        );
         cargar();
         onCambio();
       })
-      .catch((causa: unknown) =>
-        setError(causa instanceof Error ? causa.message : String(causa)),
-      )
+      .catch((causa: unknown) => {
+        setError(causa instanceof Error ? causa.message : String(causa));
+        // QA D, M1: una consulta requerida pudo guardarse antes del fallo.
+        cargar();
+        onCambio();
+      })
       .finally(() => setOcupado(false));
   };
 
@@ -74,6 +100,7 @@ export function Permisos({
       {grupos.map((grupo) => (
         <div key={grupo} style={{ marginBottom: "0.8rem" }}>
           <h4 style={{ margin: "0 0 0.3rem" }}>{grupo}</h4>
+          <div style={{ overflowX: "auto" }}>
           <table style={{ borderCollapse: "collapse", fontSize: "0.85rem" }}>
             <thead>
               <tr>
@@ -93,6 +120,9 @@ export function Permisos({
                   const propios = elegidos[permiso.codigo] ?? permiso.vigentes;
                   const bloqueado = !editable || ocupado || !permiso.configurable;
                   const distinto = !igual(permiso.vigentes, permiso.predeterminados);
+                  const dependientes = accionesQueLoRequieren(permiso, propios, permisos);
+                  const requeridas = (permiso.requiere ?? [])
+                    .map((c) => permisos.find((p) => p.codigo === c)?.descripcion ?? c);
                   return (
                     <tr key={permiso.codigo}>
                       <td style={{ padding: "0.2rem 0.5rem" }}>
@@ -100,6 +130,16 @@ export function Permisos({
                         {permiso.consulta && " (consulta)"}
                         {distinto && (
                           <span style={{ color: colores.suave }}> · cambiado</span>
+                        )}
+                        {requeridas.length > 0 && (
+                          <div style={{ fontSize: "0.75rem", color: colores.suave }}>
+                            Requiere: {requeridas.join(", ")}
+                          </div>
+                        )}
+                        {dependientes.length > 0 && (
+                          <div role="alert" style={{ fontSize: "0.75rem", color: colores.error }}>
+                            Primero quitá ese rol de: {dependientes.join(", ")}
+                          </div>
                         )}
                       </td>
                       {ROLES.map((rol) => (
@@ -122,7 +162,11 @@ export function Permisos({
                         {permiso.configurable ? (
                           <>
                             <Boton
-                              disabled={bloqueado || !puedeGuardarPermiso(permiso, propios)}
+                              disabled={
+                                bloqueado ||
+                                !puedeGuardarPermiso(permiso, propios) ||
+                                dependientes.length > 0
+                              }
                               onClick={() => guardar(permiso, propios)}
                             >
                               Guardar
@@ -130,7 +174,11 @@ export function Permisos({
                             {distinto && (
                               <button
                                 type="button"
-                                disabled={bloqueado}
+                                disabled={
+                                  bloqueado ||
+                                  accionesQueLoRequieren(permiso, permiso.predeterminados, permisos)
+                                    .length > 0
+                                }
                                 onClick={() => guardar(permiso, permiso.predeterminados)}
                               >
                                 Restablecer
@@ -146,6 +194,7 @@ export function Permisos({
                 })}
             </tbody>
           </table>
+          </div>
         </div>
       ))}
     </section>

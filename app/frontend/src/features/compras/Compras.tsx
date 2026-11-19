@@ -23,9 +23,10 @@ import type {
 } from "../../api/compras";
 import { listarInventario } from "../../api/inventario";
 import { Boton, Campo, colores, estiloInput, fechaCorta } from "../../components/ui";
-import { puede } from "../../lib/roles";
 import {
-  GESTORES,
+  type AccionesCompras,
+  accionesDeCompras,
+  puedeCancelarOrden,
   costoDistinto,
   erroresDeRecepcion,
   lineasIniciales,
@@ -52,7 +53,8 @@ export function ComprasPanel({ actor }: { actor: Usuario | null }) {
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
-  const gestiona = puede(actor, "COMPRAS_GESTIONAR", GESTORES);
+  // CFG-03 (D5, DF-5): cada acción de Compras con su permiso.
+  const gestiona = accionesDeCompras(actor);
 
   const cargar = useCallback(() => {
     api
@@ -61,7 +63,9 @@ export function ComprasPanel({ actor }: { actor: Usuario | null }) {
         setDisponible(ok);
         if (!ok) return;
         return Promise.all([
-          listarInventario(null, false).then(setInsumos),
+          listarInventario(null, false)
+            .then(setInsumos)
+            .catch(() => setInsumos([])),
           api.proveedores().then(setProveedores),
           api.solicitudes().then(setSolicitudes),
           api.sugerencias().then(setSugerencias),
@@ -207,7 +211,7 @@ function Solicitudes({
   sugerencias: SugerenciaCompra[];
   insumos: SituacionInsumo[];
   nombreInsumo: (id: string) => string;
-  gestiona: boolean;
+  gestiona: AccionesCompras;
   ocupado: boolean;
   onCrear: (datos: {
     insumo_id: string;
@@ -240,7 +244,7 @@ function Solicitudes({
               {nombreInsumo(s.insumo_id)}: sugerido {s.sugerido} (demanda {s.demanda_bloqueada},
               disponible {s.disponible}, en camino {s.en_camino})
               {s.ordenes.length > 0 ? ` · ${s.ordenes.join(", ")}` : ""}{" "}
-              {gestiona && (
+              {gestiona.solicitar && (
                 <Boton
                   variante="secundario"
                   disabled={ocupado}
@@ -274,7 +278,7 @@ function Solicitudes({
               {s.orden_compra_id ? ` (${s.orden_compra_id})` : ""} · {s.motivo}
               {s.motivo_descarte ? ` · descartada: ${s.motivo_descarte}` : ""}
               <span style={{ color: colores.suave }}> · {fechaCorta(s.fecha)}</span>{" "}
-              {gestiona && s.estado === "PENDIENTE" && descartando !== s.id && (
+              {gestiona.solicitar && s.estado === "PENDIENTE" && descartando !== s.id && (
                 <Boton variante="secundario" disabled={ocupado} onClick={() => setDescartando(s.id)}>
                   Descartar
                 </Boton>
@@ -307,7 +311,7 @@ function Solicitudes({
         </ul>
       )}
 
-      {gestiona && (
+      {gestiona.solicitar && (
         <div style={{ maxWidth: 420, marginTop: "0.6rem" }}>
           <h4 style={{ margin: "0 0 0.3rem" }}>Nueva solicitud</h4>
           <Campo etiqueta="Insumo">
@@ -369,7 +373,7 @@ function Ordenes({
   insumos: SituacionInsumo[];
   nombreInsumo: (id: string) => string;
   nombreProveedor: (id: string) => string;
-  gestiona: boolean;
+  gestiona: AccionesCompras;
   ocupado: boolean;
   idActor: string;
   ejecutar: (accion: () => Promise<unknown>, exito: string) => Promise<boolean>;
@@ -379,7 +383,7 @@ function Ordenes({
   const orden = ordenes.find((o) => o.id === elegida) ?? null;
   return (
     <section>
-      {gestiona && !nueva && (
+      {gestiona.crearOc && !nueva && (
         <Boton disabled={ocupado} onClick={() => setNueva(true)}>
           Nueva orden de compra
         </Boton>
@@ -595,14 +599,14 @@ function DetalleOrdenCompra({
   orden: OrdenCompra;
   nombreInsumo: (id: string) => string;
   nombreProveedor: (id: string) => string;
-  gestiona: boolean;
+  gestiona: AccionesCompras;
   ocupado: boolean;
   idActor: string;
   ejecutar: (accion: () => Promise<unknown>, exito: string) => Promise<boolean>;
 }) {
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
   const recibible = orden.estado === "CONFIRMADA" || orden.estado === "PARCIAL";
-  const cancelable = orden.estado === "BORRADOR" || orden.estado === "CONFIRMADA";
+  const cancelable = puedeCancelarOrden(gestiona, orden, idActor);
   return (
     <div style={{ border: `1px solid ${colores.borde}`, borderRadius: 6, padding: "0.7rem", marginTop: "0.6rem" }}>
       <h4 style={{ margin: "0 0 0.4rem" }}>
@@ -657,7 +661,7 @@ function DetalleOrdenCompra({
           ))}
         </ul>
       )}
-      {gestiona && orden.estado === "BORRADOR" && (
+      {gestiona.confirmar && orden.estado === "BORRADOR" && (
         <Boton
           disabled={ocupado}
           onClick={() => void ejecutar(() => api.confirmarOrden(orden.id, idActor), `${orden.id} confirmada.`)}
@@ -665,7 +669,7 @@ function DetalleOrdenCompra({
           Confirmar la orden de compra
         </Boton>
       )}
-      {gestiona && recibible && (
+      {gestiona.recibir && recibible && (
         <FormularioRecepcion
           orden={orden}
           nombreInsumo={nombreInsumo}
@@ -678,7 +682,7 @@ function DetalleOrdenCompra({
           }
         />
       )}
-      {gestiona && cancelable && (
+      {cancelable && (
         <div style={{ display: "flex", gap: "0.4rem", alignItems: "end", marginTop: "0.6rem", maxWidth: 520 }}>
           <Campo etiqueta="Motivo para cancelar (sin recepciones)">
             <input value={motivoCancelacion} onChange={(e) => setMotivoCancelacion(e.target.value)} style={estiloInput} />

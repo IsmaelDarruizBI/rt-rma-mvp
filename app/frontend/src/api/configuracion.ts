@@ -5,7 +5,6 @@
 
 import { get, post, put } from "./client";
 import type {
-  PoliticaGarantiaRma,
   RolUsuario,
   TipoReparacion,
   Usuario,
@@ -49,29 +48,31 @@ export interface CambioConfiguracion {
   fecha: string;
 }
 
+/**
+ * Lo que la pantalla edita de un Tipo. CFG-06 (DF-1, DF-2): solo los plazos
+ * con y sin check-in; el plazo genérico y la política RMA no se envían y
+ * la API los conserva (en un alta, el genérico toma el de con check-in).
+ */
 export interface DatosTipo {
   nombre: string;
   precio: string;
   puntaje: number;
-  garantia_dias: number;
   activo: boolean;
   garantia_con_checkin: number;
   garantia_sin_checkin: number;
-  politica_garantia_rma: PoliticaGarantiaRma | null;
 }
 
 export function obtenerCatalogo(): Promise<CatalogoConfigurable> {
   return get<CatalogoConfigurable>("/api/admin/catalog");
 }
 
+/** CFG-01: el código lo genera la API (TR-NNN). */
 export function crearTipo(
   usuarioId: string,
-  codigo: string,
   datos: DatosTipo,
 ): Promise<TipoReparacion> {
   return post<TipoReparacion>("/api/admin/repair-types", {
     usuario_id: usuarioId,
-    codigo,
     ...datos,
   });
 }
@@ -121,6 +122,8 @@ export interface PermisoConfigurable {
   configurable: boolean;
   predeterminados: RolUsuario[];
   vigentes: RolUsuario[];
+  /** CFG-03: los permisos de consulta que esta acción necesita. */
+  requiere?: string[];
 }
 
 export function listarUsuarios(): Promise<Usuario[]> {

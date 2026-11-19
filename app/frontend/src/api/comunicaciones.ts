@@ -15,6 +15,8 @@ export interface PlantillaMensaje {
   finalidad: Finalidad;
   texto: string;
   activa: boolean;
+  /** CFG-08: si la interfaz la ofrece (una API anterior no lo manda). */
+  visible?: boolean;
 }
 
 export interface Plantillas {
