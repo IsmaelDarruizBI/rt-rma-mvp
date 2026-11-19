@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 18/11/2026.
+**Última actualización:** 19/11/2026.
 
 - **Hecho:**
   - autenticación real y DC31 desplegadas en UAT (10/11, `00020-tux`);
@@ -23,7 +23,8 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - **UAT escalado a cero** (16/11, 22:54 UTC): sin etiquetas; mínimo 0 en el servicio y en la revisión publicada `00036-jis`, que tiene la misma imagen que `00033-fah`; control [`verificar_escalado_uat.py`](../supabase/scripts/validacion_uat/verificar_escalado_uat.py) después de cada publicación ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 9).
   - **Bloque C, persistencia de copias de orígenes externos** (17/11, `feat/persistencia-catalogos`, integrada en `mvp-v2` en `fd434ef` con CI en verde): el catálogo de Ventas pasa a PostgreSQL con una reserva entre instancias y un propietario por sincronización (migraciones `20261117000100` y `20261117000200`), sobre un motor común reutilizable por Productos RT; ensayo local de reinicio, fallos y vuelta atrás 26 de 26; QA independiente por fase ([`persistencia-catalogos.md`](persistencia-catalogos.md)).
   - **Bloque C en UAT, C8 aprobado** (18/11): las migraciones `20261117000100` y `20261117000200` en São Paulo (39 migraciones, 71 tablas), Cloud Run `00039-sen` (`fd434ef`), sin cambios en Vercel; la copia del catálogo de Ventas (1489 productos) sobrevive al escalado a cero; E2E UX 47 de 47, V1.4 67 de 67 e integral 68 de 68 con limpieza selectiva; respaldo y ensayo de restauración en la nube correctos ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 10.1; sección B).
-  - **Reparación RT, especificación** (17/11): DEC-RT-01 a 07 y BR-REP-050 en `rt-rma-app` `spec/reparacion-rt` `168618a` (publicada; `business/` sincronizado en `fd434ef`); diseño en [`reparacion-rt-discovery.md`](reparacion-rt-discovery.md). La etapa 1 ya no espera al bloque C; arranca con autorización.
+  - **Reparación RT, especificación** (17/11): DEC-RT-01 a 07 y BR-REP-050 en `rt-rma-app` `spec/reparacion-rt` `168618a` (publicada; `business/` sincronizado en `fd434ef`); diseño en [`reparacion-rt-discovery.md`](reparacion-rt-discovery.md). La etapa 1 ya no espera al bloque C.
+  - **Reparación RT, etapa 1, en local** (19/11, `feat/reparacion-rt-etapa1`, commits locales, sin push ni despliegue): copia de consulta de los Productos de Gestión RT en reparación en PostgreSQL (migración `20261119000100`, `rma.producto_rt`) sobre el motor del bloque C, sincronización a pedido de Administración, API `/api/rt-products` y pantalla Reparación RT con búsqueda, filtros, ficha y coincidencias sugeridas (nunca vínculos); solo las 13 columnas permitidas, nunca `producto_passcode` ([`reparacion-rt-discovery.md`](reparacion-rt-discovery.md), sección 10; sección B).
 - **Falta:**
   - conseguir la exportación de Ventas de ABI-43 (modelos que faltan en el catálogo técnico);
   - ABI-42: que Gestión RT indique qué columna (o tabla) de su catálogo es el Tipo de Equipo; con una columna `tp_*` alcanza con fijar `RMA_TIPO_EQUIPO_CAMPO` y sincronizar;
@@ -82,6 +83,16 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Reparación RT, etapa 1 (19/11/2026), rama `feat/reparacion-rt-etapa1`
+
+Con autorización: implementación completa de la etapa 1 (DEC-RT-01 a 07, BR-REP-050), solo en local. Sin migraciones en el UAT, sin despliegue, sin cambios en Gestión RT, `main` ni `mvp-v2`. Detalle, decisiones y verificación en [`reparacion-rt-discovery.md`](reparacion-rt-discovery.md), sección 10.
+
+- **Backend:** contrato de Producto con la lista permitida y adaptadores `sheets` y `archivo` (`integraciones/gestion_rt`); fusión de la copia (salidas y regresos a Reparación, ausentes, eliminados, IDs repetidos, cambio de identidad, IMEI repetido, protección contra lecturas truncadas); copia `PRODUCTOS_RT` sobre el motor común del bloque C; API `/api/rt-products` con `PRODUCTOS_RT_CONSULTAR` (Recepción, Coordinación RMA y Administración) y `PRODUCTOS_RT_SINCRONIZAR` (Administración).
+- **Base:** migración aditiva `20261119000100_productos_rt` (72 tablas); `producto_rt` maestra en los scripts de reinicio y limpieza.
+- **Frontend:** sección Reparación RT entre Taller e Inventario; estado de la copia siempre visible, Actualizar solo con permiso, búsqueda, sedes, coincidencias y «los que salieron» en la URL, ficha con coincidencias sugeridas separadas del historial.
+- **Pruebas:** unitarias 88; PostgreSQL 20; suite del backend 2019 aprobadas; frontend 181; ensayo local con procesos reales y el backend publicado 21 de 21; E2E local 23 de 23; recorrido en el navegador también a 390 px.
+- **Para el UAT falta:** la planilla de prueba (B3) y el formato real de las columnas (B4). Procedimiento en [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 11.
 
 ### Bloque C en UAT, C8 (18/11/2026): aprobado
 
@@ -753,7 +764,7 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (18/11/2026):** con el bloque C aprobado en el UAT (C8), autorizar la etapa 1 de Reparación RT ([`reparacion-rt-discovery.md`](reparacion-rt-discovery.md)). Pendientes del bloque C: mover el limitador por DNI a la base antes de permitir más de una instancia (P1-2) y, opcional, que el E2E integral compruebe el control por lote de BAT-IP14 en el escenario 0. **Antes (17/11/2026):** bloque C cerrado en local. **Antes (16/11/2026):** UAT operativo con la iteración de UX de Recepción, escalado a cero desde las 22:54 UTC (sección B). Cada publicación termina quitando su etiqueta temporal y con `verificar_escalado_uat.py` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 9). Siguen pendientes, con autorización: la pasada manual en un navegador real (P2-17, incluye el diálogo real de impresión y el desborde de «Pendientes» a 390 px), ABI-43 (exportación de Ventas), ABI-42 (para activar DC12) y la integración en `main` (P0-2).
+**Próximo paso (19/11/2026):** con la etapa 1 de Reparación RT lista en local, crear la planilla de prueba (B3) y autorizar la integración en `mvp-v2` y el despliegue en el UAT ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 11). **Antes (18/11/2026):** bloque C aprobado en el UAT (C8). Pendientes del bloque C: mover el limitador por DNI a la base antes de permitir más de una instancia (P1-2) y, opcional, que el E2E integral compruebe el control por lote de BAT-IP14 en el escenario 0. **Antes (17/11/2026):** bloque C cerrado en local. **Antes (16/11/2026):** UAT operativo con la iteración de UX de Recepción, escalado a cero desde las 22:54 UTC (sección B). Cada publicación termina quitando su etiqueta temporal y con `verificar_escalado_uat.py` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 9). Siguen pendientes, con autorización: la pasada manual en un navegador real (P2-17, incluye el diálogo real de impresión y el desborde de «Pendientes» a 390 px), ABI-43 (exportación de Ventas), ABI-42 (para activar DC12) y la integración en `main` (P0-2).
 
 **Antes (12/11/2026):** la macroiteración está desplegada y validada en UAT, con los datos de prueba limpiados (sección B). Queda, opcional, repetir `medir_api.py`: solo mide tiempos y pide la contraseña de `administracion`. Para seguir con lo bloqueado hacen falta las decisiones de la sección I del README de consolidación (garantías ABI-03/34/35/37, comercial ABI-09/10, comunicaciones ABI-13/31, compras ABI-12, equipos ABI-05). DC27A (varios roles) no tiene pendientes y puede ser la próxima iteración.
 

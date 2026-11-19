@@ -202,6 +202,19 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 
 Con ellas el esquema `rma` tiene 71 tablas y 8 vistas (`tests/postgres/test_base_local.py`, `supabase/tests/10_esquema.sql`).
 
+- **`20261119000100_productos_rt.sql`** (Reparación RT, etapa 1; solo local, sin aplicar en Supabase). Diseño en [`../reparacion-rt-discovery.md`](../reparacion-rt-discovery.md), secciones 6.2 y 10.
+  - **`sincronizacion_origen`:** la restricción de `copia` pasa a llamarse `sincronizacion_origen_copia` y admite `PRODUCTOS_RT` además de `CATALOGO_VENTAS`. El registro, la reserva y el propietario no cambian.
+  - **`producto_rt`:** la copia de consulta. Solo las columnas de la lista permitida (nunca `producto_passcode`, precios ni datos de personas), los datos del TipoProducto, los indicadores de la sincronización (`en_reparacion`, `presente_en_origen`, `eliminado_en_origen`, `conflicto_origen`, `cambio_identidad`, `imei_valido`, `imei_repetido`), `texto_busqueda` y `huella`.
+    - Se escribe solo dentro de una sincronización `EN_CURSO` de `PRODUCTOS_RT` y con el secreto de su propietario (`producto_rt_validar`, como `catalogo_producto_validar`); `propietario` es transitoria.
+    - No se borra; el identificador, la primera vez que se vio y el alta no cambian.
+    - Controles: período de reparación coherente, IMEI válido = 15 dígitos, IMEI repetido solo si es válido, verificador solo si es válido.
+    - Índices: el listado por defecto (parcial), el IMEI válido y no repetido (parcial) y el intento.
+  - **Permisos de `rma_backend`:** lee e inserta, sin `delete`; actualiza todo menos el identificador, la primera vez que se vio y el alta.
+  - **Clasificación:** maestra en `01_reiniciar.sql`, `03_verificar.sql` y `06_limpiar_e2e.sql`.
+  - **Compatibilidad:** sin cambios en `orden` ni `equipo`; el backend publicado solo usa `CATALOGO_VENTAS` (ensayado con `ensayar_reparacion_rt.py`).
+
+Con ella el esquema `rma` tiene 72 tablas y 8 vistas.
+
 Las dos se aplicaron en São Paulo el 12/11/2026, con 23 migraciones y 47 tablas ([`ESTADO_PROYECTO.md`](../ESTADO_PROYECTO.md), sección B).
 
 **Datos de referencia (en las migraciones):** iguales en todos los entornos.

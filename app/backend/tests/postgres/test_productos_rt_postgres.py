@@ -850,9 +850,11 @@ def test_permisos_por_rol(abrir, base):
         " returning codigo",
     )
     assert cliente.get(RUTA, headers=sesion(TECNICO)).status_code == 200
-    # Un usuario con sesion no sincroniza en nombre de otro.
-    ajena = _sincronizar(cliente, ADMINISTRADOR, **sesion(RECEPCION))
-    assert ajena.status_code == 403
+    # Con sesion, el usuario_id es el de la sesion: Administracion no
+    # sincroniza en nombre de otro.
+    ajena = _sincronizar(cliente, RECEPCION, **sesion(ADMINISTRADOR))
+    assert ajena.status_code == 403, ajena.text
+    assert len(ok(cliente.get(f"{RUTA}/syncs", headers=sesion(ADMINISTRADOR)))) == 1
 
 
 # --- Modo sin origen ---------------------------------------------------------

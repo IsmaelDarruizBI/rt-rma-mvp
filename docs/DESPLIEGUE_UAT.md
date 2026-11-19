@@ -411,3 +411,32 @@ Commit desplegado `fd434ef` (`mvp-v2`, CI en verde: `seguridad`, `frontend`, `fu
 | 8. Respaldo posterior y ensayo | `rt-rma-respaldo-db-zd25s`, `uat/20261118T221558Z`: 39 migraciones, 71 tablas, 6 Órdenes, 1489 productos, 4 cuentas; `SHA256SUMS` correcto en el Job y en local. Ensayo en la nube `rt-rma-respaldo-db-8c7hq`: ENSAYO_RESTAURACION_OK (71 tablas con sus conteos, integridad, secuencias y 4 cuentas) |
 
 **Incidente en el E2E integral (resuelto).** La primera corrida dio 60 de 65: ese día se había configurado a mano, desde la interfaz del UAT, el insumo `INS-001` (BAT-IP14) con control por lote, y el escenario 4 (recepción de compras sin lote) y la comprobación del escenario 5 fallaron por esa precondición. Se limpió la corrida con `06_limpiar_e2e.sql` (ensayo y aplicación), se volvió BAT-IP14 a `SIN_LOTE` (sin lotes ni movimientos con lote; con su registro en `cambio_configuracion`, de `LOTE` a `SIN_LOTE`, a nombre de `ADMIN-001`, la cuenta del cambio original), se tomó una línea de base nueva y la repetición dio 68 de 68. **Antes de un E2E integral, BAT-IP14 tiene que estar `SIN_LOTE`:** el script lo comprueba recién en el escenario 5.
+
+## 11. Reparación RT, etapa 1 (preparado el 19/11/2026, sin ejecutar)
+
+Publica la pantalla Reparación RT con la copia de los Productos de Gestión RT en reparación ([`reparacion-rt-discovery.md`](reparacion-rt-discovery.md), sección 10) sobre el par vigente `00039-sen` (`fd434ef`) + `dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`. Es como la sección 10, con frontend (secciones 7.5 y 7.6) y estas diferencias.
+
+**Requisitos (con autorización):**
+
+- `feat/reparacion-rt-etapa1` integrada en `mvp-v2` con el CI en verde;
+- **B3, la planilla de prueba** (la crea el usuario): una planilla nueva, con una hoja cargada con `producto.csv` de [`generar_productos_rt_ficticios.py`](../supabase/scripts/validacion_uat/generar_productos_rt_ficticios.py), compartida como Lector con la cuenta de servicio del UAT. Se necesitan su ID y el GID de esa hoja. **Nunca la planilla real** (`1uzGqHgmtynZW8RakCJEB_DuGNy2QQMl8ByNkIpxzPE0`): el UAT es solo de datos ficticios;
+- sesiones de `gcloud`, Supabase y Vercel, y la contraseña de Administración, que ingresa el usuario.
+
+**Procedimiento:**
+
+1. **Preflight, de solo lectura:** `verificar_escalado_uat.py --esperada rt-rma-uat-api-00039-sen` OK; São Paulo con 39 migraciones y 71 tablas; `db push --dry-run` lista **solo** `20261119000100_productos_rt`.
+2. **Respaldo previo** y verificación de la copia ([`RESPALDOS.md`](RESPALDOS.md)).
+3. **Migración:** `db push --yes`. Después: 40 migraciones y 72 tablas; `rma.producto_rt` vacía; `rma_backend` sin `DELETE` sobre ella; `verificar_integridad()` vacío; la restricción `sincronizacion_origen_copia` admite `PRODUCTOS_RT`. Subir la migración a `_herramientas/migraciones/` (40 archivos, MD5 iguales al repositorio). `00039-sen` sigue funcionando sobre las 40 (ensayado con [`ensayar_reparacion_rt.py`](../supabase/scripts/validacion_uat/ensayar_reparacion_rt.py)).
+4. **Backend sin tráfico,** desde una exportación limpia del commit integrado, con las variables nuevas, sin secretos:
+   - `RMA_PRODUCTOS_RT_ORIGEN=google_sheets`;
+   - `RMA_PRODUCTOS_RT_PLANILLA=<ID de la planilla de prueba>` y `RMA_PRODUCTOS_RT_GID=<GID de su hoja>`. **Antes de seguir, comparar el ID con el de la planilla real: tienen que ser distintos.**
+
+   Por la etiqueta: `/health` 200; 401 en `/api/rt-products` sin token; `/docs` 404; CORS solo del frontend.
+5. **Frontend sin publicar** (7.5): el bundle con la sección Reparación RT.
+6. **Publicación coordinada** (7.6): tráfico a la revisión nueva y `vercel promote`; quitar la etiqueta y `verificar_escalado_uat.py --esperada <nueva>` OK.
+7. **E2E de Reparación RT** contra la planilla de prueba: [`probar_reparacion_rt.py`](../supabase/scripts/validacion_uat/probar_reparacion_rt.py) `--fase sincronizar` (23 comprobaciones; si los contadores no coinciden, el origen no es la planilla de prueba y se detiene); esperar 0 instancias; `--fase comprobar`.
+8. **E2E de la iteración vigente** (UX, V1.4 e integral), cada uno con su línea de base y su limpieza, **sin sincronizar** mientras corren: `producto_rt` es maestra. Antes del integral, BAT-IP14 en `SIN_LOTE` (sección 10.1).
+9. **Pasada en el navegador** con las cuentas de Recepción, Coordinación, Técnico (sin la sección) y Administración, también a 390 px.
+10. **Respaldo posterior** y ensayo de restauración en la nube: 40 migraciones y 72 tablas.
+
+**Vuelta atrás:** `update-traffic --to-revisions rt-rma-uat-api-00039-sen=100` y `vercel promote dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`. La migración queda: es aditiva y el backend anterior no usa `producto_rt` (ensayado). La copia queda guardada para la próxima publicación; no se borra ninguna tabla.

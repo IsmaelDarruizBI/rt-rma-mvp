@@ -1,6 +1,6 @@
 # Reparación RT: especificación, contrato de datos y diseño
 
-**Estado (17/11/2026): especificación aprobada e incorporada en `rt-rma-app` `spec/reparacion-rt` `168618a` (commit local, sin push); diseño aprobado conceptualmente. La etapa 1 espera el bloque C ([`persistencia-catalogos.md`](persistencia-catalogos.md)).**
+**Estado (19/11/2026): etapa 1 implementada en local (`feat/reparacion-rt-etapa1`, commits locales, sin push ni despliegue; sección 10).** Especificación en `rt-rma-app` `spec/reparacion-rt` `168618a` (publicada; `business/` sincronizado). El bloque C está en el UAT desde el 18/11/2026. La etapa 2 (Orden vinculada) no empezó.
 
 - **Sin cambios:** código, base, migraciones, infraestructura, despliegues, Gestión RT, `main` y `rt-rma-app`.
 - **Especificación:** su texto exacto está en el Anexo A, validado en una copia de `rt-rma-app`. Se incorpora cuando se apruebe ese texto.
@@ -532,6 +532,50 @@ Los dos son configurables, como los demás. Los enlaces a Órdenes respetan `ORD
 | Duplicados de Orden (etapa 2) | Índice único parcial e idempotencia |
 | Desalineación con Gestión RT | Avisos; RMA no escribe en Gestión RT |
 | **Corrección:** el impacto de la copia efímera del catálogo informado el 16/11 (R1) era menor | El alta usa el catálogo técnico versionado ([`persistencia-catalogos.md`](persistencia-catalogos.md), sección 1); la corrección se hace igual, por arquitectura |
+
+## 10. Implementación de la etapa 1 (19/11/2026)
+
+Rama `feat/reparacion-rt-etapa1` sobre `mvp-v2` (`54feadf`). Solo local: sin migraciones en el UAT, sin despliegue, sin cambios en Gestión RT ni en `main`. Tareas 1.1 a 1.9 de la sección 7.
+
+| Pieza | Dónde |
+|---|---|
+| Contrato de Producto, lista permitida de 13 columnas, adaptadores `sheets` (por GID, `batchGet` por columna) y `archivo`, configuración | `app/backend/app/integraciones/gestion_rt/` |
+| Reglas de la copia (fusión, IMEI, búsqueda) | `app/backend/app/services/productos_rt.py` |
+| Copia `PRODUCTOS_RT` sobre el motor común, estado, listado y ficha | `app/backend/app/application/productos_rt.py` |
+| Migración `20261119000100_productos_rt.sql` y repositorio PostgreSQL | `supabase/migrations/`, `app/backend/app/storage/postgres/productos_rt.py` |
+| API `/api/rt-products` (sección 6.1) | `app/backend/app/api/productos_rt.py` |
+| Pantalla Reparación RT | `app/frontend/src/features/reparacion-rt/`, `api/productosRt.ts` |
+| Datos ficticios, E2E y ensayo local | `tests/fixtures/productos_rt.py`, `supabase/scripts/validacion_uat/` (`generar_productos_rt_ficticios.py`, `probar_reparacion_rt.py`, `ensayar_reparacion_rt.py`) |
+
+**Decisiones de implementación** (donde el diseño dejaba margen):
+
+- **`/sync` sin clave de idempotencia**, como el del catálogo después del QA final del bloque C (la sección 6.1 decía «idempotencia existente»). La sincronización lee el origen fuera de toda transacción y registra los intentos fallidos; repetirla es inocuo y la reserva impide dos a la vez.
+- **TipoProducto** se lee de la planilla y la hoja del catálogo de Ventas (`RMA_CATALOGO_SHEETS_*`), completa y sin el filtro `IPHONE USADOS`. Con `archivo`, de `RMA_PRODUCTOS_RT_TIPOS_ARCHIVO` (o el CSV del catálogo).
+- **Columnas:** además de las obligatorias, una columna copiada **repetida** rechaza la lectura (no hay cómo saber cuál es la buena). Antes del `batchGet` se lee solo la fila 1; si una columna pedida no vuelve con su encabezado (alguien movió columnas entre los dos pedidos), se rechaza.
+- **Protección contra lecturas truncadas:** rige con al menos 10 productos presentes (`RMA_PRODUCTOS_RT_MINIMO_PROTECCION`), para no bloquear copias chicas; el umbral es `RMA_PRODUCTOS_RT_UMBRAL_DESAPARICION` (0,5).
+- **Ausente del origen:** queda `presente_en_origen = false` y deja de listarse; `en_reparacion` no cambia (no se sabe si salió). Si reaparece, sigue su período.
+- **Cambio de identidad:** solo si cambia un IMEI o un TipoProducto que ya tenía valor; completar uno que faltaba no lo es. La marca queda puesta y `identidad_anterior` guarda los valores previos.
+- **IMEI:** normalizado igual que el del Equipo (`domain/identidad.normalizar`: sin espacios y en mayúsculas), para que la coincidencia sea la misma; un IMEI con guiones u otros separadores queda **no válido** (no sugiere). Válido: 15 dígitos; el verificador se informa. Repetido: entre los productos presentes y no eliminados.
+- **Fechas de alta:** número de serie de Sheets, texto ISO o dd/mm/aaaa, en la hora de Gestión RT (`RMA_UTC_OFFSET_HORAS`); otra cosa queda vacía con aviso.
+- **Avisos de una sincronización:** se guardan en `contadores.avisos` del intento; solo columnas, sedes y `producto_id`, nunca IMEI ni valores.
+- **Listado:** orden por `en_reparacion_desde` y `producto_id`; las cantidades por sede no dependen del filtro de sede; `sede=` (vacío) filtra los productos sin sede; búsqueda por palabras con `strpos` sobre `texto_busqueda` (sin comodines).
+- **Ficha:** en una ventana (el componente `Modal` existente, a pantalla completa a 390 px) en lugar de un panel lateral. Coincidencias sugeridas e historial en secciones separadas; el historial dice que no hay vínculos verificables.
+- **Filtros y ficha en la URL:** `#/reparacion-rt/<producto_id>?q=…&sede=…`.
+- **Modo JSON:** el listado responde con la copia no habilitada y la pantalla lo informa; la ficha y la sincronización, 409.
+
+**Verificación (19/11/2026):**
+
+| Prueba | Resultado |
+|---|---|
+| Unitarias del contrato, los adaptadores, la fusión y los permisos | 88 de 88 |
+| PostgreSQL de punta a punta por la API (`tests/postgres/test_productos_rt_postgres.py`) | 20 de 20 |
+| Suite completa del backend (sin PostgreSQL) | 2019 aprobadas, 535 salteadas |
+| Frontend: `typecheck`, pruebas y `build` | 181 de 181 |
+| Ensayo local con procesos reales y el backend publicado `fd434ef` (`ensayar_reparacion_rt.py`) | 21 de 21 |
+| E2E contra una API local (`probar_reparacion_rt.py --sin-autenticacion`) | 23 de 23 y 1 de 1 |
+| Recorrido en el navegador con el archivo ficticio, en escritorio y a 390 px, como Administración, Recepción y Técnico | Sin desborde; estados nunca sincronizada, al día y error con copia anterior |
+
+**Pendiente para el UAT:** B3 (la planilla de prueba, compartida como Lector con la cuenta del UAT) y B4 (el formato real de las columnas «Copiar»: sin confirmar, la validación avisa y no adivina). Procedimiento en [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 11.
 
 ## Anexo A. Texto incorporado en `rt-rma-app`
 

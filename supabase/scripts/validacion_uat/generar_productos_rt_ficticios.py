@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (comando de ejemplo)
 """Genera los CSV ficticios de Reparacion RT (etapa 1, tarea 1.8).
 
 Escribe en ``--destino``:

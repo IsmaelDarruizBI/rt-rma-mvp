@@ -428,7 +428,14 @@ Variables de entorno con prefijo `RMA_` (ver `app/core/config.py`):
 | `RMA_AUTH_ALGORITMOS` | `["ES256"]` (solo asimetricos) |
 | `RMA_AUTH_AUDIENCIA` | `authenticated` |
 | `RMA_AUTH_MARGEN_RELOJ_S` | `10` |
-| `RMA_SINCRONIZACION_RESERVA_S` | `600` (10 a 3600): cuánto dura la reserva de una sincronización de una copia de un origen externo (catálogo de Ventas). Con `postgres`, la copia vive en la base ([`docs/persistencia-catalogos.md`](../../docs/persistencia-catalogos.md)) |
+| `RMA_SINCRONIZACION_RESERVA_S` | `600` (10 a 3600): cuánto dura la reserva de una sincronización de una copia de un origen externo (catálogo de Ventas y Productos RT). Con `postgres`, la copia vive en la base ([`docs/persistencia-catalogos.md`](../../docs/persistencia-catalogos.md)) |
+| `RMA_PRODUCTOS_RT_ORIGEN` | `ninguno` (por defecto), `google_sheets` o `archivo`: origen de los Productos de Gestión RT en reparación (Reparación RT, solo con `postgres`; [`docs/reparacion-rt-discovery.md`](../../docs/reparacion-rt-discovery.md), sección 10) |
+| `RMA_PRODUCTOS_RT_PLANILLA` / `RMA_PRODUCTOS_RT_GID` | con `google_sheets`: la planilla y el GID de la hoja Producto. En el UAT, la **planilla de prueba**, nunca la real. TipoProducto y la credencial son los del catálogo (`RMA_CATALOGO_SHEETS_*`) |
+| `RMA_PRODUCTOS_RT_ARCHIVO` / `RMA_PRODUCTOS_RT_TIPOS_ARCHIVO` | con `archivo`: los CSV de Producto y de TipoProducto (este último, por defecto, `RMA_CATALOGO_ARCHIVO`) |
+| `RMA_PRODUCTOS_RT_ESTADO` | `Reparacion`: el `producto_status` que cuenta como en reparación (comparación exacta) |
+| `RMA_PRODUCTOS_RT_SEDES` | `["Alippi","Centro","eCommerce","Fisherton","RMA"]`: sedes confirmadas (otra se guarda y se avisa) |
+| `RMA_PRODUCTOS_RT_UMBRAL_DESAPARICION` / `RMA_PRODUCTOS_RT_MINIMO_PROTECCION` | `0.5` / `10`: si una lectura no trae más de esa fracción de los productos presentes (con al menos ese mínimo), se rechaza |
+| `RMA_PRODUCTOS_RT_ANTIGUEDAD_AVISO_H` | `24`: desde cuántas horas la pantalla avisa que los datos están viejos |
 
 `RMA_DATA_DIR` decide donde viven `ordenes/` y `catalogs/`. Los tests
 siempre usan `tmp_path`: nunca escriben sobre los catalogos DEMO

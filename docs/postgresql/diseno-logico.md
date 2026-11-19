@@ -66,7 +66,7 @@ Frente al diseño del 28/10 (49 entidades), el modelo se simplificó:
 - Las personas que entregan y retiran el equipo pasan a ser atributos de la Recepción y de la Salida.
 - La cancelación del Detalle y la anulación del pago pasan a ser atributos, porque son 0..1.
 - El tipo de movimiento pasa a ser un dominio enumerado.
-- El catálogo de Ventas deja de tener tablas. **Revisado el 17/11/2026 (bloque C):** la copia vuelve a la base, porque como archivo del contenedor se pierde en cada reinicio de Cloud Run (P1-2, F-08). Son `catalogo_producto` (la copia) y `sincronizacion_origen` (el registro de intentos con la reserva, común a las copias de orígenes externos y reutilizable por Productos RT). Diseño en [`../persistencia-catalogos.md`](../persistencia-catalogos.md).
+- El catálogo de Ventas deja de tener tablas. **Revisado el 17/11/2026 (bloque C):** la copia vuelve a la base, porque como archivo del contenedor se pierde en cada reinicio de Cloud Run (P1-2, F-08). Son `catalogo_producto` (la copia) y `sincronizacion_origen` (el registro de intentos con la reserva, común a las copias de orígenes externos y reutilizable por Productos RT). Diseño en [`../persistencia-catalogos.md`](../persistencia-catalogos.md). **Reparación RT, etapa 1 (19/11/2026):** se suma `producto_rt`, la copia de consulta de los Productos de Gestión RT en reparación, sobre el mismo registro de intentos. No es inventario ni un Equipo: Producto RT y Equipo son entidades distintas, sin vínculos en la etapa 1 (las coincidencias con Órdenes se calculan al consultar). Con ella, 72 entidades. Diseño en [`../reparacion-rt-discovery.md`](../reparacion-rt-discovery.md).
 
 Se agregaron:
 - el catálogo técnico de modelos de equipo;
