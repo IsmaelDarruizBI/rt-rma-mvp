@@ -75,6 +75,7 @@ FICTICIO = "Ficticio E2E"
 LECTURAS = {
     "/api/orders": TODOS,
     "/api/work/inbox": TODOS,
+    "/api/work/workshop": TODOS,
     "/api/inventory": TODOS,
     "/api/purchases/orders": GESTION,
     "/api/rt-products": GESTION,
@@ -109,8 +110,11 @@ def matriz(c, ctx):
         return
     for ruta, permitidos in LECTURAS.items():
         for rol, usuario in ROLES.items():
+            # Las bandejas exigen usuario_id (el mismo contrato que usa el
+            # frontend, api/trabajo.ts): sin él, 422 antes de evaluar permisos.
+            params = {"usuario_id": usuario} if ruta.startswith("/api/work/") else None
             with c.como(usuario):
-                r = c.get(ruta)
+                r = c.get(ruta, params=params)
             esperado = 200 if rol in permitidos else 403
             anotar("1", f"{ruta} con {rol}: {esperado}", r.status_code == esperado, f"HTTP {r.status_code}")
     with c.como(f.RECEPCION):

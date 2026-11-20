@@ -1,11 +1,19 @@
 # ruff: noqa: E501  (mensajes largos)
-"""Reparacion RT, etapa 1: E2E contra la PLANILLA DE PRUEBA (tarea 1.8).
+"""Reparacion RT, etapa 1: E2E de la copia de Productos RT (tarea 1.8).
 
-Requiere que el origen configurado (``RMA_PRODUCTOS_RT_PLANILLA`` y
-``RMA_PRODUCTOS_RT_GID``) sea la planilla de prueba cargada con
-``producto.csv`` de ``generar_productos_rt_ficticios.py``: los resultados
-esperados son los de esos datos ficticios. NUNCA la planilla real de
-Gestion RT (docs/reparacion-rt-discovery.md, seccion 3.3).
+Dos juegos de datos (``--datos``):
+
+- ``ficticios`` (por defecto): el origen configurado es la planilla de
+  prueba cargada con ``producto.csv`` de
+  ``generar_productos_rt_ficticios.py``; los resultados esperados son los de
+  esos datos.
+- ``reales``: el origen del UAT desde el 20/11/2026, una copia de Producto
+  con IMPORTRANGE autorizada solo para la consulta de Reparacion RT
+  (docs/DESPLIEGUE_UAT.md, seccion 12). Sin resultados fijos: coherencia
+  entre la sincronizacion, el listado, las sedes, los filtros, las
+  busquedas y la ficha. Nunca imprime ni guarda un IMEI completo (la busqueda
+  por IMEI usa sus ultimos 4 digitos, porque la URL queda en los registros
+  de Cloud Run) y el estado guardado es una huella de los IDs.
 
 Dos fases, con la espera entre medio (``docs/DESPLIEGUE_UAT.md``,
 seccion 11):
@@ -30,8 +38,11 @@ Actualizar): no crea Ordenes ni otros datos, y no escribe en Gestion RT.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 import httpx
@@ -49,13 +60,35 @@ from probar_persistencia_catalogo import (  # noqa: E402
 )
 
 RUTA = "/api/rt-products"
+TAMANO = 100
+# Campos que puede tener la ficha (ProductoRtOut). Cualquier otro, o un
+# nombre que sugiera un dato excluido, es una falla.
+CAMPOS_FICHA = {
+    "producto_id", "imei", "imei_valido", "imei_repetido", "modelo",
+    "capacidad", "color", "descripcion_tipo", "sede", "estado_gestion_rt",
+    "en_reparacion", "en_reparacion_desde", "salio_de_reparacion_en",
+    "eliminado_en_origen", "presente_en_origen", "avisos",
+    "coincidencias_sugeridas", "imei_normalizado", "imei_luhn_valido",
+    "tipo_producto_id", "tipo_producto_encontrado", "tipo_producto_eliminado",
+    "categoria", "subcategoria", "bateria", "detalle_estetico", "defecto",
+    "toma_rt", "tipo_reparacion_origen", "repuesto", "creado_en_origen",
+    "conflicto_origen", "cambio_identidad", "identidad_anterior",
+    "primera_vez_visto_en", "sincronizado_en",
+}  # fmt: skip
+EXCLUIDOS = ("passcode", "precio", "documento", "creado_por", "comentario", "movimiento", "app_id")
 
 resultados: list[tuple[str, bool, str]] = []
 
 
+def ocultar(texto: str) -> str:
+    """Nunca un IMEI completo en la salida: toda secuencia de 8 o más dígitos
+    queda con sus últimos 4."""
+    return re.sub(r"\d{8,}", lambda m: "*" * (len(m.group()) - 4) + m.group()[-4:], texto)
+
+
 def anotar(nombre: str, ok: bool, detalle: str = "") -> bool:
-    resultados.append((nombre, bool(ok), detalle))
-    print(f"{'OK   ' if ok else 'FALLA'} {nombre}" + ("" if ok else f" — {detalle[:300]}"), flush=True)
+    resultados.append((nombre, bool(ok), ocultar(detalle)))
+    print(ocultar(f"{'OK   ' if ok else 'FALLA'} {nombre}" + ("" if ok else f" — {detalle[:300]}")), flush=True)
     return bool(ok)
 
 
@@ -151,6 +184,114 @@ def sincronizar(cliente: httpx.Client, ficticios) -> dict | None:
     return resumen(cliente)
 
 
+# --- Datos reales (la copia de Producto con IMPORTRANGE) -----------------
+#
+# Sin resultados esperados fijos: comprueba la coherencia de lo que hay. Nunca
+# imprime ni guarda un IMEI: las búsquedas por IMEI usan sus últimos 4
+# dígitos (la URL queda en los registros de Cloud Run), la salida pasa por
+# ``ocultar`` y el estado guardado es una huella de los IDs, no los datos.
+
+
+def todos(cliente: httpx.Client, **params) -> tuple[int, list[dict]]:
+    productos: list[dict] = []
+    pagina, total = 1, 0
+    while True:
+        datos = cliente.get(RUTA, params={**params, "tamano": TAMANO, "pagina": pagina}).json()
+        total = datos["total"]
+        productos += datos["productos"]
+        if len(productos) >= total or not datos["productos"]:
+            return total, productos
+        pagina += 1
+
+
+def resumen_reales(cliente: httpx.Client) -> dict:
+    datos = cliente.get(RUTA, params={"tamano": 1}).json()
+    _, productos = todos(cliente)
+    ultima = datos["copia"]["ultima_exitosa"] or {}
+    return {
+        "ultima_exitosa": ultima.get("id"),
+        "datos_del": datos["copia"]["datos_del"],
+        "total": datos["total"],
+        "huella_ids": hashlib.sha256("\n".join(sorted(p["producto_id"] for p in productos)).encode()).hexdigest(),
+        "sedes": {s["sede"] or "": s["cantidad"] for s in datos["sedes"]},
+    }
+
+
+def sincronizar_reales(cliente: httpx.Client) -> dict | None:
+    antes = cliente.get(RUTA, params={"tamano": 1}).json()["copia"]
+    if not anotar("la copia está habilitada y tiene origen", antes["habilitado"] and antes["sincronizable"], f"habilitado={antes['habilitado']} sincronizable={antes['sincronizable']}"):
+        return None
+    print(f"      origen configurado: {antes['origen']}; filtro: {antes['filtro']}")
+    r = cliente.post(f"{RUTA}/sync", params={"usuario_id": ADMINISTRADOR})
+    textos = [r.text]
+    if not anotar("la sincronización es EXITOSA", r.status_code == 200 and r.json().get("resultado") == "EXITOSA", f"HTTP {r.status_code}: {r.text[:300]}"):
+        return None
+    sync = r.json()
+    c = sync["contadores"]
+    print(f"      contadores: {json.dumps(c, ensure_ascii=False)}")
+    print(f"      avisos de la sincronización: {len(sync['avisos'])}")
+    anotar("hay filas leídas y productos en Reparacion", c.get("leidos", 0) > 0 and c.get("en_reparacion", 0) > 0, json.dumps(c))
+
+    # «producto_status = Reparacion»: el valor exacto que cuenta como en Reparacion.
+    filtro = antes["filtro"].split("=", 1)[-1].strip()
+    total, productos = todos(cliente)
+    anotar("el listado tiene los productos en Reparacion de la sincronización", total == c.get("en_reparacion") == len(productos), f"listado {total} ({len(productos)} leídos), contador {c.get('en_reparacion')}")
+    anotar(f"todos los listados están en «{filtro}» exacto", all(p["en_reparacion"] and p["estado_gestion_rt"] == filtro for p in productos), str(Counter(p["estado_gestion_rt"] for p in productos if p["estado_gestion_rt"] != filtro)))
+    anotar("ids únicos en el listado", len({p["producto_id"] for p in productos}) == len(productos))
+    total_fuera, fuera = todos(cliente, incluir_fuera="true")
+    otros = [p for p in fuera if not p["en_reparacion"]]
+    anotar("«mostrar los que salieron» agrega solo productos fuera de Reparacion", total_fuera == total + len(otros) and all(p["estado_gestion_rt"] != filtro or p["eliminado_en_origen"] or not p["presente_en_origen"] for p in otros), f"{total_fuera} = {total} + {len(otros)}")
+    print(f"      fuera de Reparacion en la copia: {len(otros)}")
+
+    datos = cliente.get(RUTA, params={"tamano": 1}).json()
+    sedes = {s["sede"]: s["cantidad"] for s in datos["sedes"]}
+    print(f"      sedes: {json.dumps({(k or '(sin sede)'): v for k, v in sedes.items()}, ensure_ascii=False)}; no confirmadas: {[s['sede'] for s in datos['sedes'] if not s['confirmada']]}")
+    por_sede = Counter(p["sede"] for p in productos)
+    anotar("las cantidades por sede coinciden con el listado", all(sedes.get(s, 0) == n for s, n in por_sede.items()) and sum(sedes.values()) == total, f"{dict(por_sede)} vs {sedes}")
+    for sede, n in sorted(((s, n) for s, n in sedes.items() if s and n), key=lambda x: -x[1])[:3]:
+        t, lista = todos(cliente, sede=sede)
+        anotar(f"filtro de sede «{sede}»", t == n and all(p["sede"] == sede for p in lista), f"{t} de {n}")
+
+    muestra = productos[:1] + productos[len(productos) // 2 : len(productos) // 2 + 1] + productos[-1:]
+    for p in {x["producto_id"]: x for x in muestra}.values():
+        anotar(f"búsqueda por ID {p['producto_id']}", p["producto_id"] in ids(cliente.get(RUTA, params={"q": p["producto_id"]}).json()))
+    con_imei = [p for p in productos if p["imei"] and p["imei_valido"]]
+    print(f"      con IMEI válido: {len(con_imei)} de {total}; IMEI repetido: {sum(p['imei_repetido'] for p in productos)}")
+    if con_imei:
+        p = con_imei[len(con_imei) // 2]
+        _, encontrados = todos(cliente, q=p["imei"][-4:])
+        anotar(f"búsqueda por los últimos 4 dígitos del IMEI ({p['producto_id']})", p["producto_id"] in {x["producto_id"] for x in encontrados})
+    con_modelo = [p for p in productos if p["modelo"]]
+    if con_modelo:
+        p = con_modelo[0]
+        _, encontrados = todos(cliente, q=p["modelo"])
+        anotar(f"búsqueda por modelo «{p['modelo']}»", p["producto_id"] in {x["producto_id"] for x in encontrados})
+
+    _, con = todos(cliente, orden_rma="CON_SUGERENCIAS")
+    _, sin = todos(cliente, orden_rma="SIN_COINCIDENCIAS")
+    anotar("los filtros de Orden RMA se reparten el total", len(con) + len(sin) == total, f"{len(con)} + {len(sin)}")
+    for producto in con:
+        for coincidencia in producto["coincidencias_sugeridas"]:
+            print(ocultar(f"      aviso: {producto['producto_id']} coincide con {coincidencia['orden_id']} por {coincidencia['criterios']} (solo sugerencia)"))
+    print(f"      avisos por producto: {json.dumps(Counter(a for p in productos for a in p['avisos']), ensure_ascii=False)}")
+
+    for p in {x["producto_id"]: x for x in muestra}.values():
+        ficha = cliente.get(f"{RUTA}/{p['producto_id']}")
+        textos.append(ficha.text)
+        f = ficha.json()["producto"]
+        anotar(f"ficha de {p['producto_id']}: solo campos permitidos", ficha.status_code == 200 and set(f) <= CAMPOS_FICHA, str(sorted(set(f) - CAMPOS_FICHA)))
+        anotar(f"ficha de {p['producto_id']}: coincide con el listado", (f["sede"], f["estado_gestion_rt"], f["modelo"]) == (p["sede"], p["estado_gestion_rt"], p["modelo"]))
+    anotar("un producto que no está: 404", cliente.get(f"{RUTA}/no-existe-e2e").status_code == 404)
+    intentos = cliente.get(f"{RUTA}/syncs")
+    textos.append(intentos.text)
+    claves = " ".join(re.findall(r'"([a-z_]+)":', " ".join(textos)))
+    anotar("ninguna columna excluida en las respuestas", not any(x in claves for x in EXCLUIDOS), str([x for x in EXCLUIDOS if x in claves]))
+    imeis = {p["imei"] for p in fuera if p["imei"]}
+    avisos = json.dumps(sync["avisos"]) + json.dumps([s["avisos"] for s in intentos.json()])
+    anotar("los avisos de la sincronización no tienen IMEI", not any(i in avisos for i in imeis if len(i) >= 8))
+    return resumen_reales(cliente)
+
+
 def main() -> int:
     sys.stdout.reconfigure(errors="replace")
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -159,6 +300,7 @@ def main() -> int:
     p.add_argument("--api", default=API_UAT)
     p.add_argument("--supabase-url", default=SUPABASE_UAT)
     p.add_argument("--sin-autenticacion", action="store_true", help="API local en modo demo")
+    p.add_argument("--datos", choices=("ficticios", "reales"), default="ficticios", help="ficticios: la planilla de prueba (resultados fijos); reales: la copia de Producto (coherencia, sin IMEI en la salida)")
     a = p.parse_args()
     api = a.api.rstrip("/")
     local = api.startswith(("http://127.0.0.1", "http://localhost"))
@@ -177,15 +319,16 @@ def main() -> int:
     cliente = httpx.Client(base_url=api, headers=encabezados, timeout=120)
     archivo = Path(a.estado)
     try:
+        reales = a.datos == "reales"
         if a.fase == "sincronizar":
-            guardado = sincronizar(cliente, ficticios)
+            guardado = sincronizar_reales(cliente) if reales else sincronizar(cliente, ficticios)
             if guardado is not None:
                 archivo.write_text(json.dumps(guardado, indent=2, ensure_ascii=False), encoding="utf-8")
                 print(f"      estado guardado en {archivo}")
                 print("\nAhora: esperar a que Cloud Run llegue a 0 instancias y correr --fase comprobar.")
         else:
             guardado = json.loads(archivo.read_text(encoding="utf-8"))
-            ahora = resumen(cliente)
+            ahora = resumen_reales(cliente) if reales else resumen(cliente)
             anotar("después del escalado a cero, la misma copia", ahora == guardado and guardado["ultima_exitosa"] is not None, f"ahora {ahora}, antes {guardado}")
     finally:
         cliente.headers.pop("Authorization", None)
