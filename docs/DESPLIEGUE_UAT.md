@@ -442,7 +442,7 @@ Publica la pantalla Reparación RT con la copia de los Productos de Gestión RT 
 
 **Vuelta atrás:** `update-traffic --to-revisions rt-rma-uat-api-00039-sen=100` y `vercel promote dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`. La migración queda: es aditiva y el backend anterior no usa `producto_rt` (ensayado). La copia queda guardada para la próxima publicación; no se borra ninguna tabla.
 
-## 12. Publicación conjunta: Reparación RT etapa 1 + Configuración v2 (preparado el 19/11/2026, sin ejecutar)
+## 12. Publicación conjunta: Reparación RT etapa 1 + Configuración v2 (preparado el 19/11/2026, ejecutado el 20/11/2026)
 
 Publica en un solo paso la sección 11 (Reparación RT) y Configuración v2 ([`configuracion-discovery.md`](configuracion-discovery.md), sección 12) sobre el par vigente `00039-sen` (`fd434ef`) + `dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`. Es la sección 11 con estas diferencias.
 
@@ -470,3 +470,35 @@ Publica en un solo paso la sección 11 (Reparación RT) y Configuración v2 ([`c
 - lo que se cambie en Compras con los permisos nuevos **no** se refleja en la fila de `COMPRAS_GESTIONAR`: al volver atrás rige esa fila (o su predeterminado). Revisar Permisos después de volver;
 - los permisos de catálogos delegados con la versión nueva no existen en la anterior: vuelven a ser solo de Administración;
 - los códigos generados mientras tanto quedan; la versión anterior los lista y sigue dando altas con su `max()+1`, y la nueva saltea lo que la anterior creó.
+
+### 12.1 Resultado (20/11/2026): aprobado
+
+Commit desplegado `0b63047` (`mvp-v2` por avance rápido desde `fd434ef`, CI en verde: `seguridad`, `backend`, `postgres`, `frontend` y `funcional`). Funcional de `rt-rma-app` `7fb75cd` (DEC-CFG-01 a 08).
+
+**Cambio de origen de Reparación RT (autorizado por el usuario el 20/11/2026).** En lugar de la planilla de prueba de la sección 11 (B3), el origen es una **copia de la tabla Producto real** (Spreadsheet `1p_oX…`, GID 0, armada con IMPORTRANGE; el ID completo está solo en `RMA_PRODUCTOS_RT_PLANILLA` de la revisión), autorizada solo para la consulta de Reparación RT. Consecuencias:
+
+- la revisión lleva solo `RMA_PRODUCTOS_RT_ORIGEN=google_sheets`, `RMA_PRODUCTOS_RT_PLANILLA` y `RMA_PRODUCTOS_RT_GID=0`; **sin** `RMA_PRODUCTOS_RT_TIPOS_*`: los TipoProducto salen del catálogo real (`RMA_CATALOGO_SHEETS_PLANILLA`, `raw_TipoProducto`), que es el que corresponde a productos reales;
+- se siguen leyendo **solo las 13 columnas permitidas** (un rango por columna; `producto_passcode`, precios, personas y texto libre nunca salen de Google);
+- `rma.producto_rt`, los respaldos, la línea de base del E2E (`rma_linea_base_e2e`, sin permisos para los roles de la API y eliminada al limpiar) y los registros que la contengan son **datos operativos reales**;
+- `producto_rt` es maestra en `01_reiniciar.sql` y `06_limpiar_e2e.sql`: nunca se borra, y si cambia entre la línea de base y la limpieza, la limpieza aborta sin cambios. No sincronizar durante los E2E;
+- el E2E de Reparación RT corre con `probar_reparacion_rt.py --datos reales`: coherencia sin resultados fijos, sin IMEI completos en la salida ni en el estado guardado; la búsqueda por IMEI usa los últimos 4 dígitos;
+- la planilla de prueba ficticia (`generar_productos_rt_ficticios.py`) queda para local y CI.
+
+| Paso | Resultado |
+|---|---|
+| 1. Preflight | `00039-sen` con el 100 % y mínimo 0; 39 migraciones y 71 tablas; `precheck_configuracion_v2.sql` sin códigos en conflicto ni filas en `rma.permiso`; el `--dry-run` listó solo las tres migraciones |
+| 2. Respaldo previo | `rt-rma-respaldo-db-rh7t4`, `uat/20261120T032422Z`: 39 migraciones, 71 tablas, 6 Órdenes; `SHA256SUMS` correcto en local |
+| 3. Migraciones | `db push --yes`, enseguida del respaldo previo (03:24 UTC): 42 migraciones y 72 tablas; `verificar_integridad()` vacío; nueve `codigo_*_seq` (`tr` 3, `ins` 10, `prv` 1, el resto sin usar); seis triggers `*_codigo_fijo`; `rma.siguiente_codigo` solo para `rma_backend` (y `rma_api`, miembro); `rma.permiso` vacía (rigen los predeterminados); códigos históricos sin cambios (`TR-001` a `TR-003`, `TR-OTROS`, `BAT-IP14`, `FAC-010`, `CANC-OTRO`, `INT-OTRO`, `PRV-0001`). Las tres en `_herramientas/migraciones/` (42, MD5 iguales al repositorio) |
+| 4. Backend sin tráfico | Revisión `rt-rma-uat-api-00042-suw`, etiqueta `candidata`, etiqueta de commit `0b6304786fe6…`: `/health` 200; `/api/me` y `/api/rt-products` 401 sin token; `/docs` y `/openapi.json` 404; CORS solo para `rt-rma-uat.vercel.app` |
+| 5. Frontend sin publicar | `dpl_5deKVVEvDFx1Ez5qG819BDYYTMgK` (`--prod --skip-domain`): São Paulo, URL pública de la API, solo `sb_publishable_` (`sb_secret_` y `service_role` aparecen solo en la guarda que las rechaza) |
+| 6. Publicación coordinada | 100 % en `00042-suw` a las 03:37:47 UTC y `vercel promote` a las 03:37:55 UTC (corte de 8 s); etiqueta quitada; `verificar_escalado_uat.py --esperada rt-rma-uat-api-00042-suw` OK (24 revisiones, mínimo 0) |
+| 7. Reparación RT | Sincronización `SINC-bc9607e430df` EXITOSA (11:29 UTC): 11285 filas leídas, **104 en Reparacion** (RMA 94, Fisherton 6, Centro 4), 0 descartadas, 0 duplicadas, 0 IMEI repetidos; avisos: 3 `IMEI_INVALIDO` y 2 `TIPO_ELIMINADO`. E2E `--datos reales` 26 de 26; después del escalado a cero (0 instancias por Cloud Monitoring a las 11:48 UTC), `comprobar` 1 de 1 |
+| 8. E2E con línea de base | Configuración v2 128 de 128, UX 47 de 47, V1.4 67 de 67 e integral 68 de 68, cada uno con `05` → E2E → `06` en ensayo y aplicado → `03`. Después de cada limpieza: las 6 Órdenes previas, ningún esquema auxiliar y los mismos conteos (salvo los catálogos «Ficticio E2E» inactivos que conserva el E2E de Configuración v2). Sin sincronizar durante los E2E |
+| 9. Estado final | `verificar_integridad()` vacío; 42 migraciones, 72 tablas; `OR-000001` a `OR-000006`; inventario conciliado; 4 usuarios vinculados; `producto_rt` con los mismos 104 productos (misma huella de IDs que después de la sincronización, sin cambios desde las 11:29 UTC) y un solo intento de sincronización |
+| 10. Respaldo posterior y ensayo | `rt-rma-respaldo-db-58bxb`, `uat/20261120T124216Z`: 42 migraciones, 72 tablas, 6 Órdenes, 104 productos RT, 4 cuentas; `SHA256SUMS` correcto en local. Ensayo en la nube `rt-rma-respaldo-db-dr8ln`: ENSAYO_RESTAURACION_OK (72 tablas con sus conteos e integridad, secuencias iguales al manifiesto, 4 cuentas) |
+
+**Incidente en el E2E de Configuración v2 (resuelto, solo del script).** La primera corrida dio 120 de 124: `GET /api/work/inbox` respondió 422 con las cuatro cuentas porque el E2E no enviaba `usuario_id`, parámetro obligatorio desde la creación de la ruta (`3e718ff`) y que el frontend siempre envía (`api/trabajo.ts`). El ensayo local no lo detectó porque sin sesión se saltea la matriz. Corrección en `6bd3cc8` (también agrega `/api/work/workshop`, con el mismo contrato y permiso que exige `test_matriz_permisos.py`); comprobada en local (422 sin el parámetro, 200 con él, con las cuatro cuentas). La corrida se limpió con `06` (ensayo: solo 37 filas de `cambio_configuracion`; aplicada sin errores) y la repetición dio 128 de 128. Sin cambios en el backend, el frontend ni la base.
+
+**Catálogos «Ficticio E2E» que quedan, todos inactivos** (los catálogos no admiten borrado y los códigos no se reutilizan): tres corridas de Configuración v2 (`5F5920`, `340DEC` y `B60BE7`) dejaron `TR-004` a `TR-009`, `TR-E2E-*`, `CANC-001` a `CANC-003`, `INS-011` a `INS-013` y `PRV-0002` a `PRV-0004`. La de `340DEC` fue un primer lanzamiento del recorrido que se interrumpió después de su limpieza: sin Órdenes, acciones ni auditoría restantes.
+
+**Vuelta atrás:** backend `update-traffic --to-revisions rt-rma-uat-api-00039-sen=100` y frontend `vercel promote dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`, juntos (P1-17). Las tres migraciones quedan (aditivas); la copia de `producto_rt` queda guardada y la versión anterior no la usa.

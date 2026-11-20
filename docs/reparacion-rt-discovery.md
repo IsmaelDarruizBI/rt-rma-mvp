@@ -189,7 +189,7 @@ Una columna opcional que falta deja su campo vacío y genera un aviso. Sumar una
 - **`producto_passcode` nunca se solicita:** la lectura pide solo los rangos de las columnas «Copiar». Una prueba falla si algún rango pedido corresponde a una columna fuera de esa lista, o si `producto_passcode` entrara en ella.
 - **Columnas comerciales y de personas:** no se leen (2, 7, 14, 16, 19 a 22, 28) y tampoco el texto libre (12).
 - **Registros:** solo contadores, el identificador del intento y los `producto_id` en conflicto. Nunca IMEI, valores ni tokens.
-- **UAT:** nunca la planilla real (sección 3.3).
+- **UAT:** desde el 20/11/2026, una copia de la tabla Producto real autorizada por el usuario solo para la consulta (sección 3.3). La búsqueda viaja en la URL: un IMEI completo buscado en pantalla queda en los registros de solicitudes de Cloud Run ([`DEUDA_TECNICA.md`](DEUDA_TECNICA.md), P1-18).
 
 ### 2.9 Errores de sincronización
 
@@ -236,7 +236,7 @@ La hoja de TipoProducto y la credencial son las del catálogo de Ventas.
 | Ambiente | Origen |
 |---|---|
 | Local y CI | `archivo` con productos ficticios (sección 8) |
-| UAT | **Planilla de prueba** con las 31 columnas reales y filas ficticias, compartida como Lector con `rt-rma-uat-api@…`. La crea el usuario. Alternativa: `archivo` dentro de la imagen. **Nunca la planilla real** |
+| UAT | Diseño original: **planilla de prueba** con las 31 columnas reales y filas ficticias. **Desde el 20/11/2026, por autorización expresa del usuario:** una copia de la tabla Producto real hecha con IMPORTRANGE (GID 0), compartida como Lector con `rt-rma-uat-api@…`, solo para la consulta de Reparación RT. Se leen las mismas 13 columnas; la copia en PostgreSQL, los respaldos y los registros son datos operativos reales; las pruebas de Órdenes siguen con datos ficticios ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12.1) |
 | Producción (futuro) | Planilla real, con autorización |
 
 ## 4. Pantalla Reparación RT (etapa 1)

@@ -239,3 +239,14 @@ Hasta ese momento no se suben: el ensayo en la nube aplica todo lo que hay en es
 | Ensayo en la nube | `rt-rma-respaldo-db-8c7hq` | ENSAYO_RESTAURACION_OK: 39 migraciones, 71 tablas con sus conteos, integridad, secuencias y 4 cuentas |
 
 El respaldo diario sigue sin cambios de configuración.
+
+**Publicación conjunta de Reparación RT etapa 1 y Configuración v2 (20/11/2026), tres migraciones aditivas; scripts sin cambios** (`producto_rt` entra sola en el volcado y la verificación; [`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12.1):
+
+| Momento | Ejecución | Resultado |
+|---|---|---|
+| Respaldo previo | `rt-rma-respaldo-db-rh7t4` | `uat/20261120T032422Z`: 39 migraciones, 71 tablas, 6 Órdenes; `SHA256SUMS` correcto en local |
+| Herramientas | — | `20261119000100`, `20261120000100` y `20261120000200` en `_herramientas/migraciones/` (42, MD5 iguales al repositorio) |
+| Respaldo posterior | `rt-rma-respaldo-db-58bxb` | `uat/20261120T124216Z`: 42 migraciones, 72 tablas, 6 Órdenes, 104 productos RT, 4 cuentas; `SHA256SUMS` correcto en local |
+| Ensayo en la nube | `rt-rma-respaldo-db-dr8ln` | ENSAYO_RESTAURACION_OK: 42 migraciones, 72 tablas con sus conteos, integridad, secuencias y 4 cuentas |
+
+**Datos reales en los respaldos desde el 20/11/2026.** `rma.producto_rt` es una copia de los Productos de Gestión RT en reparación (13 columnas, con IMEI; nunca `producto_passcode` ni precios), autorizada por el usuario. Los respaldos desde `uat/20261120T124216Z` (y los diarios siguientes) contienen esos datos: se tratan como datos operativos reales. Ya estaban cifrados con `age` y la retención no cambia (30 días inmutables, borrado a los 35). El ensayo en la nube los descifra solo dentro del contenedor, con una clave descartable. Las copias descifradas a mano con la clave real se borran enseguida, como las de Auth.

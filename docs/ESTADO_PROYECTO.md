@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 19/11/2026.
+**Última actualización:** 20/11/2026.
 
 - **Hecho:**
   - autenticación real y DC31 desplegadas en UAT (10/11, `00020-tux`);
@@ -26,11 +26,13 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - **Reparación RT, especificación** (17/11): DEC-RT-01 a 07 y BR-REP-050 en `rt-rma-app` `spec/reparacion-rt` `168618a` (publicada; `business/` sincronizado en `fd434ef`); diseño en [`reparacion-rt-discovery.md`](reparacion-rt-discovery.md). La etapa 1 ya no espera al bloque C.
   - **Reparación RT, etapa 1, en local** (19/11, `feat/reparacion-rt-etapa1`, commits locales, sin push ni despliegue): copia de consulta de los Productos de Gestión RT en reparación en PostgreSQL (migración `20261119000100`, `rma.producto_rt`) sobre el motor del bloque C, sincronización a pedido de Administración, API `/api/rt-products` y pantalla Reparación RT con búsqueda, filtros, ficha y coincidencias sugeridas (nunca vínculos); solo las 13 columnas permitidas, nunca `producto_passcode` ([`reparacion-rt-discovery.md`](reparacion-rt-discovery.md), sección 10; sección B).
   - **Configuración v2, en local** (20/11, `feat/configuracion-v2` sobre `feat/reparacion-rt-etapa1`, commits locales, sin push ni despliegue): CFG-01 a CFG-08. Códigos automáticos en la base, seguros ante concurrencia. Permisos operativos configurables, con precios aparte y Compras por acción. Matriz de permisos de todas las rutas. Configuración por funcionalidad con altas en ventana. Garantías con solo los plazos con y sin check-in. Sin plazo de retiro en pantalla y solo dos plantillas de WhatsApp visibles. Dos migraciones aditivas ([`configuracion-discovery.md`](configuracion-discovery.md), sección 12; sección B).
+  - **Reparación RT etapa 1 + Configuración v2 en UAT** (20/11): `mvp-v2` en `0b63047` con CI en verde; las tres migraciones en São Paulo (42 migraciones, 72 tablas); Cloud Run `00042-suw` y Vercel `dpl_5deKVVEvDFx1Ez5qG819BDYYTMgK`. Reparación RT lee, con autorización del usuario, una copia de la tabla Producto real (104 productos en reparación, solo las 13 columnas permitidas); E2E Reparación RT 26 de 26 y 1 de 1 tras el escalado a cero, Configuración v2 128 de 128, UX 47 de 47, V1.4 67 de 67 e integral 68 de 68 con limpieza selectiva; respaldo y ensayo de restauración correctos. **UAT OPERATIVO** ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12.1; sección B).
 - **Falta:**
   - conseguir la exportación de Ventas de ABI-43 (modelos que faltan en el catálogo técnico);
   - ABI-42: que Gestión RT indique qué columna (o tabla) de su catálogo es el Tipo de Equipo; con una columna `tp_*` alcanza con fijar `RMA_TIPO_EQUIPO_CAMPO` y sincronizar;
   - el UAT tiene 6 Órdenes de prueba creadas a mano (`OR-000001` a `OR-000006`, al 18/11); es solo de datos ficticios y su borrado o reinicio está autorizado cuando las pruebas lo requieran;
-  - una pasada manual en un navegador real de las pantallas nuevas (P2-17);
+  - una pasada manual en un navegador real de las pantallas nuevas (P2-17), incluidas Reparación RT y Configuración por subsección ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12, paso 9);
+  - decidir cómo evitar IMEI completos en los registros de solicitudes (P1-18) y el tratamiento de los datos reales de Productos RT en el UAT (P1-19) ([`DEUDA_TECNICA.md`](DEUDA_TECNICA.md));
   - opcional: repetir `medir_api.py` (falló el inicio de sesión, HTTP 400, probablemente por la contraseña tipeada; solo mide tiempos);
   - integrar en `main` (P0-2).
 
@@ -48,16 +50,16 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 | Tooling de la raíz | Node y TypeScript: validaciones, diagramas Mermaid y visor HTML (`package.json`) |
 | `app/backend/` | Python 3.11 o posterior, FastAPI y Pydantic v2. Capas `api → application → services → repositories ← storage` ([README](../app/backend/README.md)) |
 | `app/frontend/` | React, TypeScript y Vite ([README](../app/frontend/README.md)) |
-| `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). 39 aplicadas en `db-rt-rma`, todas las del repositorio (São Paulo, `sa-east-1`): `20261117000100` y `20261117000200` (bloque C, aditivas) el 18/11/2026; `20261116000100` y `20261116000200` (iteración de UX de Recepción, aditivas) el 16/11/2026; antes, las 12 de la macroiteración integral ese mismo día. Oregón (`rt-rma-db`, vuelta atrás de la migración) queda en 20 |
+| `supabase/` | Esquema PostgreSQL para Supabase: migraciones, seeds y pruebas SQL ([README](../supabase/README.md)). 42 aplicadas en `db-rt-rma`, todas las del repositorio (São Paulo, `sa-east-1`): `20261119000100`, `20261120000100` y `20261120000200` (Reparación RT y Configuración v2, aditivas) el 20/11/2026; `20261117000100` y `20261117000200` (bloque C, aditivas) el 18/11/2026; `20261116000100` y `20261116000200` (iteración de UX de Recepción, aditivas) el 16/11/2026; antes, las 12 de la macroiteración integral ese mismo día. Oregón (`rt-rma-db`, vuelta atrás de la migración) queda en 20 |
 | Persistencia en uso | UAT: PostgreSQL en Supabase (`RMA_PERSISTENCIA=postgres`). JSON sigue siendo el valor por defecto local |
-| UAT publicado | Desde el 18/11/2026 a las 03:52 UTC, el bloque C sobre la iteración de UX de Recepción, en Supabase São Paulo: backend en Cloud Run (`rt-rma-uat-api-00039-sen`, código `fd434ef`, mínimo 0 instancias; vuelta atrás del backend: `00036-jis`, código `677dbb1`) y frontend en Vercel (`dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB`). Vuelta atrás: `00031-ror` y `dpl_7Zo4UDKAcsUBnHfPf63L2QtU3d3e` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 8). Oregón sigue como vuelta atrás de la migración hasta el 25/11/2026 |
+| UAT publicado | Desde el 20/11/2026 a las 03:37 UTC, Reparación RT etapa 1 y Configuración v2, en Supabase São Paulo: backend en Cloud Run (`rt-rma-uat-api-00042-suw`, código `0b63047`, mínimo 0 instancias) y frontend en Vercel (`dpl_5deKVVEvDFx1Ez5qG819BDYYTMgK`). Vuelta atrás, juntos: `00039-sen` (`fd434ef`) y `dpl_Agpv37uP5wG8uXM3rsUaHQLLbpxB` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12.1). Oregón sigue como vuelta atrás de la migración hasta el 25/11/2026 |
 
-**Rama de trabajo:** `mvp-v2`, con el bloque C integrado; `business/` de `rt-rma-app` `168618a` (`spec/reparacion-rt`, publicada). Código desplegado en UAT: `fd434ef`, desde el 18/11/2026; los commits posteriores son documentación. `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
+**Rama de trabajo:** `mvp-v2`, con Reparación RT etapa 1 y Configuración v2 integradas; `business/` de `rt-rma-app` `7fb75cd` (`spec/configuracion-v2`, publicada). Código desplegado en UAT: `0b63047`, desde el 20/11/2026; los commits posteriores son scripts de validación y documentación. `main` sin cambios. Integrar no publica: el UAT se despliega aparte ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
 
-**Últimos commits de código:** los del bloque C, de `084b4d1` a `56b2446` (catálogo de Ventas en PostgreSQL, C1 a C7 y sus QA); antes, `582d1bc` (rótulo del comprobante de autorización), `677dbb1` (E2E comercial y ensayo del despliegue), `3c96320` y `0a4c5ad` (ABI-44 y ABI-45, UX-03 y UX-04 revisadas) y los de la iteración de UX desde `b39daea`. Desplegado: `fd434ef`, desde el 18/11/2026. Ver `git log`.
+**Últimos commits de código:** Configuración v2 (`1d59a83` a `0b63047`) y Reparación RT etapa 1 (`dc9bd3b` a `797aced`); antes, los del bloque C, de `084b4d1` a `56b2446` (catálogo de Ventas en PostgreSQL, C1 a C7 y sus QA); antes, `582d1bc` (rótulo del comprobante de autorización), `677dbb1` (E2E comercial y ensayo del despliegue), `3c96320` y `0a4c5ad` (ABI-44 y ABI-45, UX-03 y UX-04 revisadas) y los de la iteración de UX desde `b39daea`. Desplegado: `0b63047`, desde el 20/11/2026. Ver `git log`.
 
 **Estado de desarrollo:**
-- El MVP está en UAT sobre PostgreSQL, con autenticación real (Supabase Auth, usuario y contraseña), DC31 y la macroiteración integral, solo con datos ficticios: las Órdenes de prueba `OR-000001` a `OR-000006`, creadas a mano, y la copia del catálogo de Ventas (bloque C) ([`autenticacion.md`](autenticacion.md)).
+- El MVP está en UAT sobre PostgreSQL, con autenticación real (Supabase Auth, usuario y contraseña), DC31 y la macroiteración integral, con datos ficticios: las Órdenes de prueba `OR-000001` a `OR-000006`, creadas a mano, y la copia del catálogo de Ventas (bloque C) ([`autenticacion.md`](autenticacion.md)). **Excepción desde el 20/11/2026, autorizada:** la copia de Reparación RT (`rma.producto_rt`) son Productos reales de Gestión RT en reparación (13 columnas, con IMEI; nunca `producto_passcode` ni precios); se tratan como datos operativos reales.
 - El UAT corre sobre São Paulo desde el 11/11/2026 ([`MIGRACION_SUPABASE_SAO_PAULO.md`](MIGRACION_SUPABASE_SAO_PAULO.md), sección 16).
 - La migración a PostgreSQL tiene E0 a E7 terminadas: Bloque A (E4 + E5) y Bloque B (E6 + E7, B1 a B6). La app corre localmente sobre PostgreSQL, con los datos persistentes entre reinicios.
 - El frontend tiene el rediseño aprobado: sidebar, barra de acciones, modales y «Pendientes» (`fe655d7`).
@@ -84,6 +86,18 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 **Aviso:** la introducción de alcance de `app/backend/README.md` y de `app/frontend/README.md` («solo `HP-REP-001`») es anterior a los slices de `mvp-v2`. Para el alcance implementado, mandan la trazabilidad y `specs/`.
 
 ## B. Últimos avances
+
+### Reparación RT etapa 1 + Configuración v2 en UAT (20/11/2026): UAT OPERATIVO
+
+Con autorización: publicación conjunta ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), secciones 12 y 12.1). Sin cambios en `main`, producción ni Gestión RT.
+
+- **Integración:** `rt-rma-app` `spec/configuracion-v2` (`aaec62e`, `7fb75cd`) con DEC-CFG-01 a 08 y `business/` sincronizado; P1-16 clasificada (ninguna brecha crítica); `feat/configuracion-v2` publicada y `mvp-v2` por avance rápido a `0b63047`, CI en verde. Correcciones previas: tipos de Productos RT con su propia planilla (`797aced`) y orden binario en el aviso de códigos en conflicto (`0b63047`).
+- **Base:** respaldo previo `uat/20261120T032422Z`; `20261119000100`, `20261120000100` y `20261120000200` aplicadas (42 migraciones, 72 tablas, integridad sin problemas, códigos históricos sin cambios).
+- **Publicación:** Cloud Run `00042-suw` sin tráfico, probada por su etiqueta, y Vercel `dpl_5deKVVEvDFx1Ez5qG819BDYYTMgK` sin dominio; corte coordinado de 8 s (03:37 UTC); etiqueta quitada; escalado OK.
+- **Reparación RT con datos reales (autorizado el 20/11):** origen = copia de la tabla Producto con IMPORTRANGE (GID 0), tipos del catálogo real; sincronización EXITOSA, 104 productos en Reparacion (RMA 94, Fisherton 6, Centro 4); E2E `--datos reales` 26 de 26 y persistencia tras el escalado a cero 1 de 1; los 104 intactos al cierre.
+- **E2E:** Configuración v2 128 de 128 (la primera corrida, 120 de 124, falló por un defecto del script: no enviaba `usuario_id` a `/api/work/inbox`; corregido en `6bd3cc8`, sin tocar la aplicación), UX 47 de 47, V1.4 67 de 67 e integral 68 de 68, con línea de base y limpieza selectiva cada uno.
+- **Respaldos:** posterior `uat/20261120T124216Z` (`58bxb`, `SHA256SUMS` correcto) y ensayo en la nube `dr8ln`: ENSAYO_RESTAURACION_OK.
+- **Riesgos nuevos:** IMEI completos en los registros si se buscan en pantalla (P1-18); datos reales en el UAT (P1-19); textos desactualizados sobre la planilla de prueba (P2-21).
 
 ### Configuración v2 (19/11/2026), rama `feat/configuracion-v2`
 
@@ -794,7 +808,9 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (19/11/2026):** autorizar el push de `feat/configuracion-v2` y su integración en `mvp-v2`, y la publicación conjunta de Reparación RT etapa 1 y Configuración v2 en el UAT ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12). Antes hace falta la planilla de prueba (B3).
+**Próximo paso (20/11/2026):** la pasada manual en el navegador de Reparación RT y Configuración v2 con las cuatro cuentas, también a 390 px ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12, paso 9), y decidir P1-18 (IMEI en los registros) antes de abrir Reparación RT a más personas. Reparación RT etapa 2 necesita autorización aparte.
+
+**Antes (19/11/2026):** autorizar el push de `feat/configuracion-v2` y su integración en `mvp-v2`, y la publicación conjunta de Reparación RT etapa 1 y Configuración v2 en el UAT. Hecho el 20/11/2026 (sección B).
 
 **Antes (19/11/2026):** con la etapa 1 de Reparación RT lista en local, crear la planilla de prueba (B3) y autorizar la integración en `mvp-v2` y el despliegue en el UAT ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 11). **Antes (18/11/2026):** bloque C aprobado en el UAT (C8). Pendientes del bloque C: mover el limitador por DNI a la base antes de permitir más de una instancia (P1-2) y, opcional, que el E2E integral compruebe el control por lote de BAT-IP14 en el escenario 0. **Antes (17/11/2026):** bloque C cerrado en local. **Antes (16/11/2026):** UAT operativo con la iteración de UX de Recepción, escalado a cero desde las 22:54 UTC (sección B). Cada publicación termina quitando su etiqueta temporal y con `verificar_escalado_uat.py` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 9). Siguen pendientes, con autorización: la pasada manual en un navegador real (P2-17, incluye el diálogo real de impresión y el desborde de «Pendientes» a 390 px), ABI-43 (exportación de Ventas), ABI-42 (para activar DC12) y la integración en `main` (P0-2).
 
