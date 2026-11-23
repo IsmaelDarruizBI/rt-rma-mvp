@@ -1585,3 +1585,31 @@ Registradas en `rt-rma-app`, rama `spec/ajustes-funcionales` (local, sin publica
 9. **Calidad del repuesto (D-14.3).** Original y alternativo tienen el mismo precio si el servicio es el mismo. El cliente no elige la calidad al autorizar, y el comprobante no la muestra. Si el negocio necesita precios distintos por calidad, solo quedan un tipo realmente distinto o un ajuste comercial.
 10. **Permisos sin nombre en el texto aprobado.** La importación (D-13.3) y el mínimo (D-11.2) exigen «permisos» sin nombrarlos. Lo natural es el permiso de precios (DEC-CFG-03) y el de insumos.
 11. **Cambio de modelo sin autorización del cliente (D-12.6).** En RT_INTERNO y en las garantías no hay autorización del cliente, así que no está definido cuándo se congela el precio. El efecto es menor, porque no se cobra.
+
+#### Resolución de los puntos (coordinación técnica, 23/11/2026)
+
+Son precisiones de implementación dentro del texto aprobado. Si alguna no coincide con lo que espera el negocio, se ajusta en la validación manual.
+
+1. **Factibilidad sin pieza elegida:** mientras un requisito no tiene pieza elegida, cuenta como factible si alguna pieza compatible tiene disponible suficiente. Con la pieza elegida, se evalúa esa pieza.
+2. **Equipo sin modelo técnico:** se ofrecen primero las piezas universales. Si no hay ninguna, quien prepara el trabajo puede elegir cualquier pieza de la categoría con un motivo obligatorio, y queda marcada como «compatibilidad no verificada».
+3. **Precio faltante sin `PRECIO_MANUAL`:** la regla es la misma en el ingreso, en 070, 075, 127 y 128.
+   - **Con el permiso:** precio manual con motivo.
+   - **Sin el permiso:** el trabajo se crea con el precio pendiente de definir (origen `PENDIENTE`, sin importe). Lo resuelve quien tenga `PRECIO_MANUAL`, o se toma el precio de catálogo cuando Administración lo carga.
+   - **Qué bloquea:** con el precio pendiente no se emite el comprobante de ingreso ni se registra la autorización del cliente (Cliente Externo).
+   - **Orígenes no cobrables** (RT_INTERNO y garantías): no bloquea.
+4. **«Otros»:** queda como está (BR-REP-047) y se distingue en los reportes. El precio manual con `PRECIO_MANUAL` es para tipos del catálogo sin precio para el modelo.
+5. **DEC-CFG-03:** se mantiene para el catálogo. El precio manual vale para un solo trabajo, nunca cambia el catálogo y queda auditado.
+6. **Recargo:** no se cambia la presentación. Rige DEC-UX-13 y se descarta la «corrección técnica» de la sección 11.
+7. **Reposición solicitada:** cuenta lo que ya calcula «en camino»: solicitudes pendientes y Órdenes de Compra en borrador, confirmadas o parciales. La sugerencia descuenta todo eso, así que no se duplican solicitudes.
+8. **Catálogo técnico:** `modelo_equipo` es el catálogo técnico de RMA (DEC-UX-01), distinto de la copia de Ventas, que sigue siendo de solo lectura.
+   - La unicidad (marca, modelo, variante) impide duplicados.
+   - El archivo versionado queda como carga inicial.
+   - Una futura regeneración desde Ventas tiene que emparejar por esa clave, sin duplicar.
+9. **Calidad del repuesto:** no cambia el precio de venta. Para cobrar distinto queda el ajuste comercial o un tipo realmente distinto.
+10. **Permisos:**
+    - la importación usa `PRECIOS_GESTIONAR`;
+    - el mínimo, `INSUMO_GESTIONAR`;
+    - el alta de modelos, un permiso nuevo «Gestionar modelos de equipo», de Administración;
+    - las categorías y los fabricantes de insumos, `INSUMO_GESTIONAR`.
+11. **Orígenes sin autorización del cliente:** el precio queda fijo cuando se define el trabajo. Un cambio de modelo posterior solo genera un aviso.
+
