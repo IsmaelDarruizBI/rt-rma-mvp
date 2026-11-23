@@ -60,6 +60,9 @@ def _cuerpo(*, dni=None, imei=None, unificado=True, trabajo=None) -> dict:
             "estado_fisico": "Golpe en la esquina.",
             "observaciones": "Rayon en la tapa.",
         }
+    # DEC-AJ-07: la pantalla pide siempre la verificacion del ingreso, que
+    # el comprobante exige (informativa).
+    recepcion["funcionalidades_verificadas"] = True
     cuerpo = {
         "usuario_id": RECEPCION,
         "cliente": datos_cliente,

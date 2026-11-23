@@ -41,7 +41,10 @@ from app.domain.models import (
     TipoReparacionInsumos,
     Usuario,
 )
-from app.domain.models.recepcion import estado_fisico_registrado
+from app.domain.models.recepcion import (
+    estado_fisico_registrado,
+    verificacion_registrada,
+)
 from app.domain.politicas import politica_de
 
 from . import permisos
@@ -139,6 +142,25 @@ def es_ingreso_inicial(orden: OrdenReparacion) -> bool:
     )
 
 
+def recepcion_con_el_comprobante(orden: OrdenReparacion) -> bool:
+    """DEC-AJ-05 (BF-04): el comprobante de recepcion que se genera al
+    enviar la Orden a revision tecnica confirma tambien la custodia, en el
+    mismo acto: entregar el comprobante y recibir el equipo es una sola
+    operacion (BR-REP-033).
+
+    Vale en los Origenes que reciben el equipo en el mostrador y emiten
+    comprobante (CLIENTE_EXTERNO), mientras la custodia no este decidida.
+    RT_INTERNO (VAR-REP-002) conserva su circuito: ni comprobante ni
+    confirmacion.
+    """
+    politica = politica_de(orden.origen)
+    return (
+        politica.requiere_confirmacion_recepcion
+        and politica.requiere_comprobante_recepcion
+        and not (orden.recepcion is not None and orden.recepcion.decidida)
+    )
+
+
 def exigir_fuera_del_ingreso_inicial(
     orden: OrdenReparacion, accion: str
 ) -> None:
@@ -161,18 +183,32 @@ def exigir_fuera_del_ingreso_inicial(
 
 def faltantes_para_ingreso(orden: OrdenReparacion) -> list[str]:
     """Lo que Recepcion tiene que completar antes de generar el comprobante
-    de ingreso: trabajos y estado fisico. El check-in no: se registra antes
-    de la entrega (UAT-009)."""
+    de ingreso: trabajos y lo que exige recibir el equipo
+    (``faltantes_para_recepcion``). El check-in no: se registra antes de la
+    entrega (UAT-009)."""
     faltan = []
     if not any(
         detalle.estado is not EstadoReparacionDetail.CANCELADO
         for detalle in orden.reparaciones_detail
     ):
         faltan.append("cargar al menos un trabajo")
+    return faltan + faltantes_para_recepcion(orden)
+
+
+def faltantes_para_recepcion(orden: OrdenReparacion) -> list[str]:
+    """Lo que exige recibir el equipo en el mostrador (confirmar la
+    custodia junto con el comprobante): el estado fisico (DEC-UX-03: en el
+    formato unificado, las observaciones del equipo) y la respuesta a «¿Se
+    pudieron verificar las funcionalidades del equipo?» (DEC-AJ-07,
+    obligatoria e informativa)."""
+    faltan = []
     datos = orden.recepcion.datos if orden.recepcion else None
-    # DEC-UX-03: en el formato unificado, las observaciones del equipo.
     if not estado_fisico_registrado(datos):
         faltan.append("registrar el estado fisico del equipo")
+    if not verificacion_registrada(datos):
+        faltan.append(
+            "responder si se pudieron verificar las funcionalidades del equipo"
+        )
     return faltan
 
 

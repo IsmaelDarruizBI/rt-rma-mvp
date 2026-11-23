@@ -20,9 +20,11 @@ def crear_con_recepcion(
     observaciones: str | None = OBSERVACIONES,
     notas_internas: str | None = NOTA_INTERNA,
     accesorios: tuple[str, ...] = ("Cargador",),
+    funcionalidades_verificadas: bool | None = True,
 ) -> str:
     """CLIENTE_EXTERNO recien creada, con los datos del ingreso (sin
-    check-in: se registra antes de la entrega)."""
+    check-in: se registra antes de la entrega). DEC-AJ-07: con la respuesta
+    a la verificacion de funcionalidades (informativa)."""
     return ok(
         cliente.post(
             "/api/orders",
@@ -43,6 +45,9 @@ def crear_con_recepcion(
                     "accesorios": list(accesorios),
                     "observaciones": observaciones,
                     "notas_internas": notas_internas,
+                    "funcionalidades_verificadas": (
+                        funcionalidades_verificadas
+                    ),
                 },
             },
         )

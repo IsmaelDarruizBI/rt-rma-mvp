@@ -24,8 +24,8 @@ from tests.fixtures import iteracion1 as it
 from tests.fixtures.api_definicion import definir_desde_revision_y_finalizar
 from tests.fixtures.custodia import (
     checkin_si_falta,
-    confirmar_recepcion,
     entregar,
+    enviar_a_revision,
 )
 
 
@@ -107,13 +107,8 @@ def test_cliente_externo_se_entrega_sin_aviso(cliente):
 
 def test_sin_reparacion_se_entrega_sin_aviso(cliente):
     orden_id = f.crear(cliente)
-    f.ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/send-to-review",
-            json={"usuario_id": f.RECEPCION},
-        )
-    )
-    confirmar_recepcion(cliente, orden_id)
+    # DEC-AJ-05: el comprobante de recepcion confirma la custodia.
+    f.ok(enviar_a_revision(cliente, orden_id))
     f.ok(
         cliente.post(
             f"/api/orders/{orden_id}/technical-review",

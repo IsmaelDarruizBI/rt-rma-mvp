@@ -119,6 +119,8 @@ def _ingresar(
                     "estado_fisico": estado_fisico,
                     "accesorios": list(accesorios),
                     "observaciones": observaciones,
+                    # DEC-AJ-07: la respuesta que exige recibir el equipo.
+                    "funcionalidades_verificadas": True,
                 },
             },
         )
@@ -135,8 +137,8 @@ def _confirmar(cliente, orden_id, observaciones=None, usuario=RECEPCION):
 def _a_revision(cliente, orden_id):
     """Sin diagnostico: PROC-REP-055 -> 050 -> 060. En CLIENTE_EXTERNO es
     el camino que emite el comprobante de recepcion (el ingreso inicial
-    emite el de ingreso y autorizacion) y donde la recepcion se confirma
-    aparte."""
+    emite el de ingreso y autorizacion). DEC-AJ-05: ese comprobante
+    confirma la custodia en el mismo acto."""
     return cliente.post(
         f"/api/orders/{orden_id}/send-to-review",
         json={"usuario_id": RECEPCION},
@@ -295,6 +297,13 @@ def test_1_datos_fisicos_de_recepcion(cliente):
         "checkin": None,
         # DEC-UX-03: registrado con los datos separados (sin texto unico).
         "observaciones_unificadas": False,
+        # DEC-AJ-05, 07 y 06: la verificacion del ingreso (informativa, no
+        # es el check-in), sin trabajo solicitado y con el IMEI vacio sin la
+        # marca «IMEI no disponible».
+        "trabajo_solicitado": None,
+        "funcionalidades_verificadas": True,
+        "observaciones_verificacion": None,
+        "imei_no_disponible": False,
     }
     assert recepcion["registrado_por"] == RECEPCION
     assert recepcion["registrado_en"].startswith("2026-10-01T13:00")
@@ -351,9 +360,9 @@ def test_2_accesorios_y_observaciones(cliente, reloj):
     assert len(mismo["recepcion"]["versiones_anteriores"]) == 1
 
     # En el ingreso inicial la confirmacion va con el comprobante de
-    # ingreso; enviada a revision, se confirma aparte.
-    ok(_a_revision(cliente, orden_id))
-    ok(_confirmar(cliente, orden_id))
+    # ingreso; enviada a revision, con el de recepcion (DEC-AJ-05).
+    orden = ok(_a_revision(cliente, orden_id))
+    assert orden["custodia"]["estado"] == "EN_CUSTODIA"
     # Confirmada: los datos no se corrigen, se complementan.
     mensaje = conflicto(_corregir(cliente, orden_id, estado_fisico="Otro"))
     assert "observacion complementaria" in mensaje
@@ -386,16 +395,17 @@ def test_3_comprobante_de_recepcion_emitido(cliente):
         )
     )
 
-    # Enviada a revision (sin diagnostico) se emite (PROC-REP-060).
+    # Enviada a revision (sin diagnostico) se emite (PROC-REP-060), con la
+    # custodia confirmada en el mismo acto (DEC-AJ-05).
     ok(_a_revision(cliente, orden_id))
     emitido = _vigente(cliente, orden_id, "COMPROBANTE_RECEPCION")
     assert emitido["id"] == f"{orden_id}-REC-01"
-    assert emitido["contenido"]["recepcion_fisica"] == "PENDIENTE_CONFIRMACION"
-    ok(_confirmar(cliente, orden_id))
+    assert emitido["contenido"]["recepcion_fisica"] == "EN_CUSTODIA"
+    ok(_nota(cliente, orden_id, "El cliente aviso que tiene clave."))
     ok(
         cliente.post(
             f"/api/orders/{orden_id}/documents/reception-receipt",
-            json={"usuario_id": RECEPCION, "motivo": "Custodia confirmada"},
+            json={"usuario_id": RECEPCION, "motivo": "Nota agregada"},
         )
     )
 
@@ -426,7 +436,6 @@ def test_3_comprobante_de_recepcion_emitido(cliente):
 def test_4_el_comprobante_no_implica_autorizacion_comercial(cliente):
     orden_id = _ingresar(cliente)
     ok(_a_revision(cliente, orden_id))
-    ok(_confirmar(cliente, orden_id))
     ok(
         cliente.post(
             f"/api/orders/{orden_id}/technical-review",
@@ -460,42 +469,47 @@ def test_4_el_comprobante_no_implica_autorizacion_comercial(cliente):
 # --- 5/6. Custodia independiente del comprobante -----------------------------
 
 
-def test_5_la_custodia_se_confirma_aparte_del_comprobante(cliente):
-    # Comprobante emitido sin custodia confirmada.
+def test_5_la_custodia_se_confirma_con_el_comprobante_de_recepcion(
+    cliente, tmp_path
+):
+    """DEC-AJ-05: en el ingreso sin trabajos de Cliente Externo, generar el
+    comprobante de recepcion y confirmar la custodia es un solo acto. La
+    confirmacion sigue siendo un hecho propio (quien y cuando), una sola
+    vez, y exige el estado fisico."""
     con_comprobante = _ingresar(cliente)
     orden = ok(_a_revision(cliente, con_comprobante))
     assert orden["custodia"]["comprobante_recepcion_emitido"] is True
-    assert orden["custodia"]["estado"] == "PENDIENTE_CONFIRMACION"
+    assert orden["custodia"]["estado"] == "EN_CUSTODIA"
+    assert orden["custodia"]["confirmada_por"] == RECEPCION
+    assert orden["custodia"]["confirmada_en"].startswith("2026-10-01")
+    # La confirmacion queda en el historial antes de 050/060.
+    assert ids(orden)[-3:] == ["ACC-REP-024", "PROC-REP-050", "PROC-REP-060"]
     contenido = _vigente(cliente, con_comprobante, "COMPROBANTE_RECEPCION")[
         "contenido"
     ]
-    assert contenido["recepcion_fisica"] == "PENDIENTE_CONFIRMACION"
-    assert contenido["confirmada_por"] is None
+    assert contenido["recepcion_fisica"] == "EN_CUSTODIA"
+    assert contenido["confirmada_por"]["id"] == RECEPCION
 
     # En el ingreso inicial no se confirma suelta: la confirma el
     # comprobante de ingreso y autorizacion.
     inicial = _ingresar(cliente)
     assert "comprobante de ingreso" in conflicto(_confirmar(cliente, inicial))
-    # La confirmacion es un hecho propio, aparte del comprobante emitido.
-    sin_comprobante = _ingresar(cliente)
-    ok(_a_revision(cliente, sin_comprobante))
-    orden = ok(_confirmar(cliente, sin_comprobante, "Queda en el local."))
-    assert orden["custodia"]["estado"] == "EN_CUSTODIA"
-    assert orden["custodia"]["confirmada_por"] == RECEPCION
-    assert orden["custodia"]["confirmada_en"].startswith("2026-10-01")
-    assert orden["recepcion"]["confirmacion"]["observaciones"] == (
-        "Queda en el local."
-    )
-    assert ids(orden)[-1] == "ACC-REP-024"
-    # Una sola confirmacion; un tecnico no confirma.
-    conflicto(_confirmar(cliente, sin_comprobante))
+    # Una sola confirmacion.
+    conflicto(_confirmar(cliente, con_comprobante))
+    # Un tecnico no envia a revision ni confirma.
     otra = _ingresar(cliente)
-    ok(_a_revision(cliente, otra))
+    conflicto(
+        cliente.post(
+            f"/api/orders/{otra}/send-to-review",
+            json={"usuario_id": TECNICO},
+        )
+    )
     conflicto(_confirmar(cliente, otra, usuario=TECNICO))
-    # Sin estado fisico no se confirma.
+    # Sin estado fisico no se recibe: no se envia ni queda nada a medias.
     sin_estado = _ingresar(cliente, estado_fisico=None)
-    ok(_a_revision(cliente, sin_estado))
-    assert "estado fisico" in conflicto(_confirmar(cliente, sin_estado))
+    antes = archivo(tmp_path, sin_estado)
+    assert "estado fisico" in conflicto(_a_revision(cliente, sin_estado))
+    assert archivo(tmp_path, sin_estado) == antes
 
 
 def test_6_orden_anterior_se_regulariza_antes_de_entregar(cliente, tmp_path):
@@ -539,25 +553,28 @@ def test_6_orden_anterior_se_regulariza_antes_de_entregar(cliente, tmp_path):
 
 
 def test_7_un_documento_emitido_no_cambia(cliente, reloj, tmp_path):
+    # DEC-AJ-05: con la custodia confirmada junto con el comprobante, los
+    # datos del ingreso ya no se corrigen: lo que cambia la Orden despues
+    # es una observacion complementaria.
     orden_id = _ingresar(cliente)
     ok(_a_revision(cliente, orden_id))
     original = _vigente(cliente, orden_id, "COMPROBANTE_RECEPCION")
 
     reloj.avanzar(minutes=10)
-    ok(_corregir(cliente, orden_id, estado_fisico="Tapa trasera rota."))
+    ok(_nota(cliente, orden_id, "Tapa trasera rota."))
 
     # El emitido conserva lo que se entrego; la Orden tiene el dato nuevo.
     guardado = ok(
         cliente.get(f"/api/orders/{orden_id}/documents/{original['id']}")
     )
     assert guardado["contenido"] == original["contenido"]
-    assert guardado["contenido"]["estado_fisico"] == ESTADO
+    assert guardado["contenido"]["notas"] == []
     previa = ok(
         cliente.get(
             f"/api/orders/{orden_id}/documents/preview/COMPROBANTE_RECEPCION"
         )
     )
-    assert previa["contenido"]["estado_fisico"] == "Tapa trasera rota."
+    assert previa["contenido"]["notas"] == ["Tapa trasera rota."]
 
     # Version nueva: con motivo, referencia a la anterior y la conserva.
     assert "motivo" in conflicto(
@@ -582,7 +599,7 @@ def test_7_un_documento_emitido_no_cambia(cliente, reloj, tmp_path):
     nueva = _vigente(cliente, orden_id, "COMPROBANTE_RECEPCION")
     assert nueva["reemplaza_a"] == original["id"]
     assert nueva["motivo"] == "Estado fisico corregido"
-    assert nueva["contenido"]["estado_fisico"] == "Tapa trasera rota."
+    assert nueva["contenido"]["notas"] == ["Tapa trasera rota."]
     # La version a pedido queda como ACC-REP-002 (emitir el comprobante
     # de recepcion); ACC-REP-026 es la entrega, no una emision.
     assert ids(orden)[-1] == "ACC-REP-002"
@@ -615,14 +632,15 @@ def test_8_un_reintento_no_duplica_documentos(cliente, tmp_path):
         assert len(orden["documentos_emitidos"]) == 1
     assert archivo(tmp_path, orden_id) == antes
 
-    ok(_confirmar(cliente, orden_id))
+    # Con contenido nuevo (una observacion visible), una sola version mas.
+    ok(_nota(cliente, orden_id, "El cliente aviso que tiene clave."))
     for _ in range(2):
         orden = ok(
             cliente.post(
                 f"/api/orders/{orden_id}/documents/reception-receipt",
                 json={
                     "usuario_id": RECEPCION,
-                    "motivo": "Custodia confirmada",
+                    "motivo": "Nota agregada",
                 },
             )
         )

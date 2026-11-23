@@ -35,7 +35,11 @@ from tests.fixtures.api_salidas import (
     tomada,
 )
 from tests.fixtures.cancelacion_heredada import cancelada_heredada
-from tests.fixtures.custodia import confirmar_recepcion, no_recibido
+from tests.fixtures.custodia import (
+    confirmar_recepcion,
+    no_recibido,
+    revision_anterior_sin_custodia,
+)
 
 MOTIVO = "El cliente nunca trajo el equipo."
 
@@ -51,16 +55,12 @@ def _sin_custodia(cliente) -> str:
     confirmar.
 
     En CLIENTE_EXTERNO el ingreso inicial confirma la recepcion con el
-    comprobante de ingreso; sin confirmar queda una Orden enviada a
-    revision (que emite el de recepcion) todavia no revisada.
+    comprobante de ingreso y, sin trabajos, con el de recepcion
+    (DEC-AJ-05). Sin confirmar queda una Orden enviada a revision antes de
+    DEC-AJ-05 (las del UAT) todavia no revisada.
     """
     orden_id = crear(cliente)
-    ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/send-to-review",
-            json={"usuario_id": RECEPCION},
-        )
-    )
+    revision_anterior_sin_custodia(cliente, orden_id)
     return orden_id
 
 

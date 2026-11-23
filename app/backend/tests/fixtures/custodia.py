@@ -11,6 +11,15 @@ confirma al generar el comprobante de ingreso y autorizacion, nunca por
 separado. Ahi estos atajos solo dejan el dato que el comprobante exige (el
 estado fisico).
 
+Ingreso sin trabajos (DEC-AJ-05): el comprobante de recepcion que se
+genera al enviar a revision confirma tambien la custodia, y exige lo mismo
+que el de ingreso: ``enviar_a_revision`` deja esos datos antes de enviarla.
+
+Verificacion del ingreso (DEC-AJ-07): la respuesta a «¿Se pudieron
+verificar las funcionalidades del equipo?» es obligatoria para recibir el
+equipo con el comprobante; ``preparar_ingreso`` la registra (Si) si falta.
+Es informativa: no es el check-in de entrega.
+
 Check-in (UAT-009): se registra antes de la entrega, con la reparacion
 lista. ``entregar`` lo registra (realizado) si la Orden lo ofrece y
 todavia no lo tiene. DEC-AJ-04 permite registrarlo dentro de la misma
@@ -35,28 +44,59 @@ def en_ingreso_inicial(orden: dict) -> bool:
 
 
 def preparar_ingreso(cliente, orden_id: str, usuario=RECEPCION) -> dict:
-    """Registra el estado fisico si falta; devuelve la Orden.
+    """Registra el estado fisico y la verificacion del ingreso si faltan;
+    devuelve la Orden.
 
-    Es el dato que exige el comprobante de ingreso y autorizacion (el
-    check-in ya no: se registra antes de la entrega). Lo que ya este
-    registrado se conserva.
+    Son los datos que exige recibir el equipo con el comprobante (el de
+    ingreso y autorizacion o, sin trabajos, el de recepcion; DEC-AJ-05 y
+    DEC-AJ-07). El check-in no: se registra antes de la entrega. Lo que ya
+    este registrado se conserva.
     """
     orden = cliente.get(f"/api/orders/{orden_id}").json()
     datos = (orden["recepcion"] or {}).get("datos") or {}
-    if datos.get("estado_fisico"):
+    if (
+        datos.get("estado_fisico")
+        and datos.get("funcionalidades_verificadas") is not None
+    ):
         return orden
     respuesta = cliente.put(
         f"/api/orders/{orden_id}/reception",
         json={
             "usuario_id": usuario,
-            "estado_fisico": ESTADO_FISICO,
+            "estado_fisico": datos.get("estado_fisico") or ESTADO_FISICO,
             "accesorios": datos.get("accesorios") or [],
             "observaciones": datos.get("observaciones"),
             "notas_internas": datos.get("notas_internas"),
+            "observaciones_unificadas": datos.get(
+                "observaciones_unificadas", False
+            ),
+            "funcionalidades_verificadas": (
+                True
+                if datos.get("funcionalidades_verificadas") is None
+                else datos["funcionalidades_verificadas"]
+            ),
         },
     )
     assert respuesta.status_code == 200, respuesta.text
     return respuesta.json()
+
+
+def enviar_a_revision(cliente, orden_id: str, usuario=RECEPCION):
+    """``POST .../send-to-review`` (la respuesta, sin validar).
+
+    En Cliente Externo con la custodia pendiente, antes deja los datos que
+    exige el comprobante de recepcion, que la confirma (DEC-AJ-05).
+    """
+    orden = cliente.get(f"/api/orders/{orden_id}").json()
+    if (
+        orden["origen"] == "CLIENTE_EXTERNO"
+        and orden["custodia"]["estado"] == "PENDIENTE_CONFIRMACION"
+    ):
+        preparar_ingreso(cliente, orden_id)
+    return cliente.post(
+        f"/api/orders/{orden_id}/send-to-review",
+        json={"usuario_id": usuario},
+    )
 
 
 def registrar_checkin(
@@ -142,3 +182,40 @@ def no_recibido(
         f"/api/orders/{orden_id}/reception/not-received",
         json={"usuario_id": usuario, "motivo": motivo},
     )
+
+
+def revision_anterior_sin_custodia(cliente, orden_id: str) -> dict:
+    """Una Orden de Cliente Externo enviada a revision ANTES de DEC-AJ-05:
+    con el comprobante de recepcion emitido y la custodia sin confirmar,
+    como quedaron las Ordenes del UAT.
+
+    Hoy ese comprobante confirma la custodia en el mismo acto. Para probar
+    lo que sigue valiendo con la custodia pendiente (equipo no recibido,
+    ejecucion bloqueada, entrega bloqueada) se envia con el flujo vigente y
+    despues el archivo queda como lo dejaba el anterior: sin la
+    confirmacion ni su paso, y el comprobante con la custodia pendiente.
+    Devuelve la Orden leida por la API.
+    """
+    import json
+
+    respuesta = enviar_a_revision(cliente, orden_id)
+    assert respuesta.status_code == 200, respuesta.text
+    directorio = cliente.app.state.settings.data_dir
+    ruta = directorio / "ordenes" / f"{orden_id}.json"
+    datos = json.loads(ruta.read_text(encoding="utf-8"))
+    datos["recepcion"]["confirmacion"] = None
+    datos["historial"] = [
+        paso
+        for paso in datos["historial"]
+        if paso["referencia_id"] != "ACC-REP-024"
+    ]
+    for documento in datos["documentos"]["emitidos"]:
+        contenido = documento["contenido"]
+        if contenido["tipo"] == "COMPROBANTE_RECEPCION":
+            contenido["recepcion_fisica"] = "PENDIENTE_CONFIRMACION"
+            contenido["confirmada_por"] = None
+            contenido["confirmada_en"] = None
+    ruta.write_text(json.dumps(datos, ensure_ascii=False), encoding="utf-8")
+    orden = cliente.get(f"/api/orders/{orden_id}").json()
+    assert orden["custodia"]["estado"] == "PENDIENTE_CONFIRMACION"
+    return orden

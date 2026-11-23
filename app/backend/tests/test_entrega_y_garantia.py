@@ -192,13 +192,10 @@ def test_solo_entregan_los_roles_de_entrega(cliente, tmp_path):
 
 
 def test_la_custodia_sin_confirmar_es_el_bloqueo_de_entregar(cliente):
-    orden_id = f.crear(cliente)
-    f.ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/send-to-review",
-            json={"usuario_id": f.RECEPCION},
-        )
-    )
+    # DEC-AJ-05: en Cliente Externo el comprobante de recepcion ya confirma
+    # la custodia; la garantia RMA la sigue confirmando aparte, asi que es
+    # la que llega a entregar con la custodia pendiente.
+    orden_id = it.recorrido_garantia_vigente(cliente)
     f.ok(
         cliente.post(
             f"/api/orders/{orden_id}/technical-review",
@@ -258,15 +255,10 @@ def test_un_solo_comprobante_de_entrega_y_garantia(cliente):
 
 def test_sin_reparacion_es_un_comprobante_de_devolucion(cliente):
     orden_id = f.crear(cliente)
-    f.ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/send-to-review",
-            json={"usuario_id": f.RECEPCION},
-        )
-    )
-    from tests.fixtures.custodia import confirmar_recepcion
+    # DEC-AJ-05: el comprobante de recepcion confirma la custodia.
+    from tests.fixtures.custodia import enviar_a_revision
 
-    confirmar_recepcion(cliente, orden_id)
+    f.ok(enviar_a_revision(cliente, orden_id))
     f.ok(
         cliente.post(
             f"/api/orders/{orden_id}/technical-review",

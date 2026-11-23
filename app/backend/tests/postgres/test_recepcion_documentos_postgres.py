@@ -33,7 +33,6 @@ from app.application import (  # noqa: E402
     agregar_foto,
     agregar_observacion_recepcion,
     cancelar_orden,
-    confirmar_recepcion,
     crear_orden,
     definir_reparacion,
     emitir_comprobante_recepcion,
@@ -1274,18 +1273,18 @@ def test_a4_los_comandos_de_recepcion_funcionan_sobre_postgres(
 
 
 def _recibida_por_revision(contexto, repo, codigo):
-    orden = enviar_a_revision(
-        contexto, orden_id=codigo, usuario_id=f.RECEPCION
-    )
-    assert repo.obtener(codigo) == orden
+    """DEC-AJ-05: el comprobante de recepcion confirma la custodia en el
+    mismo acto; antes se registran los datos que exige."""
     orden = registrar_recepcion(
         contexto,
         orden_id=codigo,
         usuario_id=f.RECEPCION,
-        datos=DatosRecepcion(estado_fisico="Sano."),
+        datos=DatosRecepcion(
+            estado_fisico="Sano.", funcionalidades_verificadas=True
+        ),
     )
     assert repo.obtener(codigo) == orden
-    orden = confirmar_recepcion(
+    orden = enviar_a_revision(
         contexto, orden_id=codigo, usuario_id=f.RECEPCION
     )
     assert repo.obtener(codigo) == orden

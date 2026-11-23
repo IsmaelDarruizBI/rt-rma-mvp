@@ -32,6 +32,7 @@ from app.services.exceptions import PrecondicionInvalidaError
 from app.services.operativa import cambios_de_insumo
 from app.services.roles import cambio_de_permiso, permisos_de
 from tests.fixtures import api_salidas as f
+from tests.fixtures.custodia import enviar_a_revision
 
 FECHA = datetime(2026, 11, 20, 12, tzinfo=timezone.utc)
 ADMIN = Usuario(id="ADMIN-001", nombre="A", rol=RolUsuario.ADMINISTRADOR)
@@ -350,15 +351,15 @@ def test_enviar_a_revision_sigue_el_permiso_configurado(cliente, monkeypatch):
         "predeterminados",
         (RolUsuario.COORDINADOR_RMA,),
     )
-    f.conflicto(
-        cliente.post(
-            f"/api/orders/{orden}/send-to-review",
-            json={"usuario_id": f.RECEPCION},
-        )
+    f.conflicto(enviar_a_revision(cliente, orden, f.RECEPCION))
+    # DEC-AJ-05: en Cliente Externo el mismo acto confirma la custodia,
+    # que exige ademas su permiso (CUSTODIA).
+    assert "RECEPCION o ADMINISTRADOR" in f.conflicto(
+        enviar_a_revision(cliente, orden, f.COORDINADOR)
     )
-    f.ok(
-        cliente.post(
-            f"/api/orders/{orden}/send-to-review",
-            json={"usuario_id": f.COORDINADOR},
-        )
+    monkeypatch.setattr(
+        permisos.CUSTODIA,
+        "predeterminados",
+        (RolUsuario.RECEPCION, RolUsuario.COORDINADOR_RMA),
     )
+    f.ok(enviar_a_revision(cliente, orden, f.COORDINADOR))

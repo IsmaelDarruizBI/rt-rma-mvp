@@ -653,7 +653,10 @@ def post_enviar_a_revision(
     """Enviar una Orden sin diagnostico a revision (ACT-RECEP).
 
     Compone PROC-REP-045 (No) -> 055 -> 050 y, si la politica del Origen
-    lo exige, 060 (VAR-REP-001/002). La Orden queda EN_REVISION.
+    lo exige, 060 (VAR-REP-001/002). La Orden queda EN_REVISION. Es el
+    ingreso sin trabajos estandarizados (DEC-AJ-05): en Cliente Externo el
+    comprobante de recepcion confirma la custodia en el mismo acto. Un
+    reintento sobre la Orden ya enviada la devuelve sin cambios.
     """
     orden = enviar_a_revision(
         contexto, orden_id=orden_id, usuario_id=cuerpo.usuario_id
@@ -1229,6 +1232,7 @@ def put_recepcion(
         datos=cuerpo.datos(),
         equipo=cuerpo.equipo.a_dominio() if cuerpo.equipo else None,
         motivo=cuerpo.motivo,
+        conservar=cuerpo.conservar(),
     )
     return _salida(orden, contexto)
 

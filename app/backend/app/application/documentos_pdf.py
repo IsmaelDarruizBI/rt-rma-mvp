@@ -239,6 +239,9 @@ def _recepcion(
     """Como se recibio el equipo. Solo lo visible: nunca notas internas."""
     hoja.titulo("Recepción del equipo")
     hoja.bajar(2)
+    # DEC-AJ-05: lo que pidio el cliente, en texto libre.
+    if contenido.trabajo_solicitado:
+        _dato(hoja, "Trabajo solicitado", contenido.trabajo_solicitado)
     unificadas = observaciones_unificadas(contenido)
     # DEC-UX-03: con el texto unico no hay un estado fisico aparte (ya salio
     # una vez como «Observaciones del equipo»).
@@ -247,6 +250,12 @@ def _recepcion(
     # Ya no se piden al ingresar: solo si la Orden los tiene registrados.
     if contenido.accesorios:
         _dato(hoja, "Accesorios", ", ".join(contenido.accesorios))
+    # DEC-AJ-07: informativa; no es el check-in de entrega.
+    if contenido.funcionalidades_verificadas is not None:
+        respuesta = "Sí" if contenido.funcionalidades_verificadas else "No"
+        if contenido.observaciones_verificacion:
+            respuesta += f". {contenido.observaciones_verificacion}"
+        _dato(hoja, "Funcionalidades verificadas al ingresar", respuesta)
     if contenido.checkin is not None:
         _dato(
             hoja,

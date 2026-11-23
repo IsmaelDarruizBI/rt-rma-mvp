@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings
 from app.main import create_app
 from tests.fixtures.api_definicion import definir_y_finalizar
-from tests.fixtures.custodia import RECEPTOR, confirmar_recepcion
+from tests.fixtures.custodia import RECEPTOR, preparar_ingreso
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     COORDINADOR,
@@ -277,6 +277,9 @@ def test_una_orden_sin_reparacion_entregada_queda_cerrada(cliente, tmp_path):
             },
         },
     ).json()["id"]
+    # DEC-AJ-05: el comprobante de recepcion confirma la custodia; antes,
+    # los datos que exige recibir el equipo.
+    preparar_ingreso(cliente, orden_id)
     pasos = [
         (f"/api/orders/{orden_id}/send-to-review", {"usuario_id": RECEPCION}),
         (
@@ -293,12 +296,9 @@ def test_una_orden_sin_reparacion_entregada_queda_cerrada(cliente, tmp_path):
             {"usuario_id": ADMINISTRADOR, **RECEPTOR},
         ),
     ]
-    for numero, (ruta, cuerpo) in enumerate(pasos):
+    for ruta, cuerpo in pasos:
         respuesta = cliente.post(ruta, json=cuerpo)
         assert respuesta.status_code == 200, (ruta, respuesta.text)
-        if numero == 0:
-            # Enviada a revision, la recepcion se confirma aparte.
-            confirmar_recepcion(cliente, orden_id)
     entregada = respuesta.json()
     assert entregada["estado_workflow"] == "ENTREGADA"
 

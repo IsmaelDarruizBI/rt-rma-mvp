@@ -52,7 +52,12 @@ from tests.fixtures.api_salidas import (
     repo_ordenes,
     tomada,
 )
-from tests.fixtures.custodia import confirmar_recepcion, entregar, no_recibido
+from tests.fixtures.custodia import (
+    confirmar_recepcion,
+    entregar,
+    enviar_a_revision,
+    no_recibido,
+)
 
 
 @pytest.fixture
@@ -230,12 +235,7 @@ def test_sin_detalles_sin_custodia_definida(cliente, tmp_path):
 
 def test_sin_detalles_con_equipo_en_custodia(cliente):
     orden_id = crear(cliente)
-    ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/send-to-review",
-            json={"usuario_id": RECEPCION},
-        )
-    )
+    ok(enviar_a_revision(cliente, orden_id, RECEPCION))
     confirmar_recepcion(cliente, orden_id)
     assert "devolucion" in conflicto(cancelar_orden(cliente, orden_id))
     assert "REGISTRAR_DEVOLUCION" in codigos(_orden(cliente, orden_id))
@@ -529,12 +529,7 @@ def test_rt_sin_reparacion_informa_a_gestion_rt_antes_de_devolver(
         },
     )
     orden_id = ok(respuesta)["id"]
-    ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/send-to-review",
-            json={"usuario_id": RECEPCION},
-        )
-    )
+    ok(enviar_a_revision(cliente, orden_id, RECEPCION))
     orden = _revisada_sin_reparacion(cliente, orden_id)
 
     assert orden["custodia"]["estado"] == "EN_CUSTODIA"
@@ -563,12 +558,7 @@ def test_cliente_sin_reparacion_con_custodia_notifica_y_entrega(
     cliente, tmp_path
 ):
     orden_id = crear(cliente)
-    ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/send-to-review",
-            json={"usuario_id": RECEPCION},
-        )
-    )
+    ok(enviar_a_revision(cliente, orden_id, RECEPCION))
     confirmar_recepcion(cliente, orden_id)
     orden = _revisada_sin_reparacion(cliente, orden_id)
 

@@ -178,6 +178,11 @@ class ContenidoComprobanteRecepcion(_ContenidoBase):
     # DEC-UX-03: ``observaciones`` es el texto unico del equipo.
     observaciones_unificadas: bool = False
     notas: list[str] = Field(default_factory=list)
+    # DEC-AJ-05, DEC-AJ-07 y DEC-AJ-06: vacios en los emitidos antes.
+    trabajo_solicitado: str | None = None
+    funcionalidades_verificadas: bool | None = None
+    observaciones_verificacion: str | None = None
+    imei_no_disponible: bool = False
     registrado_por: UsuarioEnDocumento | None = None
     registrado_en: datetime | None = None
     recepcion_fisica: EstadoCustodia
@@ -326,6 +331,12 @@ class ContenidoComprobanteIngreso(_ContenidoBase):
     observaciones_unificadas: bool = False
     notas: list[str] = Field(default_factory=list)
     checkin: bool | None = None
+    # DEC-AJ-05, DEC-AJ-07 y DEC-AJ-06: vacios en los emitidos antes. La
+    # verificacion del ingreso es informativa: no es ``checkin``.
+    trabajo_solicitado: str | None = None
+    funcionalidades_verificadas: bool | None = None
+    observaciones_verificacion: str | None = None
+    imei_no_disponible: bool = False
     registrado_por: UsuarioEnDocumento | None = None
     recepcion_fisica: EstadoCustodia
     confirmada_por: UsuarioEnDocumento | None = None

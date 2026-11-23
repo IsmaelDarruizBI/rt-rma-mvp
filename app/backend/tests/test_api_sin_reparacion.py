@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
-from tests.fixtures.custodia import entregar
+from tests.fixtures.custodia import entregar, enviar_a_revision
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     RECEPCION,
@@ -58,10 +58,7 @@ def _revisada(cliente, orden_id: str) -> dict:
 
 
 def _enviada_y_revisada(cliente, orden_id: str) -> dict:
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/send-to-review",
-        json={"usuario_id": RECEPCION},
-    )
+    respuesta = enviar_a_revision(cliente, orden_id, RECEPCION)
     assert respuesta.status_code == 200, respuesta.text
     return _revisada(cliente, orden_id)
 
@@ -95,9 +92,12 @@ def _assert_069(orden: dict) -> None:
 def test_cliente_externo_sin_reparacion_de_punta_a_punta(cliente):
     orden_id = _crear_orden_cliente(cliente)
     orden = _enviada_y_revisada(cliente, orden_id)
+    # DEC-AJ-05: el equipo ya esta en custodia (comprobante de recepcion),
+    # asi que tambien se ofrece devolverlo sin reparar (DC31).
     assert _codigos(orden) == [
         "AGREGAR_DETALLE_DESDE_REVISION",
         "FINALIZAR_SIN_REPARACION",
+        "REGISTRAR_DEVOLUCION",
     ]
 
     respuesta = _sin_reparacion(
@@ -119,12 +119,12 @@ def test_cliente_externo_sin_reparacion_de_punta_a_punta(cliente):
     assert orden["puede_entregar"] is True
     assert "PROC-REP-266" not in _ids(orden)
     # Sin trabajos realizados no hay garantia que definir: no se pide el
-    # check-in (UAT-009). DEC-AJ-04: lo que bloquea la entrega lo informa
-    # el backend; aca, la recepcion fisica sin confirmar.
+    # check-in (UAT-009). DEC-AJ-05: la custodia ya se confirmo con el
+    # comprobante de recepcion, asi que nada bloquea la entrega (el
+    # bloqueo por custodia pendiente: test_entrega_y_garantia.py).
     assert _codigos(orden) == ["ENTREGAR"]
-    assert orden["acciones_disponibles"][0]["bloqueo"] == (
-        "Falta confirmar la recepción física del equipo"
-    )
+    assert orden["acciones_disponibles"][0]["bloqueo"] is None
+    assert orden["custodia"]["estado"] == "EN_CUSTODIA"
 
     # 280 (sin garantia de reparacion) -> 270 -> EVT-REP-999.
     respuesta = entregar(cliente, orden_id, ADMINISTRADOR)
@@ -245,10 +245,7 @@ def test_sin_reparacion_solo_tras_065_sin_detalles_y_una_vez(cliente):
     assert _sin_reparacion(cliente, orden_id).status_code == 409
 
     # EN_REVISION pero antes de 065.
-    cliente.post(
-        f"/api/orders/{orden_id}/send-to-review",
-        json={"usuario_id": RECEPCION},
-    )
+    enviar_a_revision(cliente, orden_id, RECEPCION)
     assert _sin_reparacion(cliente, orden_id).status_code == 409
 
     # Con un Detalle ya definido luego de la revision.

@@ -59,11 +59,13 @@ from app.services import (
     estado_custodia,
     evidencias_de_equipo,
     faltantes_para_ingreso,
+    faltantes_para_recepcion,
     fue_priorizada,
     garantia_ajustable,
     motivo_bloqueo_ejecucion,
     pendiente_de_autorizacion,
     permisos,
+    recepcion_con_el_comprobante,
     requiere_definicion,
     revision_vigente,
     toma_activa,
@@ -462,11 +464,25 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
         # (MVP v2) cerrarla es generar el comprobante de ingreso, que
         # confirma, finaliza y autoriza en un solo paso.
         if not orden.reparaciones_detail:
+            # DEC-AJ-05: en el ingreso de CLIENTE_EXTERNO el comprobante de
+            # recepcion confirma la custodia en el mismo acto: pide lo mismo
+            # que recibir el equipo (estado fisico y verificacion).
+            faltan = (
+                faltantes_para_recepcion(orden)
+                if recepcion_con_el_comprobante(orden)
+                else []
+            )
             acciones.append(
                 AccionDisponible(
                     codigo=ACCION_ENVIAR_A_REVISION,
                     etiqueta="Enviar a revision tecnica (sin diagnostico)",
                     roles=permisos.ENVIAR_A_REVISION,
+                    bloqueo=(
+                        "Para generar el comprobante de recepcion falta "
+                        + "; ".join(faltan)
+                        if faltan
+                        else None
+                    ),
                 )
             )
         elif es_ingreso_inicial(orden):

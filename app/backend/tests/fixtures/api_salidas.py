@@ -324,17 +324,13 @@ def definida(cliente, *tipos, autorizar=True) -> str:
 def por_revision(cliente, *tipos) -> str:
     """CLIENTE_EXTERNO definida por el camino de revision (065 -> 075).
 
-    Recepcion la envia a revision, confirma la recepcion, el tecnico la
+    Recepcion la envia a revision (confirma la recepcion), el tecnico la
     revisa y Recepcion carga los trabajos y finaliza: quedan pendientes de
     la decision explicita del cliente (PROC-REP-129).
     """
     orden_id = crear(cliente)
-    ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/send-to-review",
-            json={"usuario_id": RECEPCION},
-        )
-    )
+    # DEC-AJ-05: el comprobante de recepcion confirma la custodia.
+    ok(custodia.enviar_a_revision(cliente, orden_id))
     custodia.confirmar_recepcion(cliente, orden_id)
     ok(
         cliente.post(

@@ -3,8 +3,11 @@
 Reglas centrales:
 
 - Comprobante != custodia. Emitir el comprobante de recepcion no prueba
-  que el equipo este en el local: la custodia se confirma explicitamente
-  (``confirmar_recepcion_fisica``), con usuario y fecha.
+  por si solo que el equipo este en el local: la custodia se confirma
+  explicitamente (``confirmar_recepcion_fisica``), con usuario y fecha.
+  En el ingreso de CLIENTE_EXTERNO esa confirmacion va en el mismo acto
+  que el comprobante: el de ingreso y autorizacion (BR-REP-046) o, sin
+  trabajos, el de recepcion al enviar a revision tecnica (DEC-AJ-05).
 - Los datos del ingreso se corrigen solo antes de confirmar; cada
   correccion conserva la version anterior. Despues se agregan
   observaciones complementarias, nunca se reescribe lo confirmado.
@@ -251,6 +254,10 @@ def normalizar_datos_recepcion(datos: DatosRecepcion | None) -> DatosRecepcion:
         checkin=datos.checkin,
         notas_internas=_texto(datos.notas_internas),
         observaciones_unificadas=datos.observaciones_unificadas,
+        trabajo_solicitado=_texto(datos.trabajo_solicitado),
+        funcionalidades_verificadas=datos.funcionalidades_verificadas,
+        observaciones_verificacion=_texto(datos.observaciones_verificacion),
+        imei_no_disponible=datos.imei_no_disponible,
     )
 
 
@@ -439,7 +446,25 @@ CAMPOS_DATOS = (
     "observaciones",
     "notas_internas",
     "observaciones_unificadas",
+    # DEC-AJ-05, DEC-AJ-07 y DEC-AJ-06.
+    "trabajo_solicitado",
+    "funcionalidades_verificadas",
+    "observaciones_verificacion",
+    "imei_no_disponible",
 )
+# Respuestas Si/No: se auditan como «Si» o «No» (``None``: sin responder).
+_RESPUESTAS = ("funcionalidades_verificadas",)
+# Marcas que valen ``False`` cuando no se registraron: ``False`` es «sin
+# dato» y marcarlas es registrar, no corregir.
+_MARCAS = ("imei_no_disponible",)
+
+
+def _dato_como_texto(campo: str, valor) -> str | None:
+    if campo in _RESPUESTAS and valor is not None:
+        return "Si" if valor else "No"
+    if campo in _MARCAS:
+        return "Si" if valor else None
+    return _como_texto(valor)
 
 
 def _como_texto(valor) -> str | None:
@@ -469,10 +494,11 @@ def cambios_del_ingreso(
                 )
             )
     for campo in CAMPOS_DATOS:
-        antes = _como_texto(
-            getattr(datos_anteriores, campo) if datos_anteriores else None
+        antes = _dato_como_texto(
+            campo,
+            getattr(datos_anteriores, campo) if datos_anteriores else None,
         )
-        despues = _como_texto(getattr(datos_nuevos, campo))
+        despues = _dato_como_texto(campo, getattr(datos_nuevos, campo))
         if antes != despues:
             cambios.append(
                 CambioDatoIngreso(campo=campo, anterior=antes, nuevo=despues)

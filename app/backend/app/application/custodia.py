@@ -12,6 +12,8 @@ Acciones transversales (``ACC-REP-023/024/025/027``): no mueven
 ``services.custodia``.
 """
 
+from collections.abc import Collection
+
 from app.domain.models import DatosRecepcion, Equipo, OrdenReparacion
 from app.services import (
     agregar_nota_recepcion,
@@ -35,6 +37,7 @@ def registrar_recepcion(
     datos: DatosRecepcion,
     equipo: Equipo | None = None,
     motivo: str | None = None,
+    conservar: Collection[str] = (),
 ) -> OrdenReparacion:
     """Recepcion registra o corrige los datos del ingreso.
 
@@ -42,11 +45,23 @@ def registrar_recepcion(
     (``cierre.registrar_checkin``) y la correccion conserva el que haya.
     ``equipo`` puede cambiar a otro producto del catalogo, a carga manual o
     mantener el producto que tenia (sin volver a consultarlo).
+
+    ``conservar``: datos de ``DatosRecepcion`` que el pedido no trae y que
+    quedan como estaban (los agregados despues, como el trabajo solicitado
+    o la verificacion de funcionalidades: un cliente anterior que no los
+    conoce no los borra).
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
     with orden_para_modificar(contexto, orden_id) as orden:
+        if conservar and orden.recepcion is not None:
+            datos = datos.model_copy(
+                update={
+                    campo: getattr(orden.recepcion.datos, campo)
+                    for campo in conservar
+                }
+            )
         if equipo is not None:
             equipo = equipo_desde_catalogo(
                 contexto, equipo, actual=orden.equipo
@@ -132,3 +147,4 @@ def agregar_observacion_recepcion(
         )
         contexto.ordenes.guardar(orden)
     return orden
+

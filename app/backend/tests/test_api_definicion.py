@@ -23,7 +23,7 @@ from tests.fixtures.api_definicion import (
     finalizar_definicion,
     registrar_decision,
 )
-from tests.fixtures.custodia import preparar_ingreso
+from tests.fixtures.custodia import enviar_a_revision, preparar_ingreso
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     COORDINADOR,
@@ -191,10 +191,7 @@ def test_sin_stock_autorizar_deja_la_orden_en_100_sin_error(tmp_path):
 
 def test_camino_de_revision_finaliza_sin_regenerar_el_comprobante(cliente):
     orden_id = _crear_orden_cliente(cliente)
-    cliente.post(
-        f"/api/orders/{orden_id}/send-to-review",
-        json={"usuario_id": RECEPCION},
-    )
+    enviar_a_revision(cliente, orden_id, RECEPCION)
     # Antes de 065 no hay definicion que finalizar.
     assert (
         finalizar_definicion(cliente, orden_id, RECEPCION).status_code == 409

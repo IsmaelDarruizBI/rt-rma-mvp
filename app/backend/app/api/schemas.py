@@ -343,6 +343,15 @@ class DatosRecepcionIn(BaseModel):
     notas_internas: str | None = None
     # DEC-UX-03: ``observaciones`` es el texto unico del equipo.
     observaciones_unificadas: bool = False
+    # DEC-AJ-05: lo que pide el cliente, en texto libre (no crea Detalles).
+    trabajo_solicitado: str | None = None
+    # DEC-AJ-07: «¿Se pudieron verificar las funcionalidades del equipo?»,
+    # informativa (no es el check-in de entrega). Obligatoria para recibir
+    # el equipo con el comprobante; opcional al crear la Orden por la API.
+    funcionalidades_verificadas: bool | None = None
+    observaciones_verificacion: str | None = None
+    # DEC-AJ-06: «IMEI no disponible» (el IMEI del equipo queda vacio).
+    imei_no_disponible: bool = False
 
     def a_dominio(self) -> DatosRecepcion:
         return DatosRecepcion(
@@ -351,6 +360,10 @@ class DatosRecepcionIn(BaseModel):
             observaciones=self.observaciones,
             notas_internas=self.notas_internas,
             observaciones_unificadas=self.observaciones_unificadas,
+            trabajo_solicitado=self.trabajo_solicitado,
+            funcionalidades_verificadas=self.funcionalidades_verificadas,
+            observaciones_verificacion=self.observaciones_verificacion,
+            imei_no_disponible=self.imei_no_disponible,
         )
 
 
@@ -914,6 +927,12 @@ class RegistrarRecepcionIn(BaseModel):
     motivo: str | None = None
     # DEC-UX-03: ``observaciones`` es el texto unico del equipo.
     observaciones_unificadas: bool = False
+    # DEC-AJ-05, DEC-AJ-07 y DEC-AJ-06 (como en ``DatosRecepcionIn``). Si
+    # el pedido no los trae, quedan como estaban (``conservar``).
+    trabajo_solicitado: str | None = None
+    funcionalidades_verificadas: bool | None = None
+    observaciones_verificacion: str | None = None
+    imei_no_disponible: bool = False
 
     def datos(self) -> DatosRecepcion:
         return DatosRecepcion(
@@ -922,7 +941,24 @@ class RegistrarRecepcionIn(BaseModel):
             observaciones=self.observaciones,
             notas_internas=self.notas_internas,
             observaciones_unificadas=self.observaciones_unificadas,
+            trabajo_solicitado=self.trabajo_solicitado,
+            funcionalidades_verificadas=self.funcionalidades_verificadas,
+            observaciones_verificacion=self.observaciones_verificacion,
+            imei_no_disponible=self.imei_no_disponible,
         )
+
+    def conservar(self) -> list[str]:
+        """Los datos agregados en el bloque 3 que el pedido no trae."""
+        return [
+            campo
+            for campo in (
+                "trabajo_solicitado",
+                "funcionalidades_verificadas",
+                "observaciones_verificacion",
+                "imei_no_disponible",
+            )
+            if campo not in self.model_fields_set
+        ]
 
 
 class ConfirmarRecepcionIn(BaseModel):
@@ -1421,6 +1457,13 @@ class DatosRecepcionOut(BaseModel):
     checkin: bool | None = None
     # DEC-UX-03: ``observaciones`` es el texto unico del equipo.
     observaciones_unificadas: bool = False
+    # DEC-AJ-05: trabajo solicitado. DEC-AJ-07: verificacion del ingreso
+    # (informativa: ``checkin`` es el de entrega). DEC-AJ-06: «IMEI no
+    # disponible» al ingresar.
+    trabajo_solicitado: str | None = None
+    funcionalidades_verificadas: bool | None = None
+    observaciones_verificacion: str | None = None
+    imei_no_disponible: bool = False
 
 
 class VersionRecepcionOut(BaseModel):

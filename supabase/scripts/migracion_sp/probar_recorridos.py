@@ -300,6 +300,8 @@ def main() -> int:
             "accesorios": [],
             "observaciones": None,
             "notas_internas": None,
+            # DEC-AJ-07: la verificacion que exige recibir el equipo.
+            "funcionalidades_verificadas": True,
         },
     )
     informar("recepción: estado físico", estado == 200, str(estado))
@@ -495,6 +497,8 @@ def main() -> int:
             "accesorios": [],
             "observaciones": None,
             "notas_internas": None,
+            # DEC-AJ-07: la verificacion que exige recibir el equipo.
+            "funcionalidades_verificadas": True,
         },
     )
     estado, orden = api(

@@ -385,6 +385,7 @@ def contenido_comprobante_recepcion(
             recepcion.datos.observaciones_unificadas if recepcion else False
         ),
         notas=_notas_visibles(recepcion),
+        **_datos_del_ingreso(recepcion.datos if recepcion else None),
         registrado_por=(
             _usuario(contexto, recepcion.registrado_por) if recepcion else None
         ),
@@ -402,6 +403,21 @@ def contenido_comprobante_recepcion(
             else LEYENDA_RECEPCION
         ),
     )
+
+
+def _datos_del_ingreso(datos) -> dict:
+    """Lo que el ingreso agrega a los comprobantes de recepcion y de
+    ingreso: el trabajo solicitado (DEC-AJ-05), la verificacion de
+    funcionalidades con sus observaciones (DEC-AJ-07, informativa: no es el
+    check-in de entrega) y la marca «IMEI no disponible» (DEC-AJ-06)."""
+    if datos is None:
+        return {}
+    return {
+        "trabajo_solicitado": datos.trabajo_solicitado,
+        "funcionalidades_verificadas": datos.funcionalidades_verificadas,
+        "observaciones_verificacion": datos.observaciones_verificacion,
+        "imei_no_disponible": datos.imei_no_disponible,
+    }
 
 
 def _notas_visibles(recepcion) -> list[str]:
@@ -761,6 +777,7 @@ def contenido_comprobante_ingreso(
             datos.observaciones_unificadas if datos else False
         ),
         notas=_notas_visibles(recepcion),
+        **_datos_del_ingreso(datos),
         registrado_por=(
             _usuario(contexto, recepcion.registrado_por) if recepcion else None
         ),

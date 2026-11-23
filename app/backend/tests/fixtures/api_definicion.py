@@ -33,6 +33,7 @@ from httpx import Response
 from .custodia import (
     confirmar_recepcion,
     en_ingreso_inicial,
+    enviar_a_revision,
     preparar_ingreso,
 )
 
@@ -162,10 +163,7 @@ def _por_revision(
 ) -> Response:
     """Envia a revision, confirma, revisa, define ese Detalle y finaliza:
     queda pendiente de la decision del cliente (PROC-REP-129)."""
-    enviada = cliente.post(
-        f"/api/orders/{orden_id}/send-to-review",
-        json={"usuario_id": json["usuario_id"]},
-    )
+    enviada = enviar_a_revision(cliente, orden_id, json["usuario_id"])
     if enviada.status_code != 200:
         return enviada
     confirmar_recepcion(cliente, orden_id)

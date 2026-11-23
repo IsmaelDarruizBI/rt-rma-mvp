@@ -23,6 +23,7 @@ from tests.fixtures.api_definicion import (
     definir_y_finalizar,
     finalizar_definicion,
 )
+from tests.fixtures.custodia import enviar_a_revision
 from tests.test_api_hp_rep_002 import (
     ADMINISTRADOR,
     COORDINADOR,
@@ -60,9 +61,10 @@ def _crear_orden(cliente: TestClient) -> str:
 
 
 def _enviar(cliente, orden_id, usuario=RECEPCION):
-    return cliente.post(
-        f"/api/orders/{orden_id}/send-to-review", json={"usuario_id": usuario}
-    )
+    """DEC-AJ-05: en Cliente Externo el comprobante de recepcion confirma la
+    custodia; antes se registran los datos que exige (estado fisico y
+    verificacion del ingreso)."""
+    return enviar_a_revision(cliente, orden_id, usuario)
 
 
 def _revisar(cliente, orden_id, usuario=TECNICO, resultado="Falla de placa."):
@@ -107,18 +109,21 @@ def test_var_rep_001_cliente_externo_de_punta_a_punta(cliente):
         "ENVIAR_A_REVISION",
     ]
 
-    # 045 No -> 055 -> 050 Si -> 060
+    # 045 No -> 055 -> 050 Si -> 060; DEC-AJ-05: la custodia se confirma
+    # en el mismo acto que el comprobante de recepcion (ACC-REP-024).
     respuesta = _enviar(cliente, orden_id)
     assert respuesta.status_code == 200, respuesta.text
     orden = respuesta.json()
     assert orden["estado_workflow"] == "EN_REVISION"
     assert orden["reparaciones_detail"] == []
-    assert _ids(orden)[-4:] == [
+    assert _ids(orden)[-5:] == [
         "PROC-REP-045",
         "PROC-REP-055",
+        "ACC-REP-024",
         "PROC-REP-050",
         "PROC-REP-060",
     ]
+    assert orden["custodia"]["estado"] == "EN_CUSTODIA"
     paso_045 = next(
         p for p in orden["historial"] if p["referencia_id"] == "PROC-REP-045"
     )
@@ -128,7 +133,9 @@ def test_var_rep_001_cliente_externo_de_punta_a_punta(cliente):
     )
     assert paso_055["usuario_id"] is None  # ACT-SYSTEM
     assert orden["documentos"]["comprobante_recepcion"]["generado"] is True
-    assert _codigos(orden) == ["REALIZAR_REVISION"]
+    # Con el equipo en custodia se ofrece ademas devolverlo sin reparar,
+    # como cuando la custodia se confirmaba aparte.
+    assert _codigos(orden) == ["REALIZAR_REVISION", "REGISTRAR_DEVOLUCION"]
 
     # 065 (Tecnico)
     orden = _revisar(cliente, orden_id, resultado="  Placa danada.  ").json()
@@ -140,6 +147,7 @@ def test_var_rep_001_cliente_externo_de_punta_a_punta(cliente):
     assert _codigos(orden) == [
         "AGREGAR_DETALLE_DESDE_REVISION",
         "FINALIZAR_SIN_REPARACION",
+        "REGISTRAR_DEVOLUCION",
     ]
 
     # 068 Si -> 075, al finalizar 211 -> 129 (espera al cliente), y con la
@@ -339,9 +347,14 @@ def test_enviar_a_revision_con_detalles_o_fuera_de_requerimiento(cliente):
     )  # queda HABILITADA
     assert _enviar(cliente, otra).status_code == 409  # fuera de REQUERIMIENTO
 
+    # Ya enviada: el reintento (doble clic, «Crear y generar») la devuelve
+    # sin duplicar nada (DEC-AJ-08).
     en_revision = _crear_orden(cliente)
-    _enviar(cliente, en_revision)
-    assert _enviar(cliente, en_revision).status_code == 409  # ya enviada
+    primera = _enviar(cliente, en_revision).json()
+    segunda = _enviar(cliente, en_revision)
+    assert segunda.status_code == 200, segunda.text
+    assert segunda.json()["historial"] == primera["historial"]
+    assert segunda.json()["documentos"] == primera["documentos"]
 
 
 def test_revision_tecnica_negativos(cliente):

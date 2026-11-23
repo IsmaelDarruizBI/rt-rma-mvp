@@ -200,6 +200,14 @@ def crear_ficticia(cliente, imei=None, serie=None) -> str:
                 "usuario_id": f.RECEPCION,
                 "cliente": CLIENTE,
                 "equipo": equipo,
+                # Como la pantalla: observaciones del equipo y la
+                # verificacion del ingreso (DEC-AJ-07), que el comprobante
+                # exige.
+                "recepcion": {
+                    "observaciones": EQUIPO["falla_reportada"],
+                    "observaciones_unificadas": True,
+                    "funcionalidades_verificadas": True,
+                },
             },
         )
     )["id"]

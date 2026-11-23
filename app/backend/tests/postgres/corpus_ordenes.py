@@ -252,6 +252,8 @@ def _flujos_de_salida(cliente: TestClient) -> None:
         accesorios=["Funda", "Cargador"],
         observaciones="Trae funda.",
         notas_internas="Revisar el golpe.",
+        # DEC-AJ-07: la verificacion que exige el comprobante de ingreso.
+        funcionalidades_verificadas=True,
     )
     _nota(cliente, orden, "El cliente pide que lo llamen.")
     _nota(cliente, orden, "Cliente dificil.", interna=True)
@@ -321,13 +323,8 @@ def _flujos_de_salida(cliente: TestClient) -> None:
 
     # Sin reparacion: se entrega como devolucion, con la Orden ENTREGADA.
     sin_reparacion = f.crear(cliente)
-    f.ok(
-        cliente.post(
-            f"/api/orders/{sin_reparacion}/send-to-review",
-            json={"usuario_id": f.RECEPCION},
-        )
-    )
-    c.confirmar_recepcion(cliente, sin_reparacion)
+    # DEC-AJ-05: el comprobante de recepcion confirma la custodia.
+    f.ok(c.enviar_a_revision(cliente, sin_reparacion))
     _sin_reparar(cliente, sin_reparacion)
     f.notificar_pagar_entregar(cliente, sin_reparacion)
 

@@ -6,7 +6,9 @@ Comandos, uno por intencion humana de ACT-RECEP:
     definir_reparacion   agrega UN Detalle: PROC-REP-045 (Si, una vez)
                          -> 070
     enviar_a_revision    PROC-REP-045 (No) -> 055 -> 050 -> 060 si
-                         corresponde (VAR-REP-001/002)
+                         corresponde (VAR-REP-001/002); en CLIENTE_EXTERNO
+                         confirma la custodia con el comprobante de
+                         recepcion (DEC-AJ-05)
     definir_reparacion_desde_revision
                          agrega UN Detalle: PROC-REP-068 (Si, una vez)
                          -> 075
@@ -33,6 +35,7 @@ from app.domain.models import (
     Cliente,
     DatosRecepcion,
     Equipo,
+    EstadoWorkflow,
     OrdenReparacion,
     TipoReparacion,
 )
@@ -42,6 +45,7 @@ from app.services import (
     ResultadoEvaluacionOrden,
     cargar_reservas_externas,
     cliente_para_orden,
+    confirmar_recepcion_fisica,
     crear_orden_cliente_externo,
     crear_orden_garantia_rma,
     crear_orden_rt_interno,
@@ -51,17 +55,21 @@ from app.services import (
     evaluar_situacion_orden,
     exigir_definicion_finalizable,
     exigir_fuera_del_ingreso_inicial,
+    faltantes_para_recepcion,
     generar_comprobante_recepcion,
     habilitar_o_reevaluar,
     hay_detalles_para_factibilidad,
     marcar_orden_en_revision,
     marcar_pendiente_autorizacion,
     permisos,
+    recepcion_con_el_comprobante,
     registrar_finalizacion_sin_reparacion,
     tipo_reparacion_otros,
+    validar_actor,
     validar_factibilidad_detalles,
 )
 from app.services.exceptions import GarantiaVencidaError
+from app.services.revisiones import revision_tecnica_realizada
 
 from .catalogo_equipos import equipo_desde_catalogo
 from .cola import encolar_si_ingreso_automatico
@@ -374,18 +382,57 @@ def enviar_a_revision(
     Detalles: el comprobante no los lista ("reparacion pendiente de
     diagnostico"). La diferencia entre VAR-REP-001 y VAR-REP-002 sale solo
     de ``PoliticaOrigen.requiere_comprobante_recepcion``.
+
+    DEC-AJ-05 (BF-04): es el ingreso sin trabajos estandarizados. En
+    CLIENTE_EXTERNO el comprobante de recepcion confirma la custodia en el
+    mismo acto (``recepcion_con_el_comprobante``): exige lo mismo que
+    recibir el equipo (estado fisico y la verificacion de funcionalidades,
+    DEC-AJ-07) y, si falta algo, no registra nada. RT_INTERNO no cambia.
+    Los trabajos los define despues el tecnico (PROC-REP-075) y el cliente
+    los autoriza (PROC-REP-129).
+
+    Un reintento (doble clic, «Crear y generar el comprobante») sobre la
+    Orden ya enviada y todavia sin revisar la devuelve tal como esta.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
 
     with orden_para_modificar(contexto, orden_id) as orden:
+        if _ya_enviada_a_revision(orden):
+            validar_actor(usuario, permisos.ENVIAR_A_REVISION)
+            return orden
+        confirmar = recepcion_con_el_comprobante(orden)
+        if confirmar:
+            faltan = faltantes_para_recepcion(orden)
+            if faltan:
+                raise PrecondicionInvalidaError(
+                    "Para generar el comprobante de recepcion falta: "
+                    + "; ".join(faltan)
+                    + "."
+                )
         orden = marcar_orden_en_revision(orden, usuario=usuario, fecha=fecha)
+        if confirmar:
+            orden = confirmar_recepcion_fisica(
+                orden, usuario=usuario, fecha=fecha
+            )
         orden = generar_comprobante_recepcion(orden, fecha=fecha)
         orden = emitir_comprobante_recepcion_inicial(
             contexto, orden, usuario_id=usuario.id, fecha=fecha
         )
         contexto.ordenes.guardar(orden)
     return orden
+
+
+def _ya_enviada_a_revision(orden: OrdenReparacion) -> bool:
+    """La Orden ya paso por «Enviar a revision» y espera la revision tecnica
+    (no es una garantia RMA, que nace en revision)."""
+    return (
+        orden.estado_workflow is EstadoWorkflow.EN_REVISION
+        and orden.orden_origen_id is None
+        and not orden.reparaciones_detail
+        and not revision_tecnica_realizada(orden)
+        and any(paso.process_id == "PROC-REP-055" for paso in orden.historial)
+    )
 
 
 def iniciar_garantia_rma(

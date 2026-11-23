@@ -97,8 +97,9 @@ MATRIZ = {
     ("POST", "/api/orders/{orden_origen_id}/warranty-rma"): SERVICIO(
         "GARANTIA_RMA_CREAR", "GARANTIA_EXCEPCION"
     ),
+    # DEC-AJ-05: en Cliente Externo confirma ademas la custodia.
     ("POST", "/api/orders/{orden_id}/send-to-review"): SERVICIO(
-        "ENVIAR_A_REVISION"
+        "ENVIAR_A_REVISION", "CUSTODIA"
     ),
     ("POST", "/api/orders/{orden_id}/technical-review"): SERVICIO(
         "REVISION_TECNICA"

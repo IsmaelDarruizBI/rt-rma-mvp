@@ -323,12 +323,20 @@ def test_cada_emision_con_su_system_action_y_nunca_acc_rep_026(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
         orden_id = _dos_trabajos_presentados(cliente)
         rec_01 = _comprobantes_de(cliente, orden_id, "COMPROBANTE_RECEPCION")
+        # DEC-AJ-05: la custodia ya se confirmo con REC-01; la version a
+        # pedido sale de una observacion nueva.
+        ok(
+            cliente.post(
+                f"/api/orders/{orden_id}/reception/notes",
+                json={"usuario_id": RECEPCION, "texto": "Trae funda."},
+            )
+        )
         ok(
             cliente.post(
                 f"/api/orders/{orden_id}/documents/reception-receipt",
                 json={
                     "usuario_id": RECEPCION,
-                    "motivo": "Recepcion confirmada",
+                    "motivo": "Observacion agregada",
                 },
             )
         )

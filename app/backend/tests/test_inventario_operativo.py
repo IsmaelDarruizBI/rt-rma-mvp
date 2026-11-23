@@ -52,7 +52,10 @@ from tests.fixtures.api_salidas import (
     stock,
     tomada,
 )
-from tests.fixtures.custodia import confirmar_recepcion
+from tests.fixtures.custodia import (
+    confirmar_recepcion,
+    revision_anterior_sin_custodia,
+)
 
 
 @pytest.fixture
@@ -138,12 +141,13 @@ def _con_reserva(cliente, tipo=BATERIA) -> str:
 def _sin_custodia_tomada(cliente) -> str:
     """Definida, autorizada y tomada, con la recepcion SIN confirmar.
 
-    En CLIENTE_EXTERNO, por el camino de revision: el ingreso inicial
-    confirma la recepcion con el comprobante de ingreso.
+    En CLIENTE_EXTERNO el ingreso inicial confirma la recepcion con el
+    comprobante de ingreso y el camino de revision con el de recepcion
+    (DEC-AJ-05): queda una Orden enviada a revision antes de DEC-AJ-05.
     """
     orden_id = crear(cliente)
+    revision_anterior_sin_custodia(cliente, orden_id)
     for ruta, cuerpo in (
-        ("send-to-review", {"usuario_id": RECEPCION}),
         ("technical-review", {"usuario_id": TECNICO, "resultado": "Bateria."}),
         (
             "review/details",

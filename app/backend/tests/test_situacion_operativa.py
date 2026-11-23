@@ -34,6 +34,7 @@ from tests.fixtures.custodia import (
     confirmar_recepcion,
     entregar,
     registrar_checkin,
+    revision_anterior_sin_custodia,
 )
 from tests.test_api_hp_rep_002 import _crear_orden_rt
 from tests.test_inventario_operativo import _cliente
@@ -44,15 +45,12 @@ def _revisada(cliente, *tipos) -> str:
     esperando la decision del cliente y la recepcion SIN confirmar.
 
     En CLIENTE_EXTERNO el ingreso inicial confirma y autoriza con el
-    comprobante de ingreso: estos estados quedan del camino de revision.
+    comprobante de ingreso, y el camino de revision confirma la custodia
+    con el de recepcion (DEC-AJ-05): estos estados quedan de una Orden
+    enviada a revision antes de DEC-AJ-05.
     """
     orden_id = crear(cliente)
-    ok(
-        cliente.post(
-            f"/api/orders/{orden_id}/send-to-review",
-            json={"usuario_id": RECEPCION},
-        )
-    )
+    revision_anterior_sin_custodia(cliente, orden_id)
     ok(
         cliente.post(
             f"/api/orders/{orden_id}/technical-review",

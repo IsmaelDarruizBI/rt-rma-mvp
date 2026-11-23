@@ -471,16 +471,18 @@ def test_los_otros_origenes_y_la_revision_siguen_igual(cliente):
     rt = _crear_orden_rt(cliente)
     agregar(cliente, rt)
     assert ok(_finalizar(cliente, rt))["estado_workflow"] == "HABILITADA"
-    # CLIENTE_EXTERNO enviado a revision: confirmar, finalizar y la
-    # decision del cliente son pasos explicitos.
+    # CLIENTE_EXTERNO enviado a revision: el comprobante de recepcion ya
+    # confirma la custodia (DEC-AJ-05); finalizar y la decision del cliente
+    # siguen siendo pasos explicitos.
     revisada = crear_con_recepcion(cliente)
-    ok(
+    enviada = ok(
         cliente.post(
             f"/api/orders/{revisada}/send-to-review",
             json={"usuario_id": RECEPCION},
         )
     )
-    ok(_confirmar(cliente, revisada))
+    assert enviada["custodia"]["estado"] == "EN_CUSTODIA"
+    conflicto(_confirmar(cliente, revisada))
     ok(
         cliente.post(
             f"/api/orders/{revisada}/technical-review",
@@ -513,10 +515,16 @@ def test_la_autorizacion_posterior_sigue_explicita(cliente):
 
     assert orden["estado_workflow"] == "EN_REVISION"
     assert "GENERAR_COMPROBANTE_INGRESO" not in codigos(orden)
-    # Fuera del ingreso inicial, la confirmacion vuelve a ser un paso.
-    assert "CONFIRMAR_RECEPCION" in [
+    # DEC-AJ-05: el comprobante de recepcion confirmo la custodia en el
+    # mismo acto; no queda una confirmacion suelta ni se autoriza nada.
+    assert orden["custodia"]["estado"] == "EN_CUSTODIA"
+    assert "CONFIRMAR_RECEPCION" not in [
         a["codigo"] for a in orden["acciones_custodia"]
     ]
+    assert all(
+        d["estado_autorizacion"] != "AUTORIZADO"
+        for d in orden["reparaciones_detail"]
+    )
     conflicto(generar_ingreso(cliente, orden_id))
 
 

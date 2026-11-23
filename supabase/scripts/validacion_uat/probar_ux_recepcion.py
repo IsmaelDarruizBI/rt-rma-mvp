@@ -90,6 +90,8 @@ def alta(c, trabajo=f.BATERIA) -> dict:
         "recepcion": {
             "observaciones": TEXTO,
             "observaciones_unificadas": True,
+            # DEC-AJ-07: la pantalla la pide siempre; el comprobante la exige.
+            "funcionalidades_verificadas": True,
         },
         "trabajo_inicial": trabajo,
     }
