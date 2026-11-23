@@ -62,6 +62,7 @@ from app.services import (
     faltantes_para_recepcion,
     fue_priorizada,
     garantia_ajustable,
+    imei_real_registrable,
     motivo_bloqueo_ejecucion,
     pendiente_de_autorizacion,
     permisos,
@@ -144,6 +145,8 @@ ACCION_REGISTRAR_DATOS_RECEPCION = "REGISTRAR_DATOS_RECEPCION"
 ACCION_CONFIRMAR_RECEPCION = "CONFIRMAR_RECEPCION"
 ACCION_EQUIPO_NO_RECIBIDO = "REGISTRAR_EQUIPO_NO_RECIBIDO"
 ACCION_AGREGAR_OBSERVACION_RECEPCION = "AGREGAR_OBSERVACION_RECEPCION"
+# DEC-AJ-06 (BF-05): el IMEI real de un equipo que ingreso sin el.
+ACCION_REGISTRAR_IMEI_REAL = "REGISTRAR_IMEI_REAL"
 ACCION_EMITIR_COMPROBANTE_RECEPCION = "EMITIR_COMPROBANTE_RECEPCION"
 ACCION_EMITIR_COMPROBANTE_AUTORIZACION = "EMITIR_COMPROBANTE_AUTORIZACION"
 # MVP v2 (iteracion 1 del UAT).
@@ -1066,6 +1069,8 @@ def acciones_de_custodia(orden: OrdenReparacion) -> list[AccionDisponible]:
       de que el equipo estuvo en el local, en una Orden sin trabajo
       COMPLETO (DC31: se resuelve antes de cancelarla) o en una CANCELADA
       del circuito anterior.
+    - Registrar el IMEI real: el equipo no tiene IMEI y no salio del local,
+      tambien con la custodia confirmada (DEC-AJ-06).
     - Agregar una observacion complementaria: hay datos de ingreso.
     - Emitir una version nueva del comprobante: el proceso ya emitio el
       primero (PROC-REP-060).
@@ -1124,6 +1129,15 @@ def acciones_de_custodia(orden: OrdenReparacion) -> list[AccionDisponible]:
                 codigo=ACCION_EQUIPO_NO_RECIBIDO,
                 etiqueta="Confirmar equipo no recibido",
                 roles=ROLES_RECEPCION_EQUIPO,
+            )
+        )
+    # DEC-AJ-06: tambien con la custodia confirmada, hasta la entrega.
+    if imei_real_registrable(orden):
+        acciones.append(
+            AccionDisponible(
+                codigo=ACCION_REGISTRAR_IMEI_REAL,
+                etiqueta="Registrar el IMEI real",
+                roles=permisos.INGRESO_CORREGIR,
             )
         )
     if recepcion is not None:

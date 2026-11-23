@@ -98,6 +98,7 @@ from .contexto import ApplicationContext, construir_contexto
 from .custodia import (
     agregar_observacion_recepcion,
     confirmar_recepcion,
+    registrar_imei_real,
     registrar_no_recepcion,
     registrar_recepcion,
 )
@@ -289,6 +290,7 @@ __all__ = [
     "anular_pago_de_orden",
     "registrar_devolucion_de_dinero",
     "registrar_recepcion",
+    "registrar_imei_real",
     "confirmar_recepcion",
     "registrar_no_recepcion",
     # Inventario operativo

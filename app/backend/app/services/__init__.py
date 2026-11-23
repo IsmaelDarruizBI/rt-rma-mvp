@@ -85,11 +85,14 @@ from .custodia import (
     evidencias_de_equipo,
     exigir_custodia_para_ejecutar,
     exigir_equipo_en_custodia,
+    exigir_imei_coherente,
+    imei_real_registrable,
     motivo_bloqueo_ejecucion,
     normalizar_datos_recepcion,
     recepcion_inicial,
     registrar_datos_recepcion,
     registrar_equipo_no_recibido,
+    registrar_imei_real,
     tipo_de_entrega,
 )
 from .decision_cliente import (
@@ -442,6 +445,9 @@ __all__ = [
     "normalizar_datos_recepcion",
     "recepcion_inicial",
     "registrar_datos_recepcion",
+    "registrar_imei_real",
+    "exigir_imei_coherente",
+    "imei_real_registrable",
     "registrar_equipo_no_recibido",
     "tipo_de_entrega",
     # Cancelacion y devolucion (PROC-REP-300/305/306/270)

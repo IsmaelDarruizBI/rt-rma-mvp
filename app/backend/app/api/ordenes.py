@@ -80,6 +80,7 @@ from app.application import (
     registrar_desistimiento,
     registrar_devolucion,
     registrar_devolucion_de_dinero,
+    registrar_imei_real,
     registrar_no_recepcion,
     registrar_pago_de_orden,
     registrar_recepcion,
@@ -185,6 +186,7 @@ from .schemas import (
     RegistrarCheckinIn,
     RegistrarDecisionClienteIn,
     RegistrarDevolucionIn,
+    RegistrarImeiRealIn,
     RegistrarRecepcionIn,
     RequiereRedefinicionIn,
     RevisionDetalleIn,
@@ -1233,6 +1235,31 @@ def put_recepcion(
         equipo=cuerpo.equipo.a_dominio() if cuerpo.equipo else None,
         motivo=cuerpo.motivo,
         conservar=cuerpo.conservar(),
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/real-imei")
+@idempotente("REGISTRAR_IMEI_REAL")
+def post_registrar_imei_real(
+    orden_id: str,
+    cuerpo: RegistrarImeiRealIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """Registrar el IMEI real de un equipo que ingreso sin el (DEC-AJ-06).
+
+    Tambien con la recepcion confirmada y hasta la entrega, con motivo y
+    auditoria; el identificador interno no cambia. Si el IMEI coincide con
+    otro Equipo responde 409 ``CONFIRMACION_REQUERIDA`` (DEC-MI-11): con
+    ``confirmado`` se registra en este equipo, sin vincularlos.
+    """
+    orden = registrar_imei_real(
+        contexto,
+        orden_id=orden_id,
+        usuario_id=cuerpo.usuario_id,
+        imei=cuerpo.imei,
+        motivo=cuerpo.motivo,
+        confirmado=cuerpo.confirmado,
     )
     return _salida(orden, contexto)
 

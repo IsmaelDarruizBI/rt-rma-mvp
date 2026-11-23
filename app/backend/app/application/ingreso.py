@@ -55,6 +55,7 @@ from app.services import (
     evaluar_situacion_orden,
     exigir_definicion_finalizable,
     exigir_fuera_del_ingreso_inicial,
+    exigir_imei_coherente,
     faltantes_para_recepcion,
     generar_comprobante_recepcion,
     habilitar_o_reevaluar,
@@ -110,6 +111,9 @@ def crear_orden(
     fecha = contexto.ahora()
     equipo = equipo_desde_catalogo(contexto, equipo)
     tipo_inicial = _tipo_inicial(contexto, trabajo_inicial)
+
+    # DEC-AJ-06: «IMEI no disponible» deja el IMEI vacio.
+    exigir_imei_coherente(equipo, datos_recepcion)
 
     with contexto.transaccion():
         # DEC-MI-11: reusar una identidad exige el mismo IMEI o serie.
@@ -193,6 +197,7 @@ def crear_orden_rt(
     fecha = contexto.ahora()
     equipo = equipo_desde_catalogo(contexto, equipo)
     tipo_inicial = _tipo_inicial(contexto, trabajo_inicial)
+    exigir_imei_coherente(equipo, datos_recepcion)
 
     with contexto.transaccion():
         validar_equipo_del_ingreso(contexto, equipo)

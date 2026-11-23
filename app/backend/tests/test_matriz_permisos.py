@@ -172,6 +172,8 @@ MATRIZ = {
         "CUSTODIA", "INGRESO_CORREGIR"
     ),
     ("POST", "/api/orders/{orden_id}/reception/confirm"): SERVICIO("CUSTODIA"),
+    # DEC-AJ-06: el IMEI real, con el permiso de la correccion del ingreso.
+    ("POST", "/api/orders/{orden_id}/real-imei"): SERVICIO("INGRESO_CORREGIR"),
     ("POST", "/api/orders/{orden_id}/reception/not-received"): SERVICIO(
         "CUSTODIA"
     ),

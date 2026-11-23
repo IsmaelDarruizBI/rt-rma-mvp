@@ -961,6 +961,18 @@ class RegistrarRecepcionIn(BaseModel):
         ]
 
 
+class RegistrarImeiRealIn(BaseModel):
+    """``POST .../real-imei`` (DEC-AJ-06): el IMEI real de un equipo que
+    ingreso sin el, hasta la entrega. El IMEI va en el cuerpo, nunca en la
+    URL (P1-18). ``confirmado``: registrarlo aunque coincida con otro
+    Equipo (DEC-MI-11), sin vincularlos."""
+
+    usuario_id: str = Field(min_length=1)
+    imei: str = Field(min_length=1)
+    motivo: str = Field(min_length=1)
+    confirmado: bool = False
+
+
 class ConfirmarRecepcionIn(BaseModel):
     """``POST .../reception/confirm``: el equipo quedo en el local.
 

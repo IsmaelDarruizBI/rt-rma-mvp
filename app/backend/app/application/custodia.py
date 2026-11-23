@@ -6,6 +6,8 @@
     confirmar_recepcion            el equipo quedo en el local (custodia)
     registrar_no_recepcion         el equipo nunca ingreso (Orden cancelada)
     agregar_observacion_recepcion  observacion complementaria
+    registrar_imei_real            el IMEI real de un equipo que ingreso sin
+                                   el, hasta la entrega (DEC-AJ-06)
 
 Acciones transversales (``ACC-REP-023/024/025/027``): no mueven
 ``current_process`` por si mismas. Las reglas viven en
@@ -14,6 +16,7 @@ Acciones transversales (``ACC-REP-023/024/025/027``): no mueven
 
 from collections.abc import Collection
 
+from app.domain.identidad import candidatos, normalizar
 from app.domain.models import DatosRecepcion, Equipo, OrdenReparacion
 from app.services import (
     agregar_nota_recepcion,
@@ -23,6 +26,7 @@ from app.services import (
     registrar_datos_recepcion,
     registrar_equipo_no_recibido,
 )
+from app.services import registrar_imei_real as registrar_imei_real_servicio
 
 from .catalogo_equipos import equipo_desde_catalogo
 from .contexto import ApplicationContext
@@ -148,3 +152,49 @@ def agregar_observacion_recepcion(
         contexto.ordenes.guardar(orden)
     return orden
 
+
+def registrar_imei_real(
+    contexto: ApplicationContext,
+    *,
+    orden_id: str,
+    usuario_id: str,
+    imei: str,
+    motivo: str,
+    confirmado: bool = False,
+) -> OrdenReparacion:
+    """DEC-AJ-06: registra el IMEI real de un equipo que ingreso sin el,
+    tambien con la custodia confirmada y hasta la entrega.
+
+    Busca dentro de la transaccion los otros Equipos con ese IMEI
+    (DEC-MI-11): nunca los vincula; sin ``confirmado`` avisa y no registra
+    nada. El IMEI viaja en el cuerpo del pedido, nunca en la URL (P1-18).
+    """
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    with orden_para_modificar(contexto, orden_id) as orden:
+        encontrados = []
+        if normalizar(imei):
+            _, encontrados = candidatos(
+                contexto.ordenes.listar_por_identificacion_equipo(
+                    imei=imei, numero_serie=None
+                ),
+                imei=imei,
+                numero_serie=None,
+            )
+        coincidencias = [
+            candidato.equipo_id
+            for candidato in encontrados
+            if candidato.equipo_id != orden.equipo.id
+        ]
+        orden = registrar_imei_real_servicio(
+            orden,
+            usuario=usuario,
+            fecha=fecha,
+            imei=imei,
+            motivo=motivo,
+            coincidencias=coincidencias,
+            confirmado=confirmado,
+        )
+        contexto.ordenes.guardar(orden)
+    return orden

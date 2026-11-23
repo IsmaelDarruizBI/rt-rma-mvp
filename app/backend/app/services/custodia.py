@@ -52,7 +52,7 @@ from app.domain.politicas import politica_de
 
 from . import permisos
 from .autorizacion import validar_alguno_de
-from .exceptions import PrecondicionInvalidaError
+from .exceptions import ConfirmacionRequeridaError, PrecondicionInvalidaError
 from .revisiones import finalizada_sin_reparacion
 from .workflow import registrar_accion_funcional
 
@@ -504,6 +504,133 @@ def cambios_del_ingreso(
                 CambioDatoIngreso(campo=campo, anterior=antes, nuevo=despues)
             )
     return cambios
+
+
+def exigir_imei_coherente(
+    equipo: Equipo, datos: DatosRecepcion | None
+) -> None:
+    """DEC-AJ-06: «IMEI no disponible» deja el IMEI vacio; nunca convive
+    con un IMEI cargado en el mismo ingreso (ni se inventa uno)."""
+    if datos is not None and datos.imei_no_disponible and _texto(equipo.imei):
+        raise PrecondicionInvalidaError(
+            "Marcaste «IMEI no disponible»: el IMEI tiene que quedar vacio. "
+            "Si el equipo tiene IMEI, cargalo y quita la marca."
+        )
+
+
+ACCION_REGISTRAR_IMEI_REAL = "REGISTRAR_IMEI_REAL"
+
+
+def registrar_imei_real(
+    orden: OrdenReparacion,
+    *,
+    usuario: Usuario,
+    fecha: datetime,
+    imei: str,
+    motivo: str,
+    coincidencias: list[str] | None = None,
+    confirmado: bool = False,
+) -> OrdenReparacion:
+    """DEC-AJ-06 (BF-05): registra el IMEI real de un equipo que ingreso sin
+    el (IMEI vacio o «IMEI no disponible»).
+
+    Se puede tambien con la custodia confirmada y hasta la entrega (cierra
+    ABI-41 para el IMEI), con motivo obligatorio y el permiso de la
+    correccion del ingreso (``INGRESO_CORREGIR``, DEC-MI-07). El
+    identificador interno del equipo no cambia. La auditoria es la de las
+    correcciones del ingreso: una version con el equipo anterior, el motivo
+    y el cambio (``equipo.imei``), y el paso en el historial. Los datos de
+    la recepcion ya decididos no se tocan, ni los comprobantes emitidos.
+
+    ``coincidencias``: los otros Equipos con ese IMEI (DEC-MI-11). No se
+    vinculan solos: sin ``confirmado`` se rechaza con el aviso; confirmado,
+    el IMEI queda en ESTE equipo y la vinculacion se corrige aparte, si
+    corresponde (``identidad.corregir_vinculo``).
+    """
+    validar_alguno_de(usuario, permisos.INGRESO_CORREGIR)
+    recepcion = orden.recepcion
+    if recepcion is None:
+        raise PrecondicionInvalidaError(
+            "Registra primero los datos del ingreso: la Orden es anterior al "
+            "registro de recepcion."
+        )
+    if _texto(orden.equipo.imei):
+        raise PrecondicionInvalidaError(
+            "El equipo ya tiene IMEI. Un IMEI cargado se corrige con los "
+            "datos del ingreso, antes de confirmar la recepcion."
+        )
+    if (
+        orden.estado_workflow is EstadoWorkflow.ENTREGADA
+        or orden.entrega is not None
+        or orden.devolucion is not None
+        or orden.esta_cerrada
+    ):
+        raise PrecondicionInvalidaError(
+            "El IMEI real se registra hasta la entrega: el equipo ya salio "
+            "del local o la Orden esta cerrada."
+        )
+    imei = _texto(imei)
+    if imei is None:
+        raise PrecondicionInvalidaError("Falta el IMEI real del equipo.")
+    motivo = _texto(motivo)
+    if motivo is None:
+        raise PrecondicionInvalidaError(
+            "Registrar el IMEI real exige un motivo."
+        )
+    if coincidencias and not confirmado:
+        raise ConfirmacionRequeridaError(
+            "Ese IMEI ya esta registrado en "
+            + ("el Equipo " if len(coincidencias) == 1 else "los Equipos ")
+            + ", ".join(coincidencias)
+            + ". No se vinculan solos (DEC-MI-11): confirma para registrarlo "
+            "en este equipo o, si es el mismo equipo, corregi la vinculacion."
+        )
+
+    nueva_orden = orden.model_copy(deep=True)
+    nueva_orden.recepcion.versiones_anteriores.append(
+        VersionRecepcion(
+            equipo=orden.equipo.model_copy(deep=True),
+            datos=recepcion.datos.model_copy(deep=True),
+            registrado_por=recepcion.registrado_por,
+            registrado_en=recepcion.registrado_en,
+            reemplazado_por=usuario.id,
+            reemplazado_en=fecha,
+            motivo=motivo,
+            cambios=[
+                CambioDatoIngreso(
+                    campo="equipo.imei", anterior=None, nuevo=imei
+                )
+            ],
+        )
+    )
+    nueva_orden.equipo = nueva_orden.equipo.model_copy(update={"imei": imei})
+    # El IMEI no va en el historial (P1-18): queda en la version.
+    observacion = f"IMEI real registrado. Motivo: {motivo}"
+    if coincidencias:
+        observacion += (
+            ". Coincide con " + ", ".join(coincidencias) + " (sin vincular)"
+        )
+    return registrar_accion_funcional(
+        nueva_orden,
+        accion_id=ACCION_DATOS_RECEPCION,
+        accion=ACCION_REGISTRAR_IMEI_REAL,
+        fecha=fecha,
+        usuario_id=usuario.id,
+        observacion=observacion,
+    )
+
+
+def imei_real_registrable(orden: OrdenReparacion) -> bool:
+    """La accion «Registrar el IMEI real» corresponde: el equipo no tiene
+    IMEI y todavia no salio del local (DEC-AJ-06)."""
+    return (
+        orden.recepcion is not None
+        and not _texto(orden.equipo.imei)
+        and orden.estado_workflow is not EstadoWorkflow.ENTREGADA
+        and orden.entrega is None
+        and orden.devolucion is None
+        and not orden.esta_cerrada
+    )
 
 
 def confirmar_recepcion_fisica(

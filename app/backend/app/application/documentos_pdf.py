@@ -179,8 +179,11 @@ def _cliente_y_equipo(hoja: _Hoja, contenido, zona: tzinfo) -> None:
     ]
     if cliente and cliente.email:
         izquierda.append(("Email", cliente.email))
-    # UX-02: el identificador interno del equipo, con o sin IMEI.
+    # UX-02: el identificador interno del equipo, con o sin IMEI. DEC-AJ-06:
+    # sin IMEI se aclara que es provisorio y que no es un IMEI.
     derecha = [("Equipo", equipo.nombre), ("Identificador", equipo.id)]
+    if not equipo.imei and getattr(contenido, "imei_no_disponible", False):
+        derecha.append(("IMEI", "no disponible (identificador provisorio)"))
     if equipo.capacidad:
         derecha.append(("Capacidad", equipo.capacidad))
     if equipo.color:
