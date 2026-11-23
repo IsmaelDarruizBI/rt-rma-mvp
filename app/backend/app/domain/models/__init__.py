@@ -123,6 +123,14 @@ from .reparacion import (
     TomaOrden,
 )
 from .sincronizacion import ReservaSincronizacion
+from .textos_legales import (
+    TERMINOS_INICIALES,
+    ApartadoTextoLegal,
+    ContenidoTextoLegal,
+    EncabezadoTextoLegal,
+    TextoLegal,
+    TipoTextoLegal,
+)
 from .workflow import HistorialWorkflow
 
 __all__ = [
@@ -240,6 +248,13 @@ __all__ = [
     "TrabajoEnDocumento",
     "TrabajoRealizadoEnDocumento",
     "UsuarioEnDocumento",
+    # Textos legales (DEC-AJ-09)
+    "TERMINOS_INICIALES",
+    "ApartadoTextoLegal",
+    "ContenidoTextoLegal",
+    "EncabezadoTextoLegal",
+    "TextoLegal",
+    "TipoTextoLegal",
     # Workflow
     "HistorialWorkflow",
     # Aggregate raiz

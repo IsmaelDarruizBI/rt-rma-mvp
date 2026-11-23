@@ -11,7 +11,7 @@ Esquema físico de la persistencia en Supabase PostgreSQL. Implementa el diseño
 | `seeds/desarrollo/` | Datos **ficticios** de desarrollo. **Nunca se cargan en producción** |
 | `tests/` | Pruebas SQL. Cada archivo de prueba corre en una transacción que se descarta |
 | `scripts/generar_datos_referencia.cjs` | Regenera `migrations/20261102001200_datos_referencia.sql` |
-| `scripts/generar_datos_iniciales.cjs` | Regenera `seeds/` desde los catálogos JSON del backend y el texto de Términos y Condiciones del frontend |
+| `scripts/generar_datos_iniciales.cjs` | Regenera `seeds/` desde los catálogos JSON del backend. Los Términos y Condiciones v1 quedaron congelados: desde DEC-AJ-09 las versiones siguientes las carga una migración o las publica Administración |
 | `scripts/probar_concurrencia.cjs` | Pruebas con conexiones simultáneas reales; requiere el paquete `pg` |
 | `config.toml` | Configuración de Supabase CLI. El esquema `rma` no se expone por la API de datos |
 

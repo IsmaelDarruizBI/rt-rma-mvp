@@ -2,8 +2,9 @@
 // Uso (desde la raíz de rt-rma-mvp): node supabase/scripts/generar_datos_iniciales.cjs
 //
 //   seeds/referencia_operativa/  Datos operativos iniciales válidos para producción:
-//                                medios de pago, empresa, Términos y Condiciones v1,
-//                                catálogo técnico de modelos y motivos de ajuste propuestos.
+//                                medios de pago, empresa, catálogo técnico de modelos y
+//                                motivos de ajuste propuestos. Los Términos y Condiciones
+//                                v1 (02_terminos_condiciones.sql) quedaron congelados.
 //   seeds/desarrollo/            Datos ficticios de prueba (usuarios demo, Mesas, tipos de
 //                                reparación, insumos y stock). Nunca se cargan en producción.
 const fs = require("fs");
@@ -23,25 +24,13 @@ function escribir(rel, contenido) {
   console.log("escrito", path.relative(RAIZ, destino));
 }
 
-// --- Términos y Condiciones v1, desde el texto vigente del frontend -----------------
-function terminosCondiciones() {
-  const ts = fs
-    .readFileSync(path.join(RAIZ, "app/frontend/src/features/ordenes-reparacion/terminosCondiciones.ts"), "utf8")
-    .replace(/\r\n/g, "\n");
-  const literal = (nombre) => {
-    const inicio = ts.indexOf(`export const ${nombre}`);
-    if (inicio < 0) throw new Error(`no se encontró ${nombre}`);
-    const igual = ts.indexOf("=", inicio);
-    const fin = ts.indexOf(";\n", igual);
-    const texto = ts.slice(igual + 1, fin).replace(/\s+as const\s*$/, "");
-    return Function(`"use strict"; return (${texto});`)();
-  };
-  return {
-    encabezado: literal("ENCABEZADO_TERMINOS"),
-    apartados: literal("APARTADOS_TERMINOS").map((a, i) => ({ numero: i + 1, lineas: a.lineas, destacado: !!a.destacado })),
-    pie: literal("PIE_TERMINOS"),
-  };
-}
+// --- Términos y Condiciones ------------------------------------------------------
+// La versión 1 (seeds/referencia_operativa/02_terminos_condiciones.sql) quedó
+// congelada: es la transcripción original de la hoja y rma.texto_legal es
+// inmutable. Desde DEC-AJ-09 los Términos se versionan en la base: la versión 2
+// la carga la migración 20261123000300_comprobantes_empresa_terminos.sql y las
+// siguientes las publica Administración desde Configuración. Este script ya no
+// regenera 02_terminos_condiciones.sql (el texto del frontend dejó de ser la v1).
 
 // --- Referencia operativa ---------------------------------------------------------
 function generarReferenciaOperativa() {
@@ -58,16 +47,6 @@ escribir(
     // orden: la posicion en la lista predeterminada (E3, DE3-2).
     `insert into rma.medio_pago (codigo, nombre, orden) values\n${medios.map(([c, n], i) => `  (${q(c)}, ${q(n)}, ${i + 1})`).join(",\n")}\non conflict (codigo) do update set orden = excluded.orden\n  where rma.medio_pago.orden is distinct from excluded.orden;\n\n` +
     `insert into rma.empresa (nombre) values ('Rosario Tecno')\non conflict (id) do nothing;\n`
-);
-
-const terminos = terminosCondiciones();
-if (terminos.apartados.length !== 19) throw new Error("se esperaban 19 apartados de Términos y Condiciones");
-escribir(
-  "referencia_operativa/02_terminos_condiciones.sql",
-  cabecera("Términos y Condiciones del comprobante de entrega, versión 1", "app/frontend/src/features/ordenes-reparacion/terminosCondiciones.ts") +
-    `-- El texto sigue en revisión (P-04, P-05): una corrección es una versión nueva.\n` +
-    `insert into rma.texto_legal (tipo, version, titulo, contenido, vigente_desde) values (\n` +
-    `  'TERMINOS_CONDICIONES_ENTREGA', 1, ${q(terminos.encabezado.titulo)},\n  ${q(JSON.stringify(terminos))}::jsonb,\n  '2026-10-28T00:00:00-03:00'\n)\non conflict (tipo, version) do nothing;\n`
 );
 
 const modelos = leer("app/backend/app/datos/modelos_equipo.json");

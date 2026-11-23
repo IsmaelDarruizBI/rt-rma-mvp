@@ -20,9 +20,11 @@ from app.domain.models import (
     Insumo,
     MedioPago,
     MovimientoStock,
+    TextoLegal,
     TipoReparacion,
     TipoReparacionEstacion,
     TipoReparacionInsumos,
+    TipoTextoLegal,
     Usuario,
 )
 
@@ -150,4 +152,17 @@ class CatalogosRepository(Protocol):
 
     def obtener_datos_empresa(self) -> DatosEmpresa:
         """Datos configurados (o los predeterminados si no hay)."""
+        ...
+
+    # --- Textos legales versionados (DEC-AJ-09) ---
+
+    def listar_textos_legales(self, tipo: TipoTextoLegal) -> list[TextoLegal]:
+        """Las versiones publicadas del tipo, de la primera a la ultima."""
+        ...
+
+    def obtener_texto_legal_vigente(
+        self, tipo: TipoTextoLegal
+    ) -> TextoLegal | None:
+        """La version que rige: la de mayor numero, que se publica vigente
+        desde ese momento (``None`` si no hay ninguna)."""
         ...

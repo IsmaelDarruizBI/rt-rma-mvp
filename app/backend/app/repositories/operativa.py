@@ -6,7 +6,12 @@ from collections.abc import Sequence
 from decimal import Decimal
 from typing import Protocol
 
-from app.domain.models import CambioConfiguracion, Insumo
+from app.domain.models import (
+    CambioConfiguracion,
+    DatosEmpresa,
+    Insumo,
+    TextoLegal,
+)
 from app.domain.models.checklist import PreguntaChecklist, TipoEquipo
 from app.domain.models.comunicaciones import (
     ConsentimientoComunicacion,
@@ -55,6 +60,21 @@ class ConfiguracionOperativaRepository(Protocol):
     def guardar_recargo_medio_pago(
         self, medio_id: str, porcentaje: Decimal, cambio: CambioConfiguracion
     ) -> None: ...
+
+    # DEC-AJ-09: datos de la empresa (una sola fila) y versiones nuevas de
+    # los textos legales (nunca se modifica una publicada), con auditoria.
+    def guardar_datos_empresa(
+        self,
+        empresa: DatosEmpresa,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None: ...
+
+    def publicar_texto_legal(
+        self, texto: TextoLegal, cambio: CambioConfiguracion
+    ) -> None:
+        """Agrega la version (``CodigoExistenteError`` si ese numero ya
+        existe: otra publicacion concurrente)."""
+        ...
 
     # DC12: copia de los tipos de equipo del catalogo de Ventas y
     # preguntas del checklist.

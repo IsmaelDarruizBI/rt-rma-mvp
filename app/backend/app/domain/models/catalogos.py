@@ -116,6 +116,10 @@ class DatosEmpresa(BaseModel):
     negocio lo define: el sistema no inventa condiciones. Cada documento
     emitido guarda una copia, asi que cambiar estos datos no altera lo ya
     entregado al cliente.
+
+    DEC-AJ-09: Administracion los edita, con auditoria. ``horario`` (de
+    atencion) y ``pie_comprobante`` (texto libre al pie de los
+    comprobantes) son opcionales: los snapshots anteriores no los tienen.
     """
 
     nombre: str
@@ -125,6 +129,8 @@ class DatosEmpresa(BaseModel):
     telefono: str | None = None
     email: str | None = None
     condiciones_garantia: str | None = None
+    horario: str | None = None
+    pie_comprobante: str | None = None
 
 
 # Unica definicion de los medios iniciales. Se usan mientras el directorio

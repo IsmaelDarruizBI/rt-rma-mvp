@@ -23,6 +23,9 @@ class EntidadConfiguracion(str, Enum):
     CHECKLIST = "CHECKLIST"
     PROVEEDOR = "PROVEEDOR"
     MEDIO_PAGO = "MEDIO_PAGO"
+    # DEC-AJ-09: datos de la empresa y versiones de los textos legales.
+    EMPRESA = "EMPRESA"
+    TEXTO_LEGAL = "TEXTO_LEGAL"
 
 
 class CambioConfiguracion(BaseModel):

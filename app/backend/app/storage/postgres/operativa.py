@@ -1,10 +1,16 @@
 """Configuracion operativa sobre PostgreSQL: motivos y parametros, con su
 auditoria en la misma transaccion (DEC-MI-13, 14 y 15)."""
 
+import json
 from collections.abc import Sequence
 from decimal import Decimal
 
-from app.domain.models import CambioConfiguracion, Insumo
+from app.domain.models import (
+    CambioConfiguracion,
+    DatosEmpresa,
+    Insumo,
+    TextoLegal,
+)
 from app.domain.models.checklist import PreguntaChecklist, TipoEquipo
 from app.domain.models.comunicaciones import PlantillaMensaje
 from app.domain.models.operativa import MotivoOperativo, TipoMotivo
@@ -183,6 +189,43 @@ _ACTUALIZAR_PREGUNTA = consulta(
     modo=ESCRITURA,
 )
 
+# DEC-AJ-09: la unica fila de la empresa (sin ella, la crea).
+_GUARDAR_EMPRESA = consulta(
+    "operativa.guardar_empresa",
+    """
+    INSERT INTO rma.empresa
+        (id, nombre, razon_social, cuit, direccion, telefono, email,
+         condiciones_garantia, horario, pie_comprobante)
+    VALUES (true, %(nombre)s, %(razon_social)s, %(cuit)s, %(direccion)s,
+            %(telefono)s, %(email)s, %(condiciones_garantia)s,
+            %(horario)s, %(pie_comprobante)s)
+    ON CONFLICT (id) DO UPDATE
+       SET nombre = excluded.nombre,
+           razon_social = excluded.razon_social,
+           cuit = excluded.cuit,
+           direccion = excluded.direccion,
+           telefono = excluded.telefono,
+           email = excluded.email,
+           condiciones_garantia = excluded.condiciones_garantia,
+           horario = excluded.horario,
+           pie_comprobante = excluded.pie_comprobante
+    """,
+    modo=ESCRITURA,
+)
+# Una version nueva: nunca pisa una existente (la tabla es inmutable).
+_PUBLICAR_TEXTO_LEGAL = consulta(
+    "operativa.publicar_texto_legal",
+    """
+    INSERT INTO rma.texto_legal
+        (tipo, version, titulo, contenido, vigente_desde, publicado_por)
+    VALUES (%(tipo)s, %(version)s, %(titulo)s, %(contenido)s::jsonb,
+            %(vigente_desde)s,
+            (SELECT id FROM rma.usuario WHERE codigo = %(usuario)s))
+    ON CONFLICT (tipo, version) DO NOTHING
+    """,
+    modo=ESCRITURA,
+)
+
 
 class PostgresConfiguracionOperativa:
     editable = True
@@ -306,6 +349,42 @@ class PostgresConfiguracionOperativa:
         ):
             raise EntidadPersistidaNoEncontradaError(
                 f"No existe el medio de pago {medio_id}"
+            )
+        self._auditoria._auditar(ejecutor, [cambio])
+
+    def guardar_datos_empresa(
+        self,
+        empresa: DatosEmpresa,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None:
+        self._exigir_transaccion()
+        ejecutor = self._unidad.ejecutor()
+        ejecutor.ejecutar(_GUARDAR_EMPRESA, empresa.model_dump())
+        self._auditoria._auditar(ejecutor, cambios)
+
+    def publicar_texto_legal(
+        self, texto: TextoLegal, cambio: CambioConfiguracion
+    ) -> None:
+        self._exigir_transaccion()
+        ejecutor = self._unidad.ejecutor()
+        insertadas = ejecutor.ejecutar(
+            _PUBLICAR_TEXTO_LEGAL,
+            {
+                "tipo": texto.tipo.value,
+                "version": texto.version,
+                "titulo": texto.titulo,
+                "contenido": json.dumps(
+                    texto.contenido.model_dump(mode="json"),
+                    ensure_ascii=False,
+                ),
+                "vigente_desde": texto.vigente_desde,
+                "usuario": texto.publicado_por,
+            },
+        )
+        if insertadas != 1:
+            raise CodigoExistenteError(
+                f"Ya existe la version {texto.version} de "
+                f"{texto.tipo.value}: se publico otra al mismo tiempo."
             )
         self._auditoria._auditar(ejecutor, [cambio])
 

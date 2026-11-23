@@ -21,6 +21,7 @@ from app.domain.models import (
     DATOS_EMPRESA_PREDETERMINADOS,
     MEDIOS_PAGO_PREDETERMINADOS,
     TIPO_REPARACION_OTROS,
+    TipoTextoLegal,
 )
 from app.repositories.exceptions import (
     EntidadPersistidaNoEncontradaError,
@@ -118,6 +119,12 @@ def test_empresa_y_modelos_identicos_en_json_y_postgres(tmp_path, postgres):
         catalogos.obtener_datos_empresa()
     )
     assert postgres[1].listar_modelos() == modelos.listar_modelos()
+    # DEC-AJ-09: la version vigente de los terminos (la 2, de la migracion)
+    # es la misma que la inicial del modo JSON.
+    tipo = TipoTextoLegal.TERMINOS_CONDICIONES_ENTREGA
+    assert postgres[0].obtener_texto_legal_vigente(tipo) == (
+        catalogos.obtener_texto_legal_vigente(tipo)
+    )
     assert [
         m.model_dump(mode="json") for m in postgres[1].listar_modelos()
     ] == [m.model_dump(mode="json") for m in modelos.listar_modelos()]

@@ -13,6 +13,8 @@ Un archivo por catalogo, cada uno con un array JSON:
     medios_pago.json        (opcional: sin el archivo, los predeterminados)
     empresa.json            (opcional, un objeto: identificacion en los
                              documentos; sin el archivo, la predeterminada)
+    textos_legales.json     (opcional: versiones de los textos legales;
+                             sin el archivo, los terminos iniciales)
 
 Los catalogos se releen en cada consulta: son chicos y asi dos procesos
 no trabajan sobre una copia en memoria desactualizada. Cuando el volumen
@@ -28,14 +30,17 @@ from pydantic import BaseModel, ValidationError
 from app.domain.models import (
     DATOS_EMPRESA_PREDETERMINADOS,
     MEDIOS_PAGO_PREDETERMINADOS,
+    TERMINOS_INICIALES,
     DatosEmpresa,
     EstacionTrabajo,
     Insumo,
     MedioPago,
     MovimientoStock,
+    TextoLegal,
     TipoReparacion,
     TipoReparacionEstacion,
     TipoReparacionInsumos,
+    TipoTextoLegal,
     Usuario,
 )
 from app.repositories.exceptions import (
@@ -55,6 +60,7 @@ ARCHIVO_TIPO_REPARACION_ESTACIONES = "tipo_reparacion_estaciones.json"
 ARCHIVO_USUARIOS = "usuarios.json"
 ARCHIVO_MEDIOS_PAGO = "medios_pago.json"
 ARCHIVO_EMPRESA = "empresa.json"
+ARCHIVO_TEXTOS_LEGALES = "textos_legales.json"
 
 ModeloT = TypeVar("ModeloT", bound=BaseModel)
 
@@ -244,6 +250,29 @@ class JsonCatalogosRepository:
             raise PersistenciaError(
                 f"El archivo {ruta} no es valido: {error}"
             ) from error
+
+    # --- Textos legales versionados (DEC-AJ-09) ---
+
+    def listar_textos_legales(self, tipo: TipoTextoLegal) -> list[TextoLegal]:
+        """Las versiones del archivo o, sin el, los terminos iniciales.
+
+        En el modo JSON no se publican versiones (la configuracion es de
+        solo lectura): el archivo permite probar otra version a mano.
+        """
+        ruta = self._directorio / ARCHIVO_TEXTOS_LEGALES
+        if ruta.is_file():
+            textos = self._listar(ARCHIVO_TEXTOS_LEGALES, TextoLegal)
+        else:
+            textos = [TERMINOS_INICIALES.model_copy(deep=True)]
+        return sorted(
+            (t for t in textos if t.tipo is tipo), key=lambda t: t.version
+        )
+
+    def obtener_texto_legal_vigente(
+        self, tipo: TipoTextoLegal
+    ) -> TextoLegal | None:
+        versiones = self.listar_textos_legales(tipo)
+        return versiones[-1] if versiones else None
 
     # --- Interno ---
 

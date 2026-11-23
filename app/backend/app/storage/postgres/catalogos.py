@@ -47,9 +47,11 @@ from app.domain.models import (
     MedioPago,
     MovimientoStock,
     RolUsuario,
+    TextoLegal,
     TipoReparacion,
     TipoReparacionEstacion,
     TipoReparacionInsumos,
+    TipoTextoLegal,
     Usuario,
 )
 from app.repositories.exceptions import (
@@ -195,8 +197,22 @@ _EMPRESA = consulta(
     "catalogos.empresa",
     """
     SELECT nombre, razon_social, cuit, direccion, telefono, email,
-           condiciones_garantia
+           condiciones_garantia, horario, pie_comprobante
     FROM rma.empresa
+    """,
+    modo=LECTURA,
+)
+# DEC-AJ-09: versiones de un texto legal. Rige la de mayor numero: se
+# publica vigente desde ese momento (no hay versiones a futuro).
+_TEXTOS_LEGALES = consulta(
+    "catalogos.textos_legales",
+    """
+    SELECT t.tipo, t.version, t.titulo, t.contenido, t.vigente_desde,
+           u.codigo AS publicado_por
+    FROM rma.texto_legal t
+    LEFT JOIN rma.usuario u ON u.id = t.publicado_por
+    WHERE t.tipo = %(tipo)s
+    ORDER BY t.version
     """,
     modo=LECTURA,
 )
@@ -518,6 +534,27 @@ class PostgresCatalogosRepository:
         if fila is None:
             return DATOS_EMPRESA_PREDETERMINADOS.model_copy()
         return DatosEmpresa(**fila._asdict())
+
+    # --- Textos legales versionados (DEC-AJ-09) ---
+
+    def listar_textos_legales(self, tipo: TipoTextoLegal) -> list[TextoLegal]:
+        return [
+            TextoLegal(
+                tipo=fila.tipo,
+                version=fila.version,
+                titulo=fila.titulo,
+                contenido=fila.contenido,
+                vigente_desde=fila.vigente_desde.astimezone(timezone.utc),
+                publicado_por=fila.publicado_por,
+            )
+            for fila in self._filas(_TEXTOS_LEGALES, {"tipo": tipo.value})
+        ]
+
+    def obtener_texto_legal_vigente(
+        self, tipo: TipoTextoLegal
+    ) -> TextoLegal | None:
+        versiones = self.listar_textos_legales(tipo)
+        return versiones[-1] if versiones else None
 
     # --- Interno ---
 
