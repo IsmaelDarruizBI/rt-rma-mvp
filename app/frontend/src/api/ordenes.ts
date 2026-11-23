@@ -535,6 +535,21 @@ export interface DatosRetiro {
 }
 
 /**
+ * La entrega (DEC-AJ-09, P-05): si retira otra persona; si es así, su
+ * nombre, apellido y teléfono (obligatorios). Sin vínculo, DNI ni
+ * autorización. Si todavía falta, el check-in va en la misma confirmación
+ * (DEC-AJ-04): si se pudieron verificar las funciones básicas.
+ */
+export interface DatosEntrega {
+  retira_otra_persona: boolean;
+  retira_nombre: string | null;
+  retira_apellido: string | null;
+  retira_telefono: string | null;
+  observaciones: string | null;
+  checkin?: boolean | null;
+}
+
+/**
  * Sube UNA foto del equipo (cualquier usuario operativo). La imagen va al
  * almacenamiento privado; la Orden registra quién la subió y cuándo.
  */
@@ -577,14 +592,16 @@ export function registrarCheckin(
 }
 
 /**
- * PROC-REP-280 -> 270 -> EVT-REP-999 (Administración o Recepción). Exige
- * la custodia confirmada, el check-in (Cliente Externo con trabajos
- * realizados) y quién retira; emite el comprobante final y la garantía.
+ * [250] [269] [265] 280 -> 270 -> EVT-REP-999 (Administración o
+ * Recepción), en una sola confirmación. Exige saldo 0, la custodia
+ * confirmada y el check-in (Cliente Externo con trabajos realizados: si
+ * falta, va en `checkin`). Si retira otra persona, su nombre, apellido y
+ * teléfono; emite el Comprobante de entrega y garantía.
  */
 export function entregar(
   ordenId: string,
   usuarioId: string,
-  retiro: DatosRetiro,
+  retiro: DatosEntrega,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/deliver`, {
     usuario_id: usuarioId,

@@ -1,7 +1,8 @@
 /**
- * Términos y Condiciones del comprobante de entrega: los 19 apartados de
- * la hoja de Rosario Tecno, dos resaltados, y solo en la entrega de un
- * equipo reparado.
+ * Términos y Condiciones del comprobante de entrega y garantía: los
+ * apartados de la hoja de Rosario Tecno (sin el que anulaba la garantía si
+ * retiraba otra persona, DEC-AJ-09), uno resaltado, y solo en la entrega
+ * de un equipo reparado.
  *
  * Se ejecuta con `npm test` (node --test, sin dependencias extra).
  */
@@ -16,8 +17,8 @@ import {
   llevaTerminos,
 } from "../src/features/ordenes-reparacion/terminosCondiciones.ts";
 
-test("los 19 apartados de la hoja, sin líneas vacías", () => {
-  assert.equal(APARTADOS_TERMINOS.length, 19);
+test("los 18 apartados de la hoja, sin líneas vacías", () => {
+  assert.equal(APARTADOS_TERMINOS.length, 18);
   for (const apartado of APARTADOS_TERMINOS) {
     assert.ok(apartado.lineas.length > 0);
     for (const linea of apartado.lineas) {
@@ -27,24 +28,30 @@ test("los 19 apartados de la hoja, sin líneas vacías", () => {
   }
   assert.match(APARTADOS_TERMINOS[0].lineas[0], /^La reparación cuenta con una garantía de seis meses \(180 días de corrido\)/);
   assert.match(APARTADOS_TERMINOS[2].lineas[0], /el repuesto debe estar entero y en óptimas condiciones\.$/);
-  assert.match(APARTADOS_TERMINOS[18].lineas[0], /^El cliente declara haber leído, comprendido y aceptado/);
+  assert.match(APARTADOS_TERMINOS[17].lineas[0], /^El cliente declara haber leído, comprendido y aceptado/);
 });
 
-test("solo se resaltan el retiro por terceros y los plazos estimativos", () => {
+test("solo se resaltan los plazos estimativos", () => {
   const destacados = APARTADOS_TERMINOS.flatMap((apartado, indice) =>
     apartado.destacado ? [{ numero: indice + 1, texto: apartado.lineas.join(" ") }] : [],
   );
   assert.deepEqual(
     destacados.map((destacado) => destacado.numero),
-    [15, 17],
+    [16],
   );
   assert.equal(
     destacados[0].texto,
-    "La garantía quedará automáticamente anulada si el equipo es retirado por un comisionista, tercero, mensajero o cualquier persona distinta del titular que realizó el ingreso, aun cuando exista autorización verbal o escrita.",
-  );
-  assert.equal(
-    destacados[1].texto,
     "Los plazos de reparación son estimativos y pueden variar sin que ello genere derecho a reclamo alguno.",
+  );
+});
+
+test("DEC-AJ-09: que retire otra persona no anula la garantía", () => {
+  const texto = APARTADOS_TERMINOS.flatMap((apartado) => apartado.lineas).join(" ");
+  assert.doesNotMatch(texto, /quedará automáticamente anulada/);
+  assert.doesNotMatch(texto, /misma persona que dejó el equipo/);
+  assert.match(
+    texto,
+    /entregado únicamente contra el pago total de la reparación y la presentación del comprobante correspondiente\./,
   );
 });
 

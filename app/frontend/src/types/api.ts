@@ -186,6 +186,9 @@ export interface Devolucion {
   entregado_por: string;
   recibido_por: string;
   identificacion_receptor: string | null;
+  /** DEC-AJ-09: si retiró otra persona y su teléfono (null: dato anterior). */
+  retira_otra_persona?: boolean | null;
+  telefono_receptor?: string | null;
   fecha: string;
   observaciones: string | null;
 }
@@ -362,11 +365,20 @@ export interface ContenidoEntrega extends ContenidoBase {
   tipo: "COMPROBANTE_ENTREGA";
   estado_final: EstadoWorkflow;
   tipo_entrega: TipoEntrega;
+  /**
+   * DEC-AJ-04: «Comprobante de entrega y garantía», un solo documento con
+   * la garantía de cada trabajo y los términos. Ausente en los anteriores.
+   */
+  entrega_y_garantia?: boolean;
+  condiciones_garantia?: string | null;
   resultado: string;
   fecha_entrega: string | null;
   entregado_por: UsuarioEnDocumento | null;
   recibido_por: string | null;
   identificacion_receptor: string | null;
+  /** DEC-AJ-09: si retiró otra persona y su teléfono (null: dato anterior). */
+  retira_otra_persona?: boolean | null;
+  telefono_receptor?: string | null;
   observaciones_entrega: string | null;
   /** Si se pudieron verificar las funciones básicas antes de entregar. */
   checkin?: boolean | null;

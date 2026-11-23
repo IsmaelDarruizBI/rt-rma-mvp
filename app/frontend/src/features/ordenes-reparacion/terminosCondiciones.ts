@@ -2,9 +2,15 @@
  * Términos y Condiciones del servicio técnico de Rosario Tecno.
  *
  * Transcripción textual de la hoja que firma el cliente al retirar el
- * equipo: los 19 apartados en su orden, sin resumir ni reescribir. Cada
- * apartado es una lista de líneas: la primera abre el apartado y las
- * siguientes son los renglones que la hoja muestra aparte.
+ * equipo, en su orden, sin resumir ni reescribir. Cada apartado es una
+ * lista de líneas: la primera abre el apartado y las siguientes son los
+ * renglones que la hoja muestra aparte.
+ *
+ * DEC-AJ-09 (P-05, 23/11/2026): que retire otra persona no modifica ni
+ * anula la garantía y no se exige que retire quien dejó el equipo. Se
+ * quitaron el apartado que anulaba la garantía si retiraba un tercero y,
+ * del que lo exigía, esa condición. El resto del texto (incluidos los 180
+ * días, P-04) no cambia: lo versiona el bloque 4 (`rma.texto_legal`).
  *
  * Solo datos: la página que los imprime vive en `DocumentosOrden.tsx`.
  */
@@ -106,14 +112,8 @@ export const APARTADOS_TERMINOS: ApartadoTerminos[] = [
   },
   {
     lineas: [
-      "El equipo será entregado únicamente contra el pago total de la reparación, la presentación del comprobante correspondiente y el retiro por parte de la misma persona que dejó el equipo en el servicio técnico.",
+      "El equipo será entregado únicamente contra el pago total de la reparación y la presentación del comprobante correspondiente.",
     ],
-  },
-  {
-    lineas: [
-      "La garantía quedará automáticamente anulada si el equipo es retirado por un comisionista, tercero, mensajero o cualquier persona distinta del titular que realizó el ingreso, aun cuando exista autorización verbal o escrita.",
-    ],
-    destacado: true,
   },
   {
     lineas: [

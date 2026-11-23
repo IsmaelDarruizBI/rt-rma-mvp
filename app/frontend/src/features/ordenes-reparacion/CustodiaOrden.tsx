@@ -29,6 +29,7 @@ import type {
 } from "../../types/api";
 import { nombreEquipo } from "./catalogoEquipos";
 import { nombreDeUsuario } from "./DetalleOrden";
+import { descripcionQuienRetira } from "./entrega";
 import { CUSTODIA, descripcionCheckin, etiqueta } from "./etiquetas";
 import { Confirmacion, Seccion, habilitada } from "./PagosOrden";
 import { UbicacionAccion } from "./presentacion";
@@ -89,11 +90,7 @@ function descripcionCustodia(orden: Orden, usuarios: Usuario[]): string {
   const { custodia } = orden;
   const salida = custodia.salida;
   const retira = salida
-    ? `${salida.recibido_por}${
-        salida.identificacion_receptor
-          ? ` (${salida.identificacion_receptor})`
-          : ""
-      } el ${fechaCorta(salida.fecha)}, por ${nombreDeUsuario(usuarios, salida.entregado_por)}`
+    ? `${descripcionQuienRetira(salida)} el ${fechaCorta(salida.fecha)}, por ${nombreDeUsuario(usuarios, salida.entregado_por)}`
     : "";
   switch (custodia.estado) {
     case "PENDIENTE_CONFIRMACION":

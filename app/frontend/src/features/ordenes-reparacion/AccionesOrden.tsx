@@ -14,6 +14,7 @@ import { type ReactNode, useEffect, useId, useState } from "react";
 import type { TipoMotivo } from "../../api/operativa";
 
 import {
+  type DatosEntrega,
   type DatosRetiro,
   TIPO_REPARACION_OTROS,
   type TrabajoOtros,
@@ -42,6 +43,7 @@ import type {
   VigenciaGarantia,
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
+import { checkinPendiente, faltantesDelRetiro } from "./entrega";
 import {
   avisoCancelacionOrden,
   motivosDeBloqueo,
@@ -112,8 +114,8 @@ export interface EjecutorAcciones {
   aprobarControl: (detalleId: string | null, observaciones: string) => void;
   liberarOrden: () => void;
   notificar: () => void;
-  /** PROC-REP-280 -> 270: con quién retira (exige custodia confirmada). */
-  entregar: (retiro: DatosRetiro) => void;
+  /** Entrega en una sola confirmación: quién retira y el check-in que falte. */
+  entregar: (retiro: DatosEntrega) => void;
   informarRt: () => void;
   devolverRt: () => void;
   iniciarGarantiaRma: (
@@ -1002,11 +1004,14 @@ function FormularioDevolucion({
 }
 
 /**
- * Entrega del equipo (PROC-REP-280 -> 270): quién retira, su
- * identificación y observaciones, con confirmación. El backend exige la
- * custodia confirmada, el control aprobado y la cuenta saldada; acá solo
- * se avisa si la custodia falta. Al confirmar se emiten el comprobante
- * final y la garantía.
+ * Entrega del equipo, en una sola confirmación (DEC-AJ-04): quién retira,
+ * observaciones y, si todavía falta, el check-in (la misma pregunta que
+ * «Registrar el check-in»). DEC-AJ-09 (P-05): «¿Retira otra persona?»; si
+ * es así, nombre, apellido y teléfono obligatorios, sin vínculo, DNI ni
+ * autorización, y la garantía no cambia. El backend controla la cuenta
+ * saldada, la custodia y el check-in, y avisa en `bloqueo` lo que impide
+ * entregar: acá no se deduce. Al confirmar se emite el Comprobante de
+ * entrega y garantía.
  */
 function FormularioEntrega({
   orden,
@@ -1015,48 +1020,36 @@ function FormularioEntrega({
   onConfirmar,
 }: {
   orden: Orden;
-  /** Por ejemplo, falta el check-in: el backend la rechaza igual. */
+  /** Lo que impide entregar, según el backend (por ejemplo, la custodia). */
   bloqueo: string | null;
   deshabilitado: boolean;
-  onConfirmar: (retiro: DatosRetiro) => void;
+  onConfirmar: (retiro: DatosEntrega) => void;
 }) {
-  const [recibidoPor, setRecibidoPor] = useState("");
-  const [identificacion, setIdentificacion] = useState("");
+  const [otraPersona, setOtraPersona] = useState(false);
+  const [nombre, setNombre] = useState("");
+  const [apellido, setApellido] = useState("");
+  const [telefono, setTelefono] = useState("");
   const [observaciones, setObservaciones] = useState("");
+  const [checkin, setCheckin] = useState<"" | "si" | "no">("");
   const [confirmando, setConfirmando] = useState(false);
-  const enCustodia = orden.custodia.estado === "EN_CUSTODIA";
-  const bloqueado = deshabilitado || !enCustodia || bloqueo !== null;
+  const grupo = useId();
+  const bloqueado = deshabilitado || bloqueo !== null;
   const titular = orden.cliente?.nombre_apellido ?? null;
   const devolucion = orden.finalizada_sin_reparacion;
+  const pideCheckin = checkinPendiente(orden);
+  const faltantes = faltantesDelRetiro({ otraPersona, nombre, apellido, telefono });
 
   useEffect(
     () => setConfirmando(false),
-    [recibidoPor, identificacion, observaciones],
+    [otraPersona, nombre, apellido, telefono, observaciones, checkin],
   );
 
-  const retira = `${recibidoPor.trim()}${
-    identificacion.trim() ? ` (${identificacion.trim()})` : ""
-  }`;
+  const retira = otraPersona
+    ? `${nombre.trim()} ${apellido.trim()} (otra persona)`
+    : `el titular${titular ? ` (${titular})` : ""}`;
 
   return (
     <div>
-      {!enCustodia && (
-        <p
-          role="status"
-          style={{
-            margin: "0 0 0.6rem",
-            padding: "0.5rem 0.7rem",
-            borderRadius: 6,
-            border: `1px solid ${colores.alerta}`,
-            background: "#fff8e6",
-            fontSize: "0.85rem",
-          }}
-        >
-          La recepción física del equipo no está confirmada. Confirmala (o
-          regularizala) en <strong>Recepción y custodia</strong> antes de
-          entregar.
-        </p>
-      )}
       {bloqueo && (
         <p
           role="status"
@@ -1070,38 +1063,80 @@ function FormularioEntrega({
           }}
         >
           <strong>{bloqueo}.</strong>{" "}
-          {bloqueo.includes("check-in") &&
-            "Indicá en «Registrar el check-in» si se pudieron verificar las " +
-              "funciones básicas del equipo: define la garantía de cada trabajo."}
+          {bloqueo.includes("recepción") &&
+            "Resolvelo en «Recepción y custodia» antes de entregar."}
         </p>
       )}
-      <Campo etiqueta="Retira el equipo (obligatorio)">
-        <input
-          value={recibidoPor}
-          onChange={(evento) => setRecibidoPor(evento.target.value)}
-          disabled={bloqueado}
-          style={estiloInput}
-        />
-      </Campo>
-      {titular && (
-        <div style={{ margin: "-0.3rem 0 0.6rem" }}>
-          <Boton
-            variante="secundario"
-            disabled={bloqueado}
-            onClick={() => setRecibidoPor(titular)}
-          >
-            Retira el titular ({titular})
-          </Boton>
+      <fieldset
+        style={{
+          border: `1px solid ${colores.borde}`,
+          borderRadius: 6,
+          margin: "0 0 0.6rem",
+          padding: "0.4rem 0.7rem 0.5rem",
+        }}
+      >
+        <legend style={{ fontSize: "0.85rem", padding: "0 0.3rem" }}>
+          ¿Retira otra persona?
+        </legend>
+        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+          {(
+            [
+              [false, `No, retira el titular${titular ? ` (${titular})` : ""}`],
+              [true, "Sí"],
+            ] as const
+          ).map(([opcion, texto]) => (
+            <label
+              key={String(opcion)}
+              style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}
+            >
+              <input
+                type="radio"
+                name={`retira-${grupo}`}
+                checked={otraPersona === opcion}
+                disabled={bloqueado}
+                onChange={() => setOtraPersona(opcion)}
+              />
+              {texto}
+            </label>
+          ))}
         </div>
+      </fieldset>
+      {otraPersona && (
+        <>
+          <Campo etiqueta="Nombre (obligatorio)">
+            <input
+              value={nombre}
+              onChange={(evento) => setNombre(evento.target.value)}
+              disabled={bloqueado}
+              style={estiloInput}
+            />
+          </Campo>
+          <Campo etiqueta="Apellido (obligatorio)">
+            <input
+              value={apellido}
+              onChange={(evento) => setApellido(evento.target.value)}
+              disabled={bloqueado}
+              style={estiloInput}
+            />
+          </Campo>
+          <Campo etiqueta="Teléfono (obligatorio)">
+            <input
+              type="tel"
+              value={telefono}
+              onChange={(evento) => setTelefono(evento.target.value)}
+              disabled={bloqueado}
+              style={estiloInput}
+            />
+          </Campo>
+          <p style={{ margin: "-0.2rem 0 0.6rem", fontSize: "0.75rem", color: colores.suave }}>
+            No se pide DNI ni autorización. Que retire otra persona no cambia la
+            garantía.
+          </p>
+        </>
       )}
-      <Campo etiqueta="DNI u otra identificación (si corresponde)">
-        <input
-          value={identificacion}
-          onChange={(evento) => setIdentificacion(evento.target.value)}
-          disabled={bloqueado}
-          style={estiloInput}
-        />
-      </Campo>
+      {pideCheckin && (
+        <CampoCheckin valor={checkin} deshabilitado={bloqueado} onCambiar={setCheckin} />
+      )}
       <Campo etiqueta="Observaciones de la entrega">
         <input
           value={observaciones}
@@ -1112,7 +1147,9 @@ function FormularioEntrega({
       </Campo>
       {!confirmando ? (
         <Boton
-          disabled={bloqueado || recibidoPor.trim() === ""}
+          disabled={
+            bloqueado || faltantes.length > 0 || (pideCheckin && checkin === "")
+          }
           onClick={() => setConfirmando(true)}
         >
           {devolucion ? "Devolver el equipo (sin reparación)" : "Entregar equipo"}
@@ -1121,16 +1158,21 @@ function FormularioEntrega({
         <Confirmacion
           texto={`¿Confirmás la ${
             devolucion ? "devolución" : "entrega"
-          } del equipo a ${retira}? Se emiten el comprobante final${
-            devolucion ? "" : " y la garantía"
+          } del equipo a ${retira}?${
+            pideCheckin ? " Se registra también el check-in." : ""
+          } Se emite el comprobante de ${
+            devolucion ? "devolución" : "entrega y garantía"
           }, y la Orden queda cerrada.`}
           ocupado={deshabilitado}
           onVolver={() => setConfirmando(false)}
           onConfirmar={() =>
             onConfirmar({
-              recibido_por: recibidoPor.trim(),
-              identificacion_receptor: identificacion.trim() || null,
+              retira_otra_persona: otraPersona,
+              retira_nombre: otraPersona ? nombre.trim() : null,
+              retira_apellido: otraPersona ? apellido.trim() : null,
+              retira_telefono: otraPersona ? telefono.trim() : null,
               observaciones: observaciones.trim() || null,
+              checkin: pideCheckin ? checkin === "si" : null,
             })
           }
         />

@@ -59,6 +59,7 @@ import {
   mensajeComprobante,
   telefonoParaWhatsapp,
 } from "./whatsapp";
+import { descripcionQuienRetira, tituloComprobanteEntrega } from "./entrega";
 import {
   APARTADOS_TERMINOS,
   ENCABEZADO_TERMINOS,
@@ -68,7 +69,8 @@ import {
 
 const NOMBRE_TIPO: Record<TipoDocumento, string> = {
   COMPROBANTE_RECEPCION: "Comprobante de recepción",
-  COMPROBANTE_ENTREGA: "Comprobante de entrega",
+  // DEC-AJ-04: la entrega emite un solo documento, con la garantía.
+  COMPROBANTE_ENTREGA: "Comprobante de entrega y garantía",
   GARANTIA: "Garantía",
   COMPROBANTE_AUTORIZACION: "Comprobante de autorización",
   COMPROBANTE_INGRESO: "Comprobante de ingreso y autorización",
@@ -102,9 +104,7 @@ const CANALES: CanalComunicacion[] = [
 /** Título del documento: una devolución sin reparación no es una entrega. */
 function tituloDe(contenido: ContenidoDocumento): string {
   if (contenido.tipo === "COMPROBANTE_ENTREGA") {
-    return contenido.tipo_entrega === "DEVOLUCION_SIN_REPARACION"
-      ? "Comprobante de devolución sin reparación"
-      : "Comprobante de entrega";
+    return tituloComprobanteEntrega(contenido);
   }
   if (contenido.tipo === "GARANTIA") return "Certificado de garantía";
   if (contenido.tipo === "COMPROBANTE_AUTORIZACION") {
@@ -243,6 +243,9 @@ export function DocumentosOrden({
   const conIngreso = emitidos.some(
     (documento) => documento.tipo === "COMPROBANTE_INGRESO",
   );
+  const conEntrega = emitidos.some(
+    (documento) => documento.tipo === "COMPROBANTE_ENTREGA",
+  );
   // Marcas del proceso sin copia del documento: Orden anterior.
   const sinCopia = (
     [
@@ -254,7 +257,9 @@ export function DocumentosOrden({
     ([tipo, marca]) =>
       marca.generado &&
       !emitidos.some((documento) => documento.tipo === tipo) &&
-      !(tipo === "COMPROBANTE_RECEPCION" && conIngreso),
+      !(tipo === "COMPROBANTE_RECEPCION" && conIngreso) &&
+      // DEC-AJ-04: la garantía va dentro del comprobante de entrega.
+      !(tipo === "GARANTIA" && conEntrega),
   );
 
   return (
@@ -1301,18 +1306,7 @@ function CuerpoEntrega({
         etiqueta={devolucion ? "Fecha de devolución" : "Fecha de entrega"}
         valor={contenido.fecha_entrega ? fechaHora(contenido.fecha_entrega) : "Al registrar la entrega"}
       />
-      <Dato
-        etiqueta="Retira"
-        valor={
-          contenido.recibido_por
-            ? `${contenido.recibido_por}${
-                contenido.identificacion_receptor
-                  ? ` · ${contenido.identificacion_receptor}`
-                  : ""
-              }`
-            : "—"
-        }
-      />
+      <Dato etiqueta="Retira" valor={descripcionQuienRetira(contenido)} />
       <Dato etiqueta="Entregó" valor={contenido.entregado_por?.nombre ?? "—"} />
       {contenido.observaciones_entrega && (
         <Dato etiqueta="Observaciones" valor={contenido.observaciones_entrega} />
@@ -1353,6 +1347,19 @@ function CuerpoEntrega({
       )}
       {porConfirmar && contenido.trabajos_realizados.length > 0 && (
         <AvisoGarantiaPorConfirmar />
+      )}
+      {contenido.entrega_y_garantia && conGarantia && (
+        <p style={{ margin: "0.3rem 0 0", fontSize: "9pt" }}>
+          La garantía de cada trabajo corre desde la fecha de entrega, por el
+          plazo indicado, según los términos y condiciones de este
+          comprobante.
+        </p>
+      )}
+      {contenido.condiciones_garantia && (
+        <Dato
+          etiqueta="Condiciones de la garantía"
+          valor={contenido.condiciones_garantia}
+        />
       )}
       {contenido.trabajos_cancelados.length > 0 && (
         <>
