@@ -575,6 +575,24 @@ ANTECEDENTES_CONSULTAR = _definir(
     CONSULTAS,
     consulta=True,
 )
+# BF-07 (D-01, 23/11/2026): qué muestra el detalle de la Orden. Sin este
+# permiso, la pantalla oculta antecedentes, ejecuciones, movimientos y
+# devoluciones de insumos, insumos previstos y los bloques técnicos del
+# historial. Es PRESENTACIÓN: la API sigue devolviendo esos datos a quien
+# consulta la Orden (ORDENES_CONSULTAR) y ningún endpoint lo exige; no es un
+# control de seguridad. Sin fila en rma.permiso rige este predeterminado.
+DETALLE_TECNICO_CONSULTAR = _definir(
+    "DETALLE_TECNICO_CONSULTAR",
+    "Consultar la información técnica de la Orden",
+    (TECH, COORD, ADMIN),
+    CONSULTAS,
+    consulta=True,
+)
+
+# Permisos que solo decide la pantalla (llegan con la sesión, en
+# ``/api/me``): ningún endpoint los exige. La prueba de permisos sin uso
+# los busca en el frontend en lugar del backend.
+SOLO_PRESENTACION = frozenset({DETALLE_TECNICO_CONSULTAR.codigo})
 
 # --- Administracion (no configurables) ---
 ADMINISTRACION = "Administración"

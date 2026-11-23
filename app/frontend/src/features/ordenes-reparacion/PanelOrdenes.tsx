@@ -129,6 +129,7 @@ import {
 import { Layout, MenuAcciones, type Seccion } from "../../components/layout";
 import { Modal } from "../../components/Modal";
 import { puede, rolesDe } from "../../lib/roles";
+import { veDetalleTecnico as puedeVerDetalleTecnico } from "./detalleTecnico";
 
 type Informativa =
   | "cliente"
@@ -637,6 +638,10 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
     actor !== null &&
     rolesDe(actor).some((rol) => ABIERTA_POR_ROL[rol] === seccion);
 
+  // BF-07 (D-01): sin el permiso, el detalle oculta lo técnico. Es solo
+  // presentación: la API sigue devolviendo esos datos (no es seguridad).
+  const veDetalleTecnico = puedeVerDetalleTecnico(actor);
+
   // La sección del menú que corresponde a la pantalla actual.
   const seccion: Seccion =
     ruta.pantalla === "nueva" || ruta.pantalla === "orden"
@@ -1028,6 +1033,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                   usuarios={usuarios}
                   ocupado={ocupado}
                   onAccion={setAbierta}
+                  informacionTecnica={veDetalleTecnico}
                   accionesPorTrabajo={Object.fromEntries(
                     Object.entries(barraOrden.porTrabajo).map(([detalle, items]) => [
                       detalle,
@@ -1040,20 +1046,15 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                 />
               </SeccionPlegable>
 
-              <SeccionPlegable
-                key={`${orden.id}-antecedentes`}
-                titulo="Antecedentes del equipo"
-                resumen="Otras Órdenes con el mismo IMEI o número de serie"
-              >
-                <AntecedentesEquipo orden={orden} />
-                <IdentidadDeLaOrden
-                  key={`${orden.id}-${orden.equipo.id}`}
-                  orden={orden}
-                  actor={actor}
-                  ocupado={ocupado}
-                  ejecutarComando={ejecutarComando}
-                />
-              </SeccionPlegable>
+              {veDetalleTecnico && (
+                <SeccionPlegable
+                  key={`${orden.id}-antecedentes`}
+                  titulo="Antecedentes del equipo"
+                  resumen="Otras Órdenes con el mismo IMEI o número de serie"
+                >
+                  <AntecedentesEquipo orden={orden} />
+                </SeccionPlegable>
+              )}
 
               <SeccionPlegable
                 key={`${orden.id}-${actorId}-comunicaciones`}
@@ -1114,6 +1115,14 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                   }
                 />
                 <ChecklistRecepcion
+                  orden={orden}
+                  actor={actor}
+                  ocupado={ocupado}
+                  ejecutarComando={ejecutarComando}
+                />
+                {/* BF-07: antes estaba en Antecedentes; Recepción la usa. */}
+                <IdentidadDeLaOrden
+                  key={`${orden.id}-${orden.equipo.id}`}
                   orden={orden}
                   actor={actor}
                   ocupado={ocupado}
@@ -1197,20 +1206,22 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                   </SeccionPlegable>
                 )}
 
-              <SeccionPlegable
-                key={`${orden.id}-${actorId}-ejecuciones`}
-                titulo="Ejecuciones e insumos"
-                resumen={resumenEjecuciones(orden)}
-                abierta={abiertaPara("ejecuciones")}
-              >
-                <EjecucionesEInsumos orden={orden} usuarios={usuarios} />
-                <DevolucionesInsumo
-                  orden={orden}
-                  actor={actor}
-                  ocupado={ocupado}
-                  ejecutarComando={ejecutarComando}
-                />
-              </SeccionPlegable>
+              {veDetalleTecnico && (
+                <SeccionPlegable
+                  key={`${orden.id}-${actorId}-ejecuciones`}
+                  titulo="Ejecuciones e insumos"
+                  resumen={resumenEjecuciones(orden)}
+                  abierta={abiertaPara("ejecuciones")}
+                >
+                  <EjecucionesEInsumos orden={orden} usuarios={usuarios} />
+                  <DevolucionesInsumo
+                    orden={orden}
+                    actor={actor}
+                    ocupado={ocupado}
+                    ejecutarComando={ejecutarComando}
+                  />
+                </SeccionPlegable>
+              )}
 
               <SeccionPlegable
                 key={`${orden.id}-${actorId}-cobros`}
@@ -1301,24 +1312,33 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                 />
               </SeccionPlegable>
 
+              {/* BF-07: el historial de eventos es para todos; los bloques
+                  técnicos, en su propia sección, con el permiso. */}
               <SeccionPlegable
                 key={`${orden.id}-historial`}
-                titulo="Historial y datos técnicos"
+                titulo="Historial"
                 resumen={`${orden.historial.length} eventos registrados`}
               >
-                <Bloque titulo="Datos técnicos">
-                  <DatosTecnicos orden={orden} />
-                </Bloque>
-                <Bloque titulo="Recorrido técnico del proceso">
-                  <ProgresoHappyPath orden={orden} />
-                </Bloque>
-                <Bloque titulo="Ejecuciones (técnico)">
-                  <EjecucionesOrden orden={orden} />
-                </Bloque>
-                <Bloque titulo="Historial">
-                  <HistorialOrden orden={orden} />
-                </Bloque>
+                <HistorialOrden orden={orden} />
               </SeccionPlegable>
+
+              {veDetalleTecnico && (
+                <SeccionPlegable
+                  key={`${orden.id}-datos-tecnicos`}
+                  titulo="Datos técnicos"
+                  resumen="Datos técnicos, recorrido del proceso y ejecuciones"
+                >
+                  <Bloque titulo="Datos técnicos">
+                    <DatosTecnicos orden={orden} />
+                  </Bloque>
+                  <Bloque titulo="Recorrido técnico del proceso">
+                    <ProgresoHappyPath orden={orden} />
+                  </Bloque>
+                  <Bloque titulo="Ejecuciones (técnico)">
+                    <EjecucionesOrden orden={orden} />
+                  </Bloque>
+                </SeccionPlegable>
+              )}
             </div>
           </div>
           <AnfitrionAcciones

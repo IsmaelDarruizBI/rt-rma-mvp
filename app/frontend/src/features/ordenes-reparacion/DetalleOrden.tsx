@@ -303,12 +303,15 @@ export function TrabajosOrden({
   accionesPorTrabajo = {},
   ocupado = false,
   onAccion,
+  informacionTecnica = true,
 }: {
   orden: Orden;
   usuarios: Usuario[];
   accionesPorTrabajo?: Record<string, AccionDeTrabajo[]>;
   ocupado?: boolean;
   onAccion?: (clave: string) => void;
+  /** BF-07: sin DETALLE_TECNICO_CONSULTAR no se ven insumos previstos ni ejecuciones. */
+  informacionTecnica?: boolean;
 }) {
   if (orden.reparaciones_detail.length === 0) {
     // PROC-REP-069: la conclusión y su motivo quedan en el historial.
@@ -339,6 +342,7 @@ export function TrabajosOrden({
           acciones={accionesPorTrabajo[detalle.id] ?? []}
           ocupado={ocupado}
           onAccion={onAccion}
+          informacionTecnica={informacionTecnica}
         />
       ))}
     </ul>
@@ -352,6 +356,7 @@ function Trabajo({
   acciones,
   ocupado,
   onAccion,
+  informacionTecnica,
 }: {
   orden: Orden;
   detalle: Detalle;
@@ -359,11 +364,15 @@ function Trabajo({
   acciones: AccionDeTrabajo[];
   ocupado: boolean;
   onAccion?: (clave: string) => void;
+  informacionTecnica: boolean;
 }) {
   const cancelado = detalle.estado === "CANCELADO";
-  const ejecuciones = orden.ejecuciones.filter(
-    (ejecucion) => ejecucion.reparacion_detail_id === detalle.id,
-  );
+  // BF-07: las ejecuciones de cada trabajo son información técnica.
+  const ejecuciones = informacionTecnica
+    ? orden.ejecuciones.filter(
+        (ejecucion) => ejecucion.reparacion_detail_id === detalle.id,
+      )
+    : [];
   const decision = [...detalle.autorizaciones]
     .reverse()
     .find((registro) => registro.version_definicion === detalle.version_definicion);
@@ -480,7 +489,7 @@ function Trabajo({
           {fechaCorta(decision.fecha)}
         </Linea>
       )}
-      {detalle.insumos_previstos.length > 0 && !cancelado && (
+      {informacionTecnica && detalle.insumos_previstos.length > 0 && !cancelado && (
         <Linea>
           Insumos previstos:{" "}
           {detalle.insumos_previstos

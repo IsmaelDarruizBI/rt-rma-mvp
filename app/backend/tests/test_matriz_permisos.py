@@ -413,7 +413,8 @@ def test_los_permisos_de_la_matriz_existen():
 
 
 def test_ningun_permiso_queda_sin_uso():
-    """Cada permiso del registro se exige en algun punto del backend."""
+    """Cada permiso del registro se exige en algun punto del backend; los
+    de solo presentacion (BF-07), en el frontend, y en ningun endpoint."""
     raiz = Path(__file__).resolve().parents[1] / "app"
     fuentes = "\n".join(
         archivo.read_text(encoding="utf-8")
@@ -425,7 +426,15 @@ def test_ningun_permiso_queda_sin_uso():
         for codigo in permisos.REGISTRO
         if not re.search(rf"\b{codigo}\b", fuentes)
     ]
-    assert sin_uso == []
+    assert sorted(sin_uso) == sorted(permisos.SOLO_PRESENTACION)
+
+    frontend = Path(__file__).resolve().parents[2] / "frontend" / "src"
+    pantalla = "\n".join(
+        archivo.read_text(encoding="utf-8")
+        for archivo in frontend.rglob("*.ts*")
+    )
+    for codigo in permisos.SOLO_PRESENTACION:
+        assert re.search(rf"\b{codigo}\b", pantalla), codigo
 
 
 def test_los_comandos_de_servicio_no_tienen_rol_fijo_en_el_codigo():
