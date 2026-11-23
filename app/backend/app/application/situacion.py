@@ -267,7 +267,32 @@ class _Principal:
     roles: tuple[RolUsuario, ...] = ()
 
 
-def _roles_del_sector(principal: _Principal) -> tuple[RolUsuario, ...]:
+# Avisos que también son trabajo pendiente de un sector (BF-12): un trabajo
+# adicional que espera la decisión del cliente es tarea de Recepción aunque
+# la situación principal sea otra (por ejemplo, otro trabajo en ejecución).
+# Los demás avisos no suman roles: siguen siendo solo informativos para el
+# filtro «Pendientes de mi sector».
+_AVISOS_DEL_SECTOR = frozenset({"AUTORIZACION_PENDIENTE"})
+
+
+def _roles_del_sector(
+    principal: _Principal, avisos: Sequence[AvisoOperativo] = ()
+) -> tuple[RolUsuario, ...]:
+    """Los roles que pueden resolver las tareas principales y los avisos
+    que son tarea de un sector (``_AVISOS_DEL_SECTOR``)."""
+    roles = set(_roles_de_la_principal(principal))
+    for aviso in avisos:
+        if aviso.codigo in _AVISOS_DEL_SECTOR:
+            roles.update(
+                rol
+                for accion in aviso.acciones
+                if accion.requiere_actor
+                for rol in accion.roles
+            )
+    return tuple(rol for rol in _NOMBRE_ROL if rol in roles)
+
+
+def _roles_de_la_principal(principal: _Principal) -> tuple[RolUsuario, ...]:
     """Los roles que pueden resolver las tareas principales."""
     if principal.roles:
         return principal.roles
@@ -313,6 +338,7 @@ def situacion_operativa(
     responsable = principal.responsable or (
         principal.tareas[0].responsable if principal.tareas else None
     )
+    avisos = _avisos(datos, principal.codigo)
     return SituacionOperativa(
         codigo=principal.codigo,
         titulo=principal.titulo,
@@ -320,9 +346,9 @@ def situacion_operativa(
         responsable=responsable,
         desde=principal.desde,
         tareas=principal.tareas,
-        avisos=_avisos(datos, principal.codigo),
+        avisos=avisos,
         etapas=_etapas(datos),
-        roles=_roles_del_sector(principal),
+        roles=_roles_del_sector(principal, avisos),
         titular_id=next(
             (
                 accion.usuario_id
