@@ -1,6 +1,6 @@
 # Ajustes funcionales del feedback de UAT (BF-01 a BF-20): análisis y plan
 
-> **Estado (23/11/2026):** iteración 1 (bloques 1 a 4) implementada en local (secciones 8 y 10), sin push ni despliegue. Iteración 2 (bloques 5 a 8) pendiente. `business/` está sincronizado con `rt-rma-app` `713a9b9` (`spec/ajustes-funcionales`, local), con DEC-AJ-01 a 09 implementadas (sección 9.1).
+> **Estado (23/11/2026):** iteración 1 (bloques 1 a 4) implementada en local (secciones 8 y 10), sin push ni despliegue. Iteración 2 (bloques 5 a 8): decisiones en revisión (sección 11). `business/` está sincronizado con `rt-rma-app` `713a9b9` (`spec/ajustes-funcionales`, local), con DEC-AJ-01 a 09 implementadas (sección 9.1).
 >
 > **Aprobado (23/11/2026):** la planificación general y la secuencia de los 8 bloques (sección 3).
 >
@@ -388,6 +388,8 @@ Solo las que hay que resolver antes de implementar cada bloque. Las de los bloqu
   - P-04: ¿rigen los 180 días del texto o los 90/30 del sistema?;
   - P-05: el retiro por un tercero, ¿anula la garantía o solo genera un aviso?;
   - ¿el vínculo de quien retira es obligatorio?
+
+Las decisiones de los bloques 5 a 8 están desarrolladas en la **sección 11**; las preguntas de abajo son las originales.
 
 **Bloque 5**
 
@@ -1155,3 +1157,360 @@ La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA inte
   2. publicar una versión de los términos y entregar una Orden antes y otra después;
   3. reimprimir el comprobante anterior;
   4. ver el progreso de una Orden entregada sin aviso.
+
+## 11. Decisiones de la iteración 2 (bloques 5 a 8), en revisión (23/11/2026)
+
+Revisado contra el código, el esquema (45 migraciones) y `business/` (`713a9b9`). Reemplaza las preguntas de la sección 4 para los bloques 5 a 8. Cada decisión aprobada se registra como DEC-AJ en `rt-rma-app` antes del código, igual que en la iteración 1.
+
+**Datos que cambian el planteo:**
+
+- **BF-09:** BR-REP-016 **ya unifica** descuento y cortesía en un único «Ajuste Comercial», con motivo, usuario, fecha e historial. Lo que falta es la reversión de un error, la copia de los importes, el historial de la Orden (EV-REP-041 nunca se emite) y que los comprobantes muestren el ajuste por trabajo.
+- **BF-15:** el «faltante» actual **no puede ocurrir en PostgreSQL**: el trigger impide que el stock físico quede por debajo de lo reservado. Por eso el filtro «Solo faltantes» y la bandeja «Insumos negativos» siempre están vacíos. El mínimo necesita su propia comparación.
+- **BF-01:** el catálogo de modelos (`modelo_equipo`) es un archivo fijo con 36 modelos Apple, sin pantalla de alta. Falta la línea iPhone 18 (ABI-43). El nombre del trabajo no se copia en el Detalle: se lee del catálogo en cada pantalla.
+- **BF-14:** los insumos previstos por tipo (`tipo_reparacion_insumo`) **no tienen pantalla ni API**: solo se cargan por seed. La reserva, el consumo y el libro trabajan siempre sobre el mismo `insumo_id`.
+- **BF-02:** no hay subida de archivos multipart ni lector de Excel. Las fotos y firmas suben el cuerpo crudo.
+
+### Bloque 5. D-10 (BF-09): ajustes comerciales
+
+#### D-10.1 Unificación y permisos
+
+- **Hoy:**
+  - hay una sola entidad, pero tres formularios: descuento a la Orden, cortesía a la Orden y ajuste por trabajo;
+  - el comprobante imprime «Descuento» aunque sea una cortesía;
+  - se mantienen dos permisos, DESCUENTO y CORTESIA, ambos por defecto para Recepción, Coordinación y Administración (BR-REP-039).
+- **Alternativas:**
+  - (A) una sola acción «Ajuste comercial», que elige la clase (descuento o cortesía) y el destino (la Orden o un trabajo), conservando los dos permisos;
+  - (B) además, fusionar los permisos y eliminar la clase.
+- **Propuesta:** **A**. La clase sirve para distinguir en reportes y comprobantes, y los permisos ya tienen los mismos roles: para el usuario es una sola acción. Se corrige además un hueco: hoy, con solo DESCUENTO, la API deja reemplazar una cortesía vigente. Cambiar o quitar un ajuste va a exigir el permiso de la clase que se reemplaza y el de la nueva.
+- **Consecuencias:** un formulario único, con una vista previa del precio original, el ajuste y el final. La validación de la cortesía usa la misma base que el backend.
+- **Datos y migraciones:** ninguna.
+
+#### D-10.2 Corregir o revertir un ajuste equivocado
+
+- **Hoy:**
+  - «rige el último» por destino (la Orden o el trabajo);
+  - cambiar o quitar es un registro nuevo con motivo, indistinguible de una corrección;
+  - los registros no tienen identificador en el dominio y no quedan en el historial de la Orden.
+- **Alternativas:**
+  - (A) dejarlo así y solo mostrar mejor el historial;
+  - (B) **reversión**, como la anulación de pagos: el registro equivocado queda marcado como revertido (quién, cuándo y motivo), deja de contar y **vuelve a regir el ajuste anterior válido**. «Corregir» es revertir y aplicar el correcto en una sola confirmación, y el nuevo queda enlazado al que corrige;
+  - (C) un registro de tipo «corrección», sin marcar el original.
+- **Propuesta:** **B**.
+  - «Cambiar» y «Quitar» siguen siendo decisiones comerciales; «Revertir» y «Corregir» son la enmienda de un error.
+  - Permiso nuevo «Revertir un ajuste comercial», por defecto para Coordinación y Administración y configurable. La anulación de pagos es solo de Administración; ¿se prefiere lo mismo?
+  - Cada alta, cambio, retiro y reversión queda en el historial de la Orden (EV-REP-041).
+- **Consecuencias:**
+  - Revertir con pagos ya hechos puede dejar saldo a cobrar o saldo a favor. Se resuelve con el circuito actual: cobro, o devolución enlazada al pago. La entrega sigue exigiendo saldo 0.
+  - Habilita, como hoy, una nueva versión del comprobante de autorización.
+- **Datos y migraciones:** aditiva.
+  - En `descuento`: `revertido_por`, `revertido_en`, `reversion_motivo` y `corrige_a`.
+  - Cambio del trigger de inmutabilidad para admitir una única reversión, como en `pago`.
+  - Nueva definición de `v_orden_saldo`, que excluye los revertidos, cambiada junto con el dominio.
+  - Equivalencia de historial para EV-REP-041.
+  - Los registros viejos quedan sin revertir.
+
+#### D-10.3 Ajustes después de la entrega
+
+- **Hoy:** solo con la Orden abierta (servicio y trigger).
+- **Alternativas:**
+  - (A) mantenerlo: después de la entrega no se ajusta ni se revierte;
+  - (B) permitir la reversión después de la entrega, solo a Administración. Genera saldo, cobro o devolución posterior y una nueva versión del comprobante de entrega.
+- **Propuesta:** **A**. La entrega cierra la cuenta con saldo 0 y un comprobante inmutable; reabrirla toca la caja y los documentos ya firmados. Si el negocio lo necesita, es un circuito propio de posventa.
+- **Consecuencias:** un error detectado después de la entrega se resuelve fuera de la Orden.
+- **Datos y migraciones:** ninguna.
+
+#### D-10.4 Copia del precio original, el importe y el final
+
+- **Hoy:** se derivan. Si después se redefine o se cancela el trabajo:
+  - un porcentaje se recalcula sobre el precio nuevo;
+  - un importe fijo se recorta en silencio al precio nuevo;
+  - el ajuste de un trabajo cancelado deja de contar sin dejar rastro.
+- **Alternativas:**
+  - (A) solo derivar y mostrar;
+  - (B) guardar en cada registro, como evidencia, el precio original, el importe aplicado y el final al momento de registrarlo. El saldo sigue calculándose sobre lo vigente, y un recálculo por redefinición o cancelación queda en el historial y se avisa antes de confirmar la redefinición;
+  - (C) congelar el importe para que la redefinición no lo cambie. Contradice BR-REP-016, que lo topea al precio.
+- **Propuesta:** **B**.
+- **Consecuencias:** el historial muestra qué precio vio quien aplicó el ajuste y cuánto rige hoy.
+- **Datos y migraciones:** aditiva. Tres columnas opcionales en `descuento`; los registros viejos quedan sin copia.
+
+#### D-10.5 Qué muestran los comprobantes
+
+- **Hoy:** una sola línea con el total de los ajustes y la palabra «Descuento». No hay importe por trabajo.
+- **Alternativas:**
+  - (A) por trabajo: precio, ajuste (clase y motivo) y precio final, más una línea aparte para el ajuste de la Orden. Usuario y fecha solo en el historial interno;
+  - (B) igual, y además usuario y fecha en el comprobante del cliente.
+- **Propuesta:** **A**. Usuario y fecha son controles internos; BF-09 pide registrarlos, no imprimirlos.
+- **Consecuencias:** cambian los comprobantes de ingreso, de autorización y de entrega emitidos desde ahora. Los ya emitidos no cambian.
+- **Datos y migraciones:** ninguna. Son campos opcionales del snapshot.
+
+**Correcciones técnicas incluidas, sin decisión:**
+
+- **Recargo:** el reparto que se muestra usa la copia que guarda cada pago, no los ajustes actuales (DEC-UX-13).
+- **Vista previa del comprobante:** incluye los ajustes por trabajo.
+- **Textos:** se corrigen los comentarios viejos («no por debajo de lo cobrado», «la cortesía queda fuera de alcance»).
+
+### Bloque 6. D-11 (BF-15): stock mínimo
+
+#### D-11.1 Contra qué cantidad se compara
+
+- **Hoy:** no hay mínimo. Disponible = físico − reservado.
+  - «En camino» suma las órdenes de compra en borrador, confirmadas y parciales, y las solicitudes pendientes.
+- **Alternativas:**
+  - (A) el stock físico: ignora lo comprometido con reparaciones;
+  - (B) el disponible;
+  - (C) disponible + en camino: la alerta desaparece apenas se pide.
+- **Propuesta:** **B**, con dos estados:
+  - «Bajo mínimo»;
+  - «Bajo mínimo · repuesto pedido», cuando lo confirmado en órdenes de compra cubre la diferencia.
+
+  Para ese segundo estado no cuentan los borradores ni las solicitudes.
+- **Consecuencias:** la alerta sigue visible hasta que el repuesto entra, pero se distingue lo que ya está gestionado.
+- **Datos y migraciones:** ver D-11.2.
+
+#### D-11.2 Dónde y quién lo configura
+
+- **Alternativas:**
+  - (A) en Configuración → Insumos, con el permiso «Gestionar insumos» (Administración);
+  - (B) en Inventario, con «Gestionar stock» (Administración y Coordinación).
+- **Propuesta:** **A**. Todos los datos del insumo quedan en un solo formulario, auditado; el permiso es configurable si Coordinación también tiene que editarlo.
+  - El mínimo es por insumo y opcional: vacío significa sin alerta.
+  - Es solo un mínimo: no hay punto de pedido ni máximo.
+- **Datos y migraciones:** aditiva. `insumo.stock_minimo`, opcional y ≥ 0, con su permiso de escritura y su auditoría.
+
+#### D-11.3 Cómo se muestran las alertas
+
+- **Propuesta:** en tres lugares, sin mecanismos nuevos:
+  - **Inventario:** el estado «Bajo mínimo» y el filtro «Bajo mínimo», junto a «Solo faltantes».
+  - **Inicio:** la bandeja «Insumos a reponer», para Coordinación y Administración. Reemplaza a «Insumos negativos», que en PostgreSQL siempre está vacía, y conserva los faltantes si los hubiera.
+  - **Compras:** la sugerencia pasa a cubrir la demanda y además reponer hasta el mínimo (`demanda + mínimo − disponible − en camino`). La solicitud generada queda con el origen «Stock mínimo». Nunca se compra sola (BR-REP-049).
+- **Alternativas:**
+  - aviso en el menú: hoy no existen insignias en el menú;
+  - notificación por correo o WhatsApp: no recomendada para un MVP.
+- **Datos y migraciones:** aditiva. El nuevo origen `STOCK_MINIMO` en el CHECK de `solicitud_compra`.
+
+### Bloques 7 y 8: diseño conjunto
+
+**Modelo propuesto:**
+
+```text
+Tipo de Reparación (trabajo genérico: «Cambio de batería»)
+  ├─ garantía, puntaje, Mesas, política RMA            (por tipo, como hoy)
+  ├─ precio único                 si «precio por modelo» = No (diagnóstico, limpieza)
+  ├─ precio por modelo ──► Modelo de equipo (MOD-…)     si «precio por modelo» = Sí
+  └─ requisitos de insumo: subcategoría + cantidad  (o un insumo concreto, si es universal)
+                               │
+Insumo = SKU real con stock (INS-…) ◄─ Subcategoría ◄─ Categoría
+  ├─ fabricante, variante, código del fabricante
+  ├─ compatible con ──► Modelo de equipo (N:M; sin modelos = universal)
+  └─ stock, lotes, costo, reservas, consumo y desperdicio   (sin cambios)
+```
+
+El stock, los lotes, el libro, Compras y las reservas siguen en la fila actual de `insumo`. **No hace falta mover ni repartir stock existente.**
+
+#### D-12 (BF-01). Tipos de Reparación y precio por modelo
+
+##### D-12.1 Estructura del precio
+
+- **Hoy:** un precio único por tipo, copiado al Detalle (BR-REP-015). Los tipos son «por modelo» en el nombre.
+- **Alternativas:**
+  - (A) cada tipo indica si su precio varía por modelo. Si varía, el precio sale de la tabla (tipo, modelo); si no, del precio único actual;
+  - (B) igual, pero con el precio único como respaldo cuando falta el del modelo;
+  - (C) todos los tipos con precio por modelo.
+- **Propuesta:** **A, sin respaldo**. Un precio base aplicado en silencio presupuesta mal un modelo caro. Los trabajos que no dependen del modelo (diagnóstico, software, limpieza) no necesitan cargar 36 precios.
+- **Consecuencias:**
+  - los selectores de trabajo (ingreso, agregar, adicional, evaluación y redefinición) muestran el precio para el modelo de la Orden;
+  - el técnico sigue sin fijar precios;
+  - la garantía RMA y RT Interno siguen siendo no cobrables.
+- **Datos y migraciones:** aditiva.
+  - `tipo_reparacion.precio_por_modelo` (por defecto No: los tipos actuales no cambian).
+  - Tabla `precio_tipo_modelo` (tipo, modelo, precio), única por par.
+
+##### D-12.2 Equipo sin modelo técnico o modelo sin precio
+
+- **Alternativas:**
+  - (A) ese tipo no se ofrece para ese equipo: se muestra «sin precio para este modelo». Las salidas son «Otros», con descripción y precio manual (ya existe para Recepción), o que Administración cargue el precio;
+  - (B) precio manual del tipo con un permiso nuevo y motivo;
+  - (C) usar el precio base.
+- **Propuesta:** **A**. No crea una vía nueva para fijar precios fuera de Administración (DEC-CFG-03). «Otros» ya cubre el caso excepcional y se distingue en los reportes (BR-REP-047).
+- **Consecuencias:** un equipo cargado a mano o fuera del catálogo solo puede recibir tipos de precio único u «Otros». Por eso importa D-12.5.
+- **Datos y migraciones:** ninguna.
+
+##### D-12.3 Qué depende del modelo
+
+- **Propuesta:** solo el precio y, a través de BF-14, la pieza.
+  - La garantía, el puntaje, las Mesas y la política RMA siguen siendo del tipo (BR-REP-011 y BR-REP-041).
+  - Si un modelo necesita otra garantía u otro puntaje, es otro tipo.
+- **Alternativa:** puntaje o garantía por modelo. Agrega dimensiones a la planilla de BF-02 y no fue pedido.
+- **Datos y migraciones:** ninguna.
+
+##### D-12.4 Datos históricos y tipos actuales
+
+- **Hoy:** el Detalle guarda el tipo y la copia del precio, la garantía y el puntaje, pero no el nombre: renombrar un tipo cambia cómo se ven las Órdenes viejas.
+- **Alternativas:**
+  - (A) **sin conversión automática:** los tipos actuales siguen como de precio único. Administración crea los tipos genéricos (o los importa con BF-02) y desactiva los viejos cuando quiera, porque no se pueden borrar;
+  - (B) una migración que renombra los tipos actuales a genéricos y mueve su precio al modelo del nombre. Depende de interpretar nombres libres y cambia la etiqueta de las Órdenes existentes.
+- **Propuesta:** **A**. Además, cada Detalle nuevo guarda una copia del nombre del trabajo y del modelo con el que se tomó el precio. Las Órdenes viejas siguen leyendo el nombre del catálogo.
+- **Consecuencias:**
+  - durante la transición conviven tipos viejos y genéricos;
+  - los reportes actuales no agrupan por tipo, así que no se mezclan.
+- **Datos y migraciones:** aditiva. `detalle_version.nombre_trabajo` y `detalle_version.modelo_equipo_id`, opcionales.
+
+##### D-12.5 Alta de modelos nuevos
+
+- **Hoy:** los modelos salen de un archivo versionado con el código. Agregar el iPhone 18 exige un desarrollo (ABI-43).
+- **Alternativas:**
+  - (A) seguir regenerando el archivo;
+  - (B) Administración da de alta y desactiva modelos (marca, modelo, variante) desde Configuración, auditado y con código MOD automático.
+- **Propuesta:** **B**. La lista de precios y la compatibilidad de insumos dependen del catálogo, y salen modelos todos los años.
+  - Cierra ABI-43 en la parte de los modelos.
+  - No toca el catálogo de Ventas, que sigue siendo una copia de solo lectura (BR-REP-048).
+- **Datos y migraciones:** aditiva.
+  - Permiso de escritura sobre `modelo_equipo`.
+  - Secuencia del código MOD (hoy no existe).
+  - Entidad `MODELO_EQUIPO` en la auditoría.
+  - Permiso nuevo o reutilizar «Gestionar tipos de reparación».
+
+##### D-12.6 Cambio de modelo con trabajos ya cargados
+
+- **Alternativas:**
+  - (A) antes de la autorización del cliente, los precios por modelo se recalculan solos y se informa el cambio. Después, se conservan con un aviso «precio de otro modelo», y se corrige redefiniendo el trabajo;
+  - (B) no recalcular nunca;
+  - (C) bloquear el cambio de modelo.
+- **Propuesta:** **A**. Antes de autorizar no hay nada pactado con el cliente; después rige la copia (BR-REP-015).
+- **Datos y migraciones:** ninguna.
+
+#### D-13 (BF-02). Importación de precios
+
+##### D-13.1 Formato y claves
+
+- **Alternativas:**
+  - **forma de la planilla:** (A) una matriz, con modelos en las filas y tipos en las columnas, o (B) formato largo, una fila por tipo y modelo;
+  - **cómo llega:** (C) subir el XLSX, que agrega dos dependencias (lector de Excel y subida multipart), o (D) el enlace de Google Sheets, que exige compartir la planilla con la cuenta de servicio.
+- **Propuesta:** **una matriz (A)**, porque es como se maneja una lista de precios, cargada como CSV exportado de Excel o Sheets o pegando las celdas copiadas.
+  - La pantalla ofrece **descargar la planilla actual** con los códigos y los precios vigentes. Se edita y se vuelve a subir.
+  - Las claves son los códigos (MOD-… en las filas, TR-… en los encabezados). Los nombres van como referencia y se ignoran.
+  - Se aceptan importes con formato argentino («80.000» o «80000,50»).
+
+##### D-13.2 Alcance
+
+- **Propuesta:**
+  - crea o actualiza precios de tipos con precio por modelo y de modelos existentes;
+  - **no crea tipos ni modelos**: se dan de alta individualmente (D-12.5);
+  - una celda vacía no cambia nada;
+  - quitar un precio se hace solo desde la edición individual;
+  - la edición individual se mantiene;
+  - permiso «Gestionar precios».
+- **Alternativa:** que la importación cree tipos y modelos. Mezcla el alta del catálogo con la lista de precios.
+
+##### D-13.3 Validación y errores
+
+- **Alternativas:**
+  - (A) vista previa con todos los errores y cambios (nuevo, cambia, sin cambios); se aplica **todo o nada**, en una transacción;
+  - (B) aplicar las filas válidas y descartar las otras.
+- **Propuesta:** **A**. Una lista de precios aplicada a medias es peor que ninguna.
+  - Errores: código desconocido, tipo sin precio por modelo, importe inválido o con más de 2 decimales, celdas duplicadas.
+  - Aviso, sin bloquear: una variación de más del 50 %.
+- **Datos y migraciones:**
+  - auditoría de cada precio que cambia, con un identificador común de la importación. Los que no cambian no se auditan;
+  - entidad `PRECIO_MODELO` en la auditoría;
+  - `historial_precio` extendido;
+  - columna opcional del lote de importación en `cambio_configuracion`.
+
+#### D-14 (BF-14). Jerarquía de insumos
+
+##### D-14.1 Estructura
+
+- **Alternativas** (sección 1):
+  - (A) el insumo es la pieza física concreta (SKU), con su clasificación y su compatibilidad;
+  - (B) un producto genérico con variantes que llevan stock;
+  - (C) atributos libres.
+- **Propuesta:** **A**.
+  - Cada insumo actual ya es un SKU, con su stock, sus lotes, su costo y su desperdicio.
+  - B rompe la regla de que lo previsto, lo reservado y lo consumido son el mismo insumo, y obliga a repartir stock con movimientos.
+  - C no permite reportes ni reglas.
+- **Consecuencias:** stock, costo, consumo y desperdicio por pieza real, como pide BF-14, sin tocar el libro.
+
+##### D-14.2 Niveles y atributos
+
+- **Propuesta:**
+  - **Categoría → Subcategoría:** dos niveles fijos, administrables, con la subcategoría opcional (por ejemplo «Módulo → OLED»);
+  - **Fabricante:** un catálogo administrable, distinto de la marca del equipo;
+  - **Variante:** texto descriptivo (color, con marco);
+  - **Código del fabricante o del proveedor:** opcional, para buscar. El SKU interno sigue siendo el código INS-…, que no cambia;
+  - **Compatibilidad:** con los modelos del catálogo técnico, de muchos a muchos. Sin modelos significa universal (adhesivo, tornillería). Responde la pregunta abierta de ABI-53: los modelos salen de `modelo_equipo`, el mismo catálogo de los precios.
+- **Alternativa:** un árbol de profundidad libre. Es más flexible, pero complica pantallas y reportes sin un caso concreto.
+- **Datos y migraciones:** aditiva.
+  - Tablas `categoria_insumo` (con padre), `fabricante_repuesto` e `insumo_compatibilidad`.
+  - Columnas opcionales en `insumo`.
+  - Entidades nuevas en la auditoría.
+
+##### D-14.3 Calidad del repuesto y precio
+
+Es la decisión de negocio central del cruce entre BF-01 y BF-14.
+
+- **Alternativas:**
+  - (A) si la calidad cambia el precio o la garantía para el cliente (original, OLED, alternativo), es **otro Tipo de Reparación** («Cambio de módulo original» y «Cambio de módulo alternativo»), cada uno con su subcategoría. Marca y variante dentro de una subcategoría son intercambiables para el cliente: mismo precio y misma garantía;
+  - (B) el precio depende de tipo, modelo y calidad: la planilla de BF-02 pasa a tener tres dimensiones.
+- **Propuesta:** **A**. Mantiene la matriz de precios simple y deja la elección de calidad explícita en la autorización del cliente.
+
+##### D-14.4 Insumos previstos, reserva y consumo
+
+- **Hoy:** el tipo prevé insumos concretos (sin pantalla), se reserva todo o nada al iniciar la ejecución, y no se consume lo que no se reservó.
+- **Alternativas:**
+  - (A) el tipo declara requisitos («1 Batería»). La factibilidad suma el disponible de los SKU compatibles con el modelo. **Al iniciar la ejecución, el técnico elige la pieza** entre las compatibles con stock (preseleccionada si hay una sola o una marcada como preferida). Antes de consumir puede cambiarla: se libera una reserva y se hace otra;
+  - (B) el sistema elige solo la pieza (la preferida o la de más stock);
+  - (C) Recepción elige la pieza al autorizar.
+- **Propuesta:** **A**.
+  - El requisito también puede ser un insumo concreto universal, que es como siguen funcionando los previstos actuales.
+  - Se agrega la pantalla de requisitos por tipo, que hoy no existe.
+- **Consecuencias:**
+  - el consumo, el lote y el desperdicio quedan en el SKU real;
+  - las sugerencias de compra por faltante muestran el requisito («Batería · iPhone 14: faltan 2») y proponen el SKU preferido, editable.
+- **Datos y migraciones:** aditiva.
+  - Tabla `tipo_reparacion_requisito` (tipo, subcategoría, cantidad), junto a la actual `tipo_reparacion_insumo`, que se conserva.
+  - Marca de preferido en la compatibilidad.
+
+##### D-14.5 Datos existentes y compatibilidad
+
+- **Insumos actuales:** conservan su stock, sus lotes, sus reservas y su historial. Quedan sin clasificar hasta que Administración los clasifique: es opcional y gradual, y no requiere movimientos.
+- **Órdenes, ejecuciones y movimientos ya registrados:** no cambian. Los nuevos se crean con el mismo `insumo_id`.
+- **Compras:** sigue por SKU, con una línea por insumo por orden de compra. Los selectores agregan búsqueda por categoría, modelo y fabricante.
+- **Stock mínimo (bloque 6):** es por SKU. Un mínimo por subcategoría y modelo («tener 3 baterías de iPhone 14, de cualquier marca») queda para después, si se necesita.
+
+### Resumen de las propuestas
+
+| Decisión | Propuesta | Migración |
+|---|---|---|
+| D-10.1 Unificación | Un formulario; se conservan los dos permisos y se corrige el hueco | No |
+| D-10.2 Corrección | Revertir y Corregir, con un permiso propio; vuelve a regir el ajuste anterior | Aditiva |
+| D-10.3 Después de la entrega | No se ajusta | No |
+| D-10.4 Copia de valores | Precio original, importe y final como evidencia; los recálculos van al historial | Aditiva |
+| D-10.5 Comprobantes | Ajuste y final por trabajo; usuario y fecha solo internos | No |
+| D-11.1 Comparación | Contra el disponible, con «repuesto pedido» | No |
+| D-11.2 Configuración | Configuración → Insumos, por insumo y opcional | Aditiva |
+| D-11.3 Alertas | Inventario, bandeja de Inicio y sugerencias de Compras | Aditiva (origen) |
+| D-12.1 Precio | Tipo con precio único o por modelo, sin respaldo | Aditiva |
+| D-12.2 Sin precio | No se ofrece; «Otros» o carga del precio | No |
+| D-12.3 Por modelo | Solo el precio y la pieza | No |
+| D-12.4 Históricos | Sin conversión; copia del nombre y del modelo en el Detalle | Aditiva |
+| D-12.5 Modelos | Alta desde Configuración | Aditiva |
+| D-12.6 Cambio de modelo | Recalcula antes de autorizar; después avisa | No |
+| D-13.1 Formato | Matriz por códigos, en CSV o pegada; descarga de la planilla actual | No |
+| D-13.2 Alcance | Solo precios de tipos y modelos existentes | No |
+| D-13.3 Errores | Vista previa; todo o nada | Aditiva (auditoría) |
+| D-14.1 Estructura | Insumo = SKU real (A) | No |
+| D-14.2 Atributos | Categoría y subcategoría, fabricante, variante, compatibilidad N:M | Aditiva |
+| D-14.3 Calidad | Otro Tipo de Reparación si cambia el precio | No |
+| D-14.4 Reserva | Requisitos por subcategoría; el técnico elige el SKU compatible | Aditiva |
+| D-14.5 Existentes | Se conservan sin mover stock; clasificación gradual | No |
+
+**Reglas de `rt-rma-app` que cambian:** BR-REP-016 (reversión), BR-REP-039 (permiso de reversión), BR-REP-015 (precio del tipo para el modelo), BR-REP-002, BR-REP-005 y BR-REP-006 (requisitos y elección de la pieza), BR-REP-049 (jerarquía y mínimo), DEC-CFG-05 y ABI-53 (jerarquía), y ABI-43 (alta de modelos). Se registran como DEC-AJ-10 en adelante antes del código.
+
+**Orden de implementación propuesto:**
+
+1. bloque 5;
+2. bloque 6;
+3. bloque 7: modelos, precio por modelo e importación;
+4. bloque 8: catálogos, compatibilidad, requisitos y elección de la pieza.
+
+Hasta que termine el bloque 8, los tipos genéricos solo pueden prever insumos universales, igual que hoy, porque los previstos no tienen pantalla.
