@@ -18,15 +18,18 @@ from app.services.documentos import (
     contenido_garantia,
 )
 from app.services.ordenes import fecha_de_entrega
+from tests import test_documentos_custodia_entrega as base
 from tests.fixtures.api_salidas import BATERIA, ok
-from tests.test_documentos_custodia_entrega import (  # noqa: F401
+from tests.test_documentos_custodia_entrega import (
     ARGENTINA,
     RETIRA,
     _entregar,
     _lista_y_cobrada,
-    cliente,
-    reloj,
 )
+
+# Los fixtures del modulo de documentos (reloj controlado y datos en tmp).
+reloj = base.reloj
+cliente = base.cliente
 
 ENTREGA = datetime(2026, 10, 20, 2, 30, tzinfo=timezone.utc)  # 19/10 local
 VENCE = date(2027, 1, 17)  # 19/10 + 90 días (BATERIA)
