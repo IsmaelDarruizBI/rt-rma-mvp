@@ -6,7 +6,9 @@
 >
 > **Aprobado (23/11/2026):** D-01, alternativa B, y D-02, alternativa A (sección 4.1).
 >
-> **Bloque 1:** implementado en local, en espera de la validación manual (sección 8).
+> **Bloque 1:** implementado en local; se valida a mano junto con todo el backlog (sección 8).
+>
+> **Replanificado (23/11/2026):** la iteración 1 incluye los bloques 2, 3 y 4, y la iteración 2 los bloques 5 a 8. Las decisiones de la iteración 1 están en la sección 9, para aprobar.
 >
 > **Pendiente:** D-07; no está aprobado que la verificación inicial sea solo informativa.
 >
@@ -587,3 +589,170 @@ Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. No hay migrac
 | Arranque | Backend local con `/health` 200; el permiso aparece en el catálogo de Configuración; en la lista de usuarios, Recepción no lo tiene y Técnico, Coordinación y Administración sí |
 
 La suite completa, las pruebas de PostgreSQL y los E2E quedan para el QA integral.
+
+## 9. Decisiones de la iteración 1 (bloques 2, 3 y 4), para aprobar (23/11/2026)
+
+Replanificación del 23/11/2026:
+
+- **Iteración 1:** bloques 2, 3 y 4. Se implementan juntos, después de aprobar estas decisiones.
+- **Iteración 2:** bloques 5 a 8.
+
+Las decisiones que cambian reglas vigentes se registran antes del código.
+
+### D-03 (BF-20). Avisar al cliente deja de ser obligatorio
+
+**Hoy:**
+
+- La entrega exige el paso PROC-REP-260 («Notificar»). PROC-REP-260 dice: «no hay un camino alternativo que la evite».
+- Hay dos avisos sin conexión entre sí:
+  - el botón Notificar registra el paso 260;
+  - una comunicación por WhatsApp con la plantilla `LISTO_PARA_RETIRAR` queda en el historial de comunicaciones, pero no registra el 260.
+- El retiro demorado (DEC-MI-14, 30 días) cuenta desde el 260.
+- Pasan por el 260: CLIENTE_EXTERNO, la garantía RMA y el resultado SIN_REPARACION.
+- El camino RT usa otro paso: INFORMAR_RT (290) → DEVOLVER_RT.
+
+**Decisiones:**
+
+| | Pregunta | Alternativas | Recomendación |
+|---|---|---|---|
+| a | ¿Incluye el camino RT? | Sí / No | **No.** Informar a Gestión RT es trazabilidad hacia otro sistema, no un aviso al cliente |
+| b | ¿Aplica a SIN_REPARACION y a la garantía RMA? | Solo a las reparaciones de Cliente Externo / A todo lo que se entrega al cliente | **A todo lo que se entrega al cliente**, para que la regla sea una sola |
+| c | ¿Desde cuándo corre el retiro demorado si no hubo aviso? | Desde la Orden lista para entregar (reparación terminada o finalizada sin reparar) / No corre | **Desde que está lista para entregar.** Si hubo aviso, desde el aviso, como hoy |
+| d | ¿Una comunicación `LISTO_PARA_RETIRAR` confirmada como enviada cuenta como aviso? | Sí: registra el 260 / No | **Sí.** Así hay un solo registro del aviso |
+
+**Impacto:**
+
+- **Reglas:** cambian PROC-REP-260 (pasa a ser opcional) y el flujo 250 → 265. Hay que registrar la decisión en `rt-rma-app`.
+- **Código:** la entrega deja de exigir el 260 (`application/cierre.py`, `application/acciones.py`, `services/documentos.py`). Notificar queda como acción opcional; en la situación y las bandejas el aviso deja de bloquear y pasa a ser una sugerencia.
+- **Pruebas:** hay que adaptar unas 28 que fijan la secuencia, sin debilitar saldo, custodia ni check-in.
+- **Órdenes de prueba:** las que estén en 240 sin aviso pasan a ofrecer la entrega.
+- **Migración:** no.
+
+### D-04 (BF-18). Cierre y entrega
+
+**Hoy:**
+
+- Al entregar se emiten tres papeles:
+  - el comprobante final, que ya lista cada trabajo con su garantía y vencimiento;
+  - el certificado de garantía, un documento aparte;
+  - la página de Términos y Condiciones.
+- El check-in es una acción separada: la entrega aparece bloqueada hasta registrarlo.
+- La custodia no confirmada no se informa como bloqueo y la pantalla la deduce por su cuenta.
+- Dentro de la misma operación hay validaciones repetidas: es deuda técnica, se corrige sin decisión.
+
+**Decisiones:**
+
+| | Pregunta | Alternativas | Recomendación |
+|---|---|---|---|
+| a | Papeles de la entrega | A. Mantener comprobante final y certificado. B. **Un solo «Comprobante de entrega y garantía»**, con los Términos en el mismo PDF; deja de emitirse el certificado aparte. C. Mantener los dos, pero imprimirlos juntos | **B.** El comprobante final ya tiene la garantía por trabajo. Los certificados ya emitidos no cambian (son inmutables) |
+| b | Check-in | A. Sigue aparte. B. **Dentro del formulario de entrega,** si todavía no se registró: una sola confirmación registra el check-in y la entrega | **B.** Conserva BR-REP-045 (check-in antes de entregar, auditado) y DEC-MI-05 (corrección antes de la entrega) |
+| c | Cobro | A. **Sigue aparte,** con saldo exactamente 0 (BR-REP-017 y 038). B. Cobrar dentro de la entrega | **A.** No se mezclan finanzas con la entrega |
+
+**Impacto:**
+
+- **Reglas:** cambian BR-REP-031 y 041 en el documento de garantía (un documento en lugar de dos). El paso 269 (check-in) se registra en la misma operación que la entrega.
+- **Código:** el tipo GARANTIA queda solo para los documentos ya emitidos.
+- **Migración:** no.
+
+### D-05 (BF-04). Ingreso sin trabajos estandarizados
+
+**Hoy:**
+
+- Hay dos caminos:
+  1. **Con trabajos:** «Generar el comprobante de ingreso y autorización» (BR-REP-046) confirma la custodia, autoriza y emite en una sola operación.
+  2. **Sin trabajos:** «Enviar a revisión técnica (sin diagnóstico)» (VAR-REP-001/002) emite el comprobante de recepción («reparación pendiente de diagnóstico») y deja la Orden en revisión.
+     - Los trabajos los define el Técnico (PROC-REP-075).
+     - El cliente autoriza después (PROC-REP-129).
+     - La custodia se confirma **en otro paso**.
+- El texto libre ya existe: las «Observaciones del equipo» unificadas (`falla_reportada`).
+
+**Alternativas:**
+
+| | Alternativa | Impacto |
+|---|---|---|
+| A | **Usar el camino de revisión** como ingreso sin trabajos: Recepción registra el trabajo solicitado y genera el comprobante de recepción, que **confirma la custodia en el mismo acto**. El Técnico define los trabajos, con su precio, y el cliente autoriza con el comprobante de autorización | Reutiliza un recorrido probado. Solo cambia que la custodia se confirma junto con el comprobante de recepción. Recepción no carga los trabajos de esa Orden |
+| B | **Ingreso abierto en REQUERIMIENTO:** comprobante de recepción y custodia; la Orden queda para que **Recepción** agregue los trabajos después y genere la autorización | Recorrido nuevo: la operación única de BR-REP-046 se parte en dos. Hay más estados para probar |
+| C | **Las dos opciones al crear:** «Lo define el técnico» (A) o «Cargo los trabajos después» (B) | Lo más flexible y lo más caro |
+
+**Recomendación: A.**
+
+**Hay que decidir además** si el trabajo solicitado va en un **campo propio**, «Trabajo solicitado» (migración aditiva y visible en el comprobante), o en las «Observaciones del equipo» actuales. **Recomendación:** campo propio, para que no se mezcle con el estado del equipo.
+
+**Impacto:**
+
+- **Reglas:** hay que registrar que el comprobante de recepción confirma la custodia (hoy son actos separados: BR-REP-033 y VAR-REP-001/002) y aclarar BR-REP-046.
+- **Migración:** aditiva, si el campo es propio.
+
+### D-06 (BF-05). IMEI provisorio
+
+**Hoy:**
+
+- Un equipo sin IMEI se identifica con el identificador interno del Equipo (`EQP-…`), impreso en la Orden y en el comprobante. DEC-UX-02 dice: «nunca un IMEI ficticio».
+- El IMEI solo se corrige antes de confirmar la recepción (DEC-MI-07, con ABI-41 abierto: hasta cuándo se corrige).
+
+**Alternativas:**
+
+| | Alternativa | Impacto |
+|---|---|---|
+| A | **El botón no inventa un IMEI:** marca «IMEI no disponible», deja el campo vacío y muestra destacado el identificador del Equipo (`EQP-…`) como identificador provisorio, en la pantalla y en el comprobante. **Más una acción nueva, «Registrar el IMEI real»**, que se puede usar **también después de la custodia**, con motivo y auditoría, mientras la Orden no esté entregada | Cumple DEC-UX-02. No contamina la identificación, los antecedentes ni las búsquedas. Resuelve ABI-41 solo para el IMEI. El historial muestra cuándo y quién lo cargó |
+| B | Identificador provisorio propio (por ejemplo `PROV-…`) en un campo aparte, que nunca se usa como IMEI | Migración aditiva. Suma un identificador más al del Equipo, que ya es único |
+| C | Un IMEI generado en el campo `imei`, con una marca | Contradice DEC-UX-02. Contamina los antecedentes y la detección de equipos repetidos. **No recomendada** |
+
+**Recomendación: A**, con la acción para registrar el IMEI real hasta la entrega.
+
+**Impacto:**
+
+- **Reglas:** DEC-UX-02 no cambia. Hay que registrar el cierre de ABI-41 para el IMEI.
+- **Migración:** no, salvo que la auditoría pida un registro propio.
+
+### D-07 (BF-08). Verificación inicial, check-in y garantía (pendiente)
+
+**Hoy:**
+
+- La misma pregunta, si se pudieron verificar las funciones básicas (realizado o no realizado), es el **check-in de entrega** (BR-REP-045).
+- Ese check-in fija el plazo de la garantía de cada trabajo: 90 días con check-in y 30 sin él, según el Tipo (`garantia_con_checkin` y `garantia_sin_checkin`). Es obligatorio para entregar en Cliente Externo.
+- La columna anterior `recepcion.checkin_ingreso` todavía se lee como check-in.
+
+**Alternativas:**
+
+| | Alternativa | Impacto sobre la garantía |
+|---|---|---|
+| A | **Informativa:** se pregunta al ingresar (Sí o No, con observaciones) y queda en la recepción y en el comprobante de ingreso. El check-in de entrega sigue igual | Ninguno. Al hacer el check-in de entrega se muestra la respuesta del ingreso como referencia |
+| B | **Anticipa el check-in:** la respuesta del ingreso es el check-in; al entregar solo se confirma o se corrige con motivo (DEC-MI-05) | La garantía pasa a depender de cómo llegó el equipo y no de cómo se entrega. Cambia BR-REP-045 |
+| C | **Condiciona el plazo:** si al ingresar fue «No», la garantía queda en el plazo sin check-in aunque el check-in de entrega sea «Sí» | Cambia la base de la garantía, y BR-REP-041 y 045 |
+
+**Recomendación: A**, con respuesta obligatoria y observaciones opcionales.
+
+**Queda pendiente**, como pediste: falta tu decisión entre A, B y C, y si la respuesta es obligatoria.
+
+**Migración:** aditiva en las tres (dos columnas en `recepcion`). En ningún caso se reutiliza `checkin_ingreso`.
+
+### D-08 (BF-06). Impresión directa del comprobante de ingreso
+
+**Hoy:** se crea la Orden, se va a «Documentos», se elige el canal («El cliente autorizó», presencial por defecto), se genera y se imprime desde el visor.
+
+**Propuesta:**
+
+- «Nueva orden» termina con **«Crear y generar el comprobante»**, que encadena dos comandos ya idempotentes, con el canal presencial preseleccionado y editable.
+- El visor se abre con «Imprimir» como acción principal. El navegador no deja imprimir sin un clic del usuario.
+- Sin trabajos (D-05), se genera el comprobante de recepción.
+- El canal se sigue registrando (BR-REP-028), así que no hay confirmación que quitar. Esta propuesta no contradice reglas.
+
+### D-09 (BF-19). Comprobantes
+
+**Hoy:**
+
+- `rma.empresa` tiene nombre, razón social, CUIT, dirección, teléfono, email y condiciones de garantía, pero **solo el nombre está cargado** y no hay pantalla para editarla.
+- Los Términos están fijos en el código. Dicen 180 días (P-04) y anulan la garantía si retira un tercero (P-05).
+- `rma.salida` tiene el vínculo y el teléfono de quien retira, pero no se guardan.
+
+**Decisiones:**
+
+| | Pregunta | Alternativas | Recomendación |
+|---|---|---|---|
+| a | ¿Quién edita los datos de la empresa? | Administración, con el permiso no configurable de parámetros del sistema / un permiso configurable nuevo | **Administración**, con auditoría |
+| b | ¿Qué son los «datos operativos»? | Horario de atención, sitio web o redes, pie de comprobante libre | **Horario y un pie de comprobante libre.** Migración aditiva |
+| c | P-04: ¿qué plazo rige? | 180 días (Términos) / el plazo de cada trabajo (90/30 por Tipo y check-in) | **Decisión de negocio.** Sin ella, el texto pasa a remitir a «el plazo indicado para cada trabajo» |
+| d | P-05: ¿qué pasa si retira un tercero? | Anula la garantía / solo queda registrado, con un aviso al entregar | **Decisión de negocio.** Recomendado: registrar quién retira, su vínculo (Titular, Tercero, Empleado o representante) y su teléfono; avisar al entregar; que el texto de los Términos lo defina el negocio |
+| e | ¿El vínculo de quien retira es obligatorio? | Sí, por defecto «Titular» / No | **Sí, por defecto «Titular»** |
+| f | ¿Dónde viven los Términos? | En el código, como hoy / versionados en `rma.texto_legal`, editables por Administración y guardados en cada documento | **Versionados en `rma.texto_legal`.** La tabla ya existe y nadie la lee |
