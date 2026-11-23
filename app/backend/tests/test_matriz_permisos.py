@@ -200,6 +200,14 @@ MATRIZ = {
     ),
     ("POST", "/api/orders/{orden_id}/notify"): SERVICIO("CLIENTE_NOTIFICAR"),
     ("POST", "/api/orders/{orden_id}/payments"): SERVICIO("PAGO_REGISTRAR"),
+    # DEC-AJ-10: revertir exige AJUSTE_REVERTIR; corregir, ademas, el
+    # permiso de la clase nueva.
+    ("POST", "/api/orders/{orden_id}/adjustments/{ajuste_id}/revert"): (
+        SERVICIO("AJUSTE_REVERTIR")
+    ),
+    ("POST", "/api/orders/{orden_id}/adjustments/{ajuste_id}/correct"): (
+        SERVICIO("AJUSTE_REVERTIR", "DESCUENTO", "CORTESIA")
+    ),
     ("POST", "/api/orders/{orden_id}/payments/{pago_id}/void"): SERVICIO(
         "PAGO_ANULAR"
     ),

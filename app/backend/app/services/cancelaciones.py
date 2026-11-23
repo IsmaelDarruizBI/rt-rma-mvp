@@ -49,6 +49,7 @@ from collections.abc import Mapping
 from datetime import datetime
 
 from app.domain.models import (
+    CausaRecalculo,
     DevolucionEquipo,
     EstadoEjecucion,
     EstadoReparacionDetail,
@@ -68,6 +69,7 @@ from .custodia import (
     custodia_por_definir,
     estado_custodia,
 )
+from .descuentos import registrar_recalculos
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .inventario import reservas_activas
 from .ordenes import (
@@ -160,6 +162,24 @@ def _cancelar(
     )
 
 
+def _recalcular_ajustes(
+    antes: OrdenReparacion,
+    despues: OrdenReparacion,
+    usuario: Usuario,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """DEC-AJ-10 (D-10.4): evidencia de los ajustes vigentes cuyo importe
+    cambia porque se cancelaron trabajos (el del trabajo deja de contar y
+    el de la Orden se aplica sobre lo que queda)."""
+    return registrar_recalculos(
+        antes,
+        despues,
+        causa=CausaRecalculo.CANCELACION,
+        usuario_id=usuario.id,
+        fecha=fecha,
+    )
+
+
 def validar_cancelacion_detalle(
     orden: OrdenReparacion,
     *,
@@ -247,7 +267,7 @@ def cancelar_detalle(
         fecha=fecha,
         origen=origen,
     )
-    return nueva_orden
+    return _recalcular_ajustes(orden, nueva_orden, usuario, fecha)
 
 
 def desistimiento_pendiente(detalle: ReparacionDetail) -> bool:
@@ -519,7 +539,7 @@ def cancelar_trabajos_pendientes(
             origen=(origenes or {}).get(detalle_id, origen),
         )
     nueva_orden.updated_at = fecha
-    return nueva_orden
+    return _recalcular_ajustes(orden, nueva_orden, usuario, fecha)
 
 
 def cancelar_orden(
@@ -584,6 +604,7 @@ def cancelar_orden(
             fecha=fecha,
             origen=(origenes or {}).get(detalle_id, origen),
         )
+    nueva_orden = _recalcular_ajustes(orden, nueva_orden, usuario, fecha)
     nueva_orden.estado_workflow = EstadoWorkflow.CANCELADA
     nueva_orden.updated_at = fecha
     cerrada = verificar_fin_financiero(nueva_orden, fecha=fecha)

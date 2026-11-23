@@ -67,7 +67,11 @@ from app.domain.models.comunicaciones import (
     ComunicacionCliente,
     ConfirmacionEnvio,
 )
-from app.domain.models.descuentos import RegistroDescuento
+from app.domain.models.descuentos import (
+    RecalculoAjuste,
+    RegistroDescuento,
+    ReversionAjuste,
+)
 from app.domain.models.documentos import Documento, DocumentoEmitido
 from app.domain.models.equipos import CorreccionVinculoEquipo, EntregaEquipo
 from app.domain.models.fotos import FotoOrden
@@ -650,15 +654,39 @@ _SEGUIMIENTOS_RETIRO = consulta(
 _DESCUENTOS = consulta(
     "ordenes.descuentos",
     """
-    SELECT d.orden_id, d.tipo, d.valor, d.motivo, u.codigo AS usuario,
-           d.registrado_en, d.clase, x.codigo AS detalle
+    SELECT d.orden_id, coalesce(d.codigo, d.id::text) AS codigo, d.tipo,
+           d.valor, d.motivo, u.codigo AS usuario, d.registrado_en, d.clase,
+           x.codigo AS detalle, d.precio_original, d.importe_aplicado,
+           d.precio_final, coalesce(c.codigo, c.id::text) AS corrige_a,
+           r.codigo AS revertido_por, d.revertido_en, d.reversion_motivo
     FROM rma.descuento d
     JOIN rma.usuario u ON u.id = d.usuario_id
     LEFT JOIN rma.detalle x ON x.id = d.detalle_id
+    LEFT JOIN rma.descuento c ON c.id = d.corrige_a
+    LEFT JOIN rma.usuario r ON r.id = d.revertido_por
     WHERE d.orden_id = ANY(ARRAY(
         SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
     ))
     ORDER BY d.orden_id, d.posicion NULLS FIRST, d.registrado_en, d.id
+    """,
+    modo=LECTURA,
+)
+# DEC-AJ-10 (D-10.4): recalculos de los ajustes vigentes.
+_RECALCULOS_AJUSTE = consulta(
+    "ordenes.recalculos_ajuste",
+    """
+    SELECT r.orden_id, coalesce(d.codigo, d.id::text) AS ajuste, r.causa,
+           x.codigo AS detalle, r.precio_anterior, r.precio_nuevo,
+           r.importe_anterior, r.importe_nuevo, u.codigo AS usuario,
+           r.registrado_en
+    FROM rma.descuento_recalculo r
+    JOIN rma.descuento d ON d.id = r.descuento_id
+    JOIN rma.usuario u ON u.id = r.usuario_id
+    LEFT JOIN rma.detalle x ON x.id = r.detalle_id
+    WHERE r.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
+    ORDER BY r.orden_id, r.posicion
     """,
     modo=LECTURA,
 )
@@ -740,6 +768,7 @@ _HIJAS = (
     _Hija("pagos", _PAGOS),
     _Hija("devoluciones", _DEVOLUCIONES),
     _Hija("descuentos", _DESCUENTOS),
+    _Hija("recalculos_ajuste", _RECALCULOS_AJUSTE),
     _Hija("seguimientos_retiro", _SEGUIMIENTOS_RETIRO),
     _Hija("comunicaciones", _COMUNICACIONES),
     _Hija("correcciones_equipo", _CORRECCIONES_EQUIPO),
@@ -917,6 +946,10 @@ def _armar(raiz: Any, hijas: dict[str, Any]) -> Instantanea:
         ),
         descuentos=[
             _descuento(fila) for fila in hijas["descuentos"].get(raiz.id, [])
+        ],
+        recalculos_ajuste=[
+            _recalculo(fila)
+            for fila in hijas["recalculos_ajuste"].get(raiz.id, [])
         ],
         seguimientos_retiro=[
             SeguimientoRetiro(
@@ -1152,15 +1185,47 @@ def _devolucion(fila: Any) -> DevolucionDinero:
     )
 
 
+def _sin_ceros_o_nada(valor: Decimal | None) -> Decimal | None:
+    return None if valor is None else decimal_sin_ceros(valor)
+
+
 def _descuento(fila: Any) -> RegistroDescuento:
     return RegistroDescuento(
+        id=fila.codigo,
         tipo=fila.tipo,
-        valor=None if fila.valor is None else decimal_sin_ceros(fila.valor),
+        valor=_sin_ceros_o_nada(fila.valor),
         motivo=fila.motivo,
         usuario_id=fila.usuario,
         fecha=utc(fila.registrado_en),
         clase=fila.clase,
         detalle_id=fila.detalle,
+        precio_original=_sin_ceros_o_nada(fila.precio_original),
+        importe_aplicado=_sin_ceros_o_nada(fila.importe_aplicado),
+        precio_final=_sin_ceros_o_nada(fila.precio_final),
+        corrige_a=fila.corrige_a,
+        reversion=(
+            ReversionAjuste(
+                usuario_id=fila.revertido_por,
+                fecha=utc(fila.revertido_en),
+                motivo=fila.reversion_motivo,
+            )
+            if fila.revertido_en is not None
+            else None
+        ),
+    )
+
+
+def _recalculo(fila: Any) -> RecalculoAjuste:
+    return RecalculoAjuste(
+        ajuste_id=fila.ajuste,
+        causa=fila.causa,
+        detalle_id=fila.detalle,
+        precio_anterior=decimal_sin_ceros(fila.precio_anterior),
+        precio_nuevo=decimal_sin_ceros(fila.precio_nuevo),
+        importe_anterior=decimal_sin_ceros(fila.importe_anterior),
+        importe_nuevo=decimal_sin_ceros(fila.importe_nuevo),
+        usuario_id=fila.usuario,
+        fecha=utc(fila.registrado_en),
     )
 
 

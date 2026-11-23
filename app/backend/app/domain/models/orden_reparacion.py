@@ -3,12 +3,16 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 from ..recargos import distribuir
 from .checklist import ConfirmacionInformacionFaltante, RegistroChecklist
 from .comunicaciones import ComunicacionCliente
-from .descuentos import RegistroDescuento, importe_de_descuento
+from .descuentos import (
+    RecalculoAjuste,
+    RegistroDescuento,
+    importe_de_descuento,
+)
 from .documentos import DocumentosOrden
 from .enums import (
     EstadoControl,
@@ -136,6 +140,9 @@ class OrdenReparacion(BaseModel):
     # del mas antiguo al mas reciente; el vigente es el ultimo (si no lo
     # quito). Default vacio: un JSON anterior sigue cargando sin descuento.
     descuentos: list[RegistroDescuento] = Field(default_factory=list)
+    # DEC-AJ-10 (D-10.4): recalculos de ajustes vigentes por una
+    # redefinicion o una cancelacion; solo crecen.
+    recalculos_ajuste: list[RecalculoAjuste] = Field(default_factory=list)
     # DEC-MI-14: seguimientos de un retiro demorado.
     seguimientos_retiro: list[SeguimientoRetiro] = Field(default_factory=list)
     # DEC-MI-08: mensajes asistidos al cliente (intento y confirmacion
@@ -185,19 +192,66 @@ class OrdenReparacion(BaseModel):
             or self.current_process == "EVT-REP-999"
         )
 
-    def _ajuste_vigente(
+    @model_validator(mode="after")
+    def _identificar_ajustes(self) -> "OrdenReparacion":
+        """D-10.2: cada registro de ajuste tiene un id estable. Los de un
+        JSON anterior lo toman de su posicion, que nunca cambia (la lista
+        solo crece)."""
+        for posicion, registro in enumerate(self.descuentos, 1):
+            if registro.id is None:
+                registro.id = f"AJ-{posicion:03d}"
+        return self
+
+    def ultimo_registro_de(
         self, detalle_id: str | None
     ) -> RegistroDescuento | None:
-        """El ultimo registro de ese destino, si no quita el ajuste."""
-        ultimo = next(
+        """El ultimo registro NO revertido de ese destino (la Orden con
+        ``None`` o un Detalle), aunque quite el ajuste (D-10.2)."""
+        return next(
             (
                 d
                 for d in reversed(self.descuentos)
-                if d.detalle_id == detalle_id
+                if d.detalle_id == detalle_id and not d.revertido
             ),
             None,
         )
+
+    def _ajuste_vigente(
+        self, detalle_id: str | None
+    ) -> RegistroDescuento | None:
+        """El ultimo registro no revertido de ese destino, si no quita el
+        ajuste. Un revertido no cuenta: rige el anterior (D-10.2)."""
+        ultimo = self.ultimo_registro_de(detalle_id)
         return ultimo if ultimo is not None and ultimo.tipo else None
+
+    def ajuste_vigente_de(
+        self, detalle_id: str | None
+    ) -> RegistroDescuento | None:
+        """El ajuste vigente de un destino: la Orden (``None``) o un
+        Detalle."""
+        return self._ajuste_vigente(detalle_id)
+
+    def base_de_ajuste(self, detalle_id: str | None) -> Decimal:
+        """A que se aplica el ajuste de ese destino: el precio del Detalle
+        (0 si esta cancelado) o, para la Orden, lo que queda despues de los
+        ajustes de los Detalles."""
+        if detalle_id is None:
+            return self.subtotal - self.descuento_detalles
+        detalle = next(
+            (d for d in self.reparaciones_detail if d.id == detalle_id), None
+        )
+        if (
+            detalle is None
+            or detalle.estado is EstadoReparacionDetail.CANCELADO
+        ):
+            return Decimal("0")
+        return detalle.precio
+
+    def importe_de_ajuste(self, detalle_id: str | None) -> Decimal:
+        """Lo que descuenta hoy el ajuste vigente de ese destino."""
+        return importe_de_descuento(
+            self.base_de_ajuste(detalle_id), self._ajuste_vigente(detalle_id)
+        )
 
     @property
     def descuento_vigente(self) -> RegistroDescuento | None:

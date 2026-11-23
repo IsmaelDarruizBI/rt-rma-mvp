@@ -73,6 +73,7 @@ from app.domain.models import (
     OrigenCancelacion,
     OrigenDiagnostico,
     OrigenOrden,
+    RecalculoAjuste,
     RecepcionEquipo,
     RegistroAutorizacionCliente,
     RegistroDescuento,
@@ -648,10 +649,33 @@ class DescuentoIn(BaseModel):
     tipo: TipoDescuento | None = None
     valor: Decimal | None = Field(default=None, gt=0, decimal_places=2)
     motivo: str = Field(min_length=1)
-    # DC11: DESCUENTO (default) o CORTESIA total (Administracion).
+    # DESCUENTO (default) o CORTESIA, cada una con su permiso (DEC-AJ-10).
     clase: ClaseAjuste = ClaseAjuste.DESCUENTO
     # DC09, DEC-MI-03: un trabajo (su id) o la Orden (sin valor).
     detalle_id: str | None = None
+
+
+class RevertirAjusteIn(BaseModel):
+    """``POST .../adjustments/{ajuste_id}/revert`` (DEC-AJ-10, D-10.2).
+
+    Solo el ajuste vigente de su destino, con motivo obligatorio.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    motivo: str = Field(min_length=1)
+
+
+class CorregirAjusteIn(BaseModel):
+    """``POST .../adjustments/{ajuste_id}/correct`` (DEC-AJ-10, D-10.2).
+
+    Revierte el ajuste vigente y registra el correcto, en el mismo destino.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    tipo: TipoDescuento
+    valor: Decimal = Field(gt=0, decimal_places=2)
+    clase: ClaseAjuste = ClaseAjuste.DESCUENTO
+    motivo: str = Field(min_length=1)
 
 
 class AjustarGarantiaIn(BaseModel):
@@ -2301,8 +2325,11 @@ class OrdenOut(BaseModel):
     # Cambiar la prioridad, liberar la Orden de otro tecnico y ajustar la
     # garantia de un trabajo (MVP v2): no avanzan el proceso.
     acciones_complementarias: list[AccionOut] = Field(default_factory=list)
-    # Historia de los descuentos (el ultimo es el vigente; sin tipo: quitado).
+    # Historia de los ajustes comerciales: por destino rige el ultimo no
+    # revertido (sin tipo: quitado). DEC-AJ-10: reversiones, correcciones
+    # (``corrige_a``), la evidencia de cada registro y los recalculos.
     descuentos: list[RegistroDescuento] = Field(default_factory=list)
+    recalculos_ajuste: list[RecalculoAjuste] = Field(default_factory=list)
     # Orden CANCELADA abierta: que falta para cerrarla (custodia, devolucion
     # fisica, saldo a favor). Vacio en los demas casos.
     pendientes_de_cierre: list[str] = Field(default_factory=list)
@@ -2498,6 +2525,7 @@ class OrdenOut(BaseModel):
                 for accion in acciones_complementarias
             ],
             descuentos=list(orden.descuentos),
+            recalculos_ajuste=list(orden.recalculos_ajuste),
             pendientes_de_cierre=pendientes_para_cerrar(orden),
             situacion=(
                 SituacionOut.desde_aplicacion(situacion)

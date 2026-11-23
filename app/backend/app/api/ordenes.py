@@ -39,6 +39,7 @@ from app.application import (
     cancelar_orden,
     completar_ejecucion,
     confirmar_recepcion,
+    corregir_ajuste_de_orden,
     crear_orden,
     crear_orden_rt,
     definir_reparacion,
@@ -86,6 +87,7 @@ from app.application import (
     registrar_recepcion,
     requerir_redefinicion_ejecucion,
     revalidar_recursos,
+    revertir_ajuste_de_orden,
     revisar_detalle,
     situacion_de_orden,
     situacion_operativa,
@@ -144,6 +146,7 @@ from .schemas import (
     CancelarOrdenIn,
     CompletarEjecucionIn,
     ConfirmarRecepcionIn,
+    CorregirAjusteIn,
     CrearOrdenIn,
     CrearOrdenRtIn,
     CustodiaOut,
@@ -189,6 +192,7 @@ from .schemas import (
     RegistrarImeiRealIn,
     RegistrarRecepcionIn,
     RequiereRedefinicionIn,
+    RevertirAjusteIn,
     RevisionDetalleIn,
     RevisionTecnicaIn,
     TomarIn,
@@ -1458,6 +1462,54 @@ def post_aplicar_descuento(
         motivo=cuerpo.motivo,
         clase=cuerpo.clase,
         detalle_id=cuerpo.detalle_id,
+    )
+    return _salida_con_entrega(orden, contexto, puede_entregar)
+
+
+@router.post("/{orden_id}/adjustments/{ajuste_id}/revert")
+@idempotente("REVERTIR_AJUSTE_COMERCIAL")
+def post_revertir_ajuste(
+    orden_id: str,
+    ajuste_id: str,
+    cuerpo: RevertirAjusteIn,
+    contexto: ContextoDep,
+) -> OrdenConEntregaOut:
+    """Revertir el ajuste comercial vigente de un destino (DEC-AJ-10).
+
+    Con el permiso de reversion (por defecto Administracion) y motivo, antes
+    de la entrega. Vuelve a regir el ajuste anterior; los pagos y las
+    devoluciones no cambian.
+    """
+    orden, puede_entregar = revertir_ajuste_de_orden(
+        contexto,
+        orden_id=orden_id,
+        ajuste_id=ajuste_id,
+        usuario_id=cuerpo.usuario_id,
+        motivo=cuerpo.motivo,
+    )
+    return _salida_con_entrega(orden, contexto, puede_entregar)
+
+
+@router.post("/{orden_id}/adjustments/{ajuste_id}/correct")
+@idempotente("CORREGIR_AJUSTE_COMERCIAL")
+def post_corregir_ajuste(
+    orden_id: str,
+    ajuste_id: str,
+    cuerpo: CorregirAjusteIn,
+    contexto: ContextoDep,
+) -> OrdenConEntregaOut:
+    """Corregir el ajuste comercial vigente: revertirlo y registrar el
+    correcto en una sola operacion (DEC-AJ-10). Exige el permiso de
+    reversion y el de la clase nueva."""
+    orden, puede_entregar = corregir_ajuste_de_orden(
+        contexto,
+        orden_id=orden_id,
+        ajuste_id=ajuste_id,
+        usuario_id=cuerpo.usuario_id,
+        tipo=cuerpo.tipo,
+        valor=cuerpo.valor,
+        clase=cuerpo.clase,
+        motivo=cuerpo.motivo,
     )
     return _salida_con_entrega(orden, contexto, puede_entregar)
 

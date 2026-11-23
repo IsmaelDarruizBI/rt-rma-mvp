@@ -30,6 +30,7 @@ from datetime import datetime
 
 from app.domain.garantia import garantia_sugerida
 from app.domain.models import (
+    CausaRecalculo,
     CondicionReparacionDetail,
     DefinicionAnteriorDetalle,
     EstadoReparacionDetail,
@@ -44,6 +45,7 @@ from . import permisos
 from .autorizacion import validar_actor
 from .autorizacion_cliente import situacion_de_la_orden
 from .custodia import checkin_de
+from .descuentos import registrar_recalculos
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .resolucion import ResultadoEvaluacionOrden
 from .tomas import hay_ejecucion_activa, toma_activa
@@ -291,4 +293,12 @@ def aplicar_redefinicion(
         redefinido.garantia_dias_sugerida = dias
     redefinido.condicion = CondicionReparacionDetail.SIN_BLOQUEO
     redefinido.origen_diagnostico = OrigenDiagnostico.REVISION_TECNICA
-    return nueva_orden
+    # DEC-AJ-10 (D-10.4): evidencia de los ajustes vigentes cuyo importe
+    # cambia con el precio nuevo.
+    return registrar_recalculos(
+        orden,
+        nueva_orden,
+        causa=CausaRecalculo.REDEFINICION,
+        usuario_id=usuario.id,
+        fecha=fecha,
+    )

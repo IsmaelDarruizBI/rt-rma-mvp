@@ -29,7 +29,13 @@ from .catalogos import (
     TipoReparacionInsumos,
 )
 from .configuracion import CambioConfiguracion, EntidadConfiguracion
-from .descuentos import RegistroDescuento, importe_de_descuento
+from .descuentos import (
+    CausaRecalculo,
+    RecalculoAjuste,
+    RegistroDescuento,
+    ReversionAjuste,
+    importe_de_descuento,
+)
 from .documentos import (
     CoberturaGarantia,
     ContenidoComprobanteAutorizacion,
@@ -229,6 +235,9 @@ __all__ = [
     "ContenidoComprobanteIngreso",
     "DescuentoEnDocumento",
     "RegistroDescuento",
+    "ReversionAjuste",
+    "RecalculoAjuste",
+    "CausaRecalculo",
     "TipoDescuento",
     "AjusteGarantia",
     "TIPO_REPARACION_OTROS",

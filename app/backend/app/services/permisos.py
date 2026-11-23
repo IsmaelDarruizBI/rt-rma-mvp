@@ -358,6 +358,14 @@ CORTESIA = _definir(
     (RECEP, COORD, ADMIN),
     COMERCIAL,
 )
+# DEC-AJ-10 (D-10.2): revertir o corregir un ajuste comercial equivocado;
+# inicialmente solo Administracion, como la anulacion de pagos.
+AJUSTE_REVERTIR = _definir(
+    "AJUSTE_REVERTIR",
+    "Revertir o corregir un ajuste comercial",
+    (ADMIN,),
+    COMERCIAL,
+)
 
 # --- Salida ---
 SALIDA = "Custodia, check-in y entrega"

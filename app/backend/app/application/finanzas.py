@@ -1,8 +1,11 @@
 """Tramo financiero: anulacion de pagos, devolucion de dinero y consultas.
 
     anular_pago_de_orden            correccion administrativa (ACC-REP-021)
-    aplicar_descuento_de_orden      descuento comercial sobre los trabajos
+    aplicar_descuento_de_orden      ajuste comercial sobre los trabajos
                                     (MVP v2): aplicar, cambiar o quitar
+    revertir_ajuste_de_orden        DEC-AJ-10: revertir el ajuste vigente
+    corregir_ajuste_de_orden        DEC-AJ-10: revertir y registrar el
+                                    correcto en una sola operacion
     registrar_devolucion_de_dinero  devolucion de dinero (ACC-REP-022, V1.4
                                     PROC-REP-267)
     movimientos_financieros         lectura: pagos, anulaciones y
@@ -32,9 +35,11 @@ from app.services import (
     anular_pago,
     aplicar_descuento,
     cerrar_cancelada_si_corresponde,
+    corregir_ajuste,
     es_cobrable,
     registrar_devolucion_dinero,
     registrar_saldo_pendiente,
+    revertir_ajuste,
     validar_condicion_entrega,
 )
 
@@ -152,8 +157,8 @@ def aplicar_descuento_de_orden(
     clase: ClaseAjuste = ClaseAjuste.DESCUENTO,
     detalle_id: str | None = None,
 ) -> tuple[OrdenReparacion, bool]:
-    """Recepcion o Administracion aplica, cambia o quita el descuento; la
-    cortesia total la otorga Administracion (provisional, DC11).
+    """Recepcion, Coordinacion RMA o Administracion aplica, cambia o quita
+    un descuento o una cortesia (cada clase con su permiso, DEC-AJ-10).
 
     El total cambia, asi que si la Orden ya esta en la condicion de
     entrega se revalida igual que tras un pago.
@@ -171,6 +176,67 @@ def aplicar_descuento_de_orden(
             fecha=fecha,
             clase=clase,
             detalle_id=detalle_id,
+        )
+        orden, puede_entregar = reevaluar_tras_movimiento(orden, fecha=fecha)
+        contexto.ordenes.guardar(orden)
+    return orden, puede_entregar
+
+
+def revertir_ajuste_de_orden(
+    contexto: ApplicationContext,
+    *,
+    orden_id: str,
+    ajuste_id: str,
+    usuario_id: str,
+    motivo: str,
+) -> tuple[OrdenReparacion, bool]:
+    """Revierte el ajuste comercial vigente de un destino (DEC-AJ-10).
+
+    Vuelve a regir el anterior; los pagos y las devoluciones no cambian. El
+    total cambia, asi que en la condicion de entrega se revalida.
+    """
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = revertir_ajuste(
+            orden,
+            ajuste_id=ajuste_id,
+            usuario=usuario,
+            motivo=motivo,
+            fecha=fecha,
+        )
+        orden, puede_entregar = reevaluar_tras_movimiento(orden, fecha=fecha)
+        contexto.ordenes.guardar(orden)
+    return orden, puede_entregar
+
+
+def corregir_ajuste_de_orden(
+    contexto: ApplicationContext,
+    *,
+    orden_id: str,
+    ajuste_id: str,
+    usuario_id: str,
+    tipo: TipoDescuento,
+    valor: Decimal,
+    clase: ClaseAjuste,
+    motivo: str,
+) -> tuple[OrdenReparacion, bool]:
+    """Revierte el ajuste vigente y registra el correcto, enlazados, en la
+    misma transaccion (DEC-AJ-10)."""
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+
+    with orden_para_modificar(contexto, orden_id) as orden:
+        orden = corregir_ajuste(
+            orden,
+            ajuste_id=ajuste_id,
+            tipo=tipo,
+            valor=valor,
+            clase=clase,
+            usuario=usuario,
+            motivo=motivo,
+            fecha=fecha,
         )
         orden, puede_entregar = reevaluar_tras_movimiento(orden, fecha=fecha)
         contexto.ordenes.guardar(orden)

@@ -416,11 +416,12 @@ class TipoDescuento(str, Enum):
 class ClaseAjuste(str, Enum):
     """Tipo del Ajuste Comercial (BR-REP-016, DC09/DC11).
 
-    ``DESCUENTO``: rebaja comercial; no puede dejar el total por debajo de
-    lo ya cobrado (el tratamiento de ese caso sigue pendiente).
-    ``CORTESIA``: la Orden no se cobra; por ahora solo la cortesia TOTAL
-    (si puede ser parcial sigue pendiente). Con pagos previos deja saldo a
-    favor del cliente, que se devuelve antes de entregar (DC11).
+    ``DESCUENTO``: rebaja comercial. ``CORTESIA``: total o parcial
+    (DEC-IT1-02). Son la misma entidad, como porcentaje o importe, de la
+    Orden o de un Detalle; cada clase tiene su permiso (BR-REP-039). Si
+    cualquiera de las dos deja el total por debajo de lo ya cobrado, queda
+    saldo a favor del cliente, que se devuelve antes de entregar (DC11,
+    DEC-MI-03).
     """
 
     DESCUENTO = "DESCUENTO"

@@ -117,9 +117,11 @@ from .finanzas import (
     SituacionFinanciera,
     anular_pago_de_orden,
     aplicar_descuento_de_orden,
+    corregir_ajuste_de_orden,
     listar_medios_pago,
     movimientos_financieros,
     registrar_devolucion_de_dinero,
+    revertir_ajuste_de_orden,
     situacion_financiera,
 )
 from .fotos import (
@@ -329,6 +331,8 @@ __all__ = [
     "LimpiezaFotos",
     "limpiar_fotos_huerfanas",
     "aplicar_descuento_de_orden",
+    "corregir_ajuste_de_orden",
+    "revertir_ajuste_de_orden",
     "cambiar_prioridad_de_orden",
     "generar_comprobante_ingreso",
 ]

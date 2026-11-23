@@ -396,9 +396,48 @@ _INSERTAR_DESCUENTO = consulta(
     """
     INSERT INTO rma.descuento
         (orden_id, tipo, valor, motivo, usuario_id, registrado_en, posicion,
-         clase, detalle_id)
+         clase, detalle_id, codigo, precio_original, importe_aplicado,
+         precio_final, corrige_a, revertido_por, revertido_en,
+         reversion_motivo)
     VALUES (%(orden)s, %(tipo)s, %(valor)s, %(motivo)s, %(usuario)s,
-            %(fecha)s, %(posicion)s, %(clase)s, %(detalle)s)
+            %(fecha)s, %(posicion)s, %(clase)s, %(detalle)s, %(codigo)s,
+            %(precio_original)s, %(importe_aplicado)s, %(precio_final)s,
+            %(corrige_a)s, %(revertido_por)s, %(revertido_en)s,
+            %(reversion_motivo)s)
+    RETURNING id
+    """,
+    modo=ESCRITURA,
+)
+# DEC-AJ-10: un registro guardado se identifica por su codigo o, si es
+# anterior a DEC-AJ-10, por su id.
+_ID_DESCUENTO = consulta(
+    "ordenes.id_descuento",
+    """
+    SELECT id FROM rma.descuento
+    WHERE orden_id = %(orden)s AND coalesce(codigo, id::text) = %(codigo)s
+    """,
+    modo=ESCRITURA,
+)
+_REVERTIR_DESCUENTO = consulta(
+    "ordenes.revertir_descuento",
+    """
+    UPDATE rma.descuento SET revertido_por = %(revertido_por)s,
+        revertido_en = %(revertido_en)s,
+        reversion_motivo = %(reversion_motivo)s
+    WHERE id = %(id)s
+    """,
+    modo=ESCRITURA,
+)
+_INSERTAR_RECALCULO_AJUSTE = consulta(
+    "ordenes.insertar_recalculo_ajuste",
+    """
+    INSERT INTO rma.descuento_recalculo
+        (orden_id, descuento_id, causa, detalle_id, precio_anterior,
+         precio_nuevo, importe_anterior, importe_nuevo, usuario_id,
+         registrado_en, posicion)
+    VALUES (%(orden)s, %(descuento)s, %(causa)s, %(detalle)s,
+            %(precio_anterior)s, %(precio_nuevo)s, %(importe_anterior)s,
+            %(importe_nuevo)s, %(usuario)s, %(fecha)s, %(posicion)s)
     """,
     modo=ESCRITURA,
 )
@@ -1285,6 +1324,8 @@ class _Guardado:
         self._ejecuciones = dict(previa.ejecuciones) if previa else {}
         self._documentos = dict(previa.documentos) if previa else {}
         self._pagos = dict(previa.pagos) if previa else {}
+        # DEC-AJ-10: uuid de los registros de ajuste ya resueltos.
+        self._uuids_descuento: dict[str, UUID] = {}
         self._movimientos = dict(previa.movimientos) if previa else {}
         self._checkin_ingreso = previa.checkin_ingreso if previa else None
         # De ``_resolver_referencias``.
@@ -1341,6 +1382,7 @@ class _Guardado:
         self._pagos_de(orden_id)
         self._devoluciones(orden_id)
         self._descuentos(orden_id)
+        self._recalculos_ajuste(orden_id)
         self._seguimientos_retiro(orden_id)
         self._comunicaciones(orden_id)
         self._correcciones_equipo(orden_id)
@@ -1484,6 +1526,10 @@ class _Guardado:
                 usuarios.add(pago.anulacion.usuario_id)
         usuarios.update(d.usuario_id for d in resumen.devoluciones)
         usuarios.update(d.usuario_id for d in orden.descuentos)
+        usuarios.update(
+            d.reversion.usuario_id for d in orden.descuentos if d.reversion
+        )
+        usuarios.update(r.usuario_id for r in orden.recalculos_ajuste)
         usuarios.update(s.usuario_id for s in orden.seguimientos_retiro)
         usuarios.update(c.usuario_id for c in orden.correcciones_equipo)
         usuarios.update(c.usuario_id for c in orden.checklists_recepcion)
@@ -2254,24 +2300,67 @@ class _Guardado:
                 },
             )
 
+    def _id_descuento(self, orden_id: UUID, codigo: str) -> UUID:
+        """El uuid de un registro de ajuste de esta Orden (DEC-AJ-10)."""
+        if codigo not in self._uuids_descuento:
+            fila = self._ej.fila(
+                _ID_DESCUENTO, {"orden": orden_id, "codigo": codigo}
+            )
+            if fila is None:
+                raise PersistenciaError(
+                    f"La Orden {self._orden.id} referencia el ajuste "
+                    f"{codigo}, que no tiene."
+                )
+            self._uuids_descuento[codigo] = fila.id
+        return self._uuids_descuento[codigo]
+
+    def _reversion(self, registro) -> dict[str, Any]:
+        reversion = registro.reversion
+        return {
+            "revertido_por": (
+                self._id("usuario", reversion.usuario_id)
+                if reversion
+                else None
+            ),
+            "revertido_en": reversion.fecha if reversion else None,
+            "reversion_motivo": reversion.motivo if reversion else None,
+        }
+
     def _descuentos(self, orden_id: UUID) -> None:
-        for posicion, registro in self._con_posicion(
+        """Los registros solo crecen; de uno guardado solo se completa su
+        reversion, una vez (``descuento_validar``, DEC-AJ-10)."""
+        previos = self._previa.orden.descuentos if self._previa else []
+        registros = self._orden.descuentos
+        self._exigir_prefijo(
             "los descuentos",
-            self._previa.orden.descuentos if self._previa else [],
-            self._orden.descuentos,
-        ):
+            [r.id for r in previos],
+            [r.id for r in registros],
+        )
+        for anterior, registro in zip(previos, registros):
+            if registro == anterior:
+                continue
+            if (
+                anterior.reversion is not None
+                or registro.model_copy(update={"reversion": None}) != anterior
+            ):
+                self._inmutable(f"los descuentos (ajuste {registro.id})")
             self._ej.ejecutar(
+                _REVERTIR_DESCUENTO,
+                {
+                    **self._reversion(registro),
+                    "id": self._id_descuento(orden_id, registro.id),
+                },
+            )
+        for posicion, registro in enumerate(
+            registros[len(previos) :], len(previos) + 1
+        ):
+            self._uuids_descuento[registro.id] = self._ej.fila(
                 _INSERTAR_DESCUENTO,
                 {
+                    **self._reversion(registro),
                     "orden": orden_id,
                     "tipo": registro.tipo.value if registro.tipo else None,
-                    "valor": (
-                        None
-                        if registro.valor is None
-                        else _escala(
-                            registro.valor, _DOS_DECIMALES, "descuento"
-                        )
-                    ),
+                    "valor": _escala_o_nada(registro.valor, "descuento"),
                     "motivo": registro.motivo,
                     "usuario": self._id("usuario", registro.usuario_id),
                     "fecha": registro.fecha,
@@ -2282,6 +2371,58 @@ class _Guardado:
                         if registro.detalle_id
                         else None
                     ),
+                    "codigo": registro.id,
+                    "precio_original": _escala_o_nada(
+                        registro.precio_original, "importe"
+                    ),
+                    "importe_aplicado": _escala_o_nada(
+                        registro.importe_aplicado, "importe"
+                    ),
+                    "precio_final": _escala_o_nada(
+                        registro.precio_final, "importe"
+                    ),
+                    "corrige_a": (
+                        self._id_descuento(orden_id, registro.corrige_a)
+                        if registro.corrige_a
+                        else None
+                    ),
+                },
+            ).id
+
+    def _recalculos_ajuste(self, orden_id: UUID) -> None:
+        for posicion, recalculo in self._con_posicion(
+            "los recalculos de ajustes",
+            self._previa.orden.recalculos_ajuste if self._previa else [],
+            self._orden.recalculos_ajuste,
+        ):
+            self._ej.ejecutar(
+                _INSERTAR_RECALCULO_AJUSTE,
+                {
+                    "orden": orden_id,
+                    "descuento": self._id_descuento(
+                        orden_id, recalculo.ajuste_id
+                    ),
+                    "causa": recalculo.causa.value,
+                    "detalle": (
+                        self._detalles[recalculo.detalle_id]
+                        if recalculo.detalle_id
+                        else None
+                    ),
+                    "precio_anterior": _escala_o_nada(
+                        recalculo.precio_anterior, "importe"
+                    ),
+                    "precio_nuevo": _escala_o_nada(
+                        recalculo.precio_nuevo, "importe"
+                    ),
+                    "importe_anterior": _escala_o_nada(
+                        recalculo.importe_anterior, "importe"
+                    ),
+                    "importe_nuevo": _escala_o_nada(
+                        recalculo.importe_nuevo, "importe"
+                    ),
+                    "usuario": self._id("usuario", recalculo.usuario_id),
+                    "fecha": recalculo.fecha,
+                    "posicion": posicion,
                 },
             )
 
@@ -2836,6 +2977,11 @@ def _definicion(detalle: ReparacionDetail) -> tuple:
         detalle.puntaje,
         detalle.descripcion,
     )
+
+
+def _escala_o_nada(valor: Decimal | None, que: str) -> Decimal | None:
+    """Un importe opcional con dos decimales como maximo."""
+    return None if valor is None else _escala(valor, _DOS_DECIMALES, que)
 
 
 def _escala(valor: Decimal, escala: Decimal, que: str) -> Decimal:

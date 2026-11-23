@@ -106,9 +106,14 @@ from .decision_cliente import (
 from .descuentos import (
     ROLES_CORTESIA,
     ROLES_DESCUENTO,
+    ROLES_REVERSION_AJUSTE,
+    ajuste_revertible,
     aplicar_descuento,
+    corregir_ajuste,
     descripcion_de_descuento,
     descuento_editable,
+    registrar_recalculos,
+    revertir_ajuste,
 )
 from .documentos import (
     ROLES_COMPROBANTE_AUTORIZACION,
@@ -627,6 +632,11 @@ __all__ = [
     "aplicar_descuento",
     "descripcion_de_descuento",
     "descuento_editable",
+    "ROLES_REVERSION_AJUSTE",
+    "ajuste_revertible",
+    "corregir_ajuste",
+    "registrar_recalculos",
+    "revertir_ajuste",
     "ROLES_AJUSTE_GARANTIA",
     "ROLES_CHECKIN",
     "ajustar_garantia_detalle",
