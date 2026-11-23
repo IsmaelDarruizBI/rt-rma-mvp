@@ -166,7 +166,11 @@ export function CabeceraOrden({
         }}
       >
         Identificador del equipo: <strong>{orden.equipo.id}</strong>
-        {orden.equipo.imei ? ` · IMEI ${orden.equipo.imei}` : " · sin IMEI"}
+        {orden.equipo.imei
+          ? ` · IMEI ${orden.equipo.imei}`
+          : orden.recepcion?.datos.imei_no_disponible
+            ? " (provisorio) · IMEI no disponible: el identificador no es un IMEI"
+            : " · sin IMEI"}
         {orden.equipo.numero_serie ? ` · N.º de serie ${orden.equipo.numero_serie}` : ""}
       </p>
       <ResultadoTecnico orden={orden} />

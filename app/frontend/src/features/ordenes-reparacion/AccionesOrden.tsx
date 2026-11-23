@@ -44,6 +44,7 @@ import type {
 } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
 import { checkinPendiente, faltantesDelRetiro } from "./entrega";
+import { referenciaParaCheckin } from "./ingresoAjustes";
 import {
   avisoCancelacionOrden,
   motivosDeBloqueo,
@@ -414,10 +415,29 @@ function FormularioAccion({
       );
 
     case "ENVIAR_A_REVISION":
+      // DEC-AJ-05: es el ingreso sin trabajos; en Cliente Externo genera el
+      // comprobante de recepción, que confirma la recepción del equipo.
       return (
-        <Boton disabled={deshabilitado} onClick={ejecutar.enviarARevision}>
-          Enviar a revisión técnica
-        </Boton>
+        <div>
+          {orden.origen === "CLIENTE_EXTERNO" && (
+            <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", color: colores.suave }}>
+              Genera el comprobante de recepción y confirma que el equipo quedó
+              en el local. El técnico define después los trabajos y el cliente
+              los autoriza.
+            </p>
+          )}
+          {accion.bloqueo && (
+            <p role="alert" style={{ margin: "0 0 0.4rem", fontSize: "0.85rem", color: colores.alerta }}>
+              {accion.bloqueo}. Completalo en «Corregir los datos del ingreso».
+            </p>
+          )}
+          <Boton
+            disabled={deshabilitado || accion.bloqueo !== null}
+            onClick={ejecutar.enviarARevision}
+          >
+            Enviar a revisión técnica
+          </Boton>
+        </div>
       );
 
     case "REALIZAR_REVISION":
@@ -1135,7 +1155,12 @@ function FormularioEntrega({
         </>
       )}
       {pideCheckin && (
-        <CampoCheckin valor={checkin} deshabilitado={bloqueado} onCambiar={setCheckin} />
+        <CampoCheckin
+          valor={checkin}
+          deshabilitado={bloqueado}
+          onCambiar={setCheckin}
+          referencia={referenciaParaCheckin(orden.recepcion?.datos)}
+        />
       )}
       <Campo etiqueta="Observaciones de la entrega">
         <input
@@ -1189,10 +1214,16 @@ function CampoCheckin({
   valor,
   deshabilitado = false,
   onCambiar,
+  referencia = null,
 }: {
   valor: "" | "si" | "no";
   deshabilitado?: boolean;
   onCambiar: (valor: "si" | "no") => void;
+  /**
+   * DEC-AJ-07: la respuesta del ingreso sobre las funcionalidades, como
+   * referencia. Es informativa: no reemplaza ni cambia este check-in.
+   */
+  referencia?: string | null;
 }) {
   // Un grupo de radios por formulario: puede haber dos en la misma pantalla.
   const grupo = useId();
@@ -1230,6 +1261,11 @@ function CampoCheckin({
           </label>
         ))}
       </div>
+      {referencia && (
+        <p style={{ margin: "0.4rem 0 0", fontSize: "0.8rem", color: colores.suave }}>
+          {referencia}
+        </p>
+      )}
     </fieldset>
   );
 }
@@ -1274,7 +1310,12 @@ function FormularioCheckin({
           . Se puede corregir hasta entregar, con motivo.
         </p>
       )}
-      <CampoCheckin valor={valor} deshabilitado={deshabilitado} onCambiar={setValor} />
+      <CampoCheckin
+        valor={valor}
+        deshabilitado={deshabilitado}
+        onCambiar={setValor}
+        referencia={referenciaParaCheckin(orden.recepcion?.datos)}
+      />
       {ajustados.length > 0 && (
         <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
           Conservan su plazo ajustado a mano:{" "}

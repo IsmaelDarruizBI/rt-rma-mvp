@@ -218,6 +218,23 @@ export interface DatosRecepcion {
   /** Solo para el personal: nunca salen en un documento. */
   notas_internas?: string | null;
   /**
+   * DEC-AJ-05: lo que pide el cliente, en texto libre y aparte de las
+   * observaciones del equipo. No crea trabajos: los define el técnico.
+   */
+  trabajo_solicitado?: string | null;
+  /**
+   * DEC-AJ-07: «¿Se pudieron verificar las funcionalidades del equipo?» al
+   * ingresar (`null`: sin responder). Informativa: NO es el check-in de
+   * entrega ni cambia la garantía.
+   */
+  funcionalidades_verificadas?: boolean | null;
+  observaciones_verificacion?: string | null;
+  /**
+   * DEC-AJ-06: se marcó «IMEI no disponible» al ingresar. El IMEI quedó
+   * vacío y el equipo se identifica con su `EQP-…` (provisorio).
+   */
+  imei_no_disponible?: boolean;
+  /**
    * Check-in (verificación de funciones básicas): se registra antes de la
    * entrega y define la garantía sugerida (90 o 30 días). Solo lectura:
    * el ingreso no lo envía. Una Orden anterior puede tenerlo del ingreso.
@@ -242,6 +259,13 @@ export interface VersionRecepcion {
   registrado_en: string;
   reemplazado_por: string;
   reemplazado_en: string;
+  /**
+   * DEC-MI-07: motivo de la corrección y cada dato con su valor anterior y
+   * el nuevo (DEC-AJ-06: también el registro del IMEI real). Vacíos en las
+   * versiones anteriores.
+   */
+  motivo?: string | null;
+  cambios?: { campo: string; anterior: string | null; nuevo: string | null }[];
 }
 
 export interface Recepcion {
@@ -353,6 +377,11 @@ export interface ContenidoRecepcion extends ContenidoBase {
   /** DEC-UX-03 (ausente en los documentos anteriores). */
   observaciones_unificadas?: boolean;
   notas: string[];
+  /** DEC-AJ-05, 07 y 06 (ausentes en los documentos anteriores). */
+  trabajo_solicitado?: string | null;
+  funcionalidades_verificadas?: boolean | null;
+  observaciones_verificacion?: string | null;
+  imei_no_disponible?: boolean;
   registrado_por: UsuarioEnDocumento | null;
   registrado_en: string | null;
   recepcion_fisica: EstadoCustodia;
@@ -486,6 +515,11 @@ export interface ContenidoIngreso extends ContenidoBase {
   observaciones_unificadas?: boolean;
   notas: string[];
   checkin: boolean | null;
+  /** DEC-AJ-05, 07 y 06 (ausentes en los documentos anteriores). */
+  trabajo_solicitado?: string | null;
+  funcionalidades_verificadas?: boolean | null;
+  observaciones_verificacion?: string | null;
+  imei_no_disponible?: boolean;
   registrado_por: UsuarioEnDocumento | null;
   recepcion_fisica: EstadoCustodia;
   confirmada_por: UsuarioEnDocumento | null;

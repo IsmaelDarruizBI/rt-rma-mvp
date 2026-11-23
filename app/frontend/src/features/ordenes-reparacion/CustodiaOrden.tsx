@@ -40,6 +40,15 @@ import {
   observacionesParaMostrar,
   usaTextoUnico,
 } from "./recepcionUx";
+import {
+  PREGUNTA_VERIFICACION,
+  type RespuestaVerificacion,
+  identificacionDelEquipo,
+  imeiRealCompleto,
+  respuestaDe,
+  textoVerificacion,
+  verificacionDe,
+} from "./ingresoAjustes";
 
 interface Props {
   orden: Orden;
@@ -56,6 +65,11 @@ interface Props {
   onNoRecibido: (motivo: string) => void;
   /** `interna`: solo para el personal; nunca sale en un documento. */
   onObservar: (texto: string, interna: boolean) => void;
+  /**
+   * DEC-AJ-06: el IMEI real de un equipo que ingresó sin él. `confirmado`:
+   * registrarlo aunque coincida con otro Equipo (no se vinculan).
+   */
+  onRegistrarImei: (imei: string, motivo: string, confirmado: boolean) => void;
 }
 
 /**
@@ -145,8 +159,15 @@ export function CustodiaOrden(props: Props) {
   const confirmar = buscar("CONFIRMAR_RECEPCION");
   const noRecibido = buscar("REGISTRAR_EQUIPO_NO_RECIBIDO");
   const observar = buscar("AGREGAR_OBSERVACION_RECEPCION");
+  const registrarImei = buscar("REGISTRAR_IMEI_REAL");
+  const identificacion = identificacionDelEquipo(
+    equipo,
+    recepcion?.datos.imei_no_disponible,
+  );
+  const verificacion = textoVerificacion(recepcion?.datos);
   // Ingreso inicial de Cliente Externo: la confirmación va dentro del
-  // comprobante de ingreso y autorización, no es un paso suelto.
+  // comprobante de ingreso y autorización o, sin trabajos, del de
+  // recepción al enviar a revisión (DEC-AJ-05); no es un paso suelto.
   const confirmaConElIngreso =
     !confirmar &&
     custodia.estado === "PENDIENTE_CONFIRMACION" &&
@@ -183,7 +204,9 @@ export function CustodiaOrden(props: Props) {
           {etiqueta(CUSTODIA, custodia.estado)}
         </Etiqueta>{" "}
         {confirmaConElIngreso
-          ? "Se confirma al generar el comprobante de ingreso y autorización."
+          ? "Se confirma al generar el comprobante: el de ingreso y " +
+            "autorización o, sin trabajos, el de recepción al enviar a " +
+            "revisión técnica."
           : descripcionCustodia(orden, usuarios)}
       </p>
       <PendientesDeCierre orden={orden} />
@@ -201,14 +224,35 @@ export function CustodiaOrden(props: Props) {
       {equipo.capacidad && <Fila etiqueta="Capacidad" valor={equipo.capacidad} />}
       {equipo.color && <Fila etiqueta="Color" valor={equipo.color} />}
       {/* UX-02: el identificador interno, también sin IMEI. */}
-      <Fila etiqueta="Identificador del equipo" valor={equipo.id} />
-      <Fila etiqueta="IMEI" valor={equipo.imei ?? "—"} />
+      <Fila
+        etiqueta={
+          identificacion.provisorio
+            ? "Identificador del equipo (provisorio)"
+            : "Identificador del equipo"
+        }
+        valor={equipo.id}
+      />
+      {/* DEC-AJ-06: sin IMEI se aclara que el identificador no es un IMEI. */}
+      <Fila etiqueta="IMEI" valor={identificacion.imei} />
       <Fila etiqueta="N.º de serie" valor={equipo.numero_serie ?? "—"} />
       {/* DEC-UX-03: con el texto único se muestra una vez; en lo
           registrado antes, falla, estado físico y observaciones por separado. */}
       {observacionesParaMostrar(orden).map((dato) => (
         <Fila key={dato.etiqueta} etiqueta={dato.etiqueta} valor={dato.texto} />
       ))}
+      {recepcion?.datos.trabajo_solicitado && (
+        <Fila etiqueta="Trabajo solicitado" valor={recepcion.datos.trabajo_solicitado} />
+      )}
+      {recepcion && (
+        <Fila
+          etiqueta="Funcionalidades verificadas al ingresar"
+          valor={
+            verificacion === null
+              ? "Sin responder"
+              : `${verificacion} (informativa: no es el check-in de entrega)`
+          }
+        />
+      )}
       {recepcion ? (
         <>
           {!estadoFisicoRegistrado(recepcion.datos) && (
@@ -254,6 +298,15 @@ export function CustodiaOrden(props: Props) {
                     {version.datos.estado_fisico ?? "sin estado físico"} ·
                     accesorios:{" "}
                     {version.datos.accesorios.join(", ") || "ninguno"}
+                    {version.motivo && (
+                      <>
+                        <br />
+                        Motivo: {version.motivo}
+                        {version.cambios?.length
+                          ? ` (${version.cambios.map((cambio) => cambio.campo).join(", ")})`
+                          : ""}
+                      </>
+                    )}
                     <br />
                     <span style={{ color: colores.suave }}>
                       Registrado por{" "}
@@ -300,6 +353,9 @@ export function CustodiaOrden(props: Props) {
       {confirmar && <FormularioConfirmacion {...props} accion={confirmar} />}
       {noRecibido && <FormularioNoRecibido {...props} accion={noRecibido} />}
       {registrar && <FormularioDatosIngreso {...props} accion={registrar} />}
+      {registrarImei && (
+        <FormularioImeiReal {...props} accion={registrarImei} />
+      )}
       {observar && <FormularioNota {...props} accion={observar} />}
     </div>
   );
@@ -463,6 +519,16 @@ function FormularioDatosIngreso({
   const [notasInternas, setNotasInternas] = useState(
     recepcion?.datos.notas_internas ?? "",
   );
+  // DEC-AJ-05 y DEC-AJ-07.
+  const [trabajoSolicitado, setTrabajoSolicitado] = useState(
+    recepcion?.datos.trabajo_solicitado ?? "",
+  );
+  const [verificacion, setVerificacion] = useState<RespuestaVerificacion>(
+    respuestaDe(recepcion?.datos.funcionalidades_verificadas),
+  );
+  const [observacionesVerificacion, setObservacionesVerificacion] = useState(
+    recepcion?.datos.observaciones_verificacion ?? "",
+  );
   const [motivo, setMotivo] = useState("");
   // DEC-UX-03: si el ingreso usa el texto único (o se regulariza uno sin
   // datos), se corrige en un solo campo; si no, cada dato por separado.
@@ -550,6 +616,30 @@ function FormularioDatosIngreso({
         </>
       )}
       {campo(
+        "Trabajo solicitado por el cliente (texto libre)",
+        trabajoSolicitado,
+        setTrabajoSolicitado,
+      )}
+      <Campo etiqueta={PREGUNTA_VERIFICACION}>
+        <select
+          value={verificacion}
+          disabled={deshabilitado}
+          onChange={(evento) =>
+            setVerificacion(evento.target.value as RespuestaVerificacion)
+          }
+          style={estiloInput}
+        >
+          <option value="">Sin responder</option>
+          <option value="SI">Sí</option>
+          <option value="NO">No</option>
+        </select>
+      </Campo>
+      {campo(
+        "Observaciones de la verificación (opcional)",
+        observacionesVerificacion,
+        setObservacionesVerificacion,
+      )}
+      {campo(
         "Notas internas (no salen en documentos)",
         notasInternas,
         setNotasInternas,
@@ -573,6 +663,12 @@ function FormularioDatosIngreso({
                 observaciones: observaciones.trim() || null,
                 notas_internas: notasInternas.trim() || null,
                 observaciones_unificadas: unificado,
+                trabajo_solicitado: trabajoSolicitado.trim() || null,
+                funcionalidades_verificadas: verificacionDe(verificacion),
+                observaciones_verificacion:
+                  observacionesVerificacion.trim() || null,
+                // La marca del ingreso no se edita acá: se conserva.
+                imei_no_disponible: recepcion?.datos.imei_no_disponible ?? false,
               },
               {
                 ...datosEquipo,
@@ -592,6 +688,79 @@ function FormularioDatosIngreso({
           </Boton>
         )}
       </div>
+    </Seccion>
+  );
+}
+
+/**
+ * DEC-AJ-06: registrar el IMEI real de un equipo que ingresó sin él,
+ * también con la recepción confirmada y hasta la entrega. Motivo
+ * obligatorio; queda una versión del ingreso y el paso en el historial. Si
+ * el IMEI ya es de otro Equipo, el backend lo avisa y no los vincula:
+ * registrarlo igual se elige a propósito.
+ */
+function FormularioImeiReal({
+  actor,
+  ocupado,
+  onRegistrarImei,
+  accion,
+}: Props & { accion: Accion }) {
+  const [imei, setImei] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [aunqueCoincida, setAunqueCoincida] = useState(false);
+  const deshabilitado = !habilitada(accion, actor) || ocupado;
+  return (
+    <Seccion titulo="Registrar el IMEI real" accion={accion} actor={actor}>
+      <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
+        El equipo ingresó sin IMEI y se identifica con su identificador
+        interno, que no cambia. Se puede registrar hasta la entrega, también
+        con la recepción confirmada. Los comprobantes ya emitidos no cambian.
+      </p>
+      <Campo etiqueta="IMEI real">
+        <input
+          value={imei}
+          disabled={deshabilitado}
+          inputMode="numeric"
+          autoComplete="off"
+          onChange={(evento) => setImei(evento.target.value)}
+          style={estiloInput}
+        />
+      </Campo>
+      <Campo etiqueta="Motivo (obligatorio)">
+        <input
+          value={motivo}
+          disabled={deshabilitado}
+          onChange={(evento) => setMotivo(evento.target.value)}
+          style={estiloInput}
+        />
+      </Campo>
+      <label
+        style={{
+          display: "flex",
+          gap: "0.4rem",
+          alignItems: "center",
+          margin: "0 0 0.6rem",
+          fontSize: "0.85rem",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={aunqueCoincida}
+          disabled={deshabilitado}
+          onChange={(evento) => setAunqueCoincida(evento.target.checked)}
+        />
+        Si ese IMEI ya está en otro equipo, registrarlo igual en este (no se
+        vinculan; si es el mismo equipo, corregí la vinculación)
+      </label>
+      <Boton
+        variante="secundario"
+        disabled={deshabilitado || !imeiRealCompleto(imei) || !motivo.trim()}
+        onClick={() =>
+          onRegistrarImei(imei.trim(), motivo.trim(), aunqueCoincida)
+        }
+      >
+        Registrar el IMEI real
+      </Boton>
     </Seccion>
   );
 }

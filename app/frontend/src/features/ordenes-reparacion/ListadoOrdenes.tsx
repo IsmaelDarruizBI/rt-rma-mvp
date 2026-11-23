@@ -24,6 +24,7 @@ import {
 } from "../../components/ui";
 import type {
   BusquedaCliente,
+  CanalComunicacion,
   OrdenResumen,
   PersonaExterna,
   TipoReparacion,
@@ -42,9 +43,19 @@ import {
   datosObservacionesUnificadas,
   tiposParaTrabajoInicial,
 } from "./recepcionUx";
+import {
+  CANAL_PREDETERMINADO,
+  PREGUNTA_VERIFICACION,
+  type RespuestaVerificacion,
+  comprobanteDelAlta,
+  datosAgregadosDelIngreso,
+  explicacionDelAlta,
+  faltantesDelIngreso,
+} from "./ingresoAjustes";
 import { SelectorEquipo, useModelosEquipo } from "./SelectorEquipo";
 import { SelectorIdentidad } from "./IdentidadEquipo";
 import {
+  CANAL,
   ESTADO_WORKFLOW,
   ORIGEN,
   ROL,
@@ -490,9 +501,11 @@ export function FormularioAltaOrden({
   ocupado: boolean;
   /** UX-04: Tipos de Reparación para el trabajo inicial (opcional). */
   tipos: TipoReparacion[];
+  /** DEC-AJ-08: crear y generar el comprobante. */
   onCrearClienteExterno: (
     datos: DatosNuevaOrden,
     trabajoInicial: string | null,
+    canal: CanalComunicacion,
   ) => void;
   onCrearRtInterno: (
     datos: DatosNuevaOrdenRt,
@@ -570,6 +583,15 @@ interface Ingreso {
   notasInternas: string;
   /** UX-04: Tipo de Reparación del primer trabajo; "" sin trabajo. */
   trabajoInicial: string;
+  /** DEC-AJ-05: lo que pide el cliente, en texto libre. */
+  trabajoSolicitado: string;
+  /** DEC-AJ-07: obligatoria; "" sin responder. */
+  verificacion: RespuestaVerificacion;
+  observacionesVerificacion: string;
+  /** DEC-AJ-06: el IMEI queda vacío; se identifica con su `EQP-…`. */
+  imeiNoDisponible: boolean;
+  /** DEC-AJ-08: canal de la autorización (presencial por defecto). */
+  canal: CanalComunicacion;
 }
 
 function ingresoInicial(): Ingreso {
@@ -580,8 +602,22 @@ function ingresoInicial(): Ingreso {
     observaciones: "",
     notasInternas: "",
     trabajoInicial: "",
+    trabajoSolicitado: "",
+    verificacion: "",
+    observacionesVerificacion: "",
+    imeiNoDisponible: false,
+    canal: CANAL_PREDETERMINADO,
   };
 }
+
+/** Canales por los que el cliente puede autorizar al ingresar. */
+const CANALES: CanalComunicacion[] = [
+  "PRESENCIAL",
+  "WHATSAPP",
+  "TELEFONO",
+  "EMAIL",
+  "OTRO",
+];
 
 function textoONulo(valor: string): string | null {
   return valor.trim() || null;
@@ -594,14 +630,65 @@ function datosDeIngreso(ingreso: Ingreso) {
   );
   return {
     identificadores: {
-      imei: textoONulo(ingreso.imei),
+      // DEC-AJ-06: «IMEI no disponible» lo deja vacío (nunca uno ficticio).
+      imei: ingreso.imeiNoDisponible ? null : textoONulo(ingreso.imei),
       numero_serie: textoONulo(ingreso.numeroSerie),
       id: ingreso.equipoId,
     },
     falla: falla_reportada,
-    recepcion,
+    recepcion: { ...recepcion, ...datosAgregadosDelIngreso(ingreso) },
     trabajoInicial: ingreso.trabajoInicial || null,
+    canal: ingreso.canal,
   };
+}
+
+/** Sí / No obligatoria (DEC-AJ-07), con observaciones opcionales. */
+function PreguntaVerificacion({
+  ingreso,
+  onCambiar,
+}: {
+  ingreso: Ingreso;
+  onCambiar: (ingreso: Ingreso) => void;
+}) {
+  return (
+    <fieldset
+      style={{
+        border: `1px solid ${colores.borde}`,
+        borderRadius: 6,
+        margin: "0 0 0.6rem",
+        padding: "0.4rem 0.7rem 0.1rem",
+      }}
+    >
+      <legend style={{ fontSize: "0.85rem", padding: "0 0.3rem" }}>
+        {PREGUNTA_VERIFICACION} (obligatoria)
+      </legend>
+      <div style={{ display: "flex", gap: "1rem", margin: "0 0 0.4rem", fontSize: "0.9rem" }}>
+        {(["SI", "NO"] as const).map((valor) => (
+          <label key={valor} style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
+            <input
+              type="radio"
+              name="verificacion-ingreso"
+              checked={ingreso.verificacion === valor}
+              onChange={() => onCambiar({ ...ingreso, verificacion: valor })}
+            />
+            {valor === "SI" ? "Sí" : "No"}
+          </label>
+        ))}
+      </div>
+      <Campo etiqueta="Observaciones de la verificación (opcional)">
+        <input
+          value={ingreso.observacionesVerificacion}
+          onChange={(evento) =>
+            onCambiar({ ...ingreso, observacionesVerificacion: evento.target.value })
+          }
+          style={estiloInput}
+        />
+      </Campo>
+      <p style={{ margin: "-0.2rem 0 0.4rem", fontSize: "0.75rem", color: colores.suave }}>
+        Es informativa: no es el check-in de la entrega ni cambia la garantía.
+      </p>
+    </fieldset>
+  );
 }
 
 /**
@@ -637,12 +724,30 @@ function CamposIngreso({
         }}
       >
         <Campo etiqueta="IMEI (si tiene)">
-          <input
-            value={ingreso.imei}
-            onChange={cambiar("imei")}
-            style={estiloInput}
-            inputMode="numeric"
-          />
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+            <input
+              value={ingreso.imeiNoDisponible ? "" : ingreso.imei}
+              onChange={cambiar("imei")}
+              disabled={ingreso.imeiNoDisponible}
+              placeholder={ingreso.imeiNoDisponible ? "IMEI no disponible" : undefined}
+              style={{ ...estiloInput, flex: "1 1 9rem" }}
+              inputMode="numeric"
+            />
+            {/* DEC-AJ-06: nunca un IMEI ficticio; el equipo se identifica
+                con su identificador interno, provisorio. */}
+            <Boton
+              variante="secundario"
+              onClick={() =>
+                onCambiar({
+                  ...ingreso,
+                  imei: "",
+                  imeiNoDisponible: !ingreso.imeiNoDisponible,
+                })
+              }
+            >
+              {ingreso.imeiNoDisponible ? "Cargar el IMEI" : "IMEI no disponible"}
+            </Boton>
+          </div>
         </Campo>
         {/* UAT-011: el alta de Cliente Externo no pide el número de serie
             (el dato sigue existiendo y otros orígenes lo cargan). */}
@@ -656,8 +761,19 @@ function CamposIngreso({
           </Campo>
         )}
       </div>
+      {ingreso.imeiNoDisponible && (
+        <p
+          role="status"
+          style={{ margin: "-0.3rem 0 0.6rem", fontSize: "0.8rem", color: colores.alerta }}
+        >
+          IMEI no disponible: el equipo se identifica con su identificador
+          interno (EQP-…), que se asigna al crear la Orden. Es provisorio y no
+          es un IMEI. El IMEI real se registra después desde la Orden, hasta
+          la entrega.
+        </p>
+      )}
       <SelectorIdentidad
-        imei={ingreso.imei}
+        imei={ingreso.imeiNoDisponible ? "" : ingreso.imei}
         numeroSerie={ingreso.numeroSerie}
         elegido={ingreso.equipoId}
         onElegir={(equipoId) =>
@@ -682,13 +798,23 @@ function CamposIngreso({
           Falta describir el equipo: lo que declara el cliente y cómo se recibe.
         </p>
       )}
-      <Campo etiqueta="Trabajo inicial (opcional)">
+      <Campo etiqueta="Trabajo solicitado por el cliente (texto libre)">
+        <textarea
+          value={ingreso.trabajoSolicitado}
+          onChange={cambiar("trabajoSolicitado")}
+          rows={2}
+          placeholder="Lo que pide el cliente, con sus palabras. No crea trabajos: los define el técnico."
+          style={{ ...estiloInput, resize: "vertical" }}
+        />
+      </Campo>
+      <PreguntaVerificacion ingreso={ingreso} onCambiar={onCambiar} />
+      <Campo etiqueta="Trabajo inicial estandarizado (opcional)">
         <select
           value={ingreso.trabajoInicial}
           onChange={cambiar("trabajoInicial")}
           style={estiloInput}
         >
-          <option value="">Sin trabajo por ahora</option>
+          <option value="">Sin trabajo: lo define el técnico</option>
           {ofrecidos.map((tipo) => (
             <option key={tipo.id} value={tipo.id}>
               {tipo.nombre} · {importe(tipo.precio)}
@@ -696,6 +822,25 @@ function CamposIngreso({
           ))}
         </select>
       </Campo>
+      {/* DEC-AJ-08: el canal se sigue registrando (BR-REP-028); llega
+          presencial y se puede cambiar. */}
+      {clienteExterno && ingreso.trabajoInicial && (
+        <Campo etiqueta="El cliente autorizó el trabajo">
+          <select
+            value={ingreso.canal}
+            onChange={(evento) =>
+              onCambiar({ ...ingreso, canal: evento.target.value as CanalComunicacion })
+            }
+            style={estiloInput}
+          >
+            {CANALES.map((opcion) => (
+              <option key={opcion} value={opcion}>
+                {etiqueta(CANAL, opcion)}
+              </option>
+            ))}
+          </select>
+        </Campo>
+      )}
       <Campo etiqueta="Notas internas (solo el personal; no salen en documentos)">
         <input
           value={ingreso.notasInternas}
@@ -711,11 +856,7 @@ function CamposIngreso({
         }}
       >
         {clienteExterno
-          ? "El trabajo inicial se agrega junto con la Orden, con las mismas " +
-            "validaciones que en ella (si no se puede, no se crea nada); en la " +
-            "Orden se cargan los demás y «Otros». " +
-            "Después se genera el comprobante de ingreso y autorización, que " +
-            "confirma la recepción del equipo."
+          ? explicacionDelAlta(comprobanteDelAlta(ingreso.trabajoInicial || null))
           : "El trabajo inicial se agrega junto con la Orden. La recepción física " +
             "del equipo se confirma después, en la Orden."}
       </p>
@@ -923,7 +1064,15 @@ export function FormularioNuevaOrden({
   actor: Usuario | null;
   ocupado: boolean;
   tipos: TipoReparacion[];
-  onCrear: (datos: DatosNuevaOrden, trabajoInicial: string | null) => void;
+  /**
+   * DEC-AJ-08: crea la Orden y genera el comprobante (con trabajo, el de
+   * ingreso con `canal`; sin trabajo, el de recepción).
+   */
+  onCrear: (
+    datos: DatosNuevaOrden,
+    trabajoInicial: string | null,
+    canal: CanalComunicacion,
+  ) => void;
 }) {
   const [nombreApellido, setNombreApellido] = useState("Cliente de Prueba");
   const [telefono, setTelefono] = useState("341-0000000");
@@ -945,11 +1094,12 @@ export function FormularioNuevaOrden({
   const dniNormalizado = normalizarDni(dni);
   const dniInvalido = dni.trim() !== "" && dniNormalizado === null;
   const datosEquipo = datosDelEquipo(catalogo.modelos.length > 0, equipo);
+  const faltanDelIngreso = faltantesDelIngreso(ingreso);
   const completo =
     nombreApellido.trim() &&
     telefono.trim() &&
     datosEquipo &&
-    ingreso.observaciones.trim() &&
+    faltanDelIngreso.length === 0 &&
     !dniInvalido;
   const puedeBuscar =
     actor !== null &&
@@ -993,7 +1143,7 @@ export function FormularioNuevaOrden({
       const encontrado = await buscar(false);
       if (encontrado?.origen === "BASE") return;
     }
-    const { identificadores, falla, recepcion, trabajoInicial } =
+    const { identificadores, falla, recepcion, trabajoInicial, canal } =
       datosDeIngreso(ingreso);
     if (!datosEquipo) return;
     onCrear(
@@ -1013,6 +1163,7 @@ export function FormularioNuevaOrden({
         recepcion,
       },
       trabajoInicial,
+      canal,
     );
   }
 
@@ -1092,11 +1243,17 @@ export function FormularioNuevaOrden({
           Falta el nombre y apellido del cliente.
         </p>
       )}
+      {faltanDelIngreso.length > 0 && (
+        <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.alerta }}>
+          Para crear la Orden falta {faltanDelIngreso.join(" y ")}.
+        </p>
+      )}
+      {/* DEC-AJ-08: una sola acción; el visor se abre con «Imprimir». */}
       <Boton
         disabled={!esRecepcion || ocupado || buscando || !completo || !actor}
         onClick={() => void crear()}
       >
-        Crear Orden
+        Crear y generar el comprobante
       </Boton>
     </div>
   );
@@ -1121,8 +1278,9 @@ export function FormularioNuevaOrdenRt({
 
   // CFG-02 (brecha 18): el permiso configurable ORDEN_CREAR, no el rol.
   const esRecepcion = puede(actor, "ORDEN_CREAR", ["RECEPCION"]);
+  const faltanDelIngreso = faltantesDelIngreso(ingreso);
   const completo =
-    marca && modelo && ingreso.observaciones.trim() && referenciaRt;
+    marca && modelo && faltanDelIngreso.length === 0 && referenciaRt;
 
   return (
     <div>
@@ -1159,6 +1317,11 @@ export function FormularioNuevaOrdenRt({
         />
       </Campo>
       <CamposIngreso ingreso={ingreso} tipos={tipos} onCambiar={setIngreso} />
+      {faltanDelIngreso.length > 0 && (
+        <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.alerta }}>
+          Para crear la Orden falta {faltanDelIngreso.join(" y ")}.
+        </p>
+      )}
       <Boton
         disabled={!esRecepcion || ocupado || !completo || !actor}
         onClick={() => {

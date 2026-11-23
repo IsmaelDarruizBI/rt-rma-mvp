@@ -641,7 +641,12 @@ export function iniciarGarantiaRma(
   });
 }
 
-/** PROC-REP-045 (No) -> 055 -> 050 [-> 060] (Recepción, VAR-REP-001/002). */
+/**
+ * PROC-REP-045 (No) -> 055 -> 050 [-> 060] (Recepción, VAR-REP-001/002).
+ * DEC-AJ-05: es el ingreso sin trabajos; en Cliente Externo el comprobante
+ * de recepción confirma la custodia en el mismo acto. Un reintento sobre la
+ * Orden ya enviada la devuelve sin cambios.
+ */
 export function enviarARevision(
   ordenId: string,
   usuarioId: string,
@@ -872,6 +877,28 @@ export function registrarRecepcion(
     ...datos,
     equipo,
     motivo,
+  });
+}
+
+/**
+ * DEC-AJ-06: registra el IMEI real de un equipo que ingresó sin él, también
+ * con la custodia confirmada y hasta la entrega, con motivo. El IMEI va en
+ * el cuerpo, nunca en la URL (P1-18). Si coincide con otro Equipo responde
+ * 409 `CONFIRMACION_REQUERIDA`: con `confirmado` se registra igual, sin
+ * vincularlos.
+ */
+export function registrarImeiReal(
+  ordenId: string,
+  usuarioId: string,
+  imei: string,
+  motivo: string,
+  confirmado = false,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/real-imei`, {
+    usuario_id: usuarioId,
+    imei,
+    motivo,
+    confirmado,
   });
 }
 

@@ -48,6 +48,11 @@ import type {
 } from "../../types/api";
 import { nombreEquipo } from "./catalogoEquipos";
 import { avisoDni, importesPresentados } from "./recepcionUx";
+import {
+  comprobanteGenerado,
+  identificacionDelEquipo,
+  textoVerificacion,
+} from "./ingresoAjustes";
 import { imprimirPdf } from "./impresion";
 import { nombreDeUsuario } from "./DetalleOrden";
 import { CANAL, etiqueta } from "./etiquetas";
@@ -162,6 +167,11 @@ interface Props {
   onGenerarIngreso: (canal: CanalComunicacion) => void;
   /** UX-07: ir a registrar la firma (opcional) de un documento. */
   onFirmar?: (documentoId: string) => void;
+  /**
+   * DEC-AJ-08: abrir en el visor el comprobante recién generado por «Crear y
+   * generar el comprobante» (`pedido` distingue un pedido de otro).
+   */
+  abrir?: { tipo: TipoDocumento; pedido: number } | null;
 }
 
 export function DocumentosOrden({
@@ -173,6 +183,7 @@ export function DocumentosOrden({
   onEmitirAutorizacion,
   onGenerarIngreso,
   onFirmar,
+  abrir = null,
 }: Props) {
   const [documentos, setDocumentos] = useState<DocumentosDeOrden | null>(null);
   const [visible, setVisible] = useState<Visible | null>(null);
@@ -193,6 +204,17 @@ export function DocumentosOrden({
       vigente = false;
     };
   }, [orden.id, orden.updated_at]);
+
+  // DEC-AJ-08: el comprobante del alta se abre una sola vez por pedido.
+  const [abiertoPara, setAbiertoPara] = useState<number | null>(null);
+  useEffect(() => {
+    if (!abrir || abrir.pedido === abiertoPara || !documentos) return;
+    const generado = comprobanteGenerado(documentos.emitidos, abrir.tipo);
+    if (generado) {
+      setAbiertoPara(abrir.pedido);
+      setVisible({ clase: "emitido", documento: generado });
+    }
+  }, [abrir, abiertoPara, documentos]);
 
   useEffect(() => {
     if (pedido === null || !documentos) return;
@@ -556,7 +578,14 @@ function FormularioComprobanteIngreso({
  * «Descargar PDF» y «Compartir por WhatsApp» de un comprobante emitido.
  * Compartir no registra nada: no prueba que el cliente lo recibió.
  */
-function AccionesPdf({ documento }: { documento: DocumentoEmitido }) {
+function AccionesPdf({
+  documento,
+  imprimirPrimero = false,
+}: {
+  documento: DocumentoEmitido;
+  /** DEC-AJ-08: en el visor, «Imprimir» es la acción principal. */
+  imprimirPrimero?: boolean;
+}) {
   const [trabajando, setTrabajando] = useState(false);
   const [aviso, setAviso] = useState<ReactNode>(null);
   const nombre = `${documento.id}.pdf`;
@@ -587,8 +616,29 @@ function AccionesPdf({ documento }: { documento: DocumentoEmitido }) {
       setAviso(textoCompartir(resultado, nombre));
     });
 
+  // UX-05: el mismo PDF, al diálogo de impresión: no emite otro. El clic
+  // del usuario la inicia (el navegador no deja imprimir solo).
+  const imprimir = (
+    <Boton
+      variante={imprimirPrimero ? "primario" : "secundario"}
+      disabled={trabajando}
+      onClick={() =>
+        void conPdf(async (pdf) => {
+          const forma = await imprimirPdf(pdf);
+          setAviso(
+            forma === "dialogo"
+              ? null
+              : "Se abrió el PDF en otra pestaña: imprimilo desde ahí.",
+          );
+        })
+      }
+    >
+      Imprimir
+    </Boton>
+  );
   return (
     <>
+      {imprimirPrimero && imprimir}
       <Boton
         variante="secundario"
         disabled={trabajando}
@@ -601,23 +651,7 @@ function AccionesPdf({ documento }: { documento: DocumentoEmitido }) {
       >
         Descargar PDF
       </Boton>
-      {/* UX-05: el mismo PDF, al diálogo de impresión: no emite otro. */}
-      <Boton
-        variante="secundario"
-        disabled={trabajando}
-        onClick={() =>
-          void conPdf(async (pdf) => {
-            const forma = await imprimirPdf(pdf);
-            setAviso(
-              forma === "dialogo"
-                ? null
-                : "Se abrió el PDF en otra pestaña: imprimilo desde ahí.",
-            );
-          })
-        }
-      >
-        Imprimir
-      </Boton>
+      {!imprimirPrimero && imprimir}
       <Boton variante="secundario" disabled={trabajando} onClick={() => void compartir()}>
         Compartir por WhatsApp
       </Boton>
@@ -771,7 +805,7 @@ function VisorDocumento({
         }}
       >
         {visible.clase === "emitido" && CON_PDF.has(visible.documento.tipo) ? (
-          <AccionesPdf documento={visible.documento} />
+          <AccionesPdf documento={visible.documento} imprimirPrimero />
         ) : (
           <Boton onClick={() => window.print()}>Imprimir / guardar PDF</Boton>
         )}
@@ -1010,7 +1044,18 @@ function Partes({ contenido }: { contenido: ContenidoDocumento }) {
       <Dato etiqueta="Equipo" valor={nombreEquipo(equipo)} />
       {equipo.capacidad && <Dato etiqueta="Capacidad" valor={equipo.capacidad} />}
       {equipo.color && <Dato etiqueta="Color" valor={equipo.color} />}
-      <Dato etiqueta="IMEI" valor={equipo.imei ?? "—"} />
+      {/* UX-02 y DEC-AJ-06: el identificador interno; sin IMEI, se aclara
+          que no es un IMEI (provisorio si se marcó «IMEI no disponible»). */}
+      <Dato etiqueta="Identificador del equipo" valor={equipo.id} />
+      <Dato
+        etiqueta="IMEI"
+        valor={
+          identificacionDelEquipo(
+            equipo,
+            "imei_no_disponible" in contenido ? contenido.imei_no_disponible : false,
+          ).imei
+        }
+      />
       <Dato etiqueta="N.º de serie" valor={equipo.numero_serie ?? "—"} />
       <Dato etiqueta="Fecha de ingreso" valor={fechaHora(contenido.fecha_ingreso)} />
       {contenido.orden_origen_id && (
@@ -1074,10 +1119,37 @@ function DatosDelEquipoRecibido({
   );
 }
 
+/**
+ * DEC-AJ-05 y DEC-AJ-07: el trabajo solicitado y la verificación del
+ * ingreso (informativa: no es el check-in de entrega). Ausentes en los
+ * documentos anteriores.
+ */
+function DatosAgregadosDelIngreso({
+  contenido,
+}: {
+  contenido: ContenidoRecepcion | ContenidoIngreso;
+}) {
+  const verificacion = textoVerificacion(contenido);
+  return (
+    <>
+      {contenido.trabajo_solicitado && (
+        <Dato etiqueta="Trabajo solicitado" valor={contenido.trabajo_solicitado} />
+      )}
+      {verificacion !== null && (
+        <Dato
+          etiqueta="Funcionalidades verificadas al ingresar"
+          valor={verificacion}
+        />
+      )}
+    </>
+  );
+}
+
 function CuerpoRecepcion({ contenido }: { contenido: ContenidoRecepcion }) {
   return (
     <>
       <Titulo>Recepción</Titulo>
+      <DatosAgregadosDelIngreso contenido={contenido} />
       <DatosDelEquipoRecibido contenido={contenido} />
       <Accesorios accesorios={contenido.accesorios} />
       {!contenido.observaciones_unificadas && (
@@ -1150,6 +1222,7 @@ function CuerpoIngreso({ contenido }: { contenido: ContenidoIngreso }) {
   return (
     <>
       <Titulo>Recepción del equipo</Titulo>
+      <DatosAgregadosDelIngreso contenido={contenido} />
       <DatosDelEquipoRecibido contenido={contenido} />
       <Accesorios accesorios={contenido.accesorios} />
       {/* Solo en un comprobante anterior a UAT-009: hoy el check-in es del cierre. */}

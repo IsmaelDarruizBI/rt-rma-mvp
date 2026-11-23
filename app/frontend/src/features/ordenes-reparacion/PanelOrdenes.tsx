@@ -35,12 +35,14 @@ import { ApiError } from "../../api/client";
 import { Boton, Panel, colores, importe } from "../../components/ui";
 import type {
   Accion,
+  CanalComunicacion,
   Estacion,
   MedioPago,
   Orden,
   OrdenResumen,
   Prioridad,
   RolUsuario,
+  TipoDocumento,
   TipoReparacion,
   Usuario,
 } from "../../types/api";
@@ -120,6 +122,10 @@ import {
   puedeEjecutar,
 } from "./presentacion";
 import { subtituloOrden, usaTextoUnico } from "./recepcionUx";
+import {
+  TIPO_DEL_COMPROBANTE,
+  comprobanteDelAlta,
+} from "./ingresoAjustes";
 import { Pendientes } from "./Pendientes";
 import {
   CODIGOS_ESPECIALES,
@@ -208,6 +214,13 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
   // si se vuelve a pedir el mismo).
   const [firmaSugerida, setFirmaSugerida] = useState<{
     documentoId: string;
+    pedido: number;
+  } | null>(null);
+  // DEC-AJ-08: el comprobante recién generado por «Crear y generar», para
+  // abrirlo en el visor con «Imprimir» (el pedido lo distingue).
+  const [comprobantePedido, setComprobantePedido] = useState<{
+    ordenId: string;
+    tipo: TipoDocumento;
     pedido: number;
   } | null>(null);
   const registrar = useCallback((registrada: AccionRegistrada) => {
@@ -634,6 +647,42 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
     await ejecutarComando(() => api.tomarOrden(ordenId, idActor, estacionId));
   };
 
+  /**
+   * DEC-AJ-08: «Crear y generar el comprobante». Encadena dos comandos
+   * idempotentes: crear la Orden (que la abre en su pantalla) y generar el
+   * comprobante (con trabajo, el de ingreso y autorización con el canal
+   * elegido; sin trabajo, enviar a revisión con el de recepción, que
+   * confirma la custodia). Si el comprobante falla, el error se muestra en
+   * la Orden ya creada y se genera desde ahí. No imprime solo: el navegador
+   * exige un clic, así que abre el visor con «Imprimir».
+   */
+  const crearYGenerar = async (
+    datos: api.DatosNuevaOrden,
+    trabajoInicial: string | null,
+    canal: CanalComunicacion,
+  ) => {
+    let creada: Orden | null = null;
+    const creo = await ejecutarComando(async () => {
+      creada = await api.crearOrden({ ...datos, trabajo_inicial: trabajoInicial });
+      return creada;
+    });
+    const orden = creada as Orden | null;
+    if (!creo || orden === null) return;
+    const comprobante = comprobanteDelAlta(trabajoInicial);
+    const genero = await ejecutarComando(() =>
+      comprobante === "INGRESO"
+        ? api.generarComprobanteIngreso(orden.id, datos.usuario_id, canal)
+        : api.enviarARevision(orden.id, datos.usuario_id),
+    );
+    if (genero) {
+      setComprobantePedido({
+        ordenId: orden.id,
+        tipo: TIPO_DEL_COMPROBANTE[comprobante],
+        pedido: Date.now(),
+      });
+    }
+  };
+
   const abiertaPara = (seccion: Informativa) =>
     actor !== null &&
     rolesDe(actor).some((rol) => ABIERTA_POR_ROL[rol] === seccion);
@@ -915,10 +964,8 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                 tipos={tipos}
                 // DEC-UX-04: una sola operación con el trabajo inicial; si
                 // falla no se crea nada y el formulario conserva lo cargado.
-                onCrearClienteExterno={(datos, trabajoInicial) =>
-                  void ejecutarComando(() =>
-                    api.crearOrden({ ...datos, trabajo_inicial: trabajoInicial }),
-                  )
+                onCrearClienteExterno={(datos, trabajoInicial, canal) =>
+                  void crearYGenerar(datos, trabajoInicial, canal)
                 }
                 onCrearRtInterno={(datos, trabajoInicial) =>
                   void ejecutarComando(() =>
@@ -1113,6 +1160,17 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                       ),
                     )
                   }
+                  onRegistrarImei={(imei, motivo, confirmado) =>
+                    void ejecutarComando(() =>
+                      api.registrarImeiReal(
+                        idOrden,
+                        idActor,
+                        imei,
+                        motivo,
+                        confirmado,
+                      ),
+                    )
+                  }
                 />
                 <ChecklistRecepcion
                   orden={orden}
@@ -1277,7 +1335,10 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                 key={`${orden.id}-${actorId}-documentos`}
                 titulo="Documentos"
                 resumen={resumenDocumentos(orden)}
-                abierta={abiertaPara("documentos")}
+                abierta={
+                  abiertaPara("documentos") ||
+                  comprobantePedido?.ordenId === orden.id
+                }
               >
                 <DocumentosOrden
                   orden={orden}
@@ -1301,6 +1362,11 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                   }
                   onFirmar={(documentoId) =>
                     setFirmaSugerida({ documentoId, pedido: Date.now() })
+                  }
+                  abrir={
+                    comprobantePedido?.ordenId === orden.id
+                      ? comprobantePedido
+                      : null
                   }
                 />
                 <FirmasDocumentos
