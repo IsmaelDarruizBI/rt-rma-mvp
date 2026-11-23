@@ -741,6 +741,9 @@ function CamposIngreso({
                 onCambiar({
                   ...ingreso,
                   imei: "",
+                  // Sin IMEI no hay con qué reusar una identidad elegida por
+                  // IMEI (DEC-MI-11): vuelve a «Ninguno».
+                  equipoId: null,
                   imeiNoDisponible: !ingreso.imeiNoDisponible,
                 })
               }
