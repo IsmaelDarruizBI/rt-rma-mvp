@@ -521,6 +521,25 @@ Pruebas de desarrollo: solo las de los componentes tocados. `ruff`; `pytest` de 
 
 **Mientras se desarrolla:** commits chicos por funcionalidad, sin push salvo autorización y sin desplegar. Cada bloque cierra con la validación manual en local. El QA integral, los E2E y el despliegue se hacen al final (pasos 6 y 7).
 
+## 6. Riesgos principales
+
+1. **Reglas aprobadas que cambian (BF-04, 05, 08 y 20).** Implementarlas sin registrar antes la decisión en `rt-rma-app` deja `business/` contradiciendo al código. Mitigación: decisión primero y después sincronizar.
+2. **Tests que fijan la secuencia de entrega.** Son 28 archivos. Adaptarlos solo con aprobación (AGENTS.md) y sin debilitar las comprobaciones de saldo, custodia ni check-in.
+3. **Integridad financiera (BF-09).** El saldo se calcula en dos lugares y el recargo se reparte con los ajustes actuales. Cualquier cambio va en la vista y en el dominio juntos, con pruebas de PostgreSQL.
+4. **Migración del catálogo (BF-01 y BF-14).** Los tipos actuales no se pueden borrar, hay Órdenes con Detalles que los referencian, y existen stock, reservas y lotes sin clasificar. Hace falta una conversión explícita y un ensayo local antes del UAT.
+5. **Compatibilidad con la versión publicada.** Todas las migraciones tienen que ser aditivas, para que `00042-suw` siga funcionando como vuelta atrás (como en P1-15).
+6. **Datos de prueba del UAT.** `OR-000001` a `OR-000006` pueden quedar a mitad del workflow cuando cambien las compuertas de la entrega (bloque 2).
+
+## 7. Primer bloque recomendado
+
+**Bloque 1: BF-07, BF-12 y BF-17.**
+
+- No necesita migraciones ni decisiones en `business/`, y no toca pagos, stock ni la secuencia de la entrega.
+- Solo espera D-01 y D-02 (sección 4.1).
+- Da una mejora visible para Recepción y cierra dos verificaciones.
+
+**En paralelo:** resolver D-03 y D-04 (bloque 2) y D-05 a D-08 (bloque 3), y registrar en `rt-rma-app` las que cambian reglas, para que esos bloques puedan empezar enseguida.
+
 ## 8. Bloque 1: implementación en local (23/11/2026)
 
 Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. No hay migraciones ni cambios en `business/`.
@@ -568,22 +587,3 @@ Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. No hay migrac
 | Arranque | Backend local con `/health` 200; el permiso aparece en el catálogo de Configuración; en la lista de usuarios, Recepción no lo tiene y Técnico, Coordinación y Administración sí |
 
 La suite completa, las pruebas de PostgreSQL y los E2E quedan para el QA integral.
-
-## 6. Riesgos principales
-
-1. **Reglas aprobadas que cambian (BF-04, 05, 08 y 20).** Implementarlas sin registrar antes la decisión en `rt-rma-app` deja `business/` contradiciendo al código. Mitigación: decisión primero y después sincronizar.
-2. **Tests que fijan la secuencia de entrega.** Son 28 archivos. Adaptarlos solo con aprobación (AGENTS.md) y sin debilitar las comprobaciones de saldo, custodia ni check-in.
-3. **Integridad financiera (BF-09).** El saldo se calcula en dos lugares y el recargo se reparte con los ajustes actuales. Cualquier cambio va en la vista y en el dominio juntos, con pruebas de PostgreSQL.
-4. **Migración del catálogo (BF-01 y BF-14).** Los tipos actuales no se pueden borrar, hay Órdenes con Detalles que los referencian, y existen stock, reservas y lotes sin clasificar. Hace falta una conversión explícita y un ensayo local antes del UAT.
-5. **Compatibilidad con la versión publicada.** Todas las migraciones tienen que ser aditivas, para que `00042-suw` siga funcionando como vuelta atrás (como en P1-15).
-6. **Datos de prueba del UAT.** `OR-000001` a `OR-000006` pueden quedar a mitad del workflow cuando cambien las compuertas de la entrega (bloque 2).
-
-## 7. Primer bloque recomendado
-
-**Bloque 1: BF-07, BF-12 y BF-17.**
-
-- No necesita migraciones ni decisiones en `business/`, y no toca pagos, stock ni la secuencia de la entrega.
-- Solo espera D-01 y D-02 (sección 4.1).
-- Da una mejora visible para Recepción y cierra dos verificaciones.
-
-**En paralelo:** resolver D-03 y D-04 (bloque 2) y D-05 a D-08 (bloque 3), y registrar en `rt-rma-app` las que cambian reglas, para que esos bloques puedan empezar enseguida.
