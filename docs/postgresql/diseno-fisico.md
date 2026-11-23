@@ -61,8 +61,8 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 
 | Clase | Tablas | Mecanismo |
 |---|---|---|
-| Inmutables | Eventos, libro de inventario, versiones, decisiones, controles, ajustes, check-in, salida, fotos, notas, versiones de recepción, override, declarado de Ejecución, devoluciones, descuentos, documentos, textos legales, auditoría | Trigger que rechaza UPDATE y DELETE para cualquier usuario, más permisos del backend de solo SELECT e INSERT |
-| Se completan una vez | `accion_usuario` (respuesta y Orden), `pago` (anulación), `documento_cliente` (cierre de vigencia), `ejecucion` (mientras está en curso), `recepcion` (hasta decidir la custodia) | Triggers específicos y permisos por columna |
+| Inmutables | Eventos, libro de inventario, versiones, decisiones, controles, ajustes, check-in, salida, fotos, notas, versiones de recepción, override, declarado de Ejecución, devoluciones, recálculos de descuentos, documentos, textos legales, auditoría | Trigger que rechaza UPDATE y DELETE para cualquier usuario, más permisos del backend de solo SELECT e INSERT |
+| Se completan una vez | `accion_usuario` (respuesta y Orden), `pago` (anulación), `descuento` (reversión, DEC-AJ-10), `documento_cliente` (cierre de vigencia), `ejecucion` (mientras está en curso), `recepcion` (hasta decidir la custodia) | Triggers específicos y permisos por columna |
 | Estado actual | `orden`, `detalle`, `toma`, `cliente`, `equipo`, catálogos | UPDATE permitido; DELETE prohibido. Una Orden cerrada no cambia, salvo su contador de eventos |
 | Saldos de insumo | `stock_fisico`, `stock_reservado` | Solo los cambia el trigger del libro; el backend no tiene permiso de UPDATE sobre esas columnas |
 
@@ -107,7 +107,8 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 | M3 | `movimiento_inventario` | `insumo`, `orden`, `detalle` y `ejecucion` (comp.), sí mismo (comp.), `motivo_ajuste`, `usuario`, `accion_usuario` | Vínculos por tipo; DESPERDICIO y DEVOLUCION sin operación; inmutable; sin ON CONFLICT |
 | M3 | `override_recursos`, `override_insumo` | `detalle_version` (comp.), `insumo` | Vale para una versión; cálculo del impacto verificado |
 | M4 | `pago`, `devolucion_dinero` | `orden`, `medio_pago`, `usuario` | Solo cliente externo; importe fijo; anulación única; devolución sin superar el pago |
-| M4 | `descuento` | `orden`, `usuario` | Porcentaje hasta 100; inmutable |
+| M4 | `descuento` | `orden`, `usuario`, `detalle`, sí mismo (`corrige_a`) | Porcentaje hasta 100; inmutable salvo la reversión, una vez y con la Orden abierta (DEC-AJ-10) |
+| M4 | `descuento_recalculo` | `descuento` (comp. con `orden`), `detalle`, `usuario` | Inmutable; solo con la Orden abierta (DEC-AJ-10) |
 | M4 | `documento_emitido` | `orden`, `texto_legal`, sí mismo (comp.) | Orden, tipo y versión únicos; versión nueva con motivo |
 | M5 | `accion_usuario` | `usuario`, `orden` | Clave de idempotencia única entre las confirmadas |
 | M5 | `evento_negocio` | `accion_usuario` (comp. con CONFIRMADA), `orden`, `tipo_evento` y otras | Secuencia única por Orden, asignada por la base; inmutable |
@@ -159,6 +160,10 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 - **`20261112000200_configuracion_auditada.sql`:** la tabla inmutable `cambio_configuracion`, con `secuencia` identity; la vista `historial_precio`; DELETE en `mesa_tipo_reparacion` para `rma_backend`.
 - **`20261120000100_codigos_automaticos.sql`** (Configuración v2, CFG-01): una secuencia por prefijo (`codigo_tr_seq` … `codigo_rga_seq`) y `rma.siguiente_codigo(prefijo)`, que formatea sin truncar y saltea los códigos usados sin distinguir mayúsculas (puede dejar huecos); trigger `impedir_cambio_codigo` en seis catálogos; índices únicos `upper(codigo)` en `tipo_reparacion` e `insumo` (`clave` y `codigo`). Sin tablas nuevas.
 - **`20261120000200_permisos_operativos.sql`** (CFG-03): copia la fila de `COMPRAS_GESTIONAR` de `rma.permiso`, si existe, a los cinco permisos de Compras, con auditoría; no borra la fila anterior.
+
+**Ajustes funcionales, iteración 2 (rama `feat/ajustes-funcionales-uat`, aditiva, solo local):**
+
+- **`20261124000100_ajuste_comercial_reversion.sql`** (DEC-AJ-10, bloque 5): en `descuento`, `codigo`, la evidencia (`precio_original`, `importe_aplicado`, `precio_final`), `corrige_a` y la reversión (`revertido_por`, `revertido_en`, `reversion_motivo`, todo o nada); todas admiten vacío. `descuento_validar()` reemplaza a `descuento_inmutable`: solo completa la reversión, una vez y con la Orden abierta, y `rma_backend` solo puede actualizar esas tres columnas. Una corrección apunta a un registro revertido del mismo destino. Tabla inmutable `descuento_recalculo`. `v_orden_saldo` con las mismas columnas, sin los revertidos. Equivalencia ACC-REP-072 → EV-REP-041, visible en el historial. Queda en 73 tablas y 8 vistas. Detalle: [`../ajustes-funcionales-discovery.md`](../ajustes-funcionales-discovery.md), sección 11.2.
 
 **Macroiteración integral (rama `feat/macro-integral`, aditivas, aplicadas solo en la base local; ninguna en Supabase):**
 

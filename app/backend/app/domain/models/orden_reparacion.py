@@ -75,8 +75,8 @@ class OrdenReparacion(BaseModel):
     La situacion comercial (``subtotal``, ``descuento_aplicado``,
     ``total``, ``saldo``, ``estado_pago``) es siempre derivada: nada que
     deba sincronizarse a mano. Lo unico persistido es el precio snapshot
-    de cada Detalle, los pagos y los registros de descuento. Sin impuestos
-    ni cortesias por Detalle.
+    de cada Detalle, los pagos y los registros del Ajuste Comercial (de la
+    Orden o de un Detalle). Sin impuestos.
 
     ``cliente`` es ``None`` para RT_INTERNO (BR-REP-016): el equipo es de
     Rosario Tecno, no hay un Cliente externo que lo deje. ``referencia_rt``
@@ -136,9 +136,9 @@ class OrdenReparacion(BaseModel):
     # Datos del ingreso fisico y confirmacion de custodia. ``None`` solo en
     # una Orden anterior a este registro: no se presume su custodia.
     recepcion: RecepcionEquipo | None = None
-    # Descuento comercial sobre los trabajos (MVP v2): todos los cambios,
-    # del mas antiguo al mas reciente; el vigente es el ultimo (si no lo
-    # quito). Default vacio: un JSON anterior sigue cargando sin descuento.
+    # Ajuste Comercial (descuento o cortesia): todos los registros, del mas
+    # antiguo al mas reciente; por destino rige el ultimo no revertido (si
+    # no lo quito, DEC-AJ-10). Default vacio: un JSON anterior carga igual.
     descuentos: list[RegistroDescuento] = Field(default_factory=list)
     # DEC-AJ-10 (D-10.4): recalculos de ajustes vigentes por una
     # redefinicion o una cancelacion; solo crecen.

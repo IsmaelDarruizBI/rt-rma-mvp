@@ -589,8 +589,9 @@ def condicion_entrega_cumplida(orden: OrdenReparacion) -> bool:
         NO_COBRABLE           -> True, sin pagos (garantia)
 
     V1.4: un saldo a favor tampoco permite entregar; primero se devuelve
-    el dinero. La cortesia queda fuera de alcance. El saldo nominal de una
-    Orden NO_COBRABLE puede ser > 0 sin que eso sea una deuda.
+    el dinero; tambien si el saldo a favor lo dejo un Ajuste Comercial
+    (descuento o cortesia, DEC-MI-03). El saldo nominal de una Orden
+    NO_COBRABLE puede ser > 0 sin que eso sea una deuda.
     """
     politica = politica_de(orden.origen)
     if not politica.requiere_entrega_cliente:
@@ -620,8 +621,8 @@ def validar_condicion_entrega(
     V1.4 (BR-REP-038), tres resultados para un Origen COBRABLE: saldo 0 ->
     se entrega; saldo > 0 -> cobro pendiente (PROC-REP-266); saldo < 0 ->
     saldo a favor del cliente, que primero se devuelve. Para NO_COBRABLE
-    (garantia RMA) se aprueba directamente por Origen, sin pagos. La
-    cortesia total queda fuera del MVP.
+    (garantia RMA) se aprueba directamente por Origen, sin pagos. Una
+    cortesia total deja el total en 0: con pagos previos, saldo a favor.
 
     Se evalua antes de generar el comprobante final (PROC-REP-280), para
     que el comprobante refleje siempre el saldo definitivo.
