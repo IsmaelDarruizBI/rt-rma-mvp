@@ -17,7 +17,9 @@ from decimal import Decimal
 
 from app.core.pdf import ALTO_A4, ANCHO_A4, Pdf, ancho_texto, cortar
 from app.domain.models import (
+    AjusteEnDocumento,
     CanalComunicacion,
+    ClaseAjuste,
     ContenidoComprobanteAutorizacion,
     ContenidoComprobanteIngreso,
     DescuentoEnDocumento,
@@ -55,6 +57,18 @@ def importe(valor: Decimal) -> str:
     """$ 85.000,00 (separadores de Argentina)."""
     texto = f"{valor:,.2f}".replace(",", "_").replace(".", ",")
     return "$ " + texto.replace("_", ".")
+
+
+# DEC-AJ-10 (D-10.5): la cortesia se imprime como cortesia.
+NOMBRE_CLASE = {
+    ClaseAjuste.DESCUENTO: "Descuento",
+    ClaseAjuste.CORTESIA: "Cortesía",
+}
+
+
+def texto_ajuste(ajuste: AjusteEnDocumento) -> str:
+    """«Cortesía 10 %» o «Descuento $ 5000.00»."""
+    return f"{NOMBRE_CLASE[ajuste.clase]} {ajuste.descripcion}"
 
 
 def fecha_hora(fecha: datetime, zona: tzinfo) -> str:
@@ -309,11 +323,41 @@ def _totales(
     subtotal: Decimal | None,
     descuento: DescuentoEnDocumento | None,
     total: Decimal,
+    contenido=None,
 ) -> None:
-    """Total autorizado; con descuento, antes el subtotal y el descuento."""
+    """Total autorizado; con descuento, antes el subtotal y el descuento.
+
+    DEC-AJ-10: en los emitidos desde entonces, los ajustes de los trabajos
+    (ya en cada renglon) y el de la Orden van en lineas aparte, con su
+    clase y sin el motivo (queda en el registro interno).
+    """
     pdf = hoja.pdf
     filas: list[tuple[str, str, bool]] = []
-    if descuento is not None and subtotal is not None:
+    por_trabajo = bool(getattr(contenido, "ajustes_por_trabajo", False))
+    if por_trabajo and descuento is not None and subtotal is not None:
+        filas.append(("Subtotal", importe(subtotal), False))
+        de_trabajos = sum(
+            (t.ajuste.importe for t in contenido.trabajos if t.ajuste),
+            Decimal("0"),
+        )
+        if de_trabajos > 0:
+            filas.append(
+                (
+                    "Ajustes de los trabajos",
+                    "- " + importe(de_trabajos),
+                    False,
+                )
+            )
+        if contenido.ajuste_orden is not None:
+            filas.append(
+                (
+                    f"{texto_ajuste(contenido.ajuste_orden)} sobre la Orden",
+                    "- " + importe(contenido.ajuste_orden.importe),
+                    False,
+                )
+            )
+        descuento = None
+    elif descuento is not None and subtotal is not None:
         filas.append(("Subtotal", importe(subtotal), False))
         filas.append(
             (
@@ -361,7 +405,23 @@ def _trabajos(hoja: _Hoja, contenido, zona: tzinfo) -> None:
             ANCHO_AUTORIZACION,
             9,
         )
-        alto = 13 * max(len(nombre), len(autorizacion)) + 6
+        # DEC-AJ-10 (D-10.5): precio original, ajuste y precio final.
+        ajuste = getattr(trabajo, "ajuste", None)
+        renglon_ajuste = (
+            cortar(
+                f"{texto_ajuste(ajuste)}: - {importe(ajuste.importe)} · "
+                f"Precio final {importe(trabajo.precio_final)}",
+                ANCHO_TRABAJO,
+                8.5,
+            )
+            if ajuste is not None and trabajo.precio_final is not None
+            else []
+        )
+        alto = (
+            13 * max(len(nombre), len(autorizacion))
+            + 12 * len(renglon_ajuste)
+            + 6
+        )
         hoja.asegurar(alto)
         y = hoja.y
         for indice, linea in enumerate(nombre):
@@ -381,12 +441,25 @@ def _trabajos(hoja: _Hoja, contenido, zona: tzinfo) -> None:
             tamano=9.5,
             derecha=True,
         )
+        base = y - 13 * max(len(nombre), len(autorizacion))
+        for indice, linea in enumerate(renglon_ajuste):
+            pdf.texto(
+                COL_TRABAJO + 10,
+                base - 12 * (indice + 1),
+                linea,
+                tamano=8.5,
+                gris=0.3,
+            )
         hoja.bajar(alto)
         pdf.linea(MARGEN, hoja.y + 3, DERECHA, hoja.y + 3, gris=0.85)
     hoja.encabezado_tabla = None
     if isinstance(contenido, ContenidoComprobanteIngreso):
         _totales(
-            hoja, contenido.subtotal, contenido.descuento, contenido.total
+            hoja,
+            contenido.subtotal,
+            contenido.descuento,
+            contenido.total,
+            contenido,
         )
     else:
         _totales(
@@ -394,6 +467,7 @@ def _trabajos(hoja: _Hoja, contenido, zona: tzinfo) -> None:
             contenido.subtotal_autorizado,
             contenido.descuento,
             contenido.total_autorizado,
+            contenido,
         )
 
 

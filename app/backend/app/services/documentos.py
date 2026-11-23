@@ -30,6 +30,7 @@ from decimal import Decimal
 
 from app.domain.garantia import vencimiento_garantia
 from app.domain.models import (
+    AjusteEnDocumento,
     CoberturaGarantia,
     ContenidoComprobanteAutorizacion,
     ContenidoComprobanteEntrega,
@@ -471,6 +472,54 @@ def _descuento_en_documento(
     )
 
 
+def _ajustes_en_documento(
+    orden: OrdenReparacion, trabajos: Iterable[tuple[str, Decimal]]
+) -> tuple[dict[str, AjusteEnDocumento], AjusteEnDocumento | None]:
+    """DEC-AJ-10 (D-10.5): el Ajuste Comercial de cada trabajo y el de la
+    Orden por separado, con su clase. Las mismas cuentas que
+    ``_descuento_en_documento``: el de la Orden sobre lo que queda."""
+    por_trabajo: dict[str, AjusteEnDocumento] = {}
+    subtotal = Decimal("0")
+    de_trabajos = Decimal("0")
+    for detalle_id, precio in trabajos:
+        subtotal += precio
+        registro = orden.ajuste_de_detalle(detalle_id)
+        importe = importe_de_descuento(precio, registro)
+        if registro is not None and importe > 0:
+            de_trabajos += importe
+            por_trabajo[detalle_id] = AjusteEnDocumento(
+                clase=registro.clase,
+                descripcion=descripcion_de_descuento(registro),
+                importe=importe,
+            )
+    vigente = orden.descuento_vigente
+    de_orden = importe_de_descuento(subtotal - de_trabajos, vigente)
+    ajuste_orden = (
+        AjusteEnDocumento(
+            clase=vigente.clase,
+            descripcion=descripcion_de_descuento(vigente),
+            importe=de_orden,
+        )
+        if vigente is not None and de_orden > 0
+        else None
+    )
+    return por_trabajo, ajuste_orden
+
+
+def _con_ajuste(trabajo, por_trabajo: dict[str, AjusteEnDocumento]):
+    """El trabajo con su ajuste y su precio final (sin cobro: sin nada)."""
+    if trabajo.precio is None:
+        return trabajo
+    ajuste = por_trabajo.get(trabajo.detalle_id)
+    return trabajo.model_copy(
+        update={
+            "ajuste": ajuste,
+            "precio_final": trabajo.precio
+            - (ajuste.importe if ajuste else Decimal("0")),
+        }
+    )
+
+
 def _salida_registrada(orden: OrdenReparacion) -> EntregaEquipo | None:
     return orden.entrega or orden.devolucion
 
@@ -535,6 +584,14 @@ def contenido_comprobante_entrega(
         }
 
     reparada = tipo_entrega is TipoEntrega.REPARACION_TERMINADA
+    vigentes = [
+        (d.id, d.precio)
+        for d in orden.reparaciones_detail
+        if d.estado is not EstadoReparacionDetail.CANCELADO
+    ]
+    por_trabajo, ajuste_orden = (
+        _ajustes_en_documento(orden, vigentes) if cobrable else ({}, None)
+    )
     return ContenidoComprobanteEntrega(
         **_datos_comunes(orden, contexto),
         estado_final=orden.estado_workflow,
@@ -566,17 +623,21 @@ def contenido_comprobante_entrega(
         observaciones_entrega=salida.observaciones if salida else None,
         checkin=checkin_de(orden),
         trabajos_realizados=[
-            TrabajoRealizadoEnDocumento(
-                **trabajo(detalle),
-                recargo=recargos.get(detalle.id, Decimal("0")),
-                garantia_dias=detalle.garantia_dias,
-                # BF-17: la misma fecha de entrega que el reclamo RMA y
-                # {garantia_hasta} (con el historial de una Orden anterior).
-                garantia_vence=vencimiento_garantia(
-                    fecha_de_entrega(orden),
-                    detalle.garantia_dias,
-                    contexto.zona_horaria,
+            _con_ajuste(
+                TrabajoRealizadoEnDocumento(
+                    **trabajo(detalle),
+                    recargo=recargos.get(detalle.id, Decimal("0")),
+                    garantia_dias=detalle.garantia_dias,
+                    # BF-17: la misma fecha de entrega que el reclamo RMA y
+                    # {garantia_hasta} (con el historial de una Orden
+                    # anterior).
+                    garantia_vence=vencimiento_garantia(
+                        fecha_de_entrega(orden),
+                        detalle.garantia_dias,
+                        contexto.zona_horaria,
+                    ),
                 ),
+                por_trabajo,
             )
             for detalle in _realizados(orden)
         ],
@@ -598,17 +659,10 @@ def contenido_comprobante_entrega(
             orden.subtotal if cobrable and orden.descuento_aplicado else None
         ),
         descuento=(
-            _descuento_en_documento(
-                orden,
-                (
-                    (d.id, d.precio)
-                    for d in orden.reparaciones_detail
-                    if d.estado is not EstadoReparacionDetail.CANCELADO
-                ),
-            )
-            if cobrable
-            else None
+            _descuento_en_documento(orden, vigentes) if cobrable else None
         ),
+        ajuste_orden=ajuste_orden,
+        ajustes_por_trabajo=cobrable,
         total=orden.total if cobrable else None,
         pagado=resumen.pagado if cobrable else None,
         devuelto=resumen.devuelto if cobrable else None,
@@ -743,14 +797,16 @@ def contenido_comprobante_autorizacion(
     """
     trabajos = _trabajos_autorizados(orden, contexto)
     subtotal = sum((trabajo.precio for trabajo in trabajos), Decimal("0"))
-    descuento = _descuento_en_documento(
-        orden, ((t.detalle_id, t.precio) for t in trabajos)
-    )
+    precios = [(t.detalle_id, t.precio) for t in trabajos]
+    descuento = _descuento_en_documento(orden, precios)
+    por_trabajo, ajuste_orden = _ajustes_en_documento(orden, precios)
     return ContenidoComprobanteAutorizacion(
         **_datos_comunes(orden, contexto),
-        trabajos=trabajos,
+        trabajos=[_con_ajuste(t, por_trabajo) for t in trabajos],
         subtotal_autorizado=subtotal if descuento else None,
         descuento=descuento,
+        ajuste_orden=ajuste_orden,
+        ajustes_por_trabajo=True,
         total_autorizado=subtotal - (descuento.importe if descuento else 0),
         leyenda=LEYENDA_AUTORIZACION,
         observaciones_unificadas=bool(
@@ -776,9 +832,10 @@ def contenido_comprobante_ingreso(
     confirmacion = recepcion.confirmacion if recepcion else None
     trabajos = _trabajos_autorizados(orden, contexto)
     subtotal = sum((trabajo.precio for trabajo in trabajos), Decimal("0"))
-    descuento = _descuento_en_documento(
-        orden, ((t.detalle_id, t.precio) for t in trabajos)
-    )
+    precios = [(t.detalle_id, t.precio) for t in trabajos]
+    descuento = _descuento_en_documento(orden, precios)
+    por_trabajo, ajuste_orden = _ajustes_en_documento(orden, precios)
+    trabajos = [_con_ajuste(t, por_trabajo) for t in trabajos]
     return ContenidoComprobanteIngreso(
         **_datos_comunes(orden, contexto),
         estado_fisico=datos.estado_fisico if datos else None,
@@ -815,27 +872,53 @@ def _firma(trabajos) -> tuple:
     )
 
 
+def _clases(por_trabajo, ajuste_orden) -> tuple:
+    """DEC-AJ-10: la clase de cada ajuste (un cambio de descuento a
+    cortesia, con el mismo valor, tambien es un cambio del comprobante)."""
+    return (
+        tuple(sorted((d, a.clase.value) for d, a in por_trabajo.items())),
+        ajuste_orden.clase.value if ajuste_orden else None,
+    )
+
+
 def _firma_de(contenido) -> tuple:
-    """Lo autorizado y el descuento de un documento con trabajos."""
+    """Lo autorizado y el descuento de un documento con trabajos. Las
+    clases solo en los emitidos desde DEC-AJ-10 (``None`` en los
+    anteriores: no se compara lo que no guardaron)."""
     descuento = contenido.descuento
+    clases = None
+    if getattr(contenido, "ajustes_por_trabajo", False):
+        clases = _clases(
+            {t.detalle_id: t.ajuste for t in contenido.trabajos if t.ajuste},
+            contenido.ajuste_orden,
+        )
     return (
         _firma(contenido.trabajos),
         (descuento.descripcion, descuento.importe) if descuento else None,
+        clases,
     )
 
 
 def _firma_vigente(orden: OrdenReparacion) -> tuple:
     autorizados = _autorizados(orden)
-    descuento = _descuento_en_documento(
-        orden, ((detalle.id, detalle.precio) for detalle, _ in autorizados)
-    )
+    precios = [(detalle.id, detalle.precio) for detalle, _ in autorizados]
+    descuento = _descuento_en_documento(orden, precios)
     return (
         tuple(
             (detalle.id, decision.version_definicion, detalle.precio)
             for detalle, decision in autorizados
         ),
         (descuento.descripcion, descuento.importe) if descuento else None,
+        _clases(*_ajustes_en_documento(orden, precios)),
     )
+
+
+def _firmas_distintas(documento: tuple, vigente: tuple) -> bool:
+    """Un documento anterior a DEC-AJ-10 no guardo las clases: se compara
+    sin ellas."""
+    if documento[2] is None:
+        return documento[:2] != vigente[:2]
+    return documento != vigente
 
 
 def autorizados_en_el_ingreso(
@@ -881,7 +964,9 @@ def comprobante_autorizacion_emitible(orden: OrdenReparacion) -> bool:
     if not vigente[0]:
         return False
     ultimo = ultimo_con_trabajos_autorizados(orden)
-    return ultimo is None or _firma_de(ultimo.contenido) != vigente
+    return ultimo is None or _firmas_distintas(
+        _firma_de(ultimo.contenido), vigente
+    )
 
 
 def _lista(nombres: Sequence[str]) -> str:
@@ -913,6 +998,10 @@ def _motivo_autorizacion(anterior, actual) -> str:
         )
     if _firma_de(anterior)[1] != _firma_de(actual)[1]:
         partes.append("cambió el descuento")
+    elif None not in (_firma_de(anterior)[2], _firma_de(actual)[2]) and (
+        _firma_de(anterior)[2] != _firma_de(actual)[2]
+    ):
+        partes.append("cambió la clase del ajuste comercial")
     return "Cambiaron los trabajos autorizados: " + "; ".join(partes) + "."
 
 
@@ -947,8 +1036,8 @@ def emitir_comprobante_autorizacion(
             "autorizacion solo lista trabajos autorizados."
         )
     ultimo = ultimo_con_trabajos_autorizados(orden)
-    if ultimo is not None and _firma_de(ultimo.contenido) == _firma_de(
-        contenido
+    if ultimo is not None and not _firmas_distintas(
+        _firma_de(ultimo.contenido), _firma_de(contenido)
     ):
         return orden, ultimo, False
 

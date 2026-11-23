@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from .catalogos import DatosEmpresa
 from .enums import (
     CanalComunicacion,
+    ClaseAjuste,
     EstadoCustodia,
     EstadoWorkflow,
     OrigenCancelacion,
@@ -54,11 +55,26 @@ class UsuarioEnDocumento(BaseModel):
     nombre: str
 
 
+class AjusteEnDocumento(BaseModel):
+    """Un Ajuste Comercial tal como figura en el comprobante (DEC-AJ-10,
+    D-10.5): la clase («Descuento» o «Cortesia»), como se expreso y cuanto
+    descuenta. Usuario, fecha y motivo quedan en el registro interno."""
+
+    clase: ClaseAjuste
+    descripcion: str
+    importe: Decimal
+
+
 class TrabajoEnDocumento(BaseModel):
     """Un Detalle de reparacion tal como figura en el documento.
 
     ``precio`` es ``None`` cuando la Orden no se cobra (RT_INTERNO o
     garantia RMA): el documento no muestra cobros inexistentes.
+
+    DEC-AJ-10 (D-10.5): ``precio`` es el precio original del trabajo;
+    ``ajuste``, su Ajuste Comercial vigente (si descuenta algo), y
+    ``precio_final``, el precio menos ese ajuste. Vacios en los documentos
+    anteriores y sin cobro.
     """
 
     detalle_id: str
@@ -66,6 +82,8 @@ class TrabajoEnDocumento(BaseModel):
     nombre: str
     precio: Decimal | None = None
     detalle_origen_id: str | None = None
+    ajuste: AjusteEnDocumento | None = None
+    precio_final: Decimal | None = None
 
 
 class TrabajoRealizadoEnDocumento(TrabajoEnDocumento):
@@ -239,6 +257,12 @@ class ContenidoComprobanteEntrega(_ContenidoBase):
     # Con descuento: el subtotal de lo realizado y el descuento aplicado.
     subtotal: Decimal | None = None
     descuento: DescuentoEnDocumento | None = None
+    # DEC-AJ-10 (D-10.5): el ajuste de la Orden, en una linea aparte del de
+    # cada trabajo. ``ajustes_por_trabajo`` marca los emitidos desde
+    # DEC-AJ-10, que presentan el ajuste por trabajo; False en los
+    # anteriores, que conservan la linea unica de ``descuento``.
+    ajuste_orden: AjusteEnDocumento | None = None
+    ajustes_por_trabajo: bool = False
     total: Decimal | None = None
     pagado: Decimal | None = None
     devuelto: Decimal | None = None
@@ -308,6 +332,12 @@ class ContenidoComprobanteAutorizacion(_ContenidoBase):
     # ``None`` sin descuento (y en las versiones anteriores).
     subtotal_autorizado: Decimal | None = None
     descuento: DescuentoEnDocumento | None = None
+    # DEC-AJ-10 (D-10.5): el ajuste de la Orden, en una linea aparte del de
+    # cada trabajo. ``ajustes_por_trabajo`` marca los emitidos desde
+    # DEC-AJ-10, que presentan el ajuste por trabajo; False en los
+    # anteriores, que conservan la linea unica de ``descuento``.
+    ajuste_orden: AjusteEnDocumento | None = None
+    ajustes_por_trabajo: bool = False
     total_autorizado: Decimal
     leyenda: str
     # DEC-UX-03: el ingreso se registro con el texto unico; la falla
@@ -350,6 +380,12 @@ class ContenidoComprobanteIngreso(_ContenidoBase):
     trabajos: list[TrabajoAutorizadoEnDocumento] = Field(default_factory=list)
     subtotal: Decimal
     descuento: DescuentoEnDocumento | None = None
+    # DEC-AJ-10 (D-10.5): el ajuste de la Orden, en una linea aparte del de
+    # cada trabajo. ``ajustes_por_trabajo`` marca los emitidos desde
+    # DEC-AJ-10, que presentan el ajuste por trabajo; False en los
+    # anteriores, que conservan la linea unica de ``descuento``.
+    ajuste_orden: AjusteEnDocumento | None = None
+    ajustes_por_trabajo: bool = False
     total: Decimal
     leyenda: str
 

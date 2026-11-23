@@ -37,6 +37,7 @@ from .descuentos import (
     importe_de_descuento,
 )
 from .documentos import (
+    AjusteEnDocumento,
     CoberturaGarantia,
     ContenidoComprobanteAutorizacion,
     ContenidoComprobanteEntrega,
@@ -234,6 +235,7 @@ __all__ = [
     "ContenidoComprobanteAutorizacion",
     "ContenidoComprobanteIngreso",
     "DescuentoEnDocumento",
+    "AjusteEnDocumento",
     "RegistroDescuento",
     "ReversionAjuste",
     "RecalculoAjuste",

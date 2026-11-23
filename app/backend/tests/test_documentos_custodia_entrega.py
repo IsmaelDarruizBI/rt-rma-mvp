@@ -886,6 +886,9 @@ def test_16_comprobante_final(cliente, reloj):
             "nombre": "Cambio de bateria",
             "precio": "80000",
             "detalle_origen_id": None,
+            # DEC-AJ-10 (D-10.5): sin ajuste, el precio final es el mismo.
+            "ajuste": None,
+            "precio_final": "80000",
             "garantia_dias": 90,
             "garantia_vence": "2027-01-01",
             # DEC-UX-13: pagado sin recargo (efectivo).
