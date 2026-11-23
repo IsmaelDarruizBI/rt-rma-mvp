@@ -213,6 +213,9 @@ class ContenidoComprobanteEntrega(_ContenidoBase):
     entregado_por: UsuarioEnDocumento | None = None
     recibido_por: str | None = None
     identificacion_receptor: str | None = None
+    # DEC-AJ-09: si retiro otra persona y su telefono (``None``: anterior).
+    retira_otra_persona: bool | None = None
+    telefono_receptor: str | None = None
     observaciones_entrega: str | None = None
     checkin: bool | None = None
     trabajos_realizados: list[TrabajoRealizadoEnDocumento] = Field(

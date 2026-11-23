@@ -534,6 +534,8 @@ def contenido_comprobante_entrega(
         identificacion_receptor=(
             salida.identificacion_receptor if salida else None
         ),
+        retira_otra_persona=salida.retira_otra_persona if salida else None,
+        telefono_receptor=salida.telefono_receptor if salida else None,
         observaciones_entrega=salida.observaciones if salida else None,
         checkin=checkin_de(orden),
         trabajos_realizados=[

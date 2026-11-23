@@ -13,16 +13,15 @@ estado fisico).
 
 Check-in (UAT-009): se registra antes de la entrega, con la reparacion
 lista. ``entregar`` lo registra (realizado) si la Orden lo ofrece y
-todavia no lo tiene.
+todavia no lo tiene. DEC-AJ-04 permite registrarlo dentro de la misma
+entrega; ``tests/test_entrega_y_garantia.py`` cubre ese camino.
 """
 
 RECEPCION = "RECEP-001"
 ADMINISTRADOR = "ADMIN-001"
 ESTADO_FISICO = "Sin golpes ni marcas; pantalla sana."
-RECEPTOR = {
-    "recibido_por": "Titular de la Orden",
-    "identificacion_receptor": "DNI 30111222",
-}
+# DEC-AJ-09 (P-05): retira el titular; no se pide otro dato ni el DNI.
+RECEPTOR: dict = {"retira_otra_persona": False}
 
 
 def en_ingreso_inicial(orden: dict) -> bool:

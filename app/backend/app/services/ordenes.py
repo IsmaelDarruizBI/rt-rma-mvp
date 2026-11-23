@@ -1328,7 +1328,17 @@ def exigir_sin_trabajo_abierto(orden: OrdenReparacion) -> None:
 
 
 def descripcion_de_quien_retira(entrega: EntregaEquipo) -> str:
-    """Quien retiro, para el historial."""
+    """Quien retiro, para el historial (DEC-AJ-09: titular u otra
+    persona con su telefono; una salida anterior, con su identificacion)."""
+    if entrega.retira_otra_persona is True:
+        telefono = (
+            f", tel. {entrega.telefono_receptor}"
+            if entrega.telefono_receptor
+            else ""
+        )
+        return f"Retira otra persona: {entrega.recibido_por}{telefono}"
+    if entrega.retira_otra_persona is False:
+        return f"Retira el titular: {entrega.recibido_por}"
     descripcion = f"Retira: {entrega.recibido_por}"
     if entrega.identificacion_receptor:
         descripcion += f" ({entrega.identificacion_receptor})"

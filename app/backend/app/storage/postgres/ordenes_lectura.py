@@ -525,7 +525,8 @@ _SALIDAS = consulta(
     "ordenes.salidas",
     """
     SELECT s.orden_id, s.tipo, u.codigo AS entregado_por, s.retira_nombre,
-           s.retira_identificacion, s.registrada_en, s.observaciones
+           s.retira_identificacion, s.retira_telefono, s.retira_vinculo,
+           s.registrada_en, s.observaciones
     FROM rma.salida s
     JOIN rma.usuario u ON u.id = s.entregado_por
     WHERE s.orden_id = ANY(ARRAY(
@@ -1181,6 +1182,11 @@ def _salida(fila: Any) -> EntregaEquipo | None:
         entregado_por=fila.entregado_por,
         recibido_por=fila.retira_nombre,
         identificacion_receptor=fila.retira_identificacion,
+        # DEC-AJ-09: TITULAR o TERCERO; otro valor o vacio, sin el dato.
+        retira_otra_persona={"TITULAR": False, "TERCERO": True}.get(
+            fila.retira_vinculo
+        ),
+        telefono_receptor=fila.retira_telefono,
         fecha=utc(fila.registrada_en),
         observaciones=fila.observaciones,
     )

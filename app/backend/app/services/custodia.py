@@ -671,11 +671,26 @@ def tipo_de_entrega(orden: OrdenReparacion) -> TipoEntrega:
 
 @dataclass(frozen=True)
 class DatosRetiro:
-    """Lo que el formulario de entrega dice de quien retira el equipo."""
+    """Lo que el formulario de entrega dice de quien retira (DEC-AJ-09).
 
-    recibido_por: str | None = None
-    identificacion_receptor: str | None = None
+    «¿Retira otra persona?»: si no, retira el titular y no se pide nada
+    mas; si si, ``nombre``, ``apellido`` y ``telefono`` son obligatorios.
+    No se piden el vinculo, el DNI ni otra identificacion, ni una
+    autorizacion formal.
+    """
+
+    otra_persona: bool = False
+    nombre: str | None = None
+    apellido: str | None = None
+    telefono: str | None = None
     observaciones: str | None = None
+
+
+def nombre_del_titular(orden: OrdenReparacion) -> str:
+    """El titular de la Orden: el cliente, tal como se cargo."""
+    if orden.cliente is not None and _texto(orden.cliente.nombre_apellido):
+        return orden.cliente.nombre_apellido.strip()
+    return "Titular"
 
 
 def armar_entrega(
@@ -685,17 +700,41 @@ def armar_entrega(
     fecha: datetime,
     retiro: DatosRetiro,
 ) -> EntregaEquipo:
-    """Registro de la salida fisica del equipo; exige quien lo retira."""
-    recibido_por = _texto(retiro.recibido_por)
-    if recibido_por is None:
+    """La salida fisica del equipo hacia el cliente y quien lo retiro.
+
+    DEC-AJ-09 (P-05): si retira el titular, queda su nombre sin pedir otro
+    dato; si retira otra persona, su nombre, apellido y telefono son
+    obligatorios. Que retire otra persona no modifica ni anula la garantia.
+    """
+    if not retiro.otra_persona:
+        return EntregaEquipo(
+            tipo=tipo_de_entrega(orden),
+            entregado_por=usuario.id,
+            recibido_por=nombre_del_titular(orden),
+            retira_otra_persona=False,
+            fecha=fecha,
+            observaciones=_texto(retiro.observaciones),
+        )
+    datos = {
+        "el nombre": _texto(retiro.nombre),
+        "el apellido": _texto(retiro.apellido),
+        "el telefono": _texto(retiro.telefono),
+    }
+    faltan = [campo for campo, valor in datos.items() if valor is None]
+    if faltan:
         raise PrecondicionInvalidaError(
-            "La entrega exige indicar quien retira el equipo."
+            "Si retira otra persona, indica "
+            + ", ".join(faltan[:-1])
+            + (" y " if len(faltan) > 1 else "")
+            + faltan[-1]
+            + " de quien retira."
         )
     return EntregaEquipo(
         tipo=tipo_de_entrega(orden),
         entregado_por=usuario.id,
-        recibido_por=recibido_por,
-        identificacion_receptor=_texto(retiro.identificacion_receptor),
+        recibido_por=f"{datos['el nombre']} {datos['el apellido']}",
+        retira_otra_persona=True,
+        telefono_receptor=datos["el telefono"],
         fecha=fecha,
         observaciones=_texto(retiro.observaciones),
     )

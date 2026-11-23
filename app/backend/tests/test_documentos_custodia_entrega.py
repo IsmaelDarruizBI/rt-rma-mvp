@@ -53,9 +53,8 @@ ARGENTINA = timezone(timedelta(hours=-3))
 INICIO = datetime(2026, 10, 1, 13, 0, tzinfo=timezone.utc)
 IMEI = "356938035643809"
 ESTADO = "Raya leve en la tapa trasera; pantalla sin marcas."
+# DEC-AJ-09: retira la titular (Maria Gomez), sin otro dato ni DNI.
 RETIRA = {
-    "recibido_por": "Maria Gomez",
-    "identificacion_receptor": "DNI 28111222",
     "observaciones": "Retira la titular; se prueba el equipo en el mostrador.",
 }
 
@@ -633,12 +632,13 @@ def test_8_un_reintento_no_duplica_documentos(cliente, tmp_path):
 # --- 9/10. Entrega con receptor, una sola vez --------------------------------
 
 
-def test_9_entrega_con_persona_receptora_identificada(cliente):
+def test_9_entrega_registra_quien_retira(cliente):
+    """DEC-AJ-09 (P-05): retira la titular sin pedir otro dato ni DNI; si
+    retira otra persona, su nombre, apellido y telefono son obligatorios."""
     orden_id = _lista_y_cobrada(cliente)
 
-    assert "quien retira" in conflicto(_entregar(cliente, orden_id))
-    assert "quien retira" in conflicto(
-        _entregar(cliente, orden_id, recibido_por="   ")
+    assert "el nombre, el apellido y el telefono" in conflicto(
+        _entregar(cliente, orden_id, retira_otra_persona=True)
     )
     orden = ok(_entregar(cliente, orden_id, **RETIRA))
 
@@ -647,14 +647,16 @@ def test_9_entrega_con_persona_receptora_identificada(cliente):
         "tipo": "REPARACION_TERMINADA",
         "entregado_por": ADMINISTRADOR,
         "recibido_por": "Maria Gomez",
-        "identificacion_receptor": "DNI 28111222",
+        "identificacion_receptor": None,
+        "retira_otra_persona": False,
+        "telefono_receptor": None,
         "fecha": entrega["fecha"],
         "observaciones": RETIRA["observaciones"],
     }
     assert orden["custodia"]["estado"] == "ENTREGADO"
     paso = orden["historial"][-1]
     assert paso["referencia_id"] == "PROC-REP-270"
-    assert paso["observacion"] == "Retira: Maria Gomez (DNI 28111222)"
+    assert paso["observacion"] == "Retira el titular: Maria Gomez"
     assert orden["estado_workflow"] == "ENTREGADA"
     assert orden["devolucion"] is None
 
@@ -849,7 +851,9 @@ def test_16_comprobante_final(cliente, reloj):
     assert contenido["estado_final"] == "ENTREGADA"
     assert contenido["fecha_entrega"].startswith("2026-10-03T13:00")
     assert contenido["recibido_por"] == "Maria Gomez"
-    assert contenido["identificacion_receptor"] == "DNI 28111222"
+    # DEC-AJ-09: sin identificacion; retiro la titular.
+    assert contenido["identificacion_receptor"] is None
+    assert contenido["retira_otra_persona"] is False
     assert contenido["observaciones_entrega"] == RETIRA["observaciones"]
     assert contenido["entregado_por"] == {
         "id": ADMINISTRADOR,

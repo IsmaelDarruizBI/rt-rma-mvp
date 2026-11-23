@@ -1655,17 +1655,20 @@ def post_entregar(
     """Entregar el equipo (Recepcion o Administracion).
 
     Una sola confirmacion: [250] [269] [265] 280 -> 270 -> EVT-REP-999. La
-    Orden queda ENTREGADA. Exige saldo 0, la custodia confirmada y quien
-    retira; registra el check-in si falta (``checkin``) y emite el
-    Comprobante de entrega y garantia, que empieza con esta entrega.
+    Orden queda ENTREGADA. Exige saldo 0 y la custodia confirmada; si
+    retira otra persona, su nombre, apellido y telefono. Registra el
+    check-in si falta (``checkin``) y emite el Comprobante de entrega y
+    garantia, que empieza con esta entrega.
     """
     orden = entregar(
         contexto,
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
         retiro=DatosRetiro(
-            recibido_por=cuerpo.recibido_por,
-            identificacion_receptor=cuerpo.identificacion_receptor,
+            otra_persona=cuerpo.retira_otra_persona,
+            nombre=cuerpo.retira_nombre,
+            apellido=cuerpo.retira_apellido,
+            telefono=cuerpo.retira_telefono,
             observaciones=cuerpo.observaciones,
         ),
         checkin=cuerpo.checkin,

@@ -274,12 +274,17 @@ _INSERTAR_SALIDA = consulta(
     """
     INSERT INTO rma.salida
         (orden_id, tipo, entregado_por, retira_nombre,
-         retira_identificacion, registrada_en, observaciones)
+         retira_identificacion, retira_telefono, retira_vinculo,
+         registrada_en, observaciones)
     VALUES (%(orden)s, %(tipo)s, %(entregado_por)s, %(recibido_por)s,
-            %(identificacion)s, %(fecha)s, %(observaciones)s)
+            %(identificacion)s, %(telefono)s, %(vinculo)s, %(fecha)s,
+            %(observaciones)s)
     """,
     modo=ESCRITURA,
 )
+# DEC-AJ-09: quien retiro, en ``rma.salida.retira_vinculo``. Sin el dato
+# (salidas anteriores, devoluciones) queda vacio.
+_VINCULO_DE_RETIRO = {False: "TITULAR", True: "TERCERO"}
 _INSERTAR_PAGO = consulta(
     "ordenes.insertar_pago",
     """
@@ -1916,6 +1921,9 @@ class _Guardado:
                 "entregado_por": self._id("usuario", salida.entregado_por),
                 "recibido_por": salida.recibido_por,
                 "identificacion": salida.identificacion_receptor,
+                # DEC-AJ-09: columnas que ya existian y no se escribian.
+                "telefono": salida.telefono_receptor,
+                "vinculo": _VINCULO_DE_RETIRO.get(salida.retira_otra_persona),
                 "fecha": salida.fecha,
                 "observaciones": salida.observaciones,
             },

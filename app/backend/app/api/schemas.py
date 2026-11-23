@@ -712,17 +712,20 @@ class DevolucionDineroIn(BaseModel):
 
 
 class EntregarIn(BaseModel):
-    """``POST /api/orders/{id}/deliver`` (ACT-ADMIN).
+    """``POST /api/orders/{id}/deliver`` (Recepcion o Administracion).
 
-    ``recibido_por`` (quien retira) es obligatorio para entregar: el
-    backend lo exige despues de la condicion comercial y de la custodia,
-    asi que una Orden que todavia no puede entregarse responde por ese
-    motivo. ``identificacion_receptor``: DNI u otro, si corresponde.
+    DEC-AJ-09 (P-05): ``retira_otra_persona`` es la respuesta a «¿Retira
+    otra persona?». Si no, retira el titular y no hace falta otro dato; si
+    si, ``retira_nombre``, ``retira_apellido`` y ``retira_telefono`` son
+    obligatorios (los controla el backend despues de la cuenta y de la
+    custodia). No se piden vinculo, DNI ni autorizacion.
     """
 
     usuario_id: str = Field(min_length=1)
-    recibido_por: str | None = None
-    identificacion_receptor: str | None = None
+    retira_otra_persona: bool = False
+    retira_nombre: str | None = None
+    retira_apellido: str | None = None
+    retira_telefono: str | None = None
     observaciones: str | None = None
     # DEC-AJ-04: el check-in en el mismo formulario, si todavia falta (si se
     # pudieron verificar las funciones basicas). ``checkin_motivo`` solo
@@ -1403,6 +1406,9 @@ class DevolucionOut(BaseModel):
     entregado_por: str
     recibido_por: str
     identificacion_receptor: str | None = None
+    # DEC-AJ-09: si retiro otra persona y su telefono (``None``: anterior).
+    retira_otra_persona: bool | None = None
+    telefono_receptor: str | None = None
     fecha: datetime
     observaciones: str | None = None
 

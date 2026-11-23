@@ -74,7 +74,9 @@ class EntregaEquipo(BaseModel):
     Registra quien entrega (usuario del sistema), quien retira (texto
     libre: el cliente, un tercero o Gestion RT), su identificacion si
     corresponde (DNI u otra) y cuando. No hay firma ni identificacion
-    digital del receptor.
+    digital del receptor. DEC-AJ-09: en la entrega al cliente ya no se
+    pide la identificacion; si retira otra persona quedan su nombre y
+    apellido (``recibido_por``) y su telefono.
 
     ``tipo`` distingue la entrega de una reparacion terminada de una
     devolucion sin reparacion. Default DEVOLUCION_SIN_REPARACION: antes de
@@ -86,6 +88,11 @@ class EntregaEquipo(BaseModel):
     entregado_por: str
     recibido_por: str
     identificacion_receptor: str | None = None
+    # DEC-AJ-09 (P-05): si retiro otra persona (no el titular) y su
+    # telefono. ``None`` en las salidas anteriores y en las devoluciones,
+    # que no lo preguntan. Que retire otra persona no cambia la garantia.
+    retira_otra_persona: bool | None = None
+    telefono_receptor: str | None = None
     fecha: datetime
     observaciones: str | None = None
 

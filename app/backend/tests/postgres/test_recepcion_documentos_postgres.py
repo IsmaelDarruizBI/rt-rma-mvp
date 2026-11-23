@@ -1421,7 +1421,7 @@ def test_a4_la_entrega_real_cierra_una_garantia(armar, corpus):
         _contexto(repo, unidad, corpus),
         orden_id=final.id,
         usuario_id=f.ADMINISTRADOR,
-        retiro=DatosRetiro(recibido_por="Titular"),
+        retiro=DatosRetiro(),
     )
     assert entregada.esta_cerrada
     assert repo.obtener(final.id) == entregada
