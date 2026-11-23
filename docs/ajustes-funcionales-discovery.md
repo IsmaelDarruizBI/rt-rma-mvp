@@ -590,7 +590,7 @@ Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. No hay migrac
 
 La suite completa, las pruebas de PostgreSQL y los E2E quedan para el QA integral.
 
-## 9. Decisiones de la iteración 1 (bloques 2, 3 y 4), para aprobar (23/11/2026)
+## 9. Decisiones de la iteración 1 (bloques 2, 3 y 4), aprobadas (23/11/2026)
 
 Replanificación del 23/11/2026:
 
@@ -705,7 +705,7 @@ Las decisiones que cambian reglas vigentes se registran antes del código.
 - **Reglas:** DEC-UX-02 no cambia. Hay que registrar el cierre de ABI-41 para el IMEI.
 - **Migración:** no, salvo que la auditoría pida un registro propio.
 
-### D-07 (BF-08). Verificación inicial, check-in y garantía (pendiente)
+### D-07 (BF-08). Verificación inicial, check-in y garantía (aprobada: A)
 
 **Hoy:**
 
@@ -723,7 +723,7 @@ Las decisiones que cambian reglas vigentes se registran antes del código.
 
 **Recomendación: A**, con respuesta obligatoria y observaciones opcionales.
 
-**Queda pendiente**, como pediste: falta tu decisión entre A, B y C, y si la respuesta es obligatoria.
+**Aprobada (23/11/2026):** A, con respuesta obligatoria y observaciones opcionales (sección 9.1).
 
 **Migración:** aditiva en las tres (dos columnas en `recepcion`). En ningún caso se reutiliza `checkin_ingreso`.
 
@@ -756,3 +756,19 @@ Las decisiones que cambian reglas vigentes se registran antes del código.
 | d | P-05: ¿qué pasa si retira un tercero? | Anula la garantía / solo queda registrado, con un aviso al entregar | **Decisión de negocio.** Recomendado: registrar quién retira, su vínculo (Titular, Tercero, Empleado o representante) y su teléfono; avisar al entregar; que el texto de los Términos lo defina el negocio |
 | e | ¿El vínculo de quien retira es obligatorio? | Sí, por defecto «Titular» / No | **Sí, por defecto «Titular»** |
 | f | ¿Dónde viven los Términos? | En el código, como hoy / versionados en `rma.texto_legal`, editables por Administración y guardados en cada documento | **Versionados en `rma.texto_legal`.** La tabla ya existe y nadie la lee |
+
+### 9.1 Decisiones aprobadas (23/11/2026)
+
+Registradas en `rt-rma-app`, rama `spec/ajustes-funcionales` (local, sin publicar), commit `64a8583`, y copiadas a `business/` ([`sincronizacion-funcional.md`](sincronizacion-funcional.md)). DEC-AJ-NN corresponde a D-NN. No agregan nodos, aristas ni estados. Las que todavía no están implementadas figuran en [`traceability/discrepancias-baseline-v1.4.md`](../traceability/discrepancias-baseline-v1.4.md).
+
+| Decisión | ID | Definición aprobada | Implementación |
+|---|---|---|---|
+| D-01 (BF-07) | DEC-AJ-01 | Alternativa B: permiso de consulta configurable «Consultar la información técnica de la Orden» (`DETALLE_TECNICO_CONSULTAR`), predeterminado para Técnico, Coordinación RMA y Administración, no para Recepción. Es presentación: la API no cambia | Bloque 1 (`8980e52`) |
+| D-02 (BF-12) | DEC-AJ-02 | Alternativa A: el trabajo adicional espera la autorización del cliente solo en CLIENTE_EXTERNO. BR-REP-032 no cambia | Bloque 1 (`3788aa0`) |
+| D-03 (BF-20) | DEC-AJ-03 | Avisar al cliente deja de ser obligatorio para entregar, en toda entrega al cliente (CLIENTE_EXTERNO, incluido SIN_REPARACION, y la garantía RMA). El camino RT (INFORMAR_RT → DEVOLVER_RT) no cambia. El retiro demorado corre desde que la Orden está lista para retirar. La fecha del aviso se conserva aparte. Una comunicación `LISTO_PARA_RETIRAR` confirmada como enviada registra el aviso (260). Se mantienen los controles de saldo, custodia y check-in | Bloque 2 |
+| D-04 (BF-18) | DEC-AJ-04 | Un solo «Comprobante de entrega y garantía» con los términos y condiciones; deja de emitirse el certificado aparte (los ya emitidos no cambian). El check-in faltante se registra en la misma confirmación de la entrega. El cobro sigue aparte, con saldo exactamente 0 | Bloque 2 |
+| D-05 (BF-04) | DEC-AJ-05 | Alternativa A: camino de «Enviar a revisión técnica» con el campo propio «Trabajo solicitado»; el comprobante de recepción confirma la custodia en el mismo acto; el técnico define los trabajos y el cliente los autoriza después. BR-REP-046 sigue para el ingreso con trabajos | Bloque 3 |
+| D-06 (BF-05) | DEC-AJ-06 | Alternativa A: botón «IMEI no disponible» con el identificador interno `EQP-…` (DEC-UX-02, nunca un IMEI ficticio); acción para registrar el IMEI real hasta la entrega, también con la custodia confirmada, con motivo y auditoría. Cierra ABI-41 para el IMEI | Bloque 3 |
+| D-07 (BF-08) | DEC-AJ-07 | Alternativa A: pregunta **obligatoria** «¿Se pudieron verificar las funcionalidades del equipo?» Sí o No, con observaciones opcionales en los dos casos. Es **informativa**: se muestra como referencia en el check-in de entrega y no cambia la garantía ni BR-REP-045. BF-16 sigue postergado | Bloque 3 |
+| D-08 (BF-06) | DEC-AJ-08 | «Crear y generar el comprobante», con el canal presencial preseleccionado (se sigue registrando, BR-REP-028); Imprimir como acción principal del visor, con un gesto del usuario. Sin trabajos, el comprobante de recepción | Bloque 3 |
+| D-09 (BF-19) | DEC-AJ-09 | Administración configura los datos de la empresa (nombre comercial, dirección, teléfono, horario y pie de comprobante), con auditoría. Términos y condiciones versionados desde Configuración (`rma.texto_legal`); cada documento conserva su versión. **P-04:** los documentos informan la garantía real de cada trabajo, no los 180 días fijos. **P-05:** la entrega pregunta «¿Retira otra persona?» Sí o No; si es Sí, nombre, apellido y teléfono obligatorios; no se piden vínculo, DNI ni otra identificación, ni una autorización formal; retirar otra persona no modifica ni anula la garantía; quién retiró queda en la Orden y en el comprobante. Reemplaza las recomendaciones d y e de la tabla anterior | Bloque 4 |

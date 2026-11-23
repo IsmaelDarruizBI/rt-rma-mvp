@@ -320,6 +320,11 @@ nodes:
       confirma y la Orden nueva queda vinculada al reclamo, sin Ordenes
       duplicadas. Los datos del ingreso se corrigen con motivo y auditoria, sin
       alterar los comprobantes emitidos (DEC-MI-07, BR-REP-046).
+      DEC-AJ-06 (23/11/2026): junto al IMEI, un boton marca "IMEI no
+      disponible"; el equipo se identifica con su identificador interno,
+      distinguido de un IMEI real y nunca reemplazado por un IMEI ficticio, y
+      el IMEI real se registra despues, hasta la entrega, con motivo y
+      auditoria (BR-REP-022).
     outputs:
       - Cliente identificado (existente reutilizado expresamente o nuevo), con su clasificacion
       - Equipo identificado (reutilizacion confirmada por Recepcion o Equipo nuevo), con su tp_id cuando proviene del catalogo
@@ -378,6 +383,13 @@ nodes:
       define Detalles, no autoriza ni rechaza trabajos, no decide
       desistimientos, no genera el comprobante de recepcion y no ejecuta
       cancelaciones.
+      Ajustes funcionales (23/11/2026). DEC-AJ-05: Recepcion registra en un
+      campo propio, en texto libre, el trabajo solicitado por el cliente,
+      distinto de las observaciones del equipo; sin trabajos estandarizados
+      la Orden sigue a PROC-REP-045 = No (BR-REP-023, BR-REP-046). DEC-AJ-07:
+      Recepcion responde, obligatoriamente, si se pudieron verificar las
+      funcionalidades del equipo (Si o No, con observaciones opcionales); es
+      informativa y no es el check-in de entrega (BR-REP-045).
     inputs:
       - Orden de Reparacion creada (REQUERIMIENTO, cero Detalles)
       - Cliente identificado
@@ -538,6 +550,9 @@ nodes:
       Recepcion solo registra si continua con la revision tecnica
       (PROC-REP-056), el tecnico define los Detalles (PROC-REP-075) y recien
       entonces se consulta al cliente por ellos.
+      DEC-AJ-05 (23/11/2026): el ingreso sin trabajos estandarizados, con el
+      trabajo solicitado en texto libre, es la respuesta No; el comprobante de
+      recepcion se genera con la custodia confirmada en el mismo acto.
 
   - id: PROC-REP-046
     type: activity
@@ -742,6 +757,10 @@ nodes:
       no se registra una decision ficticia. Si la revision tecnica concluye que
       no corresponde ninguna reparacion se usa el circuito SIN_REPARACION
       existente (PROC-REP-068 -> PROC-REP-069), sin crear un Detalle ficticio.
+      DEC-AJ-05 (23/11/2026): en el ingreso sin trabajos estandarizados,
+      "Acepta la revision tecnica" lleva al comprobante de recepcion, que
+      muestra el trabajo solicitado, y Recepcion confirma la recepcion fisica
+      en el mismo acto (BR-REP-033).
     inputs:
       - Orden EN_REVISION sin Detalles
     outputs:
@@ -791,6 +810,15 @@ nodes:
       Documentos (DC13): existe un unico documento vigente por tipo y contexto;
       una correccion genera una version nueva con motivo y referencia a la que
       reemplaza, y ninguna version se borra (BR-REP-031).
+      Ajustes funcionales (23/11/2026). DEC-AJ-05: en el ingreso de
+      CLIENTE_EXTERNO sin trabajos estandarizados, el comprobante de
+      recepcion ("reparacion pendiente de diagnostico", con el trabajo
+      solicitado) se genera y Recepcion confirma la custodia en el mismo acto:
+      en ese camino generar el comprobante y confirmar el intercambio fisico
+      son una sola operacion (BR-REP-033). DEC-AJ-08: "Crear y generar el
+      comprobante" encadena la creacion de la Orden y la de este documento,
+      con el canal presencial preseleccionado (BR-REP-028); Imprimir es la
+      accion principal del visor y la inicia el usuario.
     outputs:
       - Comprobante de recepcion generado
       - Confirmacion del intercambio fisico (fecha/hora, usuario responsable y referencia del comprobante) cuando se concreta; hasta entonces la recepcion queda pendiente de confirmar
@@ -1983,7 +2011,7 @@ nodes:
       cambios respecto de V1.2. En V1.3 todo origen con entrega a cliente
       (CLIENTE_EXTERNO, RT_GARANTIA_VENTA, RMA_GARANTIA_REPARACION) sigue
       luego a PROC-REP-265 (validacion de la condicion de entrega): no hay
-      un camino alternativo que la evite. Consolidacion V1.4 (DC25 etapa 1 y
+      un camino alternativo que evite esa validacion. Consolidacion V1.4 (DC25 etapa 1 y
       DC30): el mensaje se prepara desde plantillas configurables y el envio
       asistido queda en el historial de comunicaciones de la Orden, sin dar por
       enviado ni recibido lo que solo se abrio en WhatsApp; respeta el
@@ -1995,11 +2023,22 @@ nodes:
       iniciales, equipo listo para retirar), revisa y puede editar el mensaje
       antes de abrir WhatsApp, y confirma manualmente el envio; se registran la
       plantilla, el mensaje preparado, el canal y el intento de apertura, y
-      nunca un "entregado" o "leido" sin evidencia de un proveedor. Desde esta
-      notificacion corre el plazo del retiro demorado (DEC-MI-14, BR-REP-033):
+      nunca un "entregado" o "leido" sin evidencia de un proveedor. Desde que
+      la Orden esta lista para retirar corre el plazo del retiro demorado
+      (DEC-MI-14 y DEC-AJ-03, BR-REP-033; antes corria desde esta notificacion):
       al vencer la Orden se marca, se alerta en las bandejas y se registran
       seguimientos y recordatorios de retiro, sin cerrarla. El proveedor
       oficial de la etapa 2 sigue pendiente.
+      DEC-AJ-03 (23/11/2026): el aviso es OPCIONAL. La entrega no lo exige: la
+      Orden lista para entregar sigue a PROC-REP-265 con o sin aviso, sin
+      aristas nuevas (la secuencia 250 -> 260 -> 265 se recorre igual y este
+      nodo registra el aviso solo si se dio). Rige para toda entrega al
+      cliente: CLIENTE_EXTERNO, incluido el resultado SIN_REPARACION,
+      RT_GARANTIA_VENTA y RMA_GARANTIA_REPARACION; RT_INTERNO no pasa por
+      aqui y conserva su camino (PROC-REP-290). La fecha del aviso se
+      conserva como un dato independiente. Un envio de la plantilla de
+      equipo listo para retirar confirmado manualmente registra este aviso;
+      no hay dos registros del aviso (BR-REP-044).
     rules:
       - BR-REP-043
       - BR-REP-044
@@ -2038,9 +2077,18 @@ nodes:
       (BR-REP-042). Si el check-in se corrige antes de la entrega, el
       comprobante se regenera cuando corresponde como una version nueva, sin
       destruir las anteriores (DEC-MI-05, BR-REP-045).
+      Ajustes funcionales (23/11/2026). DEC-AJ-04: el comprobante final y la
+      garantia son un solo documento, el "Comprobante de entrega y garantia",
+      con los terminos y condiciones; para las entregas nuevas no se emite el
+      certificado de garantia aparte, y los documentos ya emitidos no cambian.
+      DEC-AJ-09: informa la garantia real de cada trabajo segun BR-REP-041
+      (plazo definitivo y vencimiento por Detalle, nunca un plazo fijo ajeno),
+      quien retiro el equipo, los datos de la empresa que configura
+      Administracion y la version de los terminos y condiciones que uso, que
+      conserva.
     outputs:
-      - Comprobante final con desglose de Detalles/Ajustes/pagos/saldo
-      - Garantia de reparacion (unicamente si hubo reparacion), con plazo definitivo y vencimiento por Detalle
+      - Comprobante de entrega y garantia con desglose de Detalles/Ajustes/pagos/saldo y los terminos y condiciones
+      - Garantia de reparacion (unicamente si hubo reparacion), con plazo definitivo y vencimiento por Detalle, dentro del mismo comprobante
     rules:
       - BR-REP-031
       - BR-REP-041
@@ -2097,6 +2145,11 @@ nodes:
       Comerciales (BR-REP-016) y la anulacion de un Pago (BR-REP-017) cambian el
       Saldo que se evalua aqui; una cortesia total con Pagos recibidos deja
       saldo a favor y se devuelve (BR-REP-038).
+      DEC-AJ-03 y DEC-AJ-04 (23/11/2026): el aviso al cliente (PROC-REP-260)
+      no es una condicion de la entrega. Saldo = 0, la custodia y, cuando
+      corresponde, el check-in siguen siendo condiciones; el check-in
+      faltante se registra en la misma confirmacion de la entrega
+      (PROC-REP-269, BR-REP-045) y el cobro sigue aparte.
     rules:
       - BR-REP-017
       - BR-REP-045
@@ -2251,6 +2304,12 @@ nodes:
       la garantia RMA no pasan por aqui. Hasta la entrega el check-in puede
       corregirse con motivo obligatorio; se conservan todas sus versiones y
       rige la ultima (DEC-MI-05, BR-REP-045).
+      DEC-AJ-04 (23/11/2026): el check-in se registra dentro del formulario de
+      entrega; una sola confirmacion registra el check-in faltante y la
+      entrega (PROC-REP-270), con los mismos controles. DEC-AJ-07
+      (23/11/2026): al registrarlo se muestra como referencia la respuesta
+      del ingreso sobre si se pudieron verificar las funcionalidades del
+      equipo, que es informativa y no lo reemplaza.
     rules:
       - BR-REP-045
       - BR-REP-041
@@ -2306,6 +2365,16 @@ nodes:
       registran por defecto Recepcion y Administracion (DEC-MI-04). Un retiro
       demorado no cierra la Orden ni habilita a disponer del equipo
       (DEC-MI-14, BR-REP-033).
+      Ajustes funcionales (23/11/2026). DEC-AJ-03: la entrega al cliente no
+      exige el aviso de PROC-REP-260. DEC-AJ-04: una sola confirmacion de la
+      entrega registra el check-in, si todavia no se registro, y la entrega;
+      se entrega el Comprobante de entrega y garantia (PROC-REP-280); el cobro
+      sigue aparte y la entrega exige Saldo = 0. DEC-AJ-09: el formulario de
+      entrega pregunta si retira otra persona; si es asi, el nombre, el
+      apellido y el telefono de quien retira son obligatorios, sin pedir
+      vinculo, DNI ni otra identificacion ni una autorizacion formal. Quien
+      retiro queda registrado en la Orden y en el comprobante; que retire
+      otra persona no modifica ni anula la garantia (BR-REP-041).
     outputs:
       - Devolucion fisica registrada (fecha/hora, usuario que entrega y persona que recibe) cuando corresponde
     rules:

@@ -2,13 +2,13 @@
 
 La baseline funcional vigente es PROC-REP V1.4, aprobada en DC01 y sincronizada desde `rt-rma-app` (DC02):
 
-- Commit de origen: `7fb75cd519e42217b897525626765241176bdd30` (rama `spec/configuracion-v2`, publicada: DEC-CFG-01 a 08 y ABI-53, Configuración v2, y el estado de implementación de la etapa 1 de Reparación RT, sobre `spec/reparacion-rt` `168618a`, con DEC-RT-01 a 07 y BR-REP-050, sobre `spec/ux-recepcion` `ebd0840`, con DEC-UX-01 a 14, DEC-MI-01 a 16, DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
+- Commit de origen: `64a8583f895a89084158261f632d449e807a7c32` (rama `spec/ajustes-funcionales`, local, sin publicar: DEC-AJ-01 a 09, ajustes funcionales del feedback de UAT, sobre `spec/configuracion-v2` `7fb75cd`, publicada, con DEC-CFG-01 a 08 y ABI-53, Configuración v2, y el estado de implementación de la etapa 1 de Reparación RT, sobre `spec/reparacion-rt` `168618a`, con DEC-RT-01 a 07 y BR-REP-050, sobre `spec/ux-recepcion` `ebd0840`, con DEC-UX-01 a 14, DEC-MI-01 a 16, DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
 - Contenido funcional aprobado en `b6cc3a5`.
 - Manifiesto de procedencia: `business/FUNCTIONAL_SOURCE.json`.
 
 Este documento lista lo que el producto todavía no hace como dice la baseline, y lo que el producto hace sin que la baseline lo defina. **No son fallas de la sincronización documental**: la copia de `business/` es idéntica a la fuente. Son trabajo de implementación o decisiones pendientes.
 
-DC02 no modificó servicios, dominio, endpoints ni frontend. El código evaluado es el de `mvp-v2` en `f270a84`, salvo las decisiones de la sección G, revisadas en la rama `feat/iteracion-1-alineacion-v14` (iteración 1, 11/11/2026), las de la sección H, revisadas en `feat/macro-v14` (macroiteración, 12/11/2026), las de la sección I, revisadas en `feat/macro-integral` (macroiteración integral, 13/11/2026), y DEC-UX-01 a 14, revisadas en `feat/ux-recepcion` (iteración de UX de Recepción, 16/11/2026; DEC-UX-08, 13 y 14 implementadas, con ABI-44 y ABI-45 cerrados).
+DC02 no modificó servicios, dominio, endpoints ni frontend. El código evaluado es el de `mvp-v2` en `f270a84`, salvo las decisiones de la sección G, revisadas en la rama `feat/iteracion-1-alineacion-v14` (iteración 1, 11/11/2026), las de la sección H, revisadas en `feat/macro-v14` (macroiteración, 12/11/2026), las de la sección I, revisadas en `feat/macro-integral` (macroiteración integral, 13/11/2026), y DEC-UX-01 a 14, revisadas en `feat/ux-recepcion` (iteración de UX de Recepción, 16/11/2026; DEC-UX-08, 13 y 14 implementadas, con ABI-44 y ABI-45 cerrados), y DEC-AJ-01 a 09, revisadas en `feat/ajustes-funcionales-uat` (ajustes funcionales del feedback de UAT, 23/11/2026: DEC-AJ-01 y 02 implementadas en el bloque 1; DEC-AJ-03 a 09, pendientes de los bloques 2 a 4).
 
 Fuente de los estados de implementación: `business/decisions/decision-log-v1.4.yaml` (`implementation`). Las rutas de evidencia son relativas a `app/backend/app`, salvo que digan otra cosa.
 
@@ -18,7 +18,7 @@ Fuente de los estados de implementación: `business/decisions/decision-log-v1.4.
 
 Las tres que figuraban (DC06, DC07 y DC11) se alinearon en la iteración 1: ver la sección G.
 
-## B. Decisiones no implementadas (10)
+## B. Decisiones no implementadas (17)
 
 | Decisión | Qué dice la baseline | Situación en el producto | Pendientes |
 |---|---|---|---|
@@ -31,6 +31,13 @@ Las tres que figuraban (DC06, DC07 y DC11) se alinearon en la iteración 1: ver 
 | DEC-RT-05 | La copia de Productos RT se sincroniza a pedido, controlada por Administración | Sin implementar | Etapa 1 |
 | DEC-RT-06 | Observaciones del equipo opcionales en RT_INTERNO | Sin implementar: la base exige `orden.falla_reportada` | Etapa 2 |
 | DEC-RT-07 | Consultan Reparación RT Recepción, Coordinación RMA y Administración | Sin implementar (no hay módulo) | Etapa 1 |
+| DEC-AJ-03 | El aviso al cliente (PROC-REP-260) deja de ser obligatorio para entregar, en toda entrega al cliente; el camino RT_INTERNO no cambia; el retiro demorado corre desde que la Orden está lista para retirar; el envío confirmado de «equipo listo para retirar» registra el aviso | Sin implementar: la entrega exige el paso 260 (`application/cierre.py`, `application/acciones.py`, `services/documentos.py`), el retiro demorado cuenta desde 260 (`domain/retiro.py`) y una comunicación `LISTO_PARA_RETIRAR` no registra el aviso | Bloque 2 de [`docs/ajustes-funcionales-discovery.md`](../docs/ajustes-funcionales-discovery.md) |
+| DEC-AJ-04 | Un solo «Comprobante de entrega y garantía», con los términos y condiciones, sin certificado aparte para las entregas nuevas; el check-in faltante se registra en la misma confirmación de la entrega; el cobro sigue aparte, con saldo exactamente 0 | Sin implementar: se emiten el comprobante final, el certificado de garantía y los Términos por separado, y el check-in es una acción aparte | Bloque 2 |
+| DEC-AJ-05 | Ingreso sin trabajos estandarizados por el camino de revisión técnica, con «Trabajo solicitado» en texto libre; el comprobante de recepción confirma la custodia en el mismo acto | Sin implementar: no existe el campo y la custodia se confirma en otro paso | Bloque 3 |
+| DEC-AJ-06 | «IMEI no disponible» con el identificador interno del Equipo (DEC-UX-02); el IMEI real se registra después, hasta la entrega, con motivo y auditoría | Sin implementar: el IMEI solo se corrige antes de confirmar la recepción (`services/custodia.py` y el trigger `recepcion_decidida_no_cambia`) | Bloque 3; ABI-41 para los demás datos del ingreso |
+| DEC-AJ-07 | Pregunta obligatoria al ingresar sobre la verificación de funcionalidades (Sí o No, observaciones opcionales); informativa, se muestra en el check-in de entrega y no cambia la garantía | Sin implementar: la pregunta existe solo como check-in de entrega | Bloque 3 |
+| DEC-AJ-08 | «Crear y generar el comprobante», con el canal presencial preseleccionado e Imprimir como acción principal del visor | Sin implementar: el comprobante se genera desde Documentos, en un paso aparte | Bloque 3 |
+| DEC-AJ-09 | Datos de la empresa y términos y condiciones versionados, administrados por Administración; la garantía real de cada trabajo en los documentos (P-04); «¿Retira otra persona?» con nombre, apellido y teléfono, sin vínculo ni DNI y sin efecto sobre la garantía (P-05) | Sin implementar: `rma.empresa` sin API ni pantalla, Términos fijos en el frontend (180 días y anulación por retiro de un tercero) y `rma.salida` no guarda quién retira | Bloque 4 |
 | DC02 | `rt-rma-mvp/business` es una copia generada y verificada | **Implementada por esta sincronización.** El registro de `rt-rma-app` todavía dice NO_IMPLEMENTADO porque se evaluó antes; corresponde actualizarlo en la fuente | - |
 
 ## C. Decisiones implementadas en parte (4)

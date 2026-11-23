@@ -684,6 +684,11 @@ rules:
       total cobrado, sin linea de recargo; el saldo sigue sobre los importes
       base. DEC-UX-14 (ABI-44): la devolucion reintegra tambien la parte
       proporcional del recargo de su pago.
+      DEC-AJ-03 y DEC-AJ-04 (23/11/2026): el aviso al cliente (PROC-REP-260)
+      deja de ser una condicion de la entrega. El cobro sigue independiente
+      de la entrega y la entrega exige Saldo = 0 exacto, como hasta ahora; el
+      check-in faltante se registra en la misma confirmacion de la entrega
+      (BR-REP-045).
     status: approved
 
   - id: BR-REP-018
@@ -875,6 +880,12 @@ rules:
       muestra en la Orden y en el comprobante de ingreso; nunca un IMEI
       ficticio. El IMEI real se asocia despues con la correccion del ingreso
       (DEC-MI-07), que conserva el identificador.
+      DEC-AJ-06 (23/11/2026): junto al IMEI, un boton marca "IMEI no
+      disponible" y el equipo se identifica con su identificador interno,
+      distinguido con claridad de un IMEI real, nunca con un IMEI ficticio. El
+      IMEI real se registra despues con una accion propia, tambien con la
+      custodia confirmada y hasta la entrega, con motivo obligatorio y
+      auditoria; el identificador interno no cambia.
     status: approved
 
   - id: BR-REP-023
@@ -899,6 +910,9 @@ rules:
       del equipo, visibles para Recepcion y Taller e incluidas en el
       comprobante inicial, de las notas internas, que solo se ven dentro de la
       aplicacion y nunca salen en documentos, PDF ni mensajes al cliente.
+      DEC-AJ-05 (23/11/2026): Recepcion registra ademas, en un campo propio y
+      en texto libre, el trabajo solicitado por el cliente, distinto de las
+      observaciones del equipo; no crea Detalles (BR-REP-026).
     status: approved
 
   - id: BR-REP-024
@@ -1067,6 +1081,9 @@ rules:
       despues, en PROC-REP-211 (BR-REP-034). Si el cliente no responde no se registra
       ninguna decision: la solicitud queda sin resolver (PROC-REP-046 -> 211) y los
       Detalles siguen PENDIENTE_AUTORIZACION.
+      DEC-AJ-08 (23/11/2026): al crear la Orden y generar el comprobante en una
+      sola accion, el canal de la autorizacion llega preseleccionado como
+      presencial, editable, y se sigue registrando.
     status: approved
 
   - id: BR-REP-029
@@ -1204,6 +1221,18 @@ rules:
       autoriza otro trabajo y evita duplicados involuntarios. Generar un
       documento no equivale a enviarlo ni registra que el cliente lo recibio o
       firmo (BR-REP-042, BR-REP-044).
+      DEC-AJ-05 (23/11/2026): en el ingreso de CLIENTE_EXTERNO sin trabajos
+      estandarizados (camino de revision tecnica) Recepcion genera el
+      comprobante de recepcion, "reparacion pendiente de diagnostico", y
+      confirma la recepcion fisica en el mismo acto (BR-REP-033).
+      DEC-AJ-04 y DEC-AJ-09 (23/11/2026): la entrega emite un solo
+      Comprobante de entrega y garantia, versionado como el comprobante final,
+      con la garantia y el vencimiento de cada trabajo, quien retiro y los
+      terminos y condiciones en su version vigente, que el documento
+      conserva; para las entregas nuevas no se emite el certificado de
+      garantia aparte. Los documentos ya emitidos no cambian. Los
+      comprobantes muestran los datos de la empresa que configura
+      Administracion.
     status: approved
 
   - id: BR-REP-032
@@ -1245,6 +1274,8 @@ rules:
       el alta y se RESUELVE de forma diferida por Recepcion (PROC-REP-046/047,
       EVT-REP-003): el tecnico no espera la respuesta del cliente ni se bloquea
       por ella (BR-REP-037).
+      DEC-AJ-02 (23/11/2026) confirma esta regla sin cambios: el Detalle
+      agregado espera la autorizacion del cliente solo en CLIENTE_EXTERNO.
     status: approved
 
   - id: BR-REP-033
@@ -1332,6 +1363,18 @@ rules:
       DEC-CFG-07 (19/11/2026): el plazo del retiro demorado deja de mostrarse
       en Configuracion; se conserva con su valor y sus efectos, y solo
       Administracion puede cambiarlo, sin una pantalla para hacerlo.
+      DEC-AJ-03 (23/11/2026) reemplaza el inicio del plazo del retiro
+      demorado: se cuenta desde que la Orden esta lista para retirar
+      (reparacion lista o finalizada sin reparacion), no desde la
+      notificacion, que deja de ser obligatoria y cuya fecha se conserva como
+      dato propio; el plazo y sus efectos no cambian. DEC-AJ-05 (23/11/2026):
+      en el ingreso sin trabajos estandarizados la recepcion fisica se
+      confirma en el mismo acto en que se genera y se entrega el comprobante
+      de recepcion. DEC-AJ-09 (23/11/2026): en la entrega al cliente se
+      registra quien retira, el titular u otra persona; de otra persona se
+      registran nombre, apellido y telefono, obligatorios, sin pedir vinculo,
+      DNI ni otra identificacion ni una autorizacion formal. Que retire otra
+      persona no modifica ni anula la garantia.
     status: approved
 
   - id: BR-REP-034
@@ -1764,6 +1807,15 @@ rules:
       pago y la auditoria completa quedan fijos para Administracion. Un
       permiso de accion requiere su permiso de consulta y ningun permiso puede
       quedar sin roles.
+      DEC-AJ-01 (23/11/2026): un permiso de consulta configurable, "Consultar
+      la informacion tecnica de la Orden", inicialmente de Tecnico,
+      Coordinacion RMA y Administracion, define si el detalle de la Orden
+      muestra los antecedentes del equipo, las ejecuciones, los movimientos y
+      las devoluciones de insumos, los insumos previstos y los bloques
+      tecnicos del historial. Es de presentacion: no restringe lo que
+      devuelve la consulta de la Orden, que sigue exigiendo su propio
+      permiso. DEC-AJ-09 (23/11/2026): los datos de la empresa y los terminos
+      y condiciones los administra Administracion.
     status: approved
 
   - id: BR-REP-040
@@ -1805,6 +1857,11 @@ rules:
       funcionalidad, cada seccion visible con su permiso, y las altas se hacen
       en formularios breves que no piden codigo. Lo que la pantalla deja de
       mostrar se conserva con su valor y sus reglas (DEC-CFG-06 a DEC-CFG-08).
+      DEC-AJ-09 (23/11/2026): Administracion configura, con auditoria, los
+      datos de la empresa que salen en los comprobantes (nombre comercial,
+      direccion, telefono, horario de atencion y pie de comprobante) y
+      administra desde Configuracion los terminos y condiciones, versionados:
+      cada documento emitido conserva la version que uso.
     status: approved
 
   - id: BR-REP-041
@@ -1847,6 +1904,13 @@ rules:
       politica para los trabajos hechos dentro de una garantia RMA tambien se
       conserva sin pantalla, con sus reglas; un Tipo nuevo queda sin politica
       definida. Los pendientes de arriba no cambian.
+      DEC-AJ-04, DEC-AJ-07 y DEC-AJ-09 (23/11/2026): el Comprobante de entrega
+      y garantia, unico documento de la entrega, informa la garantia real de
+      cada trabajo segun estas reglas (plazo definitivo y vencimiento por
+      Detalle), nunca un plazo fijo ajeno a ellas, y los terminos y
+      condiciones remiten a esos plazos. Que retire otra persona no modifica
+      ni anula la garantia. La verificacion de funcionalidades del ingreso es
+      informativa y no cambia la garantia ni sus plazos.
     status: approved
 
   - id: BR-REP-042
@@ -1909,6 +1973,10 @@ rules:
       editan pero no se agregan nuevas; autorizacion pendiente, recordatorio
       de retiro y garantia no se borran ni se desactivan, y las comunicaciones
       registradas conservan su mensaje.
+      DEC-AJ-03 (23/11/2026): el envio de la plantilla de equipo listo para
+      retirar confirmado manualmente registra el aviso al cliente
+      (PROC-REP-260); es el mismo registro que el aviso hecho por otro medio,
+      no uno adicional. El aviso es opcional: la entrega no lo exige.
     status: approved
 
   - id: BR-REP-045
@@ -1937,6 +2005,14 @@ rules:
       garantia definitiva no confirmada. El comprobante final lleva el
       resultado del check-in. Las Ordenes anteriores con check-in registrado al
       ingresar conservan su validez.
+      DEC-AJ-04 (23/11/2026): el check-in se registra dentro del formulario de
+      entrega; una sola confirmacion registra el check-in, si todavia no se
+      registro, y la entrega, con los mismos controles. Sigue pudiendo
+      registrarse antes, desde que la reparacion esta lista. DEC-AJ-07
+      (23/11/2026): la pregunta del ingreso sobre si se pudieron verificar
+      las funcionalidades del equipo es informativa: no es este check-in ni
+      lo reemplaza, anticipa o condiciona; al registrar el check-in se
+      muestra su respuesta como referencia.
     status: approved
 
   - id: BR-REP-046
@@ -1983,6 +2059,22 @@ rules:
       cargo), el identificador del equipo, las observaciones y un espacio de
       conformidad con firma, aclaracion y DNI. Imprimirlo usa el mismo PDF y no
       emite otro documento (DEC-UX-05).
+      Ajustes funcionales (23/11/2026). DEC-AJ-05: esta operacion unica rige
+      para el ingreso con trabajos. Sin trabajos estandarizados, Recepcion
+      registra el trabajo solicitado en texto libre, la Orden sigue el camino
+      de revision tecnica (PROC-REP-045, PROC-REP-055 y PROC-REP-056) y el
+      comprobante de recepcion se genera con la recepcion fisica confirmada en
+      el mismo acto; los trabajos y sus precios los define despues el tecnico
+      (PROC-REP-075) y el cliente los autoriza (PROC-REP-046/047). DEC-AJ-06:
+      un boton marca IMEI no disponible y el IMEI real se registra despues,
+      hasta la entrega, con motivo y auditoria; hasta cuando se corrigen los
+      demas datos del ingreso sigue pendiente. DEC-AJ-07: el ingreso pregunta,
+      con respuesta obligatoria, si se pudieron verificar las funcionalidades
+      del equipo (Si o No, con observaciones opcionales); es informativa y no
+      es el check-in de entrega (BR-REP-045). DEC-AJ-08: "Crear y generar el
+      comprobante" encadena la creacion de la Orden y la del comprobante, con
+      el canal presencial preseleccionado (BR-REP-028); Imprimir es la accion
+      principal del visor y la inicia el usuario.
     status: approved
 
   - id: BR-REP-047

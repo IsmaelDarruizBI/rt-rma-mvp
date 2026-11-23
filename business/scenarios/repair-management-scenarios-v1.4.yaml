@@ -917,8 +917,8 @@ scenarios:
         label: Cortesia usada para evitar el cobro
         value: false
       - key: client_notification_required
-        label: Notificacion al cliente
-        value: true
+        label: Notificacion al cliente obligatoria para entregar (opcional desde DEC-AJ-03; este Happy Path avisa igual)
+        value: false
       - key: client_delivery_required
         label: Entrega al cliente
         value: true
@@ -1197,6 +1197,12 @@ scenarios:
       comprobante), confirmados como Scenario real en
       generated/scenarios/repair-management-candidate-analysis-v1.3.yaml.
       Contraparte sin comprobante: VAR-REP-002 (equipo RT_INTERNO).
+      DEC-AJ-05 (23/11/2026): es tambien el camino del ingreso sin trabajos
+      estandarizados. Recepcion registra el trabajo solicitado en texto
+      libre, el comprobante de recepcion lo muestra y Recepcion confirma la
+      custodia en el mismo acto en que lo genera y lo entrega (BR-REP-033);
+      los trabajos y sus precios los define despues el tecnico (PROC-REP-075)
+      y el cliente los autoriza (PROC-REP-046/047).
 
     trigger:
       node: PROC-REP-045

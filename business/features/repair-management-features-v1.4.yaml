@@ -223,6 +223,17 @@ features:
           registrar la confirmacion de continuar igualmente (BR-REP-025)
         - Permitir seleccionar cero, uno o varios tipos de reparacion
           diagnosticados por Recepcion, sin crear Detalles
+        - Registrar en un campo propio, en texto libre, el trabajo solicitado
+          por el cliente, distinto de las observaciones del equipo, para el
+          ingreso sin trabajos estandarizados (BR-REP-023, DEC-AJ-05)
+        - Marcar "IMEI no disponible" e identificar el equipo con su
+          identificador interno, distinguido de un IMEI real y nunca con un
+          IMEI ficticio; registrar despues el IMEI real, hasta la entrega, con
+          motivo y auditoria (BR-REP-022, DEC-UX-02, DEC-AJ-06)
+        - Preguntar, con respuesta obligatoria, si se pudieron verificar las
+          funcionalidades del equipo (Si o No, con observaciones opcionales),
+          como dato informativo que no es el check-in de entrega ni cambia la
+          garantia (BR-REP-045, DEC-AJ-07)
 
       excludes:
         - Definir Detalles de Reparacion ni su origen de diagnostico
@@ -271,6 +282,8 @@ features:
       - >
         Hasta cuando se pueden corregir los datos del ingreso (BR-REP-046):
         pendiente de decision; quien y como los corrige lo decidio DEC-MI-07.
+        Para el IMEI lo decidio DEC-AJ-06: hasta la entrega, con motivo y
+        auditoria.
       - >
         Garantia RMA vencida (PROC-REP-036, EVT-REP-998): DEC-MI-02 decidio el
         registro de reclamos y la continuacion como reparacion paga vinculada
@@ -471,6 +484,13 @@ features:
           corresponda
         - Preservar el historial completo del Detalle, incluidas sus
           revisiones
+        - En el ingreso sin trabajos estandarizados, generar el comprobante de
+          recepcion con el trabajo solicitado y confirmar la custodia en el
+          mismo acto; el tecnico define despues los trabajos y sus precios y
+          el cliente los autoriza (BR-REP-031, BR-REP-033, DEC-AJ-05)
+        - Crear la Orden y generar el comprobante en una sola accion, con el
+          canal presencial preseleccionado y editable, e imprimir desde el
+          visor como accion principal (BR-REP-028, BR-REP-046, DEC-AJ-08)
 
       excludes:
         - Validar disponibilidad de recursos o insumos (FEAT-REP-003)
@@ -1196,9 +1216,22 @@ features:
           asistido con su confirmacion manual sin darlo por entregado ni leido
           y respetar el consentimiento por finalidad (BR-REP-043, BR-REP-044,
           DEC-MI-08)
-        - Marcar el retiro demorado cuando vence el plazo desde la
-          notificacion de equipo listo, alertar y registrar seguimientos sin
-          cerrar la Orden ni disponer del equipo (BR-REP-033, DEC-MI-14)
+        - Marcar el retiro demorado cuando vence el plazo desde que la Orden
+          esta lista para retirar, alertar y registrar seguimientos sin
+          cerrar la Orden ni disponer del equipo (BR-REP-033, DEC-MI-14,
+          DEC-AJ-03)
+        - Entregar sin exigir el aviso al cliente, que es opcional, y
+          registrar como aviso el envio confirmado de la plantilla de equipo
+          listo para retirar (BR-REP-044, DEC-AJ-03)
+        - Registrar el check-in faltante y la entrega en una sola
+          confirmacion, con el cobro aparte y Saldo = 0, y emitir un solo
+          Comprobante de entrega y garantia con los terminos y condiciones,
+          sin certificado de garantia aparte para las entregas nuevas
+          (BR-REP-031, BR-REP-041, BR-REP-045, DEC-AJ-04)
+        - Registrar si retira otra persona, con su nombre, apellido y
+          telefono obligatorios, sin vinculo, DNI ni autorizacion formal y
+          sin efecto sobre la garantia, e informarlo en el comprobante
+          (BR-REP-033, DEC-AJ-09)
         - Registrar, de forma opcional, la firma en pantalla o el archivo
           firmado de la constancia de entrega y del comprobante final
           (BR-REP-042, DEC-MI-06)
@@ -1211,7 +1244,8 @@ features:
           cliente pendiente de devolver (PROC-REP-268, BR-REP-038); la devolucion
           de dinero es independiente de la devolucion fisica del equipo
         - Determinar si corresponde entrega a cliente
-        - Preparar y confirmar notificacion al cliente
+        - Preparar y confirmar, de forma opcional, la notificacion al cliente
+          (DEC-AJ-03)
         - Generar el comprobante final (compartido con FEAT-REP-007, que
           materializa alli el resultado comercial)
         - Incluir garantia de reparacion cuando corresponda
@@ -1508,6 +1542,10 @@ features:
         - Conservar sin pantalla, con su valor y sus reglas, el plazo generico
           de garantia y la politica RMA de cada Tipo, el plazo del retiro
           demorado y las plantillas que no se ofrecen (DEC-CFG-06 a DEC-CFG-08)
+        - Configurar, con auditoria, los datos de la empresa de los
+          comprobantes (nombre comercial, direccion, telefono, horario y pie)
+          y administrar los terminos y condiciones versionados, que cada
+          documento conserva en la version que uso (BR-REP-040, DEC-AJ-09)
       excludes:
         - Modificar condiciones ya registradas en Ordenes, Detalles o
           documentos
@@ -1606,6 +1644,11 @@ features:
           sistema, recargos y la auditoria completa; exigir la consulta de cada
           accion y no dejar un permiso sin roles (BR-REP-039, DEC-CFG-02 a
           DEC-CFG-04)
+        - Mostrar la informacion tecnica del detalle de la Orden segun el
+          permiso de consulta configurable "Consultar la informacion tecnica
+          de la Orden", inicialmente de Tecnico, Coordinacion RMA y
+          Administracion; es presentacion y no restringe la consulta de la
+          Orden (BR-REP-039, DEC-AJ-01)
       excludes:
         - Permisos individuales por usuario; los permisos se asignan solo por
           rol (DEC-CFG-02)

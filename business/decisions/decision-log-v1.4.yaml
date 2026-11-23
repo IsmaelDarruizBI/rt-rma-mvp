@@ -815,7 +815,10 @@ decisions:
       Aprobada el 12/11/2026. Cierra ABI-25 y confirma UAT-I18. Motivo
       obligatorio y auditoria de los valores anteriores y nuevos; la
       correccion no altera los comprobantes ya emitidos. No decide hasta
-      cuando se admite la correccion (ABI-41).
+      cuando se admite la correccion (ABI-41). DEC-AJ-06 (23/11/2026): el
+      IMEI real de un equipo ingresado sin IMEI se registra hasta la entrega,
+      tambien con la custodia confirmada, con motivo y auditoria; para los
+      demas datos ABI-41 sigue abierto.
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/macro-integral cc46121 (services/custodia.py cambios_del_ingreso: motivo obligatorio y valores anteriores y nuevos en la version; INGRESO_CORREGIR para Recepcion, Coordinacion RMA y Administracion; los comprobantes emitidos no cambian)"
@@ -843,7 +846,10 @@ decisions:
       envios automaticos de marketing quedan fuera del alcance. DEC-CFG-08
       (19/11/2026): Configuracion y la Orden ofrecen solo ingreso de equipo y
       equipo listo para retirar; las otras tres plantillas se conservan, sin
-      borrarse ni desactivarse.
+      borrarse ni desactivarse. DEC-AJ-03 (23/11/2026): el envio de la
+      plantilla de equipo listo para retirar confirmado manualmente registra
+      el aviso al cliente (PROC-REP-260), que deja de ser obligatorio para
+      entregar.
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/macro-integral b4dd52c (services/comunicaciones.py y application/comunicaciones.py: cinco plantillas editables, mensaje editable antes de abrir WhatsApp, intento y confirmacion manual, nunca entregado ni leido; consentimiento por finalidad y canal como historial)"
@@ -983,7 +989,10 @@ decisions:
       dinero posteriores a ENTREGADA y el dinero no retirado cuando no hay un
       equipo por retirar no se decidieron (ABI-40). DEC-CFG-07 (19/11/2026):
       el plazo sale de la pantalla de Configuracion y sigue rigiendo con su
-      valor; solo Administracion lo cambia, sin pantalla.
+      valor; solo Administracion lo cambia, sin pantalla. DEC-AJ-03
+      (23/11/2026): el plazo se cuenta desde que la Orden esta lista para
+      retirar, no desde el aviso, que deja de ser obligatorio; la fecha del
+      aviso se conserva como dato propio.
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/macro-integral ac7a56d (domain/retiro.py: demora desde el aviso de equipo listo con PLAZO_RETIRO_DIAS, 30 por defecto; bandeja RETIRO_DEMORADO y seguimientos inmutables; nunca cierra la Orden)"
@@ -1074,7 +1083,9 @@ decisions:
       ficticio. Se muestra en la Orden y en el comprobante de ingreso. El IMEI
       real se asocia despues con la correccion de los datos del ingreso
       (DEC-MI-07), que conserva el identificador y la version anterior; hasta
-      cuando se admite esa correccion sigue en ABI-41.
+      cuando se admite esa correccion sigue en ABI-41. DEC-AJ-06 (23/11/2026)
+      la mantiene y la completa: un boton marca IMEI no disponible y el IMEI
+      real se registra despues, hasta la entrega, con motivo y auditoria.
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/ux-recepcion d0f7868 (comprobante con el identificador; pruebas de altas simultaneas sin IMEI con identificadores unicos, codigo repetido rechazado por la base e IMEI real asociado despues) y 864c599 (identificador en la cabecera y en Cliente y equipo)"
@@ -1691,7 +1702,9 @@ decisions:
       si no se cambio), sigue marcando el retiro demorado en las bandejas y en
       la Orden con las mismas reglas, y solo Administracion puede cambiarlo,
       sin una pantalla para hacerlo. Ningun valor cambia. La seccion de
-      parametros pasa a ser la de recargos por medio de pago.
+      parametros pasa a ser la de recargos por medio de pago. DEC-AJ-03
+      (23/11/2026): el plazo se cuenta desde que la Orden esta lista para
+      retirar.
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/configuracion-v2 6683bcf y 928012c, local (PLAZO_RETIRO_DIAS y su efecto sin cambios; GET/PUT /api/admin/parameters solo de Administracion y sin pantalla; Configuracion sin el plazo)"
@@ -1716,6 +1729,233 @@ decisions:
     implementation:
       status: IMPLEMENTADO
       evidence: "rt-rma-mvp feat/configuracion-v2 6683bcf, local (las plantillas informan visible, solo INGRESO y LISTO_PARA_RETIRAR; ninguna se borra ni se desactiva) y 928012c (Configuracion y las comunicaciones de la Orden muestran solo las visibles)"
+
+  # ------------------------------------------------------------------ Ajustes funcionales del feedback de UAT (23/11/2026)
+  # Aprobadas por el responsable de producto el 23/11/2026 para la iteracion
+  # de ajustes funcionales del feedback de UAT de rt-rma-mvp (rama
+  # feat/ajustes-funcionales-uat): D-01 a D-09 de rt-rma-mvp
+  # docs/ajustes-funcionales-discovery.md (BF-04 a BF-08, BF-12 y BF-18 a
+  # BF-20). DEC-AJ-NN corresponde a D-NN. No agregan nodos, aristas ni
+  # estados: PROC-REP-260 deja de ser obligatorio sin cambiar el grafo (la
+  # secuencia 250 -> 260 -> 265 se recorre con o sin aviso), y el resto
+  # cambia el texto de las reglas, de los nodos, de las Features y de dos
+  # Scenarios. Los documentos ya emitidos no cambian.
+  - id: DEC-AJ-01
+    block: AJ
+    title: La informacion tecnica de la Orden se muestra con un permiso de consulta configurable, inicialmente de Tecnico, Coordinacion RMA y Administracion
+    status: CONFIRMADA
+    rules: [BR-REP-039]
+    features: [FEAT-REP-011]
+    notes: >
+      Aprobada el 23/11/2026 (D-01, alternativa B; BF-07). (1) Nuevo permiso
+      de consulta configurable "Consultar la informacion tecnica de la
+      Orden", con Tecnico, Coordinacion RMA y Administracion como roles
+      predeterminados; Recepcion no lo tiene inicialmente y Administracion
+      puede habilitarselo desde Configuracion, con auditoria. (2) Sin el
+      permiso, el detalle de la Orden no muestra los antecedentes del equipo,
+      las ejecuciones y los movimientos de insumos, las devoluciones de
+      insumos, los insumos previstos de cada trabajo ni los bloques tecnicos
+      del historial (datos tecnicos, recorrido del proceso y ejecuciones). (3)
+      Recepcion sigue viendo el resultado tecnico, el estado y el precio de
+      cada trabajo, el historial general de eventos (en su propia seccion),
+      cliente y equipo, fotografias, autorizaciones, comunicaciones, pagos y
+      documentos. (4) "Corregir la identidad" pasa a Cliente y equipo. (5) Es
+      presentacion: no restringe lo que devuelve la consulta de la Orden ni
+      ninguna otra consulta, que siguen con sus permisos; el permiso de
+      antecedentes que usa la identificacion del equipo al ingresar no
+      cambia.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ajustes-funcionales-uat 8980e52, local (services/permisos.py DETALLE_TECNICO_CONSULTAR en Consultas, predeterminado Tecnico, Coordinacion RMA y Administracion, sin migracion; app/frontend PanelOrdenes.tsx, DetalleOrden.tsx y detalleTecnico.ts; ningun endpoint lo exige, tests/test_matriz_permisos.py SOLO_PRESENTACION)"
+
+  - id: DEC-AJ-02
+    block: AJ
+    title: Un trabajo adicional espera la autorizacion del cliente solo en CLIENTE_EXTERNO; los demas origenes no cambian
+    status: CONFIRMADA
+    rules: [BR-REP-032, BR-REP-028]
+    nodes: [PROC-REP-128, PROC-REP-046]
+    features: [FEAT-REP-002]
+    notes: >
+      Aprobada el 23/11/2026 (D-02, alternativa A; BF-12). Confirma
+      BR-REP-032 sin cambiarla: en CLIENTE_EXTERNO el trabajo que agrega el
+      tecnico queda pendiente de autorizacion, la tarea llega a Recepcion, que
+      registra la decision del cliente, y recien entonces se puede empezar;
+      en RT_INTERNO, RT_GARANTIA_VENTA y RMA_GARANTIA_REPARACION el adicional
+      va directo a factibilidad. Extender la espera a la garantia RMA o a
+      RT_INTERNO seria otra decision, con la pregunta del cobro de un
+      adicional fuera de garantia.
+    implementation:
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp domain/politicas.py PoliticaOrigen.requiere_autorizacion_cliente, sin cambios; feat/ajustes-funcionales-uat 3788aa0, local (application/situacion.py: la autorizacion pendiente de un adicional suma a Recepcion en Pendientes de mi sector aunque haya una ejecucion en curso; tests/test_adicional_pendiente_sector.py de punta a punta)"
+
+  - id: DEC-AJ-03
+    block: AJ
+    title: Avisar al cliente deja de ser obligatorio para entregar; el retiro demorado se cuenta desde que la Orden esta lista para retirar
+    status: CONFIRMADA
+    rules: [BR-REP-017, BR-REP-033, BR-REP-044]
+    nodes: [PROC-REP-250, PROC-REP-260, PROC-REP-265, PROC-REP-290]
+    features: [FEAT-REP-008]
+    scenarios: [HP-REP-001, HP-REP-003]
+    notes: >
+      Aprobada el 23/11/2026 (D-03; BF-20). Ajusta DEC-MI-14, DEC-CFG-07 y
+      DEC-MI-08. (1) El aviso al cliente (PROC-REP-260) pasa a ser opcional:
+      la Orden lista para entregar sigue a la validacion de la condicion de
+      entrega (PROC-REP-265) con o sin aviso, sin agregar aristas: la
+      secuencia 250 -> 260 -> 265 se recorre igual y el aviso se registra solo
+      si se dio. (2) Rige para toda entrega al cliente: CLIENTE_EXTERNO,
+      incluido el resultado SIN_REPARACION, RT_GARANTIA_VENTA y
+      RMA_GARANTIA_REPARACION. (3) El camino RT_INTERNO (informar a Gestion
+      RT en PROC-REP-290 y devolver el equipo) conserva su trazabilidad
+      interna sin cambios. (4) El retiro demorado (DEC-MI-14) se cuenta desde
+      que la Orden esta lista para retirar (reparacion lista o finalizada sin
+      reparacion), no desde el aviso; el plazo y sus efectos no cambian. (5)
+      La fecha del aviso se conserva como un dato independiente. (6) Una
+      comunicacion de WhatsApp con la plantilla de equipo listo para retirar
+      confirmada como enviada cuenta como el aviso y lo registra; no hay dos
+      registros del aviso. (7) Se conservan los controles de la entrega:
+      Saldo = 0, custodia y check-in cuando corresponde.
+    implementation:
+      status: NO_IMPLEMENTADO
+      gap: "bloque 2 de rt-rma-mvp docs/ajustes-funcionales-discovery.md: la entrega exige hoy el paso 260 (application/cierre.py, application/acciones.py, services/documentos.py), el retiro demorado cuenta desde 260 (domain/retiro.py) y la comunicacion LISTO_PARA_RETIRAR no registra el aviso"
+
+  - id: DEC-AJ-04
+    block: AJ
+    title: La entrega emite un solo Comprobante de entrega y garantia con los terminos y condiciones, y registra el check-in faltante en la misma confirmacion; el cobro sigue aparte
+    status: CONFIRMADA
+    rules: [BR-REP-031, BR-REP-041, BR-REP-045, BR-REP-017]
+    nodes: [PROC-REP-269, PROC-REP-270, PROC-REP-280]
+    features: [FEAT-REP-008]
+    notes: >
+      Aprobada el 23/11/2026 (D-04; BF-18). (1) Al entregar se emite un solo
+      documento, el "Comprobante de entrega y garantia", que incluye el
+      desglose del comprobante final, la garantia y el vencimiento de cada
+      trabajo y los terminos y condiciones; para las entregas nuevas deja de
+      emitirse el certificado de garantia aparte. Los documentos ya emitidos
+      (comprobantes finales y certificados) no cambian. (2) El check-in se
+      registra dentro del formulario de entrega: una sola confirmacion
+      registra el check-in, si todavia no se registro, y la entrega, con los
+      mismos controles (BR-REP-045) y la correccion con motivo antes de
+      entregar (DEC-MI-05). (3) El cobro sigue independiente de la entrega:
+      para entregar el Saldo debe ser exactamente 0 (BR-REP-017, BR-REP-038,
+      sin cambios), y la custodia sigue siendo condicion de la entrega
+      (BR-REP-033).
+    implementation:
+      status: NO_IMPLEMENTADO
+      gap: "bloque 2 de rt-rma-mvp docs/ajustes-funcionales-discovery.md: hoy se emiten el comprobante final, el certificado de garantia y los Terminos por separado y el check-in es una accion aparte"
+
+  - id: DEC-AJ-05
+    block: AJ
+    title: El ingreso sin trabajos estandarizados usa el camino de revision tecnica, con el trabajo solicitado en texto libre; el comprobante de recepcion confirma la custodia en el mismo acto
+    status: CONFIRMADA
+    rules: [BR-REP-046, BR-REP-031, BR-REP-033, BR-REP-023]
+    nodes: [PROC-REP-032, PROC-REP-045, PROC-REP-056, PROC-REP-060, PROC-REP-075, PROC-REP-129]
+    features: [FEAT-REP-001, FEAT-REP-002]
+    scenarios: [VAR-REP-001]
+    notes: >
+      Aprobada el 23/11/2026 (D-05, alternativa A; BF-04). (1) Recepcion
+      registra en un campo propio, en texto libre, el "Trabajo solicitado" por
+      el cliente, distinto de las Observaciones del equipo. (2) La Orden se
+      crea sin Detalles estandarizados y sigue el camino de "Enviar a revision
+      tecnica" (PROC-REP-045 = No, VAR-REP-001). (3) El comprobante de
+      recepcion ("reparacion pendiente de diagnostico") se genera y Recepcion
+      confirma la custodia en el mismo acto: entregar el comprobante y
+      recibir el equipo es una sola operacion. (4) Los trabajos y sus precios
+      los define despues el tecnico (PROC-REP-075) y el cliente los autoriza
+      (PROC-REP-046/047, PROC-REP-129). (5) El ingreso con trabajos conserva
+      la operacion unica de BR-REP-046.
+    implementation:
+      status: NO_IMPLEMENTADO
+      gap: "bloque 3 de rt-rma-mvp docs/ajustes-funcionales-discovery.md: falta el campo Trabajo solicitado y la confirmacion de la custodia junto con el comprobante de recepcion"
+
+  - id: DEC-AJ-06
+    block: AJ
+    title: Un boton marca IMEI no disponible y el equipo se identifica con su identificador interno; el IMEI real se registra despues, hasta la entrega, con motivo y auditoria
+    status: CONFIRMADA
+    rules: [BR-REP-022, BR-REP-046]
+    nodes: [PROC-REP-030]
+    features: [FEAT-REP-001]
+    notes: >
+      Aprobada el 23/11/2026 (D-06, alternativa A; BF-05). Mantiene DEC-UX-02.
+      (1) Junto al IMEI, un boton marca "IMEI no disponible": el campo queda
+      vacio y el equipo se identifica con su identificador interno (EQP-...),
+      nunca con un IMEI ficticio, distinguido con claridad de un IMEI real en
+      la pantalla y en el comprobante. (2) Una accion nueva registra el IMEI
+      real despues, tambien con la custodia confirmada y hasta la entrega,
+      con motivo obligatorio y auditoria; el identificador interno no cambia.
+      (3) Resuelve ABI-41 para el IMEI; para los demas datos del ingreso sigue
+      abierto.
+    implementation:
+      status: NO_IMPLEMENTADO
+      gap: "bloque 3 de rt-rma-mvp docs/ajustes-funcionales-discovery.md: hoy el IMEI solo se corrige antes de confirmar la recepcion (services/custodia.py y el trigger recepcion_decidida_no_cambia)"
+    open: [ABI-41]
+
+  - id: DEC-AJ-07
+    block: AJ
+    title: Al ingresar se pregunta si se pudieron verificar las funcionalidades del equipo; es informativa y no cambia el check-in de entrega ni la garantia
+    status: CONFIRMADA
+    rules: [BR-REP-046, BR-REP-045, BR-REP-041]
+    nodes: [PROC-REP-032, PROC-REP-269]
+    features: [FEAT-REP-001, FEAT-REP-008]
+    notes: >
+      Aprobada el 23/11/2026 (D-07, alternativa A; BF-08). (1) En el ingreso
+      la pregunta "Se pudieron verificar las funcionalidades del equipo?" es
+      obligatoria, con respuesta Si o No y observaciones opcionales en los dos
+      casos. (2) Es informativa: no es el check-in de entrega, no lo
+      reemplaza, anticipa ni condiciona, y no cambia la garantia ni sus
+      plazos (BR-REP-041 y BR-REP-045 sin cambios). (3) Al registrar el
+      check-in de entrega se muestra la respuesta del ingreso como
+      referencia. La garantia por equipo (BF-16) sigue postergada.
+    implementation:
+      status: NO_IMPLEMENTADO
+      gap: "bloque 3 de rt-rma-mvp docs/ajustes-funcionales-discovery.md: la pregunta no existe en el ingreso (dos datos nuevos en la recepcion, sin reutilizar el check-in anterior al ingreso)"
+
+  - id: DEC-AJ-08
+    block: AJ
+    title: Crear la Orden y generar el comprobante en una sola accion, con el canal presencial preseleccionado e Imprimir como accion principal
+    status: CONFIRMADA
+    rules: [BR-REP-046, BR-REP-028]
+    nodes: [PROC-REP-060]
+    features: [FEAT-REP-001, FEAT-REP-002]
+    notes: >
+      Aprobada el 23/11/2026 (D-08; BF-06). Completa DEC-UX-05. (1) El alta
+      termina con "Crear y generar el comprobante", que encadena la creacion
+      de la Orden y la del comprobante con sus controles e idempotencia. (2)
+      El canal de la autorizacion llega preseleccionado como presencial,
+      editable, y se sigue registrando (BR-REP-028). (3) Imprimir es la accion
+      principal del visor, respetando las restricciones del navegador: la
+      impresion la inicia un gesto del usuario. (4) Sin trabajos (DEC-AJ-05)
+      se genera el comprobante de recepcion. Si la creacion se completa y el
+      comprobante falla, la Orden queda creada y el comprobante se genera
+      despues.
+    implementation:
+      status: NO_IMPLEMENTADO
+      gap: "bloque 3 de rt-rma-mvp docs/ajustes-funcionales-discovery.md: hoy el comprobante se genera desde Documentos, en un paso aparte"
+
+  - id: DEC-AJ-09
+    block: AJ
+    title: Datos de la empresa y terminos y condiciones versionados, administrados por Administracion; los documentos informan la garantia real de cada trabajo y quien retira, sin que un tercero anule la garantia
+    status: CONFIRMADA
+    rules: [BR-REP-040, BR-REP-041, BR-REP-031, BR-REP-033]
+    nodes: [PROC-REP-270, PROC-REP-280]
+    features: [FEAT-REP-010, FEAT-REP-008]
+    notes: >
+      Aprobada el 23/11/2026 (D-09; BF-19; P-04 y P-05 de rt-rma-mvp
+      docs/pendientes-producto.md). (1) Administracion configura los datos de
+      la empresa que salen en los comprobantes (nombre comercial, direccion,
+      telefono, horario de atencion y un pie de comprobante libre), con
+      auditoria. (2) Los terminos y condiciones son versionados y se
+      administran desde Configuracion; cada documento emitido conserva la
+      version que uso. (3) P-04: los documentos informan la garantia real de
+      cada trabajo segun las reglas vigentes (plazo y vencimiento por Detalle,
+      BR-REP-041), no un plazo fijo de 180 dias. (4) P-05: el formulario de
+      entrega pregunta "Retira otra persona?" Si o No; si es Si, el nombre, el
+      apellido y el telefono de quien retira son obligatorios. No se piden el
+      vinculo, el DNI ni otra identificacion, ni una autorizacion formal. Que
+      retire otra persona no modifica ni anula la garantia. Quien retiro queda
+      registrado en la Orden y en el comprobante correspondiente.
+    implementation:
+      status: NO_IMPLEMENTADO
+      gap: "bloque 4 de rt-rma-mvp docs/ajustes-funcionales-discovery.md: los datos de la empresa no se editan, los Terminos estan fijos en el frontend (180 dias y anulacion por retiro de un tercero) y quien retira no se registra"
 
   # ------------------------------------------------------------------ Baseline y sincronizacion
   - id: DC01
@@ -2502,7 +2742,7 @@ open_items:
   - id: ABI-41
     title: Hasta cuando se pueden corregir los datos del ingreso
     impact: POSTERIOR
-    decisions: [DEC-MI-07]
+    decisions: [DEC-MI-07, DEC-AJ-06]
     rules: [BR-REP-046]
     nodes: [PROC-REP-030, PROC-REP-032]
     features: [FEAT-REP-001]
@@ -2510,7 +2750,10 @@ open_items:
       DEC-MI-07 decide quien corrige los datos del ingreso, con motivo y
       auditoria, y que la correccion no altera los comprobantes emitidos, pero
       no hasta que momento de la Orden se admite (por ejemplo, hasta la
-      entrega) ni si cambia segun el dato.
+      entrega) ni si cambia segun el dato. Cerrado en parte: DEC-AJ-06
+      (23/11/2026) lo decidio para el IMEI, que se registra hasta la entrega,
+      tambien con la custodia confirmada, con motivo y auditoria. Sigue
+      abierto para los demas datos del ingreso.
 
   - id: ABI-42
     title: Que dato del catalogo de Ventas de Gestion RT es el Tipo de Equipo
