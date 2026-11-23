@@ -2,13 +2,13 @@
 
 La baseline funcional vigente es PROC-REP V1.4, aprobada en DC01 y sincronizada desde `rt-rma-app` (DC02):
 
-- Commit de origen: `713a9b972a102fc928d54b7c20eadee25bead68d` (rama `spec/ajustes-funcionales`, local, sin publicar: DEC-AJ-01 a 09, ajustes funcionales del feedback de UAT, las nueve implementadas, sobre `spec/configuracion-v2` `7fb75cd`, publicada, con DEC-CFG-01 a 08 y ABI-53, Configuración v2, y el estado de implementación de la etapa 1 de Reparación RT, sobre `spec/reparacion-rt` `168618a`, con DEC-RT-01 a 07 y BR-REP-050, sobre `spec/ux-recepcion` `ebd0840`, con DEC-UX-01 a 14, DEC-MI-01 a 16, DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
+- Commit de origen: `a2c64f349ccce4bf19da474f8a77884b1df14f76` (rama `spec/ajustes-funcionales`, local, sin publicar: DEC-AJ-01 a 09, ajustes funcionales del feedback de UAT, las nueve implementadas, y DEC-AJ-10 a 14, iteración 2, aprobadas y sin implementar, sobre `spec/configuracion-v2` `7fb75cd`, publicada, con DEC-CFG-01 a 08 y ABI-53, Configuración v2, y el estado de implementación de la etapa 1 de Reparación RT, sobre `spec/reparacion-rt` `168618a`, con DEC-RT-01 a 07 y BR-REP-050, sobre `spec/ux-recepcion` `ebd0840`, con DEC-UX-01 a 14, DEC-MI-01 a 16, DC31, DEC-IT1-01 a 05 y la etiqueta `v1.4-baseline`).
 - Contenido funcional aprobado en `b6cc3a5`.
 - Manifiesto de procedencia: `business/FUNCTIONAL_SOURCE.json`.
 
 Este documento lista lo que el producto todavía no hace como dice la baseline, y lo que el producto hace sin que la baseline lo defina. **No son fallas de la sincronización documental**: la copia de `business/` es idéntica a la fuente. Son trabajo de implementación o decisiones pendientes.
 
-DC02 no modificó servicios, dominio, endpoints ni frontend. El código evaluado es el de `mvp-v2` en `f270a84`, salvo las decisiones de la sección G, revisadas en la rama `feat/iteracion-1-alineacion-v14` (iteración 1, 11/11/2026), las de la sección H, revisadas en `feat/macro-v14` (macroiteración, 12/11/2026), las de la sección I, revisadas en `feat/macro-integral` (macroiteración integral, 13/11/2026), y DEC-UX-01 a 14, revisadas en `feat/ux-recepcion` (iteración de UX de Recepción, 16/11/2026; DEC-UX-08, 13 y 14 implementadas, con ABI-44 y ABI-45 cerrados), y DEC-AJ-01 a 09, revisadas en `feat/ajustes-funcionales-uat` (ajustes funcionales del feedback de UAT, 23/11/2026: las nueve implementadas en la iteración 1, ver la sección J).
+DC02 no modificó servicios, dominio, endpoints ni frontend. El código evaluado es el de `mvp-v2` en `f270a84`, salvo las decisiones de la sección G, revisadas en la rama `feat/iteracion-1-alineacion-v14` (iteración 1, 11/11/2026), las de la sección H, revisadas en `feat/macro-v14` (macroiteración, 12/11/2026), las de la sección I, revisadas en `feat/macro-integral` (macroiteración integral, 13/11/2026), y DEC-UX-01 a 14, revisadas en `feat/ux-recepcion` (iteración de UX de Recepción, 16/11/2026; DEC-UX-08, 13 y 14 implementadas, con ABI-44 y ABI-45 cerrados), y DEC-AJ-01 a 09, revisadas en `feat/ajustes-funcionales-uat` (ajustes funcionales del feedback de UAT, 23/11/2026: las nueve implementadas en la iteración 1, ver la sección J), y DEC-AJ-10 a 14, revisadas en la misma rama (iteración 2, 23/11/2026: aprobadas antes del código y pendientes de los bloques 5 a 8, en la sección B).
 
 Fuente de los estados de implementación: `business/decisions/decision-log-v1.4.yaml` (`implementation`). Las rutas de evidencia son relativas a `app/backend/app`, salvo que digan otra cosa.
 
@@ -18,19 +18,24 @@ Fuente de los estados de implementación: `business/decisions/decision-log-v1.4.
 
 Las tres que figuraban (DC06, DC07 y DC11) se alinearon en la iteración 1: ver la sección G.
 
-## B. Decisiones no implementadas (10)
+## B. Decisiones no implementadas (15)
 
 | Decisión | Qué dice la baseline | Situación en el producto | Pendientes |
 |---|---|---|---|
 | DC19 | Registrar Minorista/Mayorista sin cambios automáticos de precio | `domain/models/personas.py` (Cliente sin clasificación) | - |
 | DC27C | Supabase Auth; usuarios, roles y permisos en PostgreSQL | Sin autenticación | - |
-| DEC-UX-01 | Los modelos del catálogo técnico vienen de Ventas; se completan con una exportación nueva, sin inventar ni duplicar | El catálogo técnico es la copia de la exportación de Ventas del 21/10/2026 (36 modelos, sin la línea iPhone 18); el modelo que falta se carga a mano. Sin cambios de código | ABI-43 |
+| DEC-UX-01 | Los modelos del catálogo técnico vienen de Ventas; se completan con una exportación nueva, sin inventar ni duplicar | El catálogo técnico es la copia de la exportación de Ventas del 21/10/2026 (36 modelos, sin la línea iPhone 18); el modelo que falta se carga a mano. Sin cambios de código | ABI-43; el alta de modelos desde Configuración la decidió DEC-AJ-12 |
 | DEC-RT-01 | Reparación RT: leer los Productos de Gestión RT, copia de consulta y vínculos verificables con Equipos y Órdenes | Sin implementar: solo está el mecanismo común de copias del bloque C (`application/sincronizacion_origen.py`, `rma.sincronizacion_origen`), que la copia de Productos RT reutilizará | Etapa 1 de Reparación RT ([`docs/reparacion-rt-discovery.md`](../docs/reparacion-rt-discovery.md)); ABI-52 |
 | DEC-RT-02 | Un Producto no admite dos Órdenes abiertas vinculadas | Sin implementar (no hay vínculo Producto-Orden) | Etapa 2 |
 | DEC-RT-03 | Las coincidencias por referencia RT o IMEI son solo sugerencias; vincular exige validación explícita y registrada, exigida por el servidor | Sin implementar | Etapas 1 (sugerencias) y 2 (validación) |
 | DEC-RT-05 | La copia de Productos RT se sincroniza a pedido, controlada por Administración | Sin implementar | Etapa 1 |
 | DEC-RT-06 | Observaciones del equipo opcionales en RT_INTERNO | Sin implementar: la base exige `orden.falla_reportada` | Etapa 2 |
 | DEC-RT-07 | Consultan Reparación RT Recepción, Coordinación RMA y Administración | Sin implementar (no hay módulo) | Etapa 1 |
+| DEC-AJ-10 | Un solo Ajuste Comercial con acción unificada y permisos por clase (cambiar o quitar exige los dos); corregir y revertir sin borrar registros, con el permiso «Revertir un ajuste comercial», inicialmente solo de Administración; nunca después de la entrega; evidencia del precio original, el importe, el final y los recálculos; comprobantes con el ajuste por trabajo | Sin implementar: tres formularios; con `DESCUENTO` se reemplaza una cortesía; sin reversión ni corrección; `rma.descuento` sin copia de importes; `EV-REP-041` nunca se emite; el comprobante imprime una sola línea «Descuento» | Bloque 5 de [`docs/ajustes-funcionales-discovery.md`](../docs/ajustes-funcionales-discovery.md) (sección 11.1) |
+| DEC-AJ-11 | Stock mínimo opcional por insumo, contra el disponible; indicador, filtro, aviso en Inicio y sugerencia de reposición sin compras automáticas | Sin implementar: `insumo` sin mínimo; «Solo faltantes» y «Insumos negativos» miran un faltante que el trigger de PostgreSQL no admite | Bloque 6 |
+| DEC-AJ-12 | Precio por Tipo y Modelo de equipo (único o por modelo, sin respaldo); precio manual justificado y autorizado si falta el de catálogo; copia de nombre, modelo y precio en el Detalle; alta de modelos por Administración; cambio de modelo antes y después de autorizar | Sin implementar: precio único por tipo; `detalle_version` sin nombre ni modelo; `modelo_equipo` sale de un archivo fijo, sin alta | Bloque 7; ABI-43 (línea iPhone 18) |
+| DEC-AJ-13 | Importación de precios por modelo desde `.xlsx`, CSV o celdas pegadas, matriz por códigos, vista previa y todo o nada | Sin implementar: no hay importación, lector de planillas ni precio por modelo | Bloque 7 |
+| DEC-AJ-14 | Insumo = SKU real con categoría, subcategoría, fabricante, variante y modelos compatibles; la marca no cambia Tipo ni precio; pieza concreta elegida antes de reservar y sustitución trazada | Sin implementar: `insumo` sin clasificación ni compatibilidad; `tipo_reparacion_insumo` solo por seed, sin pantalla ni API; reserva y consumo siempre sobre ese `insumo_id` | Bloque 8 |
 | DC02 | `rt-rma-mvp/business` es una copia generada y verificada | **Implementada por esta sincronización.** El registro de `rt-rma-app` todavía dice NO_IMPLEMENTADO porque se evaluó antes; corresponde actualizarlo en la fuente | - |
 
 ## C. Decisiones implementadas en parte (4)

@@ -325,6 +325,11 @@ nodes:
       distinguido de un IMEI real y nunca reemplazado por un IMEI ficticio, y
       el IMEI real se registra despues, hasta la entrega, con motivo y
       auditoria (BR-REP-022).
+      DEC-AJ-12 (23/11/2026): el modelo del equipo determina el precio de
+      catalogo de los trabajos cuyo Tipo tiene precio por modelo (BR-REP-015).
+      Si el modelo cambia antes de autorizar los trabajos, su precio se vuelve
+      a determinar; despues de la autorizacion se conserva el precio
+      autorizado y se advierte el cambio de modelo.
     outputs:
       - Cliente identificado (existente reutilizado expresamente o nuevo), con su clasificacion
       - Equipo identificado (reutilizacion confirmada por Recepcion o Equipo nuevo), con su tp_id cuando proviene del catalogo
@@ -904,6 +909,12 @@ nodes:
       se cobra). Consolidacion V1.4 (UAT, iteracion 1): ademas de los tipos del
       catalogo, Recepcion puede cargar un Detalle "Otros - Reparacion no
       tipificada" con descripcion y precio manual (BR-REP-047).
+      DEC-AJ-12 (23/11/2026): cada trabajo toma el precio de su Tipo para el
+      modelo del equipo, sin un precio generico de respaldo; si falta el
+      precio de catalogo, se muestra y se puede continuar con un precio manual
+      con motivo, autorizado con el permiso que corresponde (BR-REP-015,
+      BR-REP-039), sin obligar a usar "Otros". El Detalle copia el nombre del
+      Tipo, el modelo y el precio autorizado.
     inputs:
       - Orden de Reparacion
     outputs:
@@ -944,6 +955,13 @@ nodes:
       precio snapshot existe en todo Detalle, cualquiera sea el origen: precio
       registrado no implica pago requerido (la condicion NO_COBRABLE del
       origen determina que no se cobra).
+      Ajustes funcionales, iteracion 2 (23/11/2026). DEC-AJ-12: el precio de
+      cada Detalle sale de su Tipo para el modelo del equipo y se copia con el
+      nombre del Tipo y el modelo; el tecnico no fija precios: un precio
+      manual, cuando falta el de catalogo, lo autoriza quien tiene el permiso
+      (BR-REP-039). DEC-AJ-14: al definir el trabajo se determinan los insumos
+      necesarios y se eligen las piezas concretas compatibles con el modelo
+      del equipo, antes de reservar (BR-REP-006).
     inputs:
       - Resultado de revision tecnica
     outputs:
@@ -972,6 +990,11 @@ nodes:
       tambien se reevalua para un Detalle nuevo o redefinido y autorizado
       despues de habilitar la Orden, sin reiniciar el ingreso ni invalidar los
       hitos previos (BR-REP-034).
+      DEC-AJ-14 (23/11/2026): cuando el Tipo declara requisitos por categoria
+      o subcategoria, la disponibilidad se consulta sobre las piezas concretas
+      elegidas, compatibles con el modelo del equipo (precision de
+      implementacion); sin requisitos, sobre los insumos previstos, como hasta
+      ahora. Un Detalle puede no requerir insumos o requerir varios.
     rules:
       - BR-REP-001
       - BR-REP-002
@@ -1156,6 +1179,13 @@ nodes:
       redundante (BR-REP-035); la autorizacion del cliente se pide
       igualmente (BR-REP-029). Agregar otros Detalles (PROC-REP-128) no
       invalida la autorizacion del Detalle original ni su definicion.
+      Ajustes funcionales, iteracion 2 (23/11/2026). DEC-AJ-12: la nueva
+      definicion copia el nombre del Tipo, el modelo y el precio autorizado
+      (catalogo del modelo o precio manual autorizado). DEC-AJ-10: si la
+      redefinicion cambia el importe efectivo de un Ajuste Comercial vigente,
+      el recalculo queda registrado con su causa, sin crear un ajuste nuevo
+      (BR-REP-016). DEC-AJ-14: los insumos necesarios y las piezas elegidas se
+      vuelven a determinar para la nueva definicion.
     inputs:
       - Resultado de revision o evaluacion tecnica del Detalle
     outputs:
@@ -1614,6 +1644,12 @@ nodes:
       Ejecucion sobre un equipo cuya recepcion no esta confirmada o que se
       registro como no recibido; el rechazo no genera Ejecucion, reservas ni
       movimientos (BR-REP-033). RT_INTERNO conserva su politica de recepcion.
+      DEC-AJ-14 (23/11/2026): la reserva se hace sobre las piezas concretas
+      elegidas antes de este paso, y no se inicia una Ejecucion con un
+      requisito sin pieza elegida (precision de implementacion). Nunca hay dos
+      reservas sobre la misma disponibilidad. Despues de reservar y antes de
+      consumir, sustituir una pieza libera la reserva anterior y reserva la
+      nueva en una sola operacion, con motivo (BR-REP-005).
     rules:
       - BR-REP-006
       - BR-REP-028
@@ -2086,6 +2122,10 @@ nodes:
       quien retiro el equipo, los datos de la empresa que configura
       Administracion y la version de los terminos y condiciones que uso, que
       conserva.
+      DEC-AJ-10 (23/11/2026): el comprobante muestra por trabajo el precio
+      original, el descuento o la cortesia aplicada y el precio final; el
+      usuario, la fecha y el motivo quedan solo en el registro interno
+      (BR-REP-031).
     outputs:
       - Comprobante de entrega y garantia con desglose de Detalles/Ajustes/pagos/saldo y los terminos y condiciones
       - Garantia de reparacion (unicamente si hubo reparacion), con plazo definitivo y vencimiento por Detalle, dentro del mismo comprobante
@@ -2375,6 +2415,8 @@ nodes:
       vinculo, DNI ni otra identificacion ni una autorizacion formal. Quien
       retiro queda registrado en la Orden y en el comprobante; que retire
       otra persona no modifica ni anula la garantia (BR-REP-041).
+      DEC-AJ-10 (23/11/2026): despues de la entrega no se agregan, corrigen ni
+      revierten Ajustes Comerciales (BR-REP-016).
     outputs:
       - Devolucion fisica registrada (fecha/hora, usuario que entrega y persona que recibe) cuando corresponde
     rules:

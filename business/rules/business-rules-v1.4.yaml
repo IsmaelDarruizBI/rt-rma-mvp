@@ -547,6 +547,28 @@ rules:
       todo cambio de configuracion (BR-REP-040); un cambio posterior no altera
       las condiciones ya registradas en los Detalles. La reparacion no
       tipificada "Otros" toma un precio manual por Detalle (BR-REP-047).
+      DEC-AJ-12 (23/11/2026): el precio de catalogo de un trabajo es el de su
+      Tipo de Reparacion para el Modelo de equipo. Cada Tipo tiene precio
+      unico o precios especificos por modelo, y con precio por modelo nunca se
+      aplica en silencio un precio generico de respaldo. La marca, el
+      fabricante o la calidad del insumo no cambian el precio de venta
+      (DEC-AJ-14); la garantia, el puntaje y las Mesas de trabajo siguen
+      siendo del Tipo. Si falta el precio de catalogo para la combinacion, se
+      puede continuar con un precio manual con motivo obligatorio, autorizado
+      mediante un permiso configurable (BR-REP-039): se muestra que falta el
+      precio de catalogo, se registran precio, motivo, usuario y fecha, el
+      trabajo conserva el origen manual del precio y el catalogo no cambia; no
+      obliga a usar "Otros" (BR-REP-047) ni permite eludir los controles del
+      Ajuste Comercial (BR-REP-016). La copia de cada Detalle nuevo incluye
+      ademas el nombre del Tipo de Reparacion, el modelo aplicable y el precio
+      autorizado; los Tipos historicos no se convierten y un cambio posterior
+      del catalogo no modifica las Ordenes anteriores. Si cambia el modelo del
+      equipo antes de autorizar el trabajo, el precio se vuelve a determinar
+      para el modelo nuevo; despues de la autorizacion se conserva el precio
+      autorizado, se advierte el cambio de modelo y modificar ese precio usa
+      el circuito de autorizacion y trazabilidad vigente. Los precios por
+      modelo pueden importarse en forma masiva (BR-REP-040, DEC-AJ-13) sin
+      cambiar los precios registrados en Ordenes.
     status: approved
 
   - id: BR-REP-016
@@ -598,6 +620,31 @@ rules:
       NO_COBRABLE, sin entrar en PROC-REP-266. El precio snapshot de sus
       Detalles existe igual (dato historico, de costo y de valoracion del
       trabajo): precio registrado no implica pago requerido.
+      Ajustes funcionales, iteracion 2 (DEC-AJ-10, 23/11/2026). El Ajuste
+      Comercial sigue siendo una unica entidad para DESCUENTO y CORTESIA, que
+      se registra con una sola accion; se conservan los permisos por clase, y
+      cambiar o quitar un ajuste exige el permiso de la clase que se reemplaza
+      y el de la nueva: el permiso del DESCUENTO no modifica una CORTESIA. Un
+      ajuste equivocado se corrige o se revierte con acciones explicitas, sin
+      eliminar registros: el ajuste revertido deja de contar y vuelve a regir
+      el anterior de ese destino, si existe; corregir es revertir y registrar
+      el ajuste correcto en una sola operacion, enlazados. Las dos acciones
+      exigen el permiso "Revertir un ajuste comercial" (BR-REP-039) y
+      registran usuario, fecha y hora, motivo y operacion. No se admite una
+      correccion o reversion que deje pagos, devoluciones o saldos
+      inconsistentes: se respetan los topes de esta regla, los Pagos, las
+      devoluciones y las copias del recargo no se modifican, y si queda saldo
+      a favor se devuelve antes de entregar (BR-REP-038). Despues de entregar
+      la Orden no se agregan, corrigen ni revierten ajustes. Cada registro
+      conserva el precio original al que se aplica, el importe del ajuste, el
+      precio final, el motivo, el usuario y la fecha y hora; si una
+      redefinicion o una cancelacion cambia el importe efectivo de un ajuste
+      vigente, el recalculo queda registrado con su causa y sus valores
+      anteriores y nuevos, sin crear un ajuste nuevo. Cada alta, cambio,
+      retiro, correccion y reversion queda en el historial de la Orden. Los
+      comprobantes muestran por trabajo el precio original, el descuento o la
+      cortesia y el precio final (BR-REP-031), y el saldo es el mismo en todos
+      los calculos.
     status: approved
 
   - id: BR-REP-017
@@ -1233,6 +1280,11 @@ rules:
       garantia aparte. Los documentos ya emitidos no cambian. Los
       comprobantes muestran los datos de la empresa que configura
       Administracion.
+      DEC-AJ-10 (23/11/2026): los comprobantes que se emiten desde entonces
+      muestran por trabajo el precio original, el descuento o la cortesia
+      aplicada y el precio final; el usuario, la fecha y la justificacion
+      quedan en el registro interno, sin imprimirse. Los ya emitidos no
+      cambian.
     status: approved
 
   - id: BR-REP-032
@@ -1816,6 +1868,20 @@ rules:
       devuelve la consulta de la Orden, que sigue exigiendo su propio
       permiso. DEC-AJ-09 (23/11/2026): los datos de la empresa y los terminos
       y condiciones los administra Administracion.
+      Ajustes funcionales, iteracion 2 (23/11/2026). DEC-AJ-10: "Revertir un
+      ajuste comercial", que habilita corregir y revertir un Ajuste Comercial,
+      es un permiso configurable que inicialmente tiene solo Administracion;
+      cambiar o quitar un ajuste exige el permiso de la clase que se reemplaza
+      y el de la nueva. DEC-AJ-12: autorizar un precio manual cuando falta el
+      precio de catalogo exige un permiso configurable, "Autorizar un precio
+      manual cuando falta el precio de catalogo", que inicialmente tienen
+      Coordinacion RMA y Administracion; el Tecnico no fija precios (precision
+      de implementacion). DEC-AJ-14: elegir o sustituir la pieza concreta de
+      un trabajo corresponde inicialmente a Tecnico, Coordinacion RMA y
+      Administracion, con un permiso nuevo o existente (precision de
+      implementacion). DEC-AJ-11 a 13: el stock minimo de los insumos, el alta
+      de modelos de equipo y los precios por modelo y su importacion se
+      administran desde Configuracion, con permisos y auditoria.
     status: approved
 
   - id: BR-REP-040
@@ -1862,6 +1928,26 @@ rules:
       direccion, telefono, horario de atencion y pie de comprobante) y
       administra desde Configuracion los terminos y condiciones, versionados:
       cada documento emitido conserva la version que uso.
+      Ajustes funcionales, iteracion 2 (23/11/2026). DEC-AJ-12: el precio de
+      un Tipo de Reparacion es unico o por Modelo de equipo, y Administracion
+      registra modelos nuevos desde Configuracion, con auditoria, sin depender
+      solo de una lista fija y preservando el catalogo existente; el historial
+      de precios incluye los precios por modelo. DEC-AJ-13: los precios por
+      modelo se importan desde Excel, CSV o celdas pegadas, como una matriz de
+      modelos por Tipos identificados por codigos estables, con descarga de
+      una plantilla con los precios actuales; solo de Tipos y modelos
+      existentes, sin crearlos; las celdas vacias no cambian nada; con una
+      vista previa de los cambios, los errores, los duplicados y los permisos
+      que distingue los precios nuevos de las actualizaciones; todo o nada;
+      sin modificar los precios registrados en Ordenes y con auditoria de la
+      importacion y de cada cambio. La primera implementacion es para iPhone;
+      los precios multimarca quedan fuera de la importacion. DEC-AJ-11: cada
+      insumo tiene un stock minimo opcional que se configura desde
+      Configuracion, Insumos, con permisos y auditoria. DEC-AJ-14: los insumos
+      se clasifican gradualmente (categoria, subcategoria, marca o fabricante,
+      variante y modelos compatibles), sin mover stock, y cada Tipo puede
+      declarar sus requisitos de insumos por categoria o subcategoria
+      (precision de implementacion).
     status: approved
 
   - id: BR-REP-041
@@ -2092,6 +2178,10 @@ rules:
       cualquier Mesa de trabajo. La futura administracion de tipos de
       reparacion (BR-REP-040) podra administrar esta opcion sin cambiar este
       comportamiento.
+      DEC-AJ-12 (23/11/2026): "Otros" se mantiene sin cambios. Ya no es la
+      unica salida cuando falta el precio de catalogo de un Tipo para el
+      modelo del equipo: el trabajo puede conservar su Tipo con un precio
+      manual autorizado (BR-REP-015).
     status: approved
 
   - id: BR-REP-048
@@ -2125,6 +2215,12 @@ rules:
       desde una exportacion nueva, sin inventar ni duplicar modelos (ABI-43).
       DEC-RT-01: ademas de este catalogo, RMA lee los Productos de Gestion RT
       para Reparacion RT (BR-REP-050), con la misma politica de copia.
+      DEC-AJ-12 (23/11/2026): ademas de completarse desde Ventas,
+      Administracion registra modelos nuevos en el catalogo tecnico desde
+      Configuracion, con auditoria; el catalogo de productos de Ventas sigue
+      siendo una copia de solo lectura. Se revisa la integracion del catalogo
+      tecnico con los modelos de Gestion RT; la carga de la linea iPhone 18
+      sigue pendiente (ABI-43).
     status: approved
 
   - id: BR-REP-049
@@ -2185,6 +2281,42 @@ rules:
       proveedores y las solicitudes y ordenes de compra los genera el
       sistema (BR-REP-040). Organizar los insumos en una jerarquia y su
       compatibilidad con modelos de equipo queda pendiente.
+      Ajustes funcionales, iteracion 2 (23/11/2026). DEC-AJ-11: cada insumo
+      puede tener un stock minimo opcional, que se compara con el stock
+      disponible y no solo con el fisico; se distinguen stock suficiente, bajo
+      minimo y bajo minimo con reposicion solicitada, y el minimo no se
+      confunde con el stock negativo ni con un faltante. Inventario muestra el
+      estado con un filtro propio, Inicio avisa y se sugiere la cantidad a
+      reponer hasta el minimo, considerando la disponibilidad y sin duplicar
+      las solicitudes de reposicion existentes; nunca se crea una Orden de
+      compra automaticamente. Los insumos sin minimo siguen funcionando igual.
+      DEC-AJ-14 decide la jerarquia y la compatibilidad pendientes: cada
+      insumo es un repuesto o SKU real con su stock, lotes, costos,
+      movimientos, reservas y consumos, sin agrupar existencias de marcas
+      distintas, y se clasifica por categoria, subcategoria, marca o
+      fabricante, variante y modelos de equipo compatibles (sin restriccion de
+      modelo, compatible con todos cuando corresponde), en forma gradual. El
+      costo pertenece al insumo y puede variar entre marcas; el precio de
+      venta no (BR-REP-015). La clasificacion no mueve ni recalcula
+      existencias ni altera lotes, movimientos, compras o consumos anteriores.
+      Las sugerencias de compra por faltante usan la pieza elegida del trabajo
+      (precision de implementacion). La factibilidad, la reserva y los
+      movimientos (BR-REP-002, BR-REP-006 y BR-REP-005, sin cambios en su
+      texto) se aplican a las piezas concretas: el Tipo puede declarar
+      requisitos (una categoria o subcategoria y una cantidad) junto a los
+      insumos previstos concretos, y para cada requisito se elige, durante la
+      definicion o la preparacion del trabajo y antes de reservar, una pieza
+      compatible con el modelo del equipo (la elige el sistema si hay una sola
+      y, si no, quien prepara el trabajo); la factibilidad y la reserva
+      trabajan sobre las piezas elegidas, la reserva sigue ocurriendo al
+      iniciar la Ejecucion y no se inicia una Ejecucion con un requisito sin
+      pieza elegida (precision de implementacion). Nunca hay dos reservas
+      simultaneas sobre la misma disponibilidad. Antes de reservar, sustituir
+      una pieza cambia la eleccion, con motivo y registro; despues de reservar
+      y antes de consumir, la liberacion y la reserva nueva son una sola
+      operacion, con motivo. El consumo, la liberacion y el desperdicio quedan
+      en la pieza real, con su lote y su costo. Un trabajo puede no requerir
+      insumos o requerir varios; sin requisitos, todo sigue como hasta ahora.
     status: approved
 
   - id: BR-REP-050

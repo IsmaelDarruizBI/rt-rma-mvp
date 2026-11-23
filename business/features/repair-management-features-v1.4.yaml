@@ -234,6 +234,10 @@ features:
           funcionalidades del equipo (Si o No, con observaciones opcionales),
           como dato informativo que no es el check-in de entrega ni cambia la
           garantia (BR-REP-045, DEC-AJ-07)
+        - Ofrecer los trabajos con el precio de su Tipo para el modelo del
+          equipo, sin un precio generico de respaldo, y permitir continuar con
+          un precio manual justificado y autorizado cuando falta el precio de
+          catalogo, sin obligar a usar Otros (BR-REP-015, DEC-AJ-12)
 
       excludes:
         - Definir Detalles de Reparacion ni su origen de diagnostico
@@ -491,6 +495,11 @@ features:
         - Crear la Orden y generar el comprobante en una sola accion, con el
           canal presencial preseleccionado y editable, e imprimir desde el
           visor como accion principal (BR-REP-028, BR-REP-046, DEC-AJ-08)
+        - Tomar el precio del Tipo para el modelo del equipo al definir o
+          redefinir un Detalle y copiar el nombre del Tipo, el modelo y el
+          precio autorizado; si el modelo cambia antes de autorizar, volver a
+          determinar el precio y, despues, conservarlo y advertir el cambio
+          (BR-REP-015, DEC-AJ-12)
 
       excludes:
         - Validar disponibilidad de recursos o insumos (FEAT-REP-003)
@@ -640,6 +649,14 @@ features:
           (BR-REP-049, DEC-MI-10)
         - Recibir como ingreso de stock lo que registra una recepcion de compra,
           con su costo historico (BR-REP-049, DEC-MI-09)
+        - Consultar la disponibilidad de las piezas concretas elegidas para
+          los requisitos del Tipo, compatibles con el modelo del equipo; sin
+          requisitos, la de los insumos previstos (BR-REP-002, DEC-AJ-14)
+        - Comparar el stock minimo opcional de cada insumo con el disponible,
+          distinguir bajo minimo y bajo minimo con reposicion solicitada en
+          Inventario, con un filtro, avisar en Inicio y sugerir la cantidad a
+          reponer sin duplicar solicitudes ni crear compras automaticas
+          (BR-REP-049, DEC-AJ-11)
 
       excludes:
         - Decidir la autorizacion del cliente (FEAT-REP-002)
@@ -911,6 +928,11 @@ features:
         - Recalcular la situacion tecnica de la Orden mediante el
           resolver (PROC-REP-211) e informar si corresponde continuar
           con otro Detalle
+        - Elegir antes de reservar la pieza concreta compatible con el modelo
+          para cada requisito del Tipo, reservar las piezas elegidas al
+          iniciar la Ejecucion y sustituirlas con motivo y trazabilidad,
+          liberando y reservando en una sola operacion cuando ya estaban
+          reservadas (BR-REP-005, BR-REP-006, DEC-AJ-14)
 
       excludes:
         - Comprar o reponer inventario
@@ -1112,6 +1134,11 @@ features:
           comprobante final hasta que el Saldo sea 0
         - Materializar el resultado comercial final en el comprobante
           (PROC-REP-280), compartido con FEAT-REP-008
+        - Registrar el Ajuste Comercial en una sola accion con el permiso de
+          cada clase; corregirlo o revertirlo sin borrar registros, con el
+          permiso de reversion y nunca despues de la entrega; conservar el
+          precio original, el importe y el precio final y registrar los
+          recalculos por redefinicion o cancelacion (BR-REP-016, DEC-AJ-10)
 
       excludes:
         - Impuestos, recargos u otros conceptos comerciales futuros entre
@@ -1256,6 +1283,9 @@ features:
           actor)
         - Registrar estado ENTREGADA para los flujos correspondientes
         - Informar el resultado a Gestion RT para equipos internos
+        - Mostrar en los comprobantes, por trabajo, el precio original, el
+          descuento o la cortesia y el precio final, sin imprimir usuario ni
+          fecha (BR-REP-031, DEC-AJ-10)
 
       excludes:
         - Diagnosticar o ejecutar Detalles de Reparacion
@@ -1546,13 +1576,25 @@ features:
           comprobantes (nombre comercial, direccion, telefono, horario y pie)
           y administrar los terminos y condiciones versionados, que cada
           documento conserva en la version que uso (BR-REP-040, DEC-AJ-09)
+        - Definir si el precio de cada Tipo de Reparacion es unico o por
+          Modelo de equipo, cargar los precios por modelo y dar de alta
+          modelos de equipo desde Configuracion, con auditoria (BR-REP-040,
+          DEC-AJ-12)
+        - Importar precios por modelo desde Excel, CSV o celdas pegadas, como
+          matriz identificada por codigos, con plantilla descargable, vista
+          previa y aplicacion todo o nada, solo para Tipos y modelos
+          existentes (BR-REP-040, DEC-AJ-13)
+        - Clasificar gradualmente los insumos por categoria, subcategoria,
+          marca o fabricante, variante y modelos compatibles, declarar los
+          requisitos de insumos de cada Tipo y configurar el stock minimo
+          opcional de cada insumo (BR-REP-049, DEC-AJ-11, DEC-AJ-14)
       excludes:
         - Modificar condiciones ya registradas en Ordenes, Detalles o
           documentos
         - Mantener el catalogo de productos, que pertenece a Ventas
-        - Organizar los insumos en una jerarquia (categorias, subcategorias,
-          productos y tipos de insumo) y su compatibilidad con modelos de
-          equipo, pendiente de decision (ABI-53)
+        - Mover o repartir el stock existente al clasificar los insumos
+          (DEC-AJ-14, que decidio la jerarquia pendiente en ABI-53)
+        - Crear Tipos de Reparacion o modelos al importar precios (DEC-AJ-13)
         - Implementar la administracion sobre los archivos JSON del MVP (se
           implementa sobre la persistencia definitiva, DC28)
 
@@ -1649,6 +1691,11 @@ features:
           de la Orden", inicialmente de Tecnico, Coordinacion RMA y
           Administracion; es presentacion y no restringe la consulta de la
           Orden (BR-REP-039, DEC-AJ-01)
+        - Exigir el permiso Revertir un ajuste comercial (inicialmente
+          Administracion) para corregir y revertir ajustes, y un permiso
+          configurable para autorizar un precio manual cuando falta el precio
+          de catalogo (inicialmente Coordinacion RMA y Administracion)
+          (BR-REP-039, DEC-AJ-10, DEC-AJ-12)
       excludes:
         - Permisos individuales por usuario; los permisos se asignan solo por
           rol (DEC-CFG-02)

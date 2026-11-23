@@ -6714,6 +6714,12 @@ scenarios:
       por debajo de lo pagado sigue el mismo circuito: el saldo a favor
       remanente se devuelve antes de entregar. Un envio duplicado no registra
       un segundo ajuste ni una segunda devolucion.
+      DEC-AJ-10 (23/11/2026): si la cortesia se otorgo por error, quien tiene
+      el permiso "Revertir un ajuste comercial" (inicialmente Administracion)
+      puede revertirla o corregirla antes de la entrega, sin borrar el
+      registro: vuelve a regir el ajuste anterior de la Orden, si existe, y el
+      saldo se recalcula sin modificar los Pagos ni las devoluciones
+      registradas. Despues de la entrega no se ajusta.
 
     trigger:
       node: PROC-REP-265
