@@ -4,7 +4,9 @@
 >
 > **Aprobado (23/11/2026):** la planificación general y la secuencia de los 8 bloques (sección 3).
 >
-> **En revisión:** D-01 y D-02, detalladas en la sección 4.1. El bloque 1 empieza cuando se aprueben.
+> **Aprobado (23/11/2026):** D-01, alternativa B, y D-02, alternativa A (sección 4.1).
+>
+> **Bloque 1:** implementado en local, en espera de la validación manual (sección 8).
 >
 > **Pendiente:** D-07; no está aprobado que la verificación inicial sea solo informativa.
 >
@@ -416,7 +418,7 @@ Solo las que hay que resolver antes de implementar cada bloque. Las de los bloqu
   - si marca y variante cambian el costo o la garantía;
   - si la reserva es por pieza concreta o por genérico compatible.
 
-### 4.1 D-01 y D-02 en detalle (para aprobar antes del bloque 1)
+### 4.1 D-01 y D-02 en detalle (aprobadas el 23/11/2026)
 
 #### D-01 (BF-07). Información técnica en el detalle de la Orden
 
@@ -518,6 +520,54 @@ Pruebas de desarrollo: solo las de los componentes tocados. `ruff`; `pytest` de 
 | 8 | Según D-14 | Inventario, compras, lotes, reservas y PostgreSQL | Los insumos se clasifican y filtran por categoría y modelo, y el stock y los costos siguen conciliados |
 
 **Mientras se desarrolla:** commits chicos por funcionalidad, sin push salvo autorización y sin desplegar. Cada bloque cierra con la validación manual en local. El QA integral, los E2E y el despliegue se hacen al final (pasos 6 y 7).
+
+## 8. Bloque 1: implementación en local (23/11/2026)
+
+Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. No hay migraciones ni cambios en `business/`.
+
+### BF-12. Autorización de trabajos adicionales (`3788aa0`)
+
+- **Defecto corregido:** con otro trabajo en ejecución, la autorización pendiente de un adicional es un aviso de la situación (`AUTORIZACION_PENDIENTE`), no la situación principal. El campo `situacion.roles`, del que sale el filtro «Pendientes de mi sector», se calculaba solo con la situación principal. Por eso Recepción no veía la Orden en el filtro, aunque sí en su bandeja de autorizaciones.
+- **Corrección:** se suman al sector los roles de ese aviso (`application/situacion.py`, `_AVISOS_DEL_SECTOR`). Los demás avisos no cambian.
+- **Autorización por origen:** sin cambios (D-02, alternativa A).
+- **Prueba:** `tests/test_adicional_pendiente_sector.py`, 3 casos. Recorre el adicional durante una ejecución, el filtro, el rechazo del inicio con 409, la autorización y el inicio, y también el rechazo del adicional. Sin la corrección, falla.
+
+### BF-17. Inicio de la garantía (`2f1a342` y `5a7fbd8`)
+
+- **Estado:** la garantía ya empezaba en la entrega efectiva.
+- **Inconsistencia corregida:** el certificado de garantía y el comprobante final tomaban `orden.entrega.fecha` sin el respaldo del historial (PROC-REP-270) que sí usan `fecha_de_entrega()`, el reclamo RMA y `{garantia_hasta}`. Ahora los tres usan la misma función (`services/documentos.py`).
+- **Plazos y alcance:** sin cambios.
+- **Prueba:** `tests/test_garantia_desde_entrega.py`, con una Orden sin registro de entrega pero con el paso 270. Sin la corrección, falla.
+
+### BF-07. Información técnica según permiso (`8980e52`)
+
+- **Permiso:** `DETALLE_TECNICO_CONSULTAR`, «Consultar la información técnica de la Orden», en el grupo «Consultas». Predeterminado para Técnico, Coordinación RMA y Administración, y configurable desde Configuración. No necesita fila en `rma.permiso` ni migración.
+- **Se oculta sin el permiso:**
+  - antecedentes del equipo;
+  - ejecuciones e insumos, con sus devoluciones;
+  - los insumos previstos y las ejecuciones de cada trabajo;
+  - los bloques técnicos, en la nueva sección «Datos técnicos».
+- **Sigue visible:**
+  - el resultado técnico, el estado y el precio de cada trabajo;
+  - el historial de eventos, en su propia sección «Historial»;
+  - cliente y equipo, fotos, autorización, comunicaciones, cobros y documentos.
+- **«Corregir la identidad»:** pasa a «Cliente y equipo». La identificación del equipo al ingresar no cambia.
+- **Pantallas:** `features/ordenes-reparacion/PanelOrdenes.tsx`, `DetalleOrden.tsx` y `detalleTecnico.ts`, una función pura con su prueba `tests/detalle-tecnico.test.ts`.
+- **Prueba existente cambiada:** la guarda `test_ningun_permiso_queda_sin_uso` (`tests/test_matriz_permisos.py`) ahora admite permisos de solo presentación (`permisos.SOLO_PRESENTACION`), siempre que el frontend los use y ningún endpoint los exija.
+- **Limitación:** es **presentación, no seguridad**. `GET /api/orders/{id}` y los endpoints de antecedentes, ejecuciones e inventario siguen devolviendo esos datos a quien consulta la Orden (`ORDENES_CONSULTAR`, `ANTECEDENTES_CONSULTAR` e `INVENTARIO_CONSULTAR`). Ocultarlos en la API sería otra decisión, fuera del alcance aprobado.
+
+### Pruebas ejecutadas (focalizadas)
+
+| Ámbito | Resultado |
+|---|---|
+| Backend: `test_adicional_pendiente_sector`, `test_situacion_operativa`, `test_bandejas`, `test_macro_v14`, `test_autorizacion_cliente` y `test_autorizacion_cliente_servicios` | 120 pasan |
+| Backend: `test_garantia_desde_entrega`, `test_documentos_custodia_entrega`, `test_garantia_checkin`, `test_politica_garantia`, `test_reclamos_garantia` y `test_comunicaciones` | 52 pasan |
+| Backend: `test_matriz_permisos` y `test_roles_permisos` | 25 pasan |
+| Backend: `ruff check` y formato | Limpios |
+| Frontend: `typecheck`, `npm test` y `npm run build` | Pasan (201 pruebas, incluidas las 4 nuevas) |
+| Arranque | Backend local con `/health` 200; el permiso aparece en el catálogo de Configuración; en la lista de usuarios, Recepción no lo tiene y Técnico, Coordinación y Administración sí |
+
+La suite completa, las pruebas de PostgreSQL y los E2E quedan para el QA integral.
 
 ## 6. Riesgos principales
 

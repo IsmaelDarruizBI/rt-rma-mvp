@@ -87,6 +87,14 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ## B. Últimos avances
 
+### Ajustes funcionales del feedback de UAT, bloque 1 en local (23/11/2026)
+
+- **Rama:** `feat/ajustes-funcionales-uat`, desde `mvp-v2` `82ebbb6`, con commits locales y sin desplegar.
+- **Plan:** BF-01 a BF-20 en 8 bloques, aprobados ([`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md)).
+- **Bloque 1:** BF-07 (información técnica según el permiso configurable `DETALLE_TECNICO_CONSULTAR`, solo presentación), BF-12 (el adicional pendiente suma a Recepción en «Pendientes de mi sector») y BF-17 (misma fecha de entrega en los documentos de garantía).
+- **Pruebas:** focalizadas y en verde.
+- **Falta:** la validación manual en local.
+
 ### Reparación RT etapa 1 + Configuración v2 en UAT (20/11/2026): UAT OPERATIVO
 
 Con autorización: publicación conjunta ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), secciones 12 y 12.1). Sin cambios en `main`, producción ni Gestión RT.
