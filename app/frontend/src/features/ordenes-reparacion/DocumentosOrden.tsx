@@ -49,6 +49,13 @@ import type {
 import { nombreEquipo } from "./catalogoEquipos";
 import { avisoDni, importesPresentados } from "./recepcionUx";
 import {
+  conAjustesPorTrabajo,
+  etiquetaClase,
+  lineasDeAjustes,
+  textoAjusteDocumento,
+  vigenteDelDestino,
+} from "./ajusteComercial";
+import {
   comprobanteGenerado,
   identificacionDelEquipo,
   textoVerificacion,
@@ -452,8 +459,8 @@ function FormularioComprobanteAutorizacion({
     (suma, detalle) => suma + Number(detalle.precio),
     0,
   );
-  // El descuento vigente se calcula sobre todos los trabajos; el
-  // comprobante lo aplica sobre lo autorizado (lo arma el backend).
+  // DEC-AJ-10: cada trabajo con su ajuste; el de la Orden se aplica sobre
+  // lo autorizado (lo arma el backend).
   const descuento = orden.resumen.descuento;
   const anterior = ultimoComprobanteAutorizacion(emitidos);
   return (
@@ -467,19 +474,53 @@ function FormularioComprobanteAutorizacion({
       <ul style={{ margin: "0 0 0.4rem", paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
         {autorizados.map((detalle) => (
           <li key={detalle.id}>
-            {detalle.tipo_reparacion_nombre} · {importe(detalle.precio)}
+            <TrabajoConAjuste orden={orden} detalle={detalle} />
           </li>
         ))}
       </ul>
       <p style={{ margin: "0 0 0.6rem", fontSize: "0.85rem" }}>
-        {descuento
-          ? `Subtotal autorizado: ${importe(String(subtotal))} · Descuento ${descuento.descripcion} (${descuento.motivo}).`
+        {descuento ||
+        (orden.resumen.ajustes_detalle ?? []).some((a) =>
+          autorizados.some((d) => d.id === a.detalle_id),
+        )
+          ? `Subtotal autorizado: ${importe(String(subtotal))}${
+              descuento
+                ? ` · ${etiquetaClase(descuento.clase)} de la Orden ${descuento.descripcion}`
+                : ""
+            }. El total lo calcula el comprobante.`
           : <>Total autorizado: <strong>{importe(String(subtotal))}</strong></>}
       </p>
       <Boton disabled={ocupado} onClick={onGenerar}>
         Generar comprobante de autorización
       </Boton>
     </Seccion>
+  );
+}
+
+/**
+ * DEC-AJ-10: un trabajo en la vista previa, con su ajuste vigente y su
+ * precio final (igual que en el comprobante que se va a emitir).
+ */
+function TrabajoConAjuste({
+  orden,
+  detalle,
+}: {
+  orden: Orden;
+  detalle: Orden["reparaciones_detail"][number];
+}) {
+  const ajuste = vigenteDelDestino(orden, detalle.id);
+  return (
+    <>
+      {detalle.tipo_reparacion_nombre} · {importe(detalle.precio)}
+      {ajuste && (
+        <>
+          {" "}
+          · {etiquetaClase(ajuste.clase)} {ajuste.descripcion} (−
+          {importe(ajuste.importe)}) · final{" "}
+          {importe(String(Number(detalle.precio) - Number(ajuste.importe)))}
+        </>
+      )}
+    </>
   );
 }
 
@@ -522,15 +563,15 @@ function FormularioComprobanteIngreso({
       <ul style={{ margin: "0 0 0.4rem", paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
         {trabajos.map((detalle) => (
           <li key={detalle.id}>
-            {detalle.tipo_reparacion_nombre} · {importe(detalle.precio)}
+            <TrabajoConAjuste orden={orden} detalle={detalle} />
           </li>
         ))}
       </ul>
       {resumen.descuento && (
         <p style={{ margin: "0 0 0.2rem", fontSize: "0.85rem" }}>
-          Subtotal {importe(resumen.subtotal)} · Descuento{" "}
-          {resumen.descuento.descripcion} (−{importe(resumen.descuento_aplicado)}
-          , {resumen.descuento.motivo})
+          Subtotal {importe(resumen.subtotal)} ·{" "}
+          {etiquetaClase(resumen.descuento.clase)} de la Orden{" "}
+          {resumen.descuento.descripcion} (−{importe(resumen.descuento.importe)})
         </p>
       )}
       <p style={{ margin: "0 0 0.4rem", fontSize: "0.85rem" }}>
@@ -1202,18 +1243,43 @@ function CuerpoRecepcion({ contenido }: { contenido: ContenidoRecepcion }) {
   );
 }
 
-/** Subtotal y descuento (si hay) y el total, al pie de los trabajos. */
+/**
+ * Subtotal y descuento (si hay) y el total, al pie de los trabajos.
+ *
+ * DEC-AJ-10: en los emitidos desde entonces (`ajustes`), el total de los
+ * ajustes de los trabajos (ya detallados en cada renglón) y el de la Orden
+ * en una línea aparte, con su clase y sin el motivo.
+ */
 function Totales({
   subtotal,
   descuento,
   total,
   etiquetaTotal,
+  ajustes,
 }: {
   subtotal: string | null | undefined;
   descuento: DescuentoEnDocumento | null | undefined;
   total: string;
   etiquetaTotal: string;
+  ajustes?: { etiqueta: string; importe: number }[] | null;
 }) {
+  if (ajustes) {
+    return (
+      <>
+        {ajustes.length > 0 && (
+          <Dato etiqueta="Subtotal" valor={importe(subtotal ?? total)} />
+        )}
+        {ajustes.map((linea) => (
+          <Dato
+            key={linea.etiqueta}
+            etiqueta={linea.etiqueta}
+            valor={`− ${importe(String(linea.importe))}`}
+          />
+        ))}
+        <Dato etiqueta={etiquetaTotal} valor={<strong>{importe(total)}</strong>} />
+      </>
+    );
+  }
   return (
     <>
       {descuento && (
@@ -1227,6 +1293,41 @@ function Totales({
       )}
       <Dato etiqueta={etiquetaTotal} valor={<strong>{importe(total)}</strong>} />
     </>
+  );
+}
+
+/**
+ * Los trabajos autorizados. DEC-AJ-10: en los emitidos desde entonces,
+ * con el precio original, el ajuste (clase y valor) y el precio final.
+ */
+function TablaAutorizados({
+  contenido,
+}: {
+  contenido: ContenidoIngreso | ContenidoAutorizacion;
+}) {
+  const porTrabajo = conAjustesPorTrabajo(contenido);
+  const conAjuste = porTrabajo && contenido.trabajos.some((t) => t.ajuste);
+  return (
+    <Tabla
+      columnas={
+        conAjuste
+          ? ["Trabajo", "Autorización", "Precio", "Ajuste", "Precio final"]
+          : ["Trabajo", "Autorización", "Precio"]
+      }
+      filas={contenido.trabajos.map((trabajo) => [
+        trabajo.nombre,
+        `${fechaHora(trabajo.autorizado_en)} · ${etiqueta(CANAL, trabajo.canal)}`,
+        importe(trabajo.precio),
+        ...(conAjuste
+          ? [
+              trabajo.ajuste
+                ? `${textoAjusteDocumento(trabajo.ajuste)} (− ${importe(trabajo.ajuste.importe)})`
+                : "—",
+              importe(trabajo.precio_final ?? trabajo.precio),
+            ]
+          : []),
+      ])}
+    />
   );
 }
 
@@ -1262,19 +1363,17 @@ function CuerpoIngreso({ contenido }: { contenido: ContenidoIngreso }) {
         }`}
       />
       <Titulo>Trabajos autorizados por el cliente</Titulo>
-      <Tabla
-        columnas={["Trabajo", "Autorización", "Precio"]}
-        filas={contenido.trabajos.map((trabajo) => [
-          trabajo.nombre,
-          `${fechaHora(trabajo.autorizado_en)} · ${etiqueta(CANAL, trabajo.canal)}`,
-          importe(trabajo.precio),
-        ])}
-      />
+      <TablaAutorizados contenido={contenido} />
       <Totales
         subtotal={contenido.subtotal}
         descuento={contenido.descuento}
         total={contenido.total}
         etiquetaTotal="Total autorizado"
+        ajustes={
+          conAjustesPorTrabajo(contenido)
+            ? lineasDeAjustes(contenido, contenido.trabajos)
+            : null
+        }
       />
       <p
         style={{
@@ -1312,19 +1411,17 @@ function CuerpoAutorizacion({
         valor={contenido.equipo.falla_reportada}
       />
       <Titulo>Trabajos autorizados por el cliente</Titulo>
-      <Tabla
-        columnas={["Trabajo", "Autorización", "Precio"]}
-        filas={contenido.trabajos.map((trabajo) => [
-          trabajo.nombre,
-          `${fechaHora(trabajo.autorizado_en)} · ${etiqueta(CANAL, trabajo.canal)}`,
-          importe(trabajo.precio),
-        ])}
-      />
+      <TablaAutorizados contenido={contenido} />
       <Totales
         subtotal={contenido.subtotal_autorizado}
         descuento={contenido.descuento}
         total={contenido.total_autorizado}
         etiquetaTotal="Total autorizado"
+        ajustes={
+          conAjustesPorTrabajo(contenido)
+            ? lineasDeAjustes(contenido, contenido.trabajos)
+            : null
+        }
       />
       {reemplazaA && (
         <p style={{ margin: "0.6rem 0 0", fontSize: "9pt", color: "#555" }}>
@@ -1388,6 +1485,12 @@ function CuerpoEntrega({
   const conGarantia = contenido.trabajos_realizados.some(
     (trabajo) => trabajo.garantia_dias !== undefined && trabajo.garantia_dias !== null,
   );
+  // DEC-AJ-10: precio, ajuste y precio final por trabajo (con el recargo
+  // incorporado a los dos precios, como siempre).
+  const conAjuste =
+    contenido.cobrable &&
+    conAjustesPorTrabajo(contenido) &&
+    contenido.trabajos_realizados.some((trabajo) => trabajo.ajuste);
   return (
     <>
       <Titulo>{devolucion ? "Devolución" : "Entrega"}</Titulo>
@@ -1420,6 +1523,7 @@ function CuerpoEntrega({
             "Trabajo",
             ...(conGarantia ? ["Garantía"] : []),
             ...(contenido.cobrable ? ["Importe"] : []),
+            ...(conAjuste ? ["Ajuste", "Precio final"] : []),
           ]}
           filas={contenido.trabajos_realizados.map((trabajo) => [
             trabajo.detalle_id,
@@ -1429,6 +1533,17 @@ function CuerpoEntrega({
               : []),
             ...(contenido.cobrable
               ? [importe(String(presentados.trabajos[trabajo.detalle_id] ?? 0))]
+              : []),
+            ...(conAjuste
+              ? [
+                  trabajo.ajuste
+                    ? `${textoAjusteDocumento(trabajo.ajuste)} (− ${importe(trabajo.ajuste.importe)})`
+                    : "—",
+                  conRecargo(
+                    trabajo.precio_final ?? trabajo.precio ?? "0",
+                    trabajo.recargo,
+                  ),
+                ]
               : []),
           ])}
         />
@@ -1475,6 +1590,11 @@ function CuerpoEntrega({
             descuento={contenido.descuento}
             total={String(presentados.total ?? 0)}
             etiquetaTotal="Total final"
+            ajustes={
+              conAjustesPorTrabajo(contenido)
+                ? lineasDeAjustes(contenido, contenido.trabajos_realizados)
+                : null
+            }
           />
           {contenido.pagos.map((pago) => (
             <Dato

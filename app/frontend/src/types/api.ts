@@ -376,6 +376,16 @@ export interface TextoLegal {
   publicado_por: string | null;
 }
 
+/**
+ * DEC-AJ-10 (D-10.5): un Ajuste Comercial en un comprobante: la clase,
+ * cómo se expresó y cuánto descuenta (sin motivo, usuario ni fecha).
+ */
+export interface AjusteEnDocumento {
+  clase: ClaseAjuste;
+  descripcion: string;
+  importe: string;
+}
+
 export interface TrabajoEnDocumento {
   detalle_id: string;
   tipo_reparacion_id: string;
@@ -383,6 +393,15 @@ export interface TrabajoEnDocumento {
   /** `null` si la Orden no se cobra: no se muestran cobros inexistentes. */
   precio: string | null;
   detalle_origen_id: string | null;
+  /** DEC-AJ-10: el ajuste del trabajo y su precio final (ausentes antes). */
+  ajuste?: AjusteEnDocumento | null;
+  precio_final?: string | null;
+}
+
+/** DEC-AJ-10: el ajuste de la Orden aparte (ausente en los anteriores). */
+interface ConAjustesPorTrabajo {
+  ajuste_orden?: AjusteEnDocumento | null;
+  ajustes_por_trabajo?: boolean;
 }
 
 interface ContenidoBase {
@@ -418,7 +437,7 @@ export interface ContenidoRecepcion extends ContenidoBase {
   leyenda: string;
 }
 
-export interface ContenidoEntrega extends ContenidoBase {
+export interface ContenidoEntrega extends ContenidoBase, ConAjustesPorTrabajo {
   tipo: "COMPROBANTE_ENTREGA";
   estado_final: EstadoWorkflow;
   tipo_entrega: TipoEntrega;
@@ -522,7 +541,9 @@ export interface TrabajoAutorizadoEnDocumento extends TrabajoEnDocumento {
  * pendientes, rechazados ni cancelados) y su total. No es un comprobante
  * de pago.
  */
-export interface ContenidoAutorizacion extends ContenidoBase {
+export interface ContenidoAutorizacion
+  extends ContenidoBase,
+    ConAjustesPorTrabajo {
   tipo: "COMPROBANTE_AUTORIZACION";
   trabajos: TrabajoAutorizadoEnDocumento[];
   /** Con descuento: la suma de los precios, antes de descontar. */
@@ -539,7 +560,7 @@ export interface ContenidoAutorizacion extends ContenidoBase {
  * Externo): la recepción del equipo y los trabajos autorizados con su
  * precio, el descuento y el total. Nunca incluye notas internas.
  */
-export interface ContenidoIngreso extends ContenidoBase {
+export interface ContenidoIngreso extends ContenidoBase, ConAjustesPorTrabajo {
   tipo: "COMPROBANTE_INGRESO";
   estado_fisico: string | null;
   accesorios: string[];
@@ -1086,8 +1107,17 @@ export interface DescuentoVigente {
   detalle_id?: string | null;
 }
 
-/** Cada aplicación, cambio o retiro (sin `tipo`) de un descuento. */
+/** DEC-AJ-10: quién revirtió un ajuste, cuándo y por qué. */
+export interface ReversionAjuste {
+  usuario_id: string;
+  fecha: string;
+  motivo: string;
+}
+
+/** Cada aplicación, cambio o retiro (sin `tipo`) de un ajuste comercial. */
 export interface RegistroDescuento {
+  /** DEC-AJ-10: identificador estable del registro. */
+  id?: string | null;
   tipo: TipoDescuento | null;
   valor: string | null;
   motivo: string;
@@ -1096,6 +1126,26 @@ export interface RegistroDescuento {
   clase?: ClaseAjuste;
   /** Vacío: de la Orden; con valor, de ese trabajo (DEC-MI-03). */
   detalle_id?: string | null;
+  /** DEC-AJ-10: evidencia al registrarlo (vacía en los anteriores). */
+  precio_original?: string | null;
+  importe_aplicado?: string | null;
+  precio_final?: string | null;
+  /** DEC-AJ-10: el registro revertido que este corrige. */
+  corrige_a?: string | null;
+  reversion?: ReversionAjuste | null;
+}
+
+/** DEC-AJ-10 (D-10.4): un ajuste vigente recalculado por otra causa. */
+export interface RecalculoAjuste {
+  ajuste_id: string;
+  causa: "REDEFINICION" | "CANCELACION";
+  detalle_id: string | null;
+  precio_anterior: string;
+  precio_nuevo: string;
+  importe_anterior: string;
+  importe_nuevo: string;
+  usuario_id: string;
+  fecha: string;
 }
 
 /**
@@ -1341,8 +1391,12 @@ export interface Orden {
   acciones_custodia: Accion[];
   /** Cambiar la prioridad, liberar la Orden de otro técnico, ajustar garantía. */
   acciones_complementarias: Accion[];
-  /** Historia de descuentos; el último es el vigente (sin tipo: quitado). */
+  /**
+   * Historia de los ajustes comerciales: por destino rige el último no
+   * revertido (sin tipo: quitado). DEC-AJ-10: y sus recálculos.
+   */
   descuentos: RegistroDescuento[];
+  recalculos_ajuste?: RecalculoAjuste[];
   /** Orden CANCELADA abierta: qué falta para cerrarla. */
   pendientes_de_cierre: string[];
   /** Situación operativa para la pantalla (solo lectura). */

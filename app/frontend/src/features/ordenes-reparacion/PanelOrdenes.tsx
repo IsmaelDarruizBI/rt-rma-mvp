@@ -1328,6 +1328,24 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                       ),
                     )
                   }
+                  onRevertirAjuste={(ajusteId, motivo) =>
+                    void ejecutarComando(() =>
+                      api.revertirAjuste(idOrden, ajusteId, idActor, motivo),
+                    )
+                  }
+                  onCorregirAjuste={(ajusteId, tipo, valor, clase, motivo) =>
+                    void ejecutarComando(() =>
+                      api.corregirAjuste(
+                        idOrden,
+                        ajusteId,
+                        idActor,
+                        tipo,
+                        valor,
+                        clase,
+                        motivo,
+                      ),
+                    )
+                  }
                 />
               </SeccionPlegable>
 

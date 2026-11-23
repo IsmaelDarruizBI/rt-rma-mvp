@@ -1,10 +1,11 @@
 /**
  * Pagos y movimientos de la Orden (FEAT-REP-007, BR-REP-017/038).
  *
- * Muestra la cuenta -Subtotal y descuento (si hay), Total, Pagado válido,
- * Devuelto y Saldo o crédito a favor- y la lista cronológica de pagos,
- * anulaciones y devoluciones de dinero. El descuento no cambia el precio
- * de ningún trabajo ni los pagos. Los formularios aparecen solo si el backend los ofrece en
+ * Muestra la cuenta -Subtotal y ajustes comerciales (si hay), Total,
+ * Pagado válido, Devuelto y Saldo o crédito a favor-, el historial de los
+ * ajustes (DEC-AJ-10) y la lista cronológica de pagos, anulaciones y
+ * devoluciones de dinero. Un ajuste no cambia el precio de ningún trabajo
+ * ni los pagos. Los formularios aparecen solo si el backend los ofrece en
  * `acciones_financieras`; el backend vuelve a validar todo (rol, importe,
  * saldo, duplicados) igual.
  */
@@ -26,15 +27,27 @@ import type {
   ClaseAjuste,
   MedioPago,
   Orden,
+  RegistroDescuento,
   SituacionFinanciera,
   TipoDescuento,
   Usuario,
 } from "../../types/api";
+import {
+  ETIQUETA_OPERACION,
+  PERMISO_DE_CLASE,
+  ROLES_AJUSTE,
+  ROLES_REVERTIR,
+  baseDelDestino,
+  etiquetaClase,
+  historialDeAjustes,
+  vigenteDelDestino,
+  vistaPrevia,
+} from "./ajusteComercial";
 import { nombreDeUsuario } from "./DetalleOrden";
 import { ESTADO_PAGO, etiqueta } from "./etiquetas";
 import { TituloAccion, UbicacionAccion } from "./presentacion";
 import { recargoADevolver, recargoDe } from "./recepcionUx";
-import { tieneAlguno } from "../../lib/roles";
+import { puede, tieneAlguno } from "../../lib/roles";
 
 interface Props {
   orden: Orden;
@@ -58,6 +71,16 @@ interface Props {
     clase: ClaseAjuste,
     /** DEC-MI-03: el trabajo del ajuste; sin valor, la Orden. */
     detalleId?: string | null,
+  ) => void;
+  /** DEC-AJ-10: revertir el ajuste vigente de un destino. */
+  onRevertirAjuste?: (ajusteId: string, motivo: string) => void;
+  /** DEC-AJ-10: revertirlo y registrar el correcto, enlazados. */
+  onCorregirAjuste?: (
+    ajusteId: string,
+    tipo: TipoDescuento,
+    valor: string,
+    clase: ClaseAjuste,
+    motivo: string,
   ) => void;
 }
 
@@ -190,27 +213,35 @@ export function PagosYMovimientos(props: Props) {
           </div>
         ))}
       </dl>
-      <HistorialDescuentos orden={orden} usuarios={usuarios} />
+      <HistorialAjustes
+        orden={orden}
+        usuarios={usuarios}
+        actor={props.actor}
+        ocupado={props.ocupado}
+        editable={!!(descontar || cortesia)}
+        onRevertirAjuste={props.onRevertirAjuste}
+        onCorregirAjuste={props.onCorregirAjuste}
+      />
       <ListaMovimientos orden={orden} medios={medios} usuarios={usuarios} />
+      {/* DEC-AJ-10: un solo formulario, desde «Aplicar un descuento» o
+          desde «Otorgar una cortesía» (elige la clase al abrirse). */}
       {descontar && (
-        <FormularioDescuento
+        <FormularioAjusteComercial
           key={`descuento-${orden.updated_at}`}
           accion={descontar}
+          clasePreferida="DESCUENTO"
+          descontar={descontar}
+          cortesia={cortesia ?? null}
           {...props}
         />
       )}
       {cortesia && (
-        <FormularioCortesia
+        <FormularioAjusteComercial
           key={`cortesia-${orden.updated_at}`}
           accion={cortesia}
-          {...props}
-        />
-      )}
-      {(descontar || cortesia) && (
-        <FormularioAjusteTrabajo
-          key={`ajuste-trabajo-${orden.updated_at}`}
+          clasePreferida="CORTESIA"
           descontar={descontar ?? null}
-          cortesia={cortesia ?? null}
+          cortesia={cortesia}
           {...props}
         />
       )}
@@ -240,91 +271,122 @@ export function PagosYMovimientos(props: Props) {
 }
 
 /**
- * Descuento comercial: porcentaje o importe fijo, con motivo. No supera el
- * subtotal ni deja el total por debajo de lo ya cobrado (el backend lo
- * rechaza con el motivo). Quitarlo también pide motivo.
+ * DEC-AJ-10 (D-10.1): un solo formulario de Ajuste Comercial. Elige la
+ * clase (descuento o cortesía, cada una con su permiso), el destino (la
+ * Orden o un trabajo), el tipo (porcentaje o importe) y el motivo, con la
+ * vista previa del precio original, el ajuste y el precio final. Cambiar o
+ * quitar el vigente exige además el permiso de su clase (el backend lo
+ * valida igual). Por debajo de lo cobrado deja saldo a favor, que se
+ * devuelve antes de entregar.
  */
-function FormularioDescuento({
+function FormularioAjusteComercial({
   orden,
   actor,
   ocupado,
   onDescontar,
   accion,
-}: Props & { accion: Accion }) {
-  // Con una cortesía vigente el backend no ofrece el descuento: se la
-  // modifica o se la quita desde su propio formulario.
-  return (
-    <FormularioDescuentoComun
-      orden={orden}
-      actor={actor}
-      ocupado={ocupado}
-      onDescontar={onDescontar}
-      accion={accion}
-      vigente={orden.resumen.descuento}
-    />
-  );
-}
-
-function FormularioDescuentoComun({
-  orden,
-  actor,
-  ocupado,
-  onDescontar,
-  accion,
-  vigente,
-}: Pick<Props, "orden" | "actor" | "ocupado" | "onDescontar"> & {
+  clasePreferida,
+  descontar,
+  cortesia,
+}: Props & {
   accion: Accion;
-  vigente: Orden["resumen"]["descuento"];
+  clasePreferida: ClaseAjuste;
+  descontar: Accion | null;
+  cortesia: Accion | null;
 }) {
+  const trabajos = orden.reparaciones_detail.filter(
+    (d) => d.estado !== "CANCELADO",
+  );
+  const permitida = (clase: ClaseAjuste) =>
+    puede(
+      actor,
+      PERMISO_DE_CLASE[clase],
+      (clase === "CORTESIA" ? cortesia : descontar)?.roles ?? ROLES_AJUSTE,
+    );
+  const clases = (["DESCUENTO", "CORTESIA"] as ClaseAjuste[]).filter(permitida);
+  const [destino, setDestino] = useState("");
+  const [clase, setClase] = useState<ClaseAjuste>(
+    clases.includes(clasePreferida) ? clasePreferida : (clases[0] ?? clasePreferida),
+  );
+  const detalleId = destino || null;
+  const vigente = vigenteDelDestino(orden, detalleId);
   const [tipo, setTipo] = useState<TipoDescuento>(vigente?.tipo ?? "PORCENTAJE");
   const [valor, setValor] = useState(vigente ? String(Number(vigente.valor)) : "");
   const [motivo, setMotivo] = useState("");
+  const base = baseDelDestino(orden, detalleId);
+  const previa = vistaPrevia(base, tipo, valor);
   const deshabilitado = !habilitada(accion, actor) || ocupado;
-  const numero = Number(valor.replace(",", "."));
-  const valido =
-    /^\d+(?:[.,]\d{1,2})?$/.test(valor.trim()) &&
-    numero > 0 &&
-    (tipo === "IMPORTE"
-      ? numero <= Number(orden.resumen.subtotal)
-      : numero <= 100);
-  const base = Number(orden.resumen.subtotal);
-  const previsto = valido
-    ? tipo === "PORCENTAJE"
-      ? Math.round(base * numero) / 100
-      : numero
-    : 0;
+  // Cambiar o quitar el vigente exige también el permiso de su clase.
+  const puedeReemplazar = !vigente || permitida(vigente.clase ?? "DESCUENTO");
+  const cobrado = Number(orden.resumen.pagado) - Number(orden.resumen.devuelto);
+  const listo =
+    !deshabilitado &&
+    clases.includes(clase) &&
+    puedeReemplazar &&
+    previa.valido &&
+    motivo.trim() !== "";
   return (
-    <Seccion
-      titulo={vigente ? "Cambiar o quitar el descuento" : "Aplicar un descuento"}
-      accion={accion}
-      actor={actor}
-    >
+    <Seccion titulo="Ajuste comercial" accion={accion} actor={actor}>
       <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
-        Sobre el subtotal de los trabajos ({importe(orden.resumen.subtotal)}). El
-        precio de cada trabajo no cambia; queda registrado quién lo aplicó,
-        cuándo y por qué.
+        Descuento o cortesía sobre la Orden o sobre un trabajo. El precio de
+        cada trabajo no cambia; el de la Orden se aplica sobre lo que queda
+        después de los ajustes de los trabajos y no se reparte. Queda
+        registrado quién, cuándo y por qué.
       </p>
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <div style={{ width: 170, maxWidth: "100%" }}>
-          <Campo etiqueta="Tipo">
-            <select
-              value={tipo}
-              disabled={deshabilitado}
-              onChange={(evento) => setTipo(evento.target.value as TipoDescuento)}
-              style={estiloInput}
-            >
-              <option value="PORCENTAJE">Porcentaje (%)</option>
-              <option value="IMPORTE">Importe fijo ($)</option>
-            </select>
-          </Campo>
-        </div>
+        <Campo etiqueta="Clase">
+          <select
+            value={clase}
+            disabled={deshabilitado}
+            onChange={(e) => setClase(e.target.value as ClaseAjuste)}
+            style={estiloInput}
+          >
+            {clases.map((opcion) => (
+              <option key={opcion} value={opcion}>
+                {etiquetaClase(opcion)}
+              </option>
+            ))}
+          </select>
+        </Campo>
+        <Campo etiqueta="Sobre">
+          <select
+            value={destino}
+            disabled={deshabilitado}
+            onChange={(e) => {
+              setDestino(e.target.value);
+              const nuevo = vigenteDelDestino(orden, e.target.value || null);
+              setTipo(nuevo?.tipo ?? "PORCENTAJE");
+              setValor(nuevo ? String(Number(nuevo.valor)) : "");
+            }}
+            style={estiloInput}
+          >
+            <option value="">La Orden</option>
+            {trabajos.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.id} · {d.tipo_reparacion_nombre ?? d.tipo_reparacion_id} ·{" "}
+                {importe(d.precio)}
+              </option>
+            ))}
+          </select>
+        </Campo>
+        <Campo etiqueta="Tipo">
+          <select
+            value={tipo}
+            disabled={deshabilitado}
+            onChange={(e) => setTipo(e.target.value as TipoDescuento)}
+            style={estiloInput}
+          >
+            <option value="PORCENTAJE">Porcentaje (%)</option>
+            <option value="IMPORTE">Importe fijo ($)</option>
+          </select>
+        </Campo>
         <div style={{ width: 140 }}>
           <Campo etiqueta={tipo === "PORCENTAJE" ? "Porcentaje" : "Importe"}>
             <input
               value={valor}
               disabled={deshabilitado}
               inputMode="decimal"
-              onChange={(evento) => setValor(evento.target.value)}
+              onChange={(e) => setValor(e.target.value)}
               style={estiloInput}
             />
           </Campo>
@@ -334,39 +396,64 @@ function FormularioDescuentoComun({
         <input
           value={motivo}
           disabled={deshabilitado}
-          onChange={(evento) => setMotivo(evento.target.value)}
+          onChange={(e) => setMotivo(e.target.value)}
           style={estiloInput}
         />
       </Campo>
-      {valido && (
+      {vigente && (
+        <p style={{ margin: "0.3rem 0", fontSize: "0.82rem" }}>
+          Vigente en {detalleId ?? "la Orden"}: {etiquetaClase(vigente.clase)}{" "}
+          {vigente.descripcion} (−{importe(vigente.importe)}).
+          {!puedeReemplazar &&
+            ` Cambiarlo o quitarlo exige el permiso de ${etiquetaClase(vigente.clase).toLowerCase()}.`}
+        </p>
+      )}
+      {valor.trim() !== "" && (
         <p style={{ margin: "0 0 0.5rem", fontSize: "0.85rem" }}>
-          Descuento {importe(String(previsto))} · Total{" "}
-          <strong>{importe(String(base - previsto))}</strong>
+          {previa.valido ? (
+            <>
+              Precio original {importe(String(previa.original))} ·{" "}
+              {etiquetaClase(clase)} −{importe(String(previa.ajuste))} · Precio
+              final <strong>{importe(String(previa.final))}</strong>
+              {!detalleId &&
+                cobrado > previa.final &&
+                ` · quedan ${importe(String(cobrado - previa.final))} a favor del cliente: hay que devolverlos antes de entregar el equipo.`}
+            </>
+          ) : (
+            <span style={{ color: colores.error }}>{previa.error}</span>
+          )}
         </p>
       )}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         <Boton
-          disabled={deshabilitado || !valido || !motivo.trim()}
+          disabled={!listo}
           onClick={() =>
             onDescontar(
               tipo,
               valor.trim().replace(",", "."),
               motivo.trim(),
-              "DESCUENTO",
+              clase,
+              detalleId,
             )
           }
         >
-          {vigente ? "Cambiar el descuento" : "Aplicar el descuento"}
+          {vigente ? "Cambiar el ajuste" : "Aplicar el ajuste"}
         </Boton>
         {vigente && (
           <Boton
             variante="secundario"
-            disabled={deshabilitado || !motivo.trim()}
+            disabled={deshabilitado || !puedeReemplazar || !motivo.trim()}
             onClick={() =>
-              onDescontar(null, null, motivo.trim(), "DESCUENTO")
+              onDescontar(
+                null,
+                null,
+                motivo.trim(),
+                vigente.clase ?? "DESCUENTO",
+                detalleId,
+              )
             }
           >
-            Quitar el descuento
+            Quitar el ajuste
           </Boton>
         )}
       </div>
@@ -374,152 +461,38 @@ function FormularioDescuentoComun({
   );
 }
 
-/** La cortesía vigente (DC11), si el ajuste vigente es una cortesía. */
-function cortesiaVigente(orden: Orden) {
-  const registros = (orden.descuentos ?? []).filter((r) => !r.detalle_id);
-  const ultimo = registros[registros.length - 1];
-  return ultimo?.clase === "CORTESIA" && ultimo.tipo !== null ? ultimo : null;
-}
-
 /**
- * DC11 / DEC-IT1-02 (VAR-REP-041): la cortesía, total o parcial, como
- * porcentaje o importe. La otorgan, modifican o quitan Recepción,
- * Coordinación RMA o Administración. Si deja el total por debajo de lo
- * cobrado, queda saldo a favor del cliente y hay que devolverlo antes de
- * entregar. Los pagos se conservan. Es el mismo Ajuste Comercial que el
- * descuento: uno solo vigente por Orden.
+ * Historial del Ajuste Comercial (DEC-AJ-10): cada alta, cambio, retiro,
+ * corrección, reversión y recálculo, con la evidencia de los importes,
+ * quién, cuándo y por qué. Sobre el ajuste vigente de cada destino, quien
+ * tiene el permiso de reversión puede revertirlo o corregirlo antes de la
+ * entrega. El ajuste no es un movimiento de dinero: los pagos no cambian.
  */
-function FormularioCortesia({
-  orden,
-  actor,
-  ocupado,
-  onDescontar,
-  accion,
-}: Props & { accion: Accion }) {
-  const vigente = cortesiaVigente(orden);
-  const [tipo, setTipo] = useState<TipoDescuento>(
-    vigente?.tipo ?? "PORCENTAJE",
-  );
-  const [valor, setValor] = useState(
-    vigente?.valor ? String(Number(vigente.valor)) : "100",
-  );
-  const [motivo, setMotivo] = useState("");
-  const deshabilitado = !habilitada(accion, actor) || ocupado;
-  const base = Number(orden.resumen.subtotal);
-  const numero = Number(valor.replace(",", "."));
-  const valido =
-    /^\d+(?:[.,]\d{1,2})?$/.test(valor.trim()) &&
-    numero > 0 &&
-    (tipo === "IMPORTE" ? numero <= base : numero <= 100);
-  const bonificado = valido
-    ? tipo === "PORCENTAJE"
-      ? Math.round(base * numero) / 100
-      : numero
-    : 0;
-  const total = base - bonificado;
-  const cobrado =
-    Number(orden.resumen.pagado) - Number(orden.resumen.devuelto);
-  const total100 = valido && bonificado === base;
-  return (
-    <Seccion
-      titulo={vigente ? "Modificar o quitar la cortesía" : "Otorgar una cortesía"}
-      accion={accion}
-      actor={actor}
-    >
-      <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
-        Total (100 %) o parcial, sobre el subtotal de los trabajos (
-        {importe(orden.resumen.subtotal)}). Reemplaza al descuento o la
-        cortesía vigente; queda registrado quién, cuándo y por qué.
-      </p>
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <div style={{ width: 170, maxWidth: "100%" }}>
-          <Campo etiqueta="Tipo">
-            <select
-              value={tipo}
-              disabled={deshabilitado}
-              onChange={(evento) => setTipo(evento.target.value as TipoDescuento)}
-              style={estiloInput}
-            >
-              <option value="PORCENTAJE">Porcentaje (%)</option>
-              <option value="IMPORTE">Importe fijo ($)</option>
-            </select>
-          </Campo>
-        </div>
-        <div style={{ width: 140 }}>
-          <Campo etiqueta={tipo === "PORCENTAJE" ? "Porcentaje" : "Importe"}>
-            <input
-              value={valor}
-              disabled={deshabilitado}
-              inputMode="decimal"
-              onChange={(evento) => setValor(evento.target.value)}
-              style={estiloInput}
-            />
-          </Campo>
-        </div>
-      </div>
-      <Campo etiqueta="Motivo (obligatorio)">
-        <input
-          value={motivo}
-          disabled={deshabilitado}
-          onChange={(evento) => setMotivo(evento.target.value)}
-          style={estiloInput}
-        />
-      </Campo>
-      {valido && (
-        <p style={{ margin: "0 0 0.5rem", fontSize: "0.85rem" }}>
-          {total100 ? "Cortesía total" : "Cortesía parcial"} ·{" "}
-          {importe(String(bonificado))} · Total{" "}
-          <strong>{importe(String(total))}</strong>
-          {cobrado > total &&
-            ` · quedan ${importe(String(cobrado - total))} a favor del cliente: hay que devolverlos antes de entregar el equipo.`}
-        </p>
-      )}
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <Boton
-          disabled={deshabilitado || !valido || !motivo.trim()}
-          onClick={() =>
-            onDescontar(
-              tipo,
-              valor.trim().replace(",", "."),
-              motivo.trim(),
-              "CORTESIA",
-            )
-          }
-        >
-          {vigente ? "Modificar la cortesía" : "Otorgar la cortesía"}
-        </Boton>
-        {vigente && (
-          <Boton
-            variante="secundario"
-            disabled={deshabilitado || !motivo.trim()}
-            onClick={() => onDescontar(null, null, motivo.trim(), "CORTESIA")}
-          >
-            Quitar la cortesía
-          </Boton>
-        )}
-      </div>
-    </Seccion>
-  );
-}
-
-/** «10 %» o «$ 5.000,00»: como se expresó el descuento. */
-function textoDescuento(tipo: TipoDescuento, valor: string): string {
-  return tipo === "PORCENTAJE" ? `${Number(valor)} %` : importe(valor);
-}
-
-/**
- * Cada vez que se aplicó, cambió o quitó el descuento: quién, cuándo y por
- * qué. El descuento no es un movimiento de dinero: los pagos no cambian.
- */
-function HistorialDescuentos({
+function HistorialAjustes({
   orden,
   usuarios,
+  actor,
+  ocupado,
+  editable,
+  onRevertirAjuste,
+  onCorregirAjuste,
 }: {
   orden: Orden;
   usuarios: Usuario[];
+  actor: Usuario | null;
+  ocupado: boolean;
+  editable: boolean;
+  onRevertirAjuste?: Props["onRevertirAjuste"];
+  onCorregirAjuste?: Props["onCorregirAjuste"];
 }) {
-  const registros = orden.descuentos ?? [];
-  if (registros.length === 0) return null;
+  const [abierto, setAbierto] = useState<{
+    id: string;
+    modo: "REVERTIR" | "CORREGIR";
+  } | null>(null);
+  const entradas = historialDeAjustes(orden);
+  if (entradas.length === 0) return null;
+  const puedeRevertir =
+    editable && puede(actor, "AJUSTE_REVERTIR", ROLES_REVERTIR);
   return (
     <div style={{ marginTop: "0.8rem" }}>
       <h4
@@ -531,27 +504,197 @@ function HistorialDescuentos({
           color: colores.suave,
         }}
       >
-        Historial de descuentos
+        Historial de ajustes comerciales
       </h4>
       <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.82rem" }}>
-        {registros.map((registro) => (
-          <li key={registro.fecha + registro.motivo}>
-            {registro.clase === "CORTESIA"
-              ? registro.tipo && registro.valor
-                ? `Cortesía ${textoDescuento(registro.tipo, registro.valor)}`
-                : "Cortesía quitada"
-              : registro.tipo && registro.valor
-                ? `Descuento ${textoDescuento(registro.tipo, registro.valor)}`
-                : "Descuento quitado"}{" "}
-            {registro.detalle_id ? `(${registro.detalle_id}) ` : "(Orden) "}·{" "}
-            {registro.motivo}{" "}
-            <span style={{ color: colores.suave }}>
-              ({nombreDeUsuario(usuarios, registro.usuario_id)},{" "}
-              {fechaCorta(registro.fecha)})
+        {entradas.map((entrada) => (
+          <li key={entrada.clave} style={{ marginBottom: "0.25rem" }}>
+            <strong>{ETIQUETA_OPERACION[entrada.operacion]}</strong> ·{" "}
+            <span
+              style={
+                entrada.revertido
+                  ? { textDecoration: "line-through", color: colores.suave }
+                  : undefined
+              }
+            >
+              {entrada.descripcion}
             </span>
+            {entrada.revertido && " (revertido)"}
+            {entrada.evidencia && ` · ${entrada.evidencia}`}
+            {entrada.motivo && ` · ${entrada.motivo}`}{" "}
+            <span style={{ color: colores.suave }}>
+              ({nombreDeUsuario(usuarios, entrada.usuarioId)},{" "}
+              {fechaCorta(entrada.fecha)})
+            </span>
+            {puedeRevertir && entrada.revertible?.id && (
+              <span style={{ marginLeft: "0.4rem", display: "inline-flex", gap: "0.3rem" }}>
+                <Boton
+                  variante="secundario"
+                  disabled={ocupado}
+                  onClick={() =>
+                    setAbierto({ id: entrada.revertible!.id!, modo: "REVERTIR" })
+                  }
+                >
+                  Revertir
+                </Boton>
+                <Boton
+                  variante="secundario"
+                  disabled={ocupado}
+                  onClick={() =>
+                    setAbierto({ id: entrada.revertible!.id!, modo: "CORREGIR" })
+                  }
+                >
+                  Corregir
+                </Boton>
+              </span>
+            )}
+            {abierto &&
+              entrada.revertible?.id === abierto.id && (
+                <FormularioReversion
+                  key={`${abierto.id}-${abierto.modo}`}
+                  modo={abierto.modo}
+                  registro={entrada.revertible}
+                  actor={actor}
+                  ocupado={ocupado}
+                  onCancelar={() => setAbierto(null)}
+                  onRevertir={(motivo) =>
+                    onRevertirAjuste?.(abierto.id, motivo)
+                  }
+                  onCorregir={(tipo, valor, clase, motivo) =>
+                    onCorregirAjuste?.(abierto.id, tipo, valor, clase, motivo)
+                  }
+                  base={baseDelDestino(orden, entrada.revertible.detalle_id ?? null)}
+                />
+              )}
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** Revertir (motivo) o corregir (el ajuste correcto y el motivo). */
+function FormularioReversion({
+  modo,
+  registro,
+  actor,
+  ocupado,
+  base,
+  onCancelar,
+  onRevertir,
+  onCorregir,
+}: {
+  modo: "REVERTIR" | "CORREGIR";
+  registro: RegistroDescuento;
+  actor: Usuario | null;
+  ocupado: boolean;
+  base: number;
+  onCancelar: () => void;
+  onRevertir: (motivo: string) => void;
+  onCorregir: (
+    tipo: TipoDescuento,
+    valor: string,
+    clase: ClaseAjuste,
+    motivo: string,
+  ) => void;
+}) {
+  const clases = (["DESCUENTO", "CORTESIA"] as ClaseAjuste[]).filter((c) =>
+    puede(actor, PERMISO_DE_CLASE[c], ROLES_AJUSTE),
+  );
+  const [clase, setClase] = useState<ClaseAjuste>(
+    registro.clase && clases.includes(registro.clase)
+      ? registro.clase
+      : (clases[0] ?? "DESCUENTO"),
+  );
+  const [tipo, setTipo] = useState<TipoDescuento>(registro.tipo ?? "PORCENTAJE");
+  const [valor, setValor] = useState("");
+  const [motivo, setMotivo] = useState("");
+  // Al corregir, el registro equivocado deja de contar: la base del
+  // destino puede cambiar (el backend la vuelve a validar).
+  const previa = vistaPrevia(base, tipo, valor);
+  const corregir = modo === "CORREGIR";
+  const listo =
+    !ocupado &&
+    motivo.trim() !== "" &&
+    (!corregir || (previa.valido && clases.includes(clase)));
+  return (
+    <div
+      style={{
+        margin: "0.4rem 0 0.6rem",
+        padding: "0.5rem 0.7rem",
+        border: `1px solid ${colores.borde}`,
+        borderRadius: 6,
+      }}
+    >
+      <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", color: colores.suave }}>
+        {corregir
+          ? "Revierte el ajuste equivocado y registra el correcto en una sola operación. Los pagos no cambian."
+          : "El ajuste deja de contar y vuelve a regir el anterior de este destino, si existe. Los pagos no cambian: si queda saldo a favor, se devuelve antes de entregar."}
+      </p>
+      {corregir && (
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <Campo etiqueta="Clase">
+            <select
+              value={clase}
+              onChange={(e) => setClase(e.target.value as ClaseAjuste)}
+              style={estiloInput}
+            >
+              {clases.map((opcion) => (
+                <option key={opcion} value={opcion}>
+                  {etiquetaClase(opcion)}
+                </option>
+              ))}
+            </select>
+          </Campo>
+          <Campo etiqueta="Tipo">
+            <select
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value as TipoDescuento)}
+              style={estiloInput}
+            >
+              <option value="PORCENTAJE">Porcentaje (%)</option>
+              <option value="IMPORTE">Importe fijo ($)</option>
+            </select>
+          </Campo>
+          <div style={{ width: 140 }}>
+            <Campo etiqueta={tipo === "PORCENTAJE" ? "Porcentaje" : "Importe"}>
+              <input
+                value={valor}
+                inputMode="decimal"
+                onChange={(e) => setValor(e.target.value)}
+                style={estiloInput}
+              />
+            </Campo>
+          </div>
+        </div>
+      )}
+      {corregir && valor.trim() !== "" && !previa.valido && (
+        <p style={{ margin: "0 0 0.4rem", fontSize: "0.82rem", color: colores.error }}>
+          {previa.error}
+        </p>
+      )}
+      <Campo etiqueta="Motivo (obligatorio)">
+        <input
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value)}
+          style={estiloInput}
+        />
+      </Campo>
+      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.3rem" }}>
+        <Boton
+          disabled={!listo}
+          onClick={() =>
+            corregir
+              ? onCorregir(tipo, valor.trim().replace(",", "."), clase, motivo.trim())
+              : onRevertir(motivo.trim())
+          }
+        >
+          {corregir ? "Corregir el ajuste" : "Revertir el ajuste"}
+        </Boton>
+        <Boton variante="secundario" onClick={onCancelar}>
+          Volver
+        </Boton>
+      </div>
     </div>
   );
 }
@@ -1127,136 +1270,6 @@ export function Confirmacion({
         <Boton variante="secundario" onClick={onVolver}>
           Volver
         </Boton>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Ajuste Comercial de un trabajo (DC09, DEC-MI-03): descuento o cortesía
- * sobre su precio, en porcentaje o importe, con motivo. El de la Orden se
- * aplica después, sobre lo que queda, y no se reparte entre los trabajos.
- * Por debajo de lo cobrado deja saldo a favor, a devolver antes de entregar.
- */
-function FormularioAjusteTrabajo({
-  orden,
-  actor,
-  ocupado,
-  descontar,
-  cortesia,
-  onDescontar,
-}: Props & { descontar: Accion | null; cortesia: Accion | null }) {
-  const trabajos = orden.reparaciones_detail.filter(
-    (d) => d.estado !== "CANCELADO",
-  );
-  const [detalleId, setDetalleId] = useState(trabajos[0]?.id ?? "");
-  const [clase, setClase] = useState<ClaseAjuste>(
-    descontar ? "DESCUENTO" : "CORTESIA",
-  );
-  const [tipo, setTipo] = useState<TipoDescuento>("PORCENTAJE");
-  const [valor, setValor] = useState("");
-  const [motivo, setMotivo] = useState("");
-  if (trabajos.length === 0) return null;
-  const accion = clase === "CORTESIA" ? cortesia : descontar;
-  const vigente = (orden.resumen.ajustes_detalle ?? []).find(
-    (a) => a.detalle_id === detalleId,
-  );
-  const listo =
-    accion !== null &&
-    habilitada(accion, actor) &&
-    !ocupado &&
-    Number(valor) > 0 &&
-    motivo.trim() !== "";
-  return (
-    <div style={{ marginTop: "0.8rem" }}>
-      <h4 style={{ margin: "0 0 0.4rem" }}>Ajuste de un trabajo</h4>
-      <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
-        Sobre el precio del trabajo elegido. El ajuste de la Orden se aplica
-        después, sobre lo que queda, y no se reparte entre los trabajos.
-      </p>
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <Campo etiqueta="Trabajo">
-          <select
-            value={detalleId}
-            onChange={(e) => setDetalleId(e.target.value)}
-            style={estiloInput}
-          >
-            {trabajos.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.id} · {d.tipo_reparacion_nombre ?? d.tipo_reparacion_id} ·{" "}
-                {importe(d.precio)}
-              </option>
-            ))}
-          </select>
-        </Campo>
-        <Campo etiqueta="Clase">
-          <select
-            value={clase}
-            onChange={(e) => setClase(e.target.value as ClaseAjuste)}
-            style={estiloInput}
-          >
-            {descontar && <option value="DESCUENTO">Descuento</option>}
-            {cortesia && <option value="CORTESIA">Cortesía</option>}
-          </select>
-        </Campo>
-        <Campo etiqueta="Tipo">
-          <select
-            value={tipo}
-            onChange={(e) => setTipo(e.target.value as TipoDescuento)}
-            style={estiloInput}
-          >
-            <option value="PORCENTAJE">Porcentaje</option>
-            <option value="IMPORTE">Importe</option>
-          </select>
-        </Campo>
-        <Campo etiqueta={tipo === "PORCENTAJE" ? "Porcentaje" : "Importe"}>
-          <input
-            inputMode="decimal"
-            value={valor}
-            onChange={(e) => setValor(e.target.value)}
-            style={estiloInput}
-          />
-        </Campo>
-      </div>
-      <Campo etiqueta="Motivo">
-        <input
-          value={motivo}
-          onChange={(e) => setMotivo(e.target.value)}
-          style={estiloInput}
-        />
-      </Campo>
-      {vigente && (
-        <p style={{ margin: "0.3rem 0", fontSize: "0.82rem" }}>
-          Vigente en {detalleId}: {vigente.descripcion} (−
-          {importe(vigente.importe)})
-        </p>
-      )}
-      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.4rem" }}>
-        <Boton
-          disabled={!listo}
-          onClick={() =>
-            onDescontar(tipo, valor.trim(), motivo.trim(), clase, detalleId)
-          }
-        >
-          {vigente ? "Cambiar el ajuste del trabajo" : "Aplicar al trabajo"}
-        </Boton>
-        {vigente && (
-          <Boton
-            variante="secundario"
-            disabled={ocupado || motivo.trim() === ""}
-            onClick={() =>
-              onDescontar(
-                null,
-                null,
-                motivo.trim(),
-                vigente.clase ?? "DESCUENTO",
-                detalleId,
-              )
-            }
-          >
-            Quitar el ajuste del trabajo
-          </Boton>
-        )}
       </div>
     </div>
   );

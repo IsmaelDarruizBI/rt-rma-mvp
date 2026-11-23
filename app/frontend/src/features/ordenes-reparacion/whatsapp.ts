@@ -55,6 +55,10 @@ export function telefonoParaWhatsapp(
   return `549${digitos}`;
 }
 
+function claseDe(clase: string): string {
+  return clase === "CORTESIA" ? "Cortesía" : "Descuento";
+}
+
 function pesos(valor: string): string {
   const numero = Number(valor);
   if (Number.isNaN(numero)) return valor;
@@ -79,17 +83,33 @@ export function mensajeComprobante(
   const { marca, modelo, variante } = contenido.equipo;
   const equipo = [marca, modelo, variante].filter(Boolean).join(" ");
   const ingreso = contenido.tipo === "COMPROBANTE_INGRESO";
+  // DEC-AJ-10: en los emitidos desde entonces, cada trabajo con su ajuste
+  // y su precio final, y el de la Orden aparte (la cortesía como tal).
+  const porTrabajo = contenido.ajustes_por_trabajo === true;
   const trabajos = contenido.trabajos
-    .map((trabajo) => `• ${trabajo.nombre}: ${pesos(trabajo.precio)}`)
+    .map((trabajo) =>
+      porTrabajo && trabajo.ajuste && trabajo.precio_final
+        ? `• ${trabajo.nombre}: ${pesos(trabajo.precio)} - ` +
+          `${claseDe(trabajo.ajuste.clase)} ${trabajo.ajuste.descripcion} = ` +
+          pesos(trabajo.precio_final)
+        : `• ${trabajo.nombre}: ${pesos(trabajo.precio)}`,
+    )
     .join("\n");
   const total = ingreso ? contenido.total : contenido.total_autorizado;
   const subtotal = ingreso ? contenido.subtotal : contenido.subtotal_autorizado;
-  const descuento = contenido.descuento
-    ? [
-        `Subtotal: ${pesos(subtotal ?? total)}`,
-        `Descuento (${contenido.descuento.descripcion}): -${pesos(contenido.descuento.importe)}`,
-      ]
-    : [];
+  const ajusteOrden = contenido.ajuste_orden;
+  const descuento = porTrabajo
+    ? ajusteOrden
+      ? [
+          `${claseDe(ajusteOrden.clase)} sobre la orden (${ajusteOrden.descripcion}): -${pesos(ajusteOrden.importe)}`,
+        ]
+      : []
+    : contenido.descuento
+      ? [
+          `Subtotal: ${pesos(subtotal ?? total)}`,
+          `Descuento (${contenido.descuento.descripcion}): -${pesos(contenido.descuento.importe)}`,
+        ]
+      : [];
   return [
     ingreso
       ? `${saludo} Te enviamos el comprobante de ingreso y autorización de ` +

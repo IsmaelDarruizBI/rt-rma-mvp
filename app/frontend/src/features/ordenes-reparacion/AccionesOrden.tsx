@@ -42,6 +42,7 @@ import type {
   Usuario,
   VigenciaGarantia,
 } from "../../types/api";
+import { avisoRecalculo } from "./ajusteComercial";
 import { nombreDeUsuario } from "./DetalleOrden";
 import { checkinPendiente, faltantesDelRetiro } from "./entrega";
 import { referenciaParaCheckin } from "./ingresoAjustes";
@@ -633,6 +634,7 @@ function FormularioAccion({
     case "REDEFINIR_DETALLE":
       return (
         <FormularioRedefinirDetalle
+          orden={orden}
           tipos={tipos}
           detalle={orden.reparaciones_detail.find(
             (candidato) => candidato.id === accion.detalle_id,
@@ -748,6 +750,15 @@ function FormularioAccion({
 
     case "CANCELAR_DETALLE":
       return (
+        <>
+          {/* DEC-AJ-10 (D-10.4): el ajuste del trabajo deja de contar y el
+              de la Orden se recalcula; queda registrado. */}
+          {accion.detalle_id &&
+            avisoRecalculo(orden, accion.detalle_id, 0) && (
+              <AvisoRecalculo
+                texto={avisoRecalculo(orden, accion.detalle_id, 0) ?? ""}
+              />
+            )}
         <FormularioMotivo
           deshabilitado={deshabilitado || accion.detalle_id === null}
           etiqueta="Motivo de la cancelación (obligatorio)"
@@ -758,6 +769,7 @@ function FormularioAccion({
             ejecutar.cancelarDetalle(accion.detalle_id, motivo, motivoCodigo)
           }
         />
+        </>
       );
 
     case "CANCELAR_ORDEN":
@@ -2853,12 +2865,26 @@ function FormularioTrabajoAdicional({
   );
 }
 
+/** DEC-AJ-10 (D-10.4): aviso de que un ajuste vigente se va a recalcular. */
+function AvisoRecalculo({ texto }: { texto: string }) {
+  return (
+    <p
+      role="note"
+      style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.alerta }}
+    >
+      {texto}
+    </p>
+  );
+}
+
 function FormularioRedefinirDetalle({
+  orden,
   tipos,
   detalle,
   deshabilitado,
   onConfirmar,
 }: {
+  orden: Orden;
   tipos: TipoReparacion[];
   detalle: Orden["reparaciones_detail"][number] | undefined;
   deshabilitado: boolean;
@@ -2900,6 +2926,11 @@ function FormularioRedefinirDetalle({
         >
           Nueva definición: {elegido.nombre} ({elegido.precio})
         </p>
+      )}
+      {elegido && detalle && avisoRecalculo(orden, detalle.id, Number(elegido.precio)) && (
+        <AvisoRecalculo
+          texto={avisoRecalculo(orden, detalle.id, Number(elegido.precio)) ?? ""}
+        />
       )}
       <Boton
         disabled={deshabilitado || !tipoId}

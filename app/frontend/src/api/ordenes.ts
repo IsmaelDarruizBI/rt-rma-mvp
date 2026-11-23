@@ -188,7 +188,7 @@ export function cambiarPrioridad(
 
 /**
  * Aplicar, cambiar (o quitar, con `tipo: null`) el ajuste comercial: un
- * descuento o, con `clase: "CORTESIA"`, la cortesía total (DC11).
+ * descuento o una cortesía, de la Orden o de un trabajo (DEC-AJ-10).
  */
 export function aplicarDescuento(
   ordenId: string,
@@ -206,6 +206,44 @@ export function aplicarDescuento(
     motivo,
     clase,
     detalle_id: detalleId,
+  });
+}
+
+/**
+ * DEC-AJ-10: revertir el ajuste vigente de un destino (vuelve a regir el
+ * anterior). Exige el permiso de reversión y motivo.
+ */
+export function revertirAjuste(
+  ordenId: string,
+  ajusteId: string,
+  usuarioId: string,
+  motivo: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/adjustments/${ajusteId}/revert`, {
+    usuario_id: usuarioId,
+    motivo,
+  });
+}
+
+/**
+ * DEC-AJ-10: corregir el ajuste vigente: lo revierte y registra el correcto
+ * en una sola operación, enlazados.
+ */
+export function corregirAjuste(
+  ordenId: string,
+  ajusteId: string,
+  usuarioId: string,
+  tipo: TipoDescuento,
+  valor: string,
+  clase: ClaseAjuste,
+  motivo: string,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/adjustments/${ajusteId}/correct`, {
+    usuario_id: usuarioId,
+    tipo,
+    valor,
+    clase,
+    motivo,
   });
 }
 
