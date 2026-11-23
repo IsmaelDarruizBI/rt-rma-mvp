@@ -889,3 +889,157 @@ La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA inte
 - **Documentación:** `traceability/discrepancias-baseline-v1.4.md` (DEC-AJ-03 y 04 todavía «sin implementar») y `docs/ESTADO_PROYECTO.md` no se actualizaron en este bloque.
 - **Datos del UAT:** las Órdenes en 240 sin aviso pasan a ofrecer la entrega (riesgo 6).
 - **Validación manual:** pendiente en local, según la tabla de la sección 5.
+
+### 10.2 Bloque 3: ingreso
+
+Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. `business/` no cambia: implementa DEC-AJ-05, DEC-AJ-06, DEC-AJ-07 y DEC-AJ-08 (sección 9.1).
+
+| Commit | Qué |
+|---|---|
+| `0376f34` | Migración `20261123000200_ingreso_trabajo_verificacion_imei` y persistencia de los datos nuevos del ingreso |
+| `462ff87` | BF-04 (DEC-AJ-05), BF-08 (DEC-AJ-07) y la parte de backend de BF-06 (DEC-AJ-08): ingreso sin trabajos, custodia con el comprobante de recepción y verificación del ingreso |
+| `869a003` | BF-05 (DEC-AJ-06): «IMEI no disponible» y «Registrar el IMEI real» |
+| `e1ffcd0` | Frontend de los cuatro: alta, «Crear y generar el comprobante», visor, Orden y check-in |
+| `a55b1b8` | Frontend: «IMEI no disponible» vuelve a «Ninguno» la identidad elegida por IMEI |
+
+#### Ingreso sin trabajos estandarizados (DEC-AJ-05)
+
+- **Trabajo solicitado:** texto libre propio de la recepción (`DatosRecepcion.trabajo_solicitado`, `rma.recepcion.trabajo_solicitado`), distinto de las «Observaciones del equipo». No crea Detalles.
+  - Se registra al crear la Orden.
+  - Se corrige como el resto del ingreso: con versión y, si cambia un dato ya registrado, con motivo.
+  - Sale en la Orden, en el comprobante de recepción y en el de ingreso (también en el PDF).
+- **Sin trabajos:** el alta no exige un Tipo. El ingreso sigue por «Enviar a revisión técnica» (PROC-REP-045 = No, VAR-REP-001).
+- **Custodia con el comprobante de recepción:** en Cliente Externo, enviar a revisión confirma la recepción física en el mismo acto (`application/ingreso.py`, `enviar_a_revision`, con `services/reparaciones.py`, `recepcion_con_el_comprobante`).
+  - El historial queda 045 → 055 → ACC-REP-024 (confirmación) → 050 → 060. El comprobante se emite con la custodia `EN_CUSTODIA` y quién la confirmó.
+  - Exige lo mismo que recibir el equipo (`faltantes_para_recepcion`): el estado físico (u observaciones unificadas) y la verificación del ingreso. Si falta algo, se rechaza sin registrar nada, y la acción ENVIAR_A_REVISION lo informa en `bloqueo`.
+  - Además de `ENVIAR_A_REVISION`, exige `CUSTODIA`, el permiso de confirmar la recepción.
+  - No cambian RT_INTERNO (VAR-REP-002) ni la garantía RMA, que no pasa por este comando.
+- **Después:**
+  - el técnico revisa y define los trabajos (065 → 068 → 075);
+  - la definición se cierra y la Orden espera la decisión del cliente (129);
+  - con la autorización sigue como siempre (080 → 090 → 140).
+
+  Con el equipo en custodia también se ofrece la devolución sin reparar (DC31), como cuando la custodia se confirmaba aparte.
+- **Con trabajos:** sin cambios. El comprobante de ingreso y autorización confirma, autoriza y emite en una sola operación (BR-REP-046). Ahora exige también la verificación.
+
+#### Verificación inicial (DEC-AJ-07)
+
+- **Datos:** `funcionalidades_verificadas` (Sí, No o sin responder) y `observaciones_verificacion`, en la recepción y en sus versiones. Son columnas nuevas: no se reutilizan `recepcion.checkin_ingreso` ni `DatosRecepcion.checkin`.
+- **Obligatoria:**
+  - En la pantalla, para crear la Orden, en los dos orígenes.
+  - En la API, para recibir el equipo con el comprobante: el de ingreso y autorización y, sin trabajos, el de recepción (faltantes y `bloqueo`).
+  - Crear la Orden por la API sin la respuesta sigue siendo posible (BR-REP-023): se completa después con la corrección del ingreso.
+  - Registrar la primera respuesta no pide motivo; cambiarla es una corrección.
+- **Dónde se ve:**
+  - en «Cliente y equipo» de la Orden;
+  - en los comprobantes de recepción y de ingreso, en pantalla y en el PDF («Funcionalidades verificadas al ingresar»);
+  - como referencia, junto al check-in de entrega: en el formulario de entrega y en «Registrar el check-in».
+- **Sin efecto sobre la garantía:** el check-in de entrega sigue igual. La entrega lo sigue exigiendo. Los plazos siguen siendo de 90 o 30 días según ese check-in, sin importar la respuesta del ingreso.
+
+#### Crear y generar el comprobante (DEC-AJ-08)
+
+- «Nueva orden» de Cliente Externo termina con **«Crear y generar el comprobante»** (`PanelOrdenes.tsx`, `crearYGenerar`). Encadena dos comandos:
+  - **Con trabajo inicial:** crea la Orden y genera el comprobante de ingreso y autorización. El canal llega presencial y se puede cambiar en el mismo formulario; se registra igual (BR-REP-028).
+  - **Sin trabajo:** crea la Orden y la envía a revisión, con el comprobante de recepción que confirma la custodia.
+- **Visor:** se abre con el comprobante generado y **«Imprimir»** como acción principal (el PDF en el de ingreso; la hoja imprimible en el de recepción). La impresión la inicia el clic del usuario: no se imprime sola después de las llamadas.
+- **Si el comprobante falla:** la Orden ya quedó creada. El error se muestra en esa Orden y el comprobante se genera desde ahí.
+- **Idempotencia:** crear la Orden y el comprobante de ingreso ya lo eran. Ahora enviar a revisión también: un reintento sobre la Orden ya enviada y todavía sin revisar la devuelve sin cambios.
+- **Confirmaciones:** no se agregó ninguna.
+
+#### IMEI no disponible e IMEI real (DEC-AJ-06)
+
+- **«IMEI no disponible»:** un botón junto al IMEI.
+  - El campo queda vacío y la recepción guarda la marca `imei_no_disponible`.
+  - El equipo se identifica con su `EQP-…` (DEC-UX-02). Se aclara que es provisorio y que no es un IMEI en el alta, en la cabecera, en «Cliente y equipo», en los comprobantes y en el PDF.
+  - El backend rechaza la marca junto con un IMEI: nunca un IMEI ficticio.
+- **«Registrar el IMEI real»:** `POST /api/orders/{id}/real-imei`. El IMEI viaja en el cuerpo, nunca en la URL (P1-18).
+  - **Cuándo:** se ofrece (`acciones_custodia`) mientras el equipo no tenga IMEI y la Orden no se haya entregado ni devuelto, también con la custodia confirmada. Después de la entrega se rechaza.
+  - **Motivo y permiso:** el motivo es obligatorio. Usa el permiso configurable de la corrección del ingreso, `INGRESO_CORREGIR` (DEC-MI-07): Recepción, Coordinación RMA y Administración. No hay permiso nuevo.
+  - **Auditoría:** como en las correcciones del ingreso. Queda una versión de la recepción con el equipo anterior, el motivo y el cambio `equipo.imei`, y el paso ACC-REP-023 `REGISTRAR_IMEI_REAL` («Datos del ingreso corregidos», EV-REP-002). El IMEI no va en la observación del historial.
+  - **Qué cambia:** `rma.equipo.imei` y la copia de la Orden. No cambian la fila decidida de `rma.recepcion` (el trigger `recepcion_decidida_no_cambia` sigue igual), los comprobantes emitidos ni el identificador interno.
+- **Otro equipo con ese IMEI (DEC-MI-11):**
+  - Responde 409 `CONFIRMACION_REQUERIDA` con los `EQP-…` que coinciden, y no registra nada.
+  - Si se confirma a propósito, el IMEI queda en este equipo, sin vincularlos.
+  - Si es el mismo equipo, se usa «Corregir la vinculación».
+
+#### Migración
+
+`20261123000200_ingreso_trabajo_verificacion_imei.sql`, aditiva e idempotente:
+
+- cuatro columnas en `rma.recepcion`: `trabajo_solicitado`, `funcionalidades_verificadas`, `observaciones_verificacion` e `imei_no_disponible` (`false` por defecto);
+- los comentarios de esas columnas y el de `rma.recepcion_version`, que ahora también guarda el registro del IMEI real.
+
+No agrega tablas, así que los scripts de reinicio del UAT no cambian.
+
+#### Pruebas nuevas
+
+| Archivo | Casos | Qué cubre |
+|---|---|---|
+| `tests/test_ingreso_sin_trabajos.py` | 12 | Alta sin trabajos con el trabajo solicitado y su corrección versionada; el comprobante de recepción confirma la custodia (historial, contenido, idempotencia); sin estado físico ni verificación no se recibe ni queda nada; RT_INTERNO sin cambios; definición del técnico y autorización del cliente después; con trabajos, el comprobante de ingreso con el canal; crear y generar con y sin trabajos; la Orden queda creada si falla el comprobante; verificación obligatoria, registrada, corregida con motivo, en los comprobantes y el PDF; la garantía no cambia (90/30 solo según el check-in de entrega) |
+| `tests/test_imei_no_disponible.py` | 6 | IMEI vacío con `EQP-…` y la aclaración en el PDF; la marca con un IMEI se rechaza; IMEI real con la custodia confirmada (motivo, versión, historial sin el IMEI, comprobante sin cambios, una sola vez); permiso; rechazado después de la entrega; aviso de otro equipo sin vincular |
+| `tests/postgres/test_ingreso_bloque3_postgres.py` | 2 | Columnas nuevas y sus versiones guardadas y releídas; custodia con el comprobante de recepción e IMEI real después (equipo y copia de la Orden, recepción sin tocar, EV-REP-002) |
+| Frontend `tests/ingreso-ajustes.test.ts` | 8 | Datos del alta, faltantes, verificación y su referencia en el check-in, comprobante del alta, comprobante que abre el visor, identificación provisoria e IMEI real |
+
+#### Pruebas existentes adaptadas (aprobado: fijaban las reglas reemplazadas)
+
+- **Fixtures centrales:**
+  - `tests/fixtures/custodia.py`: `preparar_ingreso` registra la verificación si falta. Suma dos funciones:
+    - `enviar_a_revision`, que deja los datos que exige el comprobante de recepción;
+    - `revision_anterior_sin_custodia`, una Orden enviada a revisión antes de DEC-AJ-05, con la custodia pendiente, como las del UAT.
+  - `tests/fixtures/ingreso_inicial.py`: el alta con la verificación.
+  - `tests/fixtures/api_definicion.py` y `tests/fixtures/api_salidas.py`: el camino de revisión usa `enviar_a_revision`.
+- **Custodia aparte del comprobante de recepción (DEC-AJ-05):**
+  - `test_documentos_custodia_entrega.py`:
+    - pruebas 2 a 8: el comprobante sale `EN_CUSTODIA` y la versión a pedido sale de una observación nueva;
+    - prueba 5: pasa a verificar la confirmación con el comprobante (una sola vez, permisos y estado físico, sin dejar nada a medias);
+    - prueba 7: la inmutabilidad se prueba con una observación;
+    - prueba 1: compara también los datos nuevos de la recepción.
+  - `test_ingreso_inicial.py` (2 pruebas), `test_api_var_rep_001_002.py` (historial con ACC-REP-024 y devolución ofrecida), `test_api_sin_reparacion.py`, `test_api_definicion.py`, `test_cancelacion_orden.py` y `test_comprobante_autorizacion.py`.
+  - `test_entrega_y_garantia.py`: la entrega bloqueada por la custodia se prueba con una garantía RMA, que la sigue confirmando aparte.
+  - `test_entrega_sin_aviso.py`, `test_orden_cerrada.py` y `test_permisos_operativos.py`: enviar a revisión exige también `CUSTODIA`.
+  - `test_equipo_no_recibido.py`, `test_inventario_operativo.py` y `test_situacion_operativa.py`: la custodia pendiente después de enviar a revisión se arma como una Orden anterior a DEC-AJ-05 (`revision_anterior_sin_custodia`).
+  - `tests/postgres/test_recepcion_documentos_postgres.py` y `tests/postgres/corpus_ordenes.py`: la verificación se registra antes del comprobante.
+- **Idempotencia:** `test_api_var_rep_001_002.py` ya no espera 409 al enviar dos veces: el segundo envío no duplica nada (historial y documentos iguales).
+- **Alta sin la verificación:** `test_ux_recepcion.py`.
+- **Ruta nueva:** `test_matriz_permisos.py` clasifica `real-imei` y suma `CUSTODIA` a `send-to-review`.
+- **Scripts E2E (sin ejecutar):** `probar_macro_v14.py` (`crear_ficticia`), `probar_ux_recepcion.py` (`alta`) y `probar_recorridos.py` registran la verificación.
+
+No se debilitó ninguna comprobación de custodia, autorización, inmutabilidad de documentos, idempotencia ni permisos.
+
+#### Pruebas ejecutadas (focalizadas)
+
+| Ámbito | Resultado |
+|---|---|
+| Backend: 79 archivos (ingreso, ingreso inicial, corrección del ingreso, custodia y documentos, identidad, VAR-REP-001/002, caracterización, recepción, check-in y garantía, entregas, matriz de permisos, cancelaciones, situación, bandejas, HP/EXC, macro V1.4, permisos y PDF, entre otros), con los 2 nuevos | 989 pasan (29 omitidas); falla `test_pagos_devoluciones.py::test_21_no_se_entrega_con_saldo_pendiente`, que ya fallaba antes de este bloque (ver limitaciones) |
+| PostgreSQL local: `test_ingreso_bloque3` (nuevo), `test_recepcion_documentos`, `test_ux_recepcion`, `test_ordenes`, `test_cierre_ux`, `test_entrega`, `test_iteracion1`, `test_macro_v14`, `test_consultas`, `test_identidad_equipo`, `test_idempotencia`, `test_pruebas_sql_supabase`, `test_reinicio_clasificacion`, `test_permisos_operativos`, `test_firmas`, `test_comunicaciones`, `test_motivos_retiro`, `test_finanzas`, `test_reservas`, `test_garantias_tipo` y `test_bloque_a` | 239 pasan |
+| Backend: `ruff check . ../../supabase/scripts` y `ruff format --check` de los archivos tocados | Limpios |
+| Frontend: `typecheck`, `npm test` y `npm run build` | Pasan (217 pruebas) |
+| Arranque | Backend local en modo JSON con `/health` 200; `npm run dev` levanta |
+
+La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA integral.
+
+#### Decisiones tomadas en la implementación
+
+- **Dónde vive el trabajo solicitado:** en los datos de la recepción, no en la raíz de la Orden. Así se versiona y se corrige como el resto del ingreso, y queda fijo con la custodia.
+- **Dónde se exige la verificación:** en la API, al recibir el equipo con el comprobante, no al crear la Orden. BR-REP-023 dice que ningún campo es obligatorio para crear; así no se rompen los clientes de la API ni las Órdenes ya creadas. La pantalla la exige al crear.
+- **Orden del historial:** la confirmación de la custodia va antes de 050/060, como en el comprobante de ingreso, para que el comprobante de recepción salga con la custodia confirmada.
+- **Permiso para enviar a revisión:** como el mismo acto confirma la custodia, exige también `CUSTODIA`. Con la configuración inicial, Recepción tiene los dos.
+- **Auditoría del IMEI real:** se reutilizan la versión de la recepción (`rma.recepcion_version`, que solo crece) en lugar de una tabla nueva, y el permiso de corrección del ingreso en lugar de uno nuevo.
+- **La marca «IMEI no disponible»:** es un hecho del ingreso. Se conserva después de registrar el IMEI real; cuando el IMEI existe, la pantalla muestra el IMEI.
+- **Comprobante de recepción:** se sigue imprimiendo desde la hoja del navegador, sin un PDF propio. `test_comprobante_autorizacion.py` fija que solo el de ingreso y el de autorización se descargan como PDF.
+- **Verificación en RT_INTERNO:** la pantalla la pide en los dos orígenes; la API solo la exige cuando el comprobante confirma la custodia (Cliente Externo).
+
+#### Limitaciones y pendientes
+
+- **Garantía RMA:** su ingreso sigue confirmando la custodia aparte y no pide la verificación (DEC-AJ-05 habla del ingreso de Cliente Externo). El formulario de la garantía no cambió.
+- **Órdenes del UAT:**
+  - las que ya se enviaron a revisión conservan su custodia pendiente y se confirman como antes;
+  - las que están en REQUERIMIENTO sin la verificación tienen que responderla (corrección del ingreso) antes de generar el comprobante.
+- **IMEI en la URL:** la identificación por IMEI del alta sigue mandándolo en la URL (`/equipment/identify`, P1-18). El registro del IMEI real lo manda en el cuerpo, y la búsqueda de coincidencias se hace en el servidor.
+- **Prueba que ya fallaba:** `test_pagos_devoluciones.py::test_21_no_se_entrega_con_saldo_pendiente` falla también sin este bloque. Espera PROC-REP-266 en el mensaje de rechazo, que el bloque 2 cambió.
+- **Documentación:** no se actualizaron en este bloque `traceability/discrepancias-baseline-v1.4.md` (DEC-AJ-05 a 08 siguen «sin implementar») ni `docs/ESTADO_PROYECTO.md`.
+- **Validación manual:** pendiente, en local y en un navegador. Recorrido:
+  1. alta con trabajo y alta sin trabajo;
+  2. impresión desde el visor;
+  3. IMEI no disponible y registro del IMEI real después de la custodia;
+  4. check-in con la referencia del ingreso.
