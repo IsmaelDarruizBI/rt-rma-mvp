@@ -93,9 +93,10 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 - **Plan:** BF-01 a BF-20 en 8 bloques, aprobados; detalle, pruebas y limitaciones en [`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md) (secciones 8 y 10).
 - **Iteración 1, implementada en local (bloques 1 a 4):** BF-07, BF-12, BF-17, BF-18, BF-19, BF-20, BF-04, BF-05, BF-06 y BF-08, con DEC-AJ-01 a 09. Commits: bloque 1 `3788aa0` a `8980e52`; bloque 2 `5cf99f9` a `f51ce94`; bloque 3 `0376f34` a `a55b1b8`; bloque 4 `d657ca5` a `89a3e6a`.
 - **Migraciones:** tres aditivas, solo locales: `20261123000100` (check-in en la entrega), `20261123000200` (trabajo solicitado, verificación e IMEI del ingreso) y `20261123000300` (datos de la empresa y términos de los comprobantes); el bloque 1 no tiene. Quedan 45 en el repositorio.
-- **`business/`:** sincronizado con `rt-rma-app` `713a9b9` (`spec/ajustes-funcionales`, local), con DEC-AJ-01 a 09 implementadas ([`sincronizacion-funcional.md`](sincronizacion-funcional.md)). P-04 y P-05 resueltos; P-08 (apartados 6 y 18 de los términos) para revisar ([`pendientes-producto.md`](pendientes-producto.md)).
+- **`business/`:** sincronizado con `rt-rma-app` `a2c64f3` (`spec/ajustes-funcionales`, local), con DEC-AJ-01 a 09 implementadas y DEC-AJ-10 a 14 (iteración 2) aprobadas y sin implementar ([`sincronizacion-funcional.md`](sincronizacion-funcional.md)). P-04 y P-05 resueltos; P-08 (apartados 6 y 18 de los términos) para revisar ([`pendientes-producto.md`](pendientes-producto.md)).
 - **Pruebas:** focalizadas por bloque, en verde.
-- **Falta:** la iteración 2 (bloques 5 a 8: BF-09, BF-15, BF-01/02 y BF-14) y la validación manual de todo el backlog.
+- **Iteración 2 (bloques 5 a 8: BF-09, BF-15, BF-01/02 y BF-14):** decisiones aprobadas el 23/11/2026 y registradas como DEC-AJ-10 a 14 antes del código ([`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md), sección 11.1); implementación en curso.
+- **Falta:** implementar la iteración 2 y la validación manual de todo el backlog.
 
 ### Reparación RT etapa 1 + Configuración v2 en UAT (20/11/2026): UAT OPERATIVO
 

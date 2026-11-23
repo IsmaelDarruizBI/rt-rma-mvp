@@ -1,10 +1,12 @@
 # Ajustes funcionales del feedback de UAT (BF-01 a BF-20): análisis y plan
 
-> **Estado (23/11/2026):** iteración 1 (bloques 1 a 4) implementada en local (secciones 8 y 10), sin push ni despliegue. Iteración 2 (bloques 5 a 8): decisiones en revisión (sección 11). `business/` está sincronizado con `rt-rma-app` `713a9b9` (`spec/ajustes-funcionales`, local), con DEC-AJ-01 a 09 implementadas (sección 9.1).
+> **Estado (23/11/2026):** iteración 1 (bloques 1 a 4) implementada en local (secciones 8 y 10), sin push ni despliegue. Iteración 2 (bloques 5 a 8): decisiones aprobadas y registradas como DEC-AJ-10 a 14 (sección 11.1); implementación en curso. `business/` está sincronizado con `rt-rma-app` `a2c64f3` (`spec/ajustes-funcionales`, local), con DEC-AJ-01 a 09 implementadas (sección 9.1) y DEC-AJ-10 a 14 sin implementar (sección 11.1).
 >
 > **Aprobado (23/11/2026):** la planificación general y la secuencia de los 8 bloques (sección 3).
 >
 > **Aprobado (23/11/2026):** D-01, alternativa B, y D-02, alternativa A (sección 4.1).
+>
+> **Aprobado (23/11/2026):** las decisiones de la iteración 2, D-10 a D-14. D-12.2, D-13.1, D-14.3 y D-14.4 fueron modificadas por el usuario. Rige la sección 11.1, con las precisiones de implementación de la coordinación.
 >
 > **Bloques 1 a 4:** implementados en local; se validan a mano junto con todo el backlog (secciones 8 y 10).
 >
@@ -1158,7 +1160,9 @@ La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA inte
   3. reimprimir el comprobante anterior;
   4. ver el progreso de una Orden entregada sin aviso.
 
-## 11. Decisiones de la iteración 2 (bloques 5 a 8), en revisión (23/11/2026)
+## 11. Decisiones de la iteración 2 (bloques 5 a 8): análisis y propuestas (23/11/2026)
+
+> **Aprobadas el 23/11/2026, con cambios: rige la sección 11.1.** Lo que sigue es el análisis y las propuestas que se presentaron a revisión. Donde difiere de 11.1 (por ejemplo D-12.2, D-13.1, D-14.3 y D-14.4), vale 11.1.
 
 Revisado contra el código, el esquema (45 migraciones) y `business/` (`713a9b9`). Reemplaza las preguntas de la sección 4 para los bloques 5 a 8. Cada decisión aprobada se registra como DEC-AJ en `rt-rma-app` antes del código, igual que en la iteración 1.
 
@@ -1514,3 +1518,70 @@ Es la decisión de negocio central del cruce entre BF-01 y BF-14.
 4. bloque 8: catálogos, compatibilidad, requisitos y elección de la pieza.
 
 Hasta que termine el bloque 8, los tipos genéricos solo pueden prever insumos universales, igual que hoy, porque los previstos no tienen pantalla.
+
+### 11.1 Decisiones aprobadas (23/11/2026)
+
+**Rige esta sección.** El análisis y las propuestas de la sección 11 quedan como contexto; donde difieren, vale lo de aquí.
+
+Registradas en `rt-rma-app`, rama `spec/ajustes-funcionales` (local, sin publicar), commit `a2c64f3`, y copiadas a `business/` ([`sincronizacion-funcional.md`](sincronizacion-funcional.md)). DEC-AJ-NN corresponde a D-NN y agrupa sus puntos. No agregan nodos, aristas ni estados. Ninguna está implementada: figuran en la sección B de [`traceability/discrepancias-baseline-v1.4.md`](../traceability/discrepancias-baseline-v1.4.md).
+
+- **Modificadas por el usuario** respecto de la propuesta: D-12.2, D-13.1, D-14.3 y D-14.4.
+- **Precisiones de implementación:** las definió la coordinación del desarrollo para cerrar huecos del texto aprobado. No son texto aprobado. En `rt-rma-app` van separadas en las notas de cada DEC-AJ, y en las reglas llevan la marca «precisión de implementación».
+
+| Decisión | ID | Definición aprobada | Implementación |
+|---|---|---|---|
+| D-10 (BF-09) | DEC-AJ-10 | **D-10.1:** una sola entidad de ajuste comercial para descuento y cortesía, con una experiencia unificada; se conservan los permisos por clase y se corrige que el permiso de descuento modifique una cortesía. **D-10.2:** acciones explícitas de corrección y reversión, sin borrar registros; el ajuste revertido deja de contar y vuelve a regir el anterior, si existe; permiso configurable nuevo, por defecto **solo Administración**; se registran usuario, fecha, motivo y operación; ninguna reversión deja pagos, devoluciones o saldos inconsistentes. **D-10.3:** después de la entrega no se agregan, corrigen ni revierten ajustes. **D-10.4:** se conservan precio original, importe del ajuste, precio final, motivo, usuario, fecha y hora, y la evidencia de los recálculos; la redefinición o cancelación de un trabajo mantiene la trazabilidad. **D-10.5:** los comprobantes muestran por trabajo el precio original, el ajuste y el precio final; usuario, fecha y justificación quedan solo en el registro interno; los cálculos de saldo del backend deben dar lo mismo | Bloque 5 |
+| D-11 (BF-15) | DEC-AJ-11 | **D-11.1:** el mínimo se compara con el disponible, no solo con el físico; se distinguen stock suficiente, bajo mínimo y bajo mínimo con reposición solicitada; no se confunde con stock negativo ni faltantes. **D-11.2:** mínimo opcional por insumo, editable desde Configuración → Insumos, con permisos y auditoría; los insumos sin mínimo siguen funcionando. **D-11.3:** indicador y filtro en Inventario, aviso en Inicio y sugerencia de la cantidad a reponer hasta el mínimo, que considera la disponibilidad y no duplica solicitudes existentes; nunca se crean Órdenes de Compra automáticamente | Bloque 6 |
+| D-12 (BF-01) | DEC-AJ-12 | **D-12.1:** Tipo de Reparación, Modelo de equipo y Precio separados; cada tipo con precio único o por modelo; con precio por modelo, nunca un precio genérico de respaldo en silencio; los tipos actuales siguen funcionando. **D-12.2 (modificada):** sin precio para la combinación se puede continuar con un **precio manual justificado y autorizado**, sin obligar a usar «Otros»: se muestra que falta el precio de catálogo, se piden precio y motivo, se exige un permiso configurable, se registran precio, motivo, usuario y fecha, el trabajo conserva el origen manual y el catálogo no cambia; no permite eludir los controles de los ajustes comerciales. **D-12.3:** el precio depende de tipo y modelo; la marca, el fabricante o la calidad del insumo no lo cambian; garantía, puntaje y Mesas siguen en el tipo; los insumos deben ser compatibles con el modelo; un trabajo puede usar cero, uno o varios. **D-12.4:** los tipos históricos no se convierten; cada trabajo nuevo copia nombre del tipo, modelo y precio autorizado. **D-12.5:** Administración da de alta modelos desde Configuración; el catálogo no depende solo de una lista fija; se revisa la integración con los modelos de Gestión RT. **D-12.6:** antes de autorizar, un cambio de modelo vuelve a determinar el precio; después se conserva el autorizado y se advierte el cambio; modificar un precio autorizado usa el circuito vigente | Bloque 7 |
+| D-13 (BF-02) | DEC-AJ-13 | **D-13.1 (modificada):** importación desde **Excel `.xlsx`**, CSV y celdas pegadas de Google Sheets; matriz con modelos en filas y tipos en columnas; combinaciones identificadas por códigos estables; descarga de una plantilla con los precios actuales. **D-13.2:** solo precios de tipos y modelos existentes; celdas vacías sin efecto; no crea modelos ni tipos; primero iPhone, multimarca fuera de la importación masiva. **D-13.3:** vista previa con cambios, errores, duplicados, permisos y precios nuevos frente a actualizaciones; aplicación transaccional, todo o nada; no toca precios ya registrados en Órdenes; auditoría de la importación | Bloque 7 |
+| D-14 (BF-14) | DEC-AJ-14 | **D-14.1:** cada insumo es un repuesto o SKU real, con su stock, lotes, costos, movimientos, reservas y consumos; no se agrupan marcas distintas. **D-14.2:** categoría, subcategoría, marca o fabricante, variante y modelos compatibles; sin restricción de modelo, compatible con todos cuando corresponde; clasificación gradual. **D-14.3 (modificada):** la marca, el fabricante o la calidad **no definen por sí solos otro Tipo**: «Cambio de batería» + iPhone 14 tiene un precio, con cualquier batería compatible; los costos sí se individualizan; otro tipo solo si el servicio es realmente distinto. **D-14.4 (modificada):** la pieza concreta se elige **durante la definición o preparación del trabajo, antes de reservar** (tipo → modelo → insumos necesarios → piezas compatibles → disponibilidad → reserva → ejecución); nunca dos reservas sobre la misma disponibilidad; sustituciones controladas con trazabilidad; cero, uno o varios insumos; sin rediseñar el motor de reservas, movimientos y consumo. **D-14.5:** no se mueven ni recalculan existencias; no se alteran lotes, movimientos, compras ni consumos | Bloque 8 |
+
+**Consistencia entre los bloques 7 y 8 (aprobada):** el tipo define el trabajo; el modelo, el dispositivo; tipo + modelo, el precio de catálogo. Los insumos reales se eligen por compatibilidad y disponibilidad. El costo es del insumo y el precio de venta no depende de su marca. Las Órdenes conservan copias y trazabilidad. Se amplían las entidades existentes (`detalle_version`, `tipo_reparacion_insumo`, `insumo`, `modelo_equipo`, compras, reservas, movimientos, lotes, garantías e historial) en lugar de duplicarlas.
+
+#### Precisiones de implementación (coordinación del desarrollo, 23/11/2026)
+
+- **D-10.2:**
+  - **Qué se revierte:** solo el ajuste vigente de un destino (la Orden o un trabajo). Vuelve a regir el registro anterior no revertido de ese destino; si ese registro es un «quitar», no queda ningún ajuste.
+  - **Corregir:** revierte y registra el ajuste correcto en la misma transacción, enlazado con `corrige_a`. Exige `AJUSTE_REVERTIR` y el permiso de la clase del ajuste nuevo.
+  - **Permiso:** `AJUSTE_REVERTIR`, solo Administración por defecto y configurable.
+  - **Se rechaza:** con la Orden entregada, cerrada o cancelada, o si el resultado supera los topes de BR-REP-016 (el ajuste no supera el importe al que se aplica y el total nunca es negativo). Nunca se modifican pagos, devoluciones ni las copias de recargo de los pagos.
+  - **Estado consistente:** la vista SQL y el dominio dan el mismo saldo, y las devoluciones nunca superan lo pagado. Un saldo a favor es el estado que ya admite DEC-MI-03 (devolución enlazada al pago, antes de entregar). La entrega sigue exigiendo saldo 0.
+- **D-10.4:** cada registro nuevo guarda el precio original (la base), el importe aplicado y el precio final. Si una redefinición o cancelación cambia el importe efectivo de un ajuste vigente, se persiste un registro inmutable de recálculo (ajuste, causa, precio e importe anterior y nuevo, usuario y fecha), que también va al historial de la Orden. No se escribe un ajuste nuevo. Cada alta, cambio, retiro, corrección y reversión emite `EV-REP-041`.
+- **D-12.2:**
+  - **Permiso:** `PRECIO_MANUAL` («Autorizar un precio manual cuando falta el precio de catálogo»), por defecto Coordinación RMA y Administración, configurable. El técnico no fija precios ni lo tiene por defecto.
+  - **Se acepta:** si el tipo tiene precio por modelo y no hay precio para el modelo de la Orden, o si el equipo no tiene modelo técnico.
+  - **Se rechaza:** si existe precio de catálogo para la combinación (para bajar un precio está el ajuste comercial) y en los tipos de precio único. «Otros» sigue como hoy.
+  - **Copia en el Detalle:** origen del precio (`CATALOGO`, `CATALOGO_MODELO`, `MANUAL` u `OTROS`), motivo del precio manual y quién lo definió.
+- **D-12.6:** antes de la autorización del cliente, un cambio de modelo vuelve a resolver el precio de los trabajos con precio por modelo; sin precio para el modelo nuevo, el trabajo queda «precio pendiente de definir» y no se autoriza hasta definirlo (catálogo o precio manual autorizado). Después de la autorización se conserva la copia, con el aviso «el precio corresponde a otro modelo».
+- **D-13:** lectura del `.xlsx` en el backend con `openpyxl` (dependencia nueva, solo lectura); subida del cuerpo crudo, como fotos y firmas, sin multipart; plantilla en `.xlsx` y CSV; pegado de Google Sheets como texto separado por tabulaciones; solo modelos Apple y tipos con precio por modelo (otra marca es un error de la fila); importes con formato argentino; un identificador común por importación en la auditoría.
+- **D-14.4:**
+  - **Requisitos:** el tipo declara requisitos (categoría o subcategoría + cantidad), junto a los insumos previstos concretos actuales (universales), que se conservan.
+  - **Pieza elegida:** por requisito, el Detalle guarda un SKU compatible con el modelo de la Orden. La elige el sistema si hay una sola compatible activa; si no, quien prepara el trabajo (permiso nuevo o existente, por defecto Técnico, Coordinación y Administración).
+  - **Factibilidad y reserva:** sobre las piezas elegidas; una sola reserva por disponibilidad, garantizada por el motor actual. La reserva sigue al iniciar la ejecución (BR-REP-006) y no se inicia con requisitos sin pieza elegida.
+  - **Sustitución:** antes de reservar cambia la elección, con motivo y registro; después de reservar y antes de consumir, liberación y reserva nueva en una sola transacción, con motivo.
+  - **Sin requisitos:** como hoy. **Compras:** las sugerencias por faltante usan la pieza elegida.
+
+#### Registro en `rt-rma-app`
+
+- **Cambian de texto:**
+  - reglas BR-REP-015, 016, 031, 039, 040 y 047 a 049;
+  - nodos PROC-REP-030, 070, 075, 080, 127, 185, 270 y 280;
+  - Features FEAT-REP-001, 002, 003, 005, 007, 008, 010 y 011;
+  - Scenario VAR-REP-041;
+  - notas de DEC-MI-03 y 09, DEC-IT1-02, DEC-UX-01 y 13, DEC-CFG-03 y 05.
+- **ABI-53** cerrado por DEC-AJ-14. **ABI-43** cerrado en parte por DEC-AJ-12: sigue abierto para cargar la línea iPhone 18.
+- **Sin cambios de texto:** BR-REP-002, 005 y 006, PROC-REP-210 y EXC-REP-001 y 003. `test-scenarios` exige que sigan iguales a V1.3. Lo que DEC-AJ-14 agrega a la factibilidad, la reserva y los movimientos está en BR-REP-049 y en PROC-REP-080 y 185. Cambiar esos textos obliga a declararlos en la prueba, y eso requiere aprobación.
+
+#### Puntos para resolver en la implementación o con el negocio
+
+1. **Factibilidad sin pieza elegida (D-14.4).** La factibilidad (PROC-REP-080) corre al definir o autorizar el trabajo. Si hay varias piezas compatibles y nadie eligió todavía, no está definido qué evalúa: puede tratar el requisito como «pendiente de elegir» o sumar el disponible de las compatibles.
+2. **Equipo sin modelo técnico con requisitos por categoría.** Solo serían compatibles las piezas sin restricción de modelo. Si no hay ninguna, el trabajo no puede iniciarse, y eso no está definido.
+3. **Técnico y precio faltante (D-12.2).** El técnico define trabajos (075, 127 y 128) sin `PRECIO_MANUAL`. La precisión de D-12.6 («precio pendiente de definir», que bloquea la autorización) debería aplicarse también a esos casos. En los orígenes sin autorización del cliente no hay un paso que lo bloquee.
+4. **«Otros» y precio manual.** Recepción no tiene `PRECIO_MANUAL` por defecto, pero sigue pudiendo usar «Otros» con precio manual (BR-REP-047). Precio manual y «Otros» conviven con controles distintos.
+5. **Precios y DEC-CFG-03.** Fijar precios es de Administración (DEC-CFG-03). `PRECIO_MANUAL` agrega una vía por trabajo para Coordinación, sin tocar el catálogo. Es coherente con el texto aprobado, pero es una excepción a «solo Administración fija precios».
+6. **Reparto del recargo (DEC-UX-13).** DEC-UX-13 dice que el comprobante reparte el recargo cobrado entre los trabajos vigentes al emitirlo. La corrección técnica de la sección 11 dice que el reparto mostrado use la copia de cada pago. Hay que confirmar que no contradice DEC-UX-13 antes de cambiar la presentación.
+7. **«Reposición solicitada» (D-11.1).** La propuesta contaba solo las Órdenes de Compra confirmadas. El texto aprobado habla de «reposición solicitada» y de no duplicar solicitudes, lo que sugiere contar también las solicitudes pendientes. Falta fijar qué estados cuentan.
+8. **Catálogo técnico administrado por RMA (D-12.5).** BR-REP-040 dice que el catálogo de equipos lo mantiene Ventas, y DEC-UX-01 dice que no se inventan modelos. Desde DEC-AJ-12, el catálogo técnico (`modelo_equipo`) también se da de alta desde Configuración. La copia de productos de Ventas sigue siendo de solo lectura. Hay que evitar duplicados con una exportación futura de Ventas.
+9. **Calidad del repuesto (D-14.3).** Original y alternativo tienen el mismo precio si el servicio es el mismo. El cliente no elige la calidad al autorizar, y el comprobante no la muestra. Si el negocio necesita precios distintos por calidad, solo quedan un tipo realmente distinto o un ajuste comercial.
+10. **Permisos sin nombre en el texto aprobado.** La importación (D-13.3) y el mínimo (D-11.2) exigen «permisos» sin nombrarlos. Lo natural es el permiso de precios (DEC-CFG-03) y el de insumos.
+11. **Cambio de modelo sin autorización del cliente (D-12.6).** En RT_INTERNO y en las garantías no hay autorización del cliente, así que no está definido cuándo se congela el precio. El efecto es menor, porque no se cobra.
