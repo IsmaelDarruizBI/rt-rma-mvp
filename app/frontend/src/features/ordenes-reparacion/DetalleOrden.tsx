@@ -33,6 +33,7 @@ import {
   etiqueta,
   etiquetaAutorizacion,
   hace,
+  tituloDePaso,
 } from "./etiquetas";
 
 /** "Nombre" si el usuario está en el catálogo; si no, su ID. */
@@ -684,7 +685,7 @@ export function ProgresoHappyPath({ orden }: { orden: Orden }) {
       {orden.progreso.map((paso) => (
         <li
           key={paso.process_id}
-          title={`${paso.process_id} — ${paso.etiqueta}`}
+          title={tituloDePaso(paso)}
           style={{
             padding: "0.2rem 0.45rem",
             borderRadius: 4,
@@ -692,7 +693,14 @@ export function ProgresoHappyPath({ orden }: { orden: Orden }) {
             fontFamily: "ui-monospace, monospace",
             background: paso.alcanzado ? colores.ok : colores.fondo,
             color: paso.alcanzado ? "#fff" : colores.suave,
-            border: `1px solid ${paso.alcanzado ? colores.ok : colores.borde}`,
+            // DEC-AJ-03: un paso opcional se marca con borde punteado; si
+            // la Orden siguió sin él, además tachado (salteado, no
+            // pendiente).
+            border: `1px ${paso.opcional ? "dashed" : "solid"} ${
+              paso.alcanzado ? colores.ok : colores.borde
+            }`,
+            textDecoration: paso.omitido ? "line-through" : undefined,
+            opacity: paso.omitido ? 0.7 : undefined,
           }}
         >
           {paso.process_id.replace("PROC-REP-", "")}

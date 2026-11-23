@@ -1719,11 +1719,17 @@ class HistorialOut(BaseModel):
 
 
 class PasoProgresoOut(BaseModel):
-    """Nodo de HP-REP-001 y si la Orden ya paso por el."""
+    """Nodo de HP-REP-001 y si la Orden ya paso por el.
+
+    DEC-AJ-03: ``opcional`` (avisar al cliente) y ``omitido`` (opcional y
+    salteado: la Orden ya siguio adelante sin el).
+    """
 
     process_id: str
     etiqueta: str
     alcanzado: bool
+    opcional: bool = False
+    omitido: bool = False
 
     @classmethod
     def desde_dominio(cls, paso: PasoProgreso) -> "PasoProgresoOut":
@@ -1731,6 +1737,8 @@ class PasoProgresoOut(BaseModel):
             process_id=paso.process_id,
             etiqueta=paso.etiqueta,
             alcanzado=paso.alcanzado,
+            opcional=paso.opcional,
+            omitido=paso.omitido,
         )
 
 

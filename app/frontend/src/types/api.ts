@@ -1092,6 +1092,10 @@ export interface PasoProgreso {
   process_id: string;
   etiqueta: string;
   alcanzado: boolean;
+  /** DEC-AJ-03: un paso que se puede saltear (avisar al cliente). */
+  opcional?: boolean;
+  /** Opcional y salteado: la Orden siguió sin él (no está pendiente). */
+  omitido?: boolean;
 }
 
 /** Accion humana que la Orden admite ahora, segun el backend. */

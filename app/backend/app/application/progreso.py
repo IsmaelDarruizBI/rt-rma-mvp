@@ -152,11 +152,23 @@ _RUTAS_POR_ORIGEN: dict[OrigenOrden, tuple[tuple[str, str], ...]] = {
 
 @dataclass(frozen=True)
 class PasoProgreso:
-    """Un nodo de la ruta de referencia y si la Orden ya paso por el."""
+    """Un nodo de la ruta de referencia y si la Orden ya paso por el.
+
+    ``opcional``: un paso que la Orden puede saltear (DEC-AJ-03: avisar al
+    cliente, PROC-REP-260). ``omitido``: opcional, no alcanzado y con la
+    Orden ya mas adelante en la ruta; la pantalla lo muestra salteado, no
+    pendiente. Solo presentacion: el grafo del proceso no cambia.
+    """
 
     process_id: str
     etiqueta: str
     alcanzado: bool
+    opcional: bool = False
+    omitido: bool = False
+
+
+# DEC-AJ-03: avisar al cliente dejo de ser obligatorio para entregar.
+_NODOS_OPCIONALES = frozenset({"PROC-REP-260"})
 
 
 _TRAMO_RECURSOS: tuple[tuple[str, str], ...] = (
@@ -464,13 +476,32 @@ def nodos_alcanzados(orden: OrdenReparacion) -> set[str]:
 
 
 def progreso(orden: OrdenReparacion) -> list[PasoProgreso]:
-    """Recorrido de referencia de la Orden marcando lo ya transitado."""
+    """Recorrido de referencia de la Orden marcando lo ya transitado.
+
+    Un paso opcional que la Orden salteo (por ejemplo, la entrega sin
+    aviso, DEC-AJ-03) queda ``omitido``: no alcanzado, pero tampoco
+    pendiente.
+    """
     alcanzados = nodos_alcanzados(orden)
-    return [
-        PasoProgreso(
-            process_id=process_id,
-            etiqueta=etiqueta,
-            alcanzado=process_id in alcanzados,
+    ruta = _ruta_esperada(orden)
+    pasos = []
+    for indice, (process_id, etiqueta) in enumerate(ruta):
+        alcanzado = process_id in alcanzados
+        opcional = process_id in _NODOS_OPCIONALES
+        pasos.append(
+            PasoProgreso(
+                process_id=process_id,
+                etiqueta=etiqueta,
+                alcanzado=alcanzado,
+                opcional=opcional,
+                omitido=(
+                    opcional
+                    and not alcanzado
+                    and any(
+                        siguiente in alcanzados
+                        for siguiente, _ in ruta[indice + 1 :]
+                    )
+                ),
+            )
         )
-        for process_id, etiqueta in _ruta_esperada(orden)
-    ]
+    return pasos

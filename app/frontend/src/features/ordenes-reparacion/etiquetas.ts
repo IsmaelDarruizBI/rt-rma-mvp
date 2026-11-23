@@ -4,7 +4,7 @@
  * y los códigos siguen visibles en «Historial y datos técnicos».
  */
 
-import type { Accion, Detalle, Orden, RolUsuario } from "../../types/api";
+import type { Accion, Detalle, Orden, PasoProgreso, RolUsuario } from "../../types/api";
 
 export const ESTADO_WORKFLOW: Record<string, string> = {
   REQUERIMIENTO: "Ingresada",
@@ -304,4 +304,16 @@ export function mensajeLegible(
     )
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+/**
+ * El título de un paso del «Recorrido técnico del proceso». DEC-AJ-03:
+ * avisar al cliente (PROC-REP-260) es opcional; si la Orden siguió sin el
+ * aviso, se dice salteado, no pendiente.
+ */
+export function tituloDePaso(paso: PasoProgreso): string {
+  const base = `${paso.process_id} — ${paso.etiqueta}`;
+  if (paso.omitido) return `${base} (opcional, salteado)`;
+  if (paso.opcional) return `${base} (opcional)`;
+  return base;
 }
