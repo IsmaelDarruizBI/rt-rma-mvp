@@ -202,6 +202,12 @@ class ContenidoComprobanteEntrega(_ContenidoBase):
     )
     estado_final: EstadoWorkflow
     tipo_entrega: TipoEntrega
+    # DEC-AJ-04: "Comprobante de entrega y garantia", un solo documento con
+    # la garantia de cada trabajo, sus condiciones y los terminos y
+    # condiciones (no se emite el certificado aparte). False en los
+    # comprobantes emitidos antes, que conservan su presentacion.
+    entrega_y_garantia: bool = False
+    condiciones_garantia: str | None = None
     resultado: str
     fecha_entrega: datetime | None = None
     entregado_por: UsuarioEnDocumento | None = None
@@ -238,6 +244,10 @@ class ContenidoComprobanteEntrega(_ContenidoBase):
 
 class ContenidoGarantia(_ContenidoBase):
     """Garantia de los trabajos realizados (PROC-REP-280).
+
+    DEC-AJ-04: ya no se emite para las entregas nuevas (la garantia va en
+    el Comprobante de entrega y garantia); se conserva para leer los
+    certificados ya emitidos, que son inmutables.
 
     Cada trabajo con su propio plazo: no hay una duracion general. La
     vigencia empieza con la entrega efectiva del equipo (``fecha_inicio``).

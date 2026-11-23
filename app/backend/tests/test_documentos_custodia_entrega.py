@@ -668,11 +668,8 @@ def test_10_no_se_entrega_dos_veces(cliente, tmp_path):
 
     assert archivo(tmp_path, orden_id) == antes
     tipos = [d["tipo"] for d in _documentos(cliente, orden_id)["emitidos"]]
-    assert tipos == [
-        "COMPROBANTE_INGRESO",
-        "COMPROBANTE_ENTREGA",
-        "GARANTIA",
-    ]
+    # DEC-AJ-04: un solo documento de entrega (sin certificado aparte).
+    assert tipos == ["COMPROBANTE_INGRESO", "COMPROBANTE_ENTREGA"]
 
 
 # --- 11/12/13. Condicion financiera de la entrega ----------------------------
@@ -736,8 +733,11 @@ def test_13_17_entrega_despues_del_cierre_financiero(cliente):
     assert cancelado["detalle_id"] == "DET-002"
     assert cancelado["nombre"] == "Cambio de pantalla"
     assert cancelado["origen_cancelacion"] == "INTERNA"
-    garantia = _vigente(cliente, orden_id, "GARANTIA")["contenido"]
-    assert [c["detalle_id"] for c in garantia["coberturas"]] == ["DET-001"]
+    # DEC-AJ-04: la garantia va en el mismo comprobante, solo lo realizado.
+    assert contenido["entrega_y_garantia"] is True
+    assert [t["garantia_dias"] for t in contenido["trabajos_realizados"]] == [
+        90
+    ]
 
 
 # --- 14/15. Devolucion por cancelacion ---------------------------------------
@@ -894,18 +894,23 @@ def test_18_19_cada_trabajo_con_su_plazo(cliente):
 
     ok(_entregar(cliente, orden_id, **RETIRA))
 
-    garantia = _vigente(cliente, orden_id, "GARANTIA")
-    assert garantia["id"] == f"{orden_id}-GAR-01"
+    # DEC-AJ-04: la garantia de cada trabajo va en el Comprobante de
+    # entrega y garantia; no se emite el certificado aparte.
+    comprobante = _vigente(cliente, orden_id, "COMPROBANTE_ENTREGA")
+    assert comprobante["id"] == f"{orden_id}-ENT-01"
     coberturas = {
-        c["detalle_id"]: (c["nombre"], c["garantia_dias"], c["vence"])
-        for c in garantia["contenido"]["coberturas"]
+        t["detalle_id"]: (t["nombre"], t["garantia_dias"], t["garantia_vence"])
+        for t in comprobante["contenido"]["trabajos_realizados"]
     }
     # 2026-10-01 10:00 en Argentina: + 90 y + 60 dias.
     assert coberturas == {
         "DET-001": ("Cambio de bateria", 90, "2026-12-30"),
         "DET-002": ("Cambio de pantalla", 60, "2026-11-30"),
     }
-    assert garantia["contenido"]["condiciones"] is None
+    assert comprobante["contenido"]["condiciones_garantia"] is None
+    assert "GARANTIA" not in [
+        d["tipo"] for d in _documentos(cliente, orden_id)["emitidos"]
+    ]
 
 
 def test_20_la_garantia_empieza_con_la_entrega(cliente, reloj):
@@ -919,12 +924,12 @@ def test_20_la_garantia_empieza_con_la_entrega(cliente, reloj):
 
     orden = ok(_entregar(cliente, orden_id, **RETIRA))
 
-    contenido = _vigente(cliente, orden_id, "GARANTIA")["contenido"]
-    assert contenido["fecha_inicio"] == orden["entrega"]["fecha"]
-    assert contenido["fecha_inicio"].startswith("2026-10-20T02:30")
+    contenido = _vigente(cliente, orden_id, "COMPROBANTE_ENTREGA")["contenido"]
+    assert contenido["fecha_entrega"] == orden["entrega"]["fecha"]
+    assert contenido["fecha_entrega"].startswith("2026-10-20T02:30")
     # Dia local de la entrega (19/10) + 90, no el de la reparacion (01/10).
-    (cobertura,) = contenido["coberturas"]
-    assert cobertura["vence"] == "2027-01-17"
+    (trabajo,) = contenido["trabajos_realizados"]
+    assert trabajo["garantia_vence"] == "2027-01-17"
     assert vencimiento_garantia(
         datetime(2026, 10, 20, 2, 30, tzinfo=timezone.utc), 90, ARGENTINA
     ) == date(2027, 1, 17)
@@ -999,12 +1004,13 @@ def test_21_garantia_rma_vinculada_a_la_orden_original(cliente, tmp_path):
     assert final["trabajos_realizados"][0]["precio"] is None
     assert final["trabajos_realizados"][0]["detalle_origen_id"] == "DET-001"
     assert f"Garantia de la Orden {origen_id}: sin cargo" in final["resultado"]
-    garantia = _vigente(cliente, rma_id, "GARANTIA")["contenido"]
-    assert garantia["orden_origen_id"] == origen_id
-    assert [d["detalle_id"] for d in garantia["detalles_reclamados"]] == [
+    # DEC-AJ-04: la garantia va en el mismo comprobante de entrega.
+    assert final["entrega_y_garantia"] is True
+    assert final["orden_origen_id"] == origen_id
+    assert [d["detalle_id"] for d in final["detalles_reclamados"]] == [
         "DET-001"
     ]
-    assert garantia["coberturas"][0]["detalle_origen_id"] == "DET-001"
+    assert final["trabajos_realizados"][0]["garantia_vence"] is not None
     # La Orden original no se toca.
     assert archivo(tmp_path, origen_id) == origen_antes
 
@@ -1019,7 +1025,8 @@ def test_22_una_orden_cerrada_se_consulta_sin_acciones(cliente, tmp_path):
 
     documentos = _documentos(cliente, orden_id)
     assert documentos["cerrada"] is True
-    assert len(documentos["emitidos"]) == 3
+    # Ingreso y el Comprobante de entrega y garantia (DEC-AJ-04).
+    assert len(documentos["emitidos"]) == 2
     for documento in documentos["emitidos"]:
         ok(cliente.get(f"/api/orders/{orden_id}/documents/{documento['id']}"))
     custodia = ok(cliente.get(f"/api/orders/{orden_id}/custody"))
@@ -1128,7 +1135,7 @@ def test_24_ordenes_json_anteriores_siguen_cargando(cliente, tmp_path):
 def test_circuito_a_cliente_externo(cliente, reloj):
     """Ingreso con accesorios y estado -> trabajos -> comprobante de ingreso
     y autorizacion (recepcion, definicion y autorizacion) -> reparacion ->
-    control -> pago -> entrega -> comprobante final y garantia."""
+    control -> pago -> entrega -> comprobante de entrega y garantia."""
     orden_id = _ingresar(cliente)
     agregar(cliente, orden_id, BATERIA)
     finalizar(cliente, orden_id)
@@ -1143,13 +1150,16 @@ def test_circuito_a_cliente_externo(cliente, reloj):
 
     assert orden["estado_workflow"] == "ENTREGADA"
     assert orden["current_process"] == "EVT-REP-999"
+    # DEC-AJ-04: un solo documento de entrega, con la garantia.
     assert [d["id"] for d in orden["documentos_emitidos"]] == [
         f"{orden_id}-ING-01",
         f"{orden_id}-ENT-01",
-        f"{orden_id}-GAR-01",
     ]
-    garantia = _vigente(cliente, orden_id, "GARANTIA")["contenido"]
-    assert garantia["coberturas"][0]["vence"] == "2026-12-31"
+    contenido = _vigente(cliente, orden_id, "COMPROBANTE_ENTREGA")["contenido"]
+    assert contenido["entrega_y_garantia"] is True
+    assert contenido["trabajos_realizados"][0]["garantia_vence"] == (
+        "2026-12-31"
+    )
 
 
 def test_circuito_b_cancelacion(cliente):
@@ -1214,7 +1224,9 @@ def test_circuito_c_garantia_rma(cliente, tmp_path):
     assert orden["estado_workflow"] == "ENTREGADA"
     assert orden["pagos"] == []
     assert orden["orden_origen_id"] == origen_id
-    assert _vigente(cliente, rma_id, "GARANTIA")["contenido"]["coberturas"]
+    assert _vigente(cliente, rma_id, "COMPROBANTE_ENTREGA")["contenido"][
+        "trabajos_realizados"
+    ]
     # El total es nominal: lo que hubiera costado, sin cobro.
     assert orden["resumen"]["condicion_comercial"] == "NO_COBRABLE"
     assert Decimal(orden["resumen"]["total"]) == Decimal("80000")

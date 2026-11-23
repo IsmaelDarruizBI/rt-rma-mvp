@@ -321,22 +321,20 @@ def test_sin_checkin_no_se_entrega(cliente, tmp_path):
     # Notificar y cobrar siguen igual, sin check-in.
     orden = _notificar_y_pagar(cliente, orden_id)
 
+    # DEC-AJ-04: el check-in faltante se pide en el mismo formulario de
+    # entrega; no bloquea la accion ni es una situacion aparte. Se puede
+    # seguir registrando antes, por separado.
     entregar = _accion(orden, "ENTREGAR")
-    assert entregar["bloqueo"] == "Falta registrar el check-in"
+    assert entregar["bloqueo"] is None
     assert _accion(orden, "REGISTRAR_CHECKIN") is not None
-    # Presentacion: no "lista para entregar" sino pendiente del check-in;
-    # el workflow sigue en REPARACION_LISTA.
     principal = orden["situacion"]
     assert orden["estado_workflow"] == "REPARACION_LISTA"
-    assert principal["codigo"] == "PENDIENTE_CHECKIN"
-    assert principal["titulo"] == (
-        "Pendiente de verificación de funciones básicas"
-    )
-    assert [t["titulo"] for t in principal["tareas"]] == [
-        "Registrar el check-in",
-        "Entregar el equipo",
-    ]
+    assert principal["codigo"] == "LISTA_PARA_ENTREGAR"
+    (tarea,) = principal["tareas"]
+    assert tarea["titulo"] == "Entregar el equipo"
+    assert "check-in" in tarea["motivo"]
     antes = archivo(tmp_path, orden_id)
+    # Sin la respuesta del check-in, la entrega se rechaza (BR-REP-045).
     assert "check-in" in conflicto(_entregar(cliente, orden_id))
     assert archivo(tmp_path, orden_id) == antes
 
@@ -423,22 +421,11 @@ def test_el_plazo_corre_desde_la_entrega(cliente, reloj):
     assert not [
         c for c, _ in complementarias(orden) if c == "AJUSTAR_GARANTIA"
     ]
-    (garantia,) = del_tipo(cliente, orden_id, "GARANTIA")
-    contenido = garantia["contenido"]
-    assert contenido["fecha_inicio"].startswith("2026-10-21")
-    vencimientos = {
-        cobertura["detalle_id"]: (
-            cobertura["garantia_dias"],
-            date.fromisoformat(cobertura["vence"]),
-        )
-        for cobertura in contenido["coberturas"]
-    }
-    assert vencimientos == {
-        "DET-001": (90, date(2027, 1, 19)),
-        "DET-002": (45, date(2026, 12, 5)),
-    }
-    # El comprobante final lleva el check-in y la garantia de cada trabajo.
+    # DEC-AJ-04: no hay certificado aparte; el Comprobante de entrega y
+    # garantia lleva el check-in y la garantia de cada trabajo.
+    assert del_tipo(cliente, orden_id, "GARANTIA") == []
     (final,) = del_tipo(cliente, orden_id, "COMPROBANTE_ENTREGA")
+    assert final["contenido"]["fecha_entrega"].startswith("2026-10-21")
     assert final["contenido"]["checkin"] is True
     assert {
         trabajo["detalle_id"]: (
@@ -446,6 +433,9 @@ def test_el_plazo_corre_desde_la_entrega(cliente, reloj):
             date.fromisoformat(trabajo["garantia_vence"]),
         )
         for trabajo in final["contenido"]["trabajos_realizados"]
-    } == vencimientos
+    } == {
+        "DET-001": (90, date(2027, 1, 19)),
+        "DET-002": (45, date(2026, 12, 5)),
+    }
     # Despues de entregar ya no se ajusta.
     conflicto(_ajustar(cliente, orden_id, "DET-001", 30), "ORDEN_CERRADA")

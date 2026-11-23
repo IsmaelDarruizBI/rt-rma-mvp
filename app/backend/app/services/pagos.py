@@ -640,22 +640,37 @@ def validar_condicion_entrega(
         )
 
     puede_entregar = condicion_entrega_cumplida(orden)
+    return registrar_condicion_entrega(orden, fecha=fecha), puede_entregar
 
-    if politica.condicion_comercial == CondicionComercial.NO_COBRABLE:
+
+def registrar_condicion_entrega(
+    orden: OrdenReparacion,
+    *,
+    fecha: datetime,
+) -> OrdenReparacion:
+    """El paso PROC-REP-265 con el resultado, sin volver a validar.
+
+    Lo usa ``validar_condicion_entrega`` despues de sus controles y la
+    entrega (``services.entrega``), que ya los hizo una vez en la misma
+    operacion.
+    """
+    if (
+        politica_de(orden.origen).condicion_comercial
+        == CondicionComercial.NO_COBRABLE
+    ):
         observacion = "NO_COBRABLE_POR_ORIGEN"
     elif orden.saldo < 0:
         observacion = f"Saldo {orden.saldo}: a favor del cliente"
     else:
         observacion = f"Saldo {orden.saldo}"
 
-    nueva_orden = registrar_paso(
+    return registrar_paso(
         orden,
         process_id="PROC-REP-265",
         accion="VALIDAR_CONDICION_ENTREGA",
         fecha=fecha,
         observacion=observacion,
     )
-    return nueva_orden, puede_entregar
 
 
 def registrar_saldo_pendiente(

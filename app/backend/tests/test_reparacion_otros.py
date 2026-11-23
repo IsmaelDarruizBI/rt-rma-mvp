@@ -135,10 +135,11 @@ def test_ciclo_de_vida_completo_sin_insumos(cliente, tmp_path):
     assert comprobante["contenido"]["trabajos"][0]["nombre"] == (
         f"Otros: {DESCRIPCION}"
     )
-    (garantia,) = del_tipo(cliente, orden_id, "GARANTIA")
-    (cobertura,) = garantia["contenido"]["coberturas"]
-    assert cobertura["tipo_reparacion_id"] == "TR-OTROS"
-    assert cobertura["nombre"] == f"Otros: {DESCRIPCION}"
+    # DEC-AJ-04: la garantia va en el Comprobante de entrega y garantia.
+    (entrega,) = del_tipo(cliente, orden_id, "COMPROBANTE_ENTREGA")
+    (trabajo,) = entrega["contenido"]["trabajos_realizados"]
+    assert trabajo["tipo_reparacion_id"] == "TR-OTROS"
+    assert trabajo["nombre"] == f"Otros: {DESCRIPCION}"
 
 
 def test_se_distingue_en_las_bandejas(cliente):

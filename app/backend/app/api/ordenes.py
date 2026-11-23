@@ -123,6 +123,7 @@ from app.services import (
     MAX_BYTES_FOTO,
     ROLES_EXCEPCION_GARANTIA,
     ROLES_FOTOS,
+    DatosRetiro,
     DecisionDetalle,
     PrecondicionInvalidaError,
     evaluar_vigencia_garantia,
@@ -1651,19 +1652,24 @@ def post_entregar(
     cuerpo: EntregarIn,
     contexto: ContextoDep,
 ) -> OrdenOut:
-    """Entregar el equipo (ACT-ADMIN).
+    """Entregar el equipo (Recepcion o Administracion).
 
-    Compone PROC-REP-280 -> 270 -> EVT-REP-999. La Orden queda ENTREGADA.
-    Exige la custodia confirmada y quien retira; emite el comprobante final
-    y la garantia, que empieza con esta entrega.
+    Una sola confirmacion: [250] [269] [265] 280 -> 270 -> EVT-REP-999. La
+    Orden queda ENTREGADA. Exige saldo 0, la custodia confirmada y quien
+    retira; registra el check-in si falta (``checkin``) y emite el
+    Comprobante de entrega y garantia, que empieza con esta entrega.
     """
     orden = entregar(
         contexto,
         orden_id=orden_id,
         usuario_id=cuerpo.usuario_id,
-        recibido_por=cuerpo.recibido_por,
-        identificacion_receptor=cuerpo.identificacion_receptor,
-        observaciones=cuerpo.observaciones,
+        retiro=DatosRetiro(
+            recibido_por=cuerpo.recibido_por,
+            identificacion_receptor=cuerpo.identificacion_receptor,
+            observaciones=cuerpo.observaciones,
+        ),
+        checkin=cuerpo.checkin,
+        checkin_motivo=cuerpo.checkin_motivo,
     )
     return _salida(orden, contexto)
 

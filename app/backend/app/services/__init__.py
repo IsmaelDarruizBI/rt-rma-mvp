@@ -73,6 +73,7 @@ from .clientes import (
 )
 from .custodia import (
     ROLES_RECEPCION_EQUIPO,
+    DatosRetiro,
     agregar_nota_recepcion,
     armar_entrega,
     checkin_de,
@@ -125,6 +126,7 @@ from .documentos import (
     emitir_comprobante_recepcion,
     generar_comprobante_final,
     generar_comprobante_recepcion,
+    marcar_comprobante_final,
     registrar_documento,
     ultimo_con_trabajos_autorizados,
     ultimo_documento,
@@ -141,6 +143,7 @@ from .ejecuciones import (
     registrar_reserva_fallida,
     reservar_insumos_e_iniciar_ejecucion,
 )
+from .entrega import bloqueo_de_entrega, entregar_al_cliente
 from .exceptions import (
     CodigoDuplicadoError,
     ConfirmacionRequeridaError,
@@ -247,6 +250,7 @@ from .ordenes import (
     notificar_cliente,
     pendientes_para_cerrar,
     registrar_aviso_listo,
+    registrar_entrega,
     verificar_fin_financiero,
 )
 from .pagos import (
@@ -262,6 +266,7 @@ from .pagos import (
     devolvible_de,
     es_cobrable,
     motivo_de_entrega_bloqueada,
+    registrar_condicion_entrega,
     registrar_devolucion_dinero,
     registrar_pago,
     registrar_saldo_pendiente,
@@ -421,6 +426,7 @@ __all__ = [
     # Recepcion fisica y custodia
     "ROLES_RECEPCION_EQUIPO",
     "agregar_nota_recepcion",
+    "DatosRetiro",
     "armar_entrega",
     "confirmar_recepcion_fisica",
     "custodia_por_definir",
@@ -624,4 +630,10 @@ __all__ = [
     "es_ingreso_inicial",
     "exigir_fuera_del_ingreso_inicial",
     "faltantes_para_ingreso",
+    # Entrega en una sola operacion (ajustes funcionales, bloque 2)
+    "bloqueo_de_entrega",
+    "entregar_al_cliente",
+    "marcar_comprobante_final",
+    "registrar_condicion_entrega",
+    "registrar_entrega",
 ]

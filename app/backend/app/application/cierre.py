@@ -5,9 +5,10 @@
     notificar          PROC-REP-250 -> 260 -> 265 [-> 266] (opcional)
     registrar_pago_de_orden   (capacidad transversal) [-> 265 [-> 266]]
     registrar_checkin  verificacion de funciones basicas antes de entregar
-                       (MVP v2, UAT-009): define la garantia por Detalle
-    entregar           [250 ->] [265 ->] 280 -> 270 -> EVT-REP-999 (+
-                       comprobante final y garantia emitidos)
+                       (MVP v2, UAT-009): define la garantia por Detalle;
+                       tambien se registra dentro de la entrega
+    entregar           [250 ->] [269 ->] [265 ->] 280 -> 270 -> EVT-REP-999
+                       (+ Comprobante de entrega y garantia)
 
 La condicion de entrega exige saldo exactamente cero (V1.4, BR-REP-038):
 una deuda se cobra y un saldo a favor se devuelve
@@ -17,40 +18,34 @@ DEC-AJ-03 (23/11/2026): avisar al cliente (PROC-REP-260) es opcional. Con
 aviso, PROC-REP-265 se evalua al avisar y despues de cada Pago, como en
 HP-REP-001, y ``entregar`` no lo repite. Sin aviso, ``entregar`` registra
 250 y evalua 265 en la misma operacion, antes de PROC-REP-280.
+
+DEC-AJ-04 (23/11/2026): el check-in que falta se registra en la misma
+confirmacion de la entrega (269, y se revalida 265) y se emite un solo
+documento, el Comprobante de entrega y garantia.
 """
 
 from decimal import Decimal
 
 from app.domain.models import OrdenReparacion
 from app.services import (
-    PrecondicionInvalidaError,
+    DatosRetiro,
     aprobar_control_tecnico,
-    armar_entrega,
     aviso_registrable,
     calcular_puntaje,
-    condicion_entrega_cumplida,
     control_tecnico_completo,
     devolver_equipo_rt,
-    entregar_equipo,
+    entregar_al_cliente,
     evaluar_situacion_orden,
-    exigir_checkin_para_entrega,
-    exigir_equipo_en_custodia,
-    generar_comprobante_final,
     informar_resultado_rt,
-    lista_para_cierre,
     marcar_reparacion_lista,
     notificar_cliente,
     rechazar_control_tecnico,
     registrar_aviso_listo,
     registrar_checkin_de_entrega,
     registrar_pago,
-    registrar_paso,
     registrar_saldo_pendiente,
-    validar_alguno_de,
     validar_condicion_entrega,
 )
-from app.services.ordenes import ROLES_ENTREGA
-from app.services.pagos import motivo_de_entrega_bloqueada
 
 from .contexto import ApplicationContext
 from .documentos import emitir_documentos_de_salida
@@ -58,11 +53,6 @@ from .finanzas import reevaluar_tras_movimiento
 from .modificacion import orden_para_modificar
 
 CERO = Decimal("0")
-# El cierre por Origen ya empezo: hubo aviso (260) y se evaluo la condicion
-# de entrega (265), con o sin saldo pendiente (266).
-NODOS_CIERRE_INICIADO = frozenset(
-    {"PROC-REP-260", "PROC-REP-265", "PROC-REP-266"}
-)
 
 
 def aprobar_control(
@@ -299,93 +289,37 @@ def entregar(
     *,
     orden_id: str,
     usuario_id: str,
-    recibido_por: str | None = None,
-    identificacion_receptor: str | None = None,
-    observaciones: str | None = None,
+    retiro: DatosRetiro,
+    checkin: bool | None = None,
+    checkin_motivo: str | None = None,
 ) -> OrdenReparacion:
-    """El Administrador entrega el equipo (280 -> 270 -> EVT-REP-999).
+    """Recepcion o Administracion entregan el equipo al cliente.
 
-    La condicion de entrega se comprueba como PRECONDICION del comando,
-    no volviendo a recorrer PROC-REP-265: ese nodo ya se evaluo en la
-    notificacion y despues del pago. Reejecutarlo aqui agregaria al
-    historial un paso que HP-REP-001 no da.
-
-    El rol se valida antes de generar nada: ``entregar_equipo`` tambien
-    lo valida, pero para entonces PROC-REP-280 ya habria emitido el
-    comprobante final.
-
-    Despues de la condicion comercial exige el check-in si hay trabajos
-    con garantia (Cliente Externo), el equipo en custodia confirmada (el
-    comprobante de recepcion no alcanza) y quien lo retira.
-    La entrega queda registrada (``orden.entrega``) y, en la misma
-    operacion, se emiten el comprobante final y la garantia, que empieza
-    con esta entrega.
+    Una sola confirmacion (DEC-AJ-04): ``entregar_al_cliente`` controla una
+    vez el rol, el resultado, la cuenta (saldo exactamente 0), la custodia
+    confirmada, el trabajo abierto, quien retira y el check-in, registra el
+    check-in que falte (269) y la condicion de entrega si todavia no se
+    evaluo (DEC-AJ-03: sin aviso, 250 y 265), y despues 280 y 270. En la
+    misma transaccion se emite el Comprobante de entrega y garantia, con la
+    garantia que empieza con esta entrega. Si algo falla no se guarda nada.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    validar_alguno_de(usuario, ROLES_ENTREGA)
     fecha = contexto.ahora()
 
     with orden_para_modificar(contexto, orden_id) as orden:
-        if not lista_para_cierre(orden):
-            raise PrecondicionInvalidaError(
-                f"Solo se entrega una Orden con resultado "
-                f"(REPARACION_LISTA o SIN_REPARACION); esta en "
-                f"{orden.estado_workflow.value}."
-            )
-        if not condicion_entrega_cumplida(orden):
-            raise PrecondicionInvalidaError(
-                f"No se puede entregar: {motivo_de_entrega_bloqueada(orden)}. "
-                "Resolve la cuenta (cobro o devolucion) y volve a intentarlo."
-            )
-        exigir_checkin_para_entrega(orden)
-        exigir_equipo_en_custodia(orden, operacion="entregar el equipo")
-        entrega = armar_entrega(
+        orden = entregar_al_cliente(
             orden,
             usuario=usuario,
             fecha=fecha,
-            recibido_por=recibido_por,
-            identificacion_receptor=identificacion_receptor,
-            observaciones=observaciones,
-        )
-        # DEC-AJ-03: sin aviso (ni cobro con la Orden en cierre), la entrega
-        # evalua la condicion de entrega directamente (250 -> 265).
-        if orden.current_process != "PROC-REP-265":
-            orden = _evaluar_condicion_en_la_entrega(orden, fecha=fecha)
-
-        orden = generar_comprobante_final(
-            orden, fecha=fecha, zona_horaria=contexto.zona_horaria
-        )
-        orden = entregar_equipo(
-            orden, usuario=usuario, fecha=fecha, entrega=entrega
+            retiro=retiro,
+            checkin=checkin,
+            checkin_motivo=checkin_motivo,
+            zona_horaria=contexto.zona_horaria,
         )
         orden = emitir_documentos_de_salida(
             contexto, orden, usuario_id=usuario.id, fecha=fecha
         )
-
         contexto.ordenes.guardar(orden)
-    return orden
-
-
-def _evaluar_condicion_en_la_entrega(
-    orden: OrdenReparacion,
-    *,
-    fecha,
-) -> OrdenReparacion:
-    """PROC-REP-265 dentro de la entrega, cuando todavia no se evaluo.
-
-    Sin aviso al cliente la Orden sigue en 240 o 069: se registra la
-    decision PROC-REP-250 (requiere entrega a cliente) y la condicion. Con
-    el aviso hecho (260, 265 o 266) solo se revalida la condicion.
-    """
-    if orden.current_process not in NODOS_CIERRE_INICIADO:
-        orden = registrar_paso(
-            orden,
-            process_id="PROC-REP-250",
-            accion="REQUIERE_ENTREGA_A_CLIENTE",
-            fecha=fecha,
-            observacion=orden.origen.value,
-        )
-    orden, _ = validar_condicion_entrega(orden, fecha=fecha)
     return orden
 
 

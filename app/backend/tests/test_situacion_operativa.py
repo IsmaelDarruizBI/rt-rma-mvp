@@ -406,18 +406,13 @@ def test_aviso_cobro_y_entrega(tmp_path):
 
         _pagar(cliente, orden_id, saldo)
         situacion = _situacion(cliente, orden_id)
-        # Saldada: antes de entregar falta el check-in. Es solo
-        # presentacion: el workflow sigue en REPARACION_LISTA.
-        assert situacion["codigo"] == "PENDIENTE_CHECKIN"
-        assert situacion["titulo"] == (
-            "Pendiente de verificación de funciones básicas"
-        )
-        checkin, entrega = situacion["tareas"]
-        assert _codigos(checkin) == ["REGISTRAR_CHECKIN"]
+        # Saldada: lista para entregar. DEC-AJ-04: el check-in que falta
+        # se registra en el mismo formulario de entrega, sin bloquearla.
+        assert situacion["codigo"] == "LISTA_PARA_ENTREGAR"
+        (entrega,) = situacion["tareas"]
         assert _codigos(entrega) == ["ENTREGAR"]
-        assert entrega["acciones"][0]["bloqueo"] == (
-            "Falta registrar el check-in"
-        )
+        assert entrega["acciones"][0]["bloqueo"] is None
+        assert "check-in" in entrega["motivo"]
 
         ok(registrar_checkin(cliente, orden_id))
         situacion = _situacion(cliente, orden_id)

@@ -1302,6 +1302,14 @@ def entregar_equipo(
         raise PrecondicionInvalidaError(
             "Falta generar la garantia de reparacion (PROC-REP-280)."
         )
+    exigir_sin_trabajo_abierto(orden)
+    return registrar_entrega(
+        orden, usuario=usuario, fecha=fecha, entrega=entrega
+    )
+
+
+def exigir_sin_trabajo_abierto(orden: OrdenReparacion) -> None:
+    """No se entrega con trabajo abierto: Ejecucion, toma o reservas."""
     if any(
         ejecucion.estado is EstadoEjecucion.EN_PROGRESO
         for ejecucion in orden.ejecuciones
@@ -1318,11 +1326,30 @@ def entregar_equipo(
             "No se puede entregar con reservas de insumos activas."
         )
 
-    observacion = None
-    if entrega is not None:
-        observacion = f"Retira: {entrega.recibido_por}"
-        if entrega.identificacion_receptor:
-            observacion += f" ({entrega.identificacion_receptor})"
+
+def descripcion_de_quien_retira(entrega: EntregaEquipo) -> str:
+    """Quien retiro, para el historial."""
+    descripcion = f"Retira: {entrega.recibido_por}"
+    if entrega.identificacion_receptor:
+        descripcion += f" ({entrega.identificacion_receptor})"
+    return descripcion
+
+
+def registrar_entrega(
+    orden: OrdenReparacion,
+    *,
+    usuario: Usuario,
+    fecha: datetime,
+    entrega: EntregaEquipo | None = None,
+) -> OrdenReparacion:
+    """PROC-REP-270 sin volver a validar: el paso, la salida y ENTREGADA.
+
+    Lo usan ``entregar_equipo`` despues de sus controles y la entrega
+    (``services.entrega``), que ya los hizo una vez en la misma operacion.
+    """
+    observacion = (
+        descripcion_de_quien_retira(entrega) if entrega is not None else None
+    )
     nueva_orden = registrar_paso(
         orden,
         process_id="PROC-REP-270",

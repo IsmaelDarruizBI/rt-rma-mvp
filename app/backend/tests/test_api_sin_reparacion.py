@@ -119,9 +119,12 @@ def test_cliente_externo_sin_reparacion_de_punta_a_punta(cliente):
     assert orden["puede_entregar"] is True
     assert "PROC-REP-266" not in _ids(orden)
     # Sin trabajos realizados no hay garantia que definir: no se pide el
-    # check-in (UAT-009) y la entrega no tiene bloqueo.
+    # check-in (UAT-009). DEC-AJ-04: lo que bloquea la entrega lo informa
+    # el backend; aca, la recepcion fisica sin confirmar.
     assert _codigos(orden) == ["ENTREGAR"]
-    assert orden["acciones_disponibles"][0]["bloqueo"] is None
+    assert orden["acciones_disponibles"][0]["bloqueo"] == (
+        "Falta confirmar la recepción física del equipo"
+    )
 
     # 280 (sin garantia de reparacion) -> 270 -> EVT-REP-999.
     respuesta = entregar(cliente, orden_id, ADMINISTRADOR)

@@ -34,6 +34,7 @@ from app.domain.politicas import CondicionComercial, politica_de
 from app.domain.prioridad import nombre_de_prioridad
 from app.services import (
     ResultadoEvaluacionOrden,
+    checkin_pendiente_para_entrega,
     control_tecnico_completo,
     credito_pendiente,
     definicion_finalizada,
@@ -665,32 +666,19 @@ def _cierre(datos: _Datos) -> _Principal | None:
         )
     entregar = datos.flujo("ENTREGAR")
     if entregar:
+        # DEC-AJ-04: el check-in que falte se registra en el mismo
+        # formulario de entrega; no es una situacion aparte.
         tarea_entrega = _tarea(
             "Entregar el equipo",
-            "Registrar quién lo retira; se emite el comprobante de entrega "
-            "y garantía.",
+            (
+                "Registrar quién lo retira y si se pudieron verificar las "
+                "funciones básicas (check-in)"
+                if checkin_pendiente_para_entrega(orden)
+                else "Registrar quién lo retira"
+            )
+            + "; se emite el comprobante de entrega y garantía.",
             entregar,
         )
-        checkin = datos.flujo("REGISTRAR_CHECKIN")
-        if checkin and any(accion.bloqueo for accion in entregar):
-            return _Principal(
-                codigo=CodigoSituacion.PENDIENTE_CHECKIN,
-                titulo="Pendiente de verificación de funciones básicas",
-                descripcion="La cuenta está saldada: antes de entregar "
-                "falta registrar si se pudieron verificar las funciones "
-                "básicas del equipo.",
-                desde=lista_desde,
-                tareas=(
-                    _tarea(
-                        "Registrar el check-in",
-                        "Si se pudieron verificar las funciones básicas: "
-                        "define la garantía de cada trabajo (90 o 30 días).",
-                        checkin,
-                    ),
-                    tarea_entrega,
-                    *aviso_sugerido,
-                ),
-            )
         return _Principal(
             codigo=CodigoSituacion.LISTA_PARA_ENTREGAR,
             titulo="Lista para entregar",

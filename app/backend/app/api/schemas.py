@@ -724,6 +724,11 @@ class EntregarIn(BaseModel):
     recibido_por: str | None = None
     identificacion_receptor: str | None = None
     observaciones: str | None = None
+    # DEC-AJ-04: el check-in en el mismo formulario, si todavia falta (si se
+    # pudieron verificar las funciones basicas). ``checkin_motivo`` solo
+    # para corregir uno ya registrado (DEC-MI-05).
+    checkin: bool | None = None
+    checkin_motivo: str | None = None
 
 
 class ExcepcionGarantiaIn(BaseModel):

@@ -69,7 +69,10 @@ from app.repositories.exceptions import (  # noqa: E402
     PersistenciaError,
     RestriccionDeIntegridadError,
 )
-from app.services import PrecondicionInvalidaError  # noqa: E402
+from app.services import (  # noqa: E402
+    DatosRetiro,
+    PrecondicionInvalidaError,
+)
 from app.storage.fotos import AlmacenFotosMemoria  # noqa: E402
 from app.storage.json.catalogos import JsonCatalogosRepository  # noqa: E402
 from app.storage.postgres.ordenes_lectura import (  # noqa: E402
@@ -1418,7 +1421,7 @@ def test_a4_la_entrega_real_cierra_una_garantia(armar, corpus):
         _contexto(repo, unidad, corpus),
         orden_id=final.id,
         usuario_id=f.ADMINISTRADOR,
-        recibido_por="Titular",
+        retiro=DatosRetiro(recibido_por="Titular"),
     )
     assert entregada.esta_cerrada
     assert repo.obtener(final.id) == entregada

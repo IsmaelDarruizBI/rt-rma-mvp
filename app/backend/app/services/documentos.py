@@ -81,7 +81,7 @@ from .custodia import (
 from .descuentos import descripcion_de_descuento
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .ordenes import fecha_de_entrega
-from .pagos import condicion_entrega_cumplida
+from .pagos import condicion_entrega_cumplida, motivo_de_entrega_bloqueada
 from .reparaciones import nombre_del_trabajo
 from .revisiones import finalizada_sin_reparacion, lista_para_cierre
 from .workflow import registrar_accion_funcional, registrar_paso
@@ -245,10 +245,28 @@ def generar_comprobante_final(
         )
     if not condicion_entrega_cumplida(orden):
         raise PrecondicionInvalidaError(
-            f"No se emite el comprobante final con saldo pendiente: "
-            f"{orden.saldo}."
+            f"No se emite el comprobante final con "
+            f"{motivo_de_entrega_bloqueada(orden)}."
         )
+    return marcar_comprobante_final(
+        orden, fecha=fecha, zona_horaria=zona_horaria
+    )
 
+
+def marcar_comprobante_final(
+    orden: OrdenReparacion,
+    *,
+    fecha: datetime,
+    zona_horaria: tzinfo = timezone.utc,
+) -> OrdenReparacion:
+    """PROC-REP-280 sin volver a validar: el paso y sus marcas.
+
+    Lo usan ``generar_comprobante_final`` despues de sus controles y la
+    entrega (``services.entrega``), que ya los hizo en la misma operacion.
+    DEC-AJ-04: la garantia es parte del Comprobante de entrega y garantia;
+    la marca ``garantia_reparacion`` sigue diciendo que se emitio (con
+    reparacion), sin un certificado aparte.
+    """
     orden = aplicar_politica_garantia_rma(orden, fecha, zona_horaria)
     sin_reparacion = finalizada_sin_reparacion(orden)
     observacion = f"Total {orden.total} / Saldo {orden.saldo}"
@@ -470,6 +488,9 @@ def contenido_comprobante_entrega(
 ) -> ContenidoComprobanteEntrega:
     """Comprobante final: lo realizado, lo cancelado, el cobro y la entrega.
 
+    DEC-AJ-04: en la entrega de una reparacion es el "Comprobante de
+    entrega y garantia", el unico documento de la entrega.
+
     Cada trabajo realizado lleva su garantia definitiva y su vencimiento
     (desde la entrega), y el comprobante el resultado del check-in. Los
     Detalles cancelados figuran aparte, como no realizados y no cobrados.
@@ -493,10 +514,17 @@ def contenido_comprobante_entrega(
             "detalle_origen_id": detalle.detalle_origen_id,
         }
 
+    reparada = tipo_entrega is TipoEntrega.REPARACION_TERMINADA
     return ContenidoComprobanteEntrega(
         **_datos_comunes(orden, contexto),
         estado_final=orden.estado_workflow,
         tipo_entrega=tipo_entrega,
+        # DEC-AJ-04: la entrega de una reparacion es un solo documento, con
+        # la garantia de cada trabajo, sus condiciones y los terminos.
+        entrega_y_garantia=reparada,
+        condiciones_garantia=(
+            contexto.empresa.condiciones_garantia if reparada else None
+        ),
         resultado=_resultado(orden, tipo_entrega),
         fecha_entrega=salida.fecha if salida else None,
         entregado_por=(
@@ -1105,9 +1133,9 @@ def documentos_previsualizables(
     """Documentos que tiene sentido previsualizar ahora.
 
     El comprobante de recepcion, si el Origen lo emite. El comprobante
-    final y la garantia, cuando la Orden ya tiene resultado (o fue
-    cancelada con el equipo todavia en el local) y todavia no se
-    emitieron. RT_INTERNO no emite documentos al cliente.
+    final (de entrega y garantia, DEC-AJ-04), cuando la Orden ya tiene
+    resultado (o fue cancelada con el equipo todavia en el local) y
+    todavia no se emitio. RT_INTERNO no emite documentos al cliente.
     """
     politica = politica_de(orden.origen)
     tipos: list[TipoDocumento] = []
@@ -1129,12 +1157,8 @@ def documentos_previsualizables(
         lista_para_cierre(orden) or cancelada_en_custodia
     ) and entrega_emitida is None:
         tipos.append(TipoDocumento.COMPROBANTE_ENTREGA)
-    if (
-        lista_para_cierre(orden)
-        and not finalizada_sin_reparacion(orden)
-        and ultimo_documento(orden, TipoDocumento.GARANTIA) is None
-    ):
-        tipos.append(TipoDocumento.GARANTIA)
+    # DEC-AJ-04: la garantia va en el Comprobante de entrega y garantia; el
+    # certificado aparte (GARANTIA) queda solo para los ya emitidos.
     return tipos
 
 

@@ -23,6 +23,7 @@ Las acciones de recepcion son transversales: dejan traza en el historial
 ``current_process``.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 
 from app.domain.models import (
@@ -668,17 +669,24 @@ def tipo_de_entrega(orden: OrdenReparacion) -> TipoEntrega:
     return TipoEntrega.REPARACION_TERMINADA
 
 
+@dataclass(frozen=True)
+class DatosRetiro:
+    """Lo que el formulario de entrega dice de quien retira el equipo."""
+
+    recibido_por: str | None = None
+    identificacion_receptor: str | None = None
+    observaciones: str | None = None
+
+
 def armar_entrega(
     orden: OrdenReparacion,
     *,
     usuario: Usuario,
     fecha: datetime,
-    recibido_por: str | None,
-    identificacion_receptor: str | None = None,
-    observaciones: str | None = None,
+    retiro: DatosRetiro,
 ) -> EntregaEquipo:
     """Registro de la salida fisica del equipo; exige quien lo retira."""
-    recibido_por = _texto(recibido_por)
+    recibido_por = _texto(retiro.recibido_por)
     if recibido_por is None:
         raise PrecondicionInvalidaError(
             "La entrega exige indicar quien retira el equipo."
@@ -687,7 +695,7 @@ def armar_entrega(
         tipo=tipo_de_entrega(orden),
         entregado_por=usuario.id,
         recibido_por=recibido_por,
-        identificacion_receptor=_texto(identificacion_receptor),
+        identificacion_receptor=_texto(retiro.identificacion_receptor),
         fecha=fecha,
-        observaciones=_texto(observaciones),
+        observaciones=_texto(retiro.observaciones),
     )

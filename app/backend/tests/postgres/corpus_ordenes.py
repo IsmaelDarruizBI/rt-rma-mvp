@@ -18,8 +18,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
-from app.domain.models import OrdenReparacion
+from app.domain.models import DatosEmpresa, OrdenReparacion, TipoEntrega
 from app.main import create_app
+from app.services import ContextoDocumentos, registrar_documento
+from app.services.documentos import contenido_garantia
 from app.storage.json.ordenes import JsonOrdenReparacionRepository
 from tests.fixtures import api_salidas as f
 from tests.fixtures import custodia as c
@@ -520,4 +522,34 @@ def armar_corpus(directorio: Path) -> list[OrdenReparacion]:
             _flujos_de_salida(cliente)
             _flujos_financieros(cliente)
             _flujos_iteracion1(cliente)
-    return grabadas
+    return _con_certificado_anterior(grabadas)
+
+
+def _con_certificado_anterior(
+    grabadas: list[OrdenReparacion],
+) -> list[OrdenReparacion]:
+    """DEC-AJ-04: las entregas nuevas ya no emiten el certificado de
+    garantia aparte, pero los emitidos antes se siguen guardando y leyendo.
+    La primera entrega de una reparacion del corpus se graba como una
+    anterior a DEC-AJ-04: con su certificado (GARANTIA) junto al
+    comprobante de entrega."""
+    for indice, orden in enumerate(grabadas):
+        if (
+            orden.entrega is None
+            or orden.entrega.tipo is not TipoEntrega.REPARACION_TERMINADA
+        ):
+            continue
+        contenido = contenido_garantia(
+            orden,
+            ContextoDocumentos(empresa=DatosEmpresa(nombre="Rosario Tecno")),
+        )
+        anterior, _, _ = registrar_documento(
+            orden,
+            contenido=contenido,
+            fecha=orden.entrega.fecha,
+            usuario_id=orden.entrega.entregado_por,
+        )
+        anterior.updated_at = orden.updated_at
+        grabadas[indice] = anterior
+        return grabadas
+    raise AssertionError("El corpus no tiene ninguna entrega de reparacion.")

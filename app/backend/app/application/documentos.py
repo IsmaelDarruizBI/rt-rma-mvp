@@ -38,7 +38,6 @@ from app.services import (
     contenido_comprobante_entrega,
     contenido_comprobante_recepcion,
     contenido_de,
-    contenido_garantia,
     documento_emitido,
     documentos_previsualizables,
     registrar_documento,
@@ -161,11 +160,13 @@ def emitir_documentos_de_salida(
     usuario_id: str,
     fecha: datetime,
 ) -> OrdenReparacion:
-    """Comprobante final y, si hubo trabajos realizados, la garantia.
+    """El comprobante de la salida del equipo (entrega o devolucion).
 
-    Se emiten con la salida del equipo ya registrada (entrega o devolucion
-    sin reparar), en la misma operacion: la garantia empieza con esa
-    entrega. La garantia se emite solo si PROC-REP-280 la genero.
+    Se emite con la salida ya registrada, en la misma operacion: la
+    garantia empieza con esa entrega. DEC-AJ-04: la entrega emite un solo
+    documento, el Comprobante de entrega y garantia, con la garantia de
+    cada trabajo y los terminos y condiciones; ya no se emite el
+    certificado de garantia aparte (los emitidos antes no cambian).
     """
     datos = contexto_documentos(contexto, orden)
     orden, _, _ = registrar_documento(
@@ -174,13 +175,6 @@ def emitir_documentos_de_salida(
         fecha=fecha,
         usuario_id=usuario_id,
     )
-    if orden.documentos.garantia_reparacion.generado and orden.entrega:
-        orden, _, _ = registrar_documento(
-            orden,
-            contenido=contenido_garantia(orden, datos),
-            fecha=fecha,
-            usuario_id=usuario_id,
-        )
     return orden
 
 

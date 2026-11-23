@@ -47,7 +47,7 @@ from app.services import (
     ROLES_LIBERACION_AJENA,
     ROLES_OVERRIDE_RECURSOS,
     ROLES_RECEPCION_EQUIPO,
-    checkin_pendiente_para_entrega,
+    bloqueo_de_entrega,
     checkin_registrable,
     comprobante_autorizacion_emitible,
     custodia_por_definir,
@@ -734,11 +734,10 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
                 codigo=ACCION_ENTREGAR,
                 etiqueta="Entregar el equipo",
                 roles=ROLES_ENTREGA,
-                bloqueo=(
-                    "Falta registrar el check-in"
-                    if checkin_pendiente_para_entrega(orden)
-                    else None
-                ),
+                # DEC-AJ-04: el check-in faltante se registra en el mismo
+                # formulario de entrega; lo que bloquea es la custodia sin
+                # confirmar, y lo informa el backend.
+                bloqueo=bloqueo_de_entrega(orden),
             )
         )
 
