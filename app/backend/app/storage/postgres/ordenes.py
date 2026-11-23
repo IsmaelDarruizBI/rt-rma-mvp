@@ -626,14 +626,18 @@ _INSERTAR_RECEPCION = consulta(
          notas_internas, checkin_ingreso, registrado_por, registrado_en,
          confirmada_por, confirmada_en, confirmacion_observaciones,
          no_recibido_por, no_recibido_en, no_recibido_motivo,
-         observaciones_unificadas)
+         observaciones_unificadas, trabajo_solicitado,
+         funcionalidades_verificadas, observaciones_verificacion,
+         imei_no_disponible)
     VALUES
         (%(orden)s, %(registro)s, %(estado_fisico)s, %(accesorios)s,
          %(observaciones)s, %(notas_internas)s, %(checkin)s,
          %(registrado_por)s, %(registrado_en)s, %(confirmada_por)s,
          %(confirmada_en)s, %(confirmacion_observaciones)s,
          %(no_recibido_por)s, %(no_recibido_en)s, %(no_recibido_motivo)s,
-         %(observaciones_unificadas)s)
+         %(observaciones_unificadas)s, %(trabajo_solicitado)s,
+         %(funcionalidades_verificadas)s, %(observaciones_verificacion)s,
+         %(imei_no_disponible)s)
     """,
     modo=ESCRITURA,
 )
@@ -652,7 +656,11 @@ _ACTUALIZAR_RECEPCION = consulta(
         no_recibido_por = %(no_recibido_por)s,
         no_recibido_en = %(no_recibido_en)s,
         no_recibido_motivo = %(no_recibido_motivo)s,
-        observaciones_unificadas = %(observaciones_unificadas)s
+        observaciones_unificadas = %(observaciones_unificadas)s,
+        trabajo_solicitado = %(trabajo_solicitado)s,
+        funcionalidades_verificadas = %(funcionalidades_verificadas)s,
+        observaciones_verificacion = %(observaciones_verificacion)s,
+        imei_no_disponible = %(imei_no_disponible)s
     WHERE orden_id = %(orden)s
     """,
     modo=ESCRITURA,
@@ -2786,6 +2794,11 @@ def _fila_recepcion(
         "observaciones": datos.observaciones,
         "notas_internas": datos.notas_internas,
         "observaciones_unificadas": datos.observaciones_unificadas,
+        # DEC-AJ-05, DEC-AJ-07 y DEC-AJ-06.
+        "trabajo_solicitado": datos.trabajo_solicitado,
+        "funcionalidades_verificadas": datos.funcionalidades_verificadas,
+        "observaciones_verificacion": datos.observaciones_verificacion,
+        "imei_no_disponible": datos.imei_no_disponible,
         "checkin": checkin_ingreso,
         "registrado_por": recepcion.registrado_por,
         "registrado_en": recepcion.registrado_en,

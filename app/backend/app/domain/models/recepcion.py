@@ -49,6 +49,28 @@ class DatosRecepcion(BaseModel):
     # otras observaciones). No se copia al estado fisico: no es una
     # constatacion aparte de Recepcion. False en lo registrado antes.
     observaciones_unificadas: bool = False
+    # DEC-AJ-05 (BF-04): lo que el cliente pide, en texto libre y en un campo
+    # propio, distinto de las observaciones del equipo. No crea Detalles: los
+    # trabajos estandarizados los define despues el tecnico (PROC-REP-075).
+    trabajo_solicitado: str | None = None
+    # DEC-AJ-07 (BF-08): «¿Se pudieron verificar las funcionalidades del
+    # equipo?» al ingresar (Si o No) y sus observaciones, opcionales en los
+    # dos casos. Es INFORMATIVA: no es el check-in de entrega (``checkin``),
+    # no lo reemplaza ni lo anticipa y no cambia la garantia (BR-REP-041 y
+    # BR-REP-045). ``None``: todavia no se respondio.
+    funcionalidades_verificadas: bool | None = None
+    observaciones_verificacion: str | None = None
+    # DEC-AJ-06 (BF-05): Recepcion marco «IMEI no disponible» al ingresar. El
+    # IMEI queda vacio (nunca uno ficticio) y el equipo se identifica con su
+    # identificador interno ``EQP-...``, provisorio y distinto de un IMEI. Es
+    # un hecho del ingreso: no cambia cuando despues se registra el IMEI real.
+    imei_no_disponible: bool = False
+
+
+def verificacion_registrada(datos: DatosRecepcion | None) -> bool:
+    """DEC-AJ-07: el ingreso respondio si se pudieron verificar las
+    funcionalidades del equipo (Si o No)."""
+    return datos is not None and datos.funcionalidades_verificadas is not None
 
 
 def estado_fisico_registrado(datos: DatosRecepcion | None) -> bool:
