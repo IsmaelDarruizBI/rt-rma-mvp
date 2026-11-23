@@ -80,6 +80,7 @@ from .custodia import (
 )
 from .descuentos import descripcion_de_descuento
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
+from .ordenes import fecha_de_entrega
 from .pagos import condicion_entrega_cumplida
 from .reparaciones import nombre_del_trabajo
 from .revisiones import finalizada_sin_reparacion, lista_para_cierre
@@ -512,8 +513,10 @@ def contenido_comprobante_entrega(
                 **trabajo(detalle),
                 recargo=recargos.get(detalle.id, Decimal("0")),
                 garantia_dias=detalle.garantia_dias,
+                # BF-17: la misma fecha de entrega que el reclamo RMA y
+                # {garantia_hasta} (con el historial de una Orden anterior).
                 garantia_vence=vencimiento_garantia(
-                    orden.entrega.fecha if orden.entrega else None,
+                    fecha_de_entrega(orden),
                     detalle.garantia_dias,
                     contexto.zona_horaria,
                 ),
@@ -599,7 +602,9 @@ def contenido_garantia(
     duracion general. Empieza con la entrega efectiva; los cancelados y no
     realizados no tienen garantia.
     """
-    fecha_inicio = orden.entrega.fecha if orden.entrega else None
+    # BF-17: la entrega efectiva, la misma fecha que usan el reclamo RMA y
+    # {garantia_hasta} (con el historial de una Orden anterior).
+    fecha_inicio = fecha_de_entrega(orden)
     return ContenidoGarantia(
         **_datos_comunes(orden, contexto),
         fecha_inicio=fecha_inicio,
