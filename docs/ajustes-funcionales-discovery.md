@@ -1043,3 +1043,115 @@ La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA inte
   2. impresión desde el visor;
   3. IMEI no disponible y registro del IMEI real después de la custodia;
   4. check-in con la referencia del ingreso.
+
+### 10.3 Bloque 4: comprobantes
+
+Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. `business/` no cambia: implementa el resto de DEC-AJ-09 (la parte P-05 ya estaba en el bloque 2) y el pendiente del bloque 2 sobre el progreso de la Orden (DEC-AJ-03).
+
+| Commit | Qué |
+|---|---|
+| `d657ca5` | Migración `20261123000300_comprobantes_empresa_terminos` y persistencia de los datos de la empresa y de los términos versionados |
+| `0552bbd` | BF-19 (DEC-AJ-09): API y servicio de los datos de la empresa y de los términos; los comprobantes copian la empresa y la versión de los términos |
+| `1a14ea5` | DEC-AJ-03: en el progreso, avisar al cliente figura opcional y salteado, no pendiente |
+| `89a3e6a` | Frontend: «Datos de la empresa», «Términos y condiciones», hoja de los comprobantes y página de términos |
+
+#### Datos de la empresa (DEC-AJ-09 a y b)
+
+- **Quién:** Administración, con el permiso no configurable de parámetros del sistema, `CONFIGURACION_ADMINISTRAR` (alternativa aprobada en D-09 a). Su descripción ahora nombra los datos de la empresa y los términos.
+- **Qué:** nombre comercial (obligatorio: encabeza cada comprobante), razón social, CUIT, dirección, teléfono, email, horario de atención y un pie de comprobante libre. Un campo vacío queda sin informar.
+- **API:** `GET /api/admin/company` (`editable` y `empresa`) y `PUT /api/admin/company`. Sin cambios, sin nombre o con un email sin `@`: 409. La escritura es solo sobre PostgreSQL, como el resto de la configuración (DC23); en JSON la pantalla queda de solo lectura.
+- **Auditoría:** un registro por campo cambiado en `cambio_configuracion`, entidad `EMPRESA`, clave `EMPRESA` (`services/comprobantes.py`, `datos_de_empresa_editados`).
+- **Pantalla:** Configuración → grupo «Comprobantes» → «Datos de la empresa», con su historial de cambios.
+- **Comprobantes:** todos (recepción, ingreso ING, autorización y entrega y garantía) copian la empresa en su snapshot, ahora con `horario` y `pie_comprobante`. La hoja muestra nombre, razón social, CUIT, dirección, teléfono, email y horario; el pie va al final (en la entrega, antes de la página de términos). El PDF del ingreso y de la autorización imprime el horario en el encabezado y el pie al final.
+- **Snapshots anteriores:** los campos nuevos son opcionales; un documento emitido antes se sigue leyendo y se imprime sin horario ni pie. Cambiar la empresa no altera lo emitido.
+
+#### Términos y condiciones versionados (DEC-AJ-09 f)
+
+- **Dónde:** en `rma.texto_legal`, que ya era inmutable (trigger `texto_legal_inmutable`): una versión publicada no se edita ni se borra.
+- **Vigente:** la de mayor número. Publicar crea la versión siguiente, completa y vigente desde ese momento (`vigente_desde` es la fecha de publicación y `publicado_por`, el usuario).
+- **API:** `GET /api/admin/terms` (`vigente` y `versiones`) y `POST /api/admin/terms` (`titulo` y `contenido`: encabezado, apartados y pie). Los apartados se numeran en el orden recibido. Un texto igual al vigente: 409. Dos publicaciones simultáneas no pisan una versión: la segunda falla con 409.
+- **Auditoría:** entidad `TEXTO_LEGAL`, clave `TERMINOS_CONDICIONES_ENTREGA`, campo `version` (de la anterior a la nueva).
+- **Pantalla:** «Términos y condiciones» lista las versiones (con la vigente marcada y cada una para ver) y arma una versión nueva a partir de la vigente: título, marca, subtítulo, apartados (una línea por renglón, resaltado, quitar y agregar) y los espacios del pie. No publica sin cambios ni con apartados vacíos.
+- **En cada comprobante:** el «Comprobante de entrega y garantía» guarda la copia de la versión vigente al emitirse (`contenido.terminos`) y, en PostgreSQL, `documento_emitido.texto_legal_id`. La página de términos imprime esa versión, con su número, aunque después se publique otra. La vista previa muestra la vigente. Una devolución sin reparación no lleva términos.
+- **Anteriores:** un comprobante emitido antes, sin `terminos`, imprime el texto anterior del frontend (`terminosCondiciones.ts`, el del bloque 2), como hasta ahora.
+- **Modo JSON:** rige la versión inicial (`app/datos/terminos_condiciones_v2.json`); un `textos_legales.json` en los catálogos permite probar otra.
+
+#### Versión inicial con P-04 y P-05
+
+- La migración carga la **versión 2**: el texto vigente del bloque 2 (sin el apartado que anulaba la garantía si retiraba otra persona ni la exigencia de que retire quien dejó el equipo, P-05) con P-04 aplicado.
+- **P-04:** el apartado 1 ya no dice «seis meses (180 días de corrido)». Dice: «La reparación cuenta con la garantía indicada para cada trabajo en este comprobante, con su plazo en días y su fecha de vencimiento, válida exclusivamente sobre el trabajo realizado y/o el repuesto colocado, contada a partir de la fecha de entrega del equipo». El comprobante ya lista cada trabajo con su plazo y su vencimiento (90 o 30 días según el Tipo y el check-in, o el ajustado). Las reglas de garantía no cambian.
+- **P-05:** el comprobante sigue diciendo quién retiró (el titular, u otra persona con nombre, apellido y teléfono) y los términos no anulan la garantía por eso.
+- **Versión 1:** queda como estaba (la transcripción original). `generar_datos_iniciales.cjs` ya no la regenera desde el frontend: está congelada.
+
+#### Progreso de la Orden (pendiente del bloque 2, DEC-AJ-03)
+
+- `progreso` suma `opcional` y `omitido` a cada paso (`application/progreso.py`, `PasoProgresoOut`). PROC-REP-260 «Notificar cliente» es opcional; si la Orden ya siguió adelante sin el aviso (entrega sin aviso, también SIN_REPARACION), queda `omitido`. `alcanzado` no cambia de significado y el grafo del proceso tampoco.
+- En el «Recorrido técnico del proceso», un paso opcional tiene borde punteado; el omitido, además, tachado, con el título «(opcional, salteado)».
+
+#### Migración
+
+`20261123000300_comprobantes_empresa_terminos.sql`, aditiva e idempotente:
+
+- `rma.empresa`: columnas `horario` y `pie_comprobante`, con sus comentarios;
+- `cambio_configuracion.entidad` admite `EMPRESA` y `TEXTO_LEGAL` (el CHECK se reemplaza agregando valores, como en las migraciones anteriores);
+- `rma.texto_legal`: la versión 2 de `TERMINOS_CONDICIONES_ENTREGA`, con `on conflict do nothing`. Es la misma copia que `app/datos/terminos_condiciones_v2.json` (lo verifica `tests/test_comprobantes.py`).
+
+No agrega tablas ni permisos de base (`rma_backend` ya podía insertar en `texto_legal` y actualizar `empresa`), así que los scripts de reinicio del UAT no cambian: `empresa` y `texto_legal` ya son maestras.
+
+#### Pruebas nuevas
+
+| Archivo | Casos | Qué cubre |
+|---|---|---|
+| `tests/test_comprobantes.py` | 12 | Edición de la empresa auditada por campo, que conserva lo que no edita; solo Administración, nombre obligatorio, sin cambios rechazado; en JSON, empresa y términos de solo lectura; los comprobantes nuevos copian empresa, horario y pie (también en el PDF) y lo emitido no cambia; un snapshot anterior se sigue leyendo; P-04 sin 180 días ni anulación por terceros; la migración carga la misma versión 2; una versión nueva numera apartados y se audita; igual a la vigente o de otro rol, no se publica; el comprobante guarda e imprime su versión y la conserva cuando rige otra; quién retiró, en el comprobante, sin cambiar la garantía; la devolución sin reparación no lleva términos |
+| `tests/test_progreso_aviso_opcional.py` | 3 | 260 opcional antes de entregar, omitido al entregar sin aviso (también SIN_REPARACION) y alcanzado con aviso |
+| `tests/postgres/test_comprobantes_postgres.py` | 3 | Columnas y versiones 1 y 2 de la migración; edición de la empresa con auditoría `EMPRESA`, 409 para Recepción y comprobantes antes y después; versión 3 publicada con auditoría `TEXTO_LEGAL`, `texto_legal_id` de cada comprobante (2 y 3), 409 para Recepción y sin cambios, y una versión usada que no se modifica ni se borra |
+| Frontend `tests/comprobantes.test.ts` | 5 | Datos de la empresa en la hoja (con y sin horario y pie), formulario de la empresa, borrador de los términos, numeración y faltantes |
+| Frontend `tests/progreso.test.ts` | 1 | Título del paso opcional y salteado |
+| Frontend `tests/terminos.test.ts` | +2 | Imprime la versión guardada; sin versión, el texto anterior |
+
+Además, `tests/postgres/test_contrato_catalogos.py` compara la versión vigente de PostgreSQL con la del modo JSON. Con sesión real, el 403 de cada ruta nueva lo prueba `tests/postgres/test_permisos_operativos_postgres.py`, que recorre la matriz.
+
+#### Pruebas existentes adaptadas
+
+- `tests/test_matriz_permisos.py`: clasifica las cuatro rutas nuevas con `CONFIGURACION_ADMINISTRAR` (control permanente de la matriz).
+- Frontend `tests/configuracion-v2.test.ts`: Administración ve 13 subsecciones (eran 11) y el grupo nuevo «Comprobantes».
+- Frontend `tests/terminos.test.ts`: la prueba de los 18 apartados pasa a describir el texto anterior; sus aserciones no cambian.
+
+No se debilitó ninguna comprobación de inmutabilidad o versionado de documentos, permisos, auditoría ni idempotencia.
+
+#### Pruebas ejecutadas (focalizadas)
+
+| Ámbito | Resultado |
+|---|---|
+| Backend: 58 archivos (documentos y custodia, comprobantes, entregas, quién retira, ingreso, IMEI, configuración, matriz y permisos, garantías, check-in, HP/EXC/VAR, caracterización, SIN_REPARACION, historial, PDF, firmas, comunicaciones, recargos, motivos, pagos, situación, bandejas, repositorios JSON y generador de cargas, entre otros) | 871 pasan (29 omitidas). Después, con las pruebas del progreso en su archivo: `test_comprobantes.py` y `test_progreso_aviso_opcional.py`, 15 pasan |
+| PostgreSQL local: `test_comprobantes` (nuevo), `test_contrato_catalogos`, `test_recepcion_documentos`, `test_entrega`, `test_pruebas_sql_supabase`, `test_reinicio_clasificacion`, `test_permisos_operativos`, `test_ordenes`, `test_configuracion`, `test_recargo_medio_pago`, `test_ejecutor_sql`, `test_cargas_iniciales`, `test_macro_v14`, `test_ingreso_bloque3`, `test_cierre_ux` y `test_firmas` | 262 pasan |
+| PostgreSQL local, segunda tanda: `test_reclamos_garantia`, `test_iteracion1`, `test_arranque`, `test_ux_recepcion`, `test_comprobantes`, `test_motivos_retiro` y `test_comunicaciones` | 19 pasan |
+| Backend: `ruff check . ../../supabase/scripts` y `ruff format --check` de los archivos tocados | Limpios |
+| Frontend: `typecheck`, `npm test` y `npm run build` | Pasan (225 pruebas) |
+| Arranque | Backend local en modo JSON con `/health` 200 y las rutas nuevas respondiendo; `npm run dev` levanta |
+
+La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA integral.
+
+#### Decisiones tomadas en la implementación
+
+- **Permiso:** `CONFIGURACION_ADMINISTRAR`, el no configurable de Administración (D-09 a), para la empresa y para los términos; no se creó un permiso nuevo.
+- **Campos editables:** los ocho de la tarea. Las «condiciones de garantía» de `rma.empresa` no se editan en la pantalla (las cubren los términos versionados) y se conservan al guardar.
+- **Versión vigente:** la de mayor número; se publica vigente desde ese momento, sin versiones a futuro. Así la vigencia no depende de la diferencia entre el reloj del servidor y el de la base.
+- **Copia y referencia:** el comprobante guarda la versión completa en su snapshot (como el resto de lo que imprime) y, en PostgreSQL, además `texto_legal_id`. La impresión sale de la copia, así que también funciona en JSON.
+- **Texto anterior:** los comprobantes emitidos antes del bloque 4 siguen imprimiendo el texto del frontend del bloque 2 (con los 180 días), que es el que se les imprimía. P-04 rige para los nuevos.
+- **Versión inicial por migración:** la versión 2 la carga una migración, no una carga inicial, para que llegue al UAT al migrar. La versión 1 queda congelada.
+- **Pie del comprobante:** va al final de cada hoja; en la de entrega, antes de la página de términos, para que quede en la hoja que se entrega.
+- **Progreso:** se agregan `opcional` y `omitido` en lugar de cambiar `alcanzado`, para no alterar su significado ni las pruebas y pantallas que lo usan.
+
+#### Limitaciones y pendientes
+
+- **Texto de negocio:** los apartados 6 («los equipos que ingresen apagados… no cuentan con garantía») y 18 (plazos desde la notificación) no se tocaron. El 6 puede no coincidir con la regla vigente (sin check-in, el trabajo igual tiene 30 días) y el 18 cuenta desde la notificación, que ahora es opcional (DEC-AJ-03). Los define el negocio con una versión nueva desde Configuración.
+- **Leyendas:** las de los comprobantes de recepción, ingreso y autorización siguen fijas en el código (`services/documentos.py`); D-09 no las incluyó.
+- **Comprobante de entrega en PDF:** se sigue imprimiendo desde el navegador; el PDF descargable es solo el de ingreso y el de autorización.
+- **Modo JSON:** la empresa y los términos se ven, pero no se editan (la configuración se administra sobre PostgreSQL).
+- **Documentación:** no se actualizaron en este bloque `traceability/discrepancias-baseline-v1.4.md` (DEC-AJ-09 sigue «sin implementar»), `docs/pendientes-producto.md` (P-04 y P-05) ni `docs/ESTADO_PROYECTO.md`. Las rutas nuevas sí están en `docs/contratos-macro-integral.md`.
+- **Validación manual:** pendiente, en local y en un navegador:
+  1. editar los datos de la empresa y ver un comprobante nuevo y uno anterior;
+  2. publicar una versión de los términos y entregar una Orden antes y otra después;
+  3. reimprimir el comprobante anterior;
+  4. ver el progreso de una Orden entregada sin aviso.
