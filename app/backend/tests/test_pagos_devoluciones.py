@@ -742,8 +742,9 @@ def test_21_no_se_entrega_con_saldo_pendiente(cliente):
         )
     )
 
-    # Bloqueada en PROC-REP-266 (saldo pendiente): no hay 265 aprobado.
-    assert "PROC-REP-266" in mensaje
+    # Bloqueada en PROC-REP-266 (saldo pendiente): no hay 265 aprobado. La
+    # entrega unica (DEC-AJ-04) informa el saldo, no el codigo del nodo.
+    assert "saldo pendiente" in mensaje
     assert ids(_orden(cliente, orden_id))[-1] == "PROC-REP-266"
     # Anular un pago en el cierre vuelve a bloquear la entrega.
     orden = ok(pagar(cliente, orden_id, "60000"))
