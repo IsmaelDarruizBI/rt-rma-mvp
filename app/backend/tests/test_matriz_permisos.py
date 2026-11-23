@@ -262,6 +262,11 @@ MATRIZ = {
     ("PUT", "/api/admin/payment-methods/{codigo}"): API(
         "CONFIGURACION_ADMINISTRAR"
     ),
+    # DEC-AJ-09: datos de la empresa y terminos versionados.
+    ("GET", "/api/admin/company"): API("CONFIGURACION_ADMINISTRAR"),
+    ("PUT", "/api/admin/company"): API("CONFIGURACION_ADMINISTRAR"),
+    ("GET", "/api/admin/terms"): API("CONFIGURACION_ADMINISTRAR"),
+    ("POST", "/api/admin/terms"): API("CONFIGURACION_ADMINISTRAR"),
     ("GET", "/api/admin/supplies"): API("INSUMO_GESTIONAR"),
     ("POST", "/api/admin/supplies"): API("INSUMO_GESTIONAR"),
     ("PUT", "/api/admin/supplies/{clave}"): API("INSUMO_GESTIONAR"),

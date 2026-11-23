@@ -34,6 +34,7 @@ from .enums import (
 )
 from .equipos import Equipo
 from .personas import Cliente
+from .textos_legales import TextoLegal
 
 
 class Documento(BaseModel):
@@ -213,6 +214,11 @@ class ContenidoComprobanteEntrega(_ContenidoBase):
     # comprobantes emitidos antes, que conservan su presentacion.
     entrega_y_garantia: bool = False
     condiciones_garantia: str | None = None
+    # DEC-AJ-09: copia de la version de los terminos y condiciones vigente
+    # al emitirlo, la que se imprime siempre con este comprobante. ``None``
+    # en los emitidos antes (se imprimen con el texto anterior) y en una
+    # devolucion sin reparacion, que no lleva terminos.
+    terminos: TextoLegal | None = None
     resultado: str
     fecha_entrega: datetime | None = None
     entregado_por: UsuarioEnDocumento | None = None

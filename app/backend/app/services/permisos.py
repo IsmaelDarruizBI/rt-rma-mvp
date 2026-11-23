@@ -600,7 +600,8 @@ ADMINISTRACION = "Administración"
 # tienen sus permisos (grupo "Configuracion operativa").
 CONFIGURACION_ADMINISTRAR = _definir(
     "CONFIGURACION_ADMINISTRAR",
-    "Parámetros del sistema, recargos por medio de pago y auditoría",
+    "Parámetros del sistema, recargos por medio de pago, datos de la "
+    "empresa, términos y condiciones y auditoría",
     (ADMIN,),
     ADMINISTRACION,
     configurable=False,

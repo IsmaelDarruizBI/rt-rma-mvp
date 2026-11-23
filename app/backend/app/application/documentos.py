@@ -28,6 +28,7 @@ from app.domain.models import (
     DocumentoEmitido,
     OrdenReparacion,
     TipoDocumento,
+    TipoTextoLegal,
     TrabajoEnDocumento,
 )
 from app.repositories import EntidadPersistidaNoEncontradaError
@@ -108,6 +109,10 @@ def contexto_documentos(
     catalogos = contexto.catalogos
     return ContextoDocumentos(
         empresa=catalogos.obtener_datos_empresa(),
+        # DEC-AJ-09: la version vigente de los terminos y condiciones.
+        terminos=catalogos.obtener_texto_legal_vigente(
+            TipoTextoLegal.TERMINOS_CONDICIONES_ENTREGA
+        ),
         usuarios={
             usuario.id: usuario.nombre
             for usuario in catalogos.listar_usuarios()

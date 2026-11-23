@@ -261,10 +261,12 @@ _INSERTAR_DOCUMENTO_EMITIDO = consulta(
     """
     INSERT INTO rma.documento_emitido
         (codigo, orden_id, tipo, version, emitido_en, usuario_id, motivo,
-         reemplaza_a, contenido, posicion)
+         reemplaza_a, contenido, posicion, texto_legal_id)
     VALUES (%(codigo)s, %(orden)s, %(tipo)s, %(version)s, %(fecha)s,
             %(usuario)s, %(motivo)s, %(reemplaza)s, %(contenido)s::jsonb,
-            %(posicion)s)
+            %(posicion)s,
+            (SELECT id FROM rma.texto_legal
+              WHERE tipo = %(texto_tipo)s AND version = %(texto_version)s))
     RETURNING id
     """,
     modo=ESCRITURA,
@@ -1894,9 +1896,14 @@ class _Guardado:
                     f"El documento {documento.id} reemplaza a {reemplaza}, "
                     f"que la Orden {self._orden.id} no tiene."
                 )
+            # DEC-AJ-09: la version de los terminos que imprime (la copia
+            # va en el contenido; ``texto_legal_id`` la referencia).
+            terminos = getattr(documento.contenido, "terminos", None)
             self._documentos[documento.id] = self._ej.fila(
                 _INSERTAR_DOCUMENTO_EMITIDO,
                 {
+                    "texto_tipo": terminos.tipo.value if terminos else None,
+                    "texto_version": terminos.version if terminos else None,
                     "codigo": documento.id,
                     "orden": orden_id,
                     "tipo": documento.tipo.value,

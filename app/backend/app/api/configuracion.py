@@ -11,6 +11,10 @@
     PUT  /api/admin/permissions/{codigo}      roles de un permiso (DC08)
     GET  /api/admin/payment-methods           medios de pago y su recargo
     PUT  /api/admin/payment-methods/{codigo}  recargo de un medio (UX-08)
+    GET  /api/admin/company                   datos de la empresa (DEC-AJ-09)
+    PUT  /api/admin/company                   edicion, con auditoria
+    GET  /api/admin/terms                     versiones de los terminos
+    POST /api/admin/terms                     publica una version nueva
 
 Solo Administracion (con sesion real, 403 para los demas roles; el caso de
 uso lo valida igual). Las escrituras exigen PostgreSQL (DC23).
@@ -25,6 +29,12 @@ from app.application.checklist import catalogo as catalogo_checklist
 from app.application.checklist import (
     guardar_pregunta,
     sincronizar_tipos_equipo,
+)
+from app.application.comprobantes import (
+    datos_empresa,
+    guardar_datos_empresa,
+    publicar_terminos,
+    versiones_terminos,
 )
 from app.application.configuracion import (
     CONSERVAR,
@@ -49,9 +59,12 @@ from app.application.roles import (
 )
 from app.domain.models import (
     CambioConfiguracion,
+    ContenidoTextoLegal,
+    DatosEmpresa,
     EntidadConfiguracion,
     PoliticaGarantiaRma,
     RolUsuario,
+    TextoLegal,
 )
 from app.domain.models.lotes import ControlInsumo
 from app.domain.models.operativa import MotivoOperativo, TipoMotivo
@@ -346,6 +359,72 @@ def put_recargo_medio_pago(
             medio_id=codigo,
             porcentaje=cuerpo.recargo_porcentaje,
         )
+    )
+
+
+class DatosEmpresaIn(BaseModel):
+    """DEC-AJ-09: lo que edita «Datos de la empresa». Un campo vacio queda
+    sin informar; el nombre comercial es obligatorio."""
+
+    usuario_id: str = Field(min_length=1)
+    nombre: str = Field(min_length=1)
+    razon_social: str | None = None
+    cuit: str | None = None
+    direccion: str | None = None
+    telefono: str | None = None
+    email: str | None = None
+    horario: str | None = None
+    pie_comprobante: str | None = None
+
+
+@router.get("/company", dependencies=_sistema)
+def get_datos_empresa(contexto: ContextoDep) -> dict:
+    return {
+        "editable": contexto.operativa.editable,
+        "empresa": datos_empresa(contexto).model_dump(mode="json"),
+    }
+
+
+@router.put("/company", dependencies=_sistema)
+def put_datos_empresa(
+    cuerpo: DatosEmpresaIn, contexto: ContextoDep
+) -> DatosEmpresa:
+    datos = cuerpo.model_dump(exclude={"usuario_id"})
+    return guardar_datos_empresa(
+        contexto, usuario_id=cuerpo.usuario_id, datos=datos
+    )
+
+
+class TerminosIn(BaseModel):
+    """DEC-AJ-09: una version nueva y completa de los terminos y
+    condiciones. Los apartados se numeran en el orden recibido."""
+
+    usuario_id: str = Field(min_length=1)
+    titulo: str = Field(min_length=1)
+    contenido: ContenidoTextoLegal
+
+
+@router.get("/terms", dependencies=_sistema)
+def get_terminos(contexto: ContextoDep) -> dict:
+    """Las versiones publicadas (de la primera a la ultima) y la vigente."""
+    vista = versiones_terminos(contexto)
+    return {
+        "editable": contexto.operativa.editable,
+        "tipo": vista.tipo.value,
+        "vigente": (
+            vista.vigente.model_dump(mode="json") if vista.vigente else None
+        ),
+        "versiones": [v.model_dump(mode="json") for v in vista.versiones],
+    }
+
+
+@router.post("/terms", dependencies=_sistema)
+def post_terminos(cuerpo: TerminosIn, contexto: ContextoDep) -> TextoLegal:
+    return publicar_terminos(
+        contexto,
+        usuario_id=cuerpo.usuario_id,
+        titulo=cuerpo.titulo,
+        contenido=cuerpo.contenido,
     )
 
 

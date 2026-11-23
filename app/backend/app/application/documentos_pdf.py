@@ -121,6 +121,8 @@ def _encabezado(hoja: _Hoja, documento: DocumentoEmitido, zona: tzinfo):
             f"CUIT {empresa.cuit}" if empresa.cuit else None,
             empresa.direccion,
             " · ".join(d for d in (empresa.telefono, empresa.email) if d),
+            # DEC-AJ-09: ausente en los snapshots anteriores.
+            f"Horario: {empresa.horario}" if empresa.horario else None,
         )
         if dato
     ]
@@ -431,6 +433,18 @@ def _leyenda(hoja: _Hoja, contenido) -> None:
     hoja.bajar(alto)
 
 
+def _pie_de_empresa(hoja: _Hoja, contenido) -> None:
+    """DEC-AJ-09: el pie libre que Administracion configuro, tal como se
+    copio al emitir (ausente en los snapshots anteriores)."""
+    pie = contenido.empresa.pie_comprobante
+    if not pie:
+        return
+    hoja.bajar(10)
+    for parrafo in pie.splitlines():
+        if parrafo.strip():
+            hoja.parrafo(parrafo.strip(), tamano=8.5, gris=0.3)
+
+
 def _firma(hoja: _Hoja) -> None:
     """UX-06 y UX-07: espacio para la firma y la aclaracion del cliente. La
     firma es opcional (DEC-MI-06): el papel firmado o su foto se registran
@@ -506,6 +520,7 @@ def pdf_comprobante_autorizacion(
     _leyenda(hoja, contenido)
     if isinstance(contenido, ContenidoComprobanteIngreso):
         _firma(hoja)
+    _pie_de_empresa(hoja, contenido)
     _pies(pdf, documento)
     return pdf.bytes()
 

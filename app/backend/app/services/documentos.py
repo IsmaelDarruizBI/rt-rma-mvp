@@ -54,6 +54,7 @@ from app.domain.models import (
     RegistroAutorizacionCliente,
     ReparacionDetail,
     ResultadoAutorizacion,
+    TextoLegal,
     TipoDocumento,
     TipoEntrega,
     TrabajoAutorizadoEnDocumento,
@@ -303,10 +304,13 @@ class ContextoDocumentos:
     usuario, de Tipo de Reparacion y de medio de pago, datos de la
     empresa) para que un cambio de catalogo posterior no altere lo que se
     le entrego al cliente. ``zona_horaria`` fija el dia calendario de un
-    vencimiento.
+    vencimiento. ``terminos`` es la version vigente de los terminos y
+    condiciones (DEC-AJ-09): el Comprobante de entrega y garantia guarda
+    su copia.
     """
 
     empresa: DatosEmpresa
+    terminos: TextoLegal | None = None
     usuarios: Mapping[str, str] = field(default_factory=dict)
     tipos: Mapping[str, str] = field(default_factory=dict)
     medios: Mapping[str, str] = field(default_factory=dict)
@@ -540,6 +544,13 @@ def contenido_comprobante_entrega(
         entrega_y_garantia=reparada,
         condiciones_garantia=(
             contexto.empresa.condiciones_garantia if reparada else None
+        ),
+        # DEC-AJ-09: la version de los terminos que se imprime con este
+        # comprobante, siempre la misma aunque despues se publique otra.
+        terminos=(
+            contexto.terminos.model_copy(deep=True)
+            if reparada and contexto.terminos is not None
+            else None
         ),
         resultado=_resultado(orden, tipo_entrega),
         fecha_entrega=salida.fecha if salida else None,
