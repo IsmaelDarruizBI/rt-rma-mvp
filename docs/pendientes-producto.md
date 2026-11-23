@@ -9,8 +9,8 @@ Registrado el 28/10/2026, con `mvp-v2` en `a8dd74b`.
 | P-01 | Buscador técnico en el alta RT_INTERNO, con GB y color obligatorios | Ingreso de equipos | Decidido, sin implementar |
 | P-02 | Números de modelo del fabricante en el catálogo técnico | Catálogo técnico | Esperando información verificada |
 | P-03 | Modelos de la línea iPhone 18 | Catálogo técnico | Excluidos hasta validar |
-| P-04 | Garantía de 180 días en los Términos y Condiciones | Comprobante de entrega | Decisión pendiente |
-| P-05 | Cláusulas sobre el retiro por terceros | Comprobante de entrega | Revisión pendiente |
+| P-04 | Garantía de 180 días en los Términos y Condiciones | Comprobante de entrega | Resuelto por DEC-AJ-09; implementado en local |
+| P-05 | Cláusulas sobre el retiro por terceros | Comprobante de entrega | Resuelto por DEC-AJ-09; implementado en local |
 | P-06 | Override por falta de stock: cualquier usuario y sin stock negativo | Inventario | Implementado en el MVP; falta actualizar BR-REP-003 |
 
 ## P-01. Buscador técnico para RT_INTERNO
@@ -58,19 +58,15 @@ Los pasos 2 y 3 tienen que entrar juntos: si la validación llega antes, el alta
 
 ## P-04. Garantía de 180 días en los Términos y Condiciones
 
-**Pendiente de decisión.** El apartado 1 de los Términos y Condiciones del comprobante de entrega dice «una garantía de seis meses (180 días de corrido)». Se transcribió tal cual la hoja de Rosario Tecno, sin validar.
+**Resuelto por DEC-AJ-09 (23/11/2026).** El apartado 1 de los Términos y Condiciones decía «una garantía de seis meses (180 días de corrido)», transcripto de la hoja de Rosario Tecno sin validar. Ya no hay un plazo fijo: los términos remiten a la garantía de cada trabajo que figura en el comprobante, con su plazo y su vencimiento, contada desde la entrega. Las reglas de garantía no cambian (90 o 30 días según el check-in de entrega, con ajuste manual).
 
-**Hoy.** El sistema asigna la garantía de cada trabajo según el check-in de la entrega: 90 días si se verificaron las funciones básicas y 30 si no, con ajuste manual. El comprobante de entrega y el certificado de garantía muestran ese plazo, que puede no coincidir con los 180 días del texto.
-
-**Falta.** Decidir cuál rige y alinear el texto (`app/frontend/src/features/ordenes-reparacion/terminosCondiciones.ts`) o las reglas de garantía.
+**Implementado en local** (`feat/ajustes-funcionales-uat`, bloque 4: `d657ca5`, `0552bbd` y `89a3e6a`). Los términos son versionados y los administra Administración desde Configuración; la migración `20261123000300` carga la versión 2 con este cambio, y cada comprobante conserva la versión que usó. Los comprobantes emitidos antes se siguen imprimiendo con el texto anterior. Detalle: [`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md), sección 10.3.
 
 ## P-05. Cláusulas sobre el retiro por terceros
 
-**Pendiente de revisión.** El apartado 15 anula la garantía si el equipo lo retira un comisionista, tercero, mensajero o cualquier persona distinta del titular que hizo el ingreso, aun con autorización verbal o escrita. Se imprime resaltado. El apartado 14 dice que el equipo se entrega a la misma persona que lo dejó.
+**Resuelto por DEC-AJ-09 (23/11/2026).** El apartado 15 anulaba la garantía si retiraba el equipo una persona distinta del titular, y el 14 exigía entregarlo a quien lo dejó. Ahora la entrega pregunta «¿Retira otra persona?»: si es Sí, se piden nombre, apellido y teléfono, sin vínculo, DNI ni otra identificación. Que retire otra persona no modifica ni anula la garantía. Quién retiró queda en la Orden y en el comprobante.
 
-**Hoy.** La entrega registra quién retira y su identificación, pero no compara a esa persona con el titular ni cambia la garantía si es otra.
-
-**Falta.** Revisar la redacción de los dos apartados y decidir si el sistema debe reflejarlos, por ejemplo con un aviso al registrar la entrega.
+**Implementado en local** (`feat/ajustes-funcionales-uat`, bloque 2: `b23732f` y `f51ce94`). Los dos apartados se quitaron de los términos, también de la versión 2. Detalle: [`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md), sección 10.1.
 
 ## P-06. Override por falta de stock
 
@@ -111,6 +107,17 @@ Registrado el 19/11/2026 (Configuración v2, mejora futura, no implementada).
 **Hoy.** Cada insumo tiene identificador (`INS-NNN`, generado), código, nombre, unidad, control por lote y precio; la compatibilidad no existe.
 
 **Falta.** Definirlo en `business/` primero. El diseño actual no lo impide: el insumo conserva su identificador técnico y su clave, y la compatibilidad sería una tabla nueva entre insumo y modelo de equipo.
+
+## P-08. Apartados 6 y 18 de los Términos y Condiciones
+
+Registrado el 23/11/2026 (bloque 4 de los ajustes funcionales). **Pendiente de revisión del negocio, sin decidir.**
+
+- **Apartado 6:** dice que los equipos que ingresan apagados no cuentan con garantía. Puede no coincidir con la regla vigente: sin check-in, el trabajo igual tiene garantía de 30 días.
+- **Apartado 18:** cuenta sus plazos desde la notificación al cliente, que desde DEC-AJ-03 es opcional.
+
+**Hoy.** Los dos apartados siguen igual en la versión 2 de los términos.
+
+**Falta.** Que el negocio revise la redacción. Si cambia, se publica una versión nueva desde Configuración, sin cambiar código; si cambia una regla, se decide antes en `rt-rma-app`.
 
 ## Nota técnica: `capacidad` como texto
 

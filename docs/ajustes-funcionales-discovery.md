@@ -1,18 +1,18 @@
 # Ajustes funcionales del feedback de UAT (BF-01 a BF-20): análisis y plan
 
-> **Estado (23/11/2026):** bloque 1 implementado en local. Iteración 1 (bloques 2, 3 y 4) aprobada y en implementación. `business/` está sincronizado con `rt-rma-app` `64a8583` (`spec/ajustes-funcionales`, local), con DEC-AJ-01 a 09 (sección 9.1).
+> **Estado (23/11/2026):** iteración 1 (bloques 1 a 4) implementada en local (secciones 8 y 10), sin push ni despliegue. Iteración 2 (bloques 5 a 8) pendiente. `business/` está sincronizado con `rt-rma-app` `713a9b9` (`spec/ajustes-funcionales`, local), con DEC-AJ-01 a 09 implementadas (sección 9.1).
 >
 > **Aprobado (23/11/2026):** la planificación general y la secuencia de los 8 bloques (sección 3).
 >
 > **Aprobado (23/11/2026):** D-01, alternativa B, y D-02, alternativa A (sección 4.1).
 >
-> **Bloque 1:** implementado en local; se valida a mano junto con todo el backlog (sección 8).
+> **Bloques 1 a 4:** implementados en local; se validan a mano junto con todo el backlog (secciones 8 y 10).
 >
 > **Replanificado (23/11/2026):** la iteración 1 incluye los bloques 2, 3 y 4, y la iteración 2 los bloques 5 a 8. Las decisiones de la iteración 1 están aprobadas (sección 9).
 >
 > **D-07:** aprobada la alternativa A (verificación informativa y obligatoria), el 23/11/2026.
 >
-> **Rama:** `feat/ajustes-funcionales-uat`, desde `mvp-v2` `82ebbb6`, con 42 migraciones.
+> **Rama:** `feat/ajustes-funcionales-uat`, desde `mvp-v2` `82ebbb6`, con 42 migraciones; la iteración 1 suma tres aditivas, solo locales (`20261123000100` a `20261123000300`).
 >
 > **Referencias:** las de backend son relativas a `app/backend/app/` y las de frontend, a `app/frontend/src/`.
 >

@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 20/11/2026.
+**Última actualización:** 23/11/2026.
 
 - **Hecho:**
   - autenticación real y DC31 desplegadas en UAT (10/11, `00020-tux`);
@@ -87,13 +87,15 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ## B. Últimos avances
 
-### Ajustes funcionales del feedback de UAT, bloque 1 en local (23/11/2026)
+### Ajustes funcionales del feedback de UAT, iteración 1 en local (23/11/2026)
 
-- **Rama:** `feat/ajustes-funcionales-uat`, desde `mvp-v2` `82ebbb6`, con commits locales y sin desplegar.
-- **Plan:** BF-01 a BF-20 en 8 bloques, aprobados ([`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md)).
-- **Bloque 1:** BF-07 (información técnica según el permiso configurable `DETALLE_TECNICO_CONSULTAR`, solo presentación), BF-12 (el adicional pendiente suma a Recepción en «Pendientes de mi sector») y BF-17 (misma fecha de entrega en los documentos de garantía).
-- **Pruebas:** focalizadas y en verde.
-- **Falta:** la validación manual en local.
+- **Rama:** `feat/ajustes-funcionales-uat`, desde `mvp-v2` `82ebbb6`, con commits locales; sin push ni despliegue.
+- **Plan:** BF-01 a BF-20 en 8 bloques, aprobados; detalle, pruebas y limitaciones en [`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md) (secciones 8 y 10).
+- **Iteración 1, implementada en local (bloques 1 a 4):** BF-07, BF-12, BF-17, BF-18, BF-19, BF-20, BF-04, BF-05, BF-06 y BF-08, con DEC-AJ-01 a 09. Commits: bloque 1 `3788aa0` a `8980e52`; bloque 2 `5cf99f9` a `f51ce94`; bloque 3 `0376f34` a `a55b1b8`; bloque 4 `d657ca5` a `89a3e6a`.
+- **Migraciones:** tres aditivas, solo locales: `20261123000100` (check-in en la entrega), `20261123000200` (trabajo solicitado, verificación e IMEI del ingreso) y `20261123000300` (datos de la empresa y términos de los comprobantes); el bloque 1 no tiene. Quedan 45 en el repositorio.
+- **`business/`:** sincronizado con `rt-rma-app` `713a9b9` (`spec/ajustes-funcionales`, local), con DEC-AJ-01 a 09 implementadas ([`sincronizacion-funcional.md`](sincronizacion-funcional.md)). P-04 y P-05 resueltos; P-08 (apartados 6 y 18 de los términos) para revisar ([`pendientes-producto.md`](pendientes-producto.md)).
+- **Pruebas:** focalizadas por bloque, en verde.
+- **Falta:** la iteración 2 (bloques 5 a 8: BF-09, BF-15, BF-01/02 y BF-14) y la validación manual de todo el backlog.
 
 ### Reparación RT etapa 1 + Configuración v2 en UAT (20/11/2026): UAT OPERATIVO
 

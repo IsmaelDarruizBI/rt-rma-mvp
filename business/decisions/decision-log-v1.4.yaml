@@ -1815,8 +1815,8 @@ decisions:
       registros del aviso. (7) Se conservan los controles de la entrega:
       Saldo = 0, custodia y check-in cuando corresponde.
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "bloque 2 de rt-rma-mvp docs/ajustes-funcionales-discovery.md: la entrega exige hoy el paso 260 (application/cierre.py, application/acciones.py, services/documentos.py), el retiro demorado cuenta desde 260 (domain/retiro.py) y la comunicacion LISTO_PARA_RETIRAR no registra el aviso"
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ajustes-funcionales-uat 5cf99f9, local (la entrega no exige el paso 260: sin aviso registra 250 y evalua 265 antes de 280, en CLIENTE_EXTERNO, SIN_REPARACION y garantia RMA; el camino RT_INTERNO no cambia; services/ordenes.py registrar_aviso_listo sigue opcional; application/comunicaciones.py: el envio confirmado de LISTO_PARA_RETIRAR registra 260 una sola vez; domain/retiro.py fecha_lista_para_retirar, con la fecha del aviso aparte; tests/test_entrega_sin_aviso.py) y 1a14ea5 (application/progreso.py: 260 opcional y, sin aviso, omitido en el progreso)"
 
   - id: DEC-AJ-04
     block: AJ
@@ -1840,8 +1840,8 @@ decisions:
       sin cambios), y la custodia sigue siendo condicion de la entrega
       (BR-REP-033).
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "bloque 2 de rt-rma-mvp docs/ajustes-funcionales-discovery.md: hoy se emiten el comprobante final, el certificado de garantia y los Terminos por separado y el check-in es una accion aparte"
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ajustes-funcionales-uat 7be27fe (migracion 20261123000100_checkin_en_entrega: PROC-REP-269 en el historial), 1a3b55f (services/entrega.py entregar_al_cliente: el check-in faltante y la entrega en una sola confirmacion, con saldo exactamente 0 y custodia, y un solo Comprobante de entrega y garantia con los terminos; sin certificado GARANTIA para las entregas nuevas; tests/test_entrega_y_garantia.py) y f51ce94 (formulario de entrega unico), local"
 
   - id: DEC-AJ-05
     block: AJ
@@ -1864,8 +1864,8 @@ decisions:
       (PROC-REP-046/047, PROC-REP-129). (5) El ingreso con trabajos conserva
       la operacion unica de BR-REP-046.
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "bloque 3 de rt-rma-mvp docs/ajustes-funcionales-discovery.md: falta el campo Trabajo solicitado y la confirmacion de la custodia junto con el comprobante de recepcion"
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ajustes-funcionales-uat 0376f34 (migracion 20261123000200: rma.recepcion.trabajo_solicitado), 462ff87 (application/ingreso.py enviar_a_revision con services/reparaciones.py recepcion_con_el_comprobante: el comprobante de recepcion confirma la custodia en el mismo acto; tests/test_ingreso_sin_trabajos.py) y e1ffcd0 (alta con Trabajo solicitado), local"
 
   - id: DEC-AJ-06
     block: AJ
@@ -1885,8 +1885,8 @@ decisions:
       (3) Resuelve ABI-41 para el IMEI; para los demas datos del ingreso sigue
       abierto.
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "bloque 3 de rt-rma-mvp docs/ajustes-funcionales-discovery.md: hoy el IMEI solo se corrige antes de confirmar la recepcion (services/custodia.py y el trigger recepcion_decidida_no_cambia)"
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ajustes-funcionales-uat 0376f34 (rma.recepcion.imei_no_disponible), 869a003 (marca IMEI no disponible con el EQP-..., nunca un IMEI ficticio; POST /api/orders/{id}/real-imei hasta la entrega, con motivo, permiso INGRESO_CORREGIR, version de la recepcion y ACC-REP-023; tests/test_imei_no_disponible.py), e1ffcd0 y a55b1b8 (frontend), local"
     open: [ABI-41]
 
   - id: DEC-AJ-07
@@ -1906,8 +1906,8 @@ decisions:
       check-in de entrega se muestra la respuesta del ingreso como
       referencia. La garantia por equipo (BF-16) sigue postergada.
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "bloque 3 de rt-rma-mvp docs/ajustes-funcionales-discovery.md: la pregunta no existe en el ingreso (dos datos nuevos en la recepcion, sin reutilizar el check-in anterior al ingreso)"
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ajustes-funcionales-uat 0376f34 (rma.recepcion.funcionalidades_verificadas y observaciones_verificacion, sin reutilizar el check-in), 462ff87 (exigida para recibir el equipo con el comprobante y mostrada en los comprobantes de recepcion e ingreso; la garantia sigue segun el check-in de entrega; tests/test_ingreso_sin_trabajos.py) y e1ffcd0 (obligatoria en el alta y referencia en el check-in de entrega), local"
 
   - id: DEC-AJ-08
     block: AJ
@@ -1928,8 +1928,8 @@ decisions:
       comprobante falla, la Orden queda creada y el comprobante se genera
       despues.
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "bloque 3 de rt-rma-mvp docs/ajustes-funcionales-discovery.md: hoy el comprobante se genera desde Documentos, en un paso aparte"
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ajustes-funcionales-uat 462ff87 (enviar a revision idempotente) y e1ffcd0, local (PanelOrdenes.tsx crearYGenerar: Crear y generar el comprobante, canal presencial preseleccionado y registrado, visor con Imprimir como accion principal iniciada por el usuario; si el comprobante falla, la Orden queda creada; tests/ingreso-ajustes.test.ts)"
 
   - id: DEC-AJ-09
     block: AJ
@@ -1954,8 +1954,8 @@ decisions:
       retire otra persona no modifica ni anula la garantia. Quien retiro queda
       registrado en la Orden y en el comprobante correspondiente.
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "bloque 4 de rt-rma-mvp docs/ajustes-funcionales-discovery.md: los datos de la empresa no se editan, los Terminos estan fijos en el frontend (180 dias y anulacion por retiro de un tercero) y quien retira no se registra"
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ajustes-funcionales-uat b23732f y f51ce94 (P-05: Retira otra persona? con nombre, apellido y telefono, sin vinculo ni DNI, en la Orden, el paso 270 y el comprobante, sin efecto sobre la garantia; tests/test_quien_retira.py), d657ca5 (migracion 20261123000300_comprobantes_empresa_terminos: horario y pie de comprobante en rma.empresa y version 2 de los terminos en rma.texto_legal, con P-04 y P-05), 0552bbd (GET/PUT /api/admin/company y GET/POST /api/admin/terms con CONFIGURACION_ADMINISTRAR y auditoria EMPRESA y TEXTO_LEGAL; cada comprobante copia la empresa y la version de los terminos; tests/test_comprobantes.py) y 89a3e6a (Configuracion: Datos de la empresa y Terminos y condiciones), local"
 
   # ------------------------------------------------------------------ Baseline y sincronizacion
   - id: DC01
