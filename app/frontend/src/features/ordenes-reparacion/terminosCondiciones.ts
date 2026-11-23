@@ -1,21 +1,22 @@
 /**
  * Términos y Condiciones del servicio técnico de Rosario Tecno.
  *
- * Transcripción textual de la hoja que firma el cliente al retirar el
- * equipo, en su orden, sin resumir ni reescribir. Cada apartado es una
- * lista de líneas: la primera abre el apartado y las siguientes son los
- * renglones que la hoja muestra aparte.
+ * DEC-AJ-09 (bloque 4): los Términos se versionan en la base
+ * (`rma.texto_legal`) y los administra Administración desde Configuración.
+ * Cada «Comprobante de entrega y garantía» guarda la versión que usó
+ * (`contenido.terminos`) y se imprime siempre con ESA versión.
  *
- * DEC-AJ-09 (P-05, 23/11/2026): que retire otra persona no modifica ni
- * anula la garantía y no se exige que retire quien dejó el equipo. Se
- * quitaron el apartado que anulaba la garantía si retiraba un tercero y,
- * del que lo exigía, esa condición. El resto del texto (incluidos los 180
- * días, P-04) no cambia: lo versiona el bloque 4 (`rma.texto_legal`).
+ * Las constantes de este archivo son el TEXTO ANTERIOR: el que imprimen los
+ * comprobantes emitidos antes del bloque 4, que no guardaron su versión.
+ * Es la transcripción de la hoja que firma el cliente, sin el apartado que
+ * anulaba la garantía si retiraba un tercero ni la exigencia de que retire
+ * quien dejó el equipo (P-05, bloque 2). No se modifica: un cambio de texto
+ * es una versión nueva desde Configuración.
  *
- * Solo datos: la página que los imprime vive en `DocumentosOrden.tsx`.
+ * Solo datos y reglas: la página que los imprime vive en `DocumentosOrden.tsx`.
  */
 
-import type { TipoEntrega } from "../../types/api";
+import type { ContenidoEntrega, TipoEntrega } from "../../types/api";
 
 export interface ApartadoTerminos {
   lineas: string[];
@@ -146,4 +147,40 @@ export const APARTADOS_TERMINOS: ApartadoTerminos[] = [
  */
 export function llevaTerminos(contenido: { tipo_entrega: TipoEntrega }): boolean {
   return contenido.tipo_entrega === "REPARACION_TERMINADA";
+}
+
+/** Lo que imprime la página de términos de un comprobante. */
+export interface TerminosParaImprimir {
+  encabezado: { marca: string; titulo: string; subtitulo: string };
+  apartados: ApartadoTerminos[];
+  pie: readonly string[];
+  /** La versión guardada en el comprobante; `null`: texto anterior. */
+  version: number | null;
+}
+
+/**
+ * DEC-AJ-09: la versión que guardó el comprobante o, si es anterior al
+ * bloque 4 y no la guardó, el texto anterior de este archivo.
+ */
+export function terminosParaImprimir(
+  contenido: Pick<ContenidoEntrega, "terminos">,
+): TerminosParaImprimir {
+  const terminos = contenido.terminos;
+  if (!terminos) {
+    return {
+      encabezado: ENCABEZADO_TERMINOS,
+      apartados: APARTADOS_TERMINOS,
+      pie: PIE_TERMINOS,
+      version: null,
+    };
+  }
+  return {
+    encabezado: terminos.contenido.encabezado,
+    apartados: terminos.contenido.apartados.map((apartado) => ({
+      lineas: apartado.lineas,
+      destacado: apartado.destacado,
+    })),
+    pie: terminos.contenido.pie,
+    version: terminos.version,
+  };
 }

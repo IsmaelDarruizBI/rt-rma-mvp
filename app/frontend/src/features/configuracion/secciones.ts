@@ -4,8 +4,9 @@
  * Cada subsección se ve con SU permiso, no con un rol: Recepción o
  * Coordinación RMA pueden administrar insumos, motivos o tipos si
  * Administración se los delega desde Permisos (CFG-03). Lo sensible
- * (usuarios, permisos, recargos y la auditoría completa) sigue siendo de
- * Administración. La API valida todo de nuevo: esto solo decide qué ofrecer.
+ * (usuarios, permisos, recargos, comprobantes y la auditoría completa)
+ * sigue siendo de Administración. La API valida todo de nuevo: esto solo
+ * decide qué ofrecer.
  */
 
 import { puede, type ConRoles } from "../../lib/roles.ts";
@@ -18,6 +19,8 @@ export type SeccionConfiguracion =
   | "insumos"
   | "proveedores"
   | "plantillas"
+  | "empresa"
+  | "terminos"
   | "usuarios"
   | "permisos"
   | "recargos"
@@ -47,6 +50,9 @@ export const SECCIONES_CONFIGURACION: readonly DefinicionSeccion[] = [
   { id: "insumos", grupo: "Inventario y compras", titulo: "Insumos", permisos: ["INSUMO_GESTIONAR"] },
   { id: "proveedores", grupo: "Inventario y compras", titulo: "Proveedores", permisos: ["PROVEEDOR_GESTIONAR"] },
   { id: "plantillas", grupo: "Comunicación", titulo: "Plantillas de WhatsApp", permisos: ["PLANTILLA_GESTIONAR"] },
+  // DEC-AJ-09: Administración, con el permiso no configurable del sistema.
+  { id: "empresa", grupo: "Comprobantes", titulo: "Datos de la empresa", permisos: ["CONFIGURACION_ADMINISTRAR"] },
+  { id: "terminos", grupo: "Comprobantes", titulo: "Términos y condiciones", permisos: ["CONFIGURACION_ADMINISTRAR"] },
   { id: "usuarios", grupo: "Sistema", titulo: "Usuarios y roles", permisos: ["ROLES_ADMINISTRAR"] },
   { id: "permisos", grupo: "Sistema", titulo: "Permisos", permisos: ["ROLES_ADMINISTRAR"] },
   { id: "recargos", grupo: "Sistema", titulo: "Recargos por medio de pago", permisos: ["CONFIGURACION_ADMINISTRAR"] },
@@ -115,4 +121,6 @@ export const ENTIDAD_DE_SECCION: Partial<Record<SeccionConfiguracion, string>> =
   insumos: "INSUMO",
   proveedores: "PROVEEDOR",
   plantillas: "PLANTILLA",
+  empresa: "EMPRESA",
+  terminos: "TEXTO_LEGAL",
 };

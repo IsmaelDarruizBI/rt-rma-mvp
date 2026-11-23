@@ -59,10 +59,11 @@ describe("Configuración por permisos (CFG-05)", () => {
       "ROLES_ADMINISTRAR",
       "CONFIGURACION_ADMINISTRAR",
     ]);
-    assert.equal(seccionesPermitidas(admin).length, 11);
+    // DEC-AJ-09: + «Datos de la empresa» y «Términos y condiciones».
+    assert.equal(seccionesPermitidas(admin).length, 13);
     assert.deepEqual(
       gruposDe(seccionesPermitidas(admin)).map((g) => g.grupo),
-      ["Taller", "Inventario y compras", "Comunicación", "Sistema"],
+      ["Taller", "Inventario y compras", "Comunicación", "Comprobantes", "Sistema"],
     );
     assert.equal(seccionAMostrar(admin, undefined), "tipos-reparacion");
   });

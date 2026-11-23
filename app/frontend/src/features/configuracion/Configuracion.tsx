@@ -2,7 +2,8 @@
  * Configuración por funcionalidad (Configuración v2, CFG-05; DC23,
  * DC23AUD, BR-REP-040).
  *
- * Un índice agrupado (Taller, Inventario y compras, Comunicación, Sistema)
+ * Un índice agrupado (Taller, Inventario y compras, Comunicación,
+ * Comprobantes, Sistema)
  * con una ruta por subsección (`#/configuracion/insumos`). Cada subsección
  * se ve con su permiso, no con un rol: Administración puede delegar los
  * catálogos operativos a Recepción o Coordinación RMA desde Permisos. Lo
@@ -20,6 +21,7 @@ import { Mensajes, mensajeDe } from "../../components/FormularioModal";
 import { colores } from "../../components/ui";
 import type { Usuario } from "../../types/api";
 import { ChecklistAdmin } from "./Checklist";
+import { DatosEmpresaAdmin, TerminosCondicionesAdmin } from "./Comprobantes";
 import { InsumosAdmin } from "./Insumos";
 import { MotivosOperativos, RecargosMedioPago } from "./Operativa";
 import { Permisos } from "./Permisos";
@@ -55,6 +57,15 @@ const CAMPOS: Record<string, string> = {
   texto: "Texto",
   finalidad: "Finalidad",
   requiere_descripcion: "Exige descripción",
+  // DEC-AJ-09: datos de la empresa y versiones de los términos.
+  razon_social: "Razón social",
+  cuit: "CUIT",
+  direccion: "Dirección",
+  telefono: "Teléfono",
+  email: "Email",
+  horario: "Horario de atención",
+  pie_comprobante: "Pie de los comprobantes",
+  version: "Versión vigente",
 };
 
 /** Los booleanos se guardan como true/false: en pantalla, Sí o No. */
@@ -221,6 +232,8 @@ export function ConfiguracionPanel({
           {actual === "insumos" && <InsumosAdmin actor={actor} />}
           {actual === "proveedores" && <ProveedoresAdmin actor={actor} />}
           {actual === "plantillas" && <PlantillasMensaje actor={actor} />}
+          {actual === "empresa" && <DatosEmpresaAdmin actor={actor} />}
+          {actual === "terminos" && <TerminosCondicionesAdmin actor={actor} />}
           {actual === "usuarios" && (
             <UsuariosRoles actor={actor} editable={editableSistema} onCambio={alCambiar} />
           )}

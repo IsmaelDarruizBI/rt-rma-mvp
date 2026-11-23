@@ -1,8 +1,13 @@
 /**
- * Términos y Condiciones del comprobante de entrega y garantía: los
- * apartados de la hoja de Rosario Tecno (sin el que anulaba la garantía si
- * retiraba otra persona, DEC-AJ-09), uno resaltado, y solo en la entrega
- * de un equipo reparado.
+ * Términos y Condiciones del comprobante de entrega y garantía.
+ *
+ * - El texto anterior (el de los comprobantes emitidos antes del bloque 4,
+ *   que no guardaron su versión): los apartados de la hoja de Rosario Tecno
+ *   sin el que anulaba la garantía si retiraba otra persona (DEC-AJ-09),
+ *   uno resaltado.
+ * - DEC-AJ-09 (bloque 4): un comprobante que guardó su versión se imprime
+ *   con ESA versión; uno anterior, con el texto anterior.
+ * - Solo en la entrega de un equipo reparado.
  *
  * Se ejecuta con `npm test` (node --test, sin dependencias extra).
  */
@@ -15,9 +20,11 @@ import {
   ENCABEZADO_TERMINOS,
   PIE_TERMINOS,
   llevaTerminos,
+  terminosParaImprimir,
 } from "../src/features/ordenes-reparacion/terminosCondiciones.ts";
+import type { TextoLegal } from "../src/types/api";
 
-test("los 18 apartados de la hoja, sin líneas vacías", () => {
+test("texto anterior: los 18 apartados de la hoja, sin líneas vacías", () => {
   assert.equal(APARTADOS_TERMINOS.length, 18);
   for (const apartado of APARTADOS_TERMINOS) {
     assert.ok(apartado.lineas.length > 0);
@@ -67,4 +74,41 @@ test("encabezado de Rosario Tecno y pie con firma, aclaración y fecha", () => {
 test("solo la entrega de un equipo reparado lleva los términos", () => {
   assert.equal(llevaTerminos({ tipo_entrega: "REPARACION_TERMINADA" }), true);
   assert.equal(llevaTerminos({ tipo_entrega: "DEVOLUCION_SIN_REPARACION" }), false);
+});
+
+const VERSION_3: TextoLegal = {
+  tipo: "TERMINOS_CONDICIONES_ENTREGA",
+  version: 3,
+  titulo: "TÉRMINOS",
+  contenido: {
+    encabezado: { marca: "RT", titulo: "TÉRMINOS", subtitulo: "SERVICIO" },
+    apartados: [
+      { numero: 1, lineas: ["La garantía es la indicada para cada trabajo."], destacado: false },
+      { numero: 2, lineas: ["Plazos estimativos."], destacado: true },
+    ],
+    pie: ["FIRMA", "FECHA"],
+  },
+  vigente_desde: "2026-11-23T15:00:00Z",
+  publicado_por: "ADMIN-001",
+};
+
+test("DEC-AJ-09: se imprime la versión que guardó el comprobante", () => {
+  const terminos = terminosParaImprimir({ terminos: VERSION_3 });
+  assert.equal(terminos.version, 3);
+  assert.deepEqual(terminos.encabezado, VERSION_3.contenido.encabezado);
+  assert.deepEqual(terminos.apartados, [
+    { lineas: ["La garantía es la indicada para cada trabajo."], destacado: false },
+    { lineas: ["Plazos estimativos."], destacado: true },
+  ]);
+  assert.deepEqual([...terminos.pie], ["FIRMA", "FECHA"]);
+});
+
+test("DEC-AJ-09: un comprobante anterior, sin versión, imprime el texto anterior", () => {
+  for (const contenido of [{}, { terminos: null }]) {
+    const terminos = terminosParaImprimir(contenido);
+    assert.equal(terminos.version, null);
+    assert.equal(terminos.apartados, APARTADOS_TERMINOS);
+    assert.equal(terminos.encabezado, ENCABEZADO_TERMINOS);
+    assert.equal(terminos.pie, PIE_TERMINOS);
+  }
 });

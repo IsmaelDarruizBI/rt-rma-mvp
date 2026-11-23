@@ -346,6 +346,34 @@ export interface EmpresaEnDocumento {
   telefono: string | null;
   email: string | null;
   condiciones_garantia: string | null;
+  /** DEC-AJ-09 (ausentes en los documentos anteriores). */
+  horario?: string | null;
+  pie_comprobante?: string | null;
+}
+
+/** DEC-AJ-09: un apartado numerado de un texto legal. */
+export interface ApartadoTextoLegal {
+  numero: number;
+  lineas: string[];
+  destacado: boolean;
+}
+
+export interface ContenidoTextoLegal {
+  encabezado: { marca: string; titulo: string; subtitulo: string };
+  apartados: ApartadoTextoLegal[];
+  /** Espacios del pie que se completan a mano (firma, aclaración, fecha). */
+  pie: string[];
+}
+
+/** DEC-AJ-09: una versión publicada de los términos y condiciones. */
+export interface TextoLegal {
+  tipo: "TERMINOS_CONDICIONES_ENTREGA";
+  version: number;
+  titulo: string;
+  contenido: ContenidoTextoLegal;
+  vigente_desde: string;
+  /** `null` en la carga inicial. */
+  publicado_por: string | null;
 }
 
 export interface TrabajoEnDocumento {
@@ -400,6 +428,11 @@ export interface ContenidoEntrega extends ContenidoBase {
    */
   entrega_y_garantia?: boolean;
   condiciones_garantia?: string | null;
+  /**
+   * DEC-AJ-09: la versión de los términos que se imprime con este
+   * comprobante. Ausente o `null` en los anteriores (texto anterior).
+   */
+  terminos?: TextoLegal | null;
   resultado: string;
   fecha_entrega: string | null;
   entregado_por: UsuarioEnDocumento | null;

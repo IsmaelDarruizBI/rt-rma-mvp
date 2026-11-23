@@ -5,7 +5,10 @@
 
 import { get, post, put } from "./client";
 import type {
+  ContenidoTextoLegal,
+  EmpresaEnDocumento,
   RolUsuario,
+  TextoLegal,
   TipoReparacion,
   Usuario,
 } from "../types/api";
@@ -36,7 +39,9 @@ export type EntidadConfiguracion =
   | "PARAMETRO"
   | "CHECKLIST"
   | "PROVEEDOR"
-  | "MEDIO_PAGO";
+  | "MEDIO_PAGO"
+  | "EMPRESA"
+  | "TEXTO_LEGAL";
 
 export interface CambioConfiguracion {
   entidad: EntidadConfiguracion;
@@ -154,4 +159,63 @@ export function guardarPermiso(
     `/api/admin/permissions/${encodeURIComponent(codigo)}`,
     { usuario_id: usuarioId, roles },
   );
+}
+
+// --- Comprobantes (DEC-AJ-09) ----------------------------------------------
+
+/** Lo que edita «Datos de la empresa» (vacío: sin informar). */
+export interface DatosEmpresaEditables {
+  nombre: string;
+  razon_social: string | null;
+  cuit: string | null;
+  direccion: string | null;
+  telefono: string | null;
+  email: string | null;
+  horario: string | null;
+  pie_comprobante: string | null;
+}
+
+export interface EmpresaAdmin {
+  /** false en el modo JSON: la configuración es de solo lectura. */
+  editable: boolean;
+  empresa: EmpresaEnDocumento;
+}
+
+export function leerEmpresa(): Promise<EmpresaAdmin> {
+  return get<EmpresaAdmin>("/api/admin/company");
+}
+
+export function guardarEmpresa(
+  usuarioId: string,
+  datos: DatosEmpresaEditables,
+): Promise<EmpresaEnDocumento> {
+  return put<EmpresaEnDocumento>("/api/admin/company", {
+    usuario_id: usuarioId,
+    ...datos,
+  });
+}
+
+export interface TerminosAdmin {
+  editable: boolean;
+  tipo: string;
+  vigente: TextoLegal | null;
+  /** De la primera a la última; ninguna se modifica. */
+  versiones: TextoLegal[];
+}
+
+export function leerTerminos(): Promise<TerminosAdmin> {
+  return get<TerminosAdmin>("/api/admin/terms");
+}
+
+/** Publica una versión nueva y completa, vigente desde ahora. */
+export function publicarTerminos(
+  usuarioId: string,
+  titulo: string,
+  contenido: ContenidoTextoLegal,
+): Promise<TextoLegal> {
+  return post<TextoLegal>("/api/admin/terms", {
+    usuario_id: usuarioId,
+    titulo,
+    contenido,
+  });
 }

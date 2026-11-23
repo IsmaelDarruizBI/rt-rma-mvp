@@ -65,12 +65,8 @@ import {
   telefonoParaWhatsapp,
 } from "./whatsapp";
 import { descripcionQuienRetira, tituloComprobanteEntrega } from "./entrega";
-import {
-  APARTADOS_TERMINOS,
-  ENCABEZADO_TERMINOS,
-  PIE_TERMINOS,
-  llevaTerminos,
-} from "./terminosCondiciones";
+import { pieDeComprobante, renglonesDeEmpresa } from "./empresaEnComprobante";
+import { llevaTerminos, terminosParaImprimir } from "./terminosCondiciones";
 
 const NOMBRE_TIPO: Record<TipoDocumento, string> = {
   COMPROBANTE_RECEPCION: "Comprobante de recepción",
@@ -825,13 +821,8 @@ function HojaDocumento({ visible }: { visible: Visible }) {
   const contenido =
     visible.clase === "emitido" ? visible.documento.contenido : visible.contenido;
   const { empresa } = contenido;
-  const datosEmpresa = [
-    empresa.razon_social,
-    empresa.cuit && `CUIT ${empresa.cuit}`,
-    empresa.direccion,
-    empresa.telefono,
-    empresa.email,
-  ].filter(Boolean);
+  // DEC-AJ-09: los datos que copió el documento (con horario, si lo tiene).
+  const datosEmpresa = renglonesDeEmpresa(empresa);
 
   return (
     <article
@@ -864,7 +855,7 @@ function HojaDocumento({ visible }: { visible: Visible }) {
         <div>
           <div style={{ fontSize: "15pt", fontWeight: 700 }}>{empresa.nombre}</div>
           {datosEmpresa.map((dato) => (
-            <div key={dato as string} style={{ fontSize: "9pt" }}>
+            <div key={dato} style={{ fontSize: "9pt" }}>
               {dato}
             </div>
           ))}
@@ -927,7 +918,33 @@ function HojaDocumento({ visible }: { visible: Visible }) {
           motivo={visible.clase === "emitido" ? visible.documento.motivo : null}
         />
       )}
+      {/* En la entrega, el pie va antes de la página de términos. */}
+      {contenido.tipo !== "COMPROBANTE_ENTREGA" && <PieEmpresa empresa={empresa} />}
     </article>
+  );
+}
+
+/** DEC-AJ-09: el pie libre de la empresa, tal como lo copió el documento. */
+function PieEmpresa({ empresa }: { empresa: ContenidoDocumento["empresa"] }) {
+  const parrafos = pieDeComprobante(empresa);
+  if (parrafos.length === 0) return null;
+  return (
+    <footer
+      style={{
+        marginTop: "1rem",
+        paddingTop: "0.4rem",
+        borderTop: "1px solid #ccc",
+        fontSize: "8.5pt",
+        color: "#444",
+        textAlign: "center",
+      }}
+    >
+      {parrafos.map((parrafo, indice) => (
+        <p key={indice} style={{ margin: "0.1rem 0" }}>
+          {parrafo}
+        </p>
+      ))}
+    </footer>
   );
 }
 
@@ -1497,18 +1514,25 @@ function CuerpoEntrega({
         izquierda="Entregó por la empresa"
         derecha="Recibí conforme (firma y aclaración)"
       />
-      {llevaTerminos(contenido) && <PaginaTerminos ordenId={contenido.orden_id} />}
+      <PieEmpresa empresa={contenido.empresa} />
+      {llevaTerminos(contenido) && <PaginaTerminos contenido={contenido} />}
     </>
   );
 }
 
 /**
  * Términos y Condiciones: segunda página A4 del comprobante de entrega de
- * un equipo reparado. El texto vive en `terminosCondiciones.ts`; aquí
- * solo la forma. Los espacios de firma, aclaración y fecha quedan en
- * blanco: se completan a mano al retirar el equipo.
+ * un equipo reparado. DEC-AJ-09: se imprime la versión que guardó el
+ * comprobante; uno anterior al bloque 4, con el texto anterior
+ * (`terminosCondiciones.ts`). Aquí solo la forma. Los espacios del pie
+ * (firma, aclaración y fecha) quedan en blanco: se completan a mano al
+ * retirar el equipo.
  */
-function PaginaTerminos({ ordenId }: { ordenId: string }) {
+function PaginaTerminos({ contenido }: { contenido: ContenidoEntrega }) {
+  const ordenId = contenido.orden_id;
+  const { encabezado, apartados, pie, version } = terminosParaImprimir(contenido);
+  const izquierda = pie.length > 1 ? pie.slice(0, -1) : pie;
+  const derecha = pie.length > 1 ? pie[pie.length - 1] : null;
   return (
     <section
       className="terminos-entrega"
@@ -1539,7 +1563,7 @@ function PaginaTerminos({ ordenId }: { ordenId: string }) {
           padding: "0.1rem 0",
         }}
       >
-        {ENCABEZADO_TERMINOS.marca}
+        {encabezado.marca}
       </div>
       <div
         style={{
@@ -1553,7 +1577,7 @@ function PaginaTerminos({ ordenId }: { ordenId: string }) {
       >
         <div>
           <div style={{ fontSize: "13pt", fontWeight: 800, letterSpacing: "0.03em" }}>
-            {ENCABEZADO_TERMINOS.titulo}
+            {encabezado.titulo}
           </div>
           <span
             style={{
@@ -1566,14 +1590,19 @@ function PaginaTerminos({ ordenId }: { ordenId: string }) {
               borderRadius: 3,
             }}
           >
-            {ENCABEZADO_TERMINOS.subtitulo}
+            {encabezado.subtitulo}
           </span>
         </div>
-        <div style={{ fontSize: "9pt" }}>Orden {ordenId}</div>
+        <div style={{ fontSize: "9pt", textAlign: "right" }}>
+          Orden {ordenId}
+          {version !== null && (
+            <div style={{ fontSize: "7.5pt", color: "#555" }}>Versión {version}</div>
+          )}
+        </div>
       </div>
 
       <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
-        {APARTADOS_TERMINOS.map((apartado, indice) => (
+        {apartados.map((apartado, indice) => (
           <li
             key={indice}
             style={{
@@ -1600,6 +1629,7 @@ function PaginaTerminos({ ordenId }: { ordenId: string }) {
         ))}
       </ol>
 
+      {pie.length > 0 && (
       <div
         style={{
           display: "flex",
@@ -1613,27 +1643,30 @@ function PaginaTerminos({ ordenId }: { ordenId: string }) {
         }}
       >
         <div style={{ flex: 2 }}>
-          {PIE_TERMINOS.slice(0, 2).map((texto) => (
+          {izquierda.map((texto) => (
             <div key={texto} style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
               <span>{texto}</span>
               <span style={{ flex: 1, borderBottom: "1px dotted #111" }} />
             </div>
           ))}
         </div>
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            gap: "0.5rem",
-            alignItems: "flex-end",
-            borderLeft: "1.5px solid #111",
-            paddingLeft: "1rem",
-          }}
-        >
-          <span>{PIE_TERMINOS[2]}</span>
-          <span style={{ flex: 1, borderBottom: "1px dotted #111" }} />
-        </div>
+        {derecha !== null && (
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              gap: "0.5rem",
+              alignItems: "flex-end",
+              borderLeft: "1.5px solid #111",
+              paddingLeft: "1rem",
+            }}
+          >
+            <span>{derecha}</span>
+            <span style={{ flex: 1, borderBottom: "1px dotted #111" }} />
+          </div>
+        )}
       </div>
+      )}
     </section>
   );
 }
