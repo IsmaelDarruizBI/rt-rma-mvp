@@ -772,3 +772,120 @@ Registradas en `rt-rma-app`, rama `spec/ajustes-funcionales` (local, sin publica
 | D-07 (BF-08) | DEC-AJ-07 | Alternativa A: pregunta **obligatoria** «¿Se pudieron verificar las funcionalidades del equipo?» Sí o No, con observaciones opcionales en los dos casos. Es **informativa**: se muestra como referencia en el check-in de entrega y no cambia la garantía ni BR-REP-045. BF-16 sigue postergado | Bloque 3 |
 | D-08 (BF-06) | DEC-AJ-08 | «Crear y generar el comprobante», con el canal presencial preseleccionado (se sigue registrando, BR-REP-028); Imprimir como acción principal del visor, con un gesto del usuario. Sin trabajos, el comprobante de recepción | Bloque 3 |
 | D-09 (BF-19) | DEC-AJ-09 | Administración configura los datos de la empresa (nombre comercial, dirección, teléfono, horario y pie de comprobante), con auditoría. Términos y condiciones versionados desde Configuración (`rma.texto_legal`); cada documento conserva su versión. **P-04:** los documentos informan la garantía real de cada trabajo, no los 180 días fijos. **P-05:** la entrega pregunta «¿Retira otra persona?» Sí o No; si es Sí, nombre, apellido y teléfono obligatorios; no se piden vínculo, DNI ni otra identificación, ni una autorización formal; retirar otra persona no modifica ni anula la garantía; quién retiró queda en la Orden y en el comprobante. Reemplaza las recomendaciones d y e de la tabla anterior | Bloque 4 |
+
+## 10. Iteración 1: implementación en local
+
+### 10.1 Bloque 2: entrega
+
+Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. `business/` no cambia: implementa DEC-AJ-03, DEC-AJ-04 y la parte P-05 de DEC-AJ-09 (sección 9.1).
+
+| Commit | Qué |
+|---|---|
+| `5cf99f9` | BF-20 (DEC-AJ-03): avisar al cliente deja de ser obligatorio |
+| `7be27fe` | Migración `20261123000100_checkin_en_entrega` |
+| `1a3b55f` | BF-18 (DEC-AJ-04): entrega en una sola confirmación y un solo comprobante (backend) |
+| `b23732f` | BF-19, P-05 (DEC-AJ-09): quién retira, sin identificación (backend) |
+| `f51ce94` | Frontend de los tres: formulario de entrega, comprobante y términos |
+
+#### Aviso opcional (DEC-AJ-03)
+
+- **Entrega sin aviso:** ENTREGAR se ofrece con la Orden lista para retirar y la cuenta saldada, en Cliente Externo (también SIN_REPARACION) y en la garantía RMA. Sin aviso, la misma entrega registra PROC-REP-250 y evalúa PROC-REP-265 antes de 280. Con el aviso hecho, 265 ya se evaluó al avisar o al pagar y no se repite.
+- **Notificar:** sigue como acción opcional hasta la entrega (`services/ordenes.py`, `aviso_registrable` y `registrar_aviso_listo`).
+  - En la situación, «Avisar al cliente (opcional)» es una tarea sugerida junto a «Registrar el pago pendiente» o «Entregar el equipo». «Lista para entregar» ya no queda detrás de un aviso pendiente.
+  - La bandeja «Avisar al cliente (opcional)» lo aclara.
+- **WhatsApp:** confirmar como enviado un mensaje con la plantilla `LISTO_PARA_RETIRAR` registra el aviso (250 → 260 → 265, y 266 si hay deuda), una sola vez, con la Orden lista y sin entregar. La observación del paso dice `WhatsApp COM-…`. Otra plantilla, un envío no confirmado o una Orden que todavía no está lista no lo registran (`application/comunicaciones.py`).
+- **Retiro demorado:** corre desde que la Orden está lista para retirar, el último paso 240 o 069 (`domain/retiro.py`, `fecha_lista_para_retirar`). Una Orden vieja sin ese paso usa el aviso, como antes.
+  - Los seguimientos ya no exigen el aviso.
+  - La API expone `lista_para_retirar_desde` y `fecha_aviso`; la Orden los muestra («Lista para retirar desde … · aviso al cliente: …»).
+- **Camino RT_INTERNO:** sin cambios (INFORMAR_RT → DEVOLVER_RT). La entrega comercial lo rechaza.
+
+#### Entrega y comprobante (DEC-AJ-04)
+
+- **Una sola operación** (`services/entrega.py`, `entregar_al_cliente`):
+  - Controla una vez el rol, el resultado, la cuenta (saldo exactamente 0), la custodia, el trabajo abierto, quién retira y el check-in.
+  - Después registra [250] [269] [265] 280 y 270 con las versiones sin revalidar de cada service (`registrar_condicion_entrega`, `marcar_comprobante_final` y `registrar_entrega`).
+  - `validar_condicion_entrega`, `generar_comprobante_final` y `entregar_equipo` conservan sus controles para quien los usa por separado.
+  - Si algo falla, no se guarda nada: ni el check-in ni los pasos.
+- **Validaciones repetidas eliminadas:** el rol, `lista_para_cierre`, `current_process == 265` y `condicion_entrega_cumplida` se evaluaban dos o tres veces en la misma entrega, y se volvían a verificar los documentos recién generados. Ahora cada control se hace una vez, sin debilitar ninguno.
+- **Check-in dentro de la entrega:**
+  - `POST /deliver` recibe `checkin` y, para corregir uno ya registrado, `checkin_motivo` (DEC-MI-05 sin cambios).
+  - Si faltaba, se registra con el paso PROC-REP-269 y después se revalida 265.
+  - La acción aparte «Registrar el check-in» sigue disponible antes de entregar.
+  - El check-in ya no bloquea ENTREGAR ni es una situación propia: «Lista para entregar» indica que se registra al entregar. Sin la respuesta, la entrega se rechaza (BR-REP-045).
+- **Custodia como bloqueo:** ENTREGAR trae en `bloqueo` la custodia sin confirmar («Falta confirmar la recepción física del equipo»). El frontend la muestra y ya no la deduce.
+- **Un solo comprobante:**
+  - La entrega de una reparación emite el «Comprobante de entrega y garantía». Su contenido marca `entrega_y_garantia` y `condiciones_garantia`, y lista cada trabajo con su garantía y vencimiento.
+  - La vista imprimible agrega los términos y condiciones en la misma hoja.
+  - Ya no se emite el certificado GARANTIA ni se ofrece su vista previa. Los emitidos se siguen leyendo con su presentación.
+  - La marca `garantia_reparacion` sigue diciendo que se emitió la garantía, ahora dentro del comprobante.
+  - Una devolución sin reparación sigue siendo el «Comprobante de devolución sin reparación».
+- **Cobro:** sigue aparte. ENTREGAR no se ofrece con saldo distinto de 0, y el comando lo rechaza.
+
+#### Quién retira (DEC-AJ-09, P-05)
+
+- **Formulario:** «¿Retira otra persona?»
+  - **No:** retira el titular y no se pide nada más. Queda su nombre.
+  - **Sí:** nombre, apellido y teléfono obligatorios.
+  - No se piden vínculo, DNI ni autorización formal. Se dejó de pedir la identificación al entregar.
+- **Registro:** queda en la Orden (`entrega.retira_otra_persona` y `telefono_receptor`), en el historial del paso 270 y en el comprobante.
+- **PostgreSQL:** `rma.salida` escribe y lee `retira_telefono` y `retira_vinculo` (TITULAR o TERCERO), columnas que ya existían.
+- **Garantía:** que retire otra persona no la cambia.
+- **Términos:** se quitaron el apartado que anulaba la garantía si retiraba un tercero y la exigencia de que retire quien dejó el equipo. El resto del texto no cambia; los 180 días (P-04) quedan para el bloque 4.
+
+#### Migración
+
+`20261123000100_checkin_en_entrega.sql`, aditiva, solo datos de referencia: la equivalencia del historial de PROC-REP-269 con «Check-in registrado» (EV-REP-033). Sin ella PostgreSQL rechaza guardar el paso. No agrega tablas, así que los scripts de reinicio del UAT no cambian.
+
+#### Pruebas nuevas
+
+| Archivo | Casos | Qué cubre |
+|---|---|---|
+| `tests/test_entrega_sin_aviso.py` | 11 | Entrega sin aviso en Cliente Externo, SIN_REPARACION y garantía RMA; el saldo sigue bloqueando sin dejar pasos a medias; camino RT sin cambios; aviso opcional registrado; WhatsApp `LISTO_PARA_RETIRAR` registra 260 una vez; retiro demorado desde que está lista, con la fecha del aviso aparte |
+| `tests/test_entrega_y_garantia.py` | 10 | Check-in y entrega en una confirmación (con 269 y revalidación de 265); sin check-in o con saldo no se guarda nada; corrección con motivo; roles; custodia como bloqueo; un solo comprobante; devolución sin reparación; un certificado anterior se sigue leyendo |
+| `tests/test_quien_retira.py` | 7 | Titular sin otro dato; nombre, apellido y teléfono obligatorios para otra persona; sin vínculo ni DNI; la garantía no cambia |
+| `tests/postgres/test_entrega_postgres.py` | 2 | Paso 269 guardado como EV-REP-033, entrega sin aviso y quién retira, guardados y releídos |
+| Frontend `tests/entrega.test.ts` | 7 | Retiro y aviso, título del comprobante, cuándo se pide el check-in, faltantes y descripción de quién retira |
+| Frontend `tests/terminos.test.ts` | 1 | Sin la anulación de la garantía por retiro de un tercero |
+
+#### Pruebas existentes adaptadas (aprobado: fijaban las reglas reemplazadas)
+
+- **Aviso obligatorio (DEC-AJ-03):**
+  - `test_api_sin_reparacion.py`, `test_cancelacion_orden.py`: ENTREGAR se ofrece junto a NOTIFICAR.
+  - `test_api_hp_rep_003.py`: tres pruebas exigían avisar antes de entregar; ahora verifican que la entrega sin aviso pasa por 265 antes de 280.
+  - `test_situacion_operativa.py`: PENDIENTE_COBRO con el aviso como tarea opcional.
+  - `test_bandejas.py`: título de la bandeja del aviso.
+  - `test_documentos_custodia_entrega.py`, prueba 11: el rechazo con saldo es por el saldo, no por el nodo; la Orden sigue en 266.
+  - `test_motivos_retiro.py`: solo el docstring.
+- **Certificado aparte y check-in como acción bloqueante (DEC-AJ-04):**
+  - `test_documentos_custodia_entrega.py` (pruebas 10, 13-17, 18-19, 20, 21, 22 y circuitos A y C), `test_garantia_checkin.py` y `test_reparacion_otros.py`: la garantía de cada trabajo se lee en el comprobante de entrega. Se mantienen los mismos plazos y vencimientos.
+  - `test_garantia_checkin.py` y `test_situacion_operativa.py`: el check-in faltante no bloquea ENTREGAR; la entrega sin él se sigue rechazando.
+  - `test_api_sin_reparacion.py`: ENTREGAR informa la custodia sin confirmar como bloqueo.
+  - `tests/postgres/corpus_ordenes.py`: la primera entrega del corpus conserva un certificado anterior, para seguir cubriendo su guardado.
+- **Identificación de quien retira (DEC-AJ-09):**
+  - `test_documentos_custodia_entrega.py`, pruebas 9 y 16.
+  - `tests/fixtures/custodia.py`: `RECEPTOR` sin nombre ni DNI.
+  - `tests/postgres/test_recepcion_documentos_postgres.py`: firma nueva de `entregar`.
+- **Frontend:** `tests/terminos.test.ts`, 18 apartados y uno resaltado.
+
+No se debilitó ninguna comprobación de saldo, custodia, check-in, idempotencia ni permisos.
+
+#### Pruebas ejecutadas (focalizadas)
+
+| Ámbito | Resultado |
+|---|---|
+| Backend: 41 archivos existentes (cierre, entrega, documentos, garantía, check-in, aviso, retiro, comunicaciones, situación, bandejas, HP-REP-001/002/003, caracterización, cancelación, SIN_REPARACION, autorización, permisos, macro V1.4 y orden cerrada) y los 3 nuevos | 680 pasan |
+| PostgreSQL local: `test_ordenes`, `test_recepcion_documentos`, `test_cierre_ux`, `test_motivos_retiro`, `test_comunicaciones`, `test_iteracion1`, `test_firmas`, `test_entrega` (nuevo), `test_reclamos_garantia`, `test_macro_v14`, `test_finanzas`, `test_pruebas_sql_supabase` y `test_reinicio_clasificacion` | 174 pasan |
+| Backend: `ruff check . ../../supabase/scripts` y `ruff format --check` de los archivos tocados | Limpios |
+| Frontend: `typecheck`, `npm test` y `npm run build` | Pasan (209 pruebas) |
+| Arranque | Backend local en modo JSON con `/health` 200 |
+
+La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA integral.
+
+#### Limitaciones y pendientes
+
+- **Progreso de la Orden:** sigue listando PROC-REP-260 «Notificar cliente». En una entrega sin aviso queda como no alcanzado; no se marcó como opcional en esa vista.
+- **Términos:** siguen en el código y no se guardan en el documento. Una hoja ya emitida se imprime con el texto vigente, como antes. Los 180 días (P-04) y los términos versionados quedan para el bloque 4.
+- **Nombre y apellido:** se guardan juntos en `recibido_por` (`rma.salida.retira_nombre`), sin columnas aparte.
+- **Documentación:** `traceability/discrepancias-baseline-v1.4.md` (DEC-AJ-03 y 04 todavía «sin implementar») y `docs/ESTADO_PROYECTO.md` no se actualizaron en este bloque.
+- **Datos del UAT:** las Órdenes en 240 sin aviso pasan a ofrecer la entrega (riesgo 6).
+- **Validación manual:** pendiente en local, según la tabla de la sección 5.
