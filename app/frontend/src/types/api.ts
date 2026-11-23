@@ -1272,6 +1272,12 @@ export interface Orden {
   /** DEC-MI-14: seguimientos del retiro y días de demora (si lo está). */
   seguimientos_retiro?: SeguimientoRetiro[];
   retiro_demorado_dias?: number | null;
+  /**
+   * DEC-AJ-03: desde cuándo la Orden está lista para retirar (de ahí corre
+   * el retiro demorado) y la fecha del aviso al cliente, que es opcional.
+   */
+  lista_para_retirar_desde?: string | null;
+  fecha_aviso?: string | null;
   /** DEC-MI-08: intentos de WhatsApp y su confirmación manual. */
   comunicaciones?: ComunicacionCliente[];
   /** DEC-MI-11: correcciones de la vinculación con el Equipo. */

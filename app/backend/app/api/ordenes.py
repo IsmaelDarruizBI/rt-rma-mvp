@@ -114,7 +114,11 @@ from app.domain.models import (
     VigenciaGarantiaOrigen,
 )
 from app.domain.prioridad import clave_de_prioridad
-from app.domain.retiro import dias_de_retiro_demorado
+from app.domain.retiro import (
+    dias_de_retiro_demorado,
+    fecha_aviso_listo,
+    fecha_lista_para_retirar,
+)
 from app.services import (
     MAX_BYTES_FOTO,
     ROLES_EXCEPCION_GARANTIA,
@@ -248,6 +252,8 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
     salida.retiro_demorado_dias = dias_de_retiro_demorado(
         orden, contexto.ahora(), plazo_retiro_dias(contexto)
     )
+    salida.lista_para_retirar_desde = fecha_lista_para_retirar(orden)
+    salida.fecha_aviso = fecha_aviso_listo(orden)
     return salida
 
 

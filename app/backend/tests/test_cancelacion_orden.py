@@ -573,7 +573,8 @@ def test_cliente_sin_reparacion_con_custodia_notifica_y_entrega(
     orden = _revisada_sin_reparacion(cliente, orden_id)
 
     assert orden["custodia"]["estado"] == "EN_CUSTODIA"
-    assert codigos(orden) == ["NOTIFICAR"]
+    # DEC-AJ-03: la entrega no espera el aviso, que es opcional.
+    assert codigos(orden) == ["NOTIFICAR", "ENTREGAR"]
     assert codigos_cancelacion(orden) == []
     _con_continuacion(orden)
     _la_devolucion_previa_se_rechaza(cliente, tmp_path, orden_id)

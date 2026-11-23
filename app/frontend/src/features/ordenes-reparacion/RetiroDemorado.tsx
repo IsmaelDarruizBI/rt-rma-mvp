@@ -1,6 +1,7 @@
 /**
- * Retiro demorado (DEC-MI-14): el equipo está listo, se avisó al cliente y
- * venció el plazo configurado. La Orden sigue abierta: nunca se cierra ni
+ * Retiro demorado (DEC-MI-14): el equipo está listo para retirar y venció
+ * el plazo configurado, contado desde que quedó listo (DEC-AJ-03; el aviso
+ * al cliente es opcional y su fecha se muestra aparte). La Orden sigue abierta: nunca se cierra ni
  * se dispone del equipo por el plazo. Recepción y Administración registran
  * los seguimientos (llamados, mensajes) con una nota.
  */
@@ -11,6 +12,7 @@ import { Boton, Campo, colores, estiloInput, fechaCorta } from "../../components
 import { puede } from "../../lib/roles";
 import type { Orden, Usuario } from "../../types/api";
 import { nombreDeUsuario } from "./DetalleOrden";
+import { textoRetiro } from "./entrega";
 
 const CANALES = ["TELEFONO", "WHATSAPP", "EMAIL", "PRESENCIAL"] as const;
 
@@ -31,7 +33,20 @@ export function RetiroDemorado({
   const [canal, setCanal] = useState("");
   const dias = orden.retiro_demorado_dias ?? null;
   const seguimientos = orden.seguimientos_retiro ?? [];
-  if (dias === null && seguimientos.length === 0) return null;
+  const listaDesde = orden.lista_para_retirar_desde ?? null;
+  const aviso = orden.fecha_aviso ?? null;
+  if (dias === null && seguimientos.length === 0) {
+    // Lista para retirar sin demora: solo desde cuándo y el aviso.
+    if (listaDesde === null) return null;
+    return (
+      <p
+        aria-label="Retiro"
+        style={{ margin: "0 0 0.8rem", fontSize: "0.85rem", color: colores.suave }}
+      >
+        {textoRetiro(listaDesde, aviso, fechaCorta)}
+      </p>
+    );
+  }
   const habilitado =
     dias !== null &&
     puede(actor, "RETIRO_SEGUIMIENTO", ["RECEPCION", "ADMINISTRADOR"]);
@@ -50,8 +65,14 @@ export function RetiroDemorado({
     >
       {dias !== null && (
         <p role="status" style={{ margin: "0 0 0.4rem" }}>
-          <strong>Retiro demorado:</strong> {dias} días desde el aviso de
-          equipo listo. La Orden sigue abierta; registrá cada seguimiento.
+          <strong>Retiro demorado:</strong> {dias} días desde que el equipo
+          está listo para retirar. La Orden sigue abierta; registrá cada
+          seguimiento.
+        </p>
+      )}
+      {listaDesde !== null && (
+        <p style={{ margin: "0 0 0.4rem", fontSize: "0.85rem" }}>
+          {textoRetiro(listaDesde, aviso, fechaCorta)}
         </p>
       )}
       {seguimientos.length > 0 && (
@@ -105,3 +126,4 @@ export function RetiroDemorado({
     </section>
   );
 }
+

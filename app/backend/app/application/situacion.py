@@ -602,32 +602,16 @@ def _cancelada(datos: _Datos) -> _Principal:
 
 
 def _cierre(datos: _Datos) -> _Principal | None:
-    """Reparacion lista (o concluida sin reparacion): avisar, cobrar,
-    entregar o devolver a Gestion RT."""
+    """Reparacion lista (o concluida sin reparacion): cobrar, entregar o
+    devolver a Gestion RT.
+
+    DEC-AJ-03: avisar al cliente es opcional. La Orden lista para retirar
+    no queda escondida detras de un aviso pendiente: el aviso, si todavia
+    no se dio, es una tarea sugerida junto a la principal.
+    """
     orden = datos.orden
     sin_reparacion = finalizada_sin_reparacion(orden)
     lista_desde = _ultimo_paso(orden, "PROC-REP-240", "PROC-REP-069")
-    avisada_desde = _ultimo_paso(orden, "PROC-REP-260", "PROC-REP-290")
-    notificar = datos.flujo("NOTIFICAR")
-    if notificar:
-        return _Principal(
-            codigo=CodigoSituacion.PENDIENTE_NOTIFICACION,
-            titulo="Pendiente de aviso al cliente",
-            descripcion=(
-                "La revisión concluyó sin reparación: falta avisarle al "
-                "cliente."
-                if sin_reparacion
-                else "La reparación está lista: falta avisarle al cliente."
-            ),
-            desde=lista_desde,
-            tareas=(
-                _tarea(
-                    "Avisar al cliente",
-                    "Para que pase a retirar el equipo.",
-                    notificar,
-                ),
-            ),
-        )
     informar = datos.flujo("INFORMAR_RT")
     if informar:
         return _Principal(
@@ -644,28 +628,47 @@ def _cierre(datos: _Datos) -> _Principal | None:
                 ),
             ),
         )
+    notificar = datos.flujo("NOTIFICAR")
+    aviso_sugerido = (
+        (
+            _tarea(
+                "Avisar al cliente (opcional)",
+                "Sugerido: avisarle que puede retirar el equipo. No es "
+                "necesario para entregar.",
+                notificar,
+            ),
+        )
+        if notificar
+        else ()
+    )
+    resultado = (
+        "La revisión concluyó sin reparación"
+        if sin_reparacion
+        else "La reparación está lista"
+    )
     cobro = datos.dinero("REGISTRAR_PAGO")
     if cobro and datos.cobrable and orden.saldo > 0:
         return _Principal(
             codigo=CodigoSituacion.PENDIENTE_COBRO,
             titulo="Pendiente de cobro",
-            descripcion="El cliente ya fue avisado; falta cobrar "
+            descripcion=f"{resultado}: falta cobrar "
             f"{_importe(orden.saldo)} para poder entregar.",
-            desde=avisada_desde,
+            desde=lista_desde,
             tareas=(
                 _tarea(
                     "Registrar el pago pendiente",
                     "La entrega exige la cuenta saldada.",
                     cobro,
                 ),
+                *aviso_sugerido,
             ),
         )
     entregar = datos.flujo("ENTREGAR")
     if entregar:
         tarea_entrega = _tarea(
             "Entregar el equipo",
-            "Registrar quién lo retira; se emiten el comprobante y la "
-            "garantía.",
+            "Registrar quién lo retira; se emite el comprobante de entrega "
+            "y garantía.",
             entregar,
         )
         checkin = datos.flujo("REGISTRAR_CHECKIN")
@@ -673,10 +676,10 @@ def _cierre(datos: _Datos) -> _Principal | None:
             return _Principal(
                 codigo=CodigoSituacion.PENDIENTE_CHECKIN,
                 titulo="Pendiente de verificación de funciones básicas",
-                descripcion="El cliente fue avisado y la cuenta está "
-                "saldada: antes de entregar falta registrar si se pudieron "
-                "verificar las funciones básicas del equipo.",
-                desde=avisada_desde,
+                descripcion="La cuenta está saldada: antes de entregar "
+                "falta registrar si se pudieron verificar las funciones "
+                "básicas del equipo.",
+                desde=lista_desde,
                 tareas=(
                     _tarea(
                         "Registrar el check-in",
@@ -685,15 +688,26 @@ def _cierre(datos: _Datos) -> _Principal | None:
                         checkin,
                     ),
                     tarea_entrega,
+                    *aviso_sugerido,
                 ),
             )
         return _Principal(
             codigo=CodigoSituacion.LISTA_PARA_ENTREGAR,
             titulo="Lista para entregar",
-            descripcion="El cliente fue avisado y la cuenta está saldada: "
+            descripcion=f"{resultado} y la cuenta está saldada: el cliente "
             "puede retirar el equipo.",
-            desde=avisada_desde,
-            tareas=(tarea_entrega,),
+            desde=lista_desde,
+            tareas=(tarea_entrega, *aviso_sugerido),
+        )
+    if notificar:
+        # Sin entrega posible por otro motivo (por ejemplo, dinero a favor
+        # del cliente para devolver): el aviso sigue disponible.
+        return _Principal(
+            codigo=CodigoSituacion.PENDIENTE_NOTIFICACION,
+            titulo="Lista para retirar",
+            descripcion=f"{resultado}. Avisarle al cliente es opcional.",
+            desde=lista_desde,
+            tareas=aviso_sugerido,
         )
     devolver_rt = datos.flujo("DEVOLVER_RT")
     if devolver_rt:
@@ -702,7 +716,7 @@ def _cierre(datos: _Datos) -> _Principal | None:
             titulo="Lista para devolver a Gestión RT",
             descripcion="El resultado ya se informó: falta devolver el "
             "equipo a Gestión RT.",
-            desde=avisada_desde,
+            desde=_ultimo_paso(orden, "PROC-REP-290"),
             tareas=(
                 _tarea(
                     "Devolver el equipo a Gestión RT",

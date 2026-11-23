@@ -28,7 +28,7 @@ from app.domain.models.operativa import (
     SeguimientoRetiro,
     TipoMotivo,
 )
-from app.domain.retiro import fecha_aviso_listo
+from app.domain.retiro import fecha_lista_para_retirar
 
 from . import permisos
 from .autorizacion import validar_alguno_de
@@ -172,8 +172,9 @@ def registrar_seguimiento_retiro(
     nota: str,
     canal: str | None = None,
 ) -> OrdenReparacion:
-    """Un seguimiento del retiro (DEC-MI-14): con el aviso de equipo listo
-    hecho y el equipo todavia en el local. No cambia el estado."""
+    """Un seguimiento del retiro (DEC-MI-14): con la Orden lista para
+    retirar y el equipo todavia en el local (DEC-AJ-03: no exige el aviso).
+    No cambia el estado."""
     validar_alguno_de(usuario, permisos.RETIRO_SEGUIMIENTO)
     nota = (nota or "").strip()
     if not nota:
@@ -182,9 +183,9 @@ def registrar_seguimiento_retiro(
         raise PrecondicionInvalidaError(
             "El equipo ya se entrego: no hay retiro que seguir."
         )
-    if fecha_aviso_listo(orden) is None:
+    if fecha_lista_para_retirar(orden) is None:
         raise PrecondicionInvalidaError(
-            "Todavia no se aviso al cliente que el equipo esta listo."
+            "La Orden todavia no esta lista para retirar."
         )
     nueva = orden.model_copy(deep=True)
     nueva.seguimientos_retiro.append(

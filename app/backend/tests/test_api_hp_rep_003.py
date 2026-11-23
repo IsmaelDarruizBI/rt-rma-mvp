@@ -424,34 +424,37 @@ def _referencias(cliente: TestClient, orden_id: str) -> list[str]:
     return [p["referencia_id"] for p in orden["historial"]]
 
 
-def test_garantia_no_puede_entregarse_sin_notificar_ni_pasar_por_265(cliente):
+def test_garantia_se_entrega_sin_aviso_y_pasa_por_265(cliente):
+    """DEC-AJ-03: la garantia RMA se entrega sin avisar al cliente; la
+    entrega evalua la condicion (265, NO_COBRABLE) antes de 280."""
     origen = _orden_entregada(cliente)
     garantia = _garantia_definida(cliente, origen["id"]).json()
     orden_id = garantia["id"]
     orden = _circuito_tecnico(cliente, orden_id)
     assert orden["estado_workflow"] == "REPARACION_LISTA"
-
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/deliver", json={"usuario_id": ADMINISTRADOR}
-    )
-    assert respuesta.status_code == 409, respuesta.text
-    referencias = _referencias(cliente, orden_id)
-    assert "PROC-REP-280" not in referencias
-    assert "PROC-REP-270" not in referencias
-
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/notify", json={"usuario_id": RECEPCION}
-    )
-    assert respuesta.status_code == 200, respuesta.text
-    referencias = _referencias(cliente, orden_id)
-    assert referencias[-2:] == ["PROC-REP-260", "PROC-REP-265"]
+    assert "ENTREGAR" in _codigos(orden)
 
     respuesta = entregar(cliente, orden_id, ADMINISTRADOR)
     assert respuesta.status_code == 200, respuesta.text
-    assert respuesta.json()["estado_workflow"] == "ENTREGADA"
+    orden = respuesta.json()
+    assert orden["estado_workflow"] == "ENTREGADA"
+    referencias = _referencias(cliente, orden_id)
+    assert "PROC-REP-260" not in referencias
+    assert referencias[-4:] == [
+        "PROC-REP-250",
+        "PROC-REP-265",
+        "PROC-REP-280",
+        "PROC-REP-270",
+    ]
+    paso_265 = [
+        p for p in orden["historial"] if p["referencia_id"] == "PROC-REP-265"
+    ]
+    assert paso_265[-1]["observacion"] == "NO_COBRABLE_POR_ORIGEN"
 
 
-def test_cliente_externo_pagado_por_adelantado_tampoco_saltea_265(cliente):
+def test_cliente_externo_pagado_por_adelantado_se_entrega_sin_saltear_265(
+    cliente,
+):
     orden = cliente.post(
         "/api/orders",
         json={
@@ -483,17 +486,14 @@ def test_cliente_externo_pagado_por_adelantado_tampoco_saltea_265(cliente):
     orden = _circuito_tecnico(cliente, orden_id)
     assert orden["estado_workflow"] == "REPARACION_LISTA"
 
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/deliver", json={"usuario_id": ADMINISTRADOR}
-    )
-    assert respuesta.status_code == 409, respuesta.text
-    assert "PROC-REP-280" not in _referencias(cliente, orden_id)
-
-    cliente.post(
-        f"/api/orders/{orden_id}/notify", json={"usuario_id": RECEPCION}
-    )
+    # DEC-AJ-03: sin aviso, la entrega igual pasa por 265 antes de 280.
     respuesta = entregar(cliente, orden_id, ADMINISTRADOR)
     assert respuesta.status_code == 200, respuesta.text
+    referencias = _referencias(cliente, orden_id)
+    assert "PROC-REP-260" not in referencias
+    assert referencias.index("PROC-REP-265") < referencias.index(
+        "PROC-REP-280"
+    )
 
 
 def _cliente_externo_lista(cliente: TestClient) -> str:
@@ -539,20 +539,16 @@ def test_pago_total_en_reparacion_lista_no_ejecuta_265(cliente):
     assert "PROC-REP-265" not in referencias
     assert "PROC-REP-266" not in referencias
 
-    respuesta = cliente.post(
-        f"/api/orders/{orden_id}/deliver", json={"usuario_id": ADMINISTRADOR}
-    )
-    assert respuesta.status_code == 409, respuesta.text
-
-    orden = cliente.post(
-        f"/api/orders/{orden_id}/notify", json={"usuario_id": RECEPCION}
-    ).json()
-    referencias = [p["referencia_id"] for p in orden["historial"]]
-    assert referencias[-3:] == ["PROC-REP-250", "PROC-REP-260", "PROC-REP-265"]
-    assert orden["puede_entregar"] is True
-
+    # DEC-AJ-03: la entrega, sin aviso, evalua 265 en la misma operacion.
     respuesta = entregar(cliente, orden_id, ADMINISTRADOR)
     assert respuesta.status_code == 200, respuesta.text
+    referencias = [p["referencia_id"] for p in respuesta.json()["historial"]]
+    assert referencias[-4:] == [
+        "PROC-REP-250",
+        "PROC-REP-265",
+        "PROC-REP-280",
+        "PROC-REP-270",
+    ]
 
 
 def _hasta_266(cliente: TestClient) -> str:

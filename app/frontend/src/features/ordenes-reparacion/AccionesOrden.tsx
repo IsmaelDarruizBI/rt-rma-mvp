@@ -646,10 +646,17 @@ function FormularioAccion({
       );
 
     case "NOTIFICAR":
+      // DEC-AJ-03: el aviso es opcional; la entrega no lo exige. Un
+      // WhatsApp de «equipo listo para retirar» confirmado también cuenta.
       return (
-        <Boton disabled={deshabilitado} onClick={ejecutar.notificar}>
-          Avisar al cliente
-        </Boton>
+        <div>
+          <Boton disabled={deshabilitado} onClick={ejecutar.notificar}>
+            Registrar que se avisó al cliente
+          </Boton>
+          <p style={{ margin: "0.4rem 0 0", fontSize: "0.75rem", color: colores.suave }}>
+            Opcional: no hace falta para entregar el equipo.
+          </p>
+        </div>
       );
 
     case "ENTREGAR":

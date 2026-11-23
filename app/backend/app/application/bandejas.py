@@ -38,7 +38,10 @@ from app.domain.models import (
     Usuario,
 )
 from app.domain.prioridad import clave_de_prioridad
-from app.domain.retiro import dias_de_retiro_demorado, fecha_aviso_listo
+from app.domain.retiro import (
+    dias_de_retiro_demorado,
+    fecha_lista_para_retirar,
+)
 from app.services import (
     SituacionInsumo,
     ejecucion_activa,
@@ -401,12 +404,15 @@ class _Lectura:
             items.append(
                 self.item(
                     leida,
-                    tarea=f"Retiro demorado: {dias} dias desde el aviso",
+                    tarea=(
+                        f"Retiro demorado: {dias} dias desde que esta lista "
+                        "para retirar"
+                    ),
                     responsable="Recepcion o Administracion",
                     puede_resolver=self.usuario.tiene_alguno(
                         permisos.RETIRO_SEGUIMIENTO
                     ),
-                    desde=fecha_aviso_listo(leida.orden),
+                    desde=fecha_lista_para_retirar(leida.orden),
                 )
             )
         return _por_antiguedad(items)
@@ -636,13 +642,15 @@ def _recepcion(lectura: _Lectura) -> list[Bandeja]:
             tareas,
             lectura.por_acciones("APROBAR_CONTROL", "RECHAZAR_CONTROL"),
         ),
-        # Cada Origen trae su cierre (``politica_de``): el cliente se
-        # avisa (PROC-REP-260) y a Gestion RT se le informa (PROC-REP-290).
+        # Cada Origen trae su cierre (``politica_de``): al cliente se le
+        # puede avisar (PROC-REP-260, opcional desde DEC-AJ-03) y a Gestion RT
+        # se le informa (PROC-REP-290).
         _bandeja(
             "AVISO",
-            "Avisar al cliente",
-            "Reparaciones listas (o concluidas sin reparación) que falta "
-            "avisar al cliente.",
+            "Avisar al cliente (opcional)",
+            "Equipos listos para retirar (reparados o concluidos sin "
+            "reparación) a los que todavía no se avisó. Avisar es opcional: "
+            "no bloquea la entrega.",
             tareas,
             lectura.por_acciones("NOTIFICAR"),
         ),
@@ -667,7 +675,8 @@ def _recepcion(lectura: _Lectura) -> list[Bandeja]:
         _bandeja(
             "ENTREGA",
             "Entregar equipos",
-            "Avisadas y con la cuenta saldada: listas para retirar.",
+            "Listas para retirar, con la cuenta saldada (avisar al cliente "
+            "es opcional).",
             tareas,
             lectura.por_acciones("ENTREGAR", "DEVOLVER_RT"),
         ),
@@ -781,9 +790,9 @@ def _retiro_demorado(lectura: _Lectura) -> Bandeja:
     return _bandeja(
         "RETIRO_DEMORADO",
         "Retiro demorado",
-        f"Equipos listos que el cliente no retiro en {lectura.plazo_retiro} "
-        "dias desde el aviso. La Orden sigue abierta: registra los "
-        "seguimientos.",
+        f"Equipos que el cliente no retiro en {lectura.plazo_retiro} dias "
+        "desde que estan listos para retirar. La Orden sigue abierta: "
+        "registra los seguimientos.",
         TipoBandeja.SEGUIMIENTO,
         lectura.retiro_demorado(),
     )

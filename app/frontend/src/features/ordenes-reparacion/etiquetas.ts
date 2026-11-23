@@ -143,7 +143,7 @@ export const NOMBRE_ACCION: Record<string, string> = {
   APROBAR_CONTROL: "Aprobar el control",
   RECHAZAR_CONTROL: "Rechazar el control (retrabajo)",
   LIBERAR_ORDEN: "Liberar la Orden",
-  NOTIFICAR: "Avisar al cliente",
+  NOTIFICAR: "Avisar al cliente (opcional)",
   REGISTRAR_PAGO: "Registrar un pago",
   ENTREGAR: "Entregar el equipo",
   INFORMAR_RT: "Informar el resultado a Gestión RT",

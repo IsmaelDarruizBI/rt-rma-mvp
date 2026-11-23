@@ -33,6 +33,7 @@ from app.domain.models import (
     Usuario,
     VigenciaGarantiaOrigen,
 )
+from app.domain.politicas import politica_de
 from app.domain.prioridad import (
     NOMBRES_DE_PRIORIDAD,
     PRIORIDAD_PREDETERMINADA,
@@ -1170,6 +1171,66 @@ def marcar_reparacion_lista(
     return nueva_orden
 
 
+PASO_AVISO = "PROC-REP-260"
+
+
+def aviso_registrado(orden: OrdenReparacion) -> bool:
+    """Ya se registro el aviso al cliente (PROC-REP-260)."""
+    return any(paso.referencia_id == PASO_AVISO for paso in orden.historial)
+
+
+def aviso_registrable(orden: OrdenReparacion) -> bool:
+    """Se puede registrar el aviso de equipo listo ahora (DEC-AJ-03).
+
+    Opcional: en un Origen con entrega al cliente, con la Orden lista para
+    retirar (reparacion lista o finalizada sin reparacion), todavia sin
+    entregar y sin un aviso anterior (hay un solo registro del aviso).
+    """
+    return (
+        politica_de(orden.origen).requiere_notificacion
+        and lista_para_cierre(orden)
+        and orden.entrega is None
+        and not orden.esta_cerrada
+        and not aviso_registrado(orden)
+    )
+
+
+def registrar_aviso_listo(
+    orden: OrdenReparacion,
+    *,
+    usuario_id: str,
+    fecha: datetime,
+    observacion: str | None = None,
+) -> OrdenReparacion:
+    """PROC-REP-250 -> PROC-REP-260: queda registrado el aviso.
+
+    Lo usan el boton Avisar (``notificar_cliente``, que valida su permiso)
+    y la confirmacion manual de un WhatsApp con la plantilla de equipo
+    listo para retirar (DEC-AJ-03), que ya valido el suyo. ``observacion``
+    dice por donde se aviso, si se sabe.
+    """
+    if not lista_para_cierre(orden):
+        raise PrecondicionInvalidaError(
+            f"Solo se notifica una Orden con resultado (REPARACION_LISTA o "
+            f"SIN_REPARACION); esta en {orden.estado_workflow.value}."
+        )
+    nueva_orden = registrar_paso(
+        orden,
+        process_id="PROC-REP-250",
+        accion="REQUIERE_ENTREGA_A_CLIENTE",
+        fecha=fecha,
+        observacion=orden.origen.value,
+    )
+    return registrar_paso(
+        nueva_orden,
+        process_id=PASO_AVISO,
+        accion="NOTIFICAR_CLIENTE",
+        fecha=fecha,
+        usuario_id=usuario_id,
+        observacion=observacion,
+    )
+
+
 def notificar_cliente(
     orden: OrdenReparacion,
     *,
@@ -1183,30 +1244,11 @@ def notificar_cliente(
 
     PROC-REP-250 es una decision sin actor; PROC-REP-260 es ACT-RECEP.
     Se alcanza tanto con la reparacion lista (240) como con una Orden
-    finalizada SIN_REPARACION (069): ``lista_para_cierre``.
+    finalizada SIN_REPARACION (069): ``lista_para_cierre``. DEC-AJ-03: es
+    opcional; la entrega no lo exige.
     """
     validar_actor(usuario, permisos.CLIENTE_NOTIFICAR)
-
-    if not lista_para_cierre(orden):
-        raise PrecondicionInvalidaError(
-            f"Solo se notifica una Orden con resultado (REPARACION_LISTA o "
-            f"SIN_REPARACION); esta en {orden.estado_workflow.value}."
-        )
-
-    nueva_orden = registrar_paso(
-        orden,
-        process_id="PROC-REP-250",
-        accion="REQUIERE_ENTREGA_A_CLIENTE",
-        fecha=fecha,
-        observacion=orden.origen.value,
-    )
-    return registrar_paso(
-        nueva_orden,
-        process_id="PROC-REP-260",
-        accion="NOTIFICAR_CLIENTE",
-        fecha=fecha,
-        usuario_id=usuario.id,
-    )
+    return registrar_aviso_listo(orden, usuario_id=usuario.id, fecha=fecha)
 
 
 def entregar_equipo(

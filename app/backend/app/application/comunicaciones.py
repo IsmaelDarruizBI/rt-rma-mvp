@@ -1,7 +1,9 @@
 """Comunicaciones asistidas por WhatsApp y consentimiento (DEC-MI-08).
 
 Preparar un mensaje solo lee. Registrar el intento (al abrir WhatsApp) y
-confirmar el envio a mano modifican la Orden. El consentimiento es un
+confirmar el envio a mano modifican la Orden. Confirmar como enviado el
+mensaje de equipo listo para retirar registra ademas el aviso al cliente
+(PROC-REP-260, DEC-AJ-03), una sola vez. El consentimiento es un
 historial por cliente. Las plantillas las administra Administracion sobre
 PostgreSQL, con auditoria; en JSON rigen las cinco iniciales.
 """
@@ -31,9 +33,14 @@ from app.services.exceptions import (
     PrecondicionInvalidaError,
 )
 
+from .cierre import registrar_aviso_por_comunicacion
 from .contexto import ApplicationContext
 from .modificacion import orden_para_modificar
 from .operativa import _editable
+
+# DEC-AJ-03: la plantilla de equipo listo para retirar, confirmada como
+# enviada, es el aviso al cliente (PROC-REP-260).
+PLANTILLA_AVISO_LISTO = "LISTO_PARA_RETIRAR"
 
 
 @dataclass(frozen=True)
@@ -154,6 +161,16 @@ def confirmar_comunicacion(
             usuario=usuario,
             fecha=fecha,
         )
+        comunicacion = next(
+            c for c in orden.comunicaciones if c.id == comunicacion_id
+        )
+        if enviado and comunicacion.plantilla_codigo == PLANTILLA_AVISO_LISTO:
+            orden = registrar_aviso_por_comunicacion(
+                orden,
+                usuario_id=usuario.id,
+                fecha=fecha,
+                comunicacion_id=comunicacion_id,
+            )
         contexto.ordenes.guardar(orden)
     return orden
 

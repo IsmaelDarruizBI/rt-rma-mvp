@@ -385,11 +385,16 @@ def test_aviso_cobro_y_entrega(tmp_path):
     with _cliente(tmp_path, stock_bateria="5") as cliente:
         orden_id = _reparada(cliente)
 
+        # DEC-AJ-03: lo principal es cobrar; avisar es una tarea sugerida
+        # (opcional), no una situacion que oculte el resto.
         situacion = _situacion(cliente, orden_id)
-        assert situacion["codigo"] == "PENDIENTE_NOTIFICACION"
-        assert _codigos(situacion["tareas"][0]) == ["NOTIFICAR"]
-        # El saldo no se oculta aunque lo principal sea avisar.
-        assert _avisos(situacion) == ["SALDO_PENDIENTE"]
+        assert situacion["codigo"] == "PENDIENTE_COBRO"
+        cobro, aviso = situacion["tareas"]
+        assert _codigos(cobro) == ["REGISTRAR_PAGO"]
+        assert _codigos(aviso) == ["NOTIFICAR"]
+        assert aviso["titulo"] == "Avisar al cliente (opcional)"
+        assert "80.000,00" in situacion["descripcion"]
+        assert situacion["avisos"] == []
 
         saldo = _notificar(cliente, orden_id)["resumen"]["saldo"]
         situacion = _situacion(cliente, orden_id)
@@ -401,7 +406,7 @@ def test_aviso_cobro_y_entrega(tmp_path):
 
         _pagar(cliente, orden_id, saldo)
         situacion = _situacion(cliente, orden_id)
-        # Avisada y saldada: antes de entregar falta el check-in. Es solo
+        # Saldada: antes de entregar falta el check-in. Es solo
         # presentacion: el workflow sigue en REPARACION_LISTA.
         assert situacion["codigo"] == "PENDIENTE_CHECKIN"
         assert situacion["titulo"] == (

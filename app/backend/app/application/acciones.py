@@ -692,6 +692,7 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
 
     notificada = "PROC-REP-260" in alcanzados
 
+    # DEC-AJ-03: el aviso es opcional y se puede registrar hasta entregar.
     if politica.requiere_notificacion and lista and not notificada:
         acciones.append(
             AccionDisponible(
@@ -723,9 +724,10 @@ def acciones_disponibles(orden: OrdenReparacion) -> list[AccionDisponible]:
             )
         )
 
-    entrega_habilitada = (
-        lista and notificada and condicion_entrega_cumplida(orden)
-    )
+    # DEC-AJ-03: avisar al cliente es opcional; la entrega no lo exige. Si
+    # siguen siendo condicion la cuenta saldada y, en el comando, la
+    # custodia confirmada y el check-in cuando corresponde.
+    entrega_habilitada = lista and condicion_entrega_cumplida(orden)
     if politica.requiere_entrega_cliente and entrega_habilitada:
         acciones.append(
             AccionDisponible(

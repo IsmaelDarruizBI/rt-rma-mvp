@@ -685,9 +685,11 @@ def test_11_no_se_entrega_con_saldo_pendiente(cliente):
 
     mensaje = conflicto(_entregar(cliente, orden_id, **RETIRA))
 
-    # Con saldo la Orden espera el cobro en PROC-REP-266.
-    assert "PROC-REP-266" in mensaje
+    # Con saldo no se entrega; la Orden sigue esperando el cobro en
+    # PROC-REP-266. DEC-AJ-03: el rechazo es por el saldo, no por el nodo.
+    assert "saldo pendiente" in mensaje
     orden = _orden(cliente, orden_id)
+    assert orden["current_process"] == "PROC-REP-266"
     assert orden["resumen"]["saldo"] == "80000"
     assert orden["entrega"] is None
     assert orden["documentos_emitidos"][-1]["tipo"] == "COMPROBANTE_INGRESO"

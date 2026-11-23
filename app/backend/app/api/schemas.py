@@ -2243,6 +2243,11 @@ class OrdenOut(BaseModel):
     # DEC-MI-14: seguimientos y dias de retiro demorado (si lo esta).
     seguimientos_retiro: list[SeguimientoRetiro] = Field(default_factory=list)
     retiro_demorado_dias: int | None = None
+    # DEC-AJ-03: desde cuando la Orden esta lista para retirar (de ahi corre
+    # el retiro demorado) y la fecha del aviso al cliente (PROC-REP-260),
+    # que es opcional y se conserva como un dato aparte.
+    lista_para_retirar_desde: datetime | None = None
+    fecha_aviso: datetime | None = None
     # DEC-MI-08: intentos de envio asistido y su confirmacion manual.
     comunicaciones: list[ComunicacionCliente] = Field(default_factory=list)
     # DEC-MI-11: correcciones de la vinculacion con el Equipo.

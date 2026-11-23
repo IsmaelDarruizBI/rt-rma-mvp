@@ -219,6 +219,8 @@ from .modelos_equipo import (
 from .ordenes import (
     ROLES_CAMBIO_PRIORIDAD,
     ROLES_EXCEPCION_GARANTIA,
+    aviso_registrable,
+    aviso_registrado,
     cambiar_prioridad,
     cerrar_cancelada_si_corresponde,
     crear_orden_cliente_externo,
@@ -244,6 +246,7 @@ from .ordenes import (
     marcar_reparacion_lista,
     notificar_cliente,
     pendientes_para_cerrar,
+    registrar_aviso_listo,
     verificar_fin_financiero,
 )
 from .pagos import (
@@ -411,7 +414,10 @@ __all__ = [
     "marcar_orden_cancelada",
     "marcar_orden_en_revision",
     "marcar_reparacion_lista",
+    "aviso_registrable",
+    "aviso_registrado",
     "notificar_cliente",
+    "registrar_aviso_listo",
     # Recepcion fisica y custodia
     "ROLES_RECEPCION_EQUIPO",
     "agregar_nota_recepcion",

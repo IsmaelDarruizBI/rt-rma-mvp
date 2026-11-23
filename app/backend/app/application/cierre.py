@@ -1,22 +1,22 @@
-"""Tramo de cierre: control, notificacion, cobro y entrega.
+"""Tramo de cierre: control, aviso, cobro y entrega.
 
     aprobar_control    PROC-REP-220 -> 230 -> 245 -> 240
     rechazar_control   PROC-REP-220 -> 230 (No) -> 235 -> 211 [-> 170]
-    notificar          PROC-REP-250 -> 260 -> 265 [-> 266]
+    notificar          PROC-REP-250 -> 260 -> 265 [-> 266] (opcional)
     registrar_pago_de_orden   (capacidad transversal) [-> 265 [-> 266]]
     registrar_checkin  verificacion de funciones basicas antes de entregar
                        (MVP v2, UAT-009): define la garantia por Detalle
-    entregar           PROC-REP-280 -> 270 -> EVT-REP-999 (+ comprobante
-                       final y garantia emitidos)
+    entregar           [250 ->] [265 ->] 280 -> 270 -> EVT-REP-999 (+
+                       comprobante final y garantia emitidos)
 
 La condicion de entrega exige saldo exactamente cero (V1.4, BR-REP-038):
 una deuda se cobra y un saldo a favor se devuelve
 (``application.finanzas``) antes de entregar.
 
-PROC-REP-265 se evalua exactamente dos veces en HP-REP-001: una al
-notificar (resultado "No", hay saldo) y otra despues del pago (resultado
-"Si"). ``entregar`` NO lo vuelve a evaluar: comprueba la condicion como
-precondicion del comando y va derecho a PROC-REP-280.
+DEC-AJ-03 (23/11/2026): avisar al cliente (PROC-REP-260) es opcional. Con
+aviso, PROC-REP-265 se evalua al avisar y despues de cada Pago, como en
+HP-REP-001, y ``entregar`` no lo repite. Sin aviso, ``entregar`` registra
+250 y evalua 265 en la misma operacion, antes de PROC-REP-280.
 """
 
 from decimal import Decimal
@@ -26,6 +26,7 @@ from app.services import (
     PrecondicionInvalidaError,
     aprobar_control_tecnico,
     armar_entrega,
+    aviso_registrable,
     calcular_puntaje,
     condicion_entrega_cumplida,
     control_tecnico_completo,
@@ -40,8 +41,10 @@ from app.services import (
     marcar_reparacion_lista,
     notificar_cliente,
     rechazar_control_tecnico,
+    registrar_aviso_listo,
     registrar_checkin_de_entrega,
     registrar_pago,
+    registrar_paso,
     registrar_saldo_pendiente,
     validar_alguno_de,
     validar_condicion_entrega,
@@ -55,6 +58,11 @@ from .finanzas import reevaluar_tras_movimiento
 from .modificacion import orden_para_modificar
 
 CERO = Decimal("0")
+# El cierre por Origen ya empezo: hubo aviso (260) y se evaluo la condicion
+# de entrega (265), con o sin saldo pendiente (266).
+NODOS_CIERRE_INICIADO = frozenset(
+    {"PROC-REP-260", "PROC-REP-265", "PROC-REP-266"}
+)
 
 
 def aprobar_control(
@@ -135,6 +143,50 @@ def rechazar_control(
     return orden
 
 
+def _evaluar_tras_aviso(
+    orden: OrdenReparacion,
+    *,
+    fecha,
+) -> tuple[OrdenReparacion, bool]:
+    """Despues del aviso (260) se evalua la condicion de entrega (265).
+
+    Si queda saldo, PROC-REP-266 deja constancia del bloqueo y la entrega
+    espera a que se registre el Pago. Con saldo a favor del cliente no hay
+    266: la entrega espera la devolucion de dinero.
+    """
+    orden, puede_entregar = validar_condicion_entrega(orden, fecha=fecha)
+    # 266 solo por deuda real: no por un saldo a favor ni por el saldo
+    # nominal de un Origen NO_COBRABLE (garantia).
+    if not puede_entregar and orden.saldo > 0:
+        orden = registrar_saldo_pendiente(orden, fecha=fecha)
+    return orden, puede_entregar
+
+
+def registrar_aviso_por_comunicacion(
+    orden: OrdenReparacion,
+    *,
+    usuario_id: str,
+    fecha,
+    comunicacion_id: str,
+) -> OrdenReparacion:
+    """DEC-AJ-03: un WhatsApp de equipo listo confirmado como enviado es el
+    aviso al cliente. Registra PROC-REP-260 una sola vez, con la Orden lista
+    para retirar y sin entregar; si ya hubo aviso, no agrega otro.
+
+    El permiso ya lo valido la confirmacion del envio (COMUNICACION_ENVIAR).
+    """
+    if not aviso_registrable(orden):
+        return orden
+    orden = registrar_aviso_listo(
+        orden,
+        usuario_id=usuario_id,
+        fecha=fecha,
+        observacion=f"WhatsApp {comunicacion_id}",
+    )
+    orden, _ = _evaluar_tras_aviso(orden, fecha=fecha)
+    return orden
+
+
 def notificar(
     contexto: ApplicationContext,
     *,
@@ -143,10 +195,8 @@ def notificar(
 ) -> tuple[OrdenReparacion, bool]:
     """Recepcion avisa al cliente y se evalua la condicion de entrega.
 
-    PROC-REP-250 -> 260 (aviso) y PROC-REP-265 (condicion). Si queda
-    saldo, PROC-REP-266 deja constancia del bloqueo y la entrega espera
-    a que se registre el Pago. Con saldo a favor del cliente no hay 266:
-    la entrega espera la devolucion de dinero.
+    PROC-REP-250 -> 260 (aviso) y PROC-REP-265 (condicion), con 266 si
+    queda deuda. DEC-AJ-03: el aviso es opcional; la entrega no lo exige.
 
     Devuelve tambien si la Orden ya puede entregarse.
     """
@@ -155,12 +205,7 @@ def notificar(
 
     with orden_para_modificar(contexto, orden_id) as orden:
         orden = notificar_cliente(orden, usuario=usuario, fecha=fecha)
-        orden, puede_entregar = validar_condicion_entrega(orden, fecha=fecha)
-        # 266 solo por deuda real: no por un saldo a favor ni por el saldo
-        # nominal de un Origen NO_COBRABLE (garantia).
-        if not puede_entregar and orden.saldo > 0:
-            orden = registrar_saldo_pendiente(orden, fecha=fecha)
-
+        orden, puede_entregar = _evaluar_tras_aviso(orden, fecha=fecha)
         contexto.ordenes.guardar(orden)
     return orden, puede_entregar
 
@@ -287,12 +332,6 @@ def entregar(
                 f"(REPARACION_LISTA o SIN_REPARACION); esta en "
                 f"{orden.estado_workflow.value}."
             )
-        if orden.current_process != "PROC-REP-265":
-            raise PrecondicionInvalidaError(
-                "Falta validar la condicion de entrega (PROC-REP-265) "
-                "antes de entregar; la Orden esta en "
-                f"{orden.current_process}."
-            )
         if not condicion_entrega_cumplida(orden):
             raise PrecondicionInvalidaError(
                 f"No se puede entregar: {motivo_de_entrega_bloqueada(orden)}. "
@@ -308,6 +347,10 @@ def entregar(
             identificacion_receptor=identificacion_receptor,
             observaciones=observaciones,
         )
+        # DEC-AJ-03: sin aviso (ni cobro con la Orden en cierre), la entrega
+        # evalua la condicion de entrega directamente (250 -> 265).
+        if orden.current_process != "PROC-REP-265":
+            orden = _evaluar_condicion_en_la_entrega(orden, fecha=fecha)
 
         orden = generar_comprobante_final(
             orden, fecha=fecha, zona_horaria=contexto.zona_horaria
@@ -320,6 +363,29 @@ def entregar(
         )
 
         contexto.ordenes.guardar(orden)
+    return orden
+
+
+def _evaluar_condicion_en_la_entrega(
+    orden: OrdenReparacion,
+    *,
+    fecha,
+) -> OrdenReparacion:
+    """PROC-REP-265 dentro de la entrega, cuando todavia no se evaluo.
+
+    Sin aviso al cliente la Orden sigue en 240 o 069: se registra la
+    decision PROC-REP-250 (requiere entrega a cliente) y la condicion. Con
+    el aviso hecho (260, 265 o 266) solo se revalida la condicion.
+    """
+    if orden.current_process not in NODOS_CIERRE_INICIADO:
+        orden = registrar_paso(
+            orden,
+            process_id="PROC-REP-250",
+            accion="REQUIERE_ENTREGA_A_CLIENTE",
+            fecha=fecha,
+            observacion=orden.origen.value,
+        )
+    orden, _ = validar_condicion_entrega(orden, fecha=fecha)
     return orden
 
 

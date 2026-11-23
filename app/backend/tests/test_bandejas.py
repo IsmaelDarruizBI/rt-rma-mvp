@@ -675,8 +675,10 @@ def test_avisar_al_cliente_e_informar_a_gestion_rt_por_separado(tmp_path):
         item = _item(bandejas["INFORMAR_RT"], interna)
         assert item["tarea"] == "Informar el resultado a Gestión RT"
         assert item["orden"]["origen"] == "RT_INTERNO"
+        # DEC-AJ-03: el aviso es una sugerencia, no un requisito.
         assert (
-            _item(bandejas["AVISO"], externa)["tarea"] == "Avisar al cliente"
+            _item(bandejas["AVISO"], externa)["tarea"]
+            == "Avisar al cliente (opcional)"
         )
         # Las bandejas de los demas roles no cambian.
         assert "INFORMAR_RT" not in _bandejas(cliente, TECNICO)

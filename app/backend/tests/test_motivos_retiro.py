@@ -3,7 +3,8 @@
 - Cancelar o interrumpir con un motivo del catalogo de su tipo; «Otro»
   exige descripcion; sin motivo de catalogo, el texto libre de siempre. El
   texto registrado copia el nombre del motivo.
-- Retiro demorado: vencido el plazo desde el aviso de equipo listo, la
+- Retiro demorado: vencido el plazo desde que la Orden esta lista para
+  retirar (DEC-AJ-03; antes, desde el aviso de equipo listo), la
   Orden se alerta en las bandejas y admite seguimientos; sigue abierta.
 """
 

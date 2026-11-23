@@ -107,8 +107,9 @@ def test_cliente_externo_sin_reparacion_de_punta_a_punta(cliente):
     orden = respuesta.json()
     _assert_069(orden)
     assert "Se informa al cliente." in orden["historial"][-1]["observacion"]
-    # Solo queda avisar al cliente: ni pago ni definicion.
-    assert _codigos(orden) == ["NOTIFICAR"]
+    # Ni pago ni definicion. DEC-AJ-03: avisar es opcional y la entrega
+    # ya se ofrece sin el aviso.
+    assert _codigos(orden) == ["NOTIFICAR", "ENTREGAR"]
 
     # 250 -> 260 -> 265 (saldo 0, sin 266).
     orden = cliente.post(
@@ -156,7 +157,8 @@ def test_garantia_rma_sin_reparacion_cierra_no_cobrable(cliente):
 
     orden = _sin_reparacion(cliente, orden_id).json()
     _assert_069(orden)
-    assert _codigos(orden) == ["NOTIFICAR"]
+    # DEC-AJ-03: la entrega no espera el aviso (opcional).
+    assert _codigos(orden) == ["NOTIFICAR", "ENTREGAR"]
 
     orden = cliente.post(
         f"/api/orders/{orden_id}/notify", json={"usuario_id": RECEPCION}
