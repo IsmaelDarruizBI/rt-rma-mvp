@@ -2383,77 +2383,14 @@ Cada diferencia se anota con el número del paso (por ejemplo, «C5») y el usua
 
 ### 12.1 Entorno local sobre PostgreSQL
 
-Requisitos y PostgreSQL 17 local (puerto 54329): [`CHECKPOINT_PRE_DEPLOY.md`](CHECKPOINT_PRE_DEPLOY.md), sección 7. Comandos para Git Bash.
+La puesta en marcha está en [`VALIDACION_LOCAL.md`](VALIDACION_LOCAL.md), con comandos para PowerShell: PostgreSQL local (puerto 54329), la base aparte **`rma_validacion`** (nunca `rma_dev` ni `rma_ensayo_integral`), el backend sobre PostgreSQL con el acceso de prueba, el frontend, los usuarios y una carga de **datos ficticios por la API** (`supabase/scripts/validacion_local/`).
 
-**Usar una base nueva, `rma_validacion`.** No borrar ni reutilizar `rma_dev`, que tiene datos locales: el script de la sección 7 hace `drop database rma_dev`, y el de abajo solo toca `rma_validacion`.
+**Datos de partida:** los de la sección 4 de esa guía.
 
-1. **Rama y dependencias**, desde la raíz del repositorio:
-
-   ```bash
-   git switch feat/ajustes-funcionales-uat
-   npm install
-   cd app/backend
-   source .venv/Scripts/activate      # si no existe: python -m venv .venv
-   pip install -e ".[dev,postgres]"   # instala openpyxl, nueva en la iteración 2
-   cd ../frontend && npm install && cd ../..
-   ```
-
-2. **PostgreSQL**, si no está corriendo, desde `~/pg-rma`:
-
-   ```bash
-   BIN=$(ls -d node_modules/@embedded-postgres/*/native/bin)
-   "$BIN/pg_ctl" -D data -o "-p 54329 -c listen_addresses=127.0.0.1" -l pg.log -w start
-   ```
-
-3. **Base `rma_validacion`**, desde `app/backend`. Aplica las migraciones y las cargas de referencia y de desarrollo. Si se vuelve a correr, la base de validación queda en cero.
-
-   ```bash
-   .venv/Scripts/python - <<'EOF'
-   import psycopg
-   from psycopg import sql
-   from tests.postgres.base_local import ROLES_SUPABASE, archivos_sql, url_admin_local
-   BASE = "rma_validacion"  # nunca rma_dev
-   admin = url_admin_local("postgresql://postgres@127.0.0.1:54329/postgres")
-   with psycopg.connect(admin, autocommit=True) as a:
-       for rol in ROLES_SUPABASE:
-           if not a.execute("select 1 from pg_roles where rolname=%s", (rol,)).fetchone():
-               a.execute(sql.SQL("create role {} nologin").format(sql.Identifier(rol)))
-       a.execute(sql.SQL("drop database if exists {} with (force)").format(sql.Identifier(BASE)))
-       a.execute(sql.SQL("create database {}").format(sql.Identifier(BASE)))
-   archivos = archivos_sql()
-   with psycopg.connect(f"postgresql://postgres@127.0.0.1:54329/{BASE}", autocommit=True) as c:
-       for archivo in archivos:
-           c.execute(archivo.read_text(encoding="utf-8"))
-       tablas = c.execute(
-           "select count(*) from information_schema.tables"
-           " where table_schema = 'rma' and table_type = 'BASE TABLE'"
-       ).fetchone()[0]
-   print(len(archivos), "archivos SQL;", tablas, "tablas en rma")
-   EOF
-   ```
-
-   **Esperado:** `56 archivos SQL; 80 tablas en rma`: 51 migraciones, 4 cargas de referencia y la de desarrollo.
-
-4. **Backend**, desde `app/backend`, en una terminal:
-
-   ```bash
-   export RMA_PERSISTENCIA=postgres
-   export RMA_DATABASE_URL=postgresql://postgres@127.0.0.1:54329/rma_validacion
-   export RMA_DATA_DIR=$HOME/rma-validacion RMA_FOTOS_DIR=$HOME/rma-validacion/fotos
-   mkdir -p "$RMA_FOTOS_DIR"
-   .venv/Scripts/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-   ```
-
-   **Esperado:** `http://127.0.0.1:8000/health` responde 200. `RMA_AUTH_MODO` queda en `demo`, el valor local por defecto.
-
-5. **Frontend**, desde `app/frontend`, en otra terminal: `npm run dev` y abrir `http://localhost:5173`. Si no hay `.env`, copiar `.env.example`. Sin `VITE_AUTH_MODO`, el acceso es de prueba y se elige el usuario: `recepcion`, `tecnico`, `coordinacion` o `administracion`.
-
-**Datos de partida:**
-
-- TR-001 «Cambio bateria iPhone 14» y TR-002, con la Mesa EST-001;
-- el insumo INS-001 BAT-IP14, con 2 unidades;
-- los 36 modelos técnicos de la carga de referencia, sin la línea iPhone 18;
-- ninguna Orden.
+- **Configuración ya cargada:** empresa, los modelos MOD-0037 («iPhone 18 · Prueba local») y MOD-0038 (otra marca), categorías CAT-001 a 009, fabricantes FAB-001 a 003, insumos INS-002 a 012 con su clasificación, stock y mínimos, los Tipos TR-003 a TR-008 con precio por modelo (con huecos a propósito: la batería del iPhone 13) e insumos necesarios, y una solicitud y una orden de compra.
+- **Órdenes:** OR-000001 a OR-000004, en el ingreso.
+- **Planillas de ejemplo** para la importación, sin aplicar.
+- **Cómo se ajustan los pasos:** la sección 4.7 de la guía explica cómo se ajustan los pasos de abajo a esos datos. Por ejemplo, el próximo modelo es MOD-0039 y las Órdenes nuevas empiezan en OR-000005.
 
 ### 12.2 Recorrido
 
