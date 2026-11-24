@@ -21,6 +21,8 @@ inventar comportamiento.
 - FastAPI
 - Pydantic v2 (+ pydantic-settings para la configuracion)
 - Uvicorn
+- openpyxl (DEC-AJ-13): lee el `.xlsx` de la importacion de precios por
+  modelo, en modo de solo lectura, y genera su plantilla
 - Persistencia: JSON sobre el filesystem. **No hay base de datos.**
 
 ## Estructura

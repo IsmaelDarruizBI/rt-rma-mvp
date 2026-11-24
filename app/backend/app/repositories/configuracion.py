@@ -11,6 +11,7 @@ from typing import Protocol
 from app.domain.models import (
     CambioConfiguracion,
     EntidadConfiguracion,
+    ImportacionPrecios,
     ModeloEquipo,
     PrecioTipoModelo,
     RolUsuario,
@@ -54,6 +55,14 @@ class ConfiguracionRepository(Protocol):
         """Fija o retira (``precio`` None) precios por modelo en bloque, con
         su auditoria, en la transaccion en curso: todo o nada (DEC-AJ-12;
         la importacion masiva de DEC-AJ-13 usa esta misma escritura)."""
+        ...
+
+    def registrar_importacion_precios(
+        self, importacion: ImportacionPrecios
+    ) -> None:
+        """Registra una importacion masiva de precios por modelo
+        (DEC-AJ-13) en la transaccion en curso, antes que sus cambios: la
+        auditoria de cada uno la referencia."""
         ...
 
     def guardar_tipos_de_mesa(

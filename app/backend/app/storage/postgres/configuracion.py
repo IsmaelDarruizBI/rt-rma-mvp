@@ -10,6 +10,7 @@ from datetime import timezone
 from app.domain.models import (
     CambioConfiguracion,
     EntidadConfiguracion,
+    ImportacionPrecios,
     ModeloEquipo,
     PrecioTipoModelo,
     RolUsuario,
@@ -139,9 +140,22 @@ _INSERTAR_CAMBIO = consulta(
     """
     INSERT INTO rma.cambio_configuracion
         (entidad, clave, campo, valor_anterior, valor_nuevo, usuario_id,
-         registrado_en)
+         registrado_en, importacion_id)
     SELECT %(entidad)s, %(clave)s, %(campo)s, %(anterior)s, %(nuevo)s, u.id,
-           %(fecha)s
+           %(fecha)s, %(importacion)s::uuid
+      FROM rma.usuario u WHERE u.codigo = %(usuario)s
+    """,
+    modo=ESCRITURA,
+)
+# DEC-AJ-13: la importacion masiva de precios, antes que sus cambios.
+_REGISTRAR_IMPORTACION = consulta(
+    "configuracion.registrar_importacion_precios",
+    """
+    INSERT INTO rma.importacion_precio
+        (id, usuario_id, registrado_en, formato, nombre_archivo,
+         precios_nuevos, precios_actualizados, precios_sin_cambio)
+    SELECT %(id)s::uuid, u.id, %(fecha)s, %(formato)s, %(nombre)s,
+           %(nuevos)s, %(actualizados)s, %(sin_cambio)s
       FROM rma.usuario u WHERE u.codigo = %(usuario)s
     """,
     modo=ESCRITURA,
@@ -193,7 +207,8 @@ _CAMBIOS = consulta(
     "configuracion.cambios",
     """
     SELECT c.entidad, c.clave, c.campo, c.valor_anterior, c.valor_nuevo,
-           u.codigo AS usuario, c.registrado_en
+           u.codigo AS usuario, c.registrado_en,
+           c.importacion_id::text AS importacion_id
       FROM rma.cambio_configuracion c
       JOIN rma.usuario u ON u.id = c.usuario_id
      WHERE (%(entidad)s::text IS NULL OR c.entidad = %(entidad)s)
@@ -316,6 +331,29 @@ class PostgresConfiguracionRepository:
             )
         self._auditar(ejecutor, cambios)
 
+    def registrar_importacion_precios(
+        self, importacion: ImportacionPrecios
+    ) -> None:
+        """DEC-AJ-13: la importacion, en la transaccion de sus cambios."""
+        self._exigir_transaccion()
+        insertadas = self._unidad.ejecutor().ejecutar(
+            _REGISTRAR_IMPORTACION,
+            {
+                "id": importacion.id,
+                "usuario": importacion.usuario_id,
+                "fecha": importacion.fecha,
+                "formato": importacion.formato.value,
+                "nombre": importacion.nombre_archivo,
+                "nuevos": importacion.nuevos,
+                "actualizados": importacion.actualizados,
+                "sin_cambio": importacion.sin_cambio,
+            },
+        )
+        if insertadas != 1:
+            raise PersistenciaError(
+                f"El usuario {importacion.usuario_id} no existe en la base."
+            )
+
     def guardar_tipos_de_mesa(
         self,
         estacion_id: str,
@@ -409,6 +447,7 @@ class PostgresConfiguracionRepository:
                 valor_nuevo=f.valor_nuevo,
                 usuario_id=f.usuario,
                 fecha=f.registrado_en.astimezone(timezone.utc),
+                importacion_id=f.importacion_id,
             )
             for f in filas
         ]
@@ -416,23 +455,38 @@ class PostgresConfiguracionRepository:
     def _auditar(
         self, ejecutor, cambios: Sequence[CambioConfiguracion]
     ) -> None:
-        for cambio in cambios:
-            insertadas = ejecutor.ejecutar(
-                _INSERTAR_CAMBIO,
-                {
-                    "entidad": cambio.entidad.value,
-                    "clave": cambio.clave,
-                    "campo": cambio.campo,
-                    "anterior": cambio.valor_anterior,
-                    "nuevo": cambio.valor_nuevo,
-                    "usuario": cambio.usuario_id,
-                    "fecha": cambio.fecha,
-                },
-            )
-            if insertadas != 1:
+        def parametros(cambio: CambioConfiguracion) -> dict:
+            return {
+                "entidad": cambio.entidad.value,
+                "clave": cambio.clave,
+                "campo": cambio.campo,
+                "anterior": cambio.valor_anterior,
+                "nuevo": cambio.valor_nuevo,
+                "usuario": cambio.usuario_id,
+                "fecha": cambio.fecha,
+                "importacion": cambio.importacion_id,
+            }
+
+        if len(cambios) <= 1:
+            for cambio in cambios:
+                if (
+                    ejecutor.ejecutar(_INSERTAR_CAMBIO, parametros(cambio))
+                    != 1
+                ):
+                    raise PersistenciaError(
+                        f"El usuario {cambio.usuario_id} no existe en la base."
+                    )
+            return
+        # Muchos cambios (una importacion de cientos de precios, DEC-AJ-13):
+        # en lote, despues de comprobar que existe cada usuario.
+        for usuario in {cambio.usuario_id for cambio in cambios}:
+            if ejecutor.fila(_EXISTE_USUARIO, {"usuario": usuario}) is None:
                 raise PersistenciaError(
-                    f"El usuario {cambio.usuario_id} no existe en la base."
+                    f"El usuario {usuario} no existe en la base."
                 )
+        ejecutor.ejecutar_lote(
+            _INSERTAR_CAMBIO, [parametros(c) for c in cambios]
+        )
 
     def _exigir_transaccion(self) -> None:
         if not self._unidad.en_curso():

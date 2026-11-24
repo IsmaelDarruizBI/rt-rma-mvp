@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from app.domain.models import (
     CambioConfiguracion,
     EntidadConfiguracion,
+    ImportacionPrecios,
     ModeloEquipo,
     PoliticaGarantiaRma,
     PrecioTipoModelo,
@@ -315,6 +316,7 @@ def guardar_precios_modelo(
     *,
     usuario_id: str,
     precios: Sequence[PrecioTipoModelo],
+    importacion: ImportacionPrecios | None = None,
 ) -> list[CambioConfiguracion]:
     """Fija o retira precios por modelo en bloque, con auditoria, en una
     transaccion: todo o nada. Devuelve los cambios registrados.
@@ -322,10 +324,15 @@ def guardar_precios_modelo(
     La edicion individual de Configuracion y la importacion masiva
     (DEC-AJ-13) usan este mismo comando. Las Ordenes no cambian: cada
     Detalle guarda su copia del precio.
+
+    Con ``importacion`` (DEC-AJ-13) se registra la importacion en la misma
+    transaccion y cada cambio de la auditoria lleva su identificador; los
+    precios nuevos y actualizados se cuentan sobre los cambios que se
+    escriben.
     """
     repositorio = _repositorio(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    fecha = contexto.ahora()
+    fecha = importacion.fecha if importacion else contexto.ahora()
     validar_alguno_de(usuario, ROLES_PRECIOS)
     with contexto.transaccion():
         tipos = {
@@ -343,5 +350,19 @@ def guardar_precios_modelo(
             usuario=usuario,
             fecha=fecha,
         )
+        if importacion is not None:
+            nuevos = sum(1 for c in cambios if c.valor_anterior is None)
+            repositorio.registrar_importacion_precios(
+                importacion.model_copy(
+                    update={
+                        "nuevos": nuevos,
+                        "actualizados": len(cambios) - nuevos,
+                    }
+                )
+            )
+            cambios = [
+                c.model_copy(update={"importacion_id": importacion.id})
+                for c in cambios
+            ]
         repositorio.guardar_precios_modelo(efectivos, cambios)
     return cambios

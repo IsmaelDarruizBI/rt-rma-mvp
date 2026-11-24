@@ -40,3 +40,34 @@ class CambioConfiguracion(BaseModel):
     valor_nuevo: str | None = None
     usuario_id: str = Field(min_length=1)
     fecha: datetime
+    # DEC-AJ-13: los cambios de una importacion masiva de precios por
+    # modelo comparten el identificador de la importacion; vacio en los
+    # demas cambios.
+    importacion_id: str | None = None
+
+
+class FormatoImportacion(str, Enum):
+    """Como llego la planilla de una importacion de precios (DEC-AJ-13)."""
+
+    XLSX = "XLSX"
+    CSV = "CSV"
+    # Celdas copiadas de Google Sheets o Excel: texto con tabulaciones.
+    TEXTO = "TEXTO"
+
+
+class ImportacionPrecios(BaseModel):
+    """Una importacion masiva de precios por modelo aplicada (DEC-AJ-13).
+
+    Agrupa sus cambios de la auditoria (``CambioConfiguracion.importacion_id``)
+    y registra quien la aplico, cuando, el archivo y cuantos precios fueron
+    nuevos, actualizados o quedaron sin cambios.
+    """
+
+    id: str = Field(min_length=1)
+    usuario_id: str = Field(min_length=1)
+    fecha: datetime
+    formato: FormatoImportacion
+    nombre_archivo: str | None = None
+    nuevos: int = Field(ge=0)
+    actualizados: int = Field(ge=0)
+    sin_cambio: int = Field(ge=0)

@@ -29,7 +29,12 @@ from .catalogos import (
     TipoReparacionEstacion,
     TipoReparacionInsumos,
 )
-from .configuracion import CambioConfiguracion, EntidadConfiguracion
+from .configuracion import (
+    CambioConfiguracion,
+    EntidadConfiguracion,
+    FormatoImportacion,
+    ImportacionPrecios,
+)
 from .descuentos import (
     CausaRecalculo,
     RecalculoAjuste,
@@ -146,6 +151,8 @@ __all__ = [
     "PoliticaGarantiaRma",
     "CambioDatoIngreso",
     "CambioConfiguracion",
+    "FormatoImportacion",
+    "ImportacionPrecios",
     "EntidadConfiguracion",
     # Enums
     "CanalComunicacion",

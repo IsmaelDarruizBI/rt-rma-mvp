@@ -276,6 +276,12 @@ MATRIZ = {
     ("PUT", "/api/admin/device-models/{codigo}"): API(
         "MODELO_EQUIPO_GESTIONAR"
     ),
+    # DEC-AJ-13: importacion masiva de precios por modelo.
+    ("GET", "/api/admin/model-prices/template"): API("PRECIOS_GESTIONAR"),
+    ("POST", "/api/admin/model-prices/import/preview"): API(
+        "PRECIOS_GESTIONAR"
+    ),
+    ("POST", "/api/admin/model-prices/import"): API("PRECIOS_GESTIONAR"),
     ("GET", "/api/admin/config-changes"): EN_LA_RUTA,
     ("GET", "/api/admin/users"): API("ROLES_ADMINISTRAR"),
     ("PUT", "/api/admin/users/{codigo}/roles"): API("ROLES_ADMINISTRAR"),

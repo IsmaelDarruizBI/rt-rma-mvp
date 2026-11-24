@@ -10,6 +10,9 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     # Verificacion local de los tokens de Supabase Auth (ES256 por JWKS).
     "PyJWT[crypto]>=2.10.1",
+    # DEC-AJ-13: lectura (solo lectura) y plantilla de la importacion de
+    # precios por modelo en Excel .xlsx.
+    "openpyxl>=3.1.5",
 ]
 
 [project.optional-dependencies]
