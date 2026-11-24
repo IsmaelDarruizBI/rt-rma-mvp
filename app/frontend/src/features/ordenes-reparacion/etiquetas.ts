@@ -172,6 +172,8 @@ export const NOMBRE_ACCION: Record<string, string> = {
   LIBERAR_ORDEN_AJENA: "Liberar la Orden de otro técnico",
   AJUSTAR_GARANTIA: "Ajustar el plazo de garantía",
   REGISTRAR_CHECKIN: "Registrar el check-in",
+  // DEC-AJ-12: trabajo con el precio pendiente de definir.
+  DEFINIR_PRECIO: "Definir el precio del trabajo",
 };
 
 /**

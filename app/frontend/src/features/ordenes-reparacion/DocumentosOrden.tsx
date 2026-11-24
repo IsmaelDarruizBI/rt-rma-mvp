@@ -74,6 +74,7 @@ import {
 import { descripcionQuienRetira, tituloComprobanteEntrega } from "./entrega";
 import { pieDeComprobante, renglonesDeEmpresa } from "./empresaEnComprobante";
 import { llevaTerminos, terminosParaImprimir } from "./terminosCondiciones";
+import { textoPrecioDelDetalle } from "./precioModelo";
 
 const NOMBRE_TIPO: Record<TipoDocumento, string> = {
   COMPROBANTE_RECEPCION: "Comprobante de recepción",
@@ -511,7 +512,7 @@ function TrabajoConAjuste({
   const ajuste = vigenteDelDestino(orden, detalle.id);
   return (
     <>
-      {detalle.tipo_reparacion_nombre} · {importe(detalle.precio)}
+      {detalle.tipo_reparacion_nombre} · {textoPrecioDelDetalle(detalle, importe)}
       {ajuste && (
         <>
           {" "}

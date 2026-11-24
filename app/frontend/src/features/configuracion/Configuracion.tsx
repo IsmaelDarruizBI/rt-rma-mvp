@@ -36,6 +36,7 @@ import {
   seccionAMostrar,
   seccionesPermitidas,
 } from "./secciones";
+import { ModelosEquipoAdmin } from "./ModelosEquipo";
 import { MesasTrabajo, TiposReparacion } from "./TiposReparacion";
 import { UsuariosRoles } from "./UsuariosRoles";
 
@@ -66,6 +67,12 @@ const CAMPOS: Record<string, string> = {
   horario: "Horario de atención",
   pie_comprobante: "Pie de los comprobantes",
   version: "Versión vigente",
+  // DEC-AJ-12.
+  precio_por_modelo: "Precio por modelo",
+  marca: "Marca",
+  modelo: "Modelo",
+  variante: "Variante",
+  numeros_modelo: "Números de modelo",
 };
 
 /** Los booleanos se guardan como true/false: en pantalla, Sí o No. */
@@ -226,6 +233,7 @@ export function ConfiguracionPanel({
       ) : (
         <div style={{ minWidth: 0 }}>
           {actual === "tipos-reparacion" && <TiposReparacion actor={actor} onCambio={alCambiar} />}
+          {actual === "modelos-equipo" && <ModelosEquipoAdmin actor={actor} />}
           {actual === "mesas" && <MesasTrabajo actor={actor} />}
           {actual === "motivos" && <MotivosOperativos actor={actor} />}
           {actual === "checklist" && <ChecklistAdmin actor={actor} />}

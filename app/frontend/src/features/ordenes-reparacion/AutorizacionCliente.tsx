@@ -39,6 +39,7 @@ import { nombreDeUsuario } from "./DetalleOrden";
 import { PENDIENTE_COMPROBANTE_INGRESO } from "./etiquetas";
 import { TituloAccion, UbicacionAccion } from "./presentacion";
 import { tieneAlguno } from "../../lib/roles";
+import { textoPrecioDelDetalle } from "./precioModelo";
 
 type Eleccion = ResultadoAutorizacion | "PENDIENTE";
 
@@ -447,7 +448,7 @@ function TablaAutorizaciones({
                   </div>
                   {detalle.tipo_reparacion_nombre}
                 </td>
-                <td style={celda}>{importe(detalle.precio)}</td>
+                <td style={celda}>{textoPrecioDelDetalle(detalle, importe)}</td>
                 <td style={celda}>
                   v{detalle.version_definicion}
                   {detalle.version_definicion > 1 && (
@@ -590,7 +591,7 @@ function FormularioDecision({
           }}
         >
           <legend style={{ fontSize: "0.8rem", padding: "0 0.25rem" }}>
-            {detalle.tipo_reparacion_nombre} · {importe(detalle.precio)}
+            {detalle.tipo_reparacion_nombre} · {textoPrecioDelDetalle(detalle, importe)}
           </legend>
           <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
             {ELECCIONES.map((opcion) => (

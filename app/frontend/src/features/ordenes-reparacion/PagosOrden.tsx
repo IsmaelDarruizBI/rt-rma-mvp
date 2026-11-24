@@ -48,6 +48,7 @@ import { ESTADO_PAGO, etiqueta } from "./etiquetas";
 import { TituloAccion, UbicacionAccion } from "./presentacion";
 import { recargoADevolver, recargoDe } from "./recepcionUx";
 import { puede, tieneAlguno } from "../../lib/roles";
+import { textoPrecioDelDetalle } from "./precioModelo";
 
 interface Props {
   orden: Orden;
@@ -364,7 +365,7 @@ function FormularioAjusteComercial({
             {trabajos.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.id} · {d.tipo_reparacion_nombre ?? d.tipo_reparacion_id} ·{" "}
-                {importe(d.precio)}
+                {textoPrecioDelDetalle(d, importe)}
               </option>
             ))}
           </select>

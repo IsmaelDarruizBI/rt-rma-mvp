@@ -18,6 +18,8 @@ import {
 import type { Detalle, Estacion, Orden, Usuario } from "../../types/api";
 import { descripcionEquipo } from "./catalogoEquipos";
 import { EtapasNegocio } from "./ProximoPaso";
+import { MarcaPrecio } from "./PrecioTrabajo";
+import { textoPrecioDelDetalle } from "./precioModelo";
 import {
   TEXTO_RESULTADO,
   resultadoDeTrabajo,
@@ -416,9 +418,28 @@ function Trabajo({
               : {}),
           }}
         >
-          {cobrable ? importe(detalle.precio) : "Sin cargo"}
+          {cobrable ? textoPrecioDelDetalle(detalle, importe) : "Sin cargo"}
         </span>
       </div>
+      {/* DEC-AJ-12: origen del precio y precio de otro modelo. */}
+      {(detalle.precio_pendiente ||
+        detalle.origen_precio === "MANUAL" ||
+        detalle.precio_de_otro_modelo) && (
+        <div
+          style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", marginTop: "0.3rem" }}
+        >
+          <MarcaPrecio detalle={detalle} />
+          {detalle.precio_de_otro_modelo && (
+            <Etiqueta color={colores.alerta}>Precio de otro modelo</Etiqueta>
+          )}
+          {detalle.origen_precio === "MANUAL" && detalle.precio_motivo && (
+            <span style={{ fontSize: "0.75rem", color: colores.suave }}>
+              Motivo: {detalle.precio_motivo}
+              {detalle.precio_definido_por ? ` · ${detalle.precio_definido_por}` : ""}
+            </span>
+          )}
+        </div>
+      )}
       <div
         style={{
           display: "flex",

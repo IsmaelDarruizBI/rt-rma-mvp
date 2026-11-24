@@ -41,7 +41,10 @@ export type EntidadConfiguracion =
   | "PROVEEDOR"
   | "MEDIO_PAGO"
   | "EMPRESA"
-  | "TEXTO_LEGAL";
+  | "TEXTO_LEGAL"
+  // DEC-AJ-12: modelos de equipo y precios por modelo («TR-001/MOD-0012»).
+  | "MODELO_EQUIPO"
+  | "PRECIO_MODELO";
 
 export interface CambioConfiguracion {
   entidad: EntidadConfiguracion;
@@ -65,6 +68,8 @@ export interface DatosTipo {
   activo: boolean;
   garantia_con_checkin: number;
   garantia_sin_checkin: number;
+  /** DEC-AJ-12: con precio por modelo, `precio` no se usa. */
+  precio_por_modelo: boolean;
 }
 
 export function obtenerCatalogo(): Promise<CatalogoConfigurable> {
@@ -91,6 +96,64 @@ export function editarTipo(
     `/api/admin/repair-types/${encodeURIComponent(codigo)}`,
     { usuario_id: usuarioId, ...datos },
   );
+}
+
+// --- Precios por modelo y modelos de equipo (DEC-AJ-12) -----------------
+
+export interface ModeloAdmin {
+  id: string;
+  marca: string;
+  modelo: string;
+  variante: string | null;
+  numeros_modelo: string[];
+  activo: boolean;
+  nombre: string;
+}
+
+export interface ModelosAdmin {
+  /** false en el modo JSON: los catálogos son de solo lectura. */
+  editable: boolean;
+  modelos: ModeloAdmin[];
+}
+
+export interface DatosModelo {
+  marca: string;
+  modelo: string;
+  variante: string | null;
+  numeros_modelo: string[];
+  activo: boolean;
+}
+
+export function obtenerModelosAdmin(): Promise<ModelosAdmin> {
+  return get<ModelosAdmin>("/api/admin/device-models");
+}
+
+/** El código lo genera la API (MOD-NNNN). */
+export function crearModelo(usuarioId: string, datos: DatosModelo): Promise<ModeloAdmin> {
+  return post<ModeloAdmin>("/api/admin/device-models", { usuario_id: usuarioId, ...datos });
+}
+
+export function editarModelo(
+  usuarioId: string,
+  codigo: string,
+  datos: DatosModelo,
+): Promise<ModeloAdmin> {
+  return put<ModeloAdmin>(`/api/admin/device-models/${encodeURIComponent(codigo)}`, {
+    usuario_id: usuarioId,
+    ...datos,
+  });
+}
+
+/** Fija o retira (`precio: null`) precios del Tipo por modelo, todo o nada. */
+export function guardarPreciosModelo(
+  usuarioId: string,
+  tipo: string,
+  precios: { modelo_equipo_id: string; precio: string | null }[],
+): Promise<{ tipo: TipoReparacion; cambios: CambioConfiguracion[] }> {
+  return put(`/api/admin/repair-types/${encodeURIComponent(tipo)}/model-prices`, {
+    usuario_id: usuarioId,
+    precios,
+  });
 }
 
 export function guardarTiposDeMesa(

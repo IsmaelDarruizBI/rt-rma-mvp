@@ -13,6 +13,7 @@ import { puede, type ConRoles } from "../../lib/roles.ts";
 
 export type SeccionConfiguracion =
   | "tipos-reparacion"
+  | "modelos-equipo"
   | "mesas"
   | "motivos"
   | "checklist"
@@ -44,6 +45,8 @@ const SOLO_ADMINISTRACION = ["ADMINISTRADOR"] as const;
 
 export const SECCIONES_CONFIGURACION: readonly DefinicionSeccion[] = [
   { id: "tipos-reparacion", grupo: "Taller", titulo: "Tipos de reparación", permisos: ["TIPO_REPARACION_GESTIONAR"] },
+  // DEC-AJ-12: el catálogo técnico de modelos (alta, edición y baja).
+  { id: "modelos-equipo", grupo: "Taller", titulo: "Modelos de equipo", permisos: ["MODELO_EQUIPO_GESTIONAR"] },
   { id: "mesas", grupo: "Taller", titulo: "Mesas de trabajo", permisos: ["MESA_TIPOS_GESTIONAR"] },
   { id: "motivos", grupo: "Taller", titulo: "Motivos", permisos: ["MOTIVO_GESTIONAR"] },
   { id: "checklist", grupo: "Taller", titulo: "Checklist", permisos: ["CHECKLIST_GESTIONAR"] },
@@ -115,6 +118,7 @@ export function seccionAMostrar(
 /** Entidad de la auditoría de cada subsección (su propio historial). */
 export const ENTIDAD_DE_SECCION: Partial<Record<SeccionConfiguracion, string>> = {
   "tipos-reparacion": "TIPO_REPARACION",
+  "modelos-equipo": "MODELO_EQUIPO",
   mesas: "MESA_TRABAJO",
   motivos: "MOTIVO",
   checklist: "CHECKLIST",

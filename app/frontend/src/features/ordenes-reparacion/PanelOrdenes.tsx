@@ -441,9 +441,13 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
   const enDetalle = ruta.pantalla === "orden" && orden?.id === ruta.ordenId;
 
   const ejecutor: EjecutorAcciones = {
-    agregarDetalle: (tipoId, otros) =>
+    agregarDetalle: (tipoId, otros, manual) =>
       void ejecutarComando(() =>
-        api.definirReparacion(idOrden, idActor, tipoId, otros),
+        api.definirReparacion(idOrden, idActor, tipoId, otros, manual ?? null),
+      ),
+    definirPrecio: (detalleId, manual) =>
+      void ejecutarComando(() =>
+        api.definirPrecio(idOrden, detalleId, idActor, manual),
       ),
     finalizarDefinicion: () =>
       void ejecutarComando(() => api.finalizarDefinicion(idOrden, idActor)),
@@ -521,7 +525,14 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
       void ejecutarComando(() =>
         api.revisarDetalle(idOrden, detalleId, idActor, resultado),
       ),
-    evaluarDetalle: (detalleId, resultado, observaciones, tipoId, adicionales) =>
+    evaluarDetalle: (
+      detalleId,
+      resultado,
+      observaciones,
+      tipoId,
+      adicionales,
+      manual,
+    ) =>
       void ejecutarComando(() =>
         api.evaluarDetalle(
           idOrden,
@@ -531,15 +542,22 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
           observaciones,
           tipoId,
           adicionales,
+          manual ?? null,
         ),
       ),
-    agregarTrabajoAdicional: (tipoId, observaciones) =>
+    agregarTrabajoAdicional: (tipoId, observaciones, manual) =>
       void ejecutarComando(() =>
-        api.agregarTrabajoAdicional(idOrden, idActor, tipoId, observaciones),
+        api.agregarTrabajoAdicional(
+          idOrden,
+          idActor,
+          tipoId,
+          observaciones,
+          manual ?? null,
+        ),
       ),
-    redefinirDetalle: (detalleId, tipoId) =>
+    redefinirDetalle: (detalleId, tipoId, manual) =>
       void ejecutarComando(() =>
-        api.redefinirDetalle(idOrden, detalleId, idActor, tipoId),
+        api.redefinirDetalle(idOrden, detalleId, idActor, tipoId, manual ?? null),
       ),
     aprobarControl: (detalleId, observaciones) =>
       void ejecutarComando(() =>
@@ -560,7 +578,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
       void ejecutarComando(() =>
         api.realizarRevision(idOrden, idActor, resultado),
       ),
-    agregarDetalleDesdeRevision: (tipoId, detalleOrigenId, otros) =>
+    agregarDetalleDesdeRevision: (tipoId, detalleOrigenId, otros, manual) =>
       void ejecutarComando(() =>
         api.definirReparacionDesdeRevision(
           idOrden,
@@ -568,6 +586,7 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
           tipoId,
           detalleOrigenId,
           otros,
+          manual ?? null,
         ),
       ),
     finalizarSinReparacion: (motivo, observaciones) =>

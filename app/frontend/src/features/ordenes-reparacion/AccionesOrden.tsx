@@ -16,6 +16,7 @@ import type { TipoMotivo } from "../../api/operativa";
 import {
   type DatosEntrega,
   type DatosRetiro,
+  type PedidoPrecioManual,
   TIPO_REPARACION_OTROS,
   type TrabajoOtros,
 } from "../../api/ordenes";
@@ -62,6 +63,13 @@ import {
 } from "./etiquetas";
 import { Confirmacion } from "./PagosOrden";
 import {
+  CamposPrecioManual,
+  FormularioDefinirPrecio,
+  opcionDeTipo,
+  usePrecioManual,
+} from "./PrecioTrabajo";
+import { precioDelTipo, textoPrecioDelDetalle } from "./precioModelo";
+import {
   CODIGOS_SECUNDARIOS,
   TituloAccion,
   UbicacionAccion,
@@ -69,8 +77,18 @@ import {
 import { opcionDePrioridad, prioridadPropuesta } from "./prioridad";
 
 export interface EjecutorAcciones {
-  /** `otros`: descripción y precio de un trabajo «Otros». */
-  agregarDetalle: (tipoReparacionId: string, otros: TrabajoOtros | null) => void;
+  /**
+   * `otros`: descripción y precio de un trabajo «Otros». `manual`
+   * (DEC-AJ-12): precio manual con motivo de un Tipo sin precio de
+   * catálogo para el modelo (solo con PRECIO_MANUAL).
+   */
+  agregarDetalle: (
+    tipoReparacionId: string,
+    otros: TrabajoOtros | null,
+    manual?: PedidoPrecioManual | null,
+  ) => void;
+  /** DEC-AJ-12: «Definir precio» de un trabajo pendiente. */
+  definirPrecio: (detalleId: string, manual: PedidoPrecioManual | null) => void;
   finalizarDefinicion: () => void;
   encolar: (prioridad: number) => void;
   tomar: (estacionId: string) => void;
@@ -101,17 +119,23 @@ export interface EjecutorAcciones {
     observaciones: string,
   ) => void;
   revisarDetalle: (detalleId: string, resultado: string) => void;
-  redefinirDetalle: (detalleId: string, tipoReparacionId: string) => void;
+  redefinirDetalle: (
+    detalleId: string,
+    tipoReparacionId: string,
+    manual?: PedidoPrecioManual | null,
+  ) => void;
   evaluarDetalle: (
     detalleId: string,
     resultado: ResultadoEvaluacionTecnica,
     observaciones: string | null,
     tipoReparacionId: string | null,
     adicionales: string[],
+    manual?: PedidoPrecioManual | null,
   ) => void;
   agregarTrabajoAdicional: (
     tipoReparacionId: string,
     observaciones: string | null,
+    manual?: PedidoPrecioManual | null,
   ) => void;
   aprobarControl: (detalleId: string | null, observaciones: string) => void;
   liberarOrden: () => void;
@@ -130,6 +154,7 @@ export interface EjecutorAcciones {
     tipoReparacionId: string,
     detalleOrigenId: string | null,
     otros: TrabajoOtros | null,
+    manual?: PedidoPrecioManual | null,
   ) => void;
   finalizarSinReparacion: (motivo: string, observaciones: string) => void;
   /** PROC-REP-235: reabre el Detalle para retrabajo. */
@@ -242,6 +267,7 @@ export function ComplementariasOrden(props: Props) {
 function AccionUnica({
   accion,
   orden,
+  actor,
   usuarios,
   tipos,
   estaciones,
@@ -253,6 +279,7 @@ function AccionUnica({
     <FormularioAccion
       accion={accion}
       orden={orden}
+      actor={actor}
       usuarios={usuarios}
       tipos={tipos}
       estaciones={estaciones}
@@ -351,6 +378,7 @@ function OpcionSecundaria({
 function FormularioAccion({
   accion,
   orden,
+  actor,
   usuarios,
   tipos,
   estaciones,
@@ -360,6 +388,7 @@ function FormularioAccion({
 }: {
   accion: Accion;
   orden: Orden;
+  actor: Usuario | null;
   usuarios: Usuario[];
   tipos: TipoReparacion[];
   estaciones: Estacion[];
@@ -367,19 +396,41 @@ function FormularioAccion({
   deshabilitado: boolean;
   ejecutar: EjecutorAcciones;
 }) {
+  // DEC-AJ-12: los selectores muestran el precio para el modelo de la Orden.
+  const modeloId = orden.equipo.modelo_tecnico_id ?? null;
   switch (accion.codigo) {
     case "AGREGAR_DETALLE":
       return (
         <FormularioAgregarDetalle
           tipos={tipos}
+          modeloId={modeloId}
+          actor={actor}
           cantidadDetallesActual={orden.reparaciones_detail.length}
           detallesOrigen={[]}
           deshabilitado={deshabilitado}
-          onConfirmar={(tipoId, _origen, otros) =>
-            ejecutar.agregarDetalle(tipoId, otros)
+          onConfirmar={(tipoId, _origen, otros, manual) =>
+            ejecutar.agregarDetalle(tipoId, otros, manual)
           }
         />
       );
+
+    case "DEFINIR_PRECIO": {
+      const detalle = orden.reparaciones_detail.find(
+        (candidato) => candidato.id === accion.detalle_id,
+      );
+      return (
+        <FormularioDefinirPrecio
+          detalle={detalle}
+          tipo={tipos.find((tipo) => tipo.id === detalle?.tipo_reparacion_id)}
+          modeloId={modeloId}
+          actor={actor}
+          deshabilitado={deshabilitado || !accion.detalle_id}
+          onConfirmar={(manual) =>
+            accion.detalle_id && ejecutar.definirPrecio(accion.detalle_id, manual)
+          }
+        />
+      );
+    }
 
     case "FINALIZAR_DEFINICION":
       return (
@@ -453,6 +504,8 @@ function FormularioAccion({
       return (
         <FormularioAgregarDetalle
           tipos={tipos}
+          modeloId={modeloId}
+          actor={actor}
           cantidadDetallesActual={orden.reparaciones_detail.length}
           detallesOrigen={orden.detalles_origen}
           deshabilitado={deshabilitado}
@@ -605,11 +658,13 @@ function FormularioAccion({
       return (
         <FormularioEvaluacionTecnica
           tipos={tipos}
+          modeloId={modeloId}
+          actor={actor}
           detalle={orden.reparaciones_detail.find(
             (candidato) => candidato.id === accion.detalle_id,
           )}
           deshabilitado={deshabilitado || !accion.detalle_id}
-          onConfirmar={(resultado, observaciones, tipoId, adicionales) =>
+          onConfirmar={(resultado, observaciones, tipoId, adicionales, manual) =>
             accion.detalle_id &&
             ejecutar.evaluarDetalle(
               accion.detalle_id,
@@ -617,6 +672,7 @@ function FormularioAccion({
               observaciones,
               tipoId,
               adicionales,
+              manual,
             )
           }
         />
@@ -626,6 +682,8 @@ function FormularioAccion({
       return (
         <FormularioTrabajoAdicional
           tipos={tipos}
+          modeloId={modeloId}
+          actor={actor}
           deshabilitado={deshabilitado}
           onConfirmar={ejecutar.agregarTrabajoAdicional}
         />
@@ -636,13 +694,14 @@ function FormularioAccion({
         <FormularioRedefinirDetalle
           orden={orden}
           tipos={tipos}
+          actor={actor}
           detalle={orden.reparaciones_detail.find(
             (candidato) => candidato.id === accion.detalle_id,
           )}
           deshabilitado={deshabilitado || !accion.detalle_id}
-          onConfirmar={(tipoId) =>
+          onConfirmar={(tipoId, manual) =>
             accion.detalle_id &&
-            ejecutar.redefinirDetalle(accion.detalle_id, tipoId)
+            ejecutar.redefinirDetalle(accion.detalle_id, tipoId, manual)
           }
         />
       );
@@ -1372,12 +1431,16 @@ function FormularioCheckin({
  */
 function FormularioAgregarDetalle({
   tipos,
+  modeloId,
+  actor,
   cantidadDetallesActual,
   detallesOrigen,
   deshabilitado,
   onConfirmar,
 }: {
   tipos: TipoReparacion[];
+  modeloId: string | null;
+  actor: Usuario | null;
   cantidadDetallesActual: number;
   detallesOrigen: DetalleOrigen[];
   deshabilitado: boolean;
@@ -1385,9 +1448,15 @@ function FormularioAgregarDetalle({
     tipoReparacionId: string,
     detalleOrigenId: string | null,
     otros: TrabajoOtros | null,
+    manual: PedidoPrecioManual | null,
   ) => void;
 }) {
   const [tipoId, setTipoId] = useState(tipos[0]?.id ?? "");
+  const manual = usePrecioManual(
+    tipos.find((tipo) => tipo.id === tipoId),
+    modeloId,
+    actor,
+  );
   const [origenId, setOrigenId] = useState(detallesOrigen[0]?.id ?? "");
   const [descripcion, setDescripcion] = useState("");
   const [precio, setPrecio] = useState("");
@@ -1432,7 +1501,7 @@ function FormularioAgregarDetalle({
             >
               {tipos.map((tipo) => (
                 <option key={tipo.id} value={tipo.id}>
-                  {tipo.nombre} — {tipo.precio}
+                  {opcionDeTipo(tipo, modeloId)}
                 </option>
               ))}
               <option value={TIPO_REPARACION_OTROS}>
@@ -1444,14 +1513,30 @@ function FormularioAgregarDetalle({
         {!esOtros && (
           <div style={{ marginBottom: "0.6rem" }}>
             <Boton
-              disabled={deshabilitado || !tipoId || (pideOrigen && !origenId)}
-              onClick={() => onConfirmar(tipoId, pideOrigen ? origenId : null, null)}
+              disabled={
+                deshabilitado || !tipoId || (pideOrigen && !origenId) || manual.error !== null
+              }
+              onClick={() => {
+                onConfirmar(tipoId, pideOrigen ? origenId : null, null, manual.pedido);
+                manual.reiniciar();
+              }}
             >
               Agregar trabajo
             </Boton>
           </div>
         )}
       </div>
+      {!esOtros && (
+        <CamposPrecioManual
+          tipo={tipos.find((tipo) => tipo.id === tipoId)}
+          modeloId={modeloId}
+          actor={actor}
+          estado={manual.estado}
+          onCambio={manual.setEstado}
+          error={manual.error}
+          deshabilitado={deshabilitado}
+        />
+      )}
       {esOtros && (
         <>
           <Campo etiqueta="Descripción del trabajo (obligatoria)">
@@ -1475,10 +1560,15 @@ function FormularioAgregarDetalle({
           <Boton
             disabled={deshabilitado || !otrosCompleto || (pideOrigen && !origenId)}
             onClick={() => {
-              onConfirmar(tipoId, pideOrigen ? origenId : null, {
-                descripcion: descripcion.trim(),
-                precio: precio.trim().replace(",", "."),
-              });
+              onConfirmar(
+                tipoId,
+                pideOrigen ? origenId : null,
+                {
+                  descripcion: descripcion.trim(),
+                  precio: precio.trim().replace(",", "."),
+                },
+                null,
+              );
               setDescripcion("");
               setPrecio("");
               setTipoId(tipos[0]?.id ?? "");
@@ -1522,7 +1612,7 @@ function FormularioFinalizarDefinicion({
         {orden.reparaciones_detail.map((detalle) => (
           <li key={detalle.id}>
             {detalle.id} · {detalle.tipo_reparacion_nombre} ·{" "}
-            {importe(detalle.precio)}
+            {textoPrecioDelDetalle(detalle, importe)}
           </li>
         ))}
       </ul>
@@ -2662,11 +2752,15 @@ function FormularioResultadoRevision({
  */
 function FormularioEvaluacionTecnica({
   tipos,
+  modeloId,
+  actor,
   detalle,
   deshabilitado,
   onConfirmar,
 }: {
   tipos: TipoReparacion[];
+  modeloId: string | null;
+  actor: Usuario | null;
   detalle: Orden["reparaciones_detail"][number] | undefined;
   deshabilitado: boolean;
   onConfirmar: (
@@ -2674,6 +2768,7 @@ function FormularioEvaluacionTecnica({
     observaciones: string | null,
     tipoReparacionId: string | null,
     adicionales: string[],
+    manual: PedidoPrecioManual | null,
   ) => void;
 }) {
   const [resultado, setResultado] =
@@ -2688,8 +2783,15 @@ function FormularioEvaluacionTecnica({
   );
   const pideMotivo = resultado !== "CONFIRMADO";
   const redefine = resultado === "REQUIERE_REDEFINICION";
+  const manual = usePrecioManual(
+    redefine ? tipos.find((tipo) => tipo.id === tipoId) : undefined,
+    modeloId,
+    actor,
+  );
   const listo =
-    (!pideMotivo || observaciones.trim() !== "") && (!redefine || !!tipoId);
+    (!pideMotivo || observaciones.trim() !== "") &&
+    (!redefine || !!tipoId) &&
+    manual.error === null;
 
   return (
     <div>
@@ -2723,11 +2825,22 @@ function FormularioEvaluacionTecnica({
           >
             {tipos.map((tipo) => (
               <option key={tipo.id} value={tipo.id}>
-                {tipo.nombre} — {tipo.precio}
+                {opcionDeTipo(tipo, modeloId)}
               </option>
             ))}
           </select>
         </Campo>
+      )}
+      {redefine && (
+        <CamposPrecioManual
+          tipo={tipos.find((tipo) => tipo.id === tipoId)}
+          modeloId={modeloId}
+          actor={actor}
+          estado={manual.estado}
+          onCambio={manual.setEstado}
+          error={manual.error}
+          deshabilitado={deshabilitado}
+        />
       )}
       <Campo
         etiqueta={
@@ -2762,7 +2875,7 @@ function FormularioEvaluacionTecnica({
           >
             {tipos.map((tipo) => (
               <option key={tipo.id} value={tipo.id}>
-                {tipo.nombre} — {tipo.precio}
+                {opcionDeTipo(tipo, modeloId)}
               </option>
             ))}
           </select>
@@ -2796,6 +2909,8 @@ function FormularioEvaluacionTecnica({
         <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
           Cada una queda como un trabajo nuevo. Si el cliente autoriza los
           trabajos, Recepción le consulta; no hace falta esperar su respuesta.
+          Las que no tienen precio para este modelo quedan con el precio
+          pendiente de definir.
         </p>
       )}
       <Boton
@@ -2806,6 +2921,7 @@ function FormularioEvaluacionTecnica({
             observaciones.trim() || null,
             redefine ? tipoId : null,
             adicionales,
+            redefine ? manual.pedido : null,
           )
         }
       >
@@ -2817,15 +2933,25 @@ function FormularioEvaluacionTecnica({
 
 function FormularioTrabajoAdicional({
   tipos,
+  modeloId,
+  actor,
   deshabilitado,
   onConfirmar,
 }: {
   tipos: TipoReparacion[];
+  modeloId: string | null;
+  actor: Usuario | null;
   deshabilitado: boolean;
-  onConfirmar: (tipoReparacionId: string, observaciones: string | null) => void;
+  onConfirmar: (
+    tipoReparacionId: string,
+    observaciones: string | null,
+    manual: PedidoPrecioManual | null,
+  ) => void;
 }) {
   const [tipoId, setTipoId] = useState(tipos[0]?.id ?? "");
   const [observaciones, setObservaciones] = useState("");
+  const elegido = tipos.find((tipo) => tipo.id === tipoId);
+  const manual = usePrecioManual(elegido, modeloId, actor);
   return (
     <div>
       <p style={{ margin: "0 0 0.5rem", fontSize: "0.85rem" }}>
@@ -2842,11 +2968,20 @@ function FormularioTrabajoAdicional({
         >
           {tipos.map((tipo) => (
             <option key={tipo.id} value={tipo.id}>
-              {tipo.nombre} — {tipo.precio}
+              {opcionDeTipo(tipo, modeloId)}
             </option>
           ))}
         </select>
       </Campo>
+      <CamposPrecioManual
+        tipo={elegido}
+        modeloId={modeloId}
+        actor={actor}
+        estado={manual.estado}
+        onCambio={manual.setEstado}
+        error={manual.error}
+        deshabilitado={deshabilitado}
+      />
       <Campo etiqueta="Observaciones (opcional)">
         <input
           value={observaciones}
@@ -2856,8 +2991,11 @@ function FormularioTrabajoAdicional({
         />
       </Campo>
       <Boton
-        disabled={deshabilitado || !tipoId}
-        onClick={() => onConfirmar(tipoId, observaciones.trim() || null)}
+        disabled={deshabilitado || !tipoId || manual.error !== null}
+        onClick={() => {
+          onConfirmar(tipoId, observaciones.trim() || null, manual.pedido);
+          manual.reiniciar();
+        }}
       >
         Registrar la reparación adicional
       </Boton>
@@ -2880,27 +3018,33 @@ function AvisoRecalculo({ texto }: { texto: string }) {
 function FormularioRedefinirDetalle({
   orden,
   tipos,
+  actor,
   detalle,
   deshabilitado,
   onConfirmar,
 }: {
   orden: Orden;
   tipos: TipoReparacion[];
+  actor: Usuario | null;
   detalle: Orden["reparaciones_detail"][number] | undefined;
   deshabilitado: boolean;
-  onConfirmar: (tipoReparacionId: string) => void;
+  onConfirmar: (tipoReparacionId: string, manual: PedidoPrecioManual | null) => void;
 }) {
   const [tipoId, setTipoId] = useState(
     detalle?.tipo_reparacion_id ?? tipos[0]?.id ?? "",
   );
   const elegido = tipos.find((tipo) => tipo.id === tipoId);
+  const modeloId = orden.equipo.modelo_tecnico_id ?? null;
+  const manual = usePrecioManual(elegido, modeloId, actor);
+  // DEC-AJ-12: el precio nuevo es el del modelo (o el manual, o pendiente).
+  const precioNuevo = elegido ? precioDelTipo(elegido, modeloId).precio : null;
 
   return (
     <div>
       <p style={{ margin: "0 0 0.5rem", fontSize: "0.85rem" }}>
         Detalle {detalle?.id ?? "—"} · Tipo actual:{" "}
         <strong>{detalle?.tipo_reparacion_nombre ?? "—"}</strong> (
-        {detalle?.precio ?? "—"})
+        {detalle ? textoPrecioDelDetalle(detalle) : "—"})
       </p>
       <Campo etiqueta="Nuevo tipo de reparación">
         <select
@@ -2911,7 +3055,7 @@ function FormularioRedefinirDetalle({
         >
           {tipos.map((tipo) => (
             <option key={tipo.id} value={tipo.id}>
-              {tipo.nombre} — {tipo.precio}
+              {opcionDeTipo(tipo, modeloId)}
             </option>
           ))}
         </select>
@@ -2924,17 +3068,27 @@ function FormularioRedefinirDetalle({
             color: colores.suave,
           }}
         >
-          Nueva definición: {elegido.nombre} ({elegido.precio})
+          Nueva definición: {opcionDeTipo(elegido, modeloId)}
         </p>
       )}
-      {elegido && detalle && avisoRecalculo(orden, detalle.id, Number(elegido.precio)) && (
+      <CamposPrecioManual
+        tipo={elegido}
+        modeloId={modeloId}
+        actor={actor}
+        estado={manual.estado}
+        onCambio={manual.setEstado}
+        error={manual.error}
+        deshabilitado={deshabilitado}
+      />
+      {elegido && detalle && precioNuevo !== null &&
+        avisoRecalculo(orden, detalle.id, Number(precioNuevo)) && (
         <AvisoRecalculo
-          texto={avisoRecalculo(orden, detalle.id, Number(elegido.precio)) ?? ""}
+          texto={avisoRecalculo(orden, detalle.id, Number(precioNuevo)) ?? ""}
         />
       )}
       <Boton
-        disabled={deshabilitado || !tipoId}
-        onClick={() => onConfirmar(tipoId)}
+        disabled={deshabilitado || !tipoId || manual.error !== null}
+        onClick={() => onConfirmar(tipoId, manual.pedido)}
       >
         Redefinir reparación
       </Boton>

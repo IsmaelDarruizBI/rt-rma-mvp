@@ -649,6 +649,13 @@ export interface TipoReparacion {
   garantia_con_checkin?: number;
   garantia_sin_checkin?: number;
   politica_garantia_rma?: PoliticaGarantiaRma | null;
+  /**
+   * DEC-AJ-12: con precio por modelo, `precio` no se usa: rige
+   * `precios_modelo` (código del modelo → precio) y sin precio para el
+   * modelo de la Orden no hay precio de catálogo.
+   */
+  precio_por_modelo?: boolean;
+  precios_modelo?: Record<string, string>;
 }
 
 /** Garantía de un trabajo hecho dentro de una garantía RMA (DEC-MI-01). */
@@ -897,7 +904,24 @@ export interface Detalle {
    */
   pendiente_comprobante_ingreso?: boolean;
   autorizado_en_ingreso?: boolean;
+  /**
+   * DEC-AJ-12: copia del trabajo (nombre del Tipo, modelo con el que se
+   * tomó el precio) y origen del precio. Con `precio_pendiente` el precio
+   * vale 0 y no es un precio: «Precio pendiente de definir».
+   */
+  nombre_trabajo?: string | null;
+  modelo_equipo_id?: string | null;
+  origen_precio?: OrigenPrecio | null;
+  precio_motivo?: string | null;
+  precio_definido_por?: string | null;
+  precio_definido_en?: string | null;
+  solo_precio?: boolean;
+  precio_pendiente?: boolean;
+  /** El precio se determinó para otro modelo del equipo y se conserva. */
+  precio_de_otro_modelo?: boolean;
 }
+
+export type OrigenPrecio = "CATALOGO" | "CATALOGO_MODELO" | "MANUAL" | "OTROS" | "PENDIENTE";
 
 /** Un cambio manual del plazo de garantía de un trabajo. */
 export interface AjusteGarantia {
@@ -916,6 +940,13 @@ export interface DefinicionAnterior {
   garantia_dias: number;
   reemplazada_en: string;
   usuario_id: string;
+  /** DEC-AJ-12: la copia de esa definición (vacía en las anteriores). */
+  nombre_trabajo?: string | null;
+  modelo_equipo_id?: string | null;
+  origen_precio?: OrigenPrecio | null;
+  precio_motivo?: string | null;
+  precio_definido_por?: string | null;
+  solo_precio?: boolean;
 }
 
 export interface Toma {

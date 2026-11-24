@@ -107,6 +107,9 @@ export interface DatosNuevaOrden {
    * (si falla, no se crea nada).
    */
   trabajo_inicial?: string | null;
+  /** DEC-AJ-12: precio manual con motivo del trabajo inicial (PRECIO_MANUAL). */
+  trabajo_inicial_precio?: string | null;
+  trabajo_inicial_motivo?: string | null;
 }
 
 /** PROC-REP-010 -> 030 -> 040 (Recepción). */
@@ -121,6 +124,8 @@ export interface DatosNuevaOrdenRt {
   recepcion?: DatosRecepcion;
   /** DEC-UX-04: como en `DatosNuevaOrden`. */
   trabajo_inicial?: string | null;
+  trabajo_inicial_precio?: string | null;
+  trabajo_inicial_motivo?: string | null;
 }
 
 /** PROC-REP-010 -> 020 -> 040 (Recepción, HP-REP-002). Sin Cliente. */
@@ -138,11 +143,40 @@ export function definirReparacion(
   usuarioId: string,
   tipoReparacionId: string,
   otros: TrabajoOtros | null = null,
+  manual: PedidoPrecioManual | null = null,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/details`, {
     usuario_id: usuarioId,
     tipo_reparacion_id: tipoReparacionId,
     ...(otros ?? {}),
+    ...(manual ?? {}),
+  });
+}
+
+/**
+ * DEC-AJ-12: precio manual con motivo de un Tipo sin precio de catálogo
+ * para el modelo (solo con PRECIO_MANUAL). Sin él, el trabajo queda con el
+ * precio pendiente de definir.
+ */
+export interface PedidoPrecioManual {
+  precio: string;
+  precio_motivo: string;
+}
+
+/**
+ * DEC-AJ-12: «Definir precio» de un trabajo con el precio pendiente. Sin
+ * `manual`, toma el precio de catálogo (tiene que existir para el modelo
+ * de la Orden); con `manual`, un precio autorizado con motivo.
+ */
+export function definirPrecio(
+  ordenId: string,
+  detalleId: string,
+  usuarioId: string,
+  manual: PedidoPrecioManual | null,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/details/${detalleId}/price`, {
+    usuario_id: usuarioId,
+    ...(manual ? { precio: manual.precio, motivo: manual.precio_motivo } : {}),
   });
 }
 
@@ -413,6 +447,7 @@ export function evaluarDetalle(
   observaciones: string | null,
   tipoReparacionId: string | null,
   adicionales: string[] = [],
+  manual: PedidoPrecioManual | null = null,
 ): Promise<Orden> {
   return post<Orden>(
     `/api/orders/${ordenId}/details/${detalleId}/evaluation`,
@@ -423,6 +458,7 @@ export function evaluarDetalle(
       tipo_reparacion_id: tipoReparacionId,
       // 184 -> 128: reparaciones adicionales detectadas en la evaluación.
       adicionales: adicionales.map((tipo) => ({ tipo_reparacion_id: tipo })),
+      ...(manual ?? {}),
     },
   );
 }
@@ -433,11 +469,13 @@ export function agregarTrabajoAdicional(
   usuarioId: string,
   tipoReparacionId: string,
   observaciones: string | null,
+  manual: PedidoPrecioManual | null = null,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/details/additional`, {
     usuario_id: usuarioId,
     tipo_reparacion_id: tipoReparacionId,
     observaciones,
+    ...(manual ?? {}),
   });
 }
 
@@ -446,10 +484,12 @@ export function redefinirDetalle(
   detalleId: string,
   usuarioId: string,
   tipoReparacionId: string,
+  manual: PedidoPrecioManual | null = null,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/details/${detalleId}/redefine`, {
     usuario_id: usuarioId,
     tipo_reparacion_id: tipoReparacionId,
+    ...(manual ?? {}),
   });
 }
 
@@ -717,12 +757,14 @@ export function definirReparacionDesdeRevision(
   tipoReparacionId: string,
   detalleOrigenId: string | null,
   otros: TrabajoOtros | null = null,
+  manual: PedidoPrecioManual | null = null,
 ): Promise<Orden> {
   return post<Orden>(`/api/orders/${ordenId}/review/details`, {
     usuario_id: usuarioId,
     tipo_reparacion_id: tipoReparacionId,
     detalle_origen_id: detalleOrigenId,
     ...(otros ?? {}),
+    ...(manual ?? {}),
   });
 }
 

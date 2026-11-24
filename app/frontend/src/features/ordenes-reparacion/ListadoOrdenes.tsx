@@ -53,6 +53,8 @@ import {
   faltantesDelIngreso,
 } from "./ingresoAjustes";
 import { SelectorEquipo, useModelosEquipo } from "./SelectorEquipo";
+import { CamposPrecioManual, opcionDeTipo, puedePrecioManual } from "./PrecioTrabajo";
+import { SIN_MANUAL, pedidoPrecioManual, type EstadoPrecioManual } from "./precioModelo";
 import { SelectorIdentidad } from "./IdentidadEquipo";
 import {
   CANAL,
@@ -592,6 +594,8 @@ interface Ingreso {
   imeiNoDisponible: boolean;
   /** DEC-AJ-08: canal de la autorización (presencial por defecto). */
   canal: CanalComunicacion;
+  /** DEC-AJ-12: precio manual del trabajo inicial sin precio de catálogo. */
+  precioManual: EstadoPrecioManual;
 }
 
 function ingresoInicial(): Ingreso {
@@ -607,6 +611,32 @@ function ingresoInicial(): Ingreso {
     observacionesVerificacion: "",
     imeiNoDisponible: false,
     canal: CANAL_PREDETERMINADO,
+    precioManual: SIN_MANUAL,
+  };
+}
+
+/**
+ * DEC-AJ-12: el precio manual del trabajo inicial (solo con PRECIO_MANUAL
+ * y si falta el precio de catálogo para el modelo elegido en el alta).
+ */
+function precioManualDelAlta(
+  ingreso: Ingreso,
+  tipos: TipoReparacion[],
+  modeloId: string | null,
+  actor: Usuario | null,
+) {
+  const tipo = tipos.find((t) => t.id === ingreso.trabajoInicial);
+  const { pedido, error } = pedidoPrecioManual(
+    tipo,
+    modeloId,
+    puedePrecioManual(actor),
+    ingreso.precioManual,
+  );
+  return {
+    error,
+    campos: pedido
+      ? { trabajo_inicial_precio: pedido.precio, trabajo_inicial_motivo: pedido.precio_motivo }
+      : {},
   };
 }
 
@@ -699,12 +729,17 @@ function CamposIngreso({
   ingreso,
   clienteExterno = false,
   tipos,
+  modeloId = null,
+  actor = null,
   onCambiar,
 }: {
   ingreso: Ingreso;
   /** Cliente Externo: sigue con el comprobante de ingreso. */
   clienteExterno?: boolean;
   tipos: TipoReparacion[];
+  /** DEC-AJ-12: el modelo elegido en el mismo alta (precio por modelo). */
+  modeloId?: string | null;
+  actor?: Usuario | null;
   onCambiar: (ingreso: Ingreso) => void;
 }) {
   const ofrecidos = tiposParaTrabajoInicial(tipos, TIPO_REPARACION_OTROS);
@@ -820,11 +855,20 @@ function CamposIngreso({
           <option value="">Sin trabajo: lo define el técnico</option>
           {ofrecidos.map((tipo) => (
             <option key={tipo.id} value={tipo.id}>
-              {tipo.nombre} · {importe(tipo.precio)}
+              {opcionDeTipo(tipo, modeloId)}
             </option>
           ))}
         </select>
       </Campo>
+      <CamposPrecioManual
+        tipo={ofrecidos.find((tipo) => tipo.id === ingreso.trabajoInicial)}
+        modeloId={modeloId}
+        actor={actor}
+        estado={ingreso.precioManual}
+        onCambio={(precioManual) => onCambiar({ ...ingreso, precioManual })}
+        error={precioManualDelAlta(ingreso, ofrecidos, modeloId, actor).error}
+        deshabilitado={false}
+      />
       {/* DEC-AJ-08: el canal se sigue registrando (BR-REP-028); llega
           presencial y se puede cambiar. */}
       {clienteExterno && ingreso.trabajoInicial && (
@@ -1097,12 +1141,16 @@ export function FormularioNuevaOrden({
   const dniNormalizado = normalizarDni(dni);
   const dniInvalido = dni.trim() !== "" && dniNormalizado === null;
   const datosEquipo = datosDelEquipo(catalogo.modelos.length > 0, equipo);
+  const modeloId =
+    datosEquipo && "modelo_tecnico_id" in datosEquipo ? datosEquipo.modelo_tecnico_id : null;
+  const precioManual = precioManualDelAlta(ingreso, tipos, modeloId, actor);
   const faltanDelIngreso = faltantesDelIngreso(ingreso);
   const completo =
     nombreApellido.trim() &&
     telefono.trim() &&
     datosEquipo &&
     faltanDelIngreso.length === 0 &&
+    precioManual.error === null &&
     !dniInvalido;
   const puedeBuscar =
     actor !== null &&
@@ -1164,6 +1212,7 @@ export function FormularioNuevaOrden({
           ...identificadores,
         },
         recepcion,
+        ...(trabajoInicial ? precioManual.campos : {}),
       },
       trabajoInicial,
       canal,
@@ -1234,6 +1283,8 @@ export function FormularioNuevaOrden({
         ingreso={ingreso}
         clienteExterno
         tipos={tipos}
+        modeloId={modeloId}
+        actor={actor}
         onCambiar={setIngreso}
       />
       {!dni.trim() && (
@@ -1282,8 +1333,14 @@ export function FormularioNuevaOrdenRt({
   // CFG-02 (brecha 18): el permiso configurable ORDEN_CREAR, no el rol.
   const esRecepcion = puede(actor, "ORDEN_CREAR", ["RECEPCION"]);
   const faltanDelIngreso = faltantesDelIngreso(ingreso);
+  // RT interno se carga a mano: sin modelo técnico no hay precio por modelo.
+  const precioManual = precioManualDelAlta(ingreso, tipos, null, actor);
   const completo =
-    marca && modelo && faltanDelIngreso.length === 0 && referenciaRt;
+    marca &&
+    modelo &&
+    faltanDelIngreso.length === 0 &&
+    referenciaRt &&
+    precioManual.error === null;
 
   return (
     <div>
@@ -1319,7 +1376,7 @@ export function FormularioNuevaOrdenRt({
           style={estiloInput}
         />
       </Campo>
-      <CamposIngreso ingreso={ingreso} tipos={tipos} onCambiar={setIngreso} />
+      <CamposIngreso ingreso={ingreso} tipos={tipos} actor={actor} onCambiar={setIngreso} />
       {faltanDelIngreso.length > 0 && (
         <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.alerta }}>
           Para crear la Orden falta {faltanDelIngreso.join(" y ")}.
@@ -1342,6 +1399,7 @@ export function FormularioNuevaOrdenRt({
               },
               referencia_rt: referenciaRt,
               recepcion,
+              ...(trabajoInicial ? precioManual.campos : {}),
             },
             trabajoInicial,
           );

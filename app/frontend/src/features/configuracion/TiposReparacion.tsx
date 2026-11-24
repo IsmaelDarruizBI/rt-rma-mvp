@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import * as api from "../../api/configuracion";
-import type { CatalogoConfigurable, DatosTipo } from "../../api/configuracion";
+import type { CatalogoConfigurable, DatosTipo, ModeloAdmin } from "../../api/configuracion";
 import {
   EncabezadoListado,
   FormularioModal,
@@ -27,6 +27,7 @@ import {
 import { Boton, Campo, colores, estiloInput, importe } from "../../components/ui";
 import { puede } from "../../lib/roles";
 import type { TipoReparacion, Usuario } from "../../types/api";
+import { cambiosDePrecios } from "../ordenes-reparacion/precioModelo";
 import { conElemento, precioValido, textoGarantias } from "./listados";
 
 const SOLO_ADMINISTRACION = ["ADMINISTRADOR"];
@@ -39,6 +40,7 @@ function datosDe(tipo: TipoReparacion): DatosTipo {
     activo: tipo.activo ?? true,
     garantia_con_checkin: tipo.garantia_con_checkin ?? 90,
     garantia_sin_checkin: tipo.garantia_sin_checkin ?? 30,
+    precio_por_modelo: tipo.precio_por_modelo ?? false,
   };
 }
 
@@ -49,7 +51,15 @@ const NUEVO: DatosTipo = {
   activo: true,
   garantia_con_checkin: 90,
   garantia_sin_checkin: 30,
+  precio_por_modelo: false,
 };
+
+/** DEC-AJ-12: «Por modelo (12 modelos)» en lugar del precio único. */
+function textoPrecioDeTipo(tipo: TipoReparacion): string {
+  if (!tipo.precio_por_modelo) return importe(String(tipo.precio));
+  const cantidad = Object.keys(tipo.precios_modelo ?? {}).length;
+  return `Por modelo (${cantidad} ${cantidad === 1 ? "modelo" : "modelos"})`;
+}
 
 function CamposTipo({
   datos,
@@ -80,16 +90,33 @@ function CamposTipo({
           style={estiloInput}
         />
       </Campo>
-      <Campo etiqueta={editaPrecio ? "Precio" : "Precio (lo cambia quien gestiona precios)"}>
+      <label style={{ display: "flex", gap: "0.4rem", alignItems: "center", margin: "0 0 0.6rem" }}>
         <input
-          inputMode="decimal"
-          value={datos.precio}
-          readOnly={!editaPrecio}
-          aria-readonly={!editaPrecio}
-          onChange={(e) => onCambio({ ...datos, precio: e.target.value })}
-          style={{ ...estiloInput, background: editaPrecio ? "#fff" : colores.fondo }}
+          type="checkbox"
+          checked={datos.precio_por_modelo}
+          disabled={!editaPrecio}
+          onChange={(e) => onCambio({ ...datos, precio_por_modelo: e.target.checked })}
         />
-      </Campo>
+        Precio por modelo
+      </label>
+      {datos.precio_por_modelo ? (
+        <p style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: colores.suave }}>
+          El precio sale de la grilla de precios por modelo. Un modelo sin precio no usa
+          ningún precio de respaldo: el trabajo lleva un precio manual autorizado o queda
+          pendiente.
+        </p>
+      ) : (
+        <Campo etiqueta={editaPrecio ? "Precio" : "Precio (lo cambia quien gestiona precios)"}>
+          <input
+            inputMode="decimal"
+            value={datos.precio}
+            readOnly={!editaPrecio}
+            aria-readonly={!editaPrecio}
+            onChange={(e) => onCambio({ ...datos, precio: e.target.value })}
+            style={{ ...estiloInput, background: editaPrecio ? "#fff" : colores.fondo }}
+          />
+        </Campo>
+      )}
       {numero("puntaje", "Puntaje")}
       {numero("garantia_con_checkin", "Garantía con check-in (días)")}
       {numero("garantia_sin_checkin", "Garantía sin check-in (días)")}
@@ -110,6 +137,7 @@ export function TiposReparacion({
     null,
   );
   const [resaltado, setResaltado] = useState<string | null>(null);
+  const [grilla, setGrilla] = useState<TipoReparacion | null>(null);
   const { error, setError, aviso, setAviso, ocupado, ejecutar } = useComando();
   const editaPrecio = puede(actor, "PRECIOS_GESTIONAR", SOLO_ADMINISTRACION);
 
@@ -129,10 +157,12 @@ export function TiposReparacion({
     onCambio?.();
   };
 
+  // Con precio por modelo, el precio único no se pide (se envía el que
+  // tenía o 0 en un alta: no se usa).
   const listo =
     ventana !== null &&
     ventana.datos.nombre.trim() !== "" &&
-    precioValido(ventana.datos.precio);
+    (ventana.datos.precio_por_modelo || precioValido(ventana.datos.precio));
 
   return (
     <section>
@@ -166,7 +196,17 @@ export function TiposReparacion({
               >
                 <td style={{ padding: "0.25rem 0.5rem" }}>{tipo.id}</td>
                 <td style={{ padding: "0.25rem 0.5rem" }}>{tipo.nombre}</td>
-                <td style={{ padding: "0.25rem 0.5rem" }}>{importe(String(tipo.precio))}</td>
+                <td style={{ padding: "0.25rem 0.5rem" }}>
+                  {textoPrecioDeTipo(tipo)}
+                  {tipo.precio_por_modelo && (
+                    <>
+                      {" "}
+                      <Boton variante="secundario" disabled={ocupado} onClick={() => setGrilla(tipo)}>
+                        {editable && editaPrecio ? "Editar precios" : "Ver precios"}
+                      </Boton>
+                    </>
+                  )}
+                </td>
                 <td style={{ padding: "0.25rem 0.5rem" }}>{tipo.puntaje}</td>
                 <td style={{ padding: "0.25rem 0.5rem" }}>{textoGarantias(tipo)}</td>
                 <td style={{ padding: "0.25rem 0.5rem", textAlign: "center" }}>
@@ -211,7 +251,12 @@ export function TiposReparacion({
           onCerrar={() => setVentana(null)}
           onConfirmar={async () => {
             const { tipo, datos } = ventana;
-            const limpio = { ...datos, nombre: datos.nombre.trim(), precio: datos.precio.trim() };
+            const precio = datos.precio.trim();
+            const limpio = {
+              ...datos,
+              nombre: datos.nombre.trim(),
+              precio: datos.precio_por_modelo && !precioValido(precio) ? "0" : precio,
+            };
             const resultado = tipo
               ? await api.editarTipo(actor.id, tipo.id, limpio)
               : await api.crearTipo(actor.id, limpio);
@@ -233,7 +278,112 @@ export function TiposReparacion({
           )}
         </FormularioModal>
       )}
+      {grilla && (
+        <PreciosPorModelo
+          actor={actor}
+          tipo={grilla}
+          editable={editable && editaPrecio}
+          onCerrar={() => setGrilla(null)}
+          onGuardado={(tipo, cantidad) => {
+            guardado(tipo, `Se guardaron ${cantidad} precios de ${tipo.id}.`);
+            setGrilla(null);
+          }}
+        />
+      )}
     </section>
+  );
+}
+
+/**
+ * DEC-AJ-12: la grilla de precios de un Tipo por modelo (edición
+ * individual). Una celda vacía retira el precio de ese modelo; se envían
+ * solo los cambios, todos juntos (todo o nada), con auditoría.
+ */
+function PreciosPorModelo({
+  actor,
+  tipo,
+  editable,
+  onCerrar,
+  onGuardado,
+}: {
+  actor: Usuario;
+  tipo: TipoReparacion;
+  editable: boolean;
+  onCerrar: () => void;
+  onGuardado: (tipo: TipoReparacion, cantidad: number) => void;
+}) {
+  const vigentes = tipo.precios_modelo ?? {};
+  const [modelos, setModelos] = useState<ModeloAdmin[] | null>(null);
+  const [editados, setEditados] = useState<Record<string, string>>(() => ({ ...vigentes }));
+  const [filtro, setFiltro] = useState("");
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
+  useEffect(() => {
+    api
+      .obtenerModelosAdmin()
+      .then((datos) => setModelos(datos.modelos))
+      .catch((causa: unknown) => setErrorCarga(mensajeDe(causa)));
+  }, []);
+  const { cambios, invalidos } = cambiosDePrecios(vigentes, editados);
+  const visibles = (modelos ?? []).filter(
+    (m) =>
+      (m.activo || vigentes[m.id] !== undefined) &&
+      m.nombre.toLowerCase().includes(filtro.trim().toLowerCase()),
+  );
+  return (
+    <FormularioModal
+      amplio
+      titulo={`Precios por modelo · ${tipo.id} ${tipo.nombre}`}
+      textoConfirmar={editable ? `Guardar ${cambios.length} cambios` : "Cerrar"}
+      listo={!editable || (cambios.length > 0 && invalidos.length === 0)}
+      onCerrar={onCerrar}
+      onConfirmar={async () => {
+        if (!editable) return onCerrar();
+        const resultado = await api.guardarPreciosModelo(actor.id, tipo.id, cambios);
+        onGuardado(resultado.tipo, resultado.cambios.length);
+      }}
+    >
+      {errorCarga && <p role="alert">{errorCarga}</p>}
+      <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colores.suave }}>
+        Vacío: sin precio de catálogo para ese modelo (el trabajo lleva un precio manual
+        autorizado o queda pendiente). Los trabajos ya cargados conservan su precio.
+      </p>
+      <Campo etiqueta="Buscar modelo">
+        <input value={filtro} onChange={(e) => setFiltro(e.target.value)} style={estiloInput} />
+      </Campo>
+      <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
+        <table style={{ borderCollapse: "collapse", fontSize: "0.85rem", width: "100%" }}>
+          <tbody>
+            {visibles.map((modelo) => (
+              <tr key={modelo.id}>
+                <td style={{ padding: "0.2rem 0.4rem", color: colores.suave }}>{modelo.id}</td>
+                <td style={{ padding: "0.2rem 0.4rem" }}>
+                  {modelo.nombre}
+                  {!modelo.activo && " (no vigente)"}
+                </td>
+                <td style={{ padding: "0.2rem 0.4rem" }}>
+                  <input
+                    aria-label={`Precio para ${modelo.nombre}`}
+                    inputMode="decimal"
+                    value={editados[modelo.id] ?? ""}
+                    readOnly={!editable}
+                    onChange={(e) => setEditados({ ...editados, [modelo.id]: e.target.value })}
+                    style={{
+                      ...estiloInput,
+                      borderColor: invalidos.includes(modelo.id) ? colores.error : undefined,
+                    }}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {invalidos.length > 0 && (
+        <p style={{ margin: "0.4rem 0 0", color: colores.error, fontSize: "0.8rem" }}>
+          Precio inválido en {invalidos.join(", ")} (hasta dos decimales).
+        </p>
+      )}
+    </FormularioModal>
   );
 }
 
