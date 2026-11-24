@@ -56,7 +56,7 @@ from .autorizacion_cliente import (
 )
 from .custodia import checkin_de
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
-from .inventario import faltantes_del_detalle
+from .piezas import RequisitosInsumo, faltantes_con_requisitos
 from .precio_trabajo import (
     PrecioManual,
     PrecioResuelto,
@@ -696,20 +696,26 @@ def _faltantes_para_factibilidad(
     insumos: Sequence[Insumo],
     insumos_previstos: Sequence[TipoReparacionInsumos],
     reservas_externas: Mapping[str, Decimal],
+    requisitos: RequisitosInsumo | None = None,
 ) -> list[str]:
     """La pregunta de PROC-REP-080 para UN Detalle: que insumos faltan hoy.
 
     Un override vigente (EXC-REP-002) la responde de antemano: nada, el
     override persiste (BR-REP-003).
+
+    DEC-AJ-14: los previstos concretos y las piezas elegidas como siempre;
+    un requisito sin pieza elegida falta solo si ninguna pieza elegible
+    tiene disponible suficiente (punto 1 de la resolucion de 11.1).
     """
     if tiene_override_factibilidad(orden, detalle.id):
         return []
-    return faltantes_del_detalle(
-        detalle.tipo_reparacion_id,
-        orden.movimientos_insumo,
-        insumos,
-        insumos_previstos,
-        reservas_externas,
+    return faltantes_con_requisitos(
+        orden,
+        detalle,
+        insumos=insumos,
+        insumos_previstos=insumos_previstos,
+        reservas_externas=reservas_externas,
+        requisitos=requisitos,
     )
 
 
@@ -719,6 +725,7 @@ def faltantes_de_detalles_bloqueados(
     insumos: Sequence[Insumo],
     insumos_previstos: Sequence[TipoReparacionInsumos],
     reservas_externas: Mapping[str, Decimal] | None = None,
+    requisitos: RequisitosInsumo | None = None,
 ) -> dict[str, list[str]]:
     """PROC-REP-080 como consulta, solo de los Detalles bloqueados.
 
@@ -730,7 +737,12 @@ def faltantes_de_detalles_bloqueados(
     detalles = {detalle.id: detalle for detalle in orden.reparaciones_detail}
     return {
         detalle_id: _faltantes_para_factibilidad(
-            orden, detalles[detalle_id], insumos, insumos_previstos, ajenas
+            orden,
+            detalles[detalle_id],
+            insumos,
+            insumos_previstos,
+            ajenas,
+            requisitos,
         )
         for detalle_id in detalles_bloqueados_por_recursos(orden)
     }
@@ -757,6 +769,7 @@ def validar_factibilidad_detalles(
     reservas_externas: Mapping[str, Decimal] | None = None,
     detalle_ids: Collection[str] | None = None,
     registrar_faltantes: bool = True,
+    requisitos: RequisitosInsumo | None = None,
 ) -> tuple[OrdenReparacion, bool]:
     """PROC-REP-080 -> 090 [-> 100 por Detalle]: factibilidad POR Detalle.
 
@@ -800,7 +813,12 @@ def validar_factibilidad_detalles(
         if detalle_ids is not None and detalle.id not in detalle_ids:
             continue
         faltantes = _faltantes_para_factibilidad(
-            nueva_orden, detalle, insumos, insumos_previstos, ajenas
+            nueva_orden,
+            detalle,
+            insumos,
+            insumos_previstos,
+            ajenas,
+            requisitos,
         )
         if faltantes:
             detalle.condicion = (

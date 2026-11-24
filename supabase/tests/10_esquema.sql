@@ -16,12 +16,13 @@ declare
     'tipo_reparacion_insumo', 'medio_pago', 'tipo_documento', 'motivo_ajuste', 'empresa', 'texto_legal',
     -- Iteración 2: DEC-AJ-10, DEC-AJ-12, DEC-AJ-13 y DEC-AJ-14.
     'descuento_recalculo', 'precio_tipo_modelo', 'importacion_precio',
-    'categoria_insumo', 'fabricante_repuesto', 'insumo_compatibilidad'
+    'categoria_insumo', 'fabricante_repuesto', 'insumo_compatibilidad',
+    'tipo_reparacion_requisito', 'detalle_pieza'
   ];
   v_faltan text[];
   v_sobran text[];
 begin
-  perform rma_pruebas.debe_ser(cardinality(v_esperadas), 78, 'el diseño lógico tiene 78 entidades');
+  perform rma_pruebas.debe_ser(cardinality(v_esperadas), 80, 'el diseño lógico tiene 80 entidades');
   select array_agg(t) into v_faltan from unnest(v_esperadas) t
    where not exists (select 1 from information_schema.tables
                       where table_schema = 'rma' and table_name = t and table_type = 'BASE TABLE');

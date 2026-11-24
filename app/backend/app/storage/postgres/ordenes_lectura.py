@@ -96,6 +96,7 @@ from app.domain.models.reparacion import (
     AjusteGarantia,
     DefinicionAnteriorDetalle,
     EjecucionReparacion,
+    EleccionPieza,
     RegistroAutorizacionCliente,
     RegistroCancelacion,
     RegistroControlTecnico,
@@ -370,6 +371,30 @@ _AJUSTES = consulta(
         SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
     ))
     ORDER BY a.detalle_id, a.posicion, a.registrado_en, a.id
+    """,
+    modo=LECTURA,
+)
+# DEC-AJ-14: la pieza elegida de cada requisito, en orden.
+_PIEZAS = consulta(
+    "ordenes.piezas",
+    """
+    SELECT p.detalle_id, p.codigo, p.requisito_id::text AS requisito,
+           t.codigo AS tipo, c.codigo AS categoria, p.cantidad,
+           i.clave AS insumo, p.causa, p.compatibilidad_no_verificada,
+           m.codigo AS modelo, p.motivo, u.codigo AS usuario, p.elegida_en,
+           r.codigo AS reemplaza
+    FROM rma.detalle_pieza p
+    JOIN rma.detalle d ON d.id = p.detalle_id
+    JOIN rma.tipo_reparacion t ON t.id = p.tipo_reparacion_id
+    JOIN rma.categoria_insumo c ON c.id = p.categoria_id
+    JOIN rma.usuario u ON u.id = p.elegida_por
+    LEFT JOIN rma.insumo i ON i.id = p.insumo_id
+    LEFT JOIN rma.modelo_equipo m ON m.id = p.modelo_equipo_id
+    LEFT JOIN rma.detalle_pieza r ON r.id = p.reemplaza_a
+    WHERE d.orden_id = ANY(ARRAY(
+        SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
+    ))
+    ORDER BY p.detalle_id, p.posicion
     """,
     modo=LECTURA,
 )
@@ -758,6 +783,7 @@ _HIJAS = (
     _Hija("versiones", _VERSIONES, columna="detalle_id"),
     _Hija("decisiones", _DECISIONES, columna="detalle_id"),
     _Hija("ajustes", _AJUSTES, columna="detalle_id"),
+    _Hija("piezas", _PIEZAS, columna="detalle_id"),
     _Hija("controles", _CONTROLES, columna="detalle_id"),
     _Hija("evaluaciones", _EVALUACIONES, columna="detalle_id"),
     _Hija("tomas", _TOMAS),
@@ -1340,6 +1366,26 @@ def _detalles(
                         fecha=utc(ajuste.registrado_en),
                     )
                     for ajuste in hijas["ajustes"].get(fila.id, [])
+                ],
+                piezas=[
+                    EleccionPieza(
+                        id=pieza.codigo,
+                        requisito_id=pieza.requisito,
+                        tipo_reparacion_id=pieza.tipo,
+                        categoria_id=pieza.categoria,
+                        cantidad=decimal_sin_ceros(pieza.cantidad),
+                        insumo_id=pieza.insumo,
+                        causa=pieza.causa,
+                        compatibilidad_no_verificada=(
+                            pieza.compatibilidad_no_verificada
+                        ),
+                        modelo_equipo_id=pieza.modelo,
+                        motivo=pieza.motivo,
+                        usuario_id=pieza.usuario,
+                        fecha=utc(pieza.elegida_en),
+                        reemplaza_a=pieza.reemplaza,
+                    )
+                    for pieza in hijas["piezas"].get(fila.id, [])
                 ],
                 estado=fila.estado,
                 condicion=fila.condicion,

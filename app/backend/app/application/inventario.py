@@ -64,6 +64,7 @@ from .contexto import ApplicationContext
 from .ingreso import _validar_y_habilitar
 from .lotes import estado_de_lotes
 from .modificacion import orden_para_modificar
+from .piezas import requisitos_de_insumo
 
 NODOS_ESPERANDO_RECURSOS = ("PROC-REP-100", "PROC-REP-120")
 
@@ -629,6 +630,7 @@ def _revalidar_una(
             reservas_externas=cargar_reservas_externas(
                 orden.id, contexto.ordenes
             ),
+            requisitos=requisitos_de_insumo(contexto),
         )
         con_recursos = sorted(
             detalle_id

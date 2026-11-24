@@ -36,7 +36,6 @@ from app.services import (
     ejecucion_activa,
     ejecutar_detalle,
     evaluar_situacion_orden,
-    insumos_previstos_de,
     intentar_reserva_e_inicio,
     registrar_ejecucion_completada,
     registrar_ejecucion_interrumpida,
@@ -54,12 +53,14 @@ from app.services import (
 )
 from app.services.cancelaciones import resolver_desistimientos_pendientes
 from app.services.evaluacion_tecnica import registrar_no_requiere
+from app.services.inventario import insumos_previstos_del_detalle
 from app.services.tomas import buscar_detalle
 
 from .contexto import ApplicationContext
 from .lotes import validar_lotes_de_la_ejecucion
 from .modificacion import orden_para_modificar
 from .operativa import resolver_motivo
+from .piezas import conciliar, requisitos_de_insumo
 
 
 def _motivo_del_ultimo_paso(orden: OrdenReparacion) -> str:
@@ -179,16 +180,27 @@ def iniciar_detalle(
                 "implementa el override de incompatibilidad."
             )
 
-        # DI-2: con la Orden ya bloqueada, sus insumos previstos, por
-        # clave. Lo que sigue (stock y reservas de las demas Ordenes) ya no
-        # cambia hasta guardar: dos tecnicos no reservan la misma unidad.
+        # DEC-AJ-14 (D-14.4): la pieza de los requisitos con una sola
+        # compatible se elige sola; sin pieza en alguno, no se inicia.
+        requisitos = requisitos_de_insumo(contexto)
+        orden = conciliar(
+            contexto,
+            orden,
+            usuario_id=usuario.id,
+            fecha=fecha,
+            requisitos=requisitos,
+            detalle_ids={detalle_id},
+        )
+        # DI-2: con la Orden ya bloqueada, sus insumos previstos (con las
+        # piezas elegidas), por clave. Lo que sigue (stock y reservas de
+        # las demas Ordenes) ya no cambia hasta guardar: dos tecnicos no
+        # reservan la misma unidad.
         previstos = contexto.catalogos.listar_tipo_reparacion_insumos()
         contexto.catalogos.bloquear_insumos(
             {
                 previsto.insumo_id
-                for previsto in insumos_previstos_de(
-                    buscar_detalle(orden, detalle_id).tipo_reparacion_id,
-                    previstos,
+                for previsto in insumos_previstos_del_detalle(
+                    buscar_detalle(orden, detalle_id), previstos
                 )
             }
         )
@@ -202,6 +214,7 @@ def iniciar_detalle(
             reservas_externas=cargar_reservas_externas(
                 orden.id, contexto.ordenes
             ),
+            requisitos=requisitos,
         )
         if not reserva_exitosa:
             # PROC-REP-186 -> 211: mismo snapshot de inventario que hizo

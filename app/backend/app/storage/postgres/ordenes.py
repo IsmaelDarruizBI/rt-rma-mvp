@@ -802,6 +802,26 @@ _INSERTAR_AJUSTE = consulta(
     """,
     modo=ESCRITURA,
 )
+# DEC-AJ-14: la pieza elegida de cada requisito (append-only). El trigger
+# exige la categoria del requisito y la cadena lineal de reemplazos.
+_INSERTAR_PIEZA = consulta(
+    "ordenes.insertar_pieza",
+    """
+    INSERT INTO rma.detalle_pieza
+        (codigo, detalle_id, posicion, requisito_id, tipo_reparacion_id,
+         categoria_id, cantidad, insumo_id, causa,
+         compatibilidad_no_verificada, modelo_equipo_id, motivo,
+         elegida_por, elegida_en, reemplaza_a)
+    VALUES (%(codigo)s, %(detalle)s, %(posicion)s, %(requisito)s::uuid,
+            %(tipo)s,
+            (SELECT id FROM rma.categoria_insumo
+              WHERE codigo = %(categoria)s),
+            %(cantidad)s, %(insumo)s, %(causa)s, %(no_verificada)s,
+            %(modelo)s, %(motivo)s, %(usuario)s, %(fecha)s,
+            (SELECT id FROM rma.detalle_pieza WHERE codigo = %(reemplaza)s))
+    """,
+    modo=ESCRITURA,
+)
 _INSERTAR_EVALUACION = consulta(
     "ordenes.insertar_evaluacion",
     """
@@ -1514,6 +1534,14 @@ class _Guardado:
                 usuarios.add(detalle.solicitud_desistimiento.usuario_id)
             usuarios.update(a.usuario_id for a in detalle.autorizaciones)
             usuarios.update(a.usuario_id for a in detalle.ajustes_garantia)
+            # DEC-AJ-14: las piezas elegidas.
+            for eleccion in detalle.piezas:
+                usuarios.add(eleccion.usuario_id)
+                tipos.add(eleccion.tipo_reparacion_id)
+                if eleccion.insumo_id:
+                    insumos.add(eleccion.insumo_id)
+                if eleccion.modelo_equipo_id:
+                    modelos.add(eleccion.modelo_equipo_id)
             usuarios.update(c.usuario_id for c in detalle.controles)
             usuarios.update(e.usuario_id for e in detalle.evaluaciones)
         for toma in orden.tomas:
@@ -2467,6 +2495,7 @@ class _Guardado:
             self._versiones_de(detalle, anterior)
             self._decisiones(detalle, anterior)
             self._ajustes(detalle, anterior)
+            self._piezas(detalle, anterior)
 
     @staticmethod
     def _columnas_detalle(detalle: ReparacionDetail) -> tuple:
@@ -2691,6 +2720,42 @@ class _Guardado:
                     "usuario": self._id("usuario", ajuste.usuario_id),
                     "fecha": ajuste.fecha,
                     "posicion": posicion,
+                },
+            )
+
+    def _piezas(
+        self, detalle: ReparacionDetail, anterior: ReparacionDetail | None
+    ) -> None:
+        """DEC-AJ-14: las elecciones de pieza solo crecen."""
+        previas = anterior.piezas if anterior else []
+        nuevas = self._exigir_prefijo(
+            f"las piezas elegidas de {detalle.id}", previas, detalle.piezas
+        )
+        for posicion, eleccion in enumerate(nuevas, len(previas) + 1):
+            self._ej.ejecutar(
+                _INSERTAR_PIEZA,
+                {
+                    "codigo": eleccion.id,
+                    "detalle": self._detalles[detalle.id],
+                    "posicion": posicion,
+                    "requisito": eleccion.requisito_id,
+                    "tipo": self._id(
+                        "tipo_reparacion", eleccion.tipo_reparacion_id
+                    ),
+                    "categoria": eleccion.categoria_id,
+                    "cantidad": _escala(
+                        eleccion.cantidad, _TRES_DECIMALES, "cantidad"
+                    ),
+                    "insumo": self._id("insumo", eleccion.insumo_id),
+                    "causa": eleccion.causa.value,
+                    "no_verificada": eleccion.compatibilidad_no_verificada,
+                    "modelo": self._id(
+                        "modelo_equipo", eleccion.modelo_equipo_id
+                    ),
+                    "motivo": eleccion.motivo,
+                    "usuario": self._id("usuario", eleccion.usuario_id),
+                    "fecha": eleccion.fecha,
+                    "reemplaza": eleccion.reemplaza_a,
                 },
             )
 

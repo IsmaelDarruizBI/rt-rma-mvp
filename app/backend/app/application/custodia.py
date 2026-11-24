@@ -31,6 +31,7 @@ from app.services import registrar_imei_real as registrar_imei_real_servicio
 from .catalogo_equipos import equipo_desde_catalogo
 from .contexto import ApplicationContext
 from .modificacion import orden_para_modificar
+from .piezas import conciliar
 from .precio_trabajo import redeterminar_precios
 
 
@@ -93,6 +94,13 @@ def registrar_recepcion(
             usuario=usuario,
             fecha=fecha,
         )
+        # DEC-AJ-14: las piezas elegidas que no sirven para el modelo nuevo
+        # se anulan (o se reemplazan por la unica compatible); las
+        # reservadas o consumidas no cambian (se sustituyen a mano).
+        if orden.equipo.modelo_tecnico_id != modelo_anterior:
+            orden = conciliar(
+                contexto, orden, usuario_id=usuario.id, fecha=fecha
+            )
         contexto.ordenes.guardar(orden)
     return orden
 

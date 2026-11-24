@@ -412,9 +412,12 @@ def test_todo_el_sql_registrado_de_los_repositories_es_valido():
     assert propias["catalogos.usuario_por_identidad"].modo is LECTURA
     # Los terminos versionados (DEC-AJ-09) tambien se leen.
     assert propias["catalogos.textos_legales"].modo is LECTURA
+    # Los requisitos de insumo de los Tipos (DEC-AJ-14) son una lectura.
+    assert propias["catalogos.tipo_reparacion_requisitos"].modo is LECTURA
     # 12 de catalogos, el historial de stock (A7), 2 de modelos, la
-    # identidad, los terminos versionados (DEC-AJ-09) y el stock.
-    assert len(propias) == 17 + len(del_stock)
+    # identidad, los terminos versionados (DEC-AJ-09), los requisitos
+    # (DEC-AJ-14) y el stock.
+    assert len(propias) == 18 + len(del_stock)
 
 
 def test_solo_la_unidad_de_trabajo_toca_la_conexion_y_la_transaccion():

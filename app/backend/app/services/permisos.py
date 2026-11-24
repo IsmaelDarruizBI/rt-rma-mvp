@@ -315,6 +315,16 @@ EJECUCION = _definir(
     (TECH,),
     TALLER,
 )
+# DEC-AJ-14 (D-14.4, precision b; BR-REP-039): elegir o sustituir la pieza
+# concreta de un requisito del trabajo, antes de reservar o, ya reservada,
+# antes de consumirla. Inicialmente Tecnico, Coordinacion RMA y
+# Administracion (quien prepara el trabajo).
+PIEZA_ELEGIR = _definir(
+    "PIEZA_ELEGIR",
+    "Elegir o sustituir la pieza concreta de un trabajo",
+    (TECH, COORD, ADMIN),
+    TALLER,
+)
 CONTROL_TECNICO = _definir(
     "CONTROL_TECNICO",
     "Aprobar o rechazar el control técnico",

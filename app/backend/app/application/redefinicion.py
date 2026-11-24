@@ -20,6 +20,7 @@ from app.services import revisar_detalle_pendiente
 from .contexto import ApplicationContext
 from .ingreso import _validar_y_habilitar, precio_manual_de
 from .modificacion import orden_para_modificar
+from .piezas import conciliar
 
 
 def revisar_detalle(
@@ -80,6 +81,9 @@ def redefinir_detalle(
             fecha=fecha,
             precio_manual=precio_manual_de(precio, precio_motivo),
         )
+        # DEC-AJ-14: las piezas del Tipo anterior se anulan y las del nuevo
+        # con una sola compatible se eligen solas.
+        orden = conciliar(contexto, orden, usuario_id=usuario.id, fecha=fecha)
         orden = _validar_y_habilitar(contexto, orden, fecha=fecha)
 
         contexto.ordenes.guardar(orden)

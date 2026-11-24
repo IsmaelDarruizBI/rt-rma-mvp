@@ -16,6 +16,7 @@ frontend los convierte a numero solo para mostrarlos.
 """
 
 from collections.abc import Mapping, Sequence
+from dataclasses import asdict
 from datetime import datetime
 from decimal import Decimal
 
@@ -44,11 +45,13 @@ from app.application import (
     situacion_autorizacion,
     situacion_financiera,
 )
+from app.application.piezas import OpcionesDePieza, PiezaDelRequisito
 from app.domain.garantia import GARANTIA_MAXIMA_DIAS
 from app.domain.models import (
     AjusteGarantia,
     CambioDatoIngreso,
     CanalComunicacion,
+    CausaEleccionPieza,
     ClaseAjuste,
     Cliente,
     CondicionReparacionDetail,
@@ -56,6 +59,7 @@ from app.domain.models import (
     DatosRecepcion,
     DocumentoEmitido,
     EjecucionReparacion,
+    EleccionPieza,
     Equipo,
     EstacionTrabajo,
     EstadoControl,
@@ -448,6 +452,86 @@ class DefinirPrecioIn(BaseModel):
     usuario_id: str = Field(min_length=1)
     precio: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     motivo: str | None = None
+
+
+class ElegirPiezaIn(BaseModel):
+    """``POST /api/orders/{id}/details/{detalle_id}/pieces`` (DEC-AJ-14).
+
+    «Elegir pieza» o «Sustituir» la pieza concreta de un requisito del
+    trabajo (permiso PIEZA_ELEGIR). Sustituir exige ``motivo``; tambien una
+    pieza sin compatibilidad verificada (equipo sin modelo tecnico). Con la
+    pieza ya reservada, libera y reserva en la misma operacion.
+    """
+
+    usuario_id: str = Field(min_length=1)
+    requisito_id: str = Field(min_length=1)
+    insumo_id: str = Field(min_length=1)
+    motivo: str | None = Field(default=None, max_length=500)
+
+
+class OpcionPiezaOut(BaseModel):
+    """Una pieza elegible para el requisito, con su clasificacion (para
+    nombrarla como el resto de los selectores) y su disponible."""
+
+    id: str
+    codigo: str
+    nombre: str
+    activo: bool
+    disponible: Decimal
+    categoria_id: str | None = None
+    fabricante_id: str | None = None
+    variante: str | None = None
+    codigo_fabricante: str | None = None
+    modelos_compatibles: list[str] = Field(default_factory=list)
+    compatibilidad_no_verificada: bool = False
+    elegida: bool = False
+
+
+class OpcionesPiezaOut(BaseModel):
+    """``GET /api/orders/{id}/details/{detalle_id}/pieces/options``.
+
+    Las piezas que se pueden elegir: compatibles con el modelo del equipo
+    (sin modelo tecnico, las universales; si no hay, cualquiera de la
+    categoria, con ``compatibilidad_no_verificada`` y motivo obligatorio).
+    """
+
+    requisito_id: str
+    categoria_id: str
+    categoria_nombre: str
+    cantidad: Decimal
+    modelo_equipo_id: str | None = None
+    compatibilidad_no_verificada: bool = False
+    opciones: list[OpcionPiezaOut] = Field(default_factory=list)
+
+    @classmethod
+    def desde_aplicacion(cls, opciones: OpcionesDePieza) -> "OpcionesPiezaOut":
+        return cls(
+            requisito_id=opciones.requisito_id,
+            categoria_id=opciones.categoria_id,
+            categoria_nombre=opciones.categoria_nombre,
+            cantidad=opciones.cantidad,
+            modelo_equipo_id=opciones.modelo_equipo_id,
+            compatibilidad_no_verificada=opciones.compatibilidad_no_verificada,
+            opciones=[
+                OpcionPiezaOut(
+                    id=o.insumo.id,
+                    codigo=o.insumo.codigo,
+                    nombre=o.insumo.nombre,
+                    activo=o.insumo.activo,
+                    disponible=o.disponible,
+                    categoria_id=o.insumo.categoria_id,
+                    fabricante_id=o.insumo.fabricante_id,
+                    variante=o.insumo.variante,
+                    codigo_fabricante=o.insumo.codigo_fabricante,
+                    modelos_compatibles=list(o.insumo.modelos_compatibles),
+                    compatibilidad_no_verificada=(
+                        o.compatibilidad_no_verificada
+                    ),
+                    elegida=o.elegida,
+                )
+                for o in opciones.opciones
+            ],
+        )
 
 
 class FinalizarDefinicionIn(BaseModel):
@@ -1242,6 +1326,8 @@ class InsumoPrevistoOut(BaseModel):
     codigo: str
     nombre: str
     cantidad_prevista: Decimal
+    # DEC-AJ-14: la linea incluye la pieza elegida de un requisito.
+    pieza: bool = False
 
     @classmethod
     def desde_aplicacion(
@@ -1253,7 +1339,43 @@ class InsumoPrevistoOut(BaseModel):
             codigo=previsto.codigo,
             nombre=previsto.nombre,
             cantidad_prevista=previsto.cantidad_prevista,
+            pieza=previsto.pieza,
         )
+
+
+class RequisitoInsumoOut(BaseModel):
+    """DEC-AJ-14: un requisito del Tipo del Detalle y su pieza.
+
+    ``estado``: ``ELEGIDA`` o ``PENDIENTE`` («Pendiente de elegir»: cuenta
+    como factible si alguna pieza elegible tiene disponible suficiente).
+    ``causa`` ``AUTOMATICA``: «Elegida automaticamente».
+    ``compatibilidad_no_verificada``: equipo sin modelo tecnico, elegida con
+    motivo. ``compatible_con_modelo`` falso: la pieza ya no sirve para el
+    modelo actual del equipo (se sustituye). ``reservada``/``consumida``:
+    su situacion en el libro de este Detalle.
+    """
+
+    requisito_id: str
+    categoria_id: str
+    categoria_nombre: str
+    cantidad: Decimal
+    estado: str
+    requisito_vigente: bool = True
+    insumo_id: str | None = None
+    insumo_codigo: str | None = None
+    insumo_nombre: str | None = None
+    causa: CausaEleccionPieza | None = None
+    compatibilidad_no_verificada: bool = False
+    compatible_con_modelo: bool = True
+    reservada: bool = False
+    consumida: bool = False
+    motivo: str | None = None
+    elegida_por: str | None = None
+    elegida_en: datetime | None = None
+
+    @classmethod
+    def desde_aplicacion(cls, fila: PiezaDelRequisito) -> "RequisitoInsumoOut":
+        return cls(**asdict(fila))
 
 
 class DefinicionAnteriorOut(BaseModel):
@@ -1388,6 +1510,10 @@ class DetalleOut(BaseModel):
     solo_precio: bool = False
     precio_pendiente: bool = False
     precio_de_otro_modelo: bool = False
+    # DEC-AJ-14: requisitos del Tipo con su pieza (presentacion) y el
+    # registro de elecciones de pieza (append-only).
+    requisitos_insumo: list[RequisitoInsumoOut] = Field(default_factory=list)
+    piezas: list[EleccionPieza] = Field(default_factory=list)
 
     @classmethod
     def desde_dominio(
@@ -1405,6 +1531,7 @@ class DetalleOut(BaseModel):
         pendiente_comprobante_ingreso: bool = False,
         autorizado_en_ingreso: bool = False,
         precio_de_otro_modelo: bool = False,
+        requisitos_insumo: Sequence[PiezaDelRequisito] = (),
     ) -> "DetalleOut":
         return cls(
             **detalle.model_dump(),
@@ -1427,6 +1554,10 @@ class DetalleOut(BaseModel):
             insumos_previstos=[
                 InsumoPrevistoOut.desde_aplicacion(previsto)
                 for previsto in previstos
+            ],
+            requisitos_insumo=[
+                RequisitoInsumoOut.desde_aplicacion(fila)
+                for fila in requisitos_insumo
             ],
         )
 
@@ -2463,6 +2594,8 @@ class OrdenOut(BaseModel):
         fotos_habilitadas: bool = False,
         garantia_por_detalle: Sequence[VigenciaGarantiaOrigen] = (),
         checklist_disponible: bool = True,
+        piezas_por_detalle: Mapping[str, Sequence[PiezaDelRequisito]]
+        | None = None,
     ) -> "OrdenOut":
         vigentes = _vigentes(orden)
         en_ingreso = es_ingreso_inicial(orden)
@@ -2512,6 +2645,9 @@ class OrdenOut(BaseModel):
                     in del_ingreso,
                     precio_de_otro_modelo=precio_de_otro_modelo(
                         orden, detalle
+                    ),
+                    requisitos_insumo=(piezas_por_detalle or {}).get(
+                        detalle.id, ()
                     ),
                 )
                 for detalle in orden.reparaciones_detail

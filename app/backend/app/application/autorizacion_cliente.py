@@ -68,6 +68,7 @@ from .cola import encolar_si_ingreso_automatico
 from .consultas import nombres_de_tipo_por_detalle
 from .contexto import ApplicationContext
 from .modificacion import orden_para_modificar
+from .piezas import requisitos_de_insumo
 
 
 class SituacionAutorizacion(str, Enum):
@@ -395,6 +396,7 @@ def aplicar_decision_cliente(
         fecha=fecha,
         reservas_externas=cargar_reservas_externas(orden.id, contexto.ordenes),
         detalle_ids=autorizados,
+        requisitos=requisitos_de_insumo(contexto),
         registrar_faltantes=not ya_habilitada,
     )
     if ya_habilitada:

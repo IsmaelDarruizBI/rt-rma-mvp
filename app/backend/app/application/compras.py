@@ -8,6 +8,7 @@ reintento) y guarda la recepcion con los movimientos que genero.
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from decimal import Decimal
 
 from app.domain.models import TipoMovimientoInsumo
@@ -27,7 +28,6 @@ from app.services import (
     EntidadNoEncontradaError,
     PrecondicionInvalidaError,
     faltantes_de_detalles_bloqueados,
-    insumos_previstos_de,
     permisos,
     reservas_externas_a,
     situacion_inventario,
@@ -45,10 +45,18 @@ from app.services.compras import (
     nueva_solicitud,
     sugerencias,
 )
+from app.services.inventario import insumos_previstos_del_detalle
+from app.services.piezas import (
+    modelo_de,
+    requisito_factible,
+    requisitos_pendientes,
+)
+from app.services.recursos import detalles_bloqueados_por_recursos
 
 from .codigos import con_reintento_de_codigo
 from .contexto import ApplicationContext
 from .inventario import _registrar_movimiento
+from .piezas import requisitos_de_insumo
 
 CERO = Decimal("0")
 
@@ -180,6 +188,7 @@ def sugerencias_de_compra(
     with contexto.lectura():
         insumos = contexto.catalogos.listar_insumos()
         previstos = contexto.catalogos.listar_tipo_reparacion_insumos()
+        requisitos = requisitos_de_insumo(contexto)
         abiertas = contexto.ordenes.listar_abiertas()
         situaciones = situacion_inventario(insumos, abiertas)
         camino = en_camino(repo.listar_ordenes(), repo.listar_solicitudes())
@@ -190,11 +199,15 @@ def sugerencias_de_compra(
             insumos=insumos,
             insumos_previstos=previstos,
             reservas_externas=reservas_externas_a(orden.id, abiertas),
+            requisitos=requisitos,
         )
         detalles = {d.id: d for d in orden.reparaciones_detail}
         for detalle_id, faltantes in bloqueados.items():
-            for previsto in insumos_previstos_de(
-                detalles[detalle_id].tipo_reparacion_id, previstos
+            # DEC-AJ-14: lo previsto del Detalle con su pieza elegida (la
+            # demanda es de ese SKU). Un requisito sin pieza no es demanda
+            # de ningun SKU: va en ``requisitos_sin_pieza_de_compra``.
+            for previsto in insumos_previstos_del_detalle(
+                detalles[detalle_id], previstos
             ):
                 if previsto.insumo_id not in faltantes:
                     continue
@@ -214,6 +227,71 @@ def sugerencias_de_compra(
             if i.activo and i.stock_minimo is not None
         },
     )
+
+
+@dataclass(frozen=True)
+class RequisitoSinPieza:
+    """DEC-AJ-14: un trabajo bloqueado por recursos con un requisito sin
+    pieza elegida y sin ninguna pieza elegible con disponible suficiente.
+    No es demanda de un SKU (no entra en ``por_faltante``): se informa
+    aparte para elegir la pieza o comprar una compatible."""
+
+    orden_id: str
+    detalle_id: str
+    tipo_reparacion_id: str
+    requisito_id: str
+    categoria_id: str
+    categoria_nombre: str
+    cantidad: Decimal
+    modelo_equipo_id: str | None
+
+
+def requisitos_sin_pieza_de_compra(
+    contexto: ApplicationContext,
+) -> list[RequisitoSinPieza]:
+    """Los requisitos sin pieza elegida que hoy bloquean un trabajo (ver
+    ``RequisitoSinPieza``). Solo consulta."""
+    _repo(contexto)
+    with contexto.lectura():
+        requisitos = requisitos_de_insumo(contexto)
+        if not requisitos.requisitos:
+            return []
+        insumos = contexto.catalogos.listar_insumos()
+        abiertas = contexto.ordenes.listar_abiertas()
+    resultado: list[RequisitoSinPieza] = []
+    for orden in abiertas:
+        bloqueados = set(detalles_bloqueados_por_recursos(orden))
+        if not bloqueados:
+            continue
+        ajenas = reservas_externas_a(orden.id, abiertas)
+        for detalle in orden.reparaciones_detail:
+            if detalle.id not in bloqueados:
+                continue
+            for requisito in requisitos_pendientes(detalle, requisitos):
+                if requisito_factible(
+                    requisito,
+                    insumos=insumos,
+                    modelo_equipo_id=modelo_de(orden),
+                    categorias=requisitos.categorias,
+                    movimientos=orden.movimientos_insumo,
+                    reservas_externas=ajenas,
+                ):
+                    continue
+                resultado.append(
+                    RequisitoSinPieza(
+                        orden_id=orden.id,
+                        detalle_id=detalle.id,
+                        tipo_reparacion_id=detalle.tipo_reparacion_id,
+                        requisito_id=requisito.id,
+                        categoria_id=requisito.categoria_id,
+                        categoria_nombre=requisitos.nombre_categoria(
+                            requisito.categoria_id
+                        ),
+                        cantidad=requisito.cantidad,
+                        modelo_equipo_id=modelo_de(orden),
+                    )
+                )
+    return resultado
 
 
 # --- Ordenes de compra -------------------------------------------------------

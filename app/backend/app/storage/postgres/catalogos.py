@@ -51,6 +51,7 @@ from app.domain.models import (
     TipoReparacion,
     TipoReparacionEstacion,
     TipoReparacionInsumos,
+    TipoReparacionRequisito,
     TipoTextoLegal,
     Usuario,
 )
@@ -135,6 +136,19 @@ _PREVISTOS = consulta(
     JOIN rma.tipo_reparacion t ON t.id = ti.tipo_reparacion_id
     JOIN rma.insumo i ON i.id = ti.insumo_id
     ORDER BY t.codigo COLLATE "C", i.clave COLLATE "C"
+    """,
+    modo=LECTURA,
+)
+# DEC-AJ-14: los requisitos por categoria de cada Tipo, activos o no.
+_REQUISITOS = consulta(
+    "catalogos.tipo_reparacion_requisitos",
+    """
+    SELECT r.id::text AS id, t.codigo AS tipo, c.codigo AS categoria,
+           r.cantidad, r.posicion, r.activo
+    FROM rma.tipo_reparacion_requisito r
+    JOIN rma.tipo_reparacion t ON t.id = r.tipo_reparacion_id
+    JOIN rma.categoria_insumo c ON c.id = r.categoria_id
+    ORDER BY t.codigo COLLATE "C", r.posicion, c.codigo COLLATE "C", r.id
     """,
     modo=LECTURA,
 )
@@ -481,6 +495,21 @@ class PostgresCatalogosRepository:
                 cantidad=decimal_sin_ceros(f.cantidad),
             )
             for f in self._filas(_PREVISTOS)
+        ]
+
+    def listar_tipo_reparacion_requisitos(
+        self,
+    ) -> list[TipoReparacionRequisito]:
+        return [
+            TipoReparacionRequisito(
+                id=f.id,
+                tipo_reparacion_id=f.tipo,
+                categoria_id=f.categoria,
+                cantidad=decimal_sin_ceros(f.cantidad),
+                posicion=f.posicion,
+                activo=f.activo,
+            )
+            for f in self._filas(_REQUISITOS)
         ]
 
     # --- Estaciones de trabajo ---

@@ -18,7 +18,7 @@ repository.
   ``MODELO_EQUIPO``): ``MODELO_EQUIPO_GESTIONAR``.
 """
 
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
@@ -26,10 +26,14 @@ from enum import Enum
 from app.domain.models import (
     TIPO_REPARACION_OTROS,
     CambioConfiguracion,
+    CategoriaInsumo,
     EntidadConfiguracion,
+    Insumo,
     ModeloEquipo,
     PrecioTipoModelo,
     TipoReparacion,
+    TipoReparacionInsumos,
+    TipoReparacionRequisito,
     Usuario,
 )
 
@@ -337,3 +341,230 @@ def cambios_de_precios_modelo(
             "Los precios ya tienen esos valores: no hay cambios."
         )
     return efectivos, cambios
+
+
+# --- Insumos necesarios de un Tipo (DEC-AJ-14, D-14.4) ----------------------
+
+CAMPO_INSUMOS_PREVISTOS = "insumos_previstos"
+CAMPO_REQUISITOS = "requisitos"
+_MILESIMA = Decimal("0.001")
+_TOPE_CANTIDAD = Decimal("1000000000")
+
+
+def _cantidad_valida(cantidad: Decimal, que: str) -> Decimal:
+    """Mayor que cero y con hasta tres decimales (numeric(12, 3))."""
+    if cantidad <= 0:
+        raise PrecondicionInvalidaError(
+            f"La cantidad de {que} tiene que ser mayor que cero."
+        )
+    if cantidad != cantidad.quantize(_MILESIMA) or cantidad >= _TOPE_CANTIDAD:
+        raise PrecondicionInvalidaError(
+            f"La cantidad de {que} admite hasta tres decimales."
+        )
+    return cantidad
+
+
+def _cantidad_texto(cantidad: Decimal) -> str:
+    return format(cantidad.normalize(), "f")
+
+
+def _texto_lineas(lineas: Iterable[tuple[str, Decimal]]) -> str | None:
+    """«INS-001 x 1; INS-004 x 2» (o los CAT-…), en orden; vacio: None."""
+    return (
+        "; ".join(
+            f"{codigo} x {_cantidad_texto(cantidad)}"
+            for codigo, cantidad in lineas
+        )
+        or None
+    )
+
+
+def insumos_necesarios(
+    tipo: TipoReparacion,
+    *,
+    previstos_actuales: Sequence[TipoReparacionInsumos],
+    requisitos_actuales: Sequence[TipoReparacionRequisito],
+    previstos: Sequence[tuple[str, Decimal]],
+    requisitos: Sequence[tuple[str, Decimal]],
+    insumos: Mapping[str, Insumo],
+    categorias: Mapping[str, CategoriaInsumo],
+    usuario: Usuario,
+    fecha: datetime,
+    nuevo_id: Callable[[], str],
+) -> tuple[
+    list[TipoReparacionInsumos],
+    list[TipoReparacionRequisito],
+    list[CambioConfiguracion],
+]:
+    """«Insumos necesarios» de un Tipo: los previstos concretos y los
+    requisitos por categoria, en bloque (reemplazan el conjunto).
+
+    - **Previstos concretos** (insumo y cantidad, uno por insumo): lo que se
+      agrega tiene que existir, estar vigente y ser **universal** (sin
+      modelos compatibles cargados): una pieza que depende del modelo va
+      como requisito por categoria (precision 6). Lo que ya estaba se
+      conserva aunque no lo sea.
+    - **Requisitos** (categoria o subcategoria y cantidad, una por
+      categoria): lo que se agrega tiene que existir y estar vigente (una
+      subcategoria de una categoria dada de baja cuenta como de baja). Un
+      requisito que sigue conserva su identificador (las piezas elegidas lo
+      referencian); el que se quita queda inactivo, nunca se borra, y el
+      que vuelve se reactiva.
+    - Auditoria: entidad TIPO_REPARACION, campos ``insumos_previstos`` y
+      ``requisitos`` («INS-001 x 1; …»), uno por campo que cambia. Sin
+      cambios se rechaza.
+
+    Devuelve los previstos efectivos, todos los requisitos del Tipo
+    (activos o no, con su estado nuevo) y los cambios.
+    """
+    validar_alguno_de(usuario, ROLES_TIPO_REPARACION)
+    if tipo.id == TIPO_REPARACION_OTROS:
+        raise PrecondicionInvalidaError(
+            "«Otros» no tiene insumos previstos ni requisitos."
+        )
+
+    anteriores = {p.insumo_id: p.cantidad for p in previstos_actuales}
+    efectivos: list[TipoReparacionInsumos] = []
+    vistos: set[str] = set()
+    for insumo_id, cantidad in previstos:
+        insumo_id = (insumo_id or "").strip()
+        if insumo_id in vistos:
+            raise PrecondicionInvalidaError(
+                f"El insumo {insumo_id} esta repetido: va una sola linea con "
+                "la cantidad total."
+            )
+        vistos.add(insumo_id)
+        insumo = insumos.get(insumo_id)
+        if insumo is None:
+            raise PrecondicionInvalidaError(
+                f"No existe el insumo {insumo_id}."
+            )
+        cantidad = _cantidad_valida(cantidad, insumo.codigo)
+        if insumo_id not in anteriores:
+            if not insumo.activo:
+                raise PrecondicionInvalidaError(
+                    f"El insumo {insumo.codigo} esta dado de baja: no se "
+                    "agrega."
+                )
+            if insumo.modelos_compatibles:
+                raise PrecondicionInvalidaError(
+                    f"El insumo {insumo.codigo} solo sirve para algunos "
+                    "modelos: agregalo como requisito por categoria (la "
+                    "pieza se elige segun el modelo del equipo)."
+                )
+        efectivos.append(
+            TipoReparacionInsumos(
+                tipo_reparacion_id=tipo.id,
+                insumo_id=insumo_id,
+                cantidad=cantidad,
+            )
+        )
+
+    del_tipo = [
+        r for r in requisitos_actuales if r.tipo_reparacion_id == tipo.id
+    ]
+    por_categoria: dict[str, TipoReparacionRequisito] = {}
+    for requisito in del_tipo:
+        # Uno por categoria; si hubiera dos, manda el activo.
+        actual = por_categoria.get(requisito.categoria_id)
+        if actual is None or (requisito.activo and not actual.activo):
+            por_categoria[requisito.categoria_id] = requisito
+    pedidas: set[str] = set()
+    resultado: dict[str, TipoReparacionRequisito] = {r.id: r for r in del_tipo}
+    for posicion, (categoria_id, cantidad) in enumerate(requisitos, 1):
+        categoria_id = (categoria_id or "").strip().upper()
+        if categoria_id in pedidas:
+            raise PrecondicionInvalidaError(
+                f"La categoria {categoria_id} esta repetida: va un solo "
+                "requisito con la cantidad total."
+            )
+        pedidas.add(categoria_id)
+        categoria = categorias.get(categoria_id)
+        if categoria is None:
+            raise PrecondicionInvalidaError(
+                f"No existe la categoria {categoria_id}."
+            )
+        cantidad = _cantidad_valida(cantidad, categoria.nombre)
+        existente = por_categoria.get(categoria_id)
+        if existente is None or not existente.activo:
+            padre = categorias.get(categoria.padre_id or "")
+            if not categoria.activo or (
+                padre is not None and not padre.activo
+            ):
+                raise PrecondicionInvalidaError(
+                    f"La categoria {categoria.nombre} esta dada de baja: no "
+                    "se agrega como requisito."
+                )
+        if existente is None:
+            requisito = TipoReparacionRequisito(
+                id=nuevo_id(),
+                tipo_reparacion_id=tipo.id,
+                categoria_id=categoria_id,
+                cantidad=cantidad,
+                posicion=posicion,
+            )
+        else:
+            requisito = existente.model_copy(
+                update={
+                    "cantidad": cantidad,
+                    "posicion": posicion,
+                    "activo": True,
+                }
+            )
+        resultado[requisito.id] = requisito
+    for requisito in del_tipo:
+        if requisito.activo and requisito.categoria_id not in pedidas:
+            resultado[requisito.id] = requisito.model_copy(
+                update={"activo": False}
+            )
+
+    def activos(lista: Iterable[TipoReparacionRequisito]):
+        return [
+            (r.categoria_id, r.cantidad)
+            for r in sorted(
+                (r for r in lista if r.activo),
+                key=lambda r: (r.posicion, r.categoria_id),
+            )
+        ]
+
+    cambios: list[CambioConfiguracion] = []
+    antes = _texto_lineas(
+        (p.insumo_id, p.cantidad)
+        for p in sorted(previstos_actuales, key=lambda p: p.insumo_id)
+    )
+    despues = _texto_lineas(
+        (p.insumo_id, p.cantidad)
+        for p in sorted(efectivos, key=lambda p: p.insumo_id)
+    )
+    if antes != despues:
+        cambios.append(
+            CambioConfiguracion(
+                entidad=EntidadConfiguracion.TIPO_REPARACION,
+                clave=tipo.id,
+                campo=CAMPO_INSUMOS_PREVISTOS,
+                valor_anterior=antes,
+                valor_nuevo=despues,
+                usuario_id=usuario.id,
+                fecha=fecha,
+            )
+        )
+    antes = _texto_lineas(activos(del_tipo))
+    despues = _texto_lineas(activos(resultado.values()))
+    if antes != despues:
+        cambios.append(
+            CambioConfiguracion(
+                entidad=EntidadConfiguracion.TIPO_REPARACION,
+                clave=tipo.id,
+                campo=CAMPO_REQUISITOS,
+                valor_anterior=antes,
+                valor_nuevo=despues,
+                usuario_id=usuario.id,
+                fecha=fecha,
+            )
+        )
+    if not cambios:
+        raise PrecondicionInvalidaError(
+            f"El Tipo {tipo.id} ya tiene esos insumos necesarios: no hay "
+            "cambios."
+        )
+    return efectivos, list(resultado.values()), cambios

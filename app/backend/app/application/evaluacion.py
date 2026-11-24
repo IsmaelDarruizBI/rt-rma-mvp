@@ -40,6 +40,7 @@ from .contexto import ApplicationContext
 from .identificadores import siguiente_detalle_id, siguientes_detalle_ids
 from .ingreso import precio_manual_de
 from .modificacion import orden_para_modificar
+from .piezas import conciliar, requisitos_de_insumo
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,7 @@ def _factibilidad(
         fecha=fecha,
         reservas_externas=cargar_reservas_externas(orden.id, contexto.ordenes),
         detalle_ids=set(detalle_ids),
+        requisitos=requisitos_de_insumo(contexto),
         registrar_faltantes=False,
     )
     return orden
@@ -127,6 +129,8 @@ def evaluar_detalle(
                 )
             ],
         )
+        # DEC-AJ-14: piezas de los trabajos redefinidos o agregados.
+        orden = conciliar(contexto, orden, usuario_id=usuario.id, fecha=fecha)
         con_autorizacion = requiere_autorizacion_cliente(orden)
         por_factibilidad = [] if con_autorizacion else list(ids_nuevos)
         if (
@@ -182,6 +186,7 @@ def agregar_trabajo_adicional(
             detalle_origen_id=detalle_origen_id,
             precio_manual=precio_manual_de(precio, precio_motivo),
         )
+        orden = conciliar(contexto, orden, usuario_id=usuario.id, fecha=fecha)
         if not requiere_autorizacion_cliente(orden):
             orden = _factibilidad(contexto, orden, [nuevo_id], fecha)
             if not hay_ejecucion_activa(orden):

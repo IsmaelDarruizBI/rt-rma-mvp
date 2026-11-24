@@ -30,6 +30,7 @@ from .catalogos import (
     TipoReparacion,
     TipoReparacionEstacion,
     TipoReparacionInsumos,
+    TipoReparacionRequisito,
 )
 from .configuracion import (
     CambioConfiguracion,
@@ -67,6 +68,7 @@ from .documentos import (
 )
 from .enums import (
     CanalComunicacion,
+    CausaEleccionPieza,
     ClaseAjuste,
     CondicionReparacionDetail,
     EstadoControl,
@@ -130,6 +132,7 @@ from .reparacion import (
     AjusteGarantia,
     DefinicionAnteriorDetalle,
     EjecucionReparacion,
+    EleccionPieza,
     EvaluacionTecnica,
     RegistroAutorizacionCliente,
     RegistroCancelacion,
@@ -170,6 +173,7 @@ __all__ = [
     "OrigenCancelacion",
     "OrigenDiagnostico",
     "OrigenPrecio",
+    "CausaEleccionPieza",
     "OrigenOrden",
     "RegistroRecepcion",
     "ResultadoAutorizacion",
@@ -223,6 +227,7 @@ __all__ = [
     "TipoReparacion",
     "TipoReparacionEstacion",
     "TipoReparacionInsumos",
+    "TipoReparacionRequisito",
     # Trabajo tecnico
     "EjecucionReparacion",
     "RegistroAutorizacionCliente",
@@ -257,6 +262,7 @@ __all__ = [
     "CausaRecalculo",
     "TipoDescuento",
     "AjusteGarantia",
+    "EleccionPieza",
     "TIPO_REPARACION_OTROS",
     "NOMBRE_TIPO_REPARACION_OTROS",
     "importe_de_descuento",

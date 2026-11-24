@@ -10,6 +10,9 @@ no esta disponible.
     POST /api/purchases/requests/{id}/discard      descartar con motivo
     GET  /api/purchases/suggestions                reposicion sugerida
                                                    (faltantes y minimo)
+    GET  /api/purchases/suggestions/pending-pieces trabajos bloqueados con
+                                                   un requisito sin pieza
+                                                   elegida (DEC-AJ-14)
     GET  /api/purchases/orders[/{id}]              ordenes de compra
     POST /api/purchases/orders                     crear (borrador)
     POST /api/purchases/orders/{id}/confirm        confirmar (sin aprobacion)
@@ -19,6 +22,7 @@ no esta disponible.
     GET/POST/PUT /api/admin/suppliers              proveedores (Administracion)
 """
 
+from dataclasses import asdict
 from decimal import Decimal
 
 from fastapi import APIRouter
@@ -38,6 +42,7 @@ from app.application.compras import (
     listar_solicitudes,
     obtener_orden_compra,
     recibir,
+    requisitos_sin_pieza_de_compra,
     sugerencias_de_compra,
 )
 from app.domain.models.compras import (
@@ -178,6 +183,23 @@ def post_descartar(
 @router.get("/api/purchases/suggestions", dependencies=_consulta)
 def get_sugerencias(contexto: ContextoDep) -> list[SugerenciaCompra]:
     return sugerencias_de_compra(contexto)
+
+
+@router.get(
+    "/api/purchases/suggestions/pending-pieces", dependencies=_consulta
+)
+def get_requisitos_sin_pieza(contexto: ContextoDep) -> list[dict]:
+    """DEC-AJ-14: los requisitos sin pieza elegida que bloquean un trabajo
+    y no tienen ninguna pieza elegible con disponible. No son demanda de un
+    SKU (no entran en las sugerencias): se elige la pieza o se compra una
+    compatible."""
+    return [
+        {
+            **asdict(fila),
+            "cantidad": str(fila.cantidad),
+        }
+        for fila in requisitos_sin_pieza_de_compra(contexto)
+    ]
 
 
 @router.get("/api/purchases/orders", dependencies=_consulta)

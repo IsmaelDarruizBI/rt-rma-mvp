@@ -7,6 +7,9 @@ Un archivo por catalogo, cada uno con un array JSON:
     movimientos_stock.json  (ingresos y ajustes manuales; historico del
                              stock fisico, que sigue viviendo en insumos)
     tipo_reparacion_insumos.json
+    tipo_reparacion_requisitos.json  (opcional, DEC-AJ-14: requisitos por
+                             categoria de cada Tipo; sin el archivo,
+                             ninguno)
     estaciones.json
     tipo_reparacion_estaciones.json
     usuarios.json
@@ -40,6 +43,7 @@ from app.domain.models import (
     TipoReparacion,
     TipoReparacionEstacion,
     TipoReparacionInsumos,
+    TipoReparacionRequisito,
     TipoTextoLegal,
     Usuario,
 )
@@ -55,6 +59,7 @@ ARCHIVO_TIPOS_REPARACION = "tipos_reparacion.json"
 ARCHIVO_INSUMOS = "insumos.json"
 ARCHIVO_MOVIMIENTOS_STOCK = "movimientos_stock.json"
 ARCHIVO_TIPO_REPARACION_INSUMOS = "tipo_reparacion_insumos.json"
+ARCHIVO_TIPO_REPARACION_REQUISITOS = "tipo_reparacion_requisitos.json"
 ARCHIVO_ESTACIONES = "estaciones.json"
 ARCHIVO_TIPO_REPARACION_ESTACIONES = "tipo_reparacion_estaciones.json"
 ARCHIVO_USUARIOS = "usuarios.json"
@@ -184,6 +189,18 @@ class JsonCatalogosRepository:
     def listar_tipo_reparacion_insumos(self) -> list[TipoReparacionInsumos]:
         return self._listar(
             ARCHIVO_TIPO_REPARACION_INSUMOS, TipoReparacionInsumos
+        )
+
+    def listar_tipo_reparacion_requisitos(
+        self,
+    ) -> list[TipoReparacionRequisito]:
+        """DEC-AJ-14: opcional; sin el archivo, ningun Tipo tiene
+        requisitos (la administracion es de PostgreSQL)."""
+        archivo = self._directorio / ARCHIVO_TIPO_REPARACION_REQUISITOS
+        if not archivo.exists():
+            return []
+        return self._listar(
+            ARCHIVO_TIPO_REPARACION_REQUISITOS, TipoReparacionRequisito
         )
 
     # --- Estaciones de trabajo ---

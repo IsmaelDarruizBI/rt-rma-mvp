@@ -80,6 +80,7 @@ from .documentos import emitir_comprobante_recepcion_inicial
 from .identidad import validar_equipo_del_ingreso
 from .identificadores import siguiente_detalle_id, siguiente_orden_id
 from .modificacion import orden_para_modificar
+from .piezas import conciliar, requisitos_de_insumo
 
 
 def crear_orden(
@@ -143,6 +144,8 @@ def crear_orden(
             datos_recepcion=datos_recepcion,
         )
         orden = _con_trabajo_inicial(orden, tipo_inicial, usuario, fecha)
+        # DEC-AJ-14: la pieza de los requisitos con una sola compatible.
+        orden = conciliar(contexto, orden, usuario_id=usuario.id, fecha=fecha)
         contexto.ordenes.guardar(orden)
 
     return orden
@@ -232,6 +235,8 @@ def crear_orden_rt(
             datos_recepcion=datos_recepcion,
         )
         orden = _con_trabajo_inicial(orden, tipo_inicial, usuario, fecha)
+        # DEC-AJ-14: la pieza de los requisitos con una sola compatible.
+        orden = conciliar(contexto, orden, usuario_id=usuario.id, fecha=fecha)
         contexto.ordenes.guardar(orden)
 
     return orden
@@ -314,6 +319,7 @@ def definir_reparacion(
             descripcion=descripcion,
             precio_manual=manual,
         )
+        orden = conciliar(contexto, orden, usuario_id=usuario.id, fecha=fecha)
         contexto.ordenes.guardar(orden)
     return orden
 
@@ -409,6 +415,7 @@ def _validar_y_habilitar(
         insumos_previstos=contexto.catalogos.listar_tipo_reparacion_insumos(),
         fecha=fecha,
         reservas_externas=cargar_reservas_externas(orden.id, contexto.ordenes),
+        requisitos=requisitos_de_insumo(contexto),
     )
     if not factible:
         return orden
@@ -608,6 +615,7 @@ def definir_reparacion_desde_revision(
             descripcion=descripcion,
             precio_manual=manual,
         )
+        orden = conciliar(contexto, orden, usuario_id=usuario.id, fecha=fecha)
         contexto.ordenes.guardar(orden)
     return orden
 

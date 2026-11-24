@@ -109,6 +109,11 @@ from app.application.operativa import (
     plazo_retiro_dias,
     registrar_seguimiento,
 )
+from app.application.piezas import (
+    elegir_pieza,
+    opciones_de_pieza,
+    piezas_por_detalle,
+)
 from app.application.precio_trabajo import definir_precio_trabajo
 from app.domain.models import (
     EstadoReparacionDetail,
@@ -161,6 +166,7 @@ from .schemas import (
     DocumentoEmitidoOut,
     DocumentosOrdenOut,
     DocumentosOut,
+    ElegirPiezaIn,
     EmitirComprobanteAutorizacionIn,
     EmitirDocumentoIn,
     EncolarIn,
@@ -179,6 +185,7 @@ from .schemas import (
     LiberarOrdenIn,
     NotificarIn,
     ObservacionRecepcionIn,
+    OpcionesPiezaOut,
     OrdenConEntregaOut,
     OrdenOut,
     OrdenResumenOut,
@@ -226,6 +233,7 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
         )
         nombres = nombres_de_tipo_por_detalle(contexto, orden)
         previstos = insumos_previstos_por_detalle(contexto, orden)
+        piezas = piezas_por_detalle(contexto, orden)
         origen = detalles_origen_de(contexto, orden)
     garantia = _garantia_por_detalle(orden, contexto)
     acciones = _con_excepcion_de_garantia(
@@ -257,6 +265,7 @@ def _salida(orden: OrdenReparacion, contexto: ApplicationContext) -> OrdenOut:
         fotos_habilitadas=contexto.fotos is not None,
         garantia_por_detalle=garantia,
         checklist_disponible=checklist_disponible,
+        piezas_por_detalle=piezas,
     )
     salida.retiro_demorado_dias = dias_de_retiro_demorado(
         orden, contexto.ahora(), plazo_retiro_dias(contexto)
@@ -1063,6 +1072,55 @@ def post_definir_precio(
         motivo=cuerpo.motivo,
     )
     return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/details/{detalle_id}/pieces")
+@idempotente("ELEGIR_PIEZA")
+def post_elegir_pieza(
+    orden_id: str,
+    detalle_id: str,
+    cuerpo: ElegirPiezaIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """«Elegir pieza» / «Sustituir» la pieza de un requisito (DEC-AJ-14).
+
+    Antes de reservar cambia la eleccion (sustituir exige motivo). Con la
+    pieza ya reservada (Ejecucion en curso) libera la reserva anterior y
+    reserva la nueva en la misma transaccion: sin disponible se rechaza y
+    nada cambia. Una pieza ya consumida no se sustituye.
+    """
+    orden = elegir_pieza(
+        contexto,
+        orden_id=orden_id,
+        detalle_id=detalle_id,
+        requisito_id=cuerpo.requisito_id,
+        insumo_id=cuerpo.insumo_id,
+        usuario_id=cuerpo.usuario_id,
+        motivo=cuerpo.motivo,
+    )
+    return _salida(orden, contexto)
+
+
+@router.get(
+    "/{orden_id}/details/{detalle_id}/pieces/options",
+    dependencies=_consulta,
+)
+def get_opciones_de_pieza(
+    orden_id: str,
+    detalle_id: str,
+    requisito_id: str,
+    contexto: ContextoDep,
+) -> OpcionesPiezaOut:
+    """Las piezas elegibles para un requisito del trabajo, con su
+    disponible (DEC-AJ-14)."""
+    return OpcionesPiezaOut.desde_aplicacion(
+        opciones_de_pieza(
+            contexto,
+            orden_id=orden_id,
+            detalle_id=detalle_id,
+            requisito_id=requisito_id,
+        )
+    )
 
 
 @router.post("/{orden_id}/control/approve")

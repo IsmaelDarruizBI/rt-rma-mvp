@@ -45,9 +45,10 @@ from .inventario import (
     cantidad_reservable,
     crear_reserva,
     faltantes_del_detalle,
-    insumos_previstos_de,
+    insumos_previstos_del_detalle,
     stock_disponible,
 )
+from .piezas import SIN_REQUISITOS, RequisitosInsumo, exigir_piezas_elegidas
 from .recursos import tiene_override_factibilidad
 from .tomas import (
     ROLES_LIBERACION_AJENA,
@@ -80,6 +81,7 @@ def reservar_insumos_e_iniciar_ejecucion(
     fecha: datetime,
     reservas_externas: Mapping[str, Decimal] | None = None,
     ejecucion_id: str | None = None,
+    requisitos: RequisitosInsumo | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-185: reserva real e inicio de la Ejecucion (BR-REP-006).
 
@@ -109,14 +111,23 @@ def reservar_insumos_e_iniciar_ejecucion(
     ``reservas_externas`` (insumo_id -> cantidad) revalida contra lo
     que otras Ordenes ya reservaron: entre la factibilidad y este
     momento el insumo pudo haber sido tomado por otra Orden.
+
+    DEC-AJ-14 (D-14.4): lo previsto del Detalle incluye la pieza elegida de
+    cada requisito de su Tipo (``insumos_previstos_del_detalle``), que se
+    reserva con el mismo motor, todo o nada. Con ``requisitos``, no se
+    inicia si alguno sigue sin pieza elegida (``PiezaSinElegirError``).
     """
     detalle, toma = _validar_precondiciones_de_la_reserva(
         orden, detalle_id, usuario
     )
-
-    previstos = insumos_previstos_de(
-        detalle.tipo_reparacion_id, insumos_previstos
+    exigir_piezas_elegidas(
+        orden,
+        detalle,
+        insumos=insumos,
+        requisitos=requisitos or SIN_REQUISITOS,
     )
+
+    previstos = insumos_previstos_del_detalle(detalle, insumos_previstos)
 
     # Comprobar todo antes de modificar nada. Con un override de
     # factibilidad VALIDO PARA ESTE Detalle (EXC-REP-002) se inicia aunque
@@ -127,7 +138,7 @@ def reservar_insumos_e_iniciar_ejecucion(
     con_override = tiene_override_factibilidad(orden, detalle_id)
     if not con_override:
         faltantes = faltantes_del_detalle(
-            detalle.tipo_reparacion_id,
+            detalle,
             orden.movimientos_insumo,
             insumos,
             insumos_previstos,
@@ -259,6 +270,7 @@ def intentar_reserva_e_inicio(
     fecha: datetime,
     reservas_externas: Mapping[str, Decimal] | None = None,
     ejecucion_id: str | None = None,
+    requisitos: RequisitosInsumo | None = None,
 ) -> tuple[OrdenReparacion, bool]:
     """PROC-REP-185 con sus dos resultados: exitosa o fallida (EXC-REP-003).
 
@@ -274,16 +286,23 @@ def intentar_reserva_e_inicio(
 
     Las precondiciones reales (Detalle, titular de la toma, BR-REP-007)
     siguen lanzando PrecondicionInvalidaError: no se registran como
-    reserva fallida.
+    reserva fallida. Tampoco un requisito sin pieza elegida (DEC-AJ-14):
+    es una precondicion, no una falta de stock.
     """
     detalle, _ = _validar_precondiciones_de_la_reserva(
         orden, detalle_id, usuario
+    )
+    exigir_piezas_elegidas(
+        orden,
+        detalle,
+        insumos=insumos,
+        requisitos=requisitos or SIN_REQUISITOS,
     )
 
     faltantes: list[str] = []
     if not tiene_override_factibilidad(orden, detalle_id):
         faltantes = faltantes_del_detalle(
-            detalle.tipo_reparacion_id,
+            detalle,
             orden.movimientos_insumo,
             insumos,
             insumos_previstos,
@@ -300,6 +319,7 @@ def intentar_reserva_e_inicio(
             fecha=fecha,
             reservas_externas=reservas_externas,
             ejecucion_id=ejecucion_id,
+            requisitos=requisitos,
         )
         return nueva_orden, True
 

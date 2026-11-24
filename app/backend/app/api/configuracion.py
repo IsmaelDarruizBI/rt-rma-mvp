@@ -5,6 +5,11 @@
     PUT  /api/admin/repair-types/{codigo}            edicion o baja
     PUT  /api/admin/repair-types/{codigo}/model-prices
                                      precios por modelo de un Tipo
+    GET  /api/admin/repair-types/supplies
+                                     insumos necesarios de los Tipos
+                                     (DEC-AJ-14)
+    PUT  /api/admin/repair-types/{codigo}/supplies
+                                     previstos concretos y requisitos
     GET  /api/admin/device-models    modelos de equipo, activos o no
     POST /api/admin/device-models    alta de un modelo (MOD-NNNN)
     PUT  /api/admin/device-models/{codigo}           edicion o baja
@@ -55,6 +60,7 @@ from app.application.comprobantes import (
 )
 from app.application.configuracion import (
     CONSERVAR,
+    guardar_insumos_necesarios,
     guardar_modelo_equipo,
     guardar_precios_modelo,
     guardar_tipo_reparacion,
@@ -273,6 +279,102 @@ def put_precios_modelo(
     tipo = contexto.catalogos.obtener_tipo_reparacion(codigo)
     return {
         "tipo": tipo.model_dump(mode="json"),
+        "cambios": [c.model_dump(mode="json") for c in cambios],
+    }
+
+
+class PrevistoIn(BaseModel):
+    insumo_id: str = Field(min_length=1)
+    cantidad: Decimal = Field(gt=0)
+
+
+class RequisitoIn(BaseModel):
+    categoria_id: str = Field(min_length=1)
+    cantidad: Decimal = Field(gt=0)
+
+
+class InsumosNecesariosIn(BaseModel):
+    """DEC-AJ-14: el conjunto completo; lo que no viene se quita (un
+    requisito se desactiva, nunca se borra)."""
+
+    usuario_id: str = Field(min_length=1)
+    insumos: list[PrevistoIn] = Field(default_factory=list)
+    requisitos: list[RequisitoIn] = Field(default_factory=list)
+
+
+def _insumos_necesarios(contexto: ContextoDep) -> dict:
+    catalogos = contexto.catalogos
+    return {
+        "previstos": [
+            p.model_dump(mode="json")
+            for p in catalogos.listar_tipo_reparacion_insumos()
+        ],
+        "requisitos": [
+            r.model_dump(mode="json")
+            for r in catalogos.listar_tipo_reparacion_requisitos()
+        ],
+    }
+
+
+@router.get("/repair-types/supplies", dependencies=_tipos)
+def get_insumos_necesarios(contexto: ContextoDep) -> dict:
+    """DEC-AJ-14: los insumos previstos concretos y los requisitos por
+    categoria de todos los Tipos, con los insumos y las categorias para
+    elegirlos (activos o no: un Tipo puede conservar uno dado de baja)."""
+    with contexto.lectura():
+        necesarios = _insumos_necesarios(contexto)
+        insumos = contexto.catalogos.listar_insumos()
+        categorias = contexto.operativa.listar_categorias_insumo()
+    return {
+        "editable": contexto.configuracion is not None,
+        **necesarios,
+        "insumos": [
+            {
+                "id": i.id,
+                "codigo": i.codigo,
+                "nombre": i.nombre,
+                "unidad": i.unidad,
+                "activo": i.activo,
+                "categoria_id": i.categoria_id,
+                "fabricante_id": i.fabricante_id,
+                "variante": i.variante,
+                "codigo_fabricante": i.codigo_fabricante,
+                "modelos_compatibles": list(i.modelos_compatibles),
+            }
+            for i in insumos
+        ],
+        "categorias": [c.model_dump(mode="json") for c in categorias],
+    }
+
+
+@router.put("/repair-types/{codigo}/supplies", dependencies=_tipos)
+def put_insumos_necesarios(
+    codigo: str, cuerpo: InsumosNecesariosIn, contexto: ContextoDep
+) -> dict:
+    """DEC-AJ-14: insumos necesarios de un Tipo (previstos concretos y
+    requisitos por categoria), en bloque y con auditoria (entidad
+    TIPO_REPARACION, campos insumos_previstos y requisitos)."""
+    cambios = guardar_insumos_necesarios(
+        contexto,
+        usuario_id=cuerpo.usuario_id,
+        tipo_reparacion_id=codigo,
+        previstos=[(p.insumo_id, p.cantidad) for p in cuerpo.insumos],
+        requisitos=[(r.categoria_id, r.cantidad) for r in cuerpo.requisitos],
+    )
+    with contexto.lectura():
+        necesarios = _insumos_necesarios(contexto)
+    return {
+        "tipo_reparacion_id": codigo,
+        "previstos": [
+            p
+            for p in necesarios["previstos"]
+            if p["tipo_reparacion_id"] == codigo
+        ],
+        "requisitos": [
+            r
+            for r in necesarios["requisitos"]
+            if r["tipo_reparacion_id"] == codigo
+        ],
         "cambios": [c.model_dump(mode="json") for c in cambios],
     }
 

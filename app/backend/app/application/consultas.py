@@ -25,6 +25,10 @@ from app.repositories import (
     PersistenciaError,
 )
 from app.services import nombre_del_trabajo
+from app.services.inventario import (
+    insumos_previstos_del_detalle,
+    piezas_vigentes,
+)
 
 from .contexto import ApplicationContext
 
@@ -42,6 +46,8 @@ class InsumoPrevisto:
     codigo: str
     nombre: str
     cantidad_prevista: Decimal
+    # DEC-AJ-14: la linea incluye la pieza elegida de un requisito.
+    pieza: bool = False
 
 
 @dataclass(frozen=True)
@@ -121,11 +127,8 @@ def insumos_previstos_por_detalle(
     insumos = {
         insumo.id: insumo for insumo in contexto.catalogos.listar_insumos()
     }
-
-    por_tipo: dict[str, list[InsumoPrevisto]] = {}
     for relacion in relaciones:
-        insumo = insumos.get(relacion.insumo_id)
-        if insumo is None:
+        if relacion.insumo_id not in insumos:
             # Inconsistencia de datos, no una condicion de negocio.
             # Omitirla devolveria una lista parcial y la UI dejaria
             # completar la Ejecucion sin un insumo que si estaba
@@ -134,17 +137,36 @@ def insumos_previstos_por_detalle(
                 f"El catalogo TipoReparacionInsumos referencia el insumo "
                 f"{relacion.insumo_id}, pero ese insumo no existe."
             )
-        por_tipo.setdefault(relacion.tipo_reparacion_id, []).append(
-            InsumoPrevisto(
-                insumo_id=insumo.id,
-                codigo=insumo.codigo,
-                nombre=insumo.nombre,
-                cantidad_prevista=relacion.cantidad,
+
+    def previstos_de(detalle) -> list[InsumoPrevisto]:
+        # DEC-AJ-14: los previstos concretos del Tipo y la pieza elegida de
+        # cada requisito, una linea por insumo (lo que se reserva y se
+        # declara al completar la Ejecucion).
+        piezas = {
+            eleccion.insumo_id
+            for eleccion in piezas_vigentes(detalle).values()
+        }
+        lineas = []
+        for previsto in insumos_previstos_del_detalle(detalle, relaciones):
+            insumo = insumos.get(previsto.insumo_id)
+            if insumo is None:
+                raise PersistenciaError(
+                    f"La pieza elegida {previsto.insumo_id} del Detalle "
+                    f"{detalle.id} no existe en el catalogo de insumos."
+                )
+            lineas.append(
+                InsumoPrevisto(
+                    insumo_id=insumo.id,
+                    codigo=insumo.codigo,
+                    nombre=insumo.nombre,
+                    cantidad_prevista=previsto.cantidad,
+                    pieza=insumo.id in piezas,
+                )
             )
-        )
+        return lineas
 
     return {
-        detalle.id: por_tipo.get(detalle.tipo_reparacion_id, [])
+        detalle.id: previstos_de(detalle)
         for detalle in orden.reparaciones_detail
     }
 

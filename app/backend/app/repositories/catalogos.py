@@ -24,6 +24,7 @@ from app.domain.models import (
     TipoReparacion,
     TipoReparacionEstacion,
     TipoReparacionInsumos,
+    TipoReparacionRequisito,
     TipoTextoLegal,
     Usuario,
 )
@@ -110,6 +111,13 @@ class CatalogosRepository(Protocol):
     def listar_tipo_reparacion_insumos(
         self,
     ) -> list[TipoReparacionInsumos]: ...
+
+    # DEC-AJ-14 (D-14.4): requisitos por categoria de cada Tipo, activos o
+    # no (las elecciones de pieza los referencian). Sin requisitos, lista
+    # vacia: todo funciona como antes.
+    def listar_tipo_reparacion_requisitos(
+        self,
+    ) -> list[TipoReparacionRequisito]: ...
 
     # --- Estaciones de trabajo ---
 

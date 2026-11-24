@@ -15,6 +15,8 @@ from app.domain.models import (
     PrecioTipoModelo,
     RolUsuario,
     TipoReparacion,
+    TipoReparacionInsumos,
+    TipoReparacionRequisito,
 )
 from app.repositories.exceptions import (
     CodigoExistenteError,
@@ -112,6 +114,67 @@ _RETIRAR_PRECIOS_MODELO = consulta(
 _MESA = consulta(
     "configuracion.mesa",
     "SELECT id FROM rma.mesa_trabajo WHERE codigo = %(codigo)s FOR UPDATE",
+    modo=ESCRITURA,
+)
+# DEC-AJ-14: insumos necesarios de un Tipo. Los previstos concretos son un
+# conjunto (se quitan los que no siguen); los requisitos no se borran.
+_TIPO_ID = consulta(
+    "configuracion.tipo_id",
+    "SELECT id FROM rma.tipo_reparacion WHERE codigo = %(tipo)s FOR UPDATE",
+    modo=ESCRITURA,
+)
+_QUITAR_PREVISTOS = consulta(
+    "configuracion.quitar_previstos",
+    """
+    DELETE FROM rma.tipo_reparacion_insumo ti
+     USING rma.insumo i
+     WHERE ti.tipo_reparacion_id = %(tipo)s
+       AND i.id = ti.insumo_id
+       AND NOT (i.clave = ANY(%(insumos)s))
+    """,
+    modo=ESCRITURA,
+)
+_FIJAR_PREVISTOS = consulta(
+    "configuracion.fijar_previstos",
+    """
+    INSERT INTO rma.tipo_reparacion_insumo
+        (tipo_reparacion_id, insumo_id, cantidad)
+    SELECT %(tipo)s, i.id, x.cantidad
+      FROM unnest(%(insumos)s::text[], %(cantidades)s::numeric[])
+           AS x (insumo, cantidad)
+      JOIN rma.insumo i ON i.clave = x.insumo
+    ON CONFLICT (tipo_reparacion_id, insumo_id) DO UPDATE
+       SET cantidad = EXCLUDED.cantidad
+     WHERE rma.tipo_reparacion_insumo.cantidad IS DISTINCT FROM
+           EXCLUDED.cantidad
+    """,
+    modo=ESCRITURA,
+)
+_CONTAR_PREVISTOS = consulta(
+    "configuracion.contar_previstos",
+    "SELECT count(*) AS cantidad FROM rma.tipo_reparacion_insumo "
+    "WHERE tipo_reparacion_id = %(tipo)s",
+    modo=ESCRITURA,
+)
+_FIJAR_REQUISITOS = consulta(
+    "configuracion.fijar_requisitos",
+    """
+    INSERT INTO rma.tipo_reparacion_requisito
+        (id, tipo_reparacion_id, categoria_id, cantidad, posicion, activo)
+    SELECT x.id, %(tipo)s, c.id, x.cantidad, x.posicion, x.activo
+      FROM unnest(%(ids)s::uuid[], %(categorias)s::text[],
+                  %(cantidades)s::numeric[], %(posiciones)s::int[],
+                  %(activos)s::boolean[])
+           AS x (id, categoria, cantidad, posicion, activo)
+      JOIN rma.categoria_insumo c ON c.codigo = x.categoria
+    ON CONFLICT (id) DO UPDATE
+       SET cantidad = EXCLUDED.cantidad, posicion = EXCLUDED.posicion,
+           activo = EXCLUDED.activo
+     WHERE rma.tipo_reparacion_requisito.tipo_reparacion_id
+           = EXCLUDED.tipo_reparacion_id
+       AND rma.tipo_reparacion_requisito.categoria_id = EXCLUDED.categoria_id
+    RETURNING id
+    """,
     modo=ESCRITURA,
 )
 _QUITAR_TIPOS_DE_MESA = consulta(
@@ -353,6 +416,57 @@ class PostgresConfiguracionRepository:
             raise PersistenciaError(
                 f"El usuario {importacion.usuario_id} no existe en la base."
             )
+
+    def guardar_insumos_necesarios(
+        self,
+        tipo_reparacion_id: str,
+        previstos: Sequence[TipoReparacionInsumos],
+        requisitos: Sequence[TipoReparacionRequisito],
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None:
+        self._exigir_transaccion()
+        ejecutor = self._unidad.ejecutor()
+        tipo = ejecutor.fila(_TIPO_ID, {"tipo": tipo_reparacion_id})
+        if tipo is None:
+            raise EntidadPersistidaNoEncontradaError(
+                f"No existe el Tipo de Reparacion {tipo_reparacion_id}"
+            )
+        claves = [p.insumo_id for p in previstos]
+        ejecutor.ejecutar(
+            _QUITAR_PREVISTOS, {"tipo": tipo.id, "insumos": claves}
+        )
+        if previstos:
+            ejecutor.ejecutar(
+                _FIJAR_PREVISTOS,
+                {
+                    "tipo": tipo.id,
+                    "insumos": claves,
+                    "cantidades": [p.cantidad for p in previstos],
+                },
+            )
+        quedaron = ejecutor.fila(_CONTAR_PREVISTOS, {"tipo": tipo.id})
+        if quedaron.cantidad != len(previstos):
+            raise EntidadPersistidaNoEncontradaError(
+                "Algun insumo previsto no existe en la base."
+            )
+        if requisitos:
+            escritos = ejecutor.filas(
+                _FIJAR_REQUISITOS,
+                {
+                    "tipo": tipo.id,
+                    "ids": [r.id for r in requisitos],
+                    "categorias": [r.categoria_id for r in requisitos],
+                    "cantidades": [r.cantidad for r in requisitos],
+                    "posiciones": [r.posicion for r in requisitos],
+                    "activos": [r.activo for r in requisitos],
+                },
+            )
+            if len(escritos) != len(requisitos):
+                raise PersistenciaError(
+                    "Algun requisito no se pudo guardar: la categoria no "
+                    "existe o el requisito es de otro Tipo o categoria."
+                )
+        self._auditar(ejecutor, cambios)
 
     def guardar_tipos_de_mesa(
         self,

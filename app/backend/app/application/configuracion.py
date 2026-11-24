@@ -12,6 +12,7 @@ edicion de los modelos de equipo (``guardar_modelo_equipo``).
 
 from collections.abc import Collection, Sequence
 from decimal import Decimal
+from uuid import uuid4
 
 from pydantic import ValidationError
 
@@ -34,6 +35,7 @@ from app.services.configuracion import (
     cambios_de_modelo,
     cambios_de_precios_modelo,
     cambios_de_tipo,
+    insumos_necesarios,
 )
 from app.services.exceptions import (
     CodigoDuplicadoError,
@@ -365,4 +367,54 @@ def guardar_precios_modelo(
                 for c in cambios
             ]
         repositorio.guardar_precios_modelo(efectivos, cambios)
+    return cambios
+
+
+# --- Insumos necesarios de un Tipo (DEC-AJ-14, D-14.4) ----------------------
+
+
+def guardar_insumos_necesarios(
+    contexto: ApplicationContext,
+    *,
+    usuario_id: str,
+    tipo_reparacion_id: str,
+    previstos: Sequence[tuple[str, Decimal]],
+    requisitos: Sequence[tuple[str, Decimal]],
+) -> list[CambioConfiguracion]:
+    """«Insumos necesarios» de un Tipo: sus insumos previstos concretos y
+    sus requisitos por categoria, en bloque y con auditoria
+    (``TIPO_REPARACION_GESTIONAR``). Las Ordenes no cambian: lo ya
+    reservado o consumido sigue igual, y un Detalle con la pieza elegida
+    trabaja con su eleccion; los Detalles pendientes leen los requisitos
+    vigentes. Devuelve los cambios registrados."""
+    repositorio = _repositorio(contexto)
+    usuario = contexto.catalogos.obtener_usuario(usuario_id)
+    fecha = contexto.ahora()
+    validar_alguno_de(usuario, ROLES_TIPO_REPARACION)
+    with contexto.transaccion():
+        tipo = contexto.catalogos.obtener_tipo_reparacion(tipo_reparacion_id)
+        actuales = [
+            p
+            for p in contexto.catalogos.listar_tipo_reparacion_insumos()
+            if p.tipo_reparacion_id == tipo.id
+        ]
+        efectivos, todos, cambios = insumos_necesarios(
+            tipo,
+            previstos_actuales=actuales,
+            requisitos_actuales=(
+                contexto.catalogos.listar_tipo_reparacion_requisitos()
+            ),
+            previstos=previstos,
+            requisitos=requisitos,
+            insumos={i.id: i for i in contexto.catalogos.listar_insumos()},
+            categorias={
+                c.id: c for c in contexto.operativa.listar_categorias_insumo()
+            },
+            usuario=usuario,
+            fecha=fecha,
+            nuevo_id=lambda: str(uuid4()),
+        )
+        repositorio.guardar_insumos_necesarios(
+            tipo.id, efectivos, todos, cambios
+        )
     return cambios

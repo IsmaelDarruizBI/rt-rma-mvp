@@ -138,6 +138,28 @@ class TipoReparacionInsumos(BaseModel):
     cantidad: Decimal = Field(gt=0)
 
 
+class TipoReparacionRequisito(BaseModel):
+    """Requisito de insumo de un Tipo de Reparacion (DEC-AJ-14, D-14.4).
+
+    Una categoria o subcategoria de insumos (``CAT-…``) y la cantidad que
+    necesita cada trabajo de ese Tipo («1 Bateria»), junto a los insumos
+    previstos concretos (``TipoReparacionInsumos``), que se conservan. La
+    pieza concreta (un SKU compatible con el modelo del equipo) la elige el
+    Detalle antes de reservar (``EleccionPieza``).
+
+    ``id`` es estable: las elecciones lo referencian. No se borra; un
+    requisito retirado queda ``activo=False`` y deja de pedirse en los
+    trabajos que todavia no eligieron su pieza.
+    """
+
+    id: str = Field(min_length=1)
+    tipo_reparacion_id: str
+    categoria_id: str = Field(pattern=r"^CAT-\d{3,}$")
+    cantidad: Decimal = Field(gt=0)
+    posicion: int = Field(default=1, ge=1)
+    activo: bool = True
+
+
 class EstacionTrabajo(BaseModel):
     """Estacion de trabajo fisica desde la que opera un tecnico."""
 

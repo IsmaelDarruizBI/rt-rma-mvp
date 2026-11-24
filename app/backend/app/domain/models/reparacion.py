@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from .catalogos import TIPO_REPARACION_OTROS
 from .enums import (
     CanalComunicacion,
+    CausaEleccionPieza,
     CondicionReparacionDetail,
     EstadoControl,
     EstadoEjecucion,
@@ -143,6 +144,38 @@ class AjusteGarantia(BaseModel):
     fecha: datetime
 
 
+class EleccionPieza(BaseModel):
+    """La pieza concreta elegida para un requisito del Tipo (DEC-AJ-14).
+
+    Append-only: elegir, sustituir o anular agrega un registro que
+    ``reemplaza_a`` al anterior del mismo requisito; nunca se modifica uno
+    guardado. La eleccion vigente de un requisito es la ultima; con
+    ``insumo_id`` ``None`` (anulada por un cambio de modelo o una
+    redefinicion) el requisito vuelve a estar pendiente de elegir.
+
+    ``categoria_id`` y ``cantidad`` son la copia del requisito al elegir:
+    una vez elegida, el Detalle trabaja con su eleccion aunque el Tipo
+    cambie despues. ``modelo_equipo_id`` es el modelo del equipo con el que
+    se eligio. ``compatibilidad_no_verificada``: el equipo no tenia modelo
+    tecnico y no habia piezas universales, asi que se eligio otra pieza de
+    la categoria con motivo (punto 2 de la resolucion de 11.1).
+    """
+
+    id: str
+    requisito_id: str
+    tipo_reparacion_id: str
+    categoria_id: str
+    cantidad: Decimal = Field(gt=0)
+    insumo_id: str | None = None
+    causa: CausaEleccionPieza
+    compatibilidad_no_verificada: bool = False
+    modelo_equipo_id: str | None = None
+    motivo: str | None = None
+    usuario_id: str
+    fecha: datetime
+    reemplaza_a: str | None = None
+
+
 class ReparacionDetail(BaseModel):
     """Trabajo tecnico requerido dentro de una Orden.
 
@@ -242,6 +275,11 @@ class ReparacionDetail(BaseModel):
     precio_definido_por: str | None = None
     precio_definido_en: datetime | None = None
     solo_precio: bool = False
+
+    # DEC-AJ-14 (D-14.4): elecciones de la pieza concreta de cada requisito
+    # del Tipo, de la mas antigua a la mas reciente (append-only). Vacio en
+    # un Detalle anterior o de un Tipo sin requisitos: funciona como antes.
+    piezas: list[EleccionPieza] = Field(default_factory=list)
 
     @property
     def es_otros(self) -> bool:

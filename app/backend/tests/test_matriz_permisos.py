@@ -151,6 +151,16 @@ MATRIZ = {
     ),
     # DEC-AJ-12: tomar el precio de catalogo de un trabajo pendiente lo
     # puede quien edita los trabajos; un precio manual exige PRECIO_MANUAL.
+    # DEC-AJ-14: elegir o sustituir la pieza de un requisito del trabajo
+    # (depende del estado del Detalle: el caso de uso valida PIEZA_ELEGIR)
+    # y las piezas elegibles, una lectura de la Orden.
+    ("POST", "/api/orders/{orden_id}/details/{detalle_id}/pieces"): SERVICIO(
+        "PIEZA_ELEGIR"
+    ),
+    (
+        "GET",
+        "/api/orders/{orden_id}/details/{detalle_id}/pieces/options",
+    ): API("ORDENES_CONSULTAR"),
     ("POST", "/api/orders/{orden_id}/details/{detalle_id}/price"): SERVICIO(
         "DETALLE_DEFINIR_RECEPCION",
         "DETALLE_DEFINIR_TECNICO",
@@ -267,6 +277,13 @@ MATRIZ = {
         "MESA_TIPOS_GESTIONAR"
     ),
     # DEC-AJ-12: precios por modelo y modelos de equipo.
+    # DEC-AJ-14: insumos necesarios (previstos concretos y requisitos).
+    ("GET", "/api/admin/repair-types/supplies"): API(
+        "TIPO_REPARACION_GESTIONAR"
+    ),
+    ("PUT", "/api/admin/repair-types/{codigo}/supplies"): API(
+        "TIPO_REPARACION_GESTIONAR"
+    ),
     ("PUT", "/api/admin/repair-types/{codigo}/model-prices"): API(
         "PRECIOS_GESTIONAR"
     ),
@@ -368,6 +385,10 @@ MATRIZ = {
         "COMPRA_SOLICITAR"
     ),
     ("GET", "/api/purchases/suggestions"): API("COMPRAS_CONSULTAR"),
+    # DEC-AJ-14: requisitos sin pieza que bloquean trabajos.
+    ("GET", "/api/purchases/suggestions/pending-pieces"): API(
+        "COMPRAS_CONSULTAR"
+    ),
     ("GET", "/api/purchases/orders"): API("COMPRAS_CONSULTAR"),
     ("GET", "/api/purchases/orders/{orden_id}"): API("COMPRAS_CONSULTAR"),
     ("POST", "/api/purchases/orders"): API("OC_CREAR"),

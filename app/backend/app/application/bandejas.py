@@ -72,6 +72,7 @@ from .contexto import ApplicationContext
 from .finanzas import SituacionFinanciera, situacion_financiera
 from .inventario import en_camino_de_compras
 from .operativa import plazo_retiro_dias
+from .piezas import requisitos_de_insumo
 from .situacion import CodigoSituacion, SituacionOperativa, situacion_operativa
 
 
@@ -211,6 +212,7 @@ class _Lectura:
             self.con_reservas = contexto.ordenes.listar_con_reservas()
             self.insumos = catalogos.listar_insumos()
             self.previstos = catalogos.listar_tipo_reparacion_insumos()
+            self.requisitos = requisitos_de_insumo(contexto)
             self.estaciones = catalogos.listar_estaciones()
             self.compatibilidades = (
                 catalogos.listar_tipo_reparacion_estaciones()
@@ -276,6 +278,7 @@ class _Lectura:
             insumos=self.insumos,
             insumos_previstos=self.previstos,
             reservas_externas=reservas_externas_a(orden.id, self.con_reservas),
+            requisitos=self.requisitos,
         )
         return {
             detalle_id: tuple(nombres.get(i, i) for i in insumo_ids)

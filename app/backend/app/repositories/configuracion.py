@@ -16,6 +16,8 @@ from app.domain.models import (
     PrecioTipoModelo,
     RolUsuario,
     TipoReparacion,
+    TipoReparacionInsumos,
+    TipoReparacionRequisito,
 )
 
 
@@ -63,6 +65,19 @@ class ConfiguracionRepository(Protocol):
         """Registra una importacion masiva de precios por modelo
         (DEC-AJ-13) en la transaccion en curso, antes que sus cambios: la
         auditoria de cada uno la referencia."""
+        ...
+
+    def guardar_insumos_necesarios(
+        self,
+        tipo_reparacion_id: str,
+        previstos: Sequence[TipoReparacionInsumos],
+        requisitos: Sequence[TipoReparacionRequisito],
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None:
+        """DEC-AJ-14: los insumos previstos concretos del Tipo (reemplazan
+        el conjunto) y sus requisitos por categoria (alta, cambio o
+        desactivacion; nunca se borran), con su auditoria, en la
+        transaccion en curso."""
         ...
 
     def guardar_tipos_de_mesa(

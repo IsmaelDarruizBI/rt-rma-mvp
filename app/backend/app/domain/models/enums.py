@@ -210,6 +210,27 @@ class OrigenPrecio(str, Enum):
     PENDIENTE = "PENDIENTE"
 
 
+class CausaEleccionPieza(str, Enum):
+    """Por que se registro una eleccion de la pieza de un requisito
+    (DEC-AJ-14, D-14.4).
+
+    ``AUTOMATICA``: el sistema la eligio porque habia una sola pieza
+    compatible y activa. ``ELECCION``: la primera eleccion de una persona.
+    ``SUSTITUCION``: una persona cambio la pieza elegida, con motivo (antes
+    de reservar cambia la eleccion; despues, libera y reserva en la misma
+    operacion). ``CAMBIO_MODELO``: el modelo del equipo cambio y la pieza
+    ya no es compatible (se anula o se reemplaza por la unica compatible).
+    ``REDEFINICION``: el trabajo se redefinio a otro Tipo y la eleccion ya
+    no corresponde (se anula).
+    """
+
+    AUTOMATICA = "AUTOMATICA"
+    ELECCION = "ELECCION"
+    SUSTITUCION = "SUSTITUCION"
+    CAMBIO_MODELO = "CAMBIO_MODELO"
+    REDEFINICION = "REDEFINICION"
+
+
 class ResultadoEvaluacionTecnica(str, Enum):
     """Resultado principal de PROC-REP-183 (BR-REP-035/036)."""
 

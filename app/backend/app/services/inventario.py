@@ -14,11 +14,13 @@ from datetime import datetime
 from decimal import Decimal
 
 from app.domain.models import (
+    EleccionPieza,
     EstadoEjecucion,
     Insumo,
     InsumoUtilizado,
     MovimientoInsumo,
     OrdenReparacion,
+    ReparacionDetail,
     TipoMovimientoInsumo,
     TipoReparacionInsumos,
 )
@@ -31,6 +33,11 @@ CERO = Decimal("0")
 # Observacion de PROC-REP-210 cuando un override termina con insumos que
 # el stock no respaldaba (P-06): sin movimiento ni descuento posterior.
 PREFIJO_SIN_RESPALDO = "Utilizado sin respaldo de stock"
+
+# DEC-AJ-14: la liberacion de la pieza sustituida despues de reservar (y
+# antes de consumir) lleva esta observacion. No es PROC-REP-210: no cuenta
+# para ``inventario_aplicado``.
+PREFIJO_SUSTITUCION = "Sustitucion de pieza"
 
 # Movimientos que cierran (total o parcialmente) una reserva previa.
 _CIERRAN_RESERVA = (
@@ -50,6 +57,71 @@ def insumos_previstos_de(
         for relacion in relaciones
         if relacion.tipo_reparacion_id == tipo_reparacion_id
     ]
+
+
+def piezas_vigentes(detalle: ReparacionDetail) -> dict[str, EleccionPieza]:
+    """DEC-AJ-14: la pieza elegida vigente de cada requisito del Detalle.
+
+    Por requisito, la ultima eleccion registrada; si esa eleccion anulo la
+    pieza (``insumo_id`` vacio) el requisito no tiene pieza. Solo cuentan
+    las elecciones del Tipo vigente del Detalle: las de una definicion
+    anterior (redefinido a otro Tipo) no se reservan.
+    """
+    ultimas: dict[str, EleccionPieza] = {}
+    for eleccion in detalle.piezas:
+        ultimas[eleccion.requisito_id] = eleccion
+    return {
+        requisito_id: eleccion
+        for requisito_id, eleccion in ultimas.items()
+        if eleccion.insumo_id is not None
+        and eleccion.tipo_reparacion_id == detalle.tipo_reparacion_id
+    }
+
+
+def insumos_previstos_del_detalle(
+    detalle: ReparacionDetail,
+    relaciones: Sequence[TipoReparacionInsumos],
+) -> list[TipoReparacionInsumos]:
+    """Lo que el Detalle preve consumir y reserva al iniciar (BR-REP-006).
+
+    Los insumos previstos concretos de su Tipo (como siempre) mas la pieza
+    elegida de cada requisito (DEC-AJ-14), con la cantidad de la eleccion.
+    Una linea por insumo, con las cantidades sumadas: si una pieza elegida
+    coincide con un previsto concreto, se pide (y se reserva) la suma. Sin
+    piezas elegidas es exactamente ``insumos_previstos_de``.
+    """
+    cantidades: dict[str, Decimal] = {}
+    for previsto in insumos_previstos_de(
+        detalle.tipo_reparacion_id, relaciones
+    ):
+        cantidades[previsto.insumo_id] = (
+            cantidades.get(previsto.insumo_id, CERO) + previsto.cantidad
+        )
+    for eleccion in piezas_vigentes(detalle).values():
+        insumo_id = eleccion.insumo_id
+        assert insumo_id is not None
+        cantidades[insumo_id] = (
+            cantidades.get(insumo_id, CERO) + eleccion.cantidad
+        )
+    return [
+        TipoReparacionInsumos(
+            tipo_reparacion_id=detalle.tipo_reparacion_id,
+            insumo_id=insumo_id,
+            cantidad=cantidad,
+        )
+        for insumo_id, cantidad in cantidades.items()
+    ]
+
+
+def _previstos(
+    detalle_o_tipo: ReparacionDetail | str,
+    relaciones: Sequence[TipoReparacionInsumos],
+) -> list[TipoReparacionInsumos]:
+    """Los previstos de un Detalle (con sus piezas elegidas) o, por
+    compatibilidad, los de un Tipo."""
+    if isinstance(detalle_o_tipo, ReparacionDetail):
+        return insumos_previstos_del_detalle(detalle_o_tipo, relaciones)
+    return insumos_previstos_de(detalle_o_tipo, relaciones)
 
 
 def buscar_insumo(insumo_id: str, insumos: Sequence[Insumo]) -> Insumo:
@@ -85,7 +157,7 @@ def cantidad_pendiente(
 
 
 def faltantes_del_detalle(
-    tipo_reparacion_id: str,
+    detalle_o_tipo: ReparacionDetail | str,
     movimientos: Sequence[MovimientoInsumo],
     insumos: Sequence[Insumo],
     insumos_previstos: Sequence[TipoReparacionInsumos],
@@ -99,10 +171,14 @@ def faltantes_del_detalle(
     reservas propias (``movimientos``) y ajenas (``reservas_externas``,
     insumo_id -> cantidad). No decide nada sobre overrides: eso es del
     llamador.
+
+    DEC-AJ-14: con un Detalle, lo previsto incluye la pieza elegida de
+    cada requisito (``insumos_previstos_del_detalle``). Los requisitos sin
+    pieza elegida los evalua ``services.piezas.faltantes_con_requisitos``.
     """
     ajenas = reservas_externas or {}
     faltantes: set[str] = set()
-    previstos = insumos_previstos_de(tipo_reparacion_id, insumos_previstos)
+    previstos = _previstos(detalle_o_tipo, insumos_previstos)
     for previsto in previstos:
         insumo = buscar_insumo(previsto.insumo_id, insumos)
         disponible = stock_disponible(
@@ -239,9 +315,7 @@ def impacto_en_stock_del_detalle(
 
     ajenas = reservas_externas or {}
     impactos: list[ImpactoStockInsumo] = []
-    for previsto in insumos_previstos_de(
-        detalle.tipo_reparacion_id, insumos_previstos
-    ):
+    for previsto in insumos_previstos_del_detalle(detalle, insumos_previstos):
         insumo = buscar_insumo(previsto.insumo_id, insumos)
         propias = sum(
             (
@@ -279,11 +353,26 @@ def inventario_aplicado(
     movimiento alguno, asi que nunca se la detecta como aplicada.
     Reaplicarla tampoco produce movimientos ni toca el stock -que es lo
     que la idempotencia protege-, solo vuelve a registrar el paso.
+
+    DEC-AJ-14: la liberacion de una pieza sustituida durante la Ejecucion
+    (``es_liberacion_por_sustitucion``) no es PROC-REP-210 y no cuenta.
     """
     return any(
         movimiento.ejecucion_id == ejecucion_id
         and movimiento.tipo in _CIERRAN_RESERVA
+        and not es_liberacion_por_sustitucion(movimiento)
         for movimiento in orden.movimientos_insumo
+    )
+
+
+def es_liberacion_por_sustitucion(movimiento: MovimientoInsumo) -> bool:
+    """La LIBERACION_RESERVA de una pieza sustituida despues de reservar
+    (DEC-AJ-14): la registra una persona, con la observacion
+    ``PREFIJO_SUSTITUCION``, mientras la Ejecucion sigue en curso."""
+    return (
+        movimiento.tipo is TipoMovimientoInsumo.LIBERACION_RESERVA
+        and movimiento.usuario_id is not None
+        and (movimiento.observacion or "").startswith(PREFIJO_SUSTITUCION)
     )
 
 
