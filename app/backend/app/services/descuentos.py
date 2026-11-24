@@ -295,6 +295,10 @@ def aplicar_descuento(
         observacion=f"{resumen_de_registro(registro)}. Motivo: {motivo}",
     )
     nueva_orden.descuentos.append(registro)
+    # BR-REP-016: el ajuste nuevo de un trabajo achica la base del de la
+    # Orden; ningun importe fijo vigente queda por encima de su base (antes
+    # se recortaba en silencio al calcular).
+    _validar_topes(nueva_orden)
     return nueva_orden
 
 
