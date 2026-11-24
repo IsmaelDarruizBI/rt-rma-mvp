@@ -1959,3 +1959,124 @@ La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA inte
   - `test_base_local` fija 74 tablas y 8 vistas;
   - las rutas nuevas van en `test_matriz_permisos`;
   - `test_e3_sql_y_ajustes` solo cuenta las consultas de `catalogos` y `modelos_equipo`. Las escrituras de configuración van en `storage/postgres/configuracion.py`, que no cuenta.
+
+### 11.5 Bloque 7: importación de precios (implementación)
+
+Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. Implementa la parte B del bloque 7: DEC-AJ-13 (D-13.1 a D-13.3, BF-02) con la precisión D-13 de 11.1 y el punto 10 de la resolución (permiso `PRECIOS_GESTIONAR`). `business/` no cambia.
+
+| Commit | Qué |
+|---|---|
+| `1e8a642` | Dependencia `openpyxl`, lógica pura, lectura de planillas, plantilla, API, migración y pruebas del backend |
+| `0ff410b` | Frontend: Configuración → «Importar precios» |
+| este | Esta sección, `docs/contratos-macro-integral.md` y `docs/postgresql/diseno-fisico.md` |
+
+#### Qué quedó
+
+- **Dependencia:** `openpyxl>=3.1.5` en las dependencias principales de `pyproject.toml` (la imagen la instala con `pip install ".[postgres]"`). Se usa en modo de solo lectura y solo valores (`load_workbook(read_only=True, data_only=True)`) para leer, y para escribir la plantilla. No se agregó soporte multipart.
+- **Forma de la planilla** (`services/importacion_precios.py`, lógica pura):
+  - **Encabezado:** la primera fila con contenido.
+  - **Columna clave:** la primera cuyo encabezado es «Modelo» (también «Código del modelo», sin distinguir mayúsculas ni acentos); si no hay ninguna, la primera columna. Se toma el código `MOD-…` del principio de la celda.
+  - **Columnas de precios:** las que empiezan con un código de Tipo (`TR-001` o «TR-001 · Cambio de batería»).
+  - **Columnas ignoradas:** cualquier otra (por ejemplo «Nombre del modelo»). La vista previa las lista, para que un encabezado mal escrito («TR001») no pase inadvertido.
+- **Importes:** `80000`, `80000.50`, `80000,50`, `80.000`, `80.000,50` y `$ 80.000`. La coma separa decimales y el punto los miles; un único punto seguido de uno o dos dígitos es decimal. Se rechazan con su motivo: «80,000» (ambiguo), las comas de miles («1,234,567», «80,000.50»), los negativos, más de dos decimales y lo que no es un importe. Una celda numérica del `.xlsx` llega como número; un binario que está a menos de una millonésima de los centavos (80000.09999999999) se toma como 80000.10.
+- **Validación** (todos los errores juntos, con la celda en notación de planilla):
+  - **Columnas:** Tipo desconocido, «Otros», Tipo de precio único, Tipo dado de baja y Tipo repetido.
+  - **Filas:** código que no es `MOD-…`, modelo desconocido, modelo de otra marca (solo Apple, sin distinguir mayúsculas), modelo dado de baja (**error**: probablemente una plantilla vieja; se quita la fila o se reactiva el modelo), modelo repetido y fila con precios sin código.
+  - **Celdas:** importe inválido. Una celda vacía no cambia nada.
+  - Los errores de fila y columna se informan aunque sus celdas estén vacías. Las celdas de una fila o columna con error no se evalúan.
+  - **Estructura:** planilla vacía, sin columnas de Tipos, más de 500 filas de modelos, más de 100 columnas o más de 20.000 celdas con datos. El archivo, hasta 2 MB; el `.xlsx`, hasta 30 MB descomprimido.
+- **Clasificación:** cada celda válida queda NUEVO (sin precio vigente), CAMBIA o SIN_CAMBIO. Avisos que no bloquean: una variación de más del 50 % y un precio 0. `aplicable`: sin errores y con algún cambio.
+- **Lectura** (`integraciones/planillas.py`):
+  - **`.xlsx`:** se reconoce por su contenido (ZIP), declare lo que declare el navegador. Solo la primera hoja. Un `.xls` antiguo se rechaza con un mensaje que pide guardarlo como `.xlsx` o CSV.
+  - **CSV:** UTF-8 con o sin BOM; si no es UTF-8, Windows-1252 (el CSV de Excel en Windows). El separador se detecta en la primera fila con contenido entre tabulación, punto y coma y coma: gana el que da más columnas.
+  - **Celdas pegadas:** texto con tabulaciones (`text/tab-separated-values` o `text/plain`), con la misma detección.
+- **Plantilla:** modelos Apple vigentes en las filas (código y nombre), Tipos vigentes con precio por modelo en las columnas («TR-001 · nombre», ordenados por código) y el precio vigente, o la celda vacía.
+  - **`.xlsx`:** hoja «Precios» con el encabezado fijo y formato de miles, y una hoja «Instrucciones».
+  - **CSV:** UTF-8 con BOM, punto y coma e importes `80000,00`, para que Excel en castellano lo abra bien.
+  - Descargarla y volver a importarla da cero cambios y cero errores, en los dos formatos.
+- **API** (`api/importacion_precios.py`, todas con `PRECIOS_GESTIONAR`):
+  - **`GET /api/admin/model-prices/template?formato=xlsx` (o `csv`):** la plantilla.
+  - **`POST /api/admin/model-prices/import/preview?usuario_id=&nombre=`:** la vista previa, sin escribir. Funciona también en el modo JSON, con `editable: false`.
+  - **`POST /api/admin/model-prices/import?usuario_id=&nombre=`:** aplicar. Solo PostgreSQL, como el resto de la administración.
+  - **Cuerpo:** la planilla cruda, como las fotos y las firmas, con el límite por `Content-Length` y por tamaño leído.
+- **Aplicar** (`application/importacion_precios.py`):
+  - **Revalidación:** vuelve a leer la misma planilla y a validarla en el servidor, dentro de la transacción y contra los precios de ese momento. Nunca confía en la vista previa del cliente.
+  - **Concurrencia:** si un precio cambió entre la vista previa y aplicar, cuenta el actual. Lo que ya tiene ese valor pasa a SIN_CAMBIO, y si no queda ningún cambio se rechaza con «no hay cambios».
+  - **Rechazos:** con algún error responde 409, con la cantidad y los tres primeros, y no escribe nada. Sin cambios, también 409.
+  - **Escritura:** todo o nada, con `guardar_precios_modelo` (el mismo comando y la misma validación de la edición individual). Solo con los precios NUEVO y CAMBIA: nunca manda un precio vacío, así que nunca retira uno.
+  - **Idempotencia:** acepta `Idempotency-Key` (operación `IMPORTAR_PRECIOS_MODELO`, huella con el SHA-256 del contenido), como las fotos. Sin clave, repetirla da «no hay cambios».
+- **Auditoría agrupada:**
+  - `guardar_precios_modelo` recibe una `ImportacionPrecios` opcional. La registra en la misma transacción, antes de los cambios, con los nuevos y actualizados contados sobre lo que se escribe. Cada `CambioConfiguracion` lleva `importacion_id`.
+  - `GET /api/admin/config-changes` y `historial_precio` muestran el identificador.
+  - La auditoría de muchos cambios se inserta en lote (`ejecutar_lote`), después de comprobar el usuario. Una importación de 400 precios no hace 400 viajes a la base.
+- **Frontend:** Configuración → Taller → «Importar precios» (`ImportarPrecios.tsx`, permiso `PRECIOS_GESTIONAR`):
+  - descarga de la plantilla (`.xlsx` o CSV);
+  - archivo `.xlsx` o `.csv`: el tipo sale de la extensión y el contenido se copia al elegirlo, así que la vista previa y «Aplicar» envían lo mismo. Se puede volver a elegir el mismo archivo después de editarlo;
+  - o pegar las celdas;
+  - «Vista previa» muestra el resumen, los errores con su celda, los avisos, las columnas ignoradas y los cambios (modelo, tipo, antes → nuevo, Nuevo o Cambia);
+  - «Aplicar» solo se habilita sin errores, con cambios y sobre PostgreSQL. Si no se puede, la pantalla dice por qué. Después muestra el resultado con el identificador;
+  - el historial de `PRECIO_MODELO` muestra la importación de cada cambio. La edición individual no cambia;
+  - lógica pura en `features/configuracion/importacionPrecios.ts`.
+
+#### Migración
+
+`20261124000400_importacion_precios.sql`, aditiva:
+
+- **Tabla `importacion_precio`:**
+  - columnas `id` (uuid), `usuario_id`, `registrado_en`, `formato` (XLSX, CSV o TEXTO), `nombre_archivo`, `precios_nuevos`, `precios_actualizados` y `precios_sin_cambio`;
+  - al menos un nuevo o actualizado;
+  - inmutable;
+  - `rma_backend` solo inserta y lee.
+- **`cambio_configuracion.importacion_id`:** FK, vacío en lo existente. El CHECK `cambio_configuracion_importacion_precio` lo admite solo en `PRECIO_MODELO`. Índice parcial. El `grant insert` de la tabla ya lo cubre.
+- **`historial_precio`:** `create or replace` con las mismas columnas y `importacion_id` al final.
+- **Conteo:** 75 tablas y 8 vistas. Ningún dato existente cambia.
+
+#### Pruebas focalizadas
+
+| Qué | Resultado |
+|---|---|
+| Backend JSON: `test_importacion_precios.py` (nuevo, 46: importes válidos e inválidos con su motivo; coordenadas; clasificación, avisos, columnas ignoradas y precios a aplicar; errores de columnas y de filas con su celda; estructura y límites; columna clave por nombre y encabezado después de filas vacías; plantilla solo Apple y Tipos por modelo; CSV con BOM y `;`, con `,` y comillas, en Windows-1252; celdas pegadas; formatos no admitidos, `.xls`, ZIP roto, vacío y más de 2 MB; `.xlsx` con números, textos y filas vacías; `.xlsx` sobre el límite de filas; plantilla de ida y vuelta sin cambios en `.xlsx` y CSV; API en JSON: plantilla, vista previa, aplicar rechazado por ser de PostgreSQL, permiso y formato) y los relacionados: `test_precio_por_modelo`, `test_configuracion`, `test_configuracion_persistencia`, `test_matriz_permisos`, `test_e3_sql_y_ajustes`, `test_roles_permisos`, `test_permisos_operativos`, `test_autenticacion` y `test_unidad_de_trabajo` | 397 pasan |
+| PostgreSQL local: `test_importacion_precios_postgres` (nuevo, 7: migración aditiva —columna, vista, privilegios, CHECK—; aplicar con la auditoría agrupada, la importación registrada, `historial_precio` y `config-changes`, y repetirla sin cambios; un error no escribe nada; otra marca es error de la fila y no sale en la plantilla; revalidación con los precios del momento; permiso y clave de idempotencia; plantilla `.xlsx` y CSV de ida y vuelta), `test_precio_por_modelo_postgres`, `test_configuracion_postgres`, `test_base_local`, `test_permisos_macro_v14`, `test_permisos_operativos_postgres` (incluye las tres rutas nuevas con sesión real: 401, 403 y no 5xx), `test_permisos_rma_backend`, `test_idempotencia_postgres` y `test_roles_permisos_postgres` | 94 pasan |
+| Backend: `ruff check .` y `ruff format --check` | Limpios |
+| Frontend: `npm run typecheck`, `npm test` (incluye `importacion-precios.test.ts`, 9 pruebas nuevas) y `npm run build` | Pasan (256 pruebas) |
+
+La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA integral.
+
+#### Tests adaptados
+
+- **`tests/postgres/test_base_local.py`:** el conteo pasa de 74 a 75 tablas por `importacion_precio`.
+- **`test_matriz_permisos.py`:** se clasifican las tres rutas nuevas como `API("PRECIOS_GESTIONAR")`.
+- **Ninguna otra expectativa cambió.** `test_e3_sql_y_ajustes` no cambia: las consultas nuevas están en `storage/postgres/configuracion.py`.
+
+#### Decisiones tomadas en la implementación
+
+- **Una tabla de importaciones además de la columna:** D-13.3 pide conservar la auditoría «de la importación y sus cambios». La columna agrupa los cambios. La tabla guarda lo que no está en ellos: el archivo, el formato y los sin cambios. Una importación rechazada no deja registro: no se aplicó nada.
+- **Modelo dado de baja, otra marca o Tipo inválido:** son errores aunque sus celdas estén vacías. La regla es simple y predecible, y una plantilla vieja se corrige quitando la fila o la columna.
+- **«80.000» son ochenta mil:** sigue el formato argentino del texto aprobado. Un único punto con uno o dos dígitos es decimal, para aceptar el formato llano («80000.50»).
+- **La vista previa funciona en el modo JSON:** no escribe nada. Aplicar sigue el patrón de la administración y es solo PostgreSQL.
+- **Celdas vacías y retiros:** la importación nunca retira un precio (D-13.2). Quitar uno sigue siendo de la edición individual.
+
+#### Limitaciones y pendientes
+
+- **Multimarca:** queda fuera (D-13.2). Otra marca es un error de la fila.
+- **Listado de importaciones:** no hay pantalla. Se ven en el historial de precios y en `rma.importacion_precio`.
+- **Concurrencia:** dos importaciones simultáneas no se bloquean entre sí, igual que la edición individual. La última escritura gana y la auditoría registra cada una.
+- **Documentación:** no se actualizaron `traceability/discrepancias-baseline-v1.4.md` (DEC-AJ-13 sigue «sin implementar»), `docs/ESTADO_PROYECTO.md` ni `docs/pendientes-producto.md`, como en los bloques anteriores.
+- **Validación manual:** pendiente, en un navegador y sobre PostgreSQL:
+  1. descargar la plantilla en `.xlsx` y en CSV;
+  2. abrirla en Excel y en Google Sheets, cambiar precios y volver a subirla;
+  3. pegar celdas copiadas de Google Sheets;
+  4. ver los errores con una planilla con fallas;
+  5. aplicar y revisar el historial.
+
+#### Para el bloque 8 (DEC-AJ-14)
+
+- **Guardas:**
+  - la última migración es `20261124000400`;
+  - `test_base_local` fija 75 tablas y 8 vistas.
+- **Auditoría:**
+  - `CambioConfiguracion` tiene `importacion_id`, opcional;
+  - `cambio_configuracion.importacion_id` solo se admite en `PRECIO_MODELO`, por CHECK;
+  - `_auditar` inserta en lote cuando hay más de un cambio.
+- **Lectura de planillas:** `integraciones/planillas.py` (`formato_de`, `leer_planilla`, `escribir_xlsx`, `escribir_csv`) es reutilizable si el bloque 8 necesita importar la clasificación de insumos. `openpyxl` ya es dependencia.
+- **Patrón de importación:** lógica pura que devuelve una vista previa con errores por celda, más aplicar revalidando en el servidor dentro de la transacción. Sirve como modelo.
