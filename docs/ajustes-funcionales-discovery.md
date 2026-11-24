@@ -1613,3 +1613,106 @@ Son precisiones de implementación dentro del texto aprobado. Si alguna no coinc
     - las categorías y los fabricantes de insumos, `INSUMO_GESTIONAR`.
 11. **Orígenes sin autorización del cliente:** el precio queda fijo cuando se define el trabajo. Un cambio de modelo posterior solo genera un aviso.
 
+### 11.2 Bloque 5: implementación
+
+Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. Implementa DEC-AJ-10 (D-10.1 a D-10.5) con las precisiones de 11.1. `business/` no cambia.
+
+| Commit | Qué |
+|---|---|
+| `a2a896c` | Backend: permisos por clase al cambiar o quitar, reversión y corrección, evidencia de importes, recálculos por redefinición y cancelación, historial EV-REP-041, migración y persistencia PostgreSQL |
+| `6aba17c` | Comprobantes de ingreso, autorización y entrega con el ajuste por trabajo y el de la Orden aparte; PDF |
+| `a76da9a` | Frontend: formulario único, historial con Revertir y Corregir, aviso de recálculo, comprobantes y WhatsApp |
+| `f9cf53e` | Comentarios viejos y diseño físico |
+| este | Esta sección y `docs/contratos-macro-integral.md` |
+
+#### Qué quedó
+
+- **D-10.1, permisos:** `aplicar_descuento` exige el permiso de la clase nueva y, si hay un ajuste vigente en ese destino, también el de su clase. Quitar exige el de la clase del vigente. Con solo `DESCUENTO` ya no se reemplaza ni se quita una cortesía. Las acciones `APLICAR_DESCUENTO` y `OTORGAR_CORTESIA` no cambian. En el frontend las dos abren el mismo formulario «Ajuste comercial», con la clase preseleccionada.
+- **D-10.2, reversión y corrección:**
+  - **Rutas:** `POST /api/orders/{id}/adjustments/{ajuste}/revert` y `/correct` (`services/descuentos.py`: `revertir_ajuste` y `corregir_ajuste`).
+  - **Permiso:** `AJUSTE_REVERTIR`, «Revertir o corregir un ajuste comercial», grupo Comercial, configurable y solo de Administración por defecto. Corregir exige además el permiso de la clase nueva.
+  - **Qué se revierte:** solo el vigente de su destino, es decir, el último registro no revertido que no quita el ajuste. Vuelve a regir el anterior no revertido; si ese quitó el ajuste, no queda ninguno.
+  - **Corregir:** marca la reversión y agrega el registro correcto en el mismo destino, con `corrige_a`, en un solo guardado. Va al historial como un solo paso.
+  - **Cuándo se rechaza:** con la Orden entregada, cerrada o cancelada (`descuento_editable`; en PostgreSQL, también el trigger), y si un ajuste vigente de importe fijo superaría su base después de la operación.
+  - **Pagos:** no toca pagos, devoluciones ni el reparto del recargo. Si queda saldo a favor, la entrega lo sigue bloqueando hasta la devolución.
+- **D-10.3:** después de la entrega no se aplica, corrige ni revierte. Lo cortan `orden_para_modificar` (`ORDEN_CERRADA`), el servicio y, en PostgreSQL, `descuento_validar()` y `exigir_orden_abierta()`.
+- **D-10.4, evidencia:**
+  - **Al registrar:** cada registro nuevo guarda `precio_original` (la base: el precio del trabajo o lo que quedaba de la Orden), `importe_aplicado` y `precio_final`. Un retiro guarda la base con importe 0.
+  - **Recálculos:** `registrar_recalculos` compara el importe efectivo de cada ajuste vigente antes y después de `aplicar_redefinicion` (127 y 183), `cancelar_detalle` (incluye el desistimiento), `cancelar_trabajos_pendientes` y `cancelar_orden`. Si cambió, agrega un `RecalculoAjuste` (ajuste, causa, precio e importe anterior y nuevo, usuario y fecha) y un paso del historial. No escribe un ajuste nuevo.
+- **Historial:** cada alta, cambio, retiro, corrección, reversión y recálculo queda como `ACC-REP-072`, la system action «Aplicar un ajuste comercial por Orden o por Detalle» de `traceability/macro-integral.yaml`. Las acciones son `APLICAR_`, `CAMBIAR_`, `QUITAR_`, `CORREGIR_`, `REVERTIR_` y `RECALCULAR_AJUSTE_COMERCIAL`. En PostgreSQL se traduce a EV-REP-041, que ahora es visible y se renombra «Ajuste comercial aplicado, cambiado, quitado, corregido, revertido o recalculado».
+- **Identificador:** `RegistroDescuento.id`.
+  - **Registros nuevos:** `AJ-xxxxxxxxxxxx`.
+  - **JSON anterior:** al cargarlo, cada registro toma `AJ-001`, `AJ-002`… por su posición.
+  - **PostgreSQL:** `codigo` o, en las filas anteriores, el `id` uuid.
+- **Saldo:** `_ajuste_vigente` del dominio y `v_orden_saldo` excluyen los revertidos. La equivalencia se prueba paso a paso con reversión y corrección.
+- **D-10.5, comprobantes:** los emitidos desde ahora llevan, por trabajo, `ajuste` (clase, descripción e importe) y `precio_final`, y además `ajuste_orden` y `ajustes_por_trabajo`.
+  - **Presentación:** la hoja, el PDF y el mensaje de WhatsApp muestran precio, ajuste («Cortesía» o «Descuento») y precio final por trabajo, y el ajuste de la Orden en una línea aparte, sin motivo, usuario ni fecha. En la entrega, el recargo se sigue incorporando como siempre (DEC-UX-13, punto 6 de 11.1).
+  - **Agregado anterior:** `descuento` se conserva para la compatibilidad.
+  - **Documentos anteriores:** se presentan igual.
+  - **Comprobante de autorización:** un cambio de clase también ofrece una versión nueva. Se ofrece, no se emite sola.
+- **Frontend:**
+  - **Formulario único:** reemplaza a los tres formularios (`PagosOrden.tsx`). Tiene clase, destino, tipo, valor y motivo, con la vista previa del precio original, el ajuste y el final, sobre la misma base que el backend.
+  - **Historial de ajustes:** muestra la operación, la evidencia, el motivo, el usuario y la fecha, los revertidos tachados y los recálculos. Los botones «Revertir» y «Corregir» aparecen sobre el vigente de cada destino con `puede(actor, "AJUSTE_REVERTIR")`.
+  - **Aviso de recálculo:** al redefinir o cancelar un trabajo.
+  - **Comprobantes:** vista previa y hoja con el ajuste por trabajo.
+  - **Lógica pura:** en `ajusteComercial.ts`.
+
+#### Migración
+
+`20261124000100_ajuste_comercial_reversion.sql`, aditiva:
+
+- **`descuento`:** columnas que admiten vacío: `codigo`, `precio_original`, `importe_aplicado`, `precio_final`, `corrige_a` (FK a `descuento`), `revertido_por`, `revertido_en` y `reversion_motivo`.
+- **Restricciones:** CHECK de reversión completa, de evidencia coherente y de que un registro no se corrige a sí mismo; `unique (id, orden_id)`; índices únicos de `codigo` por Orden y de `corrige_a`.
+- **Triggers:**
+  - `descuento_validar()` reemplaza a `descuento_inmutable`. No admite borrar y solo deja completar la reversión, una vez y con la Orden abierta.
+  - `descuento_correccion_valida()` exige que `corrige_a` apunte a un revertido de la misma Orden y del mismo destino.
+- **Permisos de la base:** `rma_backend` solo actualiza las tres columnas de la reversión.
+- **Tabla nueva `descuento_recalculo`:** inmutable y solo con la Orden abierta. La FK compuesta al ajuste de la misma Orden garantiza que pertenece a esa Orden. Son 73 tablas y 8 vistas.
+- **`v_orden_saldo`:** `create or replace`, con las mismas columnas y sin los revertidos.
+- **Historial:** la equivalencia `ACC-REP-072 → EV-REP-041`, y EV-REP-041 pasa a visible.
+- **Comentario de la tabla:** ya no dice «no por debajo de lo cobrado».
+- **Datos:** ningún registro existente cambia.
+
+#### Pruebas focalizadas
+
+| Qué | Resultado |
+|---|---|
+| Backend JSON: `test_ajuste_comercial_dec_aj_10.py` y `test_ajuste_comercial_comprobantes.py` (nuevos, 15), `test_descuentos`, `test_ajuste_por_detalle`, `test_iteracion1_v14`, `test_recargo_detalles_devoluciones`, `test_recargo_medio_pago`, `test_roles_permisos`, `test_matriz_permisos`, `test_e3_sql_y_ajustes`, `test_pagos_devoluciones`, `test_comprobante_autorizacion`, `test_comprobantes`, `test_documentos_custodia_entrega`, `test_firmas_documentos`, `test_pdf`, `test_cancelacion_detalle`, `test_cancelacion_heredada`, `test_cancelacion_orden`, `test_desistimiento_cliente`, `test_historial_transversal`, `test_api_exc_rep_004`, `test_exc_rep_004` y `test_macro_v14` | 534 pasan |
+| PostgreSQL local: `test_ajuste_comercial_postgres` (nuevo, 6: vista y dominio en cada paso con reversión y corrección, relectura igual, recálculo guardado, el trigger admite la reversión una sola vez, rechazo con la Orden cerrada y migración aditiva), `test_ajuste_por_detalle`, `test_finanzas`, `test_iteracion1`, `test_base_local`, `test_permisos_macro_v14`, `test_permisos_operativos`, `test_permisos_rma_backend`, `test_roles_permisos`, `test_ordenes`, `test_bloque_a`, `test_comprobantes`, `test_macro_v14` y `test_entrega` | 173 pasan |
+| Backend: `ruff check .` y `ruff format --check app` | Limpios |
+| Frontend: `npm run typecheck`, `npm test` (incluye `ajuste-comercial.test.ts`, 9 pruebas nuevas) y `npm run build` | Pasan (234 pruebas) |
+
+La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA integral.
+
+#### Tests adaptados
+
+- **`test_documentos_custodia_entrega.py::test_16_comprobante_final`:** compara el renglón completo del trabajo realizado y ahora incluye `"ajuste": None` y `"precio_final": "80000"`. Son los campos nuevos del snapshot de D-10.5.
+- **`tests/postgres/test_base_local.py`:** el conteo pasa de 72 a 73 tablas por `descuento_recalculo`.
+- **`test_matriz_permisos.py`:** se clasifican las dos rutas nuevas, como `SERVICIO("AJUSTE_REVERTIR")` y `SERVICIO("AJUSTE_REVERTIR", "DESCUENTO", "CORTESIA")`.
+- **Ninguna otra expectativa cambió.** El mensaje de `PersistenciaError` al alterar un ajuste guardado conserva «los descuentos», que fija `test_finanzas_postgres`.
+
+#### Decisiones tomadas en la implementación
+
+- **Qué se revierte:** solo un registro que aplica un ajuste. Un retiro (sin `tipo`) no se revierte. Para volver a un ajuste quitado por error se aplica de nuevo.
+- **Topes:** después de revertir o corregir, ningún ajuste vigente de importe fijo puede superar su base. Por ejemplo, si al revertir vuelve a regir un importe fijo mayor que el precio redefinido del trabajo, se rechaza. Al aplicar no se agregó este control, para no cambiar la regla vigente.
+- **Recálculo:** solo cuando cambia el importe efectivo, sobre todos los ajustes vigentes: el del trabajo y el de la Orden, cuya base cambia. Un importe fijo que sigue entrando en la base nueva no deja recálculo. El ajuste de un trabajo cancelado queda con precio nuevo 0 e importe 0.
+- **Historial:** se usa la system action existente ACC-REP-072, en lugar de un identificador nuevo.
+- **Formulario único:** se mantienen las dos acciones del backend. El formulario solo ofrece las clases que el usuario tiene permiso de aplicar y, si no tiene el permiso de la clase del vigente, no deja cambiarlo ni quitarlo.
+- **Comprobantes:** no se imprime el motivo del ajuste en los comprobantes nuevos. El PDF lo imprimía; ahora queda en el registro interno, según D-10.5. El agregado `descuento` se sigue llenando para la compatibilidad y para las pruebas existentes.
+
+#### Limitaciones y pendientes
+
+- **Recargo:** el reparto del recargo de un pago sigue usando los ajustes actuales al emitir (DEC-UX-13). Un ajuste o una reversión posterior al cobro cambia cómo se presenta el reparto, no el saldo.
+- **Comprobante de entrega:** se sigue imprimiendo desde el navegador; solo el ingreso y la autorización tienen PDF descargable.
+- **Documentación:** no se actualizaron `traceability/discrepancias-baseline-v1.4.md` (DEC-AJ-10 sigue «sin implementar»), `docs/ESTADO_PROYECTO.md` ni `docs/pendientes-producto.md`.
+- **Validación manual:** pendiente, en un navegador:
+  1. aplicar un descuento y una cortesía por trabajo y a la Orden;
+  2. revertir y corregir con Administración;
+  3. intentarlo con Recepción;
+  4. cancelar o redefinir un trabajo con ajuste y ver el recálculo;
+  5. emitir los comprobantes y ver uno anterior.
+- **Para el bloque 6:**
+  - La última migración es `20261124000100`; la siguiente va después.
+  - `test_base_local` fija 73 tablas y 8 vistas.
+  - `test_matriz_permisos` exige que todo permiso nuevo tenga uso en el backend y que toda ruta nueva esté clasificada.
+  - `test_e3_sql_y_ajustes` solo cuenta las consultas de catálogos y modelos.
