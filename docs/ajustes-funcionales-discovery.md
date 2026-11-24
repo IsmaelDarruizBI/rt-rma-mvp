@@ -2080,3 +2080,144 @@ La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA inte
   - `_auditar` inserta en lote cuando hay más de un cambio.
 - **Lectura de planillas:** `integraciones/planillas.py` (`formato_de`, `leer_planilla`, `escribir_xlsx`, `escribir_csv`) es reutilizable si el bloque 8 necesita importar la clasificación de insumos. `openpyxl` ya es dependencia.
 - **Patrón de importación:** lógica pura que devuelve una vista previa con errores por celda, más aplicar revalidando en el servidor dentro de la transacción. Sirve como modelo.
+
+### 11.6 Bloque 8: clasificación y compatibilidad (implementación)
+
+Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. Implementa la parte A del bloque 8: DEC-AJ-14 D-14.1, D-14.2 y D-14.5 (BF-14), con el punto 10 de la resolución de 11.1 (categorías y fabricantes con `INSUMO_GESTIONAR`). Los requisitos por tipo, la elección de la pieza antes de reservar, la sustitución, la factibilidad y las sugerencias por pieza elegida (D-14.4, precisión 6 y puntos 1 y 2 de la resolución) son la parte B y no están hechos. `business/` no cambia.
+
+| Commit | Qué |
+|---|---|
+| `108840e` | Migración, dominio, funciones de compatibilidad, administración de categorías y fabricantes, clasificación del insumo, persistencia y pruebas del backend |
+| `1bfe356` | Frontend: Categorías de insumos, Fabricantes de repuestos, Insumos, Inventario, Compras y `SelectorInsumo` |
+| este | Esta sección, `docs/contratos-macro-integral.md` y `docs/postgresql/diseno-fisico.md` |
+
+#### Qué quedó
+
+- **Insumo = SKU real (D-14.1):** el stock, los lotes, los costos, el libro, las reservas, los consumos, Compras y los insumos previstos siguen en la fila de `insumo` y referencian el mismo `insumo.id`. Ninguna de esas tablas cambió.
+- **Clasificación (D-14.2), opcional y gradual:**
+  - **Categoría → Subcategoría:** catálogo `categoria_insumo` con dos niveles fijos. Una categoría no tiene padre; una subcategoría tiene por padre una categoría. El nivel y el padre se fijan en el alta y **no cambian** (mover una subcategoría reclasificaría en silencio sus insumos), así que nunca hay un tercer nivel.
+  - **El insumo guarda el nivel más específico** (`Insumo.categoria_id`: la subcategoría o, si no tiene, la categoría). La categoría padre se deriva.
+  - **Fabricante:** catálogo `fabricante_repuesto`, distinto de la marca del equipo.
+  - **Variante** y **código del fabricante o del proveedor:** texto opcional. El código no es único y no reemplaza al INS.
+  - **Modelos compatibles:** `insumo_compatibilidad`, de muchos a muchos con `modelo_equipo` (el catálogo de los precios). **Sin filas, el insumo es universal.**
+- **Compatibilidad** (`services/clasificacion_insumos.py`, funciones puras):
+  - universal: sirve para todo modelo;
+  - con modelos: solo esos;
+  - equipo sin modelo técnico (`None`): solo los universales. La elección de otra pieza con «compatibilidad no verificada» (punto 2 de la resolución) es de la parte B.
+- **Administración** (solo PostgreSQL, con `INSUMO_GESTIONAR`, auditada):
+  - **Categorías:** alta con código `CAT-NNN` generado por la base, edición del nombre y baja por desactivación. El nombre no se repite entre las categorías ni entre las subcategorías de una misma categoría, sin distinguir mayúsculas. Una subcategoría nueva necesita una categoría vigente.
+  - **Fabricantes:** alta con `FAB-NNN`, edición y baja. Nombre único sin distinguir mayúsculas.
+  - **Auditoría:** entidades `CATEGORIA_INSUMO` (campos `nombre`, `padre_id`, `activo`) y `FABRICANTE_REPUESTO` (`nombre`, `activo`). Su historial lo ve quien tiene `INSUMO_GESTIONAR`.
+- **Clasificación del insumo** (`POST/PUT /api/admin/supplies`):
+  - campos `categoria_id`, `fabricante_id`, `variante`, `codigo_fabricante` y `modelos_compatibles`. En el `PUT`, el que no viene se conserva y `null` (o `[]`) lo quita, como el stock mínimo;
+  - **la compatibilidad reemplaza el conjunto** (se quitan los modelos que ya no están y se agregan los nuevos) en la misma transacción que el insumo y su auditoría. Si no queda como se pidió, se revierte todo;
+  - **auditoría** en la entidad `INSUMO`: campos `categoria`, `fabricante`, `variante`, `codigo_fabricante` y `compatibilidad` (los códigos MOD ordenados y separados por coma; vacío es universal).
+- **Validación (decidida en la implementación):**
+  - la categoría, el fabricante y los modelos tienen que existir;
+  - **lo que se asigna o se agrega tiene que estar vigente**. Una subcategoría de una categoría dada de baja cuenta como dada de baja;
+  - **lo que el insumo ya tenía se conserva aunque se haya dado de baja**: la clasificación es gradual y dar de baja un modelo o una categoría no obliga a corregir los insumos.
+- **Lectura en los dos modos:**
+  - los insumos (`GET /api/admin/supplies` y cada situación de `GET /api/inventory`) traen la clasificación y `modelos_compatibles`;
+  - `GET /api/catalogs/supply-classification` (cualquier sesión) da categorías, fabricantes y modelos, activos o no, para nombrar y filtrar;
+  - en JSON los insumos se leen sin clasificar y universales, sin categorías ni fabricantes, y la administración responde que es de PostgreSQL.
+- **Inventario:** `buscar` también encuentra por el código del fabricante y la variante.
+- **Frontend:**
+  - **Configuración → Inventario y compras:** secciones «Categorías de insumos» (en árbol, con alta de subcategorías desde su categoría) y «Fabricantes de repuestos», con `INSUMO_GESTIONAR` y su historial.
+  - **Insumos:** columnas Categoría (Cat › Subcat), Fabricante, Variante y Compatibilidad («Universal», los modelos o «N modelos»); filtros por texto, categoría, «Sin clasificar», fabricante y modelo compatible. La ventana edita la clasificación y los modelos con «Universal» o «Solo para algunos modelos», búsqueda, «Agregar los N visibles» (por ejemplo, todas las variantes de «iPhone 14») y quitar. Un modelo dado de baja no se agrega pero se conserva.
+  - **Inventario:** columna Clasificación con la compatibilidad, filtros por categoría, fabricante y modelo compatible (sobre la lista leída) y la clasificación en el detalle del insumo.
+  - **Compras:** la nueva solicitud, «Agregar insumo» de la orden de compra y el filtro de costos usan `SelectorInsumo`, con búsqueda y filtros, y las etiquetas «INS-012 · Batería iPhone 14 · Acme · alta capacidad». Sigue una línea por insumo por orden de compra.
+  - **Lógica pura:** `features/inventario/clasificacion.ts`.
+
+#### Migración
+
+`20261124000500_clasificacion_insumos.sql`, aditiva:
+
+- **`categoria_insumo`:**
+  - `codigo` CAT-nnn, `nombre`, `padre_id` (FK a sí misma), `activo` y fechas;
+  - índice único `(padre_id, lower(btrim(nombre))) nulls not distinct`;
+  - trigger `categoria_insumo_dos_niveles`: el padre es una categoría sin padre y no cambia;
+  - código fijo y sin borrado;
+  - `rma_backend` inserta y actualiza `nombre` y `activo`.
+- **`fabricante_repuesto`:** `codigo` FAB-nnn, `nombre` único sin distinguir mayúsculas, `activo` y fechas; código fijo, sin borrado y los mismos privilegios.
+- **`insumo`:** `categoria_id` y `fabricante_id` (FK), `variante` y `codigo_fabricante`, opcionales, sin texto en blanco, con índices parciales y `grant update`.
+- **`insumo_compatibilidad`:** clave `(insumo_id, modelo_equipo_id)`, índice por modelo. `rma_backend` lee, inserta y borra: es el conjunto vigente y su historia está en la auditoría.
+- **Códigos:** secuencias `codigo_cat_seq` y `codigo_fab_seq`; `siguiente_codigo` (`create or replace`) suma `CAT` y `FAB` sin cambiar los demás.
+- **`cambio_configuracion`:** el CHECK de entidad suma `CATEGORIA_INSUMO` y `FABRICANTE_REPUESTO`.
+- **Datos (D-14.5):** ningún insumo queda clasificado ni con modelos (todos universales), y no hay movimientos de stock.
+- **Conteo:** 78 tablas y 8 vistas.
+
+#### Pruebas focalizadas
+
+| Qué | Resultado |
+|---|---|
+| Backend JSON: `test_clasificacion_insumos.py` (nuevo, 27: universal, con modelos y sin modelo técnico; categoría que incluye sus subcategorías; `insumos_compatibles` por modelo, categoría y vigencia; alta y edición de categorías con auditoría, dos niveles, padre inexistente o de baja, nombres repetidos entre pares, nivel fijo y sin cambios; fabricantes únicos; sin permiso; clasificación auditada con la compatibilidad ordenada y la vuelta a universal; alta sin clasificar sin auditar vacíos; lo nuevo tiene que existir y estar vigente y lo que ya tenía se conserva; JSON sin clasificar, universal y de solo lectura; `listar_insumos_compatibles` en JSON) y los relacionados: `test_insumos_admin`, `test_inventario_operativo`, `test_inventario_global`, `test_compras_reglas`, `test_stock_minimo`, `test_configuracion`, `test_configuracion_persistencia`, `test_matriz_permisos`, `test_e3_sql_y_ajustes`, `test_exc_rep_001` a `004`, `test_api_exc_rep_001` a `004`, `test_override_reservas_ajenas`, `test_permisos_operativos`, `test_roles_permisos`, `test_precio_por_modelo`, `test_importacion_precios`, `test_bandejas` y `test_comprobantes` | 660 pasan |
+| PostgreSQL local: `test_clasificacion_insumos_postgres` (nuevo, 6: migración aditiva —columnas, sin datos, códigos CAT-001 y FAB-001, privilegios, CHECK de entidad—; la base exige dos niveles, padre fijo, nombres únicos, formato y código fijo, sin borrado y sin textos en blanco; categorías y fabricantes por la API con auditoría, permiso y lectura en los dos GET; clasificación y compatibilidad del insumo por la API con reemplazo del conjunto, modelos de baja y desconocidos rechazados sin cambiar nada, conservación de lo de baja, vuelta a universal, auditoría y sin movimientos; categoría de baja que se conserva pero no se asigna; atomicidad con la validación desactivada), `test_insumos_admin_postgres`, `test_compras_postgres`, `test_reservas_postgres`, `test_lotes_postgres`, `test_stock_minimo_postgres`, `test_base_local`, `test_configuracion_postgres`, `test_permisos_macro_v14`, `test_permisos_operativos_postgres`, `test_permisos_rma_backend`, `test_roles_permisos_postgres`, `test_contrato_catalogos`, `test_codigos_automaticos_postgres`, `test_precio_por_modelo_postgres`, `test_importacion_precios_postgres`, `test_movimientos_postgres`, `test_consultas_postgres` y `test_migracion_stock_lotes` | 196 pasan |
+| PostgreSQL local: `test_pruebas_sql_supabase` (las pruebas SQL de `supabase/tests`) | Pasa |
+| Backend: `ruff check .` y `ruff format --check` | Limpios |
+| Frontend: `npm run typecheck`, `npm test` (incluye `clasificacion-insumos.test.ts`, 11 pruebas nuevas) y `npm run build` | Pasan (266 pruebas) |
+
+La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA integral.
+
+#### Tests adaptados
+
+- **`tests/postgres/test_base_local.py`:** el conteo pasa de 75 a 78 tablas por `categoria_insumo`, `fabricante_repuesto` e `insumo_compatibilidad`.
+- **`test_matriz_permisos.py`:** se clasifican las seis rutas nuevas: `GET /api/catalogs/supply-classification` como `SESION` y las de Configuración como `API("INSUMO_GESTIONAR")`.
+- **`supabase/tests/10_esquema.sql`:** la lista de entidades estaba desactualizada desde los bloques 5 y 7 (72 entidades; faltaban `descuento_recalculo`, `precio_tipo_modelo` e `importacion_precio`), así que `test_pruebas_sql_supabase` fallaba. Suma esas tres y las tres de este bloque: 78.
+- **`frontend/tests/configuracion-v2.test.ts`:** Administración ve 15 secciones (antes 13) y Recepción con `INSUMO_GESTIONAR` ve «Insumos», «Categorías de insumos» y «Fabricantes de repuestos». Las dos secciones nuevas son de DEC-AJ-14 y usan el permiso de insumos (punto 10 de la resolución).
+- **Ninguna otra expectativa cambió.** `test_e3_sql_y_ajustes` no cambia: las consultas de insumos de `catalogos` se amplían, no se suman, y las nuevas están en `storage/postgres/operativa.py`.
+
+#### Decisiones tomadas en la implementación
+
+- **Nivel y padre fijos:** una categoría no pasa a subcategoría ni cambia de categoría. Garantiza los dos niveles sin revisar descendientes y evita reclasificar insumos en silencio. Para reorganizar, se da de alta otra y se reclasifican los insumos.
+- **Lo de baja se conserva, no se asigna:** vale para categorías, subcategorías de categorías de baja, fabricantes y modelos compatibles.
+- **Compatibilidad como conjunto con borrado:** es la única tabla de este bloque donde `rma_backend` borra, igual que `mesa_tipo_reparacion`. La historia completa queda en `cambio_configuracion` (antes y después de cada cambio).
+- **Auditoría de la compatibilidad en la entidad `INSUMO`:** el historial del insumo muestra su clasificación y su compatibilidad juntas, sin otra entidad.
+- **Una lectura pública de la clasificación:** Inventario y Compras la necesitan para nombrar y filtrar, y la consultan roles sin `INSUMO_GESTIONAR`. No expone nada sensible.
+- **Sin importación masiva de la clasificación:** se clasifica de a uno, con los filtros «Sin clasificar» y por categoría para encontrar lo pendiente. `integraciones/planillas.py` queda disponible si hace falta.
+- **Reporte de consumo por categoría:** no se agregó. El reporte operativo lee solo Órdenes y sumarlo agrega la lectura de insumos y categorías; queda como mejora.
+
+#### Limitaciones y pendientes
+
+- **Parte B sin hacer:** requisitos por tipo, pieza elegida en el Detalle, elección automática con una sola compatible, «compatibilidad no verificada», sustitución antes y después de reservar, factibilidad sobre la pieza elegida y sugerencias de Compras con la pieza elegida.
+- **Insumos previstos actuales** (`tipo_reparacion_insumo`): siguen igual. No se valida su compatibilidad con el modelo; la precisión 6 los trata como universales.
+- **Stock mínimo:** sigue por SKU (D-14.5 lo deja así).
+- **Documentación:** no se actualizaron `traceability/discrepancias-baseline-v1.4.md` (DEC-AJ-14 sigue «sin implementar»), `docs/ESTADO_PROYECTO.md` ni `docs/pendientes-producto.md`, como en los bloques anteriores.
+- **Validación manual:** pendiente, en un navegador y sobre PostgreSQL:
+  1. dar de alta categorías, subcategorías y fabricantes;
+  2. clasificar un insumo y marcar sus modelos con la búsqueda;
+  3. filtrar «Sin clasificar» en Insumos;
+  4. filtrar por modelo en Inventario;
+  5. elegir insumos con los filtros en Compras;
+  6. dar de baja una categoría y ver que el insumo la conserva.
+
+#### Para la parte B (D-14.4)
+
+- **Guardas:**
+  - la última migración es `20261124000500`;
+  - `test_base_local` fija 78 tablas y 8 vistas, y `supabase/tests/10_esquema.sql` lista 78 entidades: una tabla nueva va en los dos;
+  - las rutas nuevas van en `test_matriz_permisos`;
+  - `test_e3_sql_y_ajustes` cuenta solo las consultas de `catalogos` y `modelos_equipo`.
+- **Tablas:**
+  - `rma.categoria_insumo` (`id` uuid, `codigo` CAT-nnn, `nombre`, `padre_id`, `activo`);
+  - `rma.fabricante_repuesto` (`id`, `codigo` FAB-nnn, `nombre`, `activo`);
+  - `rma.insumo` suma `categoria_id`, `fabricante_id`, `variante` y `codigo_fabricante`;
+  - `rma.insumo_compatibilidad` (`insumo_id`, `modelo_equipo_id`), sin filas: universal.
+  - Un requisito por categoría o subcategoría (`tipo_reparacion_requisito`, precisión 6) puede referenciar `categoria_insumo.id`; la pieza elegida en `detalle_version`, `insumo.id`.
+- **Dominio** (`app.domain.models`):
+  - `Insumo.categoria_id`, `fabricante_id`, `variante`, `codigo_fabricante` (códigos o texto, `None` si no hay) y `modelos_compatibles: tuple[str, ...]` (códigos MOD ordenados; vacío: universal);
+  - `CategoriaInsumo(id, nombre, padre_id, activo)` con `es_subcategoria`;
+  - `FabricanteRepuesto(id, nombre, activo)`.
+- **Funciones puras** (`app.services.clasificacion_insumos`):
+  - `compatible(insumo: Insumo, modelo_equipo_id: str | None) -> bool`;
+  - `es_universal(insumo) -> bool`;
+  - `en_categoria(insumo, categoria_id, categorias: Mapping[str, CategoriaInsumo]) -> bool` (una categoría incluye sus subcategorías);
+  - `categoria_padre(categoria_id, categorias) -> str | None` y `categorias_por_id(categorias)`;
+  - `insumos_compatibles(insumos, modelo_equipo_id, categoria_id=None, *, categorias=(), solo_activos=True) -> list[Insumo]`, en el orden recibido;
+  - `categoria_vigente(categoria, categorias)`.
+- **Cómo listar las piezas para (categoría, modelo):** `app.application.clasificacion_insumos.listar_insumos_compatibles(contexto, modelo_equipo_id=…, categoria_id=…, solo_activos=True)`. Lee los insumos y, si hace falta, las categorías, y aplica `insumos_compatibles`. El modelo de la Orden es `equipo.modelo_tecnico_id`; sin él, solo los universales. «Una sola compatible activa» es `len(...) == 1`.
+- **Catálogos:** `contexto.operativa.listar_categorias_insumo()` y `listar_fabricantes_repuesto()` (en JSON, vacías); los modelos, `application.configuracion.listar_modelos_administrables(contexto)`.
+- **Factibilidad sin pieza elegida (punto 1):** sumar el disponible de `insumos_compatibles(...)` por requisito, o evaluar la pieza elegida.
+- **Frontend:**
+  - `components/SelectorInsumo.tsx`: `SelectorInsumo` acepta `modelo` (fijo: solo compatibles; `null`: equipo sin modelo, solo universales), `categoria` (fija: la del requisito), `soloVigentes`, `valor`, `onCambiar`, `etiqueta` y `opcionVacia`. Sirve para elegir o sustituir la pieza. `useClasificacionInsumos()` y `FiltrosClasificacion` también se exportan.
+  - `features/inventario/clasificacion.ts`: `compatibleCon`, `filtrarInsumos`, `etiquetaInsumo`, `nombreCategoria`, `textoCompatibilidad` y `opcionesCategoria`.
+  - `SituacionInsumo` (tipos) trae la clasificación y `modelos_compatibles`.
