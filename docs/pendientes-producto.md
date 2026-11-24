@@ -8,10 +8,20 @@ Registrado el 28/10/2026, con `mvp-v2` en `a8dd74b`.
 |---|---|---|---|
 | P-01 | Buscador técnico en el alta RT_INTERNO, con GB y color obligatorios | Ingreso de equipos | Decidido, sin implementar |
 | P-02 | Números de modelo del fabricante en el catálogo técnico | Catálogo técnico | Esperando información verificada |
-| P-03 | Modelos de la línea iPhone 18 | Catálogo técnico | Excluidos hasta validar |
+| P-03 | Modelos de la línea iPhone 18 | Catálogo técnico | Excluidos hasta validar; desde DEC-AJ-12 y 13 se pueden cargar desde Configuración (local) |
 | P-04 | Garantía de 180 días en los Términos y Condiciones | Comprobante de entrega | Resuelto por DEC-AJ-09; implementado en local |
 | P-05 | Cláusulas sobre el retiro por terceros | Comprobante de entrega | Resuelto por DEC-AJ-09; implementado en local |
 | P-06 | Override por falta de stock: cualquier usuario y sin stock negativo | Inventario | Implementado en el MVP; falta actualizar BR-REP-003 |
+| P-07 | Jerarquía y compatibilidad de insumos | Inventario | Resuelto por DEC-AJ-14; implementado en local |
+| P-08 | Apartados 6 y 18 de los Términos y Condiciones | Comprobante de entrega | Revisión pendiente |
+| P-09 | Motivo del ajuste comercial fuera de los comprobantes | Comprobantes | Implementado en local; confirmar |
+| P-10 | Revertir el retiro de un ajuste comercial | Ajuste comercial | Decisión pendiente |
+| P-11 | Tope del ajuste de importe fijo solo al revertir o corregir | Ajuste comercial | Decisión pendiente |
+| P-12 | Pieza preferida por requisito | Insumos y Compras | Sin decidir |
+| P-13 | Importación masiva de la clasificación de insumos | Insumos | Sin decidir |
+| P-14 | Reportes de consumo por categoría y por origen del precio | Reportes | Sin decidir |
+| P-15 | Stock mínimo por categoría y modelo | Inventario | Sin decidir |
+| P-16 | Precios multimarca en la importación | Precios | Fuera por D-13.2 |
 
 ## P-01. Buscador técnico para RT_INTERNO
 
@@ -54,7 +64,9 @@ Los pasos 2 y 3 tienen que entrar juntos: si la validación llega antes, el alta
 
 **Hoy.** El generador la excluye (`MODELOS_EXCLUIDOS`). En la exportación de Ventas del 21/10/2026 son 420 filas con las variantes Estándar, Pro, Pro Max, Air, E y Duo, más dos filas sin número de modelo («iPhone 18 Pro 256GB» y «iPhone 18 Pro Max 256GB»). Mientras tanto, un iPhone 18 se puede cargar a mano.
 
-**Falta.** Validar los nombres. Después, quitarla de `MODELOS_EXCLUIDOS` y regenerar: los modelos existentes conservan sus IDs. La iteración de UX de Recepción (DEC-UX-01, 16/11/2026) confirmó que el mismo mecanismo completa también los modelos que Ventas agregó después del 21/10 o nunca vendió: hace falta una exportación nueva de Ventas (pendiente ABI-43 en `business/`; detalle en [`ux-recepcion.md`](ux-recepcion.md), UX-01).
+**Desde DEC-AJ-12 y 13** (implementado en local, `f3a216b` y `1e8a642`), Administración puede dar de alta un modelo en Configuración → Modelos de equipo y cargar sus precios en la grilla del tipo o con la importación de precios, sin esperar la exportación de Ventas.
+
+**Falta.** Decidir si la línea se da de alta así o con la exportación, y validar los nombres. Por la exportación: quitarla de `MODELOS_EXCLUIDOS` y regenerar: los modelos existentes conservan sus IDs. La iteración de UX de Recepción (DEC-UX-01, 16/11/2026) confirmó que el mismo mecanismo completa también los modelos que Ventas agregó después del 21/10 o nunca vendió: hace falta una exportación nueva de Ventas (pendiente ABI-43 en `business/`; detalle en [`ux-recepcion.md`](ux-recepcion.md), UX-01).
 
 ## P-04. Garantía de 180 días en los Términos y Condiciones
 
@@ -100,13 +112,9 @@ La Ejecución conserva lo que el técnico informó como utilizado; los movimient
 
 ## P-07. Jerarquía y compatibilidad de insumos
 
-Registrado el 19/11/2026 (Configuración v2, mejora futura, no implementada).
+Registrado el 19/11/2026 (Configuración v2): organizar los insumos por categorías y registrar su compatibilidad con varios modelos de equipo.
 
-**Pedido.** Organizar los insumos con categorías, subcategorías, productos y tipos de insumo, y registrar la compatibilidad de un insumo con varios modelos de equipo.
-
-**Hoy.** Cada insumo tiene identificador (`INS-NNN`, generado), código, nombre, unidad, control por lote y precio; la compatibilidad no existe.
-
-**Falta.** Definirlo en `business/` primero. El diseño actual no lo impide: el insumo conserva su identificador técnico y su clave, y la compatibilidad sería una tabla nueva entre insumo y modelo de equipo.
+**Resuelto por DEC-AJ-14 (23/11/2026) e implementado en local** (`108840e`, `1bfe356`, `508cbaa` y `7fc4114`). Cada insumo es un SKU real con categoría y subcategoría, fabricante, variante y modelos compatibles (sin modelos, universal); el tipo declara sus insumos necesarios por categoría y la pieza concreta se elige antes de reservar. Detalle: [`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md), secciones 11.6 y 11.7. Lo que quedó afuera está en P-12 a P-15.
 
 ## P-08. Apartados 6 y 18 de los Términos y Condiciones
 
@@ -118,6 +126,19 @@ Registrado el 23/11/2026 (bloque 4 de los ajustes funcionales). **Pendiente de r
 **Hoy.** Los dos apartados siguen igual en la versión 2 de los términos.
 
 **Falta.** Que el negocio revise la redacción. Si cambia, se publica una versión nueva desde Configuración, sin cambiar código; si cambia una regla, se decide antes en `rt-rma-app`.
+
+## P-09 a P-16. Seguimiento de la iteración 2 de los ajustes funcionales
+
+Registrado el 24/11/2026. Lo implementado está en local (`feat/ajustes-funcionales-uat`); el detalle técnico, en [`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md), secciones 11.2 a 11.7. Ninguno bloquea la validación manual.
+
+- **P-09. Motivo del ajuste comercial:** desde DEC-AJ-10 (D-10.5) ya no se imprime en los comprobantes nuevos (el PDF lo imprimía); queda en el registro interno. Confirmar con el negocio.
+- **P-10. Revertir un retiro:** quitar un ajuste no se revierte; para volver a un ajuste quitado por error se aplica de nuevo. Decidir si alcanza.
+- **P-11. Tope del importe fijo:** un ajuste de importe fijo mayor que su base (por ejemplo, después de bajar el precio en una redefinición) solo se rechaza al revertir o corregir; al aplicar rige la regla anterior. Decidir si se controla también al aplicar o al redefinir.
+- **P-12. Pieza preferida:** no hay marca de pieza preferida por requisito ni sugerencia de un SKU en Compras para los trabajos sin pieza elegida; DEC-AJ-14 no lo pide.
+- **P-13. Importación de la clasificación:** la categoría, el fabricante y la compatibilidad se cargan de a un insumo, con el filtro «Sin clasificar». Decidir si hace falta importarla antes de clasificar el stock real.
+- **P-14. Reportes:** no hay consumo por categoría de insumo, y los reportes no distinguen el origen del precio (catálogo, manual, pendiente u «Otros») ni el modelo de la copia.
+- **P-15. Stock mínimo por categoría y modelo:** el mínimo es por SKU (D-14.5); uno por categoría y modelo queda para después.
+- **P-16. Precios multimarca:** la importación acepta solo modelos Apple (D-13.2). Definir sus particularidades antes de extenderla.
 
 ## Nota técnica: `capacidad` como texto
 

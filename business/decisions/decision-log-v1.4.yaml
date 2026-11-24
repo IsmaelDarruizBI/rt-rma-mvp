@@ -2050,8 +2050,8 @@ decisions:
       (f) Cada alta, cambio, retiro, correccion y reversion queda en el
       historial de la Orden.
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "bloque 5 de rt-rma-mvp docs/ajustes-funcionales-discovery.md (seccion 11.1): hay tres formularios, con el permiso DESCUENTO se puede reemplazar una CORTESIA, no hay reversion ni correccion, no se guarda la evidencia de los importes ni de los recalculos, el evento de historial del ajuste (EV-REP-041) no se emite y el comprobante imprime una sola linea de Descuento"
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ajustes-funcionales-uat a2a896c (migracion 20261124000100_ajuste_comercial_reversion: precio_original, importe_aplicado y precio_final en rma.descuento, reversion con revertido_por y corrige_a, tabla descuento_recalculo y v_orden_saldo sin los revertidos; services/descuentos.py: cambiar o quitar exige el permiso de la clase del vigente y el de la nueva, revertir_ajuste y corregir_ajuste con el permiso AJUSTE_REVERTIR, solo de Administracion por defecto, rechazo con la Orden entregada, cerrada o cancelada, recalculos por redefinicion y cancelacion sin escribir un ajuste nuevo; historial ACC-REP-072, en PostgreSQL EV-REP-041, ahora visible; tests/test_ajuste_comercial_dec_aj_10.py y tests/postgres/test_ajuste_comercial_postgres.py), 6aba17c (comprobantes de ingreso, autorizacion y entrega con precio, ajuste y precio final por trabajo y el ajuste de la Orden aparte, sin motivo, usuario ni fecha; tests/test_ajuste_comercial_comprobantes.py), a76da9a (formulario unico de Ajuste comercial e historial con Revertir y Corregir) y f9cf53e, local"
 
   - id: DEC-AJ-11
     block: AJ
@@ -2075,8 +2075,8 @@ decisions:
       disponibilidad y evita duplicar las solicitudes de reposicion
       existentes.
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "bloque 6 de rt-rma-mvp docs/ajustes-funcionales-discovery.md (seccion 11.1): el insumo no tiene minimo; el filtro de faltantes y la bandeja de insumos negativos miran un faltante que la base de datos no admite"
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ajustes-funcionales-uat 4c523c4 (migracion 20261124000200_stock_minimo: rma.insumo.stock_minimo opcional y origen STOCK_MINIMO de la solicitud de compra; edicion en Configuracion, Insumos, con INSUMO_GESTIONAR y auditoria), ffec63b (services/stock_minimo.py: SUFICIENTE, BAJO_MINIMO y BAJO_MINIMO_REPOSICION_SOLICITADA contra el disponible y lo en camino; filtro bajo_minimo de Inventario, bandeja STOCK_BAJO_MINIMO de Inicio y sugerencias de Compras hasta el minimo que descuentan lo en camino, sin compras automaticas; tests/test_stock_minimo.py y tests/postgres/test_stock_minimo_postgres.py) y 00ab211 (Insumos, Inventario, Inicio y Compras), local"
 
   - id: DEC-AJ-12
     block: AJ
@@ -2141,8 +2141,8 @@ decisions:
       manual autorizado. Despues de la autorizacion se conserva la copia y se
       avisa que el precio corresponde a otro modelo.
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "bloque 7 de rt-rma-mvp docs/ajustes-funcionales-discovery.md (seccion 11.1): precio unico por tipo, sin precio por modelo ni precio manual autorizado; el Detalle no copia el nombre del trabajo ni el modelo; los modelos tecnicos salen de un archivo fijo, sin alta desde Configuracion"
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ajustes-funcionales-uat f3a216b (migracion 20261124000300_precio_por_modelo: tipo_reparacion.precio_por_modelo, tabla precio_tipo_modelo, codigos MOD y, en detalle_version, la copia de nombre_trabajo y modelo_equipo_id y el origen del precio CATALOGO, CATALOGO_MODELO, MANUAL, OTROS o PENDIENTE con motivo, quien y cuando; services/precio_trabajo.py resolver_precio en todos los caminos que crean o redefinen un trabajo, sin respaldo generico; permisos PRECIO_MANUAL, de Coordinacion RMA y Administracion, y MODELO_EQUIPO_GESTIONAR, de Administracion; el precio pendiente bloquea el comprobante de ingreso y la autorizacion en CLIENTE_EXTERNO; Definir precio y el cambio de modelo antes de autorizar como version solo_precio del Detalle, y despues el aviso PRECIO_OTRO_MODELO; historial: system action nueva ACC-REP-083, definir o volver a determinar el precio de un trabajo, en PostgreSQL EV-REP-026; tests/test_precio_por_modelo.py y tests/postgres/test_precio_por_modelo_postgres.py) y 4b21e7c (selectores con el precio del modelo, Definir precio, Modelos de equipo y grilla de precios por modelo), local. ABI-43 sigue abierto para la linea iPhone 18"
     open: [ABI-43]
 
   - id: DEC-AJ-13
@@ -2179,8 +2179,8 @@ decisions:
       formato argentino; los cambios de una importacion comparten un
       identificador comun en la auditoria.
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "bloque 7 de rt-rma-mvp docs/ajustes-funcionales-discovery.md (seccion 11.1): no hay importacion de precios, lector de planillas ni precio por modelo"
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ajustes-funcionales-uat 1e8a642 (dependencia openpyxl; services/importacion_precios.py e integraciones/planillas.py: .xlsx, CSV y celdas pegadas como matriz de codigos MOD por TR, importes con formato argentino, solo modelos Apple y tipos con precio por modelo, celdas vacias sin efecto; plantilla .xlsx y CSV con los precios actuales; vista previa y aplicar todo o nada revalidando en el servidor, con PRECIOS_GESTIONAR; migracion 20261124000400_importacion_precios: tabla importacion_precio y cambio_configuracion.importacion_id para la auditoria agrupada; tests/test_importacion_precios.py y tests/postgres/test_importacion_precios_postgres.py) y 0ff410b (Configuracion, Importar precios), local"
 
   - id: DEC-AJ-14
     block: AJ
@@ -2253,8 +2253,8 @@ decisions:
       requisitos funcionan como hoy. (f) Las sugerencias de compra por
       faltante usan la pieza elegida.
     implementation:
-      status: NO_IMPLEMENTADO
-      gap: "bloque 8 de rt-rma-mvp docs/ajustes-funcionales-discovery.md (seccion 11.1): el insumo no tiene clasificacion ni compatibilidad con modelos; los insumos previstos por tipo son concretos y sin pantalla, y la reserva y el consumo usan siempre ese mismo insumo"
+      status: IMPLEMENTADO
+      evidence: "rt-rma-mvp feat/ajustes-funcionales-uat 108840e (migracion 20261124000500_clasificacion_insumos: categoria_insumo de dos niveles, fabricante_repuesto, variante y codigo del fabricante en insumo, e insumo_compatibilidad, sin filas universal; ningun insumo, lote ni movimiento cambia; services/clasificacion_insumos.py; administracion con INSUMO_GESTIONAR y auditoria; tests/test_clasificacion_insumos.py y tests/postgres/test_clasificacion_insumos_postgres.py), 1bfe356 (categorias, fabricantes, clasificacion y compatibilidad en Insumos y selector con filtros en Inventario y Compras), 508cbaa (migracion 20261124000600_requisitos_pieza: tipo_reparacion_requisito y detalle_pieza, inmutable; services/piezas.py: eleccion automatica con una sola pieza compatible, eleccion y sustitucion con el permiso PIEZA_ELEGIR, de Tecnico, Coordinacion RMA y Administracion, factibilidad sobre la pieza elegida, inicio rechazado con PIEZA_SIN_ELEGIR, sustitucion de una pieza reservada con la liberacion y la reserva nueva en una transaccion, y sugerencias de Compras con la pieza elegida; historial: system action nueva ACC-REP-084, elegir, sustituir o revisar la pieza de un trabajo, en PostgreSQL EV-REP-010 y la sustitucion de una pieza reservada EV-REP-024; tests/test_requisitos_pieza.py y tests/postgres/test_requisitos_pieza_postgres.py) y 7fc4114 (piezas por categoria del trabajo, Elegir pieza y Sustituir, Insumos necesarios del tipo y Trabajos sin pieza elegida en Compras), local"
 
   # ------------------------------------------------------------------ Baseline y sincronizacion
   - id: DC01

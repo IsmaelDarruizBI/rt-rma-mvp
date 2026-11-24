@@ -1,6 +1,6 @@
 # Ajustes funcionales del feedback de UAT (BF-01 a BF-20): análisis y plan
 
-> **Estado (23/11/2026):** iteración 1 (bloques 1 a 4) implementada en local (secciones 8 y 10), sin push ni despliegue. Iteración 2 (bloques 5 a 8): decisiones aprobadas y registradas como DEC-AJ-10 a 14 (sección 11.1); implementación en curso. `business/` está sincronizado con `rt-rma-app` `a2c64f3` (`spec/ajustes-funcionales`, local), con DEC-AJ-01 a 09 implementadas (sección 9.1) y DEC-AJ-10 a 14 sin implementar (sección 11.1).
+> **Estado (24/11/2026):** iteraciones 1 (bloques 1 a 4) y 2 (bloques 5 a 8) implementadas en local (secciones 8, 10 y 11.2 a 11.7), sin push ni despliegue. `business/` está sincronizado con `rt-rma-app` `2e93e9b` (`spec/ajustes-funcionales`, local), con DEC-AJ-01 a 14 implementadas (secciones 9.1 y 11.1). Sigue la validación manual de los ocho bloques (sección 12).
 >
 > **Aprobado (23/11/2026):** la planificación general y la secuencia de los 8 bloques (sección 3).
 >
@@ -8,13 +8,13 @@
 >
 > **Aprobado (23/11/2026):** las decisiones de la iteración 2, D-10 a D-14. D-12.2, D-13.1, D-14.3 y D-14.4 fueron modificadas por el usuario. Rige la sección 11.1, con las precisiones de implementación de la coordinación.
 >
-> **Bloques 1 a 4:** implementados en local; se validan a mano junto con todo el backlog (secciones 8 y 10).
+> **Bloques 1 a 8:** implementados en local; se validan a mano juntos, con el recorrido de la sección 12.
 >
 > **Replanificado (23/11/2026):** la iteración 1 incluye los bloques 2, 3 y 4, y la iteración 2 los bloques 5 a 8. Las decisiones de la iteración 1 están aprobadas (sección 9).
 >
 > **D-07:** aprobada la alternativa A (verificación informativa y obligatoria), el 23/11/2026.
 >
-> **Rama:** `feat/ajustes-funcionales-uat`, desde `mvp-v2` `82ebbb6`, con 42 migraciones; la iteración 1 suma tres aditivas, solo locales (`20261123000100` a `20261123000300`).
+> **Rama:** `feat/ajustes-funcionales-uat`, desde `mvp-v2` `82ebbb6`, con 42 migraciones; la iteración 1 suma tres aditivas (`20261123000100` a `20261123000300`) y la iteración 2, seis (`20261124000100` a `20261124000600`), todas solo locales: 51 migraciones y 80 tablas. La iteración 2 agrega la dependencia `openpyxl`.
 >
 > **Referencias:** las de backend son relativas a `app/backend/app/` y las de frontend, a `app/frontend/src/`.
 >
@@ -1523,7 +1523,7 @@ Hasta que termine el bloque 8, los tipos genéricos solo pueden prever insumos u
 
 **Rige esta sección.** El análisis y las propuestas de la sección 11 quedan como contexto; donde difieren, vale lo de aquí.
 
-Registradas en `rt-rma-app`, rama `spec/ajustes-funcionales` (local, sin publicar), commit `a2c64f3`, y copiadas a `business/` ([`sincronizacion-funcional.md`](sincronizacion-funcional.md)). DEC-AJ-NN corresponde a D-NN y agrupa sus puntos. No agregan nodos, aristas ni estados. Ninguna está implementada: figuran en la sección B de [`traceability/discrepancias-baseline-v1.4.md`](../traceability/discrepancias-baseline-v1.4.md).
+Registradas en `rt-rma-app`, rama `spec/ajustes-funcionales` (local, sin publicar), commit `a2c64f3`, y copiadas a `business/` ([`sincronizacion-funcional.md`](sincronizacion-funcional.md)). DEC-AJ-NN corresponde a D-NN y agrupa sus puntos. No agregan nodos, aristas ni estados. Se implementaron en la iteración 2 (secciones 11.2 a 11.7) y `rt-rma-app` `2e93e9b` las registra como implementadas: figuran en la sección J de [`traceability/discrepancias-baseline-v1.4.md`](../traceability/discrepancias-baseline-v1.4.md).
 
 - **Modificadas por el usuario** respecto de la propuesta: D-12.2, D-13.1, D-14.3 y D-14.4.
 - **Precisiones de implementación:** las definió la coordinación del desarrollo para cerrar huecos del texto aprobado. No son texto aprobado. En `rt-rma-app` van separadas en las notas de cada DEC-AJ, y en las reglas llevan la marca «precisión de implementación».
@@ -2372,3 +2372,167 @@ La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA inte
 #### Para el QA integral
 
 Es el último bloque de la iteración 2. Conviene correr la suite completa del backend, `tests/postgres` completo y los E2E antes de proponer la integración. Además, revisar a mano el circuito de piezas con un técnico, Coordinación y Recepción, esta última sin `PIEZA_ELEGIR` ni la información técnica.
+
+## 12. Validación manual de los ocho bloques
+
+Recorrido único para validar a mano las iteraciones 1 y 2 antes del QA integral (paso 3 de la metodología). Junta los pasos manuales de las secciones 8, 10 y 11.2 a 11.7 en el orden de un caso real: primero la configuración y después una Orden desde el ingreso hasta la entrega.
+
+Casi toda la administración nueva es **solo de PostgreSQL**: modelos, precios por modelo, importación, categorías, fabricantes, insumos necesarios, stock mínimo, empresa y términos. En JSON se ve, pero no se edita. Por eso se valida sobre PostgreSQL local, en una base aparte.
+
+Cada diferencia se anota con el número del paso (por ejemplo, «C5») y el usuario. Esas notas son la entrada de los ajustes (paso 4 de la metodología).
+
+### 12.1 Entorno local sobre PostgreSQL
+
+Requisitos y PostgreSQL 17 local (puerto 54329): [`CHECKPOINT_PRE_DEPLOY.md`](CHECKPOINT_PRE_DEPLOY.md), sección 7. Comandos para Git Bash.
+
+**Usar una base nueva, `rma_validacion`.** No borrar ni reutilizar `rma_dev`, que tiene datos locales: el script de la sección 7 hace `drop database rma_dev`, y el de abajo solo toca `rma_validacion`.
+
+1. **Rama y dependencias**, desde la raíz del repositorio:
+
+   ```bash
+   git switch feat/ajustes-funcionales-uat
+   npm install
+   cd app/backend
+   source .venv/Scripts/activate      # si no existe: python -m venv .venv
+   pip install -e ".[dev,postgres]"   # instala openpyxl, nueva en la iteración 2
+   cd ../frontend && npm install && cd ../..
+   ```
+
+2. **PostgreSQL**, si no está corriendo, desde `~/pg-rma`:
+
+   ```bash
+   BIN=$(ls -d node_modules/@embedded-postgres/*/native/bin)
+   "$BIN/pg_ctl" -D data -o "-p 54329 -c listen_addresses=127.0.0.1" -l pg.log -w start
+   ```
+
+3. **Base `rma_validacion`**, desde `app/backend`. Aplica las migraciones y las cargas de referencia y de desarrollo. Si se vuelve a correr, la base de validación queda en cero.
+
+   ```bash
+   .venv/Scripts/python - <<'EOF'
+   import psycopg
+   from psycopg import sql
+   from tests.postgres.base_local import ROLES_SUPABASE, archivos_sql, url_admin_local
+   BASE = "rma_validacion"  # nunca rma_dev
+   admin = url_admin_local("postgresql://postgres@127.0.0.1:54329/postgres")
+   with psycopg.connect(admin, autocommit=True) as a:
+       for rol in ROLES_SUPABASE:
+           if not a.execute("select 1 from pg_roles where rolname=%s", (rol,)).fetchone():
+               a.execute(sql.SQL("create role {} nologin").format(sql.Identifier(rol)))
+       a.execute(sql.SQL("drop database if exists {} with (force)").format(sql.Identifier(BASE)))
+       a.execute(sql.SQL("create database {}").format(sql.Identifier(BASE)))
+   archivos = archivos_sql()
+   with psycopg.connect(f"postgresql://postgres@127.0.0.1:54329/{BASE}", autocommit=True) as c:
+       for archivo in archivos:
+           c.execute(archivo.read_text(encoding="utf-8"))
+       tablas = c.execute(
+           "select count(*) from information_schema.tables"
+           " where table_schema = 'rma' and table_type = 'BASE TABLE'"
+       ).fetchone()[0]
+   print(len(archivos), "archivos SQL;", tablas, "tablas en rma")
+   EOF
+   ```
+
+   **Esperado:** `56 archivos SQL; 80 tablas en rma`: 51 migraciones, 4 cargas de referencia y la de desarrollo.
+
+4. **Backend**, desde `app/backend`, en una terminal:
+
+   ```bash
+   export RMA_PERSISTENCIA=postgres
+   export RMA_DATABASE_URL=postgresql://postgres@127.0.0.1:54329/rma_validacion
+   export RMA_DATA_DIR=$HOME/rma-validacion RMA_FOTOS_DIR=$HOME/rma-validacion/fotos
+   mkdir -p "$RMA_FOTOS_DIR"
+   .venv/Scripts/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+   ```
+
+   **Esperado:** `http://127.0.0.1:8000/health` responde 200. `RMA_AUTH_MODO` queda en `demo`, el valor local por defecto.
+
+5. **Frontend**, desde `app/frontend`, en otra terminal: `npm run dev` y abrir `http://localhost:5173`. Si no hay `.env`, copiar `.env.example`. Sin `VITE_AUTH_MODO`, el acceso es de prueba y se elige el usuario: `recepcion`, `tecnico`, `coordinacion` o `administracion`.
+
+**Datos de partida:**
+
+- TR-001 «Cambio bateria iPhone 14» y TR-002, con la Mesa EST-001;
+- el insumo INS-001 BAT-IP14, con 2 unidades;
+- los 36 modelos técnicos de la carga de referencia, sin la línea iPhone 18;
+- ninguna Orden.
+
+### 12.2 Recorrido
+
+Los bloques (B1 a B8) y los BF de cada paso permiten volver al detalle de las secciones 8 a 11. Los nombres entre comillas son los de la pantalla.
+
+#### A. Configuración (bloques 4, 6, 7 y 8)
+
+| Paso | Usuario | Qué hacer | Esperado |
+|---|---|---|---|
+| A1 | administracion | Configuración → «Datos de la empresa»: cambiar el horario y el pie del comprobante | Se guarda y queda en el historial de cambios. Los comprobantes nuevos lo copian (B4, BF-19) |
+| A2 | administracion | Configuración → «Términos y condiciones»: ver la versión 2 y publicar una 3 con un cambio menor | La versión 2 no tiene los 180 días ni la anulación por retiro de un tercero. La 3 rige para los comprobantes nuevos y las anteriores se conservan (B4, P-04 y P-05) |
+| A3 | administracion | Configuración → «Modelos de equipo»: dar de alta un modelo Apple de prueba. Repetirlo con otras mayúsculas o espacios | Se crea con el código `MOD-0037` y aparece en el alta de Órdenes. El duplicado se rechaza. `coordinacion` no ve la sección (B7, BF-01) |
+| A4 | administracion | Configuración → Tipos de reparación: crear «Cambio de batería» con la Mesa EST-001 y «Precio por modelo». En su grilla, poner precio a las variantes de iPhone 14 y a A3, y dejar sin precio el iPhone 13. Después, quitar un precio | La grilla se guarda todo o nada. El precio quitado queda inactivo, sin borrarse. Cada cambio queda en el historial de precios con su modelo (B7, BF-01) |
+| A5 | administracion | Configuración → «Importar precios»: descargar la plantilla `.xlsx` y la CSV y subirlas sin cambios | «No hay cambios» y ningún error, en los dos formatos (B7, BF-02) |
+| A6 | administracion | Editar la plantilla en Excel o Google Sheets: cambiar dos precios y agregar errores («80,000», un encabezado «TR001» y un modelo de otra marca). Ver la vista previa | Cada error con su celda, la columna «TR001» entre las ignoradas y «Aplicar» deshabilitado |
+| A7 | administracion | Corregir los errores, ver la vista previa y aplicar. Después, pegar celdas copiadas de Google Sheets | Nuevo y Cambia con el precio anterior y el nuevo; se aplica todo junto. El historial de precios muestra el identificador de la importación. El pegado funciona igual |
+| A8 | administracion | Configuración → «Categorías de insumos»: crear «Baterías» y una subcategoría. En «Fabricantes de repuestos», dos fabricantes. Repetir un nombre | Códigos `CAT-…` y `FAB-…`. El nombre repetido se rechaza (B8, BF-14) |
+| A9 | administracion | Configuración → Insumos: crear dos baterías de iPhone 14 de fabricantes distintos, en «Baterías», con «Solo para algunos modelos» y «Agregar los N visibles» de iPhone 14. Crear un insumo universal (por ejemplo, un adhesivo). Poner stock mínimo 2 a la primera batería | Las columnas muestran la categoría, el fabricante, la compatibilidad y el mínimo. El filtro «Sin clasificar» muestra INS-001 y el adhesivo (B8 y B6, BF-14 y BF-15) |
+| A10 | coordinacion | Intentar editar el stock mínimo | No puede: no tiene `INSUMO_GESTIONAR` (BF-15) |
+| A11 | administracion | Tipos de reparación → «Insumos necesarios» de «Cambio de batería»: requisito «Baterías» × 1 y el adhesivo como previsto concreto. Intentar agregar una batería como previsto concreto | Se guarda con auditoría. La batería se rechaza como previsto: no es universal y va como requisito (B8, BF-14) |
+| A12 | administracion | Inventario → «Registrar ingreso»: 1 unidad de la primera batería, 3 de la segunda y 5 del adhesivo | La primera batería queda «Bajo mínimo» (ámbar). El filtro «Bajo mínimo» la muestra. En Inicio aparece «Insumos a reponer» para `coordinacion` y `administracion`, y no para `recepcion` ni `tecnico` (B6, BF-15) |
+| A13 | administracion | Compras → «Sugerencias de reposición»: crear la solicitud sugerida | La cantidad completa el mínimo y la causa es el stock mínimo. En Inventario pasa a «Bajo mínimo · reposición solicitada» (azul) y no se vuelve a sugerir. Nada se crea solo |
+| A14 | administracion | Compras → nueva solicitud: buscar con el selector y filtrar por categoría, fabricante y modelo. En Inventario, filtrar por modelo compatible iPhone 14. Dar de baja la subcategoría de A8 | Etiquetas «INS-… · nombre · fabricante · variante». Por modelo se ven las baterías compatibles y los universales. El insumo conserva la subcategoría dada de baja, pero no se le puede asignar a otro (B8, BF-14) |
+
+#### B. Ingreso (bloques 1, 3 y 7)
+
+| Paso | Usuario | Qué hacer | Esperado |
+|---|---|---|---|
+| B1 | recepcion | Orden 1, Cliente Externo: iPhone 14 del catálogo, «Cambio de batería» y la verificación de funcionalidades. Usar «Crear y generar el comprobante» | El selector muestra el precio del modelo. La verificación es obligatoria. El canal presencial viene preseleccionado. El visor ofrece «Imprimir» como acción principal y no imprime solo. El comprobante trae la verificación y los datos de A1 (B3 y B7, BF-06, BF-08 y BF-01) |
+| B2 | recepcion | Orden 2: el mismo trabajo con iPhone 13, sin precio para el tipo | «Sin precio para este modelo» y el aviso de que queda pendiente. La Orden se crea, pero el comprobante no. El trabajo muestra «Precio pendiente de definir», nunca $0 (B7, BF-01) |
+| B3 | recepcion | Orden 2: corregir el modelo a iPhone 14 en los datos del ingreso. Después, volver a iPhone 13 | Con iPhone 14 toma el precio de catálogo; con iPhone 13 vuelve a quedar pendiente. El historial registra que se volvió a determinar el precio |
+| B4 | coordinacion | Orden 2: «Definir precio» con precio manual y motivo. Intentar lo mismo en la Orden 1 | Marca «Precio manual» con el motivo y quién. En la Orden 1 se rechaza, porque hay precio de catálogo: para bajarlo está el ajuste comercial. Después, `recepcion` genera el comprobante de la Orden 2. Como ninguna batería es compatible con iPhone 13, el trabajo queda bloqueado por recursos (C9) |
+| B5 | recepcion | Orden 3, sin trabajos: «Trabajo solicitado» en texto libre, el modelo cargado a mano (sin modelo técnico) e «IMEI no disponible». Enviar a revisión | El equipo se identifica con su `EQP-…`, nunca con un IMEI ficticio. El comprobante de recepción confirma la custodia en el mismo acto (B3, BF-04 y BF-05) |
+| B6 | recepcion | Orden 3: «Registrar el IMEI real», con motivo | Queda en la Orden y en la auditoría. Se admite hasta la entrega (BF-05) |
+| B7 | recepcion | Abrir la Orden 1 | No ve la información técnica: antecedentes, ejecuciones, insumos previstos, «Datos técnicos» ni piezas. Sí ve el estado, el precio, el historial y los cobros (B1, BF-07) |
+
+#### C. Diagnóstico, piezas y ejecución (bloques 1 y 8)
+
+| Paso | Usuario | Qué hacer | Esperado |
+|---|---|---|---|
+| C1 | tecnico | Orden 1: ver «Piezas por categoría» | «Baterías» está «Pendiente de elegir», porque hay dos piezas compatibles. Con una sola, sería «Elegida automáticamente» (B8, BF-14) |
+| C2 | tecnico | Tomar la Orden 1 e iniciar la Ejecución sin elegir la pieza | Rechazo `PIEZA_SIN_ELEGIR`, con el aviso. No hay reserva ni paso nuevo |
+| C3 | recepcion | Buscar «Elegir pieza» en la Orden 1 | No aparece: no tiene `PIEZA_ELEGIR` |
+| C4 | tecnico | «Elegir pieza»: la primera batería, que muestra su disponible. Iniciar | Se reservan la pieza y el adhesivo. Inventario los muestra reservados |
+| C5 | tecnico | Con la Ejecución en curso, «Sustituir» por la segunda batería. Probar sin motivo y después con motivo | Sin motivo se rechaza. Con motivo, en una sola operación: la liberación de la primera, la reserva de la segunda (observación «Sustitución de pieza») y el paso del historial. Si la segunda no tuviera disponible, 409 sin cambios |
+| C6 | tecnico | Completar la Ejecución y consumir | El formulario de consumo marca «· pieza elegida». Se consume la segunda batería, que queda «Consumida» y ya no se puede sustituir |
+| C7 | tecnico y coordinacion | Orden 3: `tecnico` agrega «Cambio de batería» según la revisión; `coordinacion` define el precio manual. `tecnico` elige la pieza | Sin modelo técnico el precio queda pendiente, hasta el precio manual (B7). No hay baterías universales, así que se puede elegir cualquiera de la categoría, con motivo obligatorio y la marca «Compatibilidad no verificada» (B8) |
+| C8 | tecnico | Con una Ejecución en curso de Cliente Externo, agregar un trabajo adicional | Espera la autorización del cliente. La Orden aparece en «Pendientes de mi sector» de `recepcion` aunque haya una ejecución en curso. Iniciar el adicional sin autorizar da 409 (B1, BF-12) |
+| C9 | administracion | Compras → «Trabajos sin pieza elegida» | La Orden 2 aparece aparte, con «Sin pieza elegida» y la categoría, y no suma demanda a ningún SKU en las sugerencias (B8) |
+
+#### D. Cobro y ajustes (bloque 5)
+
+| Paso | Usuario | Qué hacer | Esperado |
+|---|---|---|---|
+| D1 | recepcion | Orden 2: «Ajuste comercial»: descuento al trabajo y cortesía a la Orden | Un solo formulario con clase, destino, tipo, valor y motivo, y la vista previa del precio original, el ajuste y el final, igual al saldo (B5, BF-09) |
+| D2 | administracion y recepcion | En Configuración → Permisos, quitar la cortesía a Recepción. Con `recepcion`, intentar cambiar o quitar la cortesía. Restaurar el permiso | Con solo el permiso del descuento no se puede cambiar ni quitar una cortesía |
+| D3 | recepcion | Buscar «Revertir» y «Corregir» en el historial de ajustes | No aparecen: no tiene `AJUSTE_REVERTIR` |
+| D4 | administracion | Revertir el descuento del trabajo. Corregir la cortesía de la Orden a otro importe | El revertido se ve tachado y vuelve a regir el anterior, o ninguno. La corrección queda enlazada. El saldo se recalcula y los pagos no cambian. Cada operación queda en el historial |
+| D5 | tecnico o recepcion | Redefinir o cancelar un trabajo que tiene ajuste, antes de ejecutarlo | Aviso de recálculo, y el recálculo en el historial de ajustes, sin un ajuste nuevo |
+| D6 | recepcion | Emitir la versión nueva del comprobante de autorización y ver el de ingreso anterior | Por trabajo: precio, «Descuento» o «Cortesía» y precio final. El ajuste de la Orden va en una línea aparte, sin motivo, usuario ni fecha. El comprobante anterior se ve como se emitió |
+| D7 | recepcion | Registrar el pago de la Orden 1 hasta saldo 0 | Saldo 0. Si un ajuste dejara saldo a favor, la entrega exigiría devolverlo antes |
+
+#### E. Entrega y cierre (bloques 1, 2, 4 y 6)
+
+| Paso | Usuario | Qué hacer | Esperado |
+|---|---|---|---|
+| E1 | recepcion | Orden 1, lista para retirar: entregar sin avisar al cliente | Se ofrece la entrega sin el aviso (paso 260). El progreso muestra el aviso como opcional y salteado (B2, BF-20) |
+| E2 | recepcion | En la misma confirmación: el check-in faltante, con la verificación del ingreso como referencia, y «¿Retira otra persona?» Sí, con nombre, apellido y teléfono | Una sola confirmación, con saldo 0 y custodia. Un solo «Comprobante de entrega y garantía», con los términos de A2, la garantía de cada trabajo desde la entrega (la misma fecha en todos los documentos) y quién retiró. La garantía no cambia (B2 y B4, BF-18, BF-19 y BF-17) |
+| E3 | administracion | Orden 1 entregada: intentar aplicar, corregir o revertir un ajuste | Se rechaza: después de la entrega no hay ajustes (B5) |
+| E4 | administracion y recepcion | Cambiar otra vez el pie en «Datos de la empresa» y reimprimir el comprobante de E2 | Conserva la empresa y los términos con que se emitió (B4) |
+| E5 | recepcion | Orden 3, después de autorizarla, ejecutarla y cobrarla: enviar el WhatsApp «equipo listo para retirar» y confirmar el envío | Registra el aviso una sola vez. El retiro demorado cuenta desde que la Orden quedó lista, no desde el aviso (B2, BF-20) |
+| E6 | administracion | Convertir la solicitud de A13 en una orden de compra y recibirla | La primera batería pasa a «Suficiente» y sale de «Insumos a reponer» (B6, BF-15) |
+
+### 12.3 Qué no cubre
+
+- **QA integral:** la suite completa del backend, `tests/postgres` completo y los E2E siguen pendientes. Este recorrido no los reemplaza.
+- **Casos que cubren las pruebas automáticas y no se hacen a mano:** concurrencia (dos sustituciones sobre la última unidad, dos importaciones a la vez), el cambio de modelo con una pieza reservada (solo en el service: la API no lo permite después de confirmar la recepción) y los límites de tamaño de las planillas.
+- **Modo JSON:** la administración nueva no se valida en JSON, porque es de solo lectura.
+- **Entornos remotos:** nada se despliega. El UAT sigue sin las nueve migraciones ni la imagen con `openpyxl`, y la autenticación es la de prueba, no Supabase Auth.
+- **Fuera de alcance:** la garantía RMA (su ingreso sigue confirmando la custodia aparte, sin la verificación); BF-03, BF-10, BF-11, BF-13 y BF-16; el PDF descargable del comprobante de entrega, que se imprime desde el navegador.
+- **Pendientes de producto:** P-08 a P-16 de [`pendientes-producto.md`](pendientes-producto.md) son decisiones abiertas, no fallas. Una diferencia que ya figure allí se anota igual, como confirmación.
+- **Pantallas en celular (390 px) y otros navegadores:** quedan para la pasada manual del QA integral (P2-17 de [`DEUDA_TECNICA.md`](DEUDA_TECNICA.md)).

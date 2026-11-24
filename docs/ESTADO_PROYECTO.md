@@ -2,7 +2,7 @@
 
 Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y enlaza la documentación que es fuente de verdad de cada tema; no la reemplaza.
 
-**Última actualización:** 23/11/2026.
+**Última actualización:** 24/11/2026.
 
 - **Hecho:**
   - autenticación real y DC31 desplegadas en UAT (10/11, `00020-tux`);
@@ -27,7 +27,9 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
   - **Reparación RT, etapa 1, en local** (19/11, `feat/reparacion-rt-etapa1`, commits locales, sin push ni despliegue): copia de consulta de los Productos de Gestión RT en reparación en PostgreSQL (migración `20261119000100`, `rma.producto_rt`) sobre el motor del bloque C, sincronización a pedido de Administración, API `/api/rt-products` y pantalla Reparación RT con búsqueda, filtros, ficha y coincidencias sugeridas (nunca vínculos); solo las 13 columnas permitidas, nunca `producto_passcode` ([`reparacion-rt-discovery.md`](reparacion-rt-discovery.md), sección 10; sección B).
   - **Configuración v2, en local** (20/11, `feat/configuracion-v2` sobre `feat/reparacion-rt-etapa1`, commits locales, sin push ni despliegue): CFG-01 a CFG-08. Códigos automáticos en la base, seguros ante concurrencia. Permisos operativos configurables, con precios aparte y Compras por acción. Matriz de permisos de todas las rutas. Configuración por funcionalidad con altas en ventana. Garantías con solo los plazos con y sin check-in. Sin plazo de retiro en pantalla y solo dos plantillas de WhatsApp visibles. Dos migraciones aditivas ([`configuracion-discovery.md`](configuracion-discovery.md), sección 12; sección B).
   - **Reparación RT etapa 1 + Configuración v2 en UAT** (20/11): `mvp-v2` en `0b63047` con CI en verde; las tres migraciones en São Paulo (42 migraciones, 72 tablas); Cloud Run `00042-suw` y Vercel `dpl_5deKVVEvDFx1Ez5qG819BDYYTMgK`. Reparación RT lee, con autorización del usuario, una copia de la tabla Producto real (104 productos en reparación, solo las 13 columnas permitidas); E2E Reparación RT 26 de 26 y 1 de 1 tras el escalado a cero, Configuración v2 128 de 128, UX 47 de 47, V1.4 67 de 67 e integral 68 de 68 con limpieza selectiva; respaldo y ensayo de restauración correctos. **UAT OPERATIVO** ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12.1; sección B).
+  - **Ajustes funcionales del feedback de UAT, iteraciones 1 y 2 en local** (23/11, `feat/ajustes-funcionales-uat`, commits locales, sin push ni despliegue): BF-01, 02, 04 a 09, 12, 14, 15 y 17 a 20 en ocho bloques, con DEC-AJ-01 a 14 implementadas y `business/` sincronizado con `rt-rma-app` `2e93e9b`; nueve migraciones aditivas, solo locales (sección B).
 - **Falta:**
+  - la validación manual en local de los ocho bloques de ajustes funcionales ([`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md), sección 12); después, el QA integral con E2E y, con autorización, el despliegue en el UAT;
   - conseguir la exportación de Ventas de ABI-43 (modelos que faltan en el catálogo técnico);
   - ABI-42: que Gestión RT indique qué columna (o tabla) de su catálogo es el Tipo de Equipo; con una columna `tp_*` alcanza con fijar `RMA_TIPO_EQUIPO_CAMPO` y sincronizar;
   - el UAT tiene 6 Órdenes de prueba creadas a mano (`OR-000001` a `OR-000006`, al 18/11); es solo de datos ficticios y su borrado o reinicio está autorizado cuando las pruebas lo requieran;
@@ -87,16 +89,28 @@ Punto de entrada para retomar el desarrollo. Resume dónde está el proyecto y e
 
 ## B. Últimos avances
 
-### Ajustes funcionales del feedback de UAT, iteración 1 en local (23/11/2026)
+### Ajustes funcionales del feedback de UAT, iteraciones 1 y 2 en local (23/11/2026)
 
 - **Rama:** `feat/ajustes-funcionales-uat`, desde `mvp-v2` `82ebbb6`, con commits locales; sin push ni despliegue.
-- **Plan:** BF-01 a BF-20 en 8 bloques, aprobados; detalle, pruebas y limitaciones en [`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md) (secciones 8 y 10).
+- **Plan:** BF-01 a BF-20 en 8 bloques, aprobados; detalle, pruebas y limitaciones en [`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md) (secciones 8, 10 y 11).
 - **Iteración 1, implementada en local (bloques 1 a 4):** BF-07, BF-12, BF-17, BF-18, BF-19, BF-20, BF-04, BF-05, BF-06 y BF-08, con DEC-AJ-01 a 09. Commits: bloque 1 `3788aa0` a `8980e52`; bloque 2 `5cf99f9` a `f51ce94`; bloque 3 `0376f34` a `a55b1b8`; bloque 4 `d657ca5` a `89a3e6a`.
-- **Migraciones:** tres aditivas, solo locales: `20261123000100` (check-in en la entrega), `20261123000200` (trabajo solicitado, verificación e IMEI del ingreso) y `20261123000300` (datos de la empresa y términos de los comprobantes); el bloque 1 no tiene. Quedan 45 en el repositorio.
-- **`business/`:** sincronizado con `rt-rma-app` `a2c64f3` (`spec/ajustes-funcionales`, local), con DEC-AJ-01 a 09 implementadas y DEC-AJ-10 a 14 (iteración 2) aprobadas y sin implementar ([`sincronizacion-funcional.md`](sincronizacion-funcional.md)). P-04 y P-05 resueltos; P-08 (apartados 6 y 18 de los términos) para revisar ([`pendientes-producto.md`](pendientes-producto.md)).
-- **Pruebas:** focalizadas por bloque, en verde.
-- **Iteración 2 (bloques 5 a 8: BF-09, BF-15, BF-01/02 y BF-14):** decisiones aprobadas el 23/11/2026 y registradas como DEC-AJ-10 a 14 antes del código ([`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md), sección 11.1); implementación en curso.
-- **Falta:** implementar la iteración 2 y la validación manual de todo el backlog.
+- **Iteración 2, implementada en local (bloques 5 a 8):**
+  - BF-09: ajuste comercial con reversión, corrección y evidencia (DEC-AJ-10), `a2a896c` a `4e0564f`;
+  - BF-15: stock mínimo (DEC-AJ-11), `4c523c4` a `323bdc8`;
+  - BF-01 y BF-02: precio por modelo y precio manual (DEC-AJ-12) e importación de precios (DEC-AJ-13), `f3a216b` a `99a339e`;
+  - BF-14: clasificación y compatibilidad de insumos, requisitos por tipo y pieza elegida antes de reservar (DEC-AJ-14), `108840e` a `6bf7ea7`;
+  - `a04dbaf`: dos expectativas exactas adaptadas a los campos nuevos.
+- **Migraciones:** nueve aditivas, solo locales, **pendientes para el UAT**: `20261123000100` a `20261123000300` (iteración 1) y `20261124000100` (ajuste comercial), `20261124000200` (stock mínimo), `20261124000300` (precio por modelo), `20261124000400` (importación de precios), `20261124000500` (clasificación de insumos) y `20261124000600` (requisitos y pieza). Quedan 51 en el repositorio y 80 tablas.
+- **Dependencia nueva:** `openpyxl` (planillas `.xlsx` de la importación de precios). El despliegue exige **reconstruir la imagen del backend**; en local, `pip install -e ".[dev,postgres]"`.
+- **`business/`:** sincronizado con `rt-rma-app` `2e93e9b` (`spec/ajustes-funcionales`, local), con DEC-AJ-01 a 14 implementadas ([`sincronizacion-funcional.md`](sincronizacion-funcional.md)). Las system actions nuevas `ACC-REP-083` y `ACC-REP-084` constan en la evidencia y no tienen grafo en `traceability/` ([`DEUDA_TECNICA.md`](DEUDA_TECNICA.md), P2-23). P-04, P-05 y P-07 resueltos; P-08 a P-16, para revisar con el negocio ([`pendientes-producto.md`](pendientes-producto.md)).
+- **Pruebas:** focalizadas por bloque, en verde. Cierre de la iteración 2 (coordinación):
+  - backend JSON completo: 2262 pasan, 2 fallan y 29 se saltean; las 2 eran aserciones exactas de campos, corregidas en `a04dbaf`, y al repetir esos archivos pasan 48;
+  - `ruff check` y `ruff format`: limpios;
+  - frontend: typecheck correcto, `npm test` 299 de 299 y build correcto;
+  - `npm run validate:all`: en verde;
+  - arranque del backend sobre una base PostgreSQL local nueva (`rma_iteracion2`, los 56 SQL, 80 tablas en `rma`) y GET de los endpoints nuevos: 200.
+  - **No se corrieron:** `tests/postgres` completo, los E2E ni la validación manual.
+- **Falta:** la validación manual de los ocho bloques ([`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md), sección 12), el QA integral (suite completa, `tests/postgres` y E2E) y, con autorización, push, integración en `mvp-v2` y despliegue en el UAT.
 
 ### Reparación RT etapa 1 + Configuración v2 en UAT (20/11/2026): UAT OPERATIVO
 
@@ -819,7 +833,9 @@ Otros riesgos registrados:
 
 ## F. Próximos pasos
 
-**Próximo paso (20/11/2026):** la pasada manual en el navegador de Reparación RT y Configuración v2 con las cuatro cuentas, también a 390 px ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12, paso 9), y decidir P1-18 (IMEI en los registros) antes de abrir Reparación RT a más personas. Reparación RT etapa 2 necesita autorización aparte.
+**Próximo paso (24/11/2026):** la validación manual, por el usuario, de los ocho bloques de ajustes funcionales en local sobre PostgreSQL ([`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md), sección 12), y los ajustes que resulten. Después, el QA integral: suite completa del backend, `tests/postgres` completo y E2E. Por último, con autorización explícita para cada acción: push de `feat/ajustes-funcionales-uat`, integración en `mvp-v2` y despliegue en el UAT, con las nueve migraciones pendientes (`20261123000100` a `20261123000300` y `20261124000100` a `20261124000600`) y la imagen del backend reconstruida por `openpyxl` ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md)).
+
+**Antes (20/11/2026):** la pasada manual en el navegador de Reparación RT y Configuración v2 con las cuatro cuentas, también a 390 px ([`DESPLIEGUE_UAT.md`](DESPLIEGUE_UAT.md), sección 12, paso 9), y decidir P1-18 (IMEI en los registros) antes de abrir Reparación RT a más personas. Reparación RT etapa 2 necesita autorización aparte.
 
 **Antes (19/11/2026):** autorizar el push de `feat/configuracion-v2` y su integración en `mvp-v2`, y la publicación conjunta de Reparación RT etapa 1 y Configuración v2 en el UAT. Hecho el 20/11/2026 (sección B).
 
