@@ -75,6 +75,7 @@ import {
   UbicacionAccion,
 } from "./presentacion";
 import { opcionDePrioridad, prioridadPropuesta } from "./prioridad";
+import { requisitosPendientes, textoCantidad } from "./piezas";
 
 export interface EjecutorAcciones {
   /**
@@ -564,6 +565,7 @@ function FormularioAccion({
               )}
             </p>
           )}
+          <PiezasPendientes orden={orden} detalleId={accion.detalle_id} />
           <Boton
             disabled={
               deshabilitado || !accion.detalle_id || accion.bloqueo !== null
@@ -2418,7 +2420,9 @@ function FilaInsumoUtilizado({
           " (" +
           previsto.codigo +
           ") — previsto: " +
-          previsto.cantidad_prevista
+          previsto.cantidad_prevista +
+          // DEC-AJ-14: la pieza elegida para un requisito del Tipo.
+          (previsto.pieza ? " · pieza elegida" : "")
         }
       >
         <input
@@ -2449,6 +2453,51 @@ function FilaInsumoUtilizado({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * DEC-AJ-14: el trabajo no se inicia con un requisito sin pieza elegida
+ * (la API lo rechaza con PIEZA_SIN_ELEGIR): se avisa antes y se dice dónde
+ * se elige.
+ */
+function PiezasPendientes({
+  orden,
+  detalleId,
+}: {
+  orden: Orden;
+  detalleId: string | null;
+}) {
+  const detalle = orden.reparaciones_detail.find(
+    (candidato) => candidato.id === detalleId,
+  );
+  const pendientes = detalle ? requisitosPendientes(detalle) : [];
+  if (pendientes.length === 0) return null;
+  return (
+    <p
+      role="status"
+      style={{
+        margin: "0 0 0.5rem",
+        padding: "0.5rem 0.7rem",
+        borderRadius: 6,
+        border: `1px solid ${colores.alerta}`,
+        background: "#fff8e6",
+        fontSize: "0.85rem",
+      }}
+    >
+      <strong>
+        Falta elegir la pieza de{" "}
+        {pendientes
+          .map(
+            (requisito) =>
+              `${requisito.categoria_nombre} × ${textoCantidad(requisito.cantidad)}`,
+          )
+          .join(", ")}
+        .
+      </strong>{" "}
+      Se elige con «Elegir pieza» en el trabajo (sección «Trabajos») antes de
+      iniciar: hasta entonces no se reserva nada.
+    </p>
   );
 }
 

@@ -136,6 +136,7 @@ import { Layout, MenuAcciones, type Seccion } from "../../components/layout";
 import { Modal } from "../../components/Modal";
 import { puede, rolesDe } from "../../lib/roles";
 import { veDetalleTecnico as puedeVerDetalleTecnico } from "./detalleTecnico";
+import { mensajeConAyudaPieza, puedeElegirPieza, type PedidoPieza } from "./piezas";
 
 type Informativa =
   | "cliente"
@@ -437,6 +438,37 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
 
   const idActor = actor?.id ?? "";
   const idOrden = orden?.id ?? "";
+
+  /**
+   * DEC-AJ-14: «Elegir pieza» / «Sustituir». El error lo muestra su ventana
+   * (que queda abierta); con un 409 se recarga la Orden igual que en los
+   * demás comandos.
+   */
+  const elegirPieza = async (detalleId: string, pedido: PedidoPieza) => {
+    try {
+      const actualizada = await api.elegirPieza(
+        idOrden,
+        detalleId,
+        idActor,
+        pedido.requisito_id,
+        pedido.insumo_id,
+        pedido.motivo,
+      );
+      ordenEnPantalla.current = actualizada;
+      setOrden(actualizada);
+    } catch (fallo) {
+      if (fallo instanceof ApiError && fallo.status === 409 && idOrden) {
+        try {
+          const recargada = await api.obtenerOrden(idOrden);
+          ordenEnPantalla.current = recargada;
+          setOrden(recargada);
+        } catch {
+          // Si la recarga también falla, queda el mensaje original.
+        }
+      }
+      throw fallo;
+    }
+  };
   // Se muestra la Orden de la URL, no otra que quedó de la pantalla anterior.
   const enDetalle = ruta.pantalla === "orden" && orden?.id === ruta.ordenId;
 
@@ -1100,6 +1132,8 @@ export function PanelOrdenes({ sesion }: { sesion?: SesionReal } = {}) {
                   ocupado={ocupado}
                   onAccion={setAbierta}
                   informacionTecnica={veDetalleTecnico}
+                  puedeElegirPieza={puedeElegirPieza(actor)}
+                  onElegirPieza={elegirPieza}
                   accionesPorTrabajo={Object.fromEntries(
                     Object.entries(barraOrden.porTrabajo).map(([detalle, items]) => [
                       detalle,
@@ -1491,8 +1525,11 @@ function errorDe(
       : "";
   const sufijo = recargada ? " Se recargó la Orden con su estado actual." : "";
   return {
-    mensaje: `${prefijo}${mensajeLegible(fallo.message, orden, nombres)}` +
-      sufijo,
+    // DEC-AJ-14: sin la pieza elegida, dónde se elige.
+    mensaje: `${prefijo}${mensajeConAyudaPieza(
+      fallo.codigo,
+      mensajeLegible(fallo.message, orden, nombres),
+    )}` + sufijo,
     tecnico: fallo.message,
     clave,
   };

@@ -31,6 +31,8 @@ const RUTAS_CON_CLAVE: readonly RegExp[] = [
   /^\/api\/orders\/[^/]+\/refunds$/,
   /^\/api\/orders\/[^/]+\/discount$/,
   /^\/api\/orders\/[^/]+\/photos$/,
+  // DEC-AJ-14: elegir o sustituir la pieza de un requisito (ELEGIR_PIEZA).
+  /^\/api\/orders\/[^/]+\/details\/[^/]+\/pieces$/,
   /^\/api\/inventory\/[^/]+\/(receipts|adjustments)$/,
   /^\/api\/catalogs\/equipment\/sync$/,
   // DEC-AJ-13: aplicar una importación de precios (la vista previa no).

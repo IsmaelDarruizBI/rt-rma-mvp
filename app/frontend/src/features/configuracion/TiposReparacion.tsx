@@ -10,13 +10,21 @@
  *   genérico y la política RMA no se muestran ni se envían: la API los
  *   conserva.
  * - El listado se actualiza con lo que devuelve la API, sin recargar.
+ * - DEC-AJ-14: «Insumos necesarios» de cada Tipo (previstos concretos y
+ *   requisitos por categoría), en su ventana.
  * Lo ya registrado en las Órdenes no cambia: cada trabajo guardó su copia.
  */
 
 import { useCallback, useEffect, useState } from "react";
 
 import * as api from "../../api/configuracion";
-import type { CatalogoConfigurable, DatosTipo, ModeloAdmin } from "../../api/configuracion";
+import type {
+  CatalogoConfigurable,
+  DatosTipo,
+  InsumosNecesariosAdmin,
+  ModeloAdmin,
+} from "../../api/configuracion";
+import { TIPO_REPARACION_OTROS } from "../../api/ordenes";
 import {
   EncabezadoListado,
   FormularioModal,
@@ -28,6 +36,8 @@ import { Boton, Campo, colores, estiloInput, importe } from "../../components/ui
 import { puede } from "../../lib/roles";
 import type { TipoReparacion, Usuario } from "../../types/api";
 import { cambiosDePrecios } from "../ordenes-reparacion/precioModelo";
+import { VentanaInsumosNecesarios } from "./VentanaInsumosNecesarios";
+import { conInsumosDelTipo, resumenInsumosNecesarios } from "./insumosNecesarios";
 import { conElemento, precioValido, textoGarantias } from "./listados";
 
 const SOLO_ADMINISTRACION = ["ADMINISTRADOR"];
@@ -138,11 +148,18 @@ export function TiposReparacion({
   );
   const [resaltado, setResaltado] = useState<string | null>(null);
   const [grilla, setGrilla] = useState<TipoReparacion | null>(null);
+  // DEC-AJ-14: sin la lectura (backend anterior) la columna no se muestra.
+  const [necesarios, setNecesarios] = useState<InsumosNecesariosAdmin | null>(null);
+  const [insumosDe, setInsumosDe] = useState<TipoReparacion | null>(null);
   const { error, setError, aviso, setAviso, ocupado, ejecutar } = useComando();
   const editaPrecio = puede(actor, "PRECIOS_GESTIONAR", SOLO_ADMINISTRACION);
 
   const cargar = useCallback(() => {
     api.obtenerCatalogo().then(setCatalogo).catch((causa: unknown) => setError(mensajeDe(causa)));
+    api
+      .obtenerInsumosNecesarios()
+      .then(setNecesarios)
+      .catch(() => setNecesarios(null));
   }, [setError]);
   useEffect(cargar, [cargar]);
 
@@ -181,7 +198,16 @@ export function TiposReparacion({
         <table style={{ borderCollapse: "collapse", fontSize: "0.85rem", minWidth: 560 }}>
           <thead>
             <tr>
-              {["Código", "Nombre", "Precio", "Puntaje", "Garantía (días)", "Vigente", ""].map((t) => (
+              {[
+                "Código",
+                "Nombre",
+                "Precio",
+                "Puntaje",
+                "Garantía (días)",
+                ...(necesarios ? ["Insumos necesarios"] : []),
+                "Vigente",
+                "",
+              ].map((t) => (
                 <th key={t} style={{ textAlign: "left", padding: "0.25rem 0.5rem" }}>
                   {t}
                 </th>
@@ -209,6 +235,24 @@ export function TiposReparacion({
                 </td>
                 <td style={{ padding: "0.25rem 0.5rem" }}>{tipo.puntaje}</td>
                 <td style={{ padding: "0.25rem 0.5rem" }}>{textoGarantias(tipo)}</td>
+                {necesarios && (
+                  <td style={{ padding: "0.25rem 0.5rem" }}>
+                    {tipo.id === TIPO_REPARACION_OTROS ? (
+                      <span style={{ color: colores.suave }}>No corresponde</span>
+                    ) : (
+                      <>
+                        {resumenInsumosNecesarios(necesarios, tipo.id)}{" "}
+                        <Boton
+                          variante="secundario"
+                          disabled={ocupado}
+                          onClick={() => setInsumosDe(tipo)}
+                        >
+                          {necesarios.editable ? "Editar insumos" : "Ver insumos"}
+                        </Boton>
+                      </>
+                    )}
+                  </td>
+                )}
                 <td style={{ padding: "0.25rem 0.5rem", textAlign: "center" }}>
                   <input
                     type="checkbox"
@@ -277,6 +321,25 @@ export function TiposReparacion({
             </p>
           )}
         </FormularioModal>
+      )}
+      {insumosDe && necesarios && (
+        <VentanaInsumosNecesarios
+          actor={actor}
+          tipo={insumosDe}
+          datos={necesarios}
+          editable={necesarios.editable}
+          onCerrar={() => setInsumosDe(null)}
+          onGuardado={(previstos, requisitos, cambios) => {
+            setNecesarios(conInsumosDelTipo(necesarios, insumosDe.id, previstos, requisitos));
+            setResaltado(insumosDe.id);
+            setError(null);
+            setAviso(
+              `Se guardaron los insumos necesarios de ${insumosDe.id} (${cambios} ${
+                cambios === 1 ? "cambio" : "cambios"
+              }).`,
+            );
+          }}
+        />
       )}
       {grilla && (
         <PreciosPorModelo

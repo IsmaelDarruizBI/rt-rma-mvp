@@ -12,6 +12,13 @@ import type {
   TipoReparacion,
   Usuario,
 } from "../types/api";
+import type { CategoriaInsumo } from "../features/inventario/clasificacion";
+import type {
+  InsumoParaTipo,
+  PedidoInsumosNecesarios,
+  PrevistoDeTipo,
+  RequisitoDeTipo,
+} from "../features/configuracion/insumosNecesarios";
 
 export interface MesaConfigurable {
   id: string;
@@ -159,6 +166,43 @@ export function guardarPreciosModelo(
     usuario_id: usuarioId,
     precios,
   });
+}
+
+// --- Insumos necesarios de los Tipos (DEC-AJ-14) ------------------------
+
+/**
+ * Lo que la API devuelve de los insumos necesarios de todos los Tipos: los
+ * previstos concretos, los requisitos por categoría (activos o no) y los
+ * insumos y categorías para elegirlos.
+ */
+export interface InsumosNecesariosAdmin {
+  /** false en el modo JSON: de solo lectura. */
+  editable: boolean;
+  previstos: PrevistoDeTipo[];
+  requisitos: RequisitoDeTipo[];
+  insumos: InsumoParaTipo[];
+  categorias: CategoriaInsumo[];
+}
+
+/** Guarda el conjunto completo del Tipo: lo que no se envía se quita. */
+export function guardarInsumosNecesarios(
+  usuarioId: string,
+  tipo: string,
+  pedido: PedidoInsumosNecesarios,
+): Promise<{
+  tipo_reparacion_id: string;
+  previstos: PrevistoDeTipo[];
+  requisitos: RequisitoDeTipo[];
+  cambios: CambioConfiguracion[];
+}> {
+  return put(`/api/admin/repair-types/${encodeURIComponent(tipo)}/supplies`, {
+    usuario_id: usuarioId,
+    ...pedido,
+  });
+}
+
+export function obtenerInsumosNecesarios(): Promise<InsumosNecesariosAdmin> {
+  return get<InsumosNecesariosAdmin>("/api/admin/repair-types/supplies");
 }
 
 // --- Importación masiva de precios por modelo (DEC-AJ-13) ---------------

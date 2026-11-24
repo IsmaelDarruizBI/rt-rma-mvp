@@ -20,6 +20,7 @@ import type {
   Proveedor,
   SolicitudCompra,
   SugerenciaCompra,
+  TrabajoSinPieza,
 } from "../../api/compras";
 import { listarInventario } from "../../api/inventario";
 import { SelectorInsumo, useClasificacionInsumos } from "../../components/SelectorInsumo";
@@ -42,7 +43,13 @@ import {
   solicitudDeSugerencia,
 } from "../inventario/stockMinimo";
 import { useSaldosLotes } from "../inventario/lotes";
-import { type ClasificacionInsumos, etiquetaInsumo } from "../inventario/clasificacion";
+import {
+  type ClasificacionInsumos,
+  etiquetaInsumo,
+  nombreModeloClasificacion,
+} from "../inventario/clasificacion";
+import { hashDe } from "../ordenes-reparacion/rutas";
+import { textoCantidad } from "../ordenes-reparacion/piezas";
 
 const mensajeDe = (causa: unknown) =>
   causa instanceof Error ? causa.message : String(causa);
@@ -58,6 +65,8 @@ export function ComprasPanel({ actor }: { actor: Usuario | null }) {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [solicitudes, setSolicitudes] = useState<SolicitudCompra[]>([]);
   const [sugerencias, setSugerencias] = useState<SugerenciaCompra[]>([]);
+  // DEC-AJ-14: aparte de las sugerencias (no son demanda de un SKU).
+  const [sinPieza, setSinPieza] = useState<TrabajoSinPieza[]>([]);
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -78,6 +87,11 @@ export function ComprasPanel({ actor }: { actor: Usuario | null }) {
           api.proveedores().then(setProveedores),
           api.solicitudes().then(setSolicitudes),
           api.sugerencias().then(setSugerencias),
+          // Un backend anterior no tiene la lista: queda vacía.
+          api
+            .trabajosSinPieza()
+            .then(setSinPieza)
+            .catch(() => setSinPieza([])),
           api.ordenes().then(setOrdenes),
         ]);
       })
@@ -165,6 +179,7 @@ export function ComprasPanel({ actor }: { actor: Usuario | null }) {
         <Solicitudes
           solicitudes={solicitudes}
           sugerencias={sugerencias}
+          sinPieza={sinPieza}
           insumos={insumos}
           clasificacion={clasificacion}
           nombreInsumo={nombreInsumo}
@@ -216,6 +231,7 @@ export function ComprasPanel({ actor }: { actor: Usuario | null }) {
 function Solicitudes({
   solicitudes,
   sugerencias,
+  sinPieza,
   insumos,
   clasificacion,
   nombreInsumo,
@@ -226,6 +242,7 @@ function Solicitudes({
 }: {
   solicitudes: SolicitudCompra[];
   sugerencias: SugerenciaCompra[];
+  sinPieza: TrabajoSinPieza[];
   insumos: SituacionInsumo[];
   clasificacion: ClasificacionInsumos;
   nombreInsumo: (id: string) => string;
@@ -277,6 +294,30 @@ function Solicitudes({
             </li>
           ))}
         </ul>
+      )}
+
+      {sinPieza.length > 0 && (
+        <>
+          <h3 style={{ margin: "0.8rem 0 0.4rem" }}>Trabajos sin pieza elegida</h3>
+          <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", color: colores.suave }}>
+            Trabajos que esperan recursos porque a un requisito le falta la pieza y ninguna
+            pieza compatible tiene disponible. No es la demanda de un insumo puntual: se compra
+            una pieza compatible de la categoría (o se da de alta) y después se elige en el
+            trabajo.
+          </p>
+          <ul style={{ paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
+            {sinPieza.map((t) => (
+              <li key={`${t.detalle_id}-${t.requisito_id}`} style={{ marginBottom: "0.3rem" }}>
+                {t.categoria_nombre} × {textoCantidad(t.cantidad)} ·{" "}
+                {t.modelo_equipo_id
+                  ? `para ${nombreModeloClasificacion(t.modelo_equipo_id, clasificacion)}`
+                  : "equipo sin modelo técnico"}{" "}
+                · <a href={hashDe({ pantalla: "orden", ordenId: t.orden_id })}>{t.orden_id}</a> ·{" "}
+                {t.detalle_id} ({t.tipo_reparacion_id})
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       <h3 style={{ margin: "0.8rem 0 0.4rem" }}>Solicitudes</h3>

@@ -19,6 +19,8 @@ import type { Detalle, Estacion, Orden, Usuario } from "../../types/api";
 import { descripcionEquipo } from "./catalogoEquipos";
 import { EtapasNegocio } from "./ProximoPaso";
 import { MarcaPrecio } from "./PrecioTrabajo";
+import { RequisitosTrabajo } from "./PiezasTrabajo";
+import { type PedidoPieza, previstosConcretos } from "./piezas";
 import { textoPrecioDelDetalle } from "./precioModelo";
 import {
   TEXTO_RESULTADO,
@@ -311,6 +313,8 @@ export function TrabajosOrden({
   ocupado = false,
   onAccion,
   informacionTecnica = true,
+  puedeElegirPieza = false,
+  onElegirPieza,
 }: {
   orden: Orden;
   usuarios: Usuario[];
@@ -319,6 +323,10 @@ export function TrabajosOrden({
   onAccion?: (clave: string) => void;
   /** BF-07: sin DETALLE_TECNICO_CONSULTAR no se ven insumos previstos ni ejecuciones. */
   informacionTecnica?: boolean;
+  /** DEC-AJ-14: el usuario tiene PIEZA_ELEGIR. */
+  puedeElegirPieza?: boolean;
+  /** DEC-AJ-14: «Elegir pieza» / «Sustituir»; sin él solo se muestran. */
+  onElegirPieza?: (detalleId: string, pedido: PedidoPieza) => Promise<void>;
 }) {
   if (orden.reparaciones_detail.length === 0) {
     // PROC-REP-069: la conclusión y su motivo quedan en el historial.
@@ -350,6 +358,8 @@ export function TrabajosOrden({
           ocupado={ocupado}
           onAccion={onAccion}
           informacionTecnica={informacionTecnica}
+          puedeElegirPieza={puedeElegirPieza}
+          onElegirPieza={onElegirPieza}
         />
       ))}
     </ul>
@@ -364,6 +374,8 @@ function Trabajo({
   ocupado,
   onAccion,
   informacionTecnica,
+  puedeElegirPieza,
+  onElegirPieza,
 }: {
   orden: Orden;
   detalle: Detalle;
@@ -372,8 +384,12 @@ function Trabajo({
   ocupado: boolean;
   onAccion?: (clave: string) => void;
   informacionTecnica: boolean;
+  puedeElegirPieza: boolean;
+  onElegirPieza?: (detalleId: string, pedido: PedidoPieza) => Promise<void>;
 }) {
   const cancelado = detalle.estado === "CANCELADO";
+  // DEC-AJ-14: las piezas elegidas se muestran con su requisito.
+  const concretos = previstosConcretos(detalle);
   // BF-07: las ejecuciones de cada trabajo son información técnica.
   const ejecuciones = informacionTecnica
     ? orden.ejecuciones.filter(
@@ -515,13 +531,24 @@ function Trabajo({
           {fechaCorta(decision.fecha)}
         </Linea>
       )}
-      {informacionTecnica && detalle.insumos_previstos.length > 0 && !cancelado && (
+      {informacionTecnica && concretos.length > 0 && !cancelado && (
         <Linea>
           Insumos previstos:{" "}
-          {detalle.insumos_previstos
+          {concretos
             .map((previsto) => `${previsto.nombre} × ${previsto.cantidad_prevista}`)
             .join(", ")}
         </Linea>
+      )}
+      {/* BF-07: los requisitos y sus piezas también son información técnica. */}
+      {informacionTecnica && !cancelado && (
+        <RequisitosTrabajo
+          ordenId={orden.id}
+          detalle={detalle}
+          puedeElegir={puedeElegirPieza}
+          ocupado={ocupado}
+          nombreUsuario={(usuarioId) => nombreDeUsuario(usuarios, usuarioId)}
+          onElegir={onElegirPieza}
+        />
       )}
       {ejecuciones.map((ejecucion) => (
         <Linea key={ejecucion.id}>

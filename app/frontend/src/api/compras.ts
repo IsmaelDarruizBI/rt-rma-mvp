@@ -118,6 +118,24 @@ export const solicitudes = () =>
   get<SolicitudCompra[]>("/api/purchases/requests");
 export const sugerencias = () =>
   get<SugerenciaCompra[]>("/api/purchases/suggestions");
+/**
+ * DEC-AJ-14: trabajos que esperan recursos con un requisito sin pieza
+ * elegida y sin ninguna pieza elegible con disponible. No son demanda de un
+ * SKU: se elige la pieza o se compra una compatible.
+ */
+export interface TrabajoSinPieza {
+  orden_id: string;
+  detalle_id: string;
+  tipo_reparacion_id: string;
+  requisito_id: string;
+  categoria_id: string;
+  categoria_nombre: string;
+  cantidad: string;
+  modelo_equipo_id: string | null;
+}
+
+export const trabajosSinPieza = () =>
+  get<TrabajoSinPieza[]>("/api/purchases/suggestions/pending-pieces");
 export const ordenes = () => get<OrdenCompra[]>("/api/purchases/orders");
 export const costos = (insumoId?: string) =>
   get<CostoCompra[]>(

@@ -19,6 +19,7 @@ import type {
   ImpactoOverride,
   InsumoUtilizado,
   MedioPago,
+  OpcionesPieza,
   Prioridad,
   TipoDescuento,
   Orden,
@@ -177,6 +178,41 @@ export function definirPrecio(
   return post<Orden>(`/api/orders/${ordenId}/details/${detalleId}/price`, {
     usuario_id: usuarioId,
     ...(manual ? { precio: manual.precio, motivo: manual.precio_motivo } : {}),
+  });
+}
+
+/**
+ * DEC-AJ-14: las piezas que se pueden elegir para un requisito del trabajo
+ * (ya filtradas por compatibilidad en la API), con su disponible.
+ */
+export function opcionesDePieza(
+  ordenId: string,
+  detalleId: string,
+  requisitoId: string,
+): Promise<OpcionesPieza> {
+  return get<OpcionesPieza>(
+    `/api/orders/${ordenId}/details/${detalleId}/pieces/options?requisito_id=${encodeURIComponent(requisitoId)}`,
+  );
+}
+
+/**
+ * DEC-AJ-14: «Elegir pieza» o «Sustituir» (PIEZA_ELEGIR). Sustituir exige
+ * motivo; con la pieza reservada, la API libera y reserva en una sola
+ * operación (sin disponible, 409 y nada cambia).
+ */
+export function elegirPieza(
+  ordenId: string,
+  detalleId: string,
+  usuarioId: string,
+  requisitoId: string,
+  insumoId: string,
+  motivo: string | null,
+): Promise<Orden> {
+  return post<Orden>(`/api/orders/${ordenId}/details/${detalleId}/pieces`, {
+    usuario_id: usuarioId,
+    requisito_id: requisitoId,
+    insumo_id: insumoId,
+    motivo,
   });
 }
 

@@ -75,6 +75,9 @@ const CAMPOS: Record<string, string> = {
   modelo: "Modelo",
   variante: "Variante",
   numeros_modelo: "Números de modelo",
+  // DEC-AJ-14: insumos necesarios de un Tipo.
+  insumos_previstos: "Insumos previstos",
+  requisitos: "Requisitos por categoría",
 };
 
 /** Los booleanos se guardan como true/false: en pantalla, Sí o No. */

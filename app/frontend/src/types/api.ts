@@ -847,6 +847,92 @@ export interface InsumoPrevisto {
   codigo: string;
   nombre: string;
   cantidad_prevista: string;
+  /**
+   * DEC-AJ-14: la pieza elegida para un requisito del Tipo (no un insumo
+   * previsto concreto). Ausente en un backend anterior.
+   */
+  pieza?: boolean;
+}
+
+/** DEC-AJ-14: cómo se eligió la pieza de un requisito. */
+export type CausaEleccionPieza =
+  | "AUTOMATICA"
+  | "ELECCION"
+  | "SUSTITUCION"
+  | "CAMBIO_MODELO"
+  | "REDEFINICION";
+
+/**
+ * DEC-AJ-14 (D-14.4): un requisito del Tipo del Detalle (una categoría o
+ * subcategoría y su cantidad) con la pieza concreta elegida, o pendiente.
+ */
+export interface RequisitoInsumoDetalle {
+  requisito_id: string;
+  categoria_id: string;
+  categoria_nombre: string;
+  cantidad: string;
+  estado: "ELEGIDA" | "PENDIENTE";
+  /** El Tipo lo sigue pidiendo (la elección de uno retirado se conserva). */
+  requisito_vigente: boolean;
+  insumo_id: string | null;
+  insumo_codigo: string | null;
+  insumo_nombre: string | null;
+  causa: CausaEleccionPieza | null;
+  /** Equipo sin modelo técnico: elegida con motivo, sin verificar. */
+  compatibilidad_no_verificada: boolean;
+  /** Falso: la pieza ya no sirve para el modelo actual del equipo. */
+  compatible_con_modelo: boolean;
+  reservada: boolean;
+  consumida: boolean;
+  motivo: string | null;
+  elegida_por: string | null;
+  elegida_en: string | null;
+}
+
+/** DEC-AJ-14: una elección del historial de piezas del Detalle (append-only). */
+export interface EleccionPiezaDetalle {
+  id: string;
+  requisito_id: string;
+  tipo_reparacion_id: string;
+  categoria_id: string;
+  cantidad: string;
+  insumo_id: string | null;
+  causa: CausaEleccionPieza;
+  compatibilidad_no_verificada: boolean;
+  modelo_equipo_id: string | null;
+  motivo: string | null;
+  usuario_id: string;
+  fecha: string;
+  reemplaza_a: string | null;
+}
+
+/** DEC-AJ-14: una pieza que se puede elegir para un requisito. */
+export interface OpcionPieza {
+  id: string;
+  codigo: string;
+  nombre: string;
+  activo: boolean;
+  /** Físico menos lo reservado por todas las Órdenes. */
+  disponible: string;
+  categoria_id: string | null;
+  fabricante_id: string | null;
+  variante: string | null;
+  codigo_fabricante: string | null;
+  modelos_compatibles: string[];
+  compatibilidad_no_verificada: boolean;
+  /** Es la pieza elegida ahora. */
+  elegida: boolean;
+}
+
+/** DEC-AJ-14: las piezas elegibles para un requisito del trabajo. */
+export interface OpcionesPieza {
+  requisito_id: string;
+  categoria_id: string;
+  categoria_nombre: string;
+  cantidad: string;
+  modelo_equipo_id: string | null;
+  compatibilidad_no_verificada: boolean;
+  opciones: OpcionPieza[];
 }
 
 export interface Detalle {
@@ -885,8 +971,15 @@ export interface Detalle {
   evaluaciones?: EvaluacionTecnica[];
   /** Falta la evaluación técnica para poder iniciarlo. */
   requiere_evaluacion?: boolean;
-  /** Resuelto por la API contra el catálogo; no vive en el dominio. */
+  /**
+   * Resuelto por la API contra el catálogo; no vive en el dominio. DEC-AJ-14:
+   * incluye las piezas elegidas (`pieza: true`), una línea por insumo.
+   */
   insumos_previstos: InsumoPrevisto[];
+  /** DEC-AJ-14: requisitos del Tipo y su pieza (vacío o ausente: sin requisitos). */
+  requisitos_insumo?: RequisitoInsumoDetalle[];
+  /** DEC-AJ-14: historial de elecciones de pieza (append-only). */
+  piezas?: EleccionPiezaDetalle[];
   /** Definición vigente: 1 + las reemplazadas por PROC-REP-127. */
   version_definicion: number;
   /** Todas las decisiones del cliente, de cualquier versión. */

@@ -153,6 +153,7 @@ export function SelectorInsumo<T extends InsumoClasificable>({
   soloVigentes = false,
   modelo,
   categoria,
+  sufijo,
 }: {
   insumos: readonly T[];
   clasificacion: ClasificacionInsumos;
@@ -165,6 +166,8 @@ export function SelectorInsumo<T extends InsumoClasificable>({
   modelo?: string | null;
   /** Fijo: solo los de esta categoría o subcategoría (un requisito). */
   categoria?: string;
+  /** Texto agregado a cada opción (p. ej. el disponible de una pieza). */
+  sufijo?: (insumo: T) => string | null;
 }) {
   const [filtro, setFiltro] = useState<FiltroInsumos>({});
   const fijo = modelo !== undefined;
@@ -202,6 +205,7 @@ export function SelectorInsumo<T extends InsumoClasificable>({
         {opciones.map((i) => (
           <option key={i.id} value={i.id}>
             {etiquetaInsumo(i, clasificacion)}
+            {sufijo?.(i) ? ` — ${sufijo(i)}` : ""}
           </option>
         ))}
       </select>
