@@ -36,6 +36,9 @@ class Proveedor(BaseModel):
 class OrigenSolicitud(str, Enum):
     MANUAL = "MANUAL"
     FALTANTE = "FALTANTE"
+    # DEC-AJ-11: confirmada desde una sugerencia que repone hasta el stock
+    # minimo (sola o junto con un faltante).
+    STOCK_MINIMO = "STOCK_MINIMO"
 
 
 class EstadoSolicitud(str, Enum):
@@ -50,7 +53,8 @@ class SolicitudCompra(BaseModel):
     cantidad: Decimal = Field(gt=0)
     origen: OrigenSolicitud
     motivo: str = Field(min_length=1)
-    # Ordenes con el faltante que la origino (solo FALTANTE).
+    # Ordenes con el faltante que la origino (FALTANTE, o STOCK_MINIMO
+    # cuando la sugerencia tambien cubria un faltante).
     ordenes: list[str] = Field(default_factory=list)
     usuario_id: str
     fecha: datetime
@@ -177,7 +181,12 @@ class CostoCompra(BaseModel):
 
 
 class SugerenciaCompra(BaseModel):
-    """Faltante que conviene comprar: nunca se compra solo."""
+    """Reposicion que conviene pedir: nunca se compra sola.
+
+    ``sugerido = por_faltante + por_minimo`` (DEC-AJ-11). ``motivo`` es el
+    origen con que se confirma la solicitud: ``STOCK_MINIMO`` si el minimo
+    aporta algo a la cantidad (sola o junto con un faltante); si no,
+    ``FALTANTE``."""
 
     insumo_id: str
     disponible: Decimal
@@ -185,3 +194,7 @@ class SugerenciaCompra(BaseModel):
     en_camino: Decimal
     sugerido: Decimal
     ordenes: list[str]
+    stock_minimo: Decimal | None = None
+    por_faltante: Decimal = Decimal("0")
+    por_minimo: Decimal = Decimal("0")
+    motivo: OrigenSolicitud = OrigenSolicitud.FALTANTE

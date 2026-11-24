@@ -36,6 +36,7 @@ from . import permisos
 from .autorizacion import validar_alguno_de
 from .configuracion import texto
 from .exceptions import PrecondicionInvalidaError
+from .stock_minimo import cantidad_a_reponer
 
 CERO = Decimal("0")
 CAMPOS_PROVEEDOR = (
@@ -156,17 +157,42 @@ def sugerencias(
     disponibles: Mapping[str, Decimal],
     demanda: Mapping[str, tuple[Decimal, list[str]]],
     en_camino: Mapping[str, Decimal],
+    minimos: Mapping[str, Decimal] | None = None,
 ) -> list[SugerenciaCompra]:
-    """Por insumo con faltante: lo que piden los Detalles bloqueados por
-    recursos menos lo disponible y lo que ya esta en camino."""
+    """Por insumo con faltante o bajo su minimo (DEC-AJ-11).
+
+    - Sin minimo: lo que piden los Detalles bloqueados por recursos menos
+      lo disponible y lo que ya esta en camino (como siempre).
+    - Con minimo: ``demanda + minimo - disponible - en camino``, es decir,
+      cubrir la demanda y reponer hasta el minimo.
+
+    ``minimos`` trae solo los insumos vigentes con minimo. Lo que esta en
+    camino (solicitudes pendientes y Ordenes de compra abiertas) se
+    descuenta, asi una sugerencia ya pedida no vuelve a aparecer.
+    """
+    minimos = minimos or {}
+    candidatos = (
+        set(demanda)
+        | {i for i, d in disponibles.items() if d < 0}
+        | {
+            i
+            for i, minimo in minimos.items()
+            if disponibles.get(i, CERO) < minimo
+        }
+    )
     resultado = []
-    for insumo_id in sorted(
-        set(demanda) | {i for i, d in disponibles.items() if d < 0}
-    ):
+    for insumo_id in sorted(candidatos):
         requerido, ordenes = demanda.get(insumo_id, (CERO, []))
         disponible = disponibles.get(insumo_id, CERO)
         camino = en_camino.get(insumo_id, CERO)
-        sugerido = requerido - disponible - camino
+        minimo = minimos.get(insumo_id)
+        por_faltante, por_minimo = cantidad_a_reponer(
+            stock_minimo=minimo,
+            demanda=requerido,
+            disponible=disponible,
+            en_camino=camino,
+        )
+        sugerido = por_faltante + por_minimo
         if sugerido <= CERO:
             continue
         resultado.append(
@@ -177,6 +203,14 @@ def sugerencias(
                 en_camino=camino,
                 sugerido=sugerido,
                 ordenes=sorted(set(ordenes)),
+                stock_minimo=minimo,
+                por_faltante=por_faltante,
+                por_minimo=por_minimo,
+                motivo=(
+                    OrigenSolicitud.STOCK_MINIMO
+                    if por_minimo > CERO
+                    else OrigenSolicitud.FALTANTE
+                ),
             )
         )
     return resultado
@@ -414,8 +448,12 @@ def costos(
 def en_camino(
     ordenes: Iterable[OrdenCompra], solicitudes: Iterable[SolicitudCompra]
 ) -> dict[str, Decimal]:
-    """Lo pedido y no recibido (ordenes confirmadas o parciales) mas las
-    solicitudes pendientes."""
+    """Lo pedido y no recibido mas las solicitudes pendientes.
+
+    Cuenta lo que falta recibir de las ordenes de compra en borrador,
+    confirmadas o parciales, y las solicitudes PENDIENTE (las EN_ORDEN ya
+    estan en su orden de compra). Es tambien la «reposicion solicitada» del
+    stock minimo (DEC-AJ-11, punto 7 de 11.1)."""
     total: dict[str, Decimal] = {}
     for orden in ordenes:
         if orden.estado in (

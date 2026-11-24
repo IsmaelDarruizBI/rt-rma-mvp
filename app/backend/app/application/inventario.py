@@ -53,6 +53,7 @@ from app.services import (
     tipo_de_ajuste,
     validar_alguno_de,
 )
+from app.services.compras import en_camino
 from app.services.lotes import (
     lote_para_ingreso,
     validar_ingreso,
@@ -87,21 +88,38 @@ class ResultadoMovimientoStock:
 # --- Consultas ---------------------------------------------------------------
 
 
+def en_camino_de_compras(contexto: ApplicationContext) -> dict[str, Decimal]:
+    """Lo pedido y no recibido, por insumo (DEC-AJ-11, punto 7 de 11.1):
+    solicitudes pendientes y Ordenes de compra en borrador, confirmadas o
+    parciales. Sin Compras (modo JSON), vacio. Se llama dentro de la
+    lectura del caller, para ver todo en un solo instante."""
+    if contexto.compras is None:
+        return {}
+    compras = contexto.compras
+    return en_camino(compras.listar_ordenes(), compras.listar_solicitudes())
+
+
 def consultar_inventario(
     contexto: ApplicationContext,
     *,
     buscar: str | None = None,
     solo_faltantes: bool = False,
+    bajo_minimo: bool = False,
 ) -> list[SituacionInsumo]:
-    """Todos los insumos (o los que coinciden), con sus tres cantidades."""
+    """Todos los insumos (o los que coinciden), con sus tres cantidades, lo
+    que esta en camino y su estado frente al stock minimo (DEC-AJ-11)."""
     with contexto.lectura():
         contexto.catalogos.anticipar()
         contexto.ordenes.precargar(con_reservas=True)
         insumos = contexto.catalogos.listar_insumos()
         con_reservas = contexto.ordenes.listar_con_reservas()
-    situaciones = situacion_inventario(insumos, con_reservas)
+        camino = en_camino_de_compras(contexto)
+    situaciones = situacion_inventario(insumos, con_reservas, camino)
     return filtrar_situaciones(
-        situaciones, buscar=buscar, solo_faltantes=solo_faltantes
+        situaciones,
+        buscar=buscar,
+        solo_faltantes=solo_faltantes,
+        bajo_minimo=bajo_minimo,
     )
 
 
@@ -124,7 +142,8 @@ def detalle_de_insumo(
         # historial y puede estar en una sin movimientos de este insumo
         # (F-03, docs/postgresql/e2-consultas-dedicadas.md).
         todas = ordenes.listar()
-    (situacion,) = situacion_inventario([insumo], con_reservas)
+        camino = en_camino_de_compras(contexto)
+    (situacion,) = situacion_inventario([insumo], con_reservas, camino)
     return DetalleInsumo(
         situacion=situacion,
         movimientos=historial_movimientos(

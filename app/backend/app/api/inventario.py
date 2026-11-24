@@ -49,16 +49,22 @@ def get_inventario(
     contexto: ContextoDep,
     buscar: str | None = None,
     solo_faltantes: bool = False,
+    bajo_minimo: bool = False,
 ) -> list[SituacionInsumoOut]:
-    """Insumos con stock fisico, reservado y disponible.
+    """Insumos con stock fisico, reservado y disponible, lo que esta en
+    camino y su estado frente al stock minimo (DEC-AJ-11).
 
     ``buscar`` filtra por codigo o nombre; ``solo_faltantes`` deja los que
-    tienen disponible o fisico negativo.
+    tienen disponible o fisico negativo; ``bajo_minimo``, los vigentes por
+    debajo de su minimo (con o sin reposicion solicitada).
     """
     return [
         SituacionInsumoOut.desde_servicio(situacion)
         for situacion in consultar_inventario(
-            contexto, buscar=buscar, solo_faltantes=solo_faltantes
+            contexto,
+            buscar=buscar,
+            solo_faltantes=solo_faltantes,
+            bajo_minimo=bajo_minimo,
         )
     ]
 

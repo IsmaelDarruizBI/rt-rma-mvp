@@ -131,12 +131,16 @@ def test_cada_rol_ve_sus_bandejas(tmp_path):
                 "REVISION_PENDIENTE",
                 "COLA",
                 "EN_TALLER",
+                # DEC-AJ-11.
+                "STOCK_BAJO_MINIMO",
                 "INSUMOS_NEGATIVOS",
             ],
             ADMINISTRADOR: [
                 "COBROS",
                 "CREDITO",
                 "SALDOS",
+                # DEC-AJ-11.
+                "STOCK_BAJO_MINIMO",
                 "INSUMOS_NEGATIVOS",
                 "RETIRO_DEMORADO",
             ],

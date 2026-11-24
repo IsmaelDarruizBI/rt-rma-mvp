@@ -332,6 +332,11 @@ from .revisiones import (
     registrar_finalizacion_sin_reparacion,
     registrar_revision_tecnica,
 )
+from .stock_minimo import (
+    EstadoReposicion,
+    cantidad_a_reponer,
+    estado_reposicion,
+)
 from .tomas import (
     ROLES_LIBERACION_AJENA,
     es_liberacion_ajena,
@@ -566,6 +571,10 @@ __all__ = [
     "reservas_vigentes_por_insumo",
     "situacion_inventario",
     "tipo_de_ajuste",
+    # Stock minimo (DEC-AJ-11)
+    "EstadoReposicion",
+    "cantidad_a_reponer",
+    "estado_reposicion",
     # Inventario global (todas las Ordenes)
     "aplicar_movimientos_inventario",
     "cantidad_reservada_global",

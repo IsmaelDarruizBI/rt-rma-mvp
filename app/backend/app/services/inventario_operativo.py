@@ -20,7 +20,7 @@ reservas siguen intactas y se exige confirmacion explicita; el faltante
 queda como evidencia y se corrige con un movimiento nuevo.
 """
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -38,6 +38,7 @@ from .autorizacion import validar_alguno_de
 from .exceptions import ConfirmacionRequeridaError, PrecondicionInvalidaError
 from .identificadores import nuevo_id
 from .inventario import cantidad_pendiente
+from .stock_minimo import EstadoReposicion, bajo_minimo, estado_reposicion
 
 CERO = Decimal("0")
 
@@ -69,10 +70,15 @@ class ReservaVigente:
 
 @dataclass(frozen=True)
 class SituacionInsumo:
-    """Fisico, reservado y disponible de un insumo, con sus reservas."""
+    """Fisico, reservado y disponible de un insumo, con sus reservas.
+
+    ``en_camino``: lo pedido y no recibido (Compras); cero en el modo JSON
+    o si no se consulto. Solo cuenta para el stock minimo (DEC-AJ-11).
+    """
 
     insumo: Insumo
     reservas: tuple[ReservaVigente, ...]
+    en_camino: Decimal = CERO
 
     @property
     def reservado(self) -> Decimal:
@@ -86,6 +92,21 @@ class SituacionInsumo:
     def faltante(self) -> bool:
         """Disponible o fisico negativos: hay que reponer o corregir."""
         return self.disponible < 0 or self.insumo.stock_fisico < 0
+
+    @property
+    def estado_reposicion(self) -> EstadoReposicion:
+        """DEC-AJ-11: el minimo frente al disponible (no es un faltante)."""
+        return estado_reposicion(
+            stock_minimo=self.insumo.stock_minimo,
+            disponible=self.disponible,
+            en_camino=self.en_camino,
+        )
+
+    @property
+    def bajo_minimo(self) -> bool:
+        """Alerta de reposicion: un insumo vigente por debajo de su minimo,
+        con o sin reposicion solicitada. Un insumo inactivo no alerta."""
+        return self.insumo.activo and bajo_minimo(self.estado_reposicion)
 
     @property
     def ordenes_con_reserva(self) -> int:
@@ -135,12 +156,18 @@ def reservas_vigentes_por_insumo(
 def situacion_inventario(
     insumos: Sequence[Insumo],
     ordenes: Iterable[OrdenReparacion],
+    en_camino: Mapping[str, Decimal] | None = None,
 ) -> list[SituacionInsumo]:
-    """Situacion de cada insumo del catalogo, en el orden del catalogo."""
+    """Situacion de cada insumo del catalogo, en el orden del catalogo.
+
+    ``en_camino`` (por insumo) sale de Compras; sin el, cero."""
     vigentes = reservas_vigentes_por_insumo(ordenes)
+    camino = en_camino or {}
     return [
         SituacionInsumo(
-            insumo=insumo, reservas=tuple(vigentes.get(insumo.id, ()))
+            insumo=insumo,
+            reservas=tuple(vigentes.get(insumo.id, ())),
+            en_camino=camino.get(insumo.id, CERO),
         )
         for insumo in insumos
     ]
@@ -151,8 +178,13 @@ def filtrar_situaciones(
     *,
     buscar: str | None = None,
     solo_faltantes: bool = False,
+    bajo_minimo: bool = False,
 ) -> list[SituacionInsumo]:
-    """Busqueda por codigo o nombre (sin distinguir mayusculas)."""
+    """Busqueda por codigo o nombre (sin distinguir mayusculas).
+
+    ``solo_faltantes``: disponible o fisico negativos. ``bajo_minimo``
+    (DEC-AJ-11): insumos vigentes por debajo de su minimo, con o sin
+    reposicion solicitada. Son filtros distintos y se combinan con Y."""
     texto = (buscar or "").strip().lower()
     return [
         situacion
@@ -164,6 +196,7 @@ def filtrar_situaciones(
             or texto in situacion.insumo.id.lower()
         )
         and (not solo_faltantes or situacion.faltante)
+        and (not bajo_minimo or situacion.bajo_minimo)
     ]
 
 

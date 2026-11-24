@@ -130,7 +130,8 @@ def crear_solicitud(
     origen: OrigenSolicitud = OrigenSolicitud.MANUAL,
     ordenes: Sequence[str] = (),
 ) -> SolicitudCompra:
-    """Manual, o confirmando una sugerencia por faltante (``FALTANTE``)."""
+    """Manual, o confirmando una sugerencia: por faltante (``FALTANTE``)
+    o de reposicion hasta el minimo (``STOCK_MINIMO``, DEC-AJ-11)."""
     repo = _repo(contexto)
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     validar_alguno_de(usuario, permisos.COMPRA_SOLICITAR)
@@ -172,8 +173,9 @@ def descartar(
 def sugerencias_de_compra(
     contexto: ApplicationContext,
 ) -> list[SugerenciaCompra]:
-    """Faltantes de las Ordenes que esperan recursos, menos lo disponible y
-    lo que ya esta en camino. Solo consulta: nada se compra solo."""
+    """Faltantes de las Ordenes que esperan recursos y reposicion hasta el
+    stock minimo (DEC-AJ-11), menos lo disponible y lo que ya esta en
+    camino. Solo consulta: nada se compra solo."""
     repo = _repo(contexto)
     with contexto.lectura():
         insumos = contexto.catalogos.listar_insumos()
@@ -205,6 +207,12 @@ def sugerencias_de_compra(
         disponibles={s.insumo.id: s.disponible for s in situaciones},
         demanda=demanda,
         en_camino=camino,
+        # Un insumo inactivo no se repone (tampoco admite solicitudes).
+        minimos={
+            i.id: i.stock_minimo
+            for i in insumos
+            if i.activo and i.stock_minimo is not None
+        },
     )
 
 

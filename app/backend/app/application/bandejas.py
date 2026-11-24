@@ -12,7 +12,8 @@ otra maquina de estados:
   independientes figura en todas las que correspondan.
 - Una bandeja de SEGUIMIENTO muestra lo que el sector necesita ver aunque
   hoy no le toque actuar (la cola para Coordinacion, lo que esta en manos
-  de otro sector, los insumos con disponible negativo).
+  de otro sector, los insumos con disponible negativo y los insumos por
+  debajo de su stock minimo, DEC-AJ-11).
 - La cola de taller son las Ordenes con la accion Tomar disponible,
   ordenadas por ``clave_de_prioridad``; "Mis ordenes tomadas", las de toma
   activa del usuario.
@@ -43,6 +44,7 @@ from app.domain.retiro import (
     fecha_lista_para_retirar,
 )
 from app.services import (
+    EstadoReposicion,
     SituacionInsumo,
     ejecucion_activa,
     es_ingreso_inicial,
@@ -68,6 +70,7 @@ from .acciones import (
 )
 from .contexto import ApplicationContext
 from .finanzas import SituacionFinanciera, situacion_financiera
+from .inventario import en_camino_de_compras
 from .operativa import plazo_retiro_dias
 from .situacion import CodigoSituacion, SituacionOperativa, situacion_operativa
 
@@ -212,6 +215,22 @@ class _Lectura:
             self.compatibilidades = (
                 catalogos.listar_tipo_reparacion_estaciones()
             )
+            self.situaciones = situacion_inventario(
+                self.insumos, self.con_reservas
+            )
+            # DEC-AJ-11: lo en camino (Compras) solo distingue «bajo
+            # minimo» de «reposicion solicitada»; se lee si hay alguno por
+            # debajo de su minimo, en la misma lectura.
+            if any(
+                situacion.insumo.stock_minimo is not None
+                and situacion.disponible < situacion.insumo.stock_minimo
+                for situacion in self.situaciones
+            ):
+                self.situaciones = situacion_inventario(
+                    self.insumos,
+                    self.con_reservas,
+                    en_camino_de_compras(contexto),
+                )
         tipos = {tipo.id: tipo.nombre for tipo in tipos_reparacion}
         # DC31: una Orden CANCELADA no es un pendiente de Inicio ni de
         # Taller (las abiertas del circuito anterior se resuelven desde la
@@ -556,11 +575,23 @@ class _Lectura:
     def insumos_negativos(self) -> list[SituacionInsumo]:
         return [
             situacion
-            for situacion in situacion_inventario(
-                self.insumos, self.con_reservas
-            )
+            for situacion in self.situaciones
             if situacion.disponible < 0
         ]
+
+    def insumos_a_reponer(self) -> list[SituacionInsumo]:
+        """DEC-AJ-11: vigentes por debajo de su minimo; primero los que no
+        tienen reposicion solicitada, en el orden del catalogo."""
+        return sorted(
+            (
+                situacion
+                for situacion in self.situaciones
+                if situacion.bajo_minimo
+            ),
+            key=lambda situacion: (
+                situacion.estado_reposicion is not EstadoReposicion.BAJO_MINIMO
+            ),
+        )
 
 
 def _por_antiguedad(items: list[ItemBandeja]) -> list[ItemBandeja]:
@@ -752,6 +783,7 @@ def _coordinacion(lectura: _Lectura) -> list[Bandeja]:
         ),
         _cola(lectura),
         _en_taller(lectura),
+        _insumos_a_reponer(lectura),
         _insumos_negativos(lectura),
     ]
 
@@ -781,6 +813,7 @@ def _administracion(lectura: _Lectura) -> list[Bandeja]:
             TipoBandeja.SEGUIMIENTO,
             lectura.saldos_abiertos(excluir=cobros),
         ),
+        _insumos_a_reponer(lectura),
         _insumos_negativos(lectura),
         _retiro_demorado(lectura),
     ]
@@ -847,6 +880,19 @@ def _insumos_negativos(lectura: _Lectura) -> Bandeja:
         "Hay más reservado que en stock: reponer o corregir en Inventario.",
         TipoBandeja.SEGUIMIENTO,
         insumos=lectura.insumos_negativos(),
+        destino=DestinoBandeja.INVENTARIO,
+    )
+
+
+def _insumos_a_reponer(lectura: _Lectura) -> Bandeja:
+    return _bandeja(
+        "STOCK_BAJO_MINIMO",
+        "Insumos a reponer",
+        "Insumos con el disponible por debajo de su stock mínimo. Si ya hay "
+        "una reposición solicitada (solicitud u orden de compra) que lo "
+        "cubre, se indica. No es un faltante: se repone desde Compras.",
+        TipoBandeja.SEGUIMIENTO,
+        insumos=lectura.insumos_a_reponer(),
         destino=DestinoBandeja.INVENTARIO,
     )
 

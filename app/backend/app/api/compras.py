@@ -5,9 +5,11 @@ no esta disponible.
     GET  /api/purchases/suppliers                  proveedores
     GET  /api/purchases/requests                   solicitudes
     POST /api/purchases/requests                   solicitud manual o desde
-                                                   una sugerencia (FALTANTE)
+                                                   una sugerencia (FALTANTE
+                                                   o STOCK_MINIMO)
     POST /api/purchases/requests/{id}/discard      descartar con motivo
-    GET  /api/purchases/suggestions                faltantes sugeridos
+    GET  /api/purchases/suggestions                reposicion sugerida
+                                                   (faltantes y minimo)
     GET  /api/purchases/orders[/{id}]              ordenes de compra
     POST /api/purchases/orders                     crear (borrador)
     POST /api/purchases/orders/{id}/confirm        confirmar (sin aprobacion)

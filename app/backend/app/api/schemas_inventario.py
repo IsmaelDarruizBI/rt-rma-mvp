@@ -17,6 +17,7 @@ from app.application import (
 )
 from app.domain.models import TipoMovimientoInsumo
 from app.services import (
+    EstadoReposicion,
     EvidenciaFaltante,
     MovimientoHistorial,
     ReservaVigente,
@@ -104,6 +105,12 @@ class SituacionInsumoOut(BaseModel):
     fisico_negativo: bool
     ordenes_con_reserva: int
     detalles_con_reserva: int
+    # DEC-AJ-11: minimo opcional, lo pedido y no recibido y el estado de
+    # reposicion (no es un faltante).
+    stock_minimo: Decimal | None = None
+    en_camino: Decimal = Decimal("0")
+    estado_reposicion: EstadoReposicion = EstadoReposicion.SIN_MINIMO
+    bajo_minimo: bool = False
 
     @classmethod
     def desde_servicio(
@@ -124,6 +131,10 @@ class SituacionInsumoOut(BaseModel):
             fisico_negativo=insumo.stock_fisico < 0,
             ordenes_con_reserva=situacion.ordenes_con_reserva,
             detalles_con_reserva=situacion.detalles_con_reserva,
+            stock_minimo=insumo.stock_minimo,
+            en_camino=situacion.en_camino,
+            estado_reposicion=situacion.estado_reposicion,
+            bajo_minimo=situacion.bajo_minimo,
         )
 
 
