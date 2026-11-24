@@ -196,7 +196,17 @@ def test_definir_luego_de_revision_comparte_el_snapshot_de_070():
     )
     por_075 = _definir(_revisada(flujo_mvp.orden_creada()))
 
-    assert por_075.reparaciones_detail == por_070.reparaciones_detail
+    # DEC-AJ-12: la copia del precio registra quien y cuando lo definio;
+    # eso depende del camino (070 Recepcion, 075 Tecnico). El snapshot del
+    # trabajo (precio, garantia, puntaje, nombre y origen) es el mismo.
+    sin_autoria = {"precio_definido_por": None, "precio_definido_en": None}
+
+    def _snapshot(orden):
+        return [
+            d.model_copy(update=sin_autoria) for d in orden.reparaciones_detail
+        ]
+
+    assert _snapshot(por_075) == _snapshot(por_070)
 
 
 def test_definir_luego_de_revision_guards():

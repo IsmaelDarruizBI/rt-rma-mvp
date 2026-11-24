@@ -620,6 +620,9 @@ def test_el_detalle_expone_sus_insumos_previstos(cliente):
         "codigo": "BAT-IP14",
         "nombre": "Bateria iPhone 14",
         "cantidad_prevista": "1",
+        # DEC-AJ-14: marca si el previsto es una pieza elegida para un
+        # requisito por categoria; un insumo previsto concreto no lo es.
+        "pieza": False,
     }
 
 
