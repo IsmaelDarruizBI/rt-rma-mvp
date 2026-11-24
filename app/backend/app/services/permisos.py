@@ -366,6 +366,16 @@ AJUSTE_REVERTIR = _definir(
     (ADMIN,),
     COMERCIAL,
 )
+# DEC-AJ-12 (D-12.2, precision a): precio manual de un trabajo cuyo Tipo
+# tiene precio por modelo y no tiene precio para el modelo de la Orden (o el
+# equipo no tiene modelo tecnico). Nunca cambia el catalogo. Inicialmente
+# Coordinacion RMA y Administracion; el Tecnico no fija precios.
+PRECIO_MANUAL = _definir(
+    "PRECIO_MANUAL",
+    "Autorizar un precio manual cuando falta el precio de catálogo",
+    (COORD, ADMIN),
+    COMERCIAL,
+)
 
 # --- Salida ---
 SALIDA = "Custodia, check-in y entrega"
@@ -526,6 +536,13 @@ PLANTILLA_GESTIONAR = _definir(
 CHECKLIST_GESTIONAR = _definir(
     "CHECKLIST_GESTIONAR",
     "Checklist de recepción y tipos de equipo",
+    (ADMIN,),
+    OPERATIVA,
+)
+# DEC-AJ-12 (D-12.5): alta y edicion del catalogo tecnico de modelos.
+MODELO_EQUIPO_GESTIONAR = _definir(
+    "MODELO_EQUIPO_GESTIONAR",
+    "Gestionar modelos de equipo",
     (ADMIN,),
     OPERATIVA,
 )

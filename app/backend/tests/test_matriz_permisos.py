@@ -147,6 +147,14 @@ MATRIZ = {
     ("POST", "/api/orders/{orden_id}/details/{detalle_id}/redefine"): SERVICIO(
         "DETALLE_DEFINIR_TECNICO"
     ),
+    # DEC-AJ-12: tomar el precio de catalogo de un trabajo pendiente lo
+    # puede quien edita los trabajos; un precio manual exige PRECIO_MANUAL.
+    ("POST", "/api/orders/{orden_id}/details/{detalle_id}/price"): SERVICIO(
+        "DETALLE_DEFINIR_RECEPCION",
+        "DETALLE_DEFINIR_TECNICO",
+        "DECISION_CLIENTE",
+        "PRECIO_MANUAL",
+    ),
     ("POST", "/api/orders/{orden_id}/control/approve"): SERVICIO(
         "CONTROL_TECNICO"
     ),
@@ -255,6 +263,18 @@ MATRIZ = {
     ),
     ("PUT", "/api/admin/stations/{codigo}/repair-types"): API(
         "MESA_TIPOS_GESTIONAR"
+    ),
+    # DEC-AJ-12: precios por modelo y modelos de equipo.
+    ("PUT", "/api/admin/repair-types/{codigo}/model-prices"): API(
+        "PRECIOS_GESTIONAR"
+    ),
+    ("GET", "/api/admin/device-models"): API(
+        "MODELO_EQUIPO_GESTIONAR",
+        "PRECIOS_GESTIONAR",
+    ),
+    ("POST", "/api/admin/device-models"): API("MODELO_EQUIPO_GESTIONAR"),
+    ("PUT", "/api/admin/device-models/{codigo}"): API(
+        "MODELO_EQUIPO_GESTIONAR"
     ),
     ("GET", "/api/admin/config-changes"): EN_LA_RUTA,
     ("GET", "/api/admin/users"): API("ROLES_ADMINISTRAR"),

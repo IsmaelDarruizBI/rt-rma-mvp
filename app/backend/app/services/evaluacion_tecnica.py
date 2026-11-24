@@ -41,6 +41,7 @@ from . import permisos
 from .autorizacion import validar_actor
 from .cancelaciones import cancelar_detalle
 from .exceptions import PrecondicionInvalidaError
+from .precio_trabajo import PrecioManual, definiciones_tecnicas_iguales_desde
 from .redefinicion import aplicar_redefinicion
 from .reparaciones import agregar_detalle_adicional
 from .tomas import buscar_detalle, hay_ejecucion_activa, seleccionar_detalle
@@ -63,14 +64,22 @@ class ReparacionAdicional:
     tipo_reparacion: TipoReparacion
     observaciones: str | None = None
     detalle_origen_id: str | None = None
+    # DEC-AJ-12: precio manual (solo con PRECIO_MANUAL) si falta el de
+    # catalogo para el modelo; sin el, el trabajo queda pendiente.
+    precio_manual: PrecioManual | None = None
 
 
 def evaluacion_vigente(detalle: ReparacionDetail) -> EvaluacionTecnica | None:
-    """La ultima evaluacion sobre la definicion vigente, si la hay."""
+    """La ultima evaluacion sobre la definicion vigente, si la hay.
+
+    DEC-AJ-12: una version que solo definio el precio (``solo_precio``) no
+    cambia el trabajo: la evaluacion de la definicion tecnica sigue valiendo.
+    """
+    desde = definiciones_tecnicas_iguales_desde(detalle)
     vigentes = [
         e
         for e in detalle.evaluaciones
-        if e.version_definicion == detalle.version_definicion
+        if desde <= e.version_definicion <= detalle.version_definicion
     ]
     return vigentes[-1] if vigentes else None
 
@@ -137,6 +146,7 @@ def evaluar_detalle(
     fecha: datetime,
     tipo_reparacion: TipoReparacion | None = None,
     adicionales: Sequence[ReparacionAdicional] = (),
+    precio_manual: PrecioManual | None = None,
 ) -> OrdenReparacion:
     """181 -> 182 (Requiere) -> 183 -> efecto -> 184 [-> 128 -> 184]*.
 
@@ -178,6 +188,11 @@ def evaluar_detalle(
     elif tipo_reparacion is not None:
         raise PrecondicionInvalidaError(
             "Solo REQUIERE_REDEFINICION registra una definicion nueva."
+        )
+    elif precio_manual is not None:
+        raise PrecondicionInvalidaError(
+            "El precio manual acompana a una definicion nueva "
+            "(REQUIERE_REDEFINICION)."
         )
 
     # 181: seleccion (con la toma del tecnico y el Detalle trabajable).
@@ -237,6 +252,7 @@ def evaluar_detalle(
             tipo_reparacion=tipo_reparacion,
             usuario=usuario,
             fecha=fecha,
+            precio_manual=precio_manual,
         )
         cierre = "Original redefinido en la evaluacion tecnica"
     else:
@@ -261,6 +277,7 @@ def evaluar_detalle(
             observaciones=adicional.observaciones,
             detalle_origen_id=adicional.detalle_origen_id,
             detectado_en=detalle_id,
+            precio_manual=adicional.precio_manual,
         )
 
     return registrar_paso(

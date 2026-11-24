@@ -57,6 +57,15 @@ from .autorizacion_cliente import (
 from .custodia import checkin_de
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
 from .inventario import faltantes_del_detalle
+from .precio_trabajo import (
+    PrecioManual,
+    PrecioResuelto,
+    copia_de_precio,
+    detalles_con_precio_pendiente,
+    modelo_de,
+    precio_pendiente_bloquea,
+    resolver_precio,
+)
 from .recursos import (
     detalles_bloqueados_por_recursos,
     tiene_override_factibilidad,
@@ -192,6 +201,12 @@ def faltantes_para_ingreso(orden: OrdenReparacion) -> list[str]:
         for detalle in orden.reparaciones_detail
     ):
         faltan.append("cargar al menos un trabajo")
+    # DEC-AJ-12: el cliente autoriza trabajos con precio (punto 3 de 11.1).
+    pendientes = detalles_con_precio_pendiente(orden)
+    if pendientes and precio_pendiente_bloquea(orden):
+        faltan.append(
+            "definir el precio pendiente de " + ", ".join(pendientes)
+        )
     return faltan + faltantes_para_recepcion(orden)
 
 
@@ -215,9 +230,15 @@ def faltantes_para_recepcion(orden: OrdenReparacion) -> list[str]:
 def nombre_del_trabajo(
     detalle: ReparacionDetail, nombres_de_tipo: Mapping[str, str]
 ) -> str:
-    """Como se nombra un Detalle: el Tipo, o "Otros: <descripcion>"."""
+    """Como se nombra un Detalle: el Tipo, o "Otros: <descripcion>".
+
+    DEC-AJ-12 (D-12.4): la copia del nombre que guardo el Detalle; un
+    Detalle anterior, sin copia, se nombra con el catalogo actual.
+    """
     if detalle.es_otros:
         return f"Otros: {detalle.descripcion or 'sin descripcion'}"
+    if detalle.nombre_trabajo:
+        return detalle.nombre_trabajo
     return nombres_de_tipo.get(
         detalle.tipo_reparacion_id, detalle.tipo_reparacion_id
     )
@@ -267,6 +288,7 @@ def definir_reparacion_detail(
     fecha: datetime,
     observaciones: str | None = None,
     descripcion: str | None = None,
+    precio_manual: PrecioManual | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-045 ("Si") -> PROC-REP-070 (FEAT-REP-002 / FEAT-REP-007).
 
@@ -314,6 +336,13 @@ def definir_reparacion_detail(
             f"La Orden ya tiene un Detalle con id {detalle_id}."
         )
     descripcion = _descripcion_para(tipo_reparacion, descripcion)
+    precio = resolver_precio(
+        tipo_reparacion,
+        modelo_equipo_id=modelo_de(orden),
+        usuario=usuario,
+        fecha=fecha,
+        manual=precio_manual,
+    )
 
     nueva_orden = orden
     if not orden.reparaciones_detail:
@@ -338,6 +367,7 @@ def definir_reparacion_detail(
         _detalle_con_snapshot(
             detalle_id=detalle_id,
             tipo_reparacion=tipo_reparacion,
+            precio=precio,
             observaciones=observaciones,
             detalle_origen_id=None,
             checkin=checkin_de(orden),
@@ -351,6 +381,7 @@ def _detalle_con_snapshot(
     *,
     detalle_id: str,
     tipo_reparacion: TipoReparacion,
+    precio: PrecioResuelto,
     observaciones: str | None,
     detalle_origen_id: str | None,
     checkin: bool | None = None,
@@ -363,7 +394,8 @@ def _detalle_con_snapshot(
     funcionales distintos. La garantia nace con la del Tipo (el check-in
     se registra antes de la entrega y la reasigna) o, en una Orden
     anterior con el check-in del ingreso, la que este sugiere: sugerida y
-    definitiva nacen iguales.
+    definitiva nacen iguales. El precio y su copia (nombre, modelo, origen)
+    los determina ``precio_trabajo.resolver_precio`` (DEC-AJ-12).
     """
     dias = garantia_sugerida(
         checkin,
@@ -375,7 +407,7 @@ def _detalle_con_snapshot(
         id=detalle_id,
         tipo_reparacion_id=tipo_reparacion.id,
         descripcion=descripcion,
-        precio=tipo_reparacion.precio,
+        **copia_de_precio(tipo_reparacion, precio),
         puntaje=tipo_reparacion.puntaje,
         garantia_dias=dias,
         garantia_dias_sugerida=dias,
@@ -427,6 +459,7 @@ def definir_reparacion_detail_luego_revision(
     observaciones: str | None = None,
     detalle_origen_id: str | None = None,
     descripcion: str | None = None,
+    precio_manual: PrecioManual | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-068 ("Si") -> PROC-REP-075 (VAR-REP-001/002).
 
@@ -475,6 +508,13 @@ def definir_reparacion_detail_luego_revision(
 
     origen_del_detalle = _detalle_origen_para(orden, detalle_origen_id)
     descripcion = _descripcion_para(tipo_reparacion, descripcion)
+    precio = resolver_precio(
+        tipo_reparacion,
+        modelo_equipo_id=modelo_de(orden),
+        usuario=usuario,
+        fecha=fecha,
+        manual=precio_manual,
+    )
 
     nueva_orden = orden
     if not orden.reparaciones_detail:
@@ -499,6 +539,7 @@ def definir_reparacion_detail_luego_revision(
         _detalle_con_snapshot(
             detalle_id=detalle_id,
             tipo_reparacion=tipo_reparacion,
+            precio=precio,
             observaciones=observaciones,
             detalle_origen_id=origen_del_detalle,
             checkin=checkin_de(orden),
@@ -520,6 +561,7 @@ def agregar_detalle_adicional(
     observaciones: str | None = None,
     detalle_origen_id: str | None = None,
     detectado_en: str | None = None,
+    precio_manual: PrecioManual | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-128: el tecnico agrega una reparacion adicional detectada.
 
@@ -535,7 +577,9 @@ def agregar_detalle_adicional(
     autorizacion ni la definicion de los demas Detalles.
 
     Solo Tipos del catalogo: el precio manual de «Otros» lo carga Recepcion
-    (``tipo_reparacion_otros``); el tecnico no fija precios.
+    (``tipo_reparacion_otros``); el tecnico no fija precios. DEC-AJ-12: sin
+    precio de catalogo para el modelo, el trabajo queda con el precio
+    pendiente, salvo que el actor tenga ``PRECIO_MANUAL`` y lo informe.
     """
     from .tomas import buscar_detalle, validar_titular_de_la_toma
 
@@ -564,6 +608,13 @@ def agregar_detalle_adicional(
     if detectado_en is not None:
         buscar_detalle(orden, detectado_en)
     origen_del_detalle = _detalle_origen_para(orden, detalle_origen_id)
+    precio = resolver_precio(
+        tipo_reparacion,
+        modelo_equipo_id=modelo_de(orden),
+        usuario=usuario,
+        fecha=fecha,
+        manual=precio_manual,
+    )
 
     nueva_orden = registrar_paso(
         orden,
@@ -582,6 +633,7 @@ def agregar_detalle_adicional(
         _detalle_con_snapshot(
             detalle_id=detalle_id,
             tipo_reparacion=tipo_reparacion,
+            precio=precio,
             observaciones=observaciones,
             detalle_origen_id=origen_del_detalle,
             checkin=checkin_de(orden),

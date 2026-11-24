@@ -39,6 +39,26 @@ class TipoReparacion(BaseModel):
     garantia_con_checkin: int = Field(default=90, ge=0)
     garantia_sin_checkin: int = Field(default=30, ge=0)
     politica_garantia_rma: PoliticaGarantiaRma | None = None
+    # DEC-AJ-12 (D-12.1): con ``precio_por_modelo`` el precio sale de
+    # ``precios_modelo`` (codigo del modelo -> precio vigente) y ``precio``
+    # no se usa: nunca es un respaldo. Sin precio para el modelo, el trabajo
+    # lleva un precio manual autorizado o queda pendiente. Por defecto,
+    # precio unico: los tipos existentes (y el modo JSON) no cambian.
+    precio_por_modelo: bool = False
+    precios_modelo: dict[str, Decimal] = Field(default_factory=dict)
+
+
+class PrecioTipoModelo(BaseModel):
+    """Precio de catalogo de un Tipo para un Modelo de equipo (DEC-AJ-12).
+
+    Es lo que se pide guardar: ``precio`` ``None`` retira el precio de la
+    combinacion (queda sin precio de catalogo; la fila no se borra). Los
+    codigos son estables (``TR-…`` y ``MOD-…``), no los nombres.
+    """
+
+    tipo_reparacion_id: str = Field(min_length=1)
+    modelo_equipo_id: str = Field(min_length=1)
+    precio: Decimal | None = Field(default=None, ge=0)
 
 
 class Insumo(BaseModel):

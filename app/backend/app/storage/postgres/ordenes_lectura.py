@@ -325,11 +325,16 @@ _VERSIONES = consulta(
     SELECT v.detalle_id, v.id, v.numero, t.codigo AS tipo, v.descripcion,
            v.precio, v.puntaje, v.garantia_dias,
            u.codigo AS definida_por, v.definida_en,
-           v.garantia_dias_reemplazada
+           v.garantia_dias_reemplazada, v.nombre_trabajo,
+           me.codigo AS modelo_equipo, v.origen_precio, v.precio_motivo,
+           up.codigo AS precio_definido_por, v.precio_definido_en,
+           v.solo_precio
     FROM rma.detalle_version v
     JOIN rma.detalle d ON d.id = v.detalle_id
     JOIN rma.tipo_reparacion t ON t.id = v.tipo_reparacion_id
     LEFT JOIN rma.usuario u ON u.id = v.definida_por
+    LEFT JOIN rma.modelo_equipo me ON me.id = v.modelo_equipo_id
+    LEFT JOIN rma.usuario up ON up.id = v.precio_definido_por
     WHERE d.orden_id = ANY(ARRAY(
         SELECT id FROM rma.orden WHERE codigo = ANY(%(codigos)s)
     ))
@@ -1263,6 +1268,20 @@ def _salida(fila: Any) -> EntregaEquipo | None:
     )
 
 
+def _copia_de_precio(version: Any) -> dict[str, Any]:
+    """DEC-AJ-12: la copia del trabajo guardada en la version (vacia en
+    las versiones anteriores al bloque 7)."""
+    return {
+        "nombre_trabajo": version.nombre_trabajo,
+        "modelo_equipo_id": version.modelo_equipo,
+        "origen_precio": version.origen_precio,
+        "precio_motivo": version.precio_motivo,
+        "precio_definido_por": version.precio_definido_por,
+        "precio_definido_en": utc(version.precio_definido_en),
+        "solo_precio": version.solo_precio,
+    }
+
+
 def _detalles(
     filas: list[Any], hijas: dict[str, Any]
 ) -> tuple[list[ReparacionDetail], dict[str, list[UUID]], dict[str, UUID]]:
@@ -1286,6 +1305,7 @@ def _detalles(
                 garantia_dias=siguiente.garantia_dias_reemplazada,
                 reemplazada_en=utc(siguiente.definida_en),
                 usuario_id=siguiente.definida_por,
+                **_copia_de_precio(version),
             )
             for version, siguiente in zip(versiones, versiones[1:])
         ]
@@ -1304,6 +1324,7 @@ def _detalles(
                 tipo_reparacion_id=vigente.tipo,
                 descripcion=vigente.descripcion,
                 precio=decimal_sin_ceros(vigente.precio),
+                **_copia_de_precio(vigente),
                 puntaje=vigente.puntaje,
                 garantia_dias=fila.garantia_dias,
                 garantia_dias_sugerida=fila.garantia_dias_sugerida,

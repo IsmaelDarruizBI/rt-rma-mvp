@@ -89,6 +89,10 @@ from app.services.pagos import (
     condicion_entrega_cumplida,
     credito_pendiente,
 )
+from app.services.precio_trabajo import (
+    detalles_con_precio_pendiente,
+    roles_para_tomar_precio_de_catalogo,
+)
 from app.services.reparaciones import definicion_finalizada
 from app.services.revisiones import (
     finalizada_sin_reparacion,
@@ -158,6 +162,8 @@ ACCION_LIBERAR_ORDEN_AJENA = "LIBERAR_ORDEN_AJENA"
 ACCION_AJUSTAR_GARANTIA = "AJUSTAR_GARANTIA"
 # UAT-009: verificacion de funciones basicas antes de entregar.
 ACCION_REGISTRAR_CHECKIN = "REGISTRAR_CHECKIN"
+# DEC-AJ-12: definir el precio pendiente de un trabajo.
+ACCION_DEFINIR_PRECIO = "DEFINIR_PRECIO"
 
 # Terminales de un Detalle: lo realizado y lo cancelado (BR-REP-012).
 _TERMINALES = (
@@ -993,6 +999,27 @@ def acciones_financieras(orden: OrdenReparacion) -> list[AccionDisponible]:
     return acciones
 
 
+def acciones_de_precio(orden: OrdenReparacion) -> list[AccionDisponible]:
+    """DEC-AJ-12: «Definir precio» por cada trabajo con el precio pendiente.
+
+    Tomar el precio de catalogo (cuando existe) lo puede quien edita los
+    trabajos; un precio manual exige ademas ``PRECIO_MANUAL`` (lo valida el
+    service y la pantalla lo ofrece con ``puede``).
+    """
+    if orden.esta_cerrada:
+        return []
+    roles = roles_para_tomar_precio_de_catalogo()
+    return [
+        AccionDisponible(
+            codigo=ACCION_DEFINIR_PRECIO,
+            etiqueta="Definir el precio del trabajo",
+            roles=roles,
+            detalle_id=detalle_id,
+        )
+        for detalle_id in detalles_con_precio_pendiente(orden)
+    ]
+
+
 def acciones_complementarias(
     orden: OrdenReparacion,
 ) -> list[AccionDisponible]:
@@ -1006,10 +1033,11 @@ def acciones_complementarias(
       Coordinacion, salvo el titular (que libera con su propia accion).
     - Ajustar el plazo de garantia de cada Detalle no cancelado, antes de
       la entrega: Recepcion o Coordinacion.
+    - Definir el precio pendiente de un trabajo (DEC-AJ-12).
     """
     if orden.esta_cerrada:
         return []
-    acciones: list[AccionDisponible] = []
+    acciones: list[AccionDisponible] = acciones_de_precio(orden)
     if fue_priorizada(orden) and orden.estado_workflow in (
         EstadoWorkflow.EN_COLA,
         EstadoWorkflow.EN_REPARACION,

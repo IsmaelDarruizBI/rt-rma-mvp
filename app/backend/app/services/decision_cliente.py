@@ -67,6 +67,7 @@ from .cancelaciones import (
     validar_cancelacion_detalle,
 )
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
+from .precio_trabajo import exigir_precio_definido
 from .reparaciones import definicion_finalizada
 from .workflow import registrar_paso
 
@@ -236,6 +237,11 @@ def registrar_decision_cliente(
         for decision in decisiones
         if decision.resultado is ResultadoAutorizacion.AUTORIZADO
     ]
+    # DEC-AJ-12 (punto 3 de 11.1): el cliente no autoriza un trabajo sin
+    # precio; rechazarlo si puede.
+    exigir_precio_definido(
+        orden, autorizados, "registrar la autorizacion del cliente"
+    )
     rechazados = [
         decision.detalle_id
         for decision in decisiones

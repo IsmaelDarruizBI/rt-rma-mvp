@@ -65,24 +65,33 @@ from .ejecutor import EjecutorSql
 from .mapeo import decimal_sin_ceros
 from .transaccion import UnidadDeTrabajoPostgres
 
+# DEC-AJ-12: los precios por modelo vigentes (activos) viajan con el Tipo,
+# en la misma lectura, como texto para no perder decimales.
+_COLUMNAS_TIPO = """
+    SELECT t.codigo, t.nombre, t.precio, t.puntaje, t.garantia_dias,
+           t.activo, t.garantia_con_checkin, t.garantia_sin_checkin,
+           t.politica_garantia_rma, t.precio_por_modelo,
+           (SELECT coalesce(
+                       json_object_agg(m.codigo, p.precio::text), '{}'::json)
+              FROM rma.precio_tipo_modelo p
+              JOIN rma.modelo_equipo m ON m.id = p.modelo_equipo_id
+             WHERE p.tipo_reparacion_id = t.id AND p.activo) AS precios_modelo
+    FROM rma.tipo_reparacion t
+"""
 _TIPOS = consulta(
     "catalogos.tipos_reparacion",
-    """
-    SELECT codigo, nombre, precio, puntaje, garantia_dias, activo,
-           garantia_con_checkin, garantia_sin_checkin, politica_garantia_rma
-    FROM rma.tipo_reparacion
-    WHERE codigo <> %(otros)s
-    ORDER BY codigo COLLATE "C"
+    _COLUMNAS_TIPO
+    + """
+    WHERE t.codigo <> %(otros)s
+    ORDER BY t.codigo COLLATE "C"
     """,
     modo=LECTURA,
 )
 _TIPO = consulta(
     "catalogos.tipo_reparacion",
-    """
-    SELECT codigo, nombre, precio, puntaje, garantia_dias, activo,
-           garantia_con_checkin, garantia_sin_checkin, politica_garantia_rma
-    FROM rma.tipo_reparacion
-    WHERE codigo = %(codigo)s AND codigo <> %(otros)s
+    _COLUMNAS_TIPO
+    + """
+    WHERE t.codigo = %(codigo)s AND t.codigo <> %(otros)s
     """,
     modo=LECTURA,
 )
@@ -593,6 +602,11 @@ def _tipo(f) -> TipoReparacion:
         garantia_con_checkin=f.garantia_con_checkin,
         garantia_sin_checkin=f.garantia_sin_checkin,
         politica_garantia_rma=f.politica_garantia_rma,
+        precio_por_modelo=f.precio_por_modelo,
+        precios_modelo={
+            modelo: decimal_sin_ceros(Decimal(precio))
+            for modelo, precio in (f.precios_modelo or {}).items()
+        },
     )
 
 

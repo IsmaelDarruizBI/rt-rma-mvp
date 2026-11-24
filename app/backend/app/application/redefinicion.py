@@ -11,12 +11,14 @@ factibilidad en la misma operacion, como ``definir_reparacion`` y
 ``revalidar_recursos``: la Orden se guarda una sola vez.
 """
 
+from decimal import Decimal
+
 from app.domain.models import OrdenReparacion
 from app.services import redefinir_detalle as redefinir_detalle_servicio
 from app.services import revisar_detalle_pendiente
 
 from .contexto import ApplicationContext
-from .ingreso import _validar_y_habilitar
+from .ingreso import _validar_y_habilitar, precio_manual_de
 from .modificacion import orden_para_modificar
 
 
@@ -51,6 +53,8 @@ def redefinir_detalle(
     detalle_id: str,
     usuario_id: str,
     tipo_reparacion_id: str,
+    precio: Decimal | None = None,
+    precio_motivo: str | None = None,
 ) -> OrdenReparacion:
     """Recepcion redefine el Detalle y se revalida la factibilidad.
 
@@ -74,6 +78,7 @@ def redefinir_detalle(
             tipo_reparacion=tipo,
             usuario=usuario,
             fecha=fecha,
+            precio_manual=precio_manual_de(precio, precio_motivo),
         )
         orden = _validar_y_habilitar(contexto, orden, fecha=fecha)
 

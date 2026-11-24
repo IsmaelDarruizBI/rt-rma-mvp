@@ -3,6 +3,11 @@
     GET  /api/admin/catalog          Tipos y Mesas, con sus habilitados
     POST /api/admin/repair-types     alta de un Tipo
     PUT  /api/admin/repair-types/{codigo}            edicion o baja
+    PUT  /api/admin/repair-types/{codigo}/model-prices
+                                     precios por modelo de un Tipo
+    GET  /api/admin/device-models    modelos de equipo, activos o no
+    POST /api/admin/device-models    alta de un modelo (MOD-NNNN)
+    PUT  /api/admin/device-models/{codigo}           edicion o baja
     PUT  /api/admin/stations/{codigo}/repair-types   habilitados de la Mesa
     GET  /api/admin/config-changes?entidad=&clave=   auditoria y precios
     GET  /api/admin/users                     usuarios y sus roles (DC27A)
@@ -38,9 +43,12 @@ from app.application.comprobantes import (
 )
 from app.application.configuracion import (
     CONSERVAR,
+    guardar_modelo_equipo,
+    guardar_precios_modelo,
     guardar_tipo_reparacion,
     habilitar_tipos_en_mesa,
     historial_de_cambios,
+    listar_modelos_administrables,
 )
 from app.application.operativa import (
     MANTENER,
@@ -63,7 +71,9 @@ from app.domain.models import (
     ContenidoTextoLegal,
     DatosEmpresa,
     EntidadConfiguracion,
+    ModeloEquipo,
     PoliticaGarantiaRma,
+    PrecioTipoModelo,
     RolUsuario,
     TextoLegal,
 )
@@ -86,6 +96,13 @@ _catalogo = [
     )
 ]
 _mesas = [exigir_rol(permisos.MESA_TIPOS_GESTIONAR)]
+# DEC-AJ-12: precios por modelo y modelos de equipo. La lista de modelos la
+# necesitan los dos (la grilla de precios muestra todos los modelos).
+_precios = [exigir_rol(permisos.PRECIOS_GESTIONAR)]
+_modelos = [exigir_rol(permisos.MODELO_EQUIPO_GESTIONAR)]
+_lista_modelos = [
+    exigir_rol(permisos.MODELO_EQUIPO_GESTIONAR, permisos.PRECIOS_GESTIONAR)
+]
 _motivos = [exigir_rol(permisos.MOTIVO_GESTIONAR)]
 _insumos = [exigir_rol(permisos.INSUMO_GESTIONAR)]
 _checklist = [exigir_rol(permisos.CHECKLIST_GESTIONAR)]
@@ -99,6 +116,8 @@ PERMISO_DE_ENTIDAD = {
         permisos.TIPO_REPARACION_GESTIONAR,
     ),
     EntidadConfiguracion.MESA_TRABAJO: (permisos.MESA_TIPOS_GESTIONAR,),
+    EntidadConfiguracion.MODELO_EQUIPO: (permisos.MODELO_EQUIPO_GESTIONAR,),
+    EntidadConfiguracion.PRECIO_MODELO: (permisos.PRECIOS_GESTIONAR,),
     EntidadConfiguracion.MOTIVO: (permisos.MOTIVO_GESTIONAR,),
     EntidadConfiguracion.INSUMO: (permisos.INSUMO_GESTIONAR,),
     EntidadConfiguracion.PLANTILLA: (permisos.PLANTILLA_GESTIONAR,),
@@ -122,6 +141,8 @@ class TipoReparacionIn(BaseModel):
     garantia_con_checkin: int | None = Field(default=None, ge=0)
     garantia_sin_checkin: int | None = Field(default=None, ge=0)
     politica_garantia_rma: PoliticaGarantiaRma | None = None
+    # DEC-AJ-12: si no viene se conserva (en el alta, precio unico).
+    precio_por_modelo: bool | None = None
 
 
 GARANTIAS = (
@@ -143,6 +164,8 @@ def _datos_de_tipo(cuerpo: TipoReparacionIn) -> dict:
             datos[campo] is None and campo != "politica_garantia_rma"
         ):
             datos[campo] = CONSERVAR
+    if datos["precio_por_modelo"] is None:
+        datos["precio_por_modelo"] = CONSERVAR
     return datos
 
 
@@ -202,6 +225,89 @@ def put_tipo(
         contexto, codigo=codigo, **_datos_de_tipo(cuerpo), nuevo=False
     )
     return tipo.model_dump(mode="json")
+
+
+class PrecioModeloIn(BaseModel):
+    modelo_equipo_id: str = Field(min_length=1)
+    # ``None``: retira el precio del modelo (queda sin precio de catalogo).
+    precio: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+
+
+class PreciosModeloIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+    precios: list[PrecioModeloIn] = Field(min_length=1)
+
+
+@router.put("/repair-types/{codigo}/model-prices", dependencies=_precios)
+def put_precios_modelo(
+    codigo: str, cuerpo: PreciosModeloIn, contexto: ContextoDep
+) -> dict:
+    """DEC-AJ-12: fija o retira precios del Tipo por modelo, con auditoria
+    (entidad PRECIO_MODELO), todo o nada. Devuelve el Tipo y los cambios."""
+    cambios = guardar_precios_modelo(
+        contexto,
+        usuario_id=cuerpo.usuario_id,
+        precios=[
+            PrecioTipoModelo(
+                tipo_reparacion_id=codigo,
+                modelo_equipo_id=precio.modelo_equipo_id,
+                precio=precio.precio,
+            )
+            for precio in cuerpo.precios
+        ],
+    )
+    tipo = contexto.catalogos.obtener_tipo_reparacion(codigo)
+    return {
+        "tipo": tipo.model_dump(mode="json"),
+        "cambios": [c.model_dump(mode="json") for c in cambios],
+    }
+
+
+class ModeloEquipoIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+    marca: str = Field(min_length=1)
+    modelo: str = Field(min_length=1)
+    variante: str | None = None
+    numeros_modelo: list[str] = Field(default_factory=list)
+    activo: bool = True
+
+
+class AltaModeloEquipoIn(ModeloEquipoIn):
+    # Opcional: sin codigo lo genera la base (MOD-NNNN).
+    codigo: str | None = None
+
+
+def _modelo_out(modelo: ModeloEquipo) -> dict:
+    return {**modelo.model_dump(mode="json"), "nombre": modelo.nombre}
+
+
+@router.get("/device-models", dependencies=_lista_modelos)
+def get_modelos_admin(contexto: ContextoDep) -> dict:
+    """DEC-AJ-12 (D-12.5): todos los modelos, activos o no."""
+    return {
+        "editable": contexto.configuracion is not None,
+        "modelos": [
+            _modelo_out(m) for m in listar_modelos_administrables(contexto)
+        ],
+    }
+
+
+@router.post("/device-models", dependencies=_modelos)
+def post_modelo(cuerpo: AltaModeloEquipoIn, contexto: ContextoDep) -> dict:
+    return _modelo_out(
+        guardar_modelo_equipo(contexto, **cuerpo.model_dump(), nuevo=True)
+    )
+
+
+@router.put("/device-models/{codigo}", dependencies=_modelos)
+def put_modelo(
+    codigo: str, cuerpo: ModeloEquipoIn, contexto: ContextoDep
+) -> dict:
+    return _modelo_out(
+        guardar_modelo_equipo(
+            contexto, codigo=codigo, **cuerpo.model_dump(), nuevo=False
+        )
+    )
 
 
 @router.put("/stations/{codigo}/repair-types", dependencies=_mesas)

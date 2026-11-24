@@ -70,6 +70,7 @@ from app.services import (
     validar_factibilidad_detalles,
 )
 from app.services.exceptions import GarantiaVencidaError
+from app.services.precio_trabajo import PrecioManual
 from app.services.revisiones import revision_tecnica_realizada
 
 from .catalogo_equipos import equipo_desde_catalogo
@@ -90,6 +91,8 @@ def crear_orden(
     datos_recepcion: DatosRecepcion | None = None,
     cliente_reutilizado: bool = False,
     trabajo_inicial: str | None = None,
+    trabajo_inicial_precio: Decimal | None = None,
+    trabajo_inicial_motivo: str | None = None,
 ) -> OrdenReparacion:
     """Ingreso de un equipo de CLIENTE_EXTERNO (PROC-REP-010/030/040).
 
@@ -110,7 +113,12 @@ def crear_orden(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
     equipo = equipo_desde_catalogo(contexto, equipo)
-    tipo_inicial = _tipo_inicial(contexto, trabajo_inicial)
+    tipo_inicial = _tipo_inicial(
+        contexto,
+        trabajo_inicial,
+        trabajo_inicial_precio,
+        trabajo_inicial_motivo,
+    )
 
     # DEC-AJ-06: «IMEI no disponible» deja el IMEI vacio.
     exigir_imei_coherente(equipo, datos_recepcion)
@@ -141,23 +149,28 @@ def crear_orden(
 
 
 def _tipo_inicial(
-    contexto: ApplicationContext, tipo_reparacion_id: str | None
-) -> TipoReparacion | None:
+    contexto: ApplicationContext,
+    tipo_reparacion_id: str | None,
+    precio: Decimal | None = None,
+    motivo: str | None = None,
+) -> tuple[TipoReparacion, PrecioManual | None] | None:
     """DEC-UX-04: el Tipo del trabajo inicial, con las mismas validaciones
     que al agregar un Detalle. «Otros» necesita descripcion y precio: se
-    carga en la Orden."""
+    carga en la Orden. DEC-AJ-12: el precio es el del Tipo para el modelo
+    elegido en el mismo alta; sin el, un precio manual autorizado (con
+    motivo) o el precio pendiente."""
     if not tipo_reparacion_id:
         return None
     if tipo_reparacion_id == TIPO_REPARACION_OTROS:
         raise PrecondicionInvalidaError(
             "«Otros» se agrega desde la Orden, con su descripcion y precio."
         )
-    return tipo_para_detalle(contexto, tipo_reparacion_id, None)
+    return tipo_para_detalle(contexto, tipo_reparacion_id, precio, motivo)
 
 
 def _con_trabajo_inicial(
     orden: OrdenReparacion,
-    tipo: TipoReparacion | None,
+    inicial: tuple[TipoReparacion, PrecioManual | None] | None,
     usuario,
     fecha: datetime,
 ) -> OrdenReparacion:
@@ -165,14 +178,16 @@ def _con_trabajo_inicial(
     ``definir_reparacion`` (evaluacion tecnica, autorizacion y estados
     iguales), dentro de la transaccion del alta: si falla, no queda ni la
     Orden ni el Detalle."""
-    if tipo is None:
+    if inicial is None:
         return orden
+    tipo, manual = inicial
     return definir_reparacion_detail(
         orden,
         detalle_id=siguiente_detalle_id(orden),
         tipo_reparacion=tipo,
         usuario=usuario,
         fecha=fecha,
+        precio_manual=manual,
     )
 
 
@@ -184,6 +199,8 @@ def crear_orden_rt(
     referencia_rt: str,
     datos_recepcion: DatosRecepcion | None = None,
     trabajo_inicial: str | None = None,
+    trabajo_inicial_precio: Decimal | None = None,
+    trabajo_inicial_motivo: str | None = None,
 ) -> OrdenReparacion:
     """Ingreso de un equipo RT_INTERNO (PROC-REP-010/020/040, HP-REP-002).
 
@@ -196,7 +213,12 @@ def crear_orden_rt(
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
     equipo = equipo_desde_catalogo(contexto, equipo)
-    tipo_inicial = _tipo_inicial(contexto, trabajo_inicial)
+    tipo_inicial = _tipo_inicial(
+        contexto,
+        trabajo_inicial,
+        trabajo_inicial_precio,
+        trabajo_inicial_motivo,
+    )
     exigir_imei_coherente(equipo, datos_recepcion)
 
     with contexto.transaccion():
@@ -219,24 +241,41 @@ def tipo_para_detalle(
     contexto: ApplicationContext,
     tipo_reparacion_id: str,
     precio: Decimal | None,
-) -> TipoReparacion:
+    motivo: str | None = None,
+) -> tuple[TipoReparacion, PrecioManual | None]:
     """El Tipo del catalogo, o el de "Otros" con su precio manual.
 
-    El precio manual es obligatorio en "Otros" y no se admite en un Tipo
-    de catalogo: su precio es el del catalogo (BR-REP-015).
+    El precio manual es obligatorio en "Otros". En un Tipo de catalogo
+    (DEC-AJ-12) un precio informado es un pedido de precio manual con
+    motivo: ``resolver_precio`` lo admite solo si falta el precio de
+    catalogo para el modelo y el actor tiene ``PRECIO_MANUAL``.
     """
     if tipo_reparacion_id == TIPO_REPARACION_OTROS:
         if precio is None:
             raise PrecondicionInvalidaError(
                 "Una reparacion «Otros» necesita su precio."
             )
-        return tipo_reparacion_otros(precio)
-    if precio is not None:
-        raise PrecondicionInvalidaError(
-            "El precio manual es solo para una reparacion «Otros»: los "
-            "demas toman el precio del catalogo."
-        )
-    return contexto.catalogos.obtener_tipo_reparacion(tipo_reparacion_id)
+        if (motivo or "").strip():
+            raise PrecondicionInvalidaError(
+                "Una reparacion «Otros» lleva su descripcion, no un motivo "
+                "de precio manual."
+            )
+        return tipo_reparacion_otros(precio), None
+    tipo = contexto.catalogos.obtener_tipo_reparacion(tipo_reparacion_id)
+    return tipo, precio_manual_de(precio, motivo)
+
+
+def precio_manual_de(
+    precio: Decimal | None, motivo: str | None
+) -> PrecioManual | None:
+    """El pedido de precio manual (DEC-AJ-12) que trae un comando, si trae."""
+    if precio is None:
+        if (motivo or "").strip():
+            raise PrecondicionInvalidaError(
+                "El motivo acompana a un precio manual: falta el precio."
+            )
+        return None
+    return PrecioManual(precio=precio, motivo=motivo or "")
 
 
 def definir_reparacion(
@@ -248,6 +287,7 @@ def definir_reparacion(
     observaciones: str | None = None,
     descripcion: str | None = None,
     precio: Decimal | None = None,
+    precio_motivo: str | None = None,
 ) -> OrdenReparacion:
     """Recepcion AGREGA un Detalle de la reparacion (Multi-Detalle).
 
@@ -258,7 +298,9 @@ def definir_reparacion(
     Recepcion finalice la definicion (``finalizar_definicion``).
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    tipo = tipo_para_detalle(contexto, tipo_reparacion_id, precio)
+    tipo, manual = tipo_para_detalle(
+        contexto, tipo_reparacion_id, precio, precio_motivo
+    )
     fecha = contexto.ahora()
 
     with orden_para_modificar(contexto, orden_id) as orden:
@@ -270,6 +312,7 @@ def definir_reparacion(
             fecha=fecha,
             observaciones=observaciones,
             descripcion=descripcion,
+            precio_manual=manual,
         )
         contexto.ordenes.guardar(orden)
     return orden
@@ -534,6 +577,7 @@ def definir_reparacion_desde_revision(
     detalle_origen_id: str | None = None,
     descripcion: str | None = None,
     precio: Decimal | None = None,
+    precio_motivo: str | None = None,
 ) -> OrdenReparacion:
     """Recepcion AGREGA un Detalle luego de la revision (075).
 
@@ -547,7 +591,9 @@ def definir_reparacion_desde_revision(
     si hay mas de uno).
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
-    tipo = tipo_para_detalle(contexto, tipo_reparacion_id, precio)
+    tipo, manual = tipo_para_detalle(
+        contexto, tipo_reparacion_id, precio, precio_motivo
+    )
     fecha = contexto.ahora()
 
     with orden_para_modificar(contexto, orden_id) as orden:
@@ -560,6 +606,7 @@ def definir_reparacion_desde_revision(
             observaciones=observaciones,
             detalle_origen_id=detalle_origen_id,
             descripcion=descripcion,
+            precio_manual=manual,
         )
         contexto.ordenes.guardar(orden)
     return orden

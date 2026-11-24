@@ -19,6 +19,7 @@ los demas Origenes.
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 
 from app.domain.models import (
     OrdenReparacion,
@@ -37,6 +38,7 @@ from app.services.tomas import hay_ejecucion_activa
 
 from .contexto import ApplicationContext
 from .identificadores import siguiente_detalle_id, siguientes_detalle_ids
+from .ingreso import precio_manual_de
 from .modificacion import orden_para_modificar
 
 
@@ -47,6 +49,9 @@ class PedidoAdicional:
     tipo_reparacion_id: str
     observaciones: str | None = None
     detalle_origen_id: str | None = None
+    # DEC-AJ-12: precio manual con motivo (solo con PRECIO_MANUAL).
+    precio: Decimal | None = None
+    precio_motivo: str | None = None
 
 
 def _factibilidad(
@@ -78,6 +83,8 @@ def evaluar_detalle(
     observaciones: str | None,
     tipo_reparacion_id: str | None = None,
     adicionales: Sequence[PedidoAdicional] = (),
+    precio: Decimal | None = None,
+    precio_motivo: str | None = None,
 ) -> OrdenReparacion:
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     tipo = (
@@ -104,12 +111,16 @@ def evaluar_detalle(
             usuario=usuario,
             fecha=fecha,
             tipo_reparacion=tipo,
+            precio_manual=precio_manual_de(precio, precio_motivo),
             adicionales=[
                 ReparacionAdicional(
                     detalle_id=nuevo_id,
                     tipo_reparacion=tipo_adicional,
                     observaciones=pedido.observaciones,
                     detalle_origen_id=pedido.detalle_origen_id,
+                    precio_manual=precio_manual_de(
+                        pedido.precio, pedido.precio_motivo
+                    ),
                 )
                 for nuevo_id, tipo_adicional, pedido in zip(
                     ids_nuevos, tipos_adicionales, adicionales, strict=True
@@ -143,6 +154,8 @@ def agregar_trabajo_adicional(
     tipo_reparacion_id: str,
     observaciones: str | None = None,
     detalle_origen_id: str | None = None,
+    precio: Decimal | None = None,
+    precio_motivo: str | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-128 durante la participacion del tecnico (desde 190).
 
@@ -167,6 +180,7 @@ def agregar_trabajo_adicional(
             fecha=fecha,
             observaciones=observaciones,
             detalle_origen_id=detalle_origen_id,
+            precio_manual=precio_manual_de(precio, precio_motivo),
         )
         if not requiere_autorizacion_cliente(orden):
             orden = _factibilidad(contexto, orden, [nuevo_id], fecha)

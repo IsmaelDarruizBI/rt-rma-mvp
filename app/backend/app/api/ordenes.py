@@ -109,6 +109,7 @@ from app.application.operativa import (
     plazo_retiro_dias,
     registrar_seguimiento,
 )
+from app.application.precio_trabajo import definir_precio_trabajo
 from app.domain.models import (
     EstadoReparacionDetail,
     EstadoWorkflow,
@@ -150,6 +151,7 @@ from .schemas import (
     CrearOrdenIn,
     CrearOrdenRtIn,
     CustodiaOut,
+    DefinirPrecioIn,
     DefinirReparacionDesdeRevisionIn,
     DefinirReparacionIn,
     DescuentoIn,
@@ -548,6 +550,8 @@ def post_crear_orden(
             cuerpo.recepcion.a_dominio() if cuerpo.recepcion else None
         ),
         trabajo_inicial=cuerpo.trabajo_inicial,
+        trabajo_inicial_precio=cuerpo.trabajo_inicial_precio,
+        trabajo_inicial_motivo=cuerpo.trabajo_inicial_motivo,
     )
     return _salida(orden, contexto)
 
@@ -572,6 +576,8 @@ def post_crear_orden_rt(
             cuerpo.recepcion.a_dominio() if cuerpo.recepcion else None
         ),
         trabajo_inicial=cuerpo.trabajo_inicial,
+        trabajo_inicial_precio=cuerpo.trabajo_inicial_precio,
+        trabajo_inicial_motivo=cuerpo.trabajo_inicial_motivo,
     )
     return _salida(orden, contexto)
 
@@ -597,6 +603,7 @@ def post_definir_reparacion(
         observaciones=cuerpo.observaciones,
         descripcion=cuerpo.descripcion,
         precio=cuerpo.precio,
+        precio_motivo=cuerpo.precio_motivo,
     )
     return _salida(orden, contexto)
 
@@ -710,6 +717,7 @@ def post_definir_reparacion_desde_revision(
         detalle_origen_id=cuerpo.detalle_origen_id,
         descripcion=cuerpo.descripcion,
         precio=cuerpo.precio,
+        precio_motivo=cuerpo.precio_motivo,
     )
     return _salida(orden, contexto)
 
@@ -857,6 +865,8 @@ def post_evaluar_detalle(
             PedidoAdicional(**adicional.model_dump())
             for adicional in cuerpo.adicionales
         ],
+        precio=cuerpo.precio,
+        precio_motivo=cuerpo.precio_motivo,
     )
     return _salida(orden, contexto)
 
@@ -881,6 +891,8 @@ def post_agregar_trabajo_adicional(
         tipo_reparacion_id=cuerpo.tipo_reparacion_id,
         observaciones=cuerpo.observaciones,
         detalle_origen_id=cuerpo.detalle_origen_id,
+        precio=cuerpo.precio,
+        precio_motivo=cuerpo.precio_motivo,
     )
     return _salida(orden, contexto)
 
@@ -1022,6 +1034,33 @@ def post_redefinir_detalle(
         detalle_id=detalle_id,
         usuario_id=cuerpo.usuario_id,
         tipo_reparacion_id=cuerpo.tipo_reparacion_id,
+        precio=cuerpo.precio,
+        precio_motivo=cuerpo.precio_motivo,
+    )
+    return _salida(orden, contexto)
+
+
+@router.post("/{orden_id}/details/{detalle_id}/price")
+@idempotente("DEFINIR_PRECIO_TRABAJO")
+def post_definir_precio(
+    orden_id: str,
+    detalle_id: str,
+    cuerpo: DefinirPrecioIn,
+    contexto: ContextoDep,
+) -> OrdenOut:
+    """«Definir precio» de un trabajo con el precio pendiente (DEC-AJ-12).
+
+    Sin ``precio`` toma el de catalogo para el modelo de la Orden; con
+    ``precio`` y ``motivo``, un precio manual (PRECIO_MANUAL). Una version
+    nueva del Detalle: no reescribe la anterior ni cambia el catalogo.
+    """
+    orden = definir_precio_trabajo(
+        contexto,
+        orden_id=orden_id,
+        detalle_id=detalle_id,
+        usuario_id=cuerpo.usuario_id,
+        precio=cuerpo.precio,
+        motivo=cuerpo.motivo,
     )
     return _salida(orden, contexto)
 

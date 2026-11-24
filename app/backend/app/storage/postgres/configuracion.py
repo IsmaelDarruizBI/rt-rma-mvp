@@ -10,6 +10,8 @@ from datetime import timezone
 from app.domain.models import (
     CambioConfiguracion,
     EntidadConfiguracion,
+    ModeloEquipo,
+    PrecioTipoModelo,
     RolUsuario,
     TipoReparacion,
 )
@@ -28,10 +30,11 @@ _INSERTAR_TIPO = consulta(
     """
     INSERT INTO rma.tipo_reparacion
         (codigo, nombre, precio, puntaje, garantia_dias, activo,
-         garantia_con_checkin, garantia_sin_checkin, politica_garantia_rma)
+         garantia_con_checkin, garantia_sin_checkin, politica_garantia_rma,
+         precio_por_modelo)
     VALUES (%(codigo)s, %(nombre)s, %(precio)s, %(puntaje)s,
             %(garantia_dias)s, %(activo)s, %(con_checkin)s,
-            %(sin_checkin)s, %(politica_rma)s)
+            %(sin_checkin)s, %(politica_rma)s, %(precio_por_modelo)s)
     ON CONFLICT DO NOTHING
     RETURNING id
     """,
@@ -45,8 +48,63 @@ _ACTUALIZAR_TIPO = consulta(
            garantia_dias = %(garantia_dias)s, activo = %(activo)s,
            garantia_con_checkin = %(con_checkin)s,
            garantia_sin_checkin = %(sin_checkin)s,
-           politica_garantia_rma = %(politica_rma)s
+           politica_garantia_rma = %(politica_rma)s,
+           precio_por_modelo = %(precio_por_modelo)s
      WHERE codigo = %(codigo)s
+    """,
+    modo=ESCRITURA,
+)
+# DEC-AJ-12 (D-12.5): alta y edicion de modelos; el codigo no cambia.
+_INSERTAR_MODELO = consulta(
+    "configuracion.insertar_modelo",
+    """
+    INSERT INTO rma.modelo_equipo
+        (codigo, marca, modelo, variante, numeros_modelo, activo)
+    VALUES (%(codigo)s, %(marca)s, %(modelo)s, %(variante)s,
+            %(numeros)s, %(activo)s)
+    ON CONFLICT DO NOTHING
+    RETURNING id
+    """,
+    modo=ESCRITURA,
+)
+_ACTUALIZAR_MODELO = consulta(
+    "configuracion.actualizar_modelo",
+    """
+    UPDATE rma.modelo_equipo
+       SET marca = %(marca)s, modelo = %(modelo)s, variante = %(variante)s,
+           numeros_modelo = %(numeros)s, activo = %(activo)s
+     WHERE codigo = %(codigo)s
+    """,
+    modo=ESCRITURA,
+)
+# DEC-AJ-12 (D-12.1): precios por modelo en bloque (una o cientos de
+# combinaciones en la misma sentencia y la misma transaccion). Fijar crea o
+# reactiva la fila; retirar la deja inactiva, nunca la borra.
+_FIJAR_PRECIOS_MODELO = consulta(
+    "configuracion.fijar_precios_modelo",
+    """
+    INSERT INTO rma.precio_tipo_modelo
+        (tipo_reparacion_id, modelo_equipo_id, precio, activo)
+    SELECT t.id, m.id, x.precio, true
+      FROM unnest(%(tipos)s::text[], %(modelos)s::text[],
+                  %(precios)s::numeric[]) AS x (tipo, modelo, precio)
+      JOIN rma.tipo_reparacion t ON t.codigo = x.tipo
+      JOIN rma.modelo_equipo m ON m.codigo = x.modelo
+    ON CONFLICT (tipo_reparacion_id, modelo_equipo_id) DO UPDATE
+       SET precio = EXCLUDED.precio, activo = true
+    """,
+    modo=ESCRITURA,
+)
+_RETIRAR_PRECIOS_MODELO = consulta(
+    "configuracion.retirar_precios_modelo",
+    """
+    UPDATE rma.precio_tipo_modelo p
+       SET activo = false
+      FROM unnest(%(tipos)s::text[], %(modelos)s::text[]) AS x (tipo, modelo)
+      JOIN rma.tipo_reparacion t ON t.codigo = x.tipo
+      JOIN rma.modelo_equipo m ON m.codigo = x.modelo
+     WHERE p.tipo_reparacion_id = t.id AND p.modelo_equipo_id = m.id
+       AND p.activo
     """,
     modo=ESCRITURA,
 )
@@ -179,6 +237,7 @@ class PostgresConfiguracionRepository:
                 else None
             ),
             "activo": tipo.activo,
+            "precio_por_modelo": tipo.precio_por_modelo,
         }
         if nuevo:
             if ejecutor.fila(_INSERTAR_TIPO, parametros) is None:
@@ -188,6 +247,72 @@ class PostgresConfiguracionRepository:
         elif ejecutor.ejecutar(_ACTUALIZAR_TIPO, parametros) != 1:
             raise EntidadPersistidaNoEncontradaError(
                 f"No existe el Tipo de Reparacion {tipo.id}"
+            )
+        self._auditar(ejecutor, cambios)
+
+    def guardar_modelo_equipo(
+        self,
+        modelo: ModeloEquipo,
+        *,
+        nuevo: bool,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None:
+        """Alta o edicion de un modelo de equipo, con su auditoria. La
+        unicidad (marca, modelo, variante) la garantiza la base."""
+        self._exigir_transaccion()
+        ejecutor = self._unidad.ejecutor()
+        parametros = {
+            "codigo": modelo.id,
+            "marca": modelo.marca,
+            "modelo": modelo.modelo,
+            "variante": modelo.variante,
+            "numeros": list(modelo.numeros_modelo),
+            "activo": modelo.activo,
+        }
+        if nuevo:
+            if ejecutor.fila(_INSERTAR_MODELO, parametros) is None:
+                raise CodigoExistenteError(
+                    f"Ya existe el modelo {modelo.id} o uno con la misma "
+                    "marca, modelo y variante."
+                )
+        elif ejecutor.ejecutar(_ACTUALIZAR_MODELO, parametros) != 1:
+            raise EntidadPersistidaNoEncontradaError(
+                f"No existe el modelo de equipo {modelo.id}"
+            )
+        self._auditar(ejecutor, cambios)
+
+    def guardar_precios_modelo(
+        self,
+        precios: Sequence[PrecioTipoModelo],
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None:
+        """Fija o retira (``precio`` None) los precios por modelo, todos en
+        la transaccion en curso y con su auditoria: todo o nada. Cada
+        combinacion tiene que existir (Tipo y modelo)."""
+        self._exigir_transaccion()
+        ejecutor = self._unidad.ejecutor()
+        fijar = [p for p in precios if p.precio is not None]
+        retirar = [p for p in precios if p.precio is None]
+        if fijar:
+            escritas = ejecutor.ejecutar(
+                _FIJAR_PRECIOS_MODELO,
+                {
+                    "tipos": [p.tipo_reparacion_id for p in fijar],
+                    "modelos": [p.modelo_equipo_id for p in fijar],
+                    "precios": [p.precio for p in fijar],
+                },
+            )
+            if escritas != len(fijar):
+                raise EntidadPersistidaNoEncontradaError(
+                    "Algun Tipo de Reparacion o modelo de equipo no existe."
+                )
+        if retirar:
+            ejecutor.ejecutar(
+                _RETIRAR_PRECIOS_MODELO,
+                {
+                    "tipos": [p.tipo_reparacion_id for p in retirar],
+                    "modelos": [p.modelo_equipo_id for p in retirar],
+                },
             )
         self._auditar(ejecutor, cambios)
 

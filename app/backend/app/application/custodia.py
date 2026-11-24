@@ -31,6 +31,7 @@ from app.services import registrar_imei_real as registrar_imei_real_servicio
 from .catalogo_equipos import equipo_desde_catalogo
 from .contexto import ApplicationContext
 from .modificacion import orden_para_modificar
+from .precio_trabajo import redeterminar_precios
 
 
 def registrar_recepcion(
@@ -54,6 +55,11 @@ def registrar_recepcion(
     quedan como estaban (los agregados despues, como el trabajo solicitado
     o la verificacion de funcionalidades: un cliente anterior que no los
     conoce no los borra).
+
+    DEC-AJ-12 (D-12.6): si cambia el modelo tecnico del equipo, el precio
+    de los trabajos que dependen del modelo y todavia esperan la
+    autorizacion del cliente se vuelve a determinar; los demas lo
+    conservan con un aviso.
     """
     usuario = contexto.catalogos.obtener_usuario(usuario_id)
     fecha = contexto.ahora()
@@ -70,6 +76,7 @@ def registrar_recepcion(
             equipo = equipo_desde_catalogo(
                 contexto, equipo, actual=orden.equipo
             )
+        modelo_anterior = orden.equipo.modelo_tecnico_id
         orden = registrar_datos_recepcion(
             orden,
             usuario=usuario,
@@ -77,6 +84,14 @@ def registrar_recepcion(
             datos=datos,
             equipo=equipo,
             motivo=motivo,
+        )
+        # DEC-AJ-12 (D-12.6): otro modelo, otro precio antes de autorizar.
+        orden = redeterminar_precios(
+            contexto,
+            orden,
+            modelo_anterior=modelo_anterior,
+            usuario=usuario,
+            fecha=fecha,
         )
         contexto.ordenes.guardar(orden)
     return orden

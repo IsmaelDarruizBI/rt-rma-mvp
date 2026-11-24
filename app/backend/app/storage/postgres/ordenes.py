@@ -767,11 +767,15 @@ _INSERTAR_VERSION = consulta(
     INSERT INTO rma.detalle_version
         (detalle_id, numero, tipo_reparacion_id, descripcion, precio,
          puntaje, garantia_dias, definida_por, definida_en,
-         garantia_dias_reemplazada, reemplaza_a)
+         garantia_dias_reemplazada, reemplaza_a, nombre_trabajo,
+         modelo_equipo_id, origen_precio, precio_motivo,
+         precio_definido_por, precio_definido_en, solo_precio)
     VALUES
         (%(detalle)s, %(numero)s, %(tipo)s, %(descripcion)s, %(precio)s,
          %(puntaje)s, %(garantia_dias)s, %(definida_por)s, %(definida_en)s,
-         %(garantia_dias_reemplazada)s, %(reemplaza_a)s)
+         %(garantia_dias_reemplazada)s, %(reemplaza_a)s, %(nombre_trabajo)s,
+         %(modelo_equipo)s, %(origen_precio)s, %(precio_motivo)s,
+         %(precio_definido_por)s, %(precio_definido_en)s, %(solo_precio)s)
     RETURNING id
     """,
     modo=ESCRITURA,
@@ -1490,8 +1494,15 @@ class _Guardado:
         salida = orden.entrega or orden.devolucion
         if salida:
             usuarios.add(salida.entregado_por)
+        modelos: set[str] = {orden.equipo.modelo_tecnico_id} - {None}
         for detalle in orden.reparaciones_detail:
             tipos.add(detalle.tipo_reparacion_id)
+            # DEC-AJ-12: la copia del modelo y de quien definio el precio.
+            for definicion in (detalle, *detalle.definiciones_anteriores):
+                if definicion.modelo_equipo_id:
+                    modelos.add(definicion.modelo_equipo_id)
+                if definicion.precio_definido_por:
+                    usuarios.add(definicion.precio_definido_por)
             for anterior in detalle.definiciones_anteriores:
                 tipos.add(anterior.tipo_reparacion_id)
                 usuarios.add(anterior.usuario_id)
@@ -1550,7 +1561,7 @@ class _Guardado:
             "tipo_reparacion": tipos,
             "mesa_trabajo": {toma.estacion_id for toma in orden.tomas},
             "insumo": insumos,
-            "modelo_equipo": {orden.equipo.modelo_tecnico_id} - {None},
+            "modelo_equipo": modelos,
             "orden": {orden.orden_origen_id} - {None},
             "medio_pago": medios,
         }
@@ -2571,6 +2582,7 @@ class _Guardado:
                 valores = (None, definicion.precio, definicion.puntaje)
                 garantia = definicion.garantia_dias
             else:
+                definicion = detalle
                 tipo = detalle.tipo_reparacion_id
                 valores = (
                     detalle.descripcion,
@@ -2606,9 +2618,29 @@ class _Guardado:
                             reemplazo.garantia_dias if reemplazo else None
                         ),
                         "reemplaza_a": ids[-1] if ids else None,
+                        **self._copia_de_precio(definicion),
                     },
                 ).id
             )
+
+    def _copia_de_precio(self, definicion) -> dict:
+        """DEC-AJ-12: la copia del trabajo de una definicion (vigente o
+        anterior): nombre, modelo, origen del precio, motivo y quien y
+        cuando lo definio."""
+        origen = definicion.origen_precio
+        return {
+            "nombre_trabajo": definicion.nombre_trabajo,
+            "modelo_equipo": self._id(
+                "modelo_equipo", definicion.modelo_equipo_id
+            ),
+            "origen_precio": origen.value if origen else None,
+            "precio_motivo": definicion.precio_motivo,
+            "precio_definido_por": self._id(
+                "usuario", definicion.precio_definido_por
+            ),
+            "precio_definido_en": definicion.precio_definido_en,
+            "solo_precio": definicion.solo_precio,
+        }
 
     def _decisiones(
         self, detalle: ReparacionDetail, anterior: ReparacionDetail | None
@@ -2976,6 +3008,13 @@ def _definicion(detalle: ReparacionDetail) -> tuple:
         detalle.precio,
         detalle.puntaje,
         detalle.descripcion,
+        detalle.nombre_trabajo,
+        detalle.modelo_equipo_id,
+        detalle.origen_precio,
+        detalle.precio_motivo,
+        detalle.precio_definido_por,
+        detalle.precio_definido_en,
+        detalle.solo_precio,
     )
 
 

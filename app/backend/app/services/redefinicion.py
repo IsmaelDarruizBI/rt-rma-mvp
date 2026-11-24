@@ -32,7 +32,6 @@ from app.domain.garantia import garantia_sugerida
 from app.domain.models import (
     CausaRecalculo,
     CondicionReparacionDetail,
-    DefinicionAnteriorDetalle,
     EstadoReparacionDetail,
     OrdenReparacion,
     OrigenDiagnostico,
@@ -47,6 +46,13 @@ from .autorizacion_cliente import situacion_de_la_orden
 from .custodia import checkin_de
 from .descuentos import registrar_recalculos
 from .exceptions import EntidadNoEncontradaError, PrecondicionInvalidaError
+from .precio_trabajo import (
+    PrecioManual,
+    copia_de_precio,
+    definicion_anterior,
+    modelo_de,
+    resolver_precio,
+)
 from .resolucion import ResultadoEvaluacionOrden
 from .tomas import hay_ejecucion_activa, toma_activa
 from .workflow import registrar_paso
@@ -196,6 +202,7 @@ def redefinir_detalle(
     tipo_reparacion: TipoReparacion,
     usuario: Usuario,
     fecha: datetime,
+    precio_manual: PrecioManual | None = None,
 ) -> OrdenReparacion:
     """PROC-REP-127: el TECNICO redefine el MISMO Detalle (V1.4, DC06).
 
@@ -229,6 +236,7 @@ def redefinir_detalle(
         tipo_reparacion=tipo_reparacion,
         usuario=usuario,
         fecha=fecha,
+        precio_manual=precio_manual,
     )
 
 
@@ -239,6 +247,7 @@ def aplicar_redefinicion(
     tipo_reparacion: TipoReparacion,
     usuario: Usuario,
     fecha: datetime,
+    precio_manual: PrecioManual | None = None,
 ) -> OrdenReparacion:
     """El nucleo de PROC-REP-127, ya validado por el caller.
 
@@ -246,8 +255,19 @@ def aplicar_redefinicion(
     tecnica (183 REQUIERE_REDEFINICION -> 127, VAR-REP-019). La definicion
     nueva la diagnostico el tecnico (REVISION_TECNICA): queda validada por
     el mismo acto y no exige otra evaluacion (BR-REP-035).
+
+    DEC-AJ-12: el precio lo determina ``resolver_precio`` para el modelo
+    de la Orden; sin precio de catalogo queda pendiente, salvo un precio
+    manual de quien tiene ``PRECIO_MANUAL``.
     """
     detalle = next(d for d in orden.reparaciones_detail if d.id == detalle_id)
+    precio = resolver_precio(
+        tipo_reparacion,
+        modelo_equipo_id=modelo_de(orden),
+        usuario=usuario,
+        fecha=fecha,
+        manual=precio_manual,
+    )
     nueva_orden = registrar_paso(
         orden,
         process_id=NODO_REDEFINICION,
@@ -257,25 +277,25 @@ def aplicar_redefinicion(
         reparacion_detail_id=detalle_id,
         observacion=(
             f"Tipo {detalle.tipo_reparacion_id} -> {tipo_reparacion.id}; "
-            f"precio {detalle.precio} -> {tipo_reparacion.precio}"
+            f"precio {detalle.precio} -> {precio.precio}"
+            + (
+                f" ({precio.origen.value})"
+                if precio.origen.value != "CATALOGO"
+                else ""
+            )
         ),
     )
     redefinido = next(
         d for d in nueva_orden.reparaciones_detail if d.id == detalle_id
     )
     redefinido.definiciones_anteriores.append(
-        DefinicionAnteriorDetalle(
-            tipo_reparacion_id=redefinido.tipo_reparacion_id,
-            precio=redefinido.precio,
-            puntaje=redefinido.puntaje,
-            garantia_dias=redefinido.garantia_dias,
-            reemplazada_en=fecha,
-            usuario_id=usuario.id,
-        )
+        definicion_anterior(redefinido, fecha=fecha, usuario_id=usuario.id)
     )
     redefinido.tipo_reparacion_id = tipo_reparacion.id
     redefinido.descripcion = None
-    redefinido.precio = tipo_reparacion.precio
+    for campo, valor in copia_de_precio(tipo_reparacion, precio).items():
+        setattr(redefinido, campo, valor)
+    redefinido.solo_precio = False
     redefinido.puntaje = tipo_reparacion.puntaje
     redefinido.garantia_con_checkin = tipo_reparacion.garantia_con_checkin
     redefinido.garantia_sin_checkin = tipo_reparacion.garantia_sin_checkin

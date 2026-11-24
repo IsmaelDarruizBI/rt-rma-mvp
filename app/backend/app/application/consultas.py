@@ -155,10 +155,10 @@ def nombres_de_tipo_por_detalle(
 ) -> dict[str, str]:
     """Nombre del Tipo de Reparacion de cada Detalle.
 
-    Se resuelve al leer, igual que ``insumos_previstos_por_detalle``: el
-    Detalle guarda el ``tipo_reparacion_id`` y el precio snapshot, no el
-    nombre. El nombre es dato de catalogo vigente y NO se persiste en el
-    aggregate.
+    DEC-AJ-12 (D-12.4): un Detalle nuevo guarda la copia del nombre
+    (``nombre_trabajo``) y se nombra con ella; uno anterior, sin copia, se
+    resuelve al leer con el nombre vigente del catalogo, igual que
+    ``insumos_previstos_por_detalle``.
 
     Un Detalle cuyo Tipo ya no existe en el catalogo devuelve el ID como
     nombre, en vez de romper la lectura: a diferencia de un insumo

@@ -73,6 +73,7 @@ from app.domain.models import (
     OrigenCancelacion,
     OrigenDiagnostico,
     OrigenOrden,
+    OrigenPrecio,
     RecalculoAjuste,
     RecepcionEquipo,
     RegistroAutorizacionCliente,
@@ -131,6 +132,7 @@ from app.services import (
 )
 from app.services.checklist import advertencia_pendiente
 from app.services.evaluacion_tecnica import requiere_evaluacion
+from app.services.precio_trabajo import precio_de_otro_modelo
 
 # --- Catalogos ---------------------------------------------------------------
 
@@ -144,6 +146,11 @@ class TipoReparacionOut(BaseModel):
     puntaje: int
     garantia_dias: int
     activo: bool
+    # DEC-AJ-12: con precio por modelo, ``precio`` no se usa: rige
+    # ``precios_modelo`` (codigo del modelo -> precio). Sin precio para el
+    # modelo de la Orden, «Sin precio para este modelo».
+    precio_por_modelo: bool = False
+    precios_modelo: dict[str, Decimal] = Field(default_factory=dict)
 
     @classmethod
     def desde_dominio(cls, tipo: TipoReparacion) -> "TipoReparacionOut":
@@ -382,6 +389,12 @@ class CrearOrdenIn(BaseModel):
     # DEC-UX-04: Tipo de Reparacion del primer trabajo, que se agrega en la
     # misma operacion (si falla, no se crea nada). Sin el, sin Detalles.
     trabajo_inicial: str | None = None
+    # DEC-AJ-12: precio manual del trabajo inicial, con motivo (solo si
+    # falta el precio de catalogo para el modelo elegido y con el permiso).
+    trabajo_inicial_precio: Decimal | None = Field(
+        default=None, ge=0, decimal_places=2
+    )
+    trabajo_inicial_motivo: str | None = None
 
 
 class CrearOrdenRtIn(BaseModel):
@@ -397,6 +410,12 @@ class CrearOrdenRtIn(BaseModel):
     recepcion: DatosRecepcionIn | None = None
     # DEC-UX-04: como en ``CrearOrdenIn``.
     trabajo_inicial: str | None = None
+    # DEC-AJ-12: precio manual del trabajo inicial, con motivo (solo si
+    # falta el precio de catalogo para el modelo elegido y con el permiso).
+    trabajo_inicial_precio: Decimal | None = Field(
+        default=None, ge=0, decimal_places=2
+    )
+    trabajo_inicial_motivo: str | None = None
 
 
 class DefinirReparacionIn(BaseModel):
@@ -412,7 +431,23 @@ class DefinirReparacionIn(BaseModel):
     tipo_reparacion_id: str = Field(min_length=1)
     observaciones: str | None = None
     descripcion: str | None = None
+    # En «Otros», su precio; en un Tipo del catalogo, un precio manual
+    # (DEC-AJ-12) que exige ``precio_motivo``.
     precio: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    precio_motivo: str | None = None
+
+
+class DefinirPrecioIn(BaseModel):
+    """``POST /api/orders/{id}/details/{detalle_id}/price`` (DEC-AJ-12).
+
+    «Definir precio» de un trabajo con el precio pendiente: sin ``precio``
+    toma el de catalogo (tiene que existir para el modelo de la Orden); con
+    ``precio`` y ``motivo``, un precio manual (permiso PRECIO_MANUAL).
+    """
+
+    usuario_id: str = Field(min_length=1)
+    precio: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    motivo: str | None = None
 
 
 class FinalizarDefinicionIn(BaseModel):
@@ -461,6 +496,10 @@ class EvaluarDetalleIn(BaseModel):
     tipo_reparacion_id: str | None = None
     # 184 -> 128: reparaciones adicionales detectadas en la evaluacion.
     adicionales: list["TrabajoAdicionalIn"] = Field(default_factory=list)
+    # DEC-AJ-12: precio manual con motivo, solo si falta el precio de
+    # catalogo del Tipo para el modelo y con PRECIO_MANUAL.
+    precio: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    precio_motivo: str | None = None
 
 
 class TrabajoAdicionalIn(BaseModel):
@@ -469,6 +508,10 @@ class TrabajoAdicionalIn(BaseModel):
     tipo_reparacion_id: str = Field(min_length=1)
     observaciones: str | None = None
     detalle_origen_id: str | None = None
+    # DEC-AJ-12: precio manual con motivo, solo si falta el precio de
+    # catalogo del Tipo para el modelo y con PRECIO_MANUAL.
+    precio: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    precio_motivo: str | None = None
 
 
 class AgregarTrabajoAdicionalIn(TrabajoAdicionalIn):
@@ -579,6 +622,10 @@ class RedefinirDetalleIn(BaseModel):
 
     usuario_id: str = Field(min_length=1)
     tipo_reparacion_id: str = Field(min_length=1)
+    # DEC-AJ-12: precio manual con motivo, solo si falta el precio de
+    # catalogo del Tipo para el modelo y con PRECIO_MANUAL.
+    precio: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    precio_motivo: str | None = None
 
 
 class AprobarControlIn(BaseModel):
@@ -854,6 +901,7 @@ class DefinirReparacionDesdeRevisionIn(BaseModel):
     detalle_origen_id: str | None = None
     descripcion: str | None = None
     precio: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    precio_motivo: str | None = None
 
 
 class FinalizarSinReparacionIn(BaseModel):
@@ -1217,6 +1265,14 @@ class DefinicionAnteriorOut(BaseModel):
     garantia_dias: int
     reemplazada_en: datetime
     usuario_id: str
+    # DEC-AJ-12: la copia de esa definicion (vacia en las anteriores).
+    nombre_trabajo: str | None = None
+    modelo_equipo_id: str | None = None
+    origen_precio: OrigenPrecio | None = None
+    precio_motivo: str | None = None
+    precio_definido_por: str | None = None
+    precio_definido_en: datetime | None = None
+    solo_precio: bool = False
 
 
 class ControlTecnicoOut(BaseModel):
@@ -1319,6 +1375,19 @@ class DetalleOut(BaseModel):
     # comprobante (su definicion vigente es la que figura en el).
     pendiente_comprobante_ingreso: bool = False
     autorizado_en_ingreso: bool = False
+    # DEC-AJ-12: copia del trabajo y origen del precio. ``precio_pendiente``:
+    # el precio vale 0 y no es un precio («Precio pendiente de definir»).
+    # ``precio_de_otro_modelo``: el precio se determino para otro modelo del
+    # equipo y se conserva (aviso; se corrige redefiniendo el trabajo).
+    nombre_trabajo: str | None = None
+    modelo_equipo_id: str | None = None
+    origen_precio: OrigenPrecio | None = None
+    precio_motivo: str | None = None
+    precio_definido_por: str | None = None
+    precio_definido_en: datetime | None = None
+    solo_precio: bool = False
+    precio_pendiente: bool = False
+    precio_de_otro_modelo: bool = False
 
     @classmethod
     def desde_dominio(
@@ -1335,9 +1404,12 @@ class DetalleOut(BaseModel):
         ),
         pendiente_comprobante_ingreso: bool = False,
         autorizado_en_ingreso: bool = False,
+        precio_de_otro_modelo: bool = False,
     ) -> "DetalleOut":
         return cls(
             **detalle.model_dump(),
+            precio_pendiente=detalle.precio_pendiente,
+            precio_de_otro_modelo=precio_de_otro_modelo,
             version_definicion=detalle.version_definicion,
             estado_autorizacion=estado_autorizacion,
             situacion_autorizacion=situacion_autorizacion,
@@ -1345,8 +1417,12 @@ class DetalleOut(BaseModel):
             autorizado_en_ingreso=autorizado_en_ingreso,
             pendiente_de_retrabajo=pendiente_de_retrabajo(detalle),
             requiere_evaluacion=requiere_evaluacion(detalle),
+            # D-12.4: ``nombre_del_trabajo`` (la copia del nombre; uno
+            # anterior, el del catalogo; «Otros», su descripcion).
             tipo_reparacion_nombre=(
-                tipo_reparacion_nombre or detalle.tipo_reparacion_id
+                tipo_reparacion_nombre
+                or detalle.nombre_trabajo
+                or detalle.tipo_reparacion_id
             ),
             insumos_previstos=[
                 InsumoPrevistoOut.desde_aplicacion(previsto)
@@ -2434,6 +2510,9 @@ class OrdenOut(BaseModel):
                     is EstadoAutorizacion.AUTORIZADO
                     and (detalle.id, detalle.version_definicion)
                     in del_ingreso,
+                    precio_de_otro_modelo=precio_de_otro_modelo(
+                        orden, detalle
+                    ),
                 )
                 for detalle in orden.reparaciones_detail
             ],

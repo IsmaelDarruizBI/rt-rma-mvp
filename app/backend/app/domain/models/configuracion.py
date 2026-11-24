@@ -26,6 +26,10 @@ class EntidadConfiguracion(str, Enum):
     # DEC-AJ-09: datos de la empresa y versiones de los textos legales.
     EMPRESA = "EMPRESA"
     TEXTO_LEGAL = "TEXTO_LEGAL"
+    # DEC-AJ-12: modelos de equipo y precios por modelo (clave
+    # «TR-001/MOD-0012», campo «precio»).
+    MODELO_EQUIPO = "MODELO_EQUIPO"
+    PRECIO_MODELO = "PRECIO_MODELO"
 
 
 class CambioConfiguracion(BaseModel):

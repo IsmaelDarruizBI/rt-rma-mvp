@@ -12,9 +12,13 @@ repository.
 - Cada campo que cambia deja un ``CambioConfiguracion`` con el valor
   anterior y el nuevo; un pedido sin cambios se rechaza.
 - Lo ya registrado no cambia: los Detalles guardan su copia (BR-REP-015).
+- DEC-AJ-12: ``precio_por_modelo`` de un Tipo y sus precios por modelo
+  (entidad ``PRECIO_MODELO``, clave «TR-001/MOD-0012», campo «precio») son
+  precios: ``PRECIOS_GESTIONAR``. Los modelos de equipo (entidad
+  ``MODELO_EQUIPO``): ``MODELO_EQUIPO_GESTIONAR``.
 """
 
-from collections.abc import Collection, Iterable
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
@@ -23,6 +27,8 @@ from app.domain.models import (
     TIPO_REPARACION_OTROS,
     CambioConfiguracion,
     EntidadConfiguracion,
+    ModeloEquipo,
+    PrecioTipoModelo,
     TipoReparacion,
     Usuario,
 )
@@ -35,6 +41,7 @@ ROLES_ADMINISTRACION_CONFIGURACION = permisos.CONFIGURACION_ADMINISTRAR
 ROLES_TIPO_REPARACION = permisos.TIPO_REPARACION_GESTIONAR
 ROLES_PRECIOS = permisos.PRECIOS_GESTIONAR
 ROLES_MESA_TIPOS = permisos.MESA_TIPOS_GESTIONAR
+ROLES_MODELOS = permisos.MODELO_EQUIPO_GESTIONAR
 CAMPOS_TIPO = (
     "nombre",
     "precio",
@@ -44,7 +51,12 @@ CAMPOS_TIPO = (
     "garantia_sin_checkin",
     "politica_garantia_rma",
     "activo",
+    "precio_por_modelo",
 )
+# Los campos de un Tipo que son su precio (D3 y DEC-AJ-12).
+CAMPOS_DE_PRECIO = ("precio", "precio_por_modelo")
+CAMPOS_MODELO = ("marca", "modelo", "variante", "numeros_modelo", "activo")
+CAMPO_PRECIO = "precio"
 CAMPO_TIPOS_HABILITADOS = "tipos_habilitados"
 
 
@@ -58,6 +70,8 @@ def texto(valor: object) -> str | None:
         return f"{valor:.2f}"
     if isinstance(valor, Enum):
         return valor.value
+    if isinstance(valor, tuple | list):
+        return ", ".join(str(v) for v in valor) or None
     return str(valor)
 
 
@@ -98,8 +112,16 @@ def cambios_de_tipo(
         raise PrecondicionInvalidaError(
             "El precio admite hasta dos decimales."
         )
-    if anterior is None or texto(anterior.precio) != texto(nuevo.precio):
-        # D3: fijar o cambiar el precio es aparte.
+    if any(
+        (anterior is None and campo == "precio")
+        or (
+            anterior is not None
+            and texto(getattr(anterior, campo)) != texto(getattr(nuevo, campo))
+        )
+        for campo in CAMPOS_DE_PRECIO
+    ) or (anterior is None and nuevo.precio_por_modelo):
+        # D3: fijar o cambiar el precio es aparte. DEC-AJ-12: pasar a
+        # precio por modelo (o volver al unico) tambien es un precio.
         validar_alguno_de(usuario, ROLES_PRECIOS)
     _validar_tipo(nuevo)
     if anterior is not None and anterior.id != nuevo.id:
@@ -117,7 +139,12 @@ def cambios_de_tipo(
             fecha=fecha,
         )
         for campo in CAMPOS_TIPO
-        if (anterior is None and texto(getattr(nuevo, campo)) is not None)
+        if (
+            anterior is None
+            and texto(getattr(nuevo, campo)) is not None
+            # Un alta de precio unico no anota «precio_por_modelo: false».
+            and (campo != "precio_por_modelo" or nuevo.precio_por_modelo)
+        )
         or (
             anterior is not None
             and texto(getattr(anterior, campo)) != texto(getattr(nuevo, campo))
@@ -162,3 +189,151 @@ def cambio_de_tipos_habilitados(
         usuario_id=usuario.id,
         fecha=fecha,
     )
+
+
+# --- Modelos de equipo (DEC-AJ-12, D-12.5) ----------------------------------
+
+
+def _clave_modelo(modelo: ModeloEquipo) -> tuple[str, str, str]:
+    """(marca, modelo, variante) sin distinguir mayusculas ni espacios."""
+    return tuple(
+        " ".join((parte or "").split()).casefold()
+        for parte in (modelo.marca, modelo.modelo, modelo.variante)
+    )
+
+
+def cambios_de_modelo(
+    anterior: ModeloEquipo | None,
+    nuevo: ModeloEquipo,
+    *,
+    existentes: Iterable[ModeloEquipo],
+    usuario: Usuario,
+    fecha: datetime,
+) -> list[CambioConfiguracion]:
+    """Los cambios auditables del alta o la edicion de un modelo.
+
+    La marca y el modelo son obligatorios; la variante vacia es la version
+    estandar. No se admite otro modelo con la misma marca, modelo y
+    variante (sin distinguir mayusculas): evita duplicados, tambien con una
+    futura regeneracion desde Ventas, que empareja por esa clave.
+    """
+    validar_alguno_de(usuario, ROLES_MODELOS)
+    if anterior is not None and anterior.id != nuevo.id:
+        raise PrecondicionInvalidaError("El codigo de un modelo no cambia.")
+    clave = _clave_modelo(nuevo)
+    repetido = next(
+        (
+            modelo
+            for modelo in existentes
+            if modelo.id != nuevo.id and _clave_modelo(modelo) == clave
+        ),
+        None,
+    )
+    if repetido is not None:
+        raise PrecondicionInvalidaError(
+            f"Ya existe el modelo {repetido.id} ({repetido.nombre}) con esa "
+            "marca, modelo y variante."
+        )
+    cambios = [
+        CambioConfiguracion(
+            entidad=EntidadConfiguracion.MODELO_EQUIPO,
+            clave=nuevo.id,
+            campo=campo,
+            valor_anterior=(
+                texto(getattr(anterior, campo)) if anterior else None
+            ),
+            valor_nuevo=texto(getattr(nuevo, campo)),
+            usuario_id=usuario.id,
+            fecha=fecha,
+        )
+        for campo in CAMPOS_MODELO
+        if (anterior is None and texto(getattr(nuevo, campo)) is not None)
+        or (
+            anterior is not None
+            and texto(getattr(anterior, campo)) != texto(getattr(nuevo, campo))
+        )
+    ]
+    if not cambios:
+        raise PrecondicionInvalidaError(
+            f"El modelo {nuevo.id} ya tiene esos valores: no hay cambios."
+        )
+    return cambios
+
+
+# --- Precios por modelo (DEC-AJ-12, D-12.1) ---------------------------------
+
+
+def clave_precio_modelo(tipo_id: str, modelo_id: str) -> str:
+    """La clave de auditoria de un precio por modelo: «TR-001/MOD-0012»."""
+    return f"{tipo_id}/{modelo_id}"
+
+
+def cambios_de_precios_modelo(
+    precios: Sequence[PrecioTipoModelo],
+    *,
+    tipos: Mapping[str, TipoReparacion],
+    modelos: Mapping[str, ModeloEquipo],
+    usuario: Usuario,
+    fecha: datetime,
+) -> tuple[list[PrecioTipoModelo], list[CambioConfiguracion]]:
+    """Valida un lote de precios por modelo y devuelve los que cambian y su
+    auditoria (un registro por combinacion, campo «precio»).
+
+    ``tipos`` son los Tipos del catalogo con sus precios por modelo
+    vigentes; ``modelos``, los modelos existentes (activos o no). Un precio
+    ``None`` retira el de la combinacion. Las combinaciones que ya tienen
+    ese valor no se escriben ni se auditan; si ninguna cambia, se rechaza.
+    Exige ``PRECIOS_GESTIONAR``. Nunca toca los Detalles: guardan su copia.
+    """
+    validar_alguno_de(usuario, ROLES_PRECIOS)
+    vistos: set[tuple[str, str]] = set()
+    efectivos: list[PrecioTipoModelo] = []
+    cambios: list[CambioConfiguracion] = []
+    for pedido in precios:
+        par = (pedido.tipo_reparacion_id, pedido.modelo_equipo_id)
+        if par in vistos:
+            raise PrecondicionInvalidaError(
+                f"La combinacion {clave_precio_modelo(*par)} esta repetida."
+            )
+        vistos.add(par)
+        if pedido.tipo_reparacion_id.upper() == TIPO_REPARACION_OTROS:
+            raise PrecondicionInvalidaError(
+                "«Otros» lleva un precio manual por trabajo: no tiene "
+                "precios por modelo."
+            )
+        tipo = tipos.get(pedido.tipo_reparacion_id)
+        if tipo is None:
+            raise PrecondicionInvalidaError(
+                f"No existe el Tipo de Reparacion {pedido.tipo_reparacion_id}."
+            )
+        if pedido.modelo_equipo_id not in modelos:
+            raise PrecondicionInvalidaError(
+                f"No existe el modelo de equipo {pedido.modelo_equipo_id}."
+            )
+        if pedido.precio is not None and (
+            pedido.precio < 0
+            or pedido.precio != pedido.precio.quantize(Decimal("0.01"))
+        ):
+            raise PrecondicionInvalidaError(
+                "El precio no puede ser negativo y admite hasta dos decimales."
+            )
+        anterior = tipo.precios_modelo.get(pedido.modelo_equipo_id)
+        if texto(anterior) == texto(pedido.precio):
+            continue
+        efectivos.append(pedido)
+        cambios.append(
+            CambioConfiguracion(
+                entidad=EntidadConfiguracion.PRECIO_MODELO,
+                clave=clave_precio_modelo(*par),
+                campo=CAMPO_PRECIO,
+                valor_anterior=texto(anterior),
+                valor_nuevo=texto(pedido.precio),
+                usuario_id=usuario.id,
+                fecha=fecha,
+            )
+        )
+    if not cambios:
+        raise PrecondicionInvalidaError(
+            "Los precios ya tienen esos valores: no hay cambios."
+        )
+    return efectivos, cambios

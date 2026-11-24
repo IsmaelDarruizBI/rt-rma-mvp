@@ -20,6 +20,7 @@ from .enums import (
     EstadoTomaOrden,
     OrigenCancelacion,
     OrigenDiagnostico,
+    OrigenPrecio,
     PoliticaGarantiaRma,
     ResultadoAutorizacion,
     ResultadoControl,
@@ -122,6 +123,14 @@ class DefinicionAnteriorDetalle(BaseModel):
     garantia_dias: int = Field(ge=0)
     reemplazada_en: datetime
     usuario_id: str
+    # DEC-AJ-12: la copia de esa definicion (ver ``ReparacionDetail``).
+    nombre_trabajo: str | None = None
+    modelo_equipo_id: str | None = None
+    origen_precio: OrigenPrecio | None = None
+    precio_motivo: str | None = None
+    precio_definido_por: str | None = None
+    precio_definido_en: datetime | None = None
+    solo_precio: bool = False
 
 
 class AjusteGarantia(BaseModel):
@@ -219,10 +228,31 @@ class ReparacionDetail(BaseModel):
         default_factory=list
     )
 
+    # DEC-AJ-12 (D-12.2, D-12.4): copia de la definicion vigente. El nombre
+    # del Tipo y el modelo del equipo con el que se determino el precio; de
+    # donde salio el precio (``OrigenPrecio``), el motivo de un precio manual
+    # y quien y cuando lo definio. ``solo_precio``: esta definicion solo
+    # definio el precio de la anterior (pendiente definido, tomado del
+    # catalogo o cambio de modelo), asi que su evaluacion tecnica sigue
+    # valiendo. Vacios en un Detalle anterior: se lee el nombre del catalogo.
+    nombre_trabajo: str | None = None
+    modelo_equipo_id: str | None = None
+    origen_precio: OrigenPrecio | None = None
+    precio_motivo: str | None = None
+    precio_definido_por: str | None = None
+    precio_definido_en: datetime | None = None
+    solo_precio: bool = False
+
     @property
     def es_otros(self) -> bool:
         """Reparacion no tipificada ("Otros"), con precio manual."""
         return self.tipo_reparacion_id == TIPO_REPARACION_OTROS
+
+    @property
+    def precio_pendiente(self) -> bool:
+        """DEC-AJ-12: falta definir el precio (``precio`` vale 0 y no es
+        un precio)."""
+        return self.origen_precio is OrigenPrecio.PENDIENTE
 
     @property
     def version_definicion(self) -> int:

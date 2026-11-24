@@ -11,6 +11,8 @@ from typing import Protocol
 from app.domain.models import (
     CambioConfiguracion,
     EntidadConfiguracion,
+    ModeloEquipo,
+    PrecioTipoModelo,
     RolUsuario,
     TipoReparacion,
 )
@@ -30,6 +32,28 @@ class ConfiguracionRepository(Protocol):
         cambios: Sequence[CambioConfiguracion],
     ) -> None:
         """Alta o edicion del Tipo, con sus cambios auditados."""
+        ...
+
+    def guardar_modelo_equipo(
+        self,
+        modelo: ModeloEquipo,
+        *,
+        nuevo: bool,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None:
+        """Alta o edicion de un modelo de equipo (DEC-AJ-12, D-12.5), con
+        sus cambios auditados. ``CodigoExistenteError`` si ya existe el
+        codigo o la misma marca, modelo y variante."""
+        ...
+
+    def guardar_precios_modelo(
+        self,
+        precios: Sequence[PrecioTipoModelo],
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None:
+        """Fija o retira (``precio`` None) precios por modelo en bloque, con
+        su auditoria, en la transaccion en curso: todo o nada (DEC-AJ-12;
+        la importacion masiva de DEC-AJ-13 usa esta misma escritura)."""
         ...
 
     def guardar_tipos_de_mesa(

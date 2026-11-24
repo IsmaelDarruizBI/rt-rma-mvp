@@ -192,6 +192,24 @@ class OrigenDiagnostico(str, Enum):
     REVISION_TECNICA = "REVISION_TECNICA"
 
 
+class OrigenPrecio(str, Enum):
+    """De donde salio el precio de la definicion de un Detalle (DEC-AJ-12).
+
+    ``CATALOGO``: el precio unico del Tipo. ``CATALOGO_MODELO``: el precio
+    del Tipo para el modelo del equipo. ``MANUAL``: lo autorizo quien tiene
+    ``PRECIO_MANUAL`` porque faltaba el de catalogo, con motivo. ``OTROS``:
+    la reparacion no tipificada (BR-REP-047). ``PENDIENTE``: falta el precio
+    de catalogo y nadie autorizo uno manual; el precio guardado es 0 y no
+    es un precio. Sin valor: Detalle anterior (precio copiado del catalogo).
+    """
+
+    CATALOGO = "CATALOGO"
+    CATALOGO_MODELO = "CATALOGO_MODELO"
+    MANUAL = "MANUAL"
+    OTROS = "OTROS"
+    PENDIENTE = "PENDIENTE"
+
+
 class ResultadoEvaluacionTecnica(str, Enum):
     """Resultado principal de PROC-REP-183 (BR-REP-035/036)."""
 

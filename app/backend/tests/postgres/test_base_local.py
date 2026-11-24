@@ -117,8 +117,8 @@ def test_el_esquema_rma_queda_completo_y_consistente(postgres_descartable):
         ).fetchone()
         # 45 del diseño aprobado; la macroiteración V1.4 suma
         # evaluacion_tecnica, cambio_configuracion y la vista historial_precio.
-        # DEC-AJ-10 suma descuento_recalculo.
-        assert conteo == (73, 8)
+        # DEC-AJ-10 suma descuento_recalculo y DEC-AJ-12, precio_tipo_modelo.
+        assert conteo == (74, 8)
         diferencias = conexion.execute(
             "select count(*) from rma.verificar_integridad()"
         ).fetchone()

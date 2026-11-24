@@ -52,12 +52,18 @@ from app.services import (
     toma_activa,
 )
 from app.services.cancelaciones import sin_trabajos_vigentes
+from app.services.precio_trabajo import (
+    detalles_con_precio_de_otro_modelo,
+    detalles_con_precio_pendiente,
+    precio_pendiente_bloquea,
+)
 
 from .acciones import (
     AccionDisponible,
     acciones_de_autorizacion,
     acciones_de_cancelacion,
     acciones_de_custodia,
+    acciones_de_precio,
     acciones_disponibles,
     acciones_financieras,
 )
@@ -1167,6 +1173,32 @@ def _avisos(datos: _Datos, principal: str) -> tuple[AvisoOperativo, ...]:
                     for accion in datos.flujo("OVERRIDE_RECURSOS")
                     if accion.detalle_id in bloqueados
                 ],
+            )
+        )
+    # DEC-AJ-12: trabajos sin precio y precios de otro modelo.
+    sin_precio = detalles_con_precio_pendiente(orden)
+    if sin_precio:
+        avisos.append(
+            _aviso(
+                "PRECIO_PENDIENTE",
+                f"Precio pendiente de definir: {datos.nombres_de(sin_precio)}"
+                + (
+                    ". Sin precio no se genera el comprobante de ingreso ni "
+                    "se registra la autorización del cliente."
+                    if precio_pendiente_bloquea(orden)
+                    else "."
+                ),
+                acciones_de_precio(orden),
+            )
+        )
+    otro_modelo = detalles_con_precio_de_otro_modelo(orden)
+    if otro_modelo:
+        avisos.append(
+            _aviso(
+                "PRECIO_OTRO_MODELO",
+                f"El precio de {datos.nombres_de(otro_modelo)} corresponde a "
+                "otro modelo del equipo: se conserva el precio definido; para "
+                "cambiarlo hay que redefinir el trabajo.",
             )
         )
     revision = [
