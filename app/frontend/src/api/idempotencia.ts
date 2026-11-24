@@ -33,6 +33,8 @@ const RUTAS_CON_CLAVE: readonly RegExp[] = [
   /^\/api\/orders\/[^/]+\/photos$/,
   /^\/api\/inventory\/[^/]+\/(receipts|adjustments)$/,
   /^\/api\/catalogs\/equipment\/sync$/,
+  // DEC-AJ-13: aplicar una importación de precios (la vista previa no).
+  /^\/api\/admin\/model-prices\/import$/,
 ];
 
 /** Si un POST a `ruta` (con o sin consulta) lleva clave. */

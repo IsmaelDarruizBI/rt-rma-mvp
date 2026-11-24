@@ -3,7 +3,7 @@
  * Solo Administración; las escrituras exigen la base PostgreSQL.
  */
 
-import { get, post, put } from "./client";
+import { get, getArchivo, post, postArchivo, put } from "./client";
 import type {
   ContenidoTextoLegal,
   EmpresaEnDocumento,
@@ -54,6 +54,8 @@ export interface CambioConfiguracion {
   valor_nuevo: string | null;
   usuario_id: string;
   fecha: string;
+  /** DEC-AJ-13: la importación masiva a la que pertenece el cambio. */
+  importacion_id?: string | null;
 }
 
 /**
@@ -154,6 +156,93 @@ export function guardarPreciosModelo(
     usuario_id: usuarioId,
     precios,
   });
+}
+
+// --- Importación masiva de precios por modelo (DEC-AJ-13) ---------------
+
+export type EstadoPrecioImportado = "NUEVO" | "CAMBIA";
+
+export interface PrecioImportado {
+  celda: string;
+  modelo_equipo_id: string;
+  modelo: string;
+  tipo_reparacion_id: string;
+  tipo: string;
+  anterior: string | null;
+  nuevo: string;
+  estado: EstadoPrecioImportado;
+}
+
+export interface ObservacionImportacion {
+  celda: string | null;
+  mensaje: string;
+}
+
+export interface ResumenImportacion {
+  modelos: number;
+  tipos: number;
+  nuevos: number;
+  actualizados: number;
+  sin_cambio: number;
+  vacias: number;
+  errores: number;
+  avisos: number;
+}
+
+export interface VistaPreviaImportacion {
+  formato: "XLSX" | "CSV" | "TEXTO";
+  nombre_archivo: string | null;
+  resumen: ResumenImportacion;
+  /** Solo los precios nuevos y los que cambian. */
+  cambios: PrecioImportado[];
+  errores: ObservacionImportacion[];
+  avisos: ObservacionImportacion[];
+  columnas_ignoradas: { columna: string; encabezado: string }[];
+  /** Sin errores y con algún cambio. */
+  aplicable: boolean;
+  /** false en el modo JSON: ahí no se puede aplicar. */
+  editable?: boolean;
+}
+
+export interface ImportacionPrecios {
+  id: string;
+  usuario_id: string;
+  fecha: string;
+  formato: "XLSX" | "CSV" | "TEXTO";
+  nombre_archivo: string | null;
+  nuevos: number;
+  actualizados: number;
+  sin_cambio: number;
+}
+
+export interface ResultadoImportacion {
+  importacion: ImportacionPrecios;
+  vista: VistaPreviaImportacion;
+  cambios_registrados: number;
+}
+
+/** La plantilla con los precios vigentes (.xlsx o CSV). */
+export function descargarPlantillaPrecios(formato: "xlsx" | "csv"): Promise<Blob> {
+  return getArchivo(`/api/admin/model-prices/template?formato=${formato}`);
+}
+
+/** La vista previa: no escribe nada. El cuerpo es la planilla tal cual. */
+export function previsualizarImportacion(
+  consulta: string,
+  planilla: Blob,
+): Promise<VistaPreviaImportacion> {
+  return postArchivo<VistaPreviaImportacion>(
+    `/api/admin/model-prices/import/preview?${consulta}`,
+    planilla,
+  );
+}
+
+/** Aplica todo o nada; el servidor vuelve a validar la planilla. */
+export function aplicarImportacion(
+  consulta: string,
+  planilla: Blob,
+): Promise<ResultadoImportacion> {
+  return postArchivo<ResultadoImportacion>(`/api/admin/model-prices/import?${consulta}`, planilla);
 }
 
 export function guardarTiposDeMesa(

@@ -14,6 +14,7 @@ import { puede, type ConRoles } from "../../lib/roles.ts";
 export type SeccionConfiguracion =
   | "tipos-reparacion"
   | "modelos-equipo"
+  | "importar-precios"
   | "mesas"
   | "motivos"
   | "checklist"
@@ -47,6 +48,8 @@ export const SECCIONES_CONFIGURACION: readonly DefinicionSeccion[] = [
   { id: "tipos-reparacion", grupo: "Taller", titulo: "Tipos de reparación", permisos: ["TIPO_REPARACION_GESTIONAR"] },
   // DEC-AJ-12: el catálogo técnico de modelos (alta, edición y baja).
   { id: "modelos-equipo", grupo: "Taller", titulo: "Modelos de equipo", permisos: ["MODELO_EQUIPO_GESTIONAR"] },
+  // DEC-AJ-13: importación masiva de precios por modelo.
+  { id: "importar-precios", grupo: "Taller", titulo: "Importar precios", permisos: ["PRECIOS_GESTIONAR"] },
   { id: "mesas", grupo: "Taller", titulo: "Mesas de trabajo", permisos: ["MESA_TIPOS_GESTIONAR"] },
   { id: "motivos", grupo: "Taller", titulo: "Motivos", permisos: ["MOTIVO_GESTIONAR"] },
   { id: "checklist", grupo: "Taller", titulo: "Checklist", permisos: ["CHECKLIST_GESTIONAR"] },
@@ -119,6 +122,7 @@ export function seccionAMostrar(
 export const ENTIDAD_DE_SECCION: Partial<Record<SeccionConfiguracion, string>> = {
   "tipos-reparacion": "TIPO_REPARACION",
   "modelos-equipo": "MODELO_EQUIPO",
+  "importar-precios": "PRECIO_MODELO",
   mesas: "MESA_TRABAJO",
   motivos: "MOTIVO",
   checklist: "CHECKLIST",

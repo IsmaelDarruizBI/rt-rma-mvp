@@ -36,6 +36,7 @@ import {
   seccionAMostrar,
   seccionesPermitidas,
 } from "./secciones";
+import { ImportarPrecios } from "./ImportarPrecios";
 import { ModelosEquipoAdmin } from "./ModelosEquipo";
 import { MesasTrabajo, TiposReparacion } from "./TiposReparacion";
 import { UsuariosRoles } from "./UsuariosRoles";
@@ -97,6 +98,7 @@ function ListaDeCambios({ cambios }: { cambios: CambioConfiguracion[] }) {
         <li key={i}>
           {new Date(c.fecha).toLocaleString("es-AR")} · {c.usuario_id} · {c.clave} ·{" "}
           {CAMPOS[c.campo] ?? c.campo}: {valor(c.valor_anterior)} → {valor(c.valor_nuevo)}
+          {c.importacion_id && ` · importación ${c.importacion_id.slice(0, 8)}`}
         </li>
       ))}
     </ul>
@@ -234,6 +236,7 @@ export function ConfiguracionPanel({
         <div style={{ minWidth: 0 }}>
           {actual === "tipos-reparacion" && <TiposReparacion actor={actor} onCambio={alCambiar} />}
           {actual === "modelos-equipo" && <ModelosEquipoAdmin actor={actor} />}
+          {actual === "importar-precios" && <ImportarPrecios actor={actor} />}
           {actual === "mesas" && <MesasTrabajo actor={actor} />}
           {actual === "motivos" && <MotivosOperativos actor={actor} />}
           {actual === "checklist" && <ChecklistAdmin actor={actor} />}
