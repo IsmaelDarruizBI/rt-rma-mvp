@@ -44,7 +44,10 @@ export type EntidadConfiguracion =
   | "TEXTO_LEGAL"
   // DEC-AJ-12: modelos de equipo y precios por modelo («TR-001/MOD-0012»).
   | "MODELO_EQUIPO"
-  | "PRECIO_MODELO";
+  | "PRECIO_MODELO"
+  // DEC-AJ-14: categorías de insumos y fabricantes de repuestos.
+  | "CATEGORIA_INSUMO"
+  | "FABRICANTE_REPUESTO";
 
 export interface CambioConfiguracion {
   entidad: EntidadConfiguracion;

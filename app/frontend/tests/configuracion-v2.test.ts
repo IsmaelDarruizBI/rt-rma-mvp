@@ -60,7 +60,8 @@ describe("Configuración por permisos (CFG-05)", () => {
       "CONFIGURACION_ADMINISTRAR",
     ]);
     // DEC-AJ-09: + «Datos de la empresa» y «Términos y condiciones».
-    assert.equal(seccionesPermitidas(admin).length, 13);
+    // DEC-AJ-14: + «Categorías de insumos» y «Fabricantes de repuestos».
+    assert.equal(seccionesPermitidas(admin).length, 15);
     assert.deepEqual(
       gruposDe(seccionesPermitidas(admin)).map((g) => g.grupo),
       ["Taller", "Inventario y compras", "Comunicación", "Comprobantes", "Sistema"],
@@ -70,9 +71,10 @@ describe("Configuración por permisos (CFG-05)", () => {
 
   it("Recepción con insumos delegados ve solo Insumos, sin lo sensible", () => {
     const recepcion = usuario(["RECEPCION"], ["INSUMO_GESTIONAR", "ORDENES_CONSULTAR"]);
+    // DEC-AJ-14: la clasificación de los insumos va con el mismo permiso.
     assert.deepEqual(
       seccionesPermitidas(recepcion).map((s) => s.id),
-      ["insumos"],
+      ["insumos", "categorias-insumo", "fabricantes-repuesto"],
     );
     assert.equal(puedeConfigurar(recepcion), true);
     assert.equal(seccionAMostrar(recepcion, undefined), "insumos");

@@ -1553,6 +1553,13 @@ export interface SituacionInsumo {
     | "BAJO_MINIMO_REPOSICION_SOLICITADA";
   /** Vigente y por debajo del mínimo (con o sin reposición solicitada). */
   bajo_minimo?: boolean;
+  /** DEC-AJ-14: clasificación (códigos CAT y FAB); null: sin clasificar. */
+  categoria_id?: string | null;
+  fabricante_id?: string | null;
+  variante?: string | null;
+  codigo_fabricante?: string | null;
+  /** Modelos compatibles (MOD); vacío: universal. */
+  modelos_compatibles?: string[];
 }
 
 export interface ReservaVigente {

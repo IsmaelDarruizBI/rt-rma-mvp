@@ -7,14 +7,20 @@
  * backend; acá se muestra lo que devuelve y se piden confirmaciones antes
  * de enviar. El stock mínimo (DEC-AJ-11) no es un faltante: tiene su propio
  * filtro e indicador.
+ *
+ * DEC-AJ-14: cada insumo muestra su clasificación (categoría, fabricante,
+ * variante) y su compatibilidad, y la lista se filtra por categoría (o «sin
+ * clasificar»), fabricante y modelo compatible. Esos filtros se aplican
+ * sobre la lista leída; la búsqueda por texto sigue en la API.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import * as api from "../../api/inventario";
 import { ApiError } from "../../api/client";
 import { OperacionesEstables } from "../../api/idempotencia";
 import { VentanaConservada } from "../../components/Modal";
+import { FiltrosClasificacion, useClasificacionInsumos } from "../../components/SelectorInsumo";
 import {
   Boton,
   Campo,
@@ -41,6 +47,14 @@ import {
   SelectorLote,
   useSaldosLotes,
 } from "./lotes";
+import {
+  type ClasificacionInsumos,
+  type FiltroInsumos,
+  filtrarInsumos,
+  filtraClasificacion,
+  resumenClasificacion,
+  textoCompatibilidad,
+} from "./clasificacion";
 import { NOMBRE_REPOSICION, tonoReposicion } from "./stockMinimo";
 
 /** Provisorio, a validar con Rosario Tecno (el backend lo exige igual). */
@@ -104,6 +118,8 @@ export function InventarioPanel({
   const [busqueda, setBusqueda] = useState("");
   const [soloFaltantes, setSoloFaltantes] = useState(false);
   const [bajoMinimo, setBajoMinimo] = useState(false);
+  const [filtroClasificacion, setFiltroClasificacion] = useState<FiltroInsumos>({});
+  const clasificacion = useClasificacionInsumos();
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<DetalleInsumo | null>(null);
   const [revalidacion, setRevalidacion] = useState<ResultadoRevalidacion | null>(null);
@@ -112,6 +128,10 @@ export function InventarioPanel({
   const [ocupado, setOcupado] = useState(false);
 
   const puedeGestionar = puede(actor, "STOCK_GESTIONAR", ROLES_GESTION);
+  const visibles = useMemo(
+    () => (insumos === null ? null : filtrarInsumos(insumos, filtroClasificacion, clasificacion)),
+    [insumos, filtroClasificacion, clasificacion],
+  );
 
   useEffect(() => {
     const espera = setTimeout(
@@ -176,7 +196,7 @@ export function InventarioPanel({
         >
           <label style={{ flex: "1 1 220px" }}>
             <span style={{ display: "block", fontSize: "0.75rem", color: colores.suave }}>
-              Buscar por código o nombre
+              Buscar por código, nombre o código del fabricante
             </span>
             <input
               value={buscar}
@@ -218,6 +238,19 @@ export function InventarioPanel({
             Revalidar órdenes esperando recursos
           </Boton>
         </div>
+        <div style={{ marginBottom: "0.75rem" }}>
+          <FiltrosClasificacion
+            filtro={filtroClasificacion}
+            onCambiar={setFiltroClasificacion}
+            clasificacion={clasificacion}
+            conTexto={false}
+          />
+          {filtraClasificacion(filtroClasificacion) && visibles !== null && insumos !== null && (
+            <p style={{ margin: "0.3rem 0 0", fontSize: "0.75rem", color: colores.suave }}>
+              {visibles.length} de {insumos.length} insumos con esa clasificación.
+            </p>
+          )}
+        </div>
         {!puedeGestionar && (
           <p style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: colores.alerta }}>
             Consulta para todos los roles. Ingresos, ajustes y revalidación
@@ -230,7 +263,7 @@ export function InventarioPanel({
             {aviso}
           </p>
         )}
-        {insumos === null ? (
+        {visibles === null ? (
           !error && (
             <p style={{ margin: 0, fontSize: "0.85rem", color: colores.suave }}>
               Cargando el inventario…
@@ -238,7 +271,8 @@ export function InventarioPanel({
           )
         ) : (
           <TablaInsumos
-            insumos={insumos}
+            insumos={visibles}
+            clasificacion={clasificacion}
             seleccionado={seleccionado}
             onSeleccionar={(insumoId) => setSeleccionado(insumoId)}
           />
@@ -255,6 +289,7 @@ export function InventarioPanel({
       {seleccionado && detalle && detalle.insumo.id === seleccionado && (
         <DetalleDeInsumo
           detalle={detalle}
+          clasificacion={clasificacion}
           usuarios={usuarios}
           puedeGestionar={puedeGestionar}
           ocupado={ocupado}
@@ -306,10 +341,12 @@ export function InventarioPanel({
 
 function TablaInsumos({
   insumos,
+  clasificacion,
   seleccionado,
   onSeleccionar,
 }: {
   insumos: SituacionInsumo[];
+  clasificacion: ClasificacionInsumos;
   seleccionado: string | null;
   onSeleccionar: (insumoId: string) => void;
 }) {
@@ -322,11 +359,12 @@ function TablaInsumos({
   }
   return (
     <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", fontSize: "0.85rem" }}>
+      <table style={{ width: "100%", minWidth: 960, borderCollapse: "collapse", fontSize: "0.85rem" }}>
         <thead>
           <tr style={{ textAlign: "left", color: colores.suave }}>
             <th style={celda}>Código</th>
             <th style={celda}>Nombre</th>
+            <th style={celda}>Clasificación</th>
             <th style={{ ...celda, textAlign: "right" }}>Físico</th>
             <th style={{ ...celda, textAlign: "right" }}>Reservado</th>
             <th style={{ ...celda, textAlign: "right" }}>Disponible</th>
@@ -348,6 +386,12 @@ function TablaInsumos({
             >
               <td style={{ ...celda, fontFamily: "ui-monospace, monospace" }}>{insumo.codigo}</td>
               <td style={celda}>{insumo.nombre}</td>
+              <td style={{ ...celda, fontSize: "0.8rem" }}>
+                {resumenClasificacion(insumo, clasificacion)}
+                <div style={{ color: colores.suave }} title={(insumo.modelos_compatibles ?? []).join(", ")}>
+                  {textoCompatibilidad(insumo, clasificacion)}
+                </div>
+              </td>
               <td style={{ ...celda, textAlign: "right" }}>{cantidad(insumo.stock_fisico, insumo)}</td>
               <td style={{ ...celda, textAlign: "right" }}>{insumo.reservado}</td>
               <td
@@ -480,6 +524,7 @@ function ResumenRevalidacion({
 
 function DetalleDeInsumo({
   detalle,
+  clasificacion,
   usuarios,
   puedeGestionar,
   ocupado,
@@ -489,6 +534,7 @@ function DetalleDeInsumo({
   error,
 }: {
   detalle: DetalleInsumo;
+  clasificacion: ClasificacionInsumos;
   usuarios: Usuario[];
   puedeGestionar: boolean;
   ocupado: boolean;
@@ -515,6 +561,11 @@ function DetalleDeInsumo({
   const saldos = useSaldosLotes(insumo.id, detalle.movimientos.length);
   return (
     <Panel titulo={`Insumo ${insumo.codigo} · ${insumo.nombre}`}>
+      <p style={{ margin: "0 0 0.5rem", fontSize: "0.85rem", color: colores.suave }}>
+        {resumenClasificacion(insumo, clasificacion)}
+        {insumo.codigo_fabricante ? ` · Cód. fabricante ${insumo.codigo_fabricante}` : ""} ·{" "}
+        Compatible con: {textoCompatibilidad(insumo, clasificacion, 6)}
+      </p>
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
         <Etiqueta color={colores.texto}>Físico {cantidad(insumo.stock_fisico, insumo)}</Etiqueta>
         <Etiqueta color={colores.acento}>Reservado {insumo.reservado}</Etiqueta>

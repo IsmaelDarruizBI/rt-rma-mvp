@@ -22,6 +22,7 @@ import type {
   SugerenciaCompra,
 } from "../../api/compras";
 import { listarInventario } from "../../api/inventario";
+import { SelectorInsumo, useClasificacionInsumos } from "../../components/SelectorInsumo";
 import { Boton, Campo, colores, estiloInput, fechaCorta } from "../../components/ui";
 import {
   type AccionesCompras,
@@ -41,6 +42,7 @@ import {
   solicitudDeSugerencia,
 } from "../inventario/stockMinimo";
 import { useSaldosLotes } from "../inventario/lotes";
+import { type ClasificacionInsumos, etiquetaInsumo } from "../inventario/clasificacion";
 
 const mensajeDe = (causa: unknown) =>
   causa instanceof Error ? causa.message : String(causa);
@@ -51,6 +53,8 @@ export function ComprasPanel({ actor }: { actor: Usuario | null }) {
   const [disponible, setDisponible] = useState<boolean | null>(null);
   const [pestana, setPestana] = useState<Pestana>("solicitudes");
   const [insumos, setInsumos] = useState<SituacionInsumo[]>([]);
+  // DEC-AJ-14: la clasificación para nombrar, buscar y filtrar insumos.
+  const clasificacion = useClasificacionInsumos();
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [solicitudes, setSolicitudes] = useState<SolicitudCompra[]>([]);
   const [sugerencias, setSugerencias] = useState<SugerenciaCompra[]>([]);
@@ -112,7 +116,7 @@ export function ComprasPanel({ actor }: { actor: Usuario | null }) {
 
   const nombreInsumo = (id: string) => {
     const insumo = insumos.find((i) => i.id === id);
-    return insumo ? `${insumo.codigo} · ${insumo.nombre}` : id;
+    return insumo ? etiquetaInsumo(insumo, clasificacion) : id;
   };
   const nombreProveedor = (id: string) =>
     proveedores.find((p) => p.id === id)?.nombre ?? id;
@@ -162,6 +166,7 @@ export function ComprasPanel({ actor }: { actor: Usuario | null }) {
           solicitudes={solicitudes}
           sugerencias={sugerencias}
           insumos={insumos}
+          clasificacion={clasificacion}
           nombreInsumo={nombreInsumo}
           gestiona={gestiona}
           ocupado={ocupado}
@@ -185,6 +190,7 @@ export function ComprasPanel({ actor }: { actor: Usuario | null }) {
           proveedores={proveedores}
           solicitudes={solicitudes}
           insumos={insumos}
+          clasificacion={clasificacion}
           nombreInsumo={nombreInsumo}
           nombreProveedor={nombreProveedor}
           gestiona={gestiona}
@@ -194,7 +200,12 @@ export function ComprasPanel({ actor }: { actor: Usuario | null }) {
         />
       )}
       {pestana === "costos" && (
-        <Costos insumos={insumos} nombreInsumo={nombreInsumo} nombreProveedor={nombreProveedor} />
+        <Costos
+          insumos={insumos}
+          clasificacion={clasificacion}
+          nombreInsumo={nombreInsumo}
+          nombreProveedor={nombreProveedor}
+        />
       )}
     </div>
   );
@@ -206,6 +217,7 @@ function Solicitudes({
   solicitudes,
   sugerencias,
   insumos,
+  clasificacion,
   nombreInsumo,
   gestiona,
   ocupado,
@@ -215,6 +227,7 @@ function Solicitudes({
   solicitudes: SolicitudCompra[];
   sugerencias: SugerenciaCompra[];
   insumos: SituacionInsumo[];
+  clasificacion: ClasificacionInsumos;
   nombreInsumo: (id: string) => string;
   gestiona: AccionesCompras;
   ocupado: boolean;
@@ -314,18 +327,13 @@ function Solicitudes({
       {gestiona.solicitar && (
         <div style={{ maxWidth: 420, marginTop: "0.6rem" }}>
           <h4 style={{ margin: "0 0 0.3rem" }}>Nueva solicitud</h4>
-          <Campo etiqueta="Insumo">
-            <select value={insumo} onChange={(e) => setInsumo(e.target.value)} style={estiloInput}>
-              <option value="">Elegir…</option>
-              {insumos
-                .filter((i) => i.activo)
-                .map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.codigo} · {i.nombre}
-                  </option>
-                ))}
-            </select>
-          </Campo>
+          <SelectorInsumo
+            insumos={insumos}
+            clasificacion={clasificacion}
+            valor={insumo}
+            onCambiar={setInsumo}
+            soloVigentes
+          />
           <Campo etiqueta="Cantidad">
             <input value={cantidad} inputMode="decimal" onChange={(e) => setCantidad(e.target.value)} style={estiloInput} />
           </Campo>
@@ -360,6 +368,7 @@ function Ordenes({
   proveedores,
   solicitudes,
   insumos,
+  clasificacion,
   nombreInsumo,
   nombreProveedor,
   gestiona,
@@ -371,6 +380,7 @@ function Ordenes({
   proveedores: Proveedor[];
   solicitudes: SolicitudCompra[];
   insumos: SituacionInsumo[];
+  clasificacion: ClasificacionInsumos;
   nombreInsumo: (id: string) => string;
   nombreProveedor: (id: string) => string;
   gestiona: AccionesCompras;
@@ -393,6 +403,7 @@ function Ordenes({
           proveedores={proveedores.filter((p) => p.activo)}
           solicitudes={solicitudes.filter((s) => s.estado === "PENDIENTE")}
           insumos={insumos.filter((i) => i.activo)}
+          clasificacion={clasificacion}
           nombreInsumo={nombreInsumo}
           ocupado={ocupado}
           onCancelar={() => setNueva(false)}
@@ -441,6 +452,7 @@ function NuevaOrden({
   proveedores,
   solicitudes,
   insumos,
+  clasificacion,
   nombreInsumo,
   ocupado,
   onCancelar,
@@ -449,6 +461,7 @@ function NuevaOrden({
   proveedores: Proveedor[];
   solicitudes: SolicitudCompra[];
   insumos: SituacionInsumo[];
+  clasificacion: ClasificacionInsumos;
   nombreInsumo: (id: string) => string;
   ocupado: boolean;
   onCancelar: () => void;
@@ -522,16 +535,13 @@ function NuevaOrden({
           ))}
         </fieldset>
       )}
-      <Campo etiqueta="Agregar insumo">
-        <select value="" onChange={(e) => e.target.value && agregar(e.target.value)} style={estiloInput}>
-          <option value="">Elegir…</option>
-          {insumos.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.codigo} · {i.nombre}
-            </option>
-          ))}
-        </select>
-      </Campo>
+      <SelectorInsumo
+        etiqueta="Agregar insumo (una línea por insumo)"
+        insumos={insumos}
+        clasificacion={clasificacion}
+        valor=""
+        onCambiar={(id) => id && agregar(id)}
+      />
       {items.map((item, indice) => (
         <div key={item.insumo_id} style={{ display: "flex", gap: "0.4rem", alignItems: "end" }}>
           <span style={{ flex: 2, fontSize: "0.85rem" }}>{nombreInsumo(item.insumo_id)}</span>
@@ -833,10 +843,12 @@ function LineaRecepcionForm({
 
 function Costos({
   insumos,
+  clasificacion,
   nombreInsumo,
   nombreProveedor,
 }: {
   insumos: SituacionInsumo[];
+  clasificacion: ClasificacionInsumos;
   nombreInsumo: (id: string) => string;
   nombreProveedor: (id: string) => string;
 }) {
@@ -855,16 +867,15 @@ function Costos({
         conserva su costo. Los precios de los insumos los configura
         Administración.
       </p>
-      <Campo etiqueta="Insumo">
-        <select value={insumo} onChange={(e) => setInsumo(e.target.value)} style={{ ...estiloInput, maxWidth: 360 }}>
-          <option value="">Todos</option>
-          {insumos.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.codigo} · {i.nombre}
-            </option>
-          ))}
-        </select>
-      </Campo>
+      <div style={{ maxWidth: 720 }}>
+        <SelectorInsumo
+          insumos={insumos}
+          clasificacion={clasificacion}
+          valor={insumo}
+          onCambiar={setInsumo}
+          opcionVacia="Todos"
+        />
+      </div>
       <ul style={{ paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
         {lista.map((c, i) => (
           <li key={`${c.orden_compra_id}-${c.recepcion_id}-${c.insumo_id}-${i}`}>

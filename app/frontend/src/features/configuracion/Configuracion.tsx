@@ -22,6 +22,7 @@ import { colores } from "../../components/ui";
 import type { Usuario } from "../../types/api";
 import { ChecklistAdmin } from "./Checklist";
 import { DatosEmpresaAdmin, TerminosCondicionesAdmin } from "./Comprobantes";
+import { CategoriasInsumoAdmin, FabricantesRepuestoAdmin } from "./ClasificacionInsumos";
 import { InsumosAdmin } from "./Insumos";
 import { MotivosOperativos, RecargosMedioPago } from "./Operativa";
 import { Permisos } from "./Permisos";
@@ -241,6 +242,8 @@ export function ConfiguracionPanel({
           {actual === "motivos" && <MotivosOperativos actor={actor} />}
           {actual === "checklist" && <ChecklistAdmin actor={actor} />}
           {actual === "insumos" && <InsumosAdmin actor={actor} />}
+          {actual === "categorias-insumo" && <CategoriasInsumoAdmin actor={actor} />}
+          {actual === "fabricantes-repuesto" && <FabricantesRepuestoAdmin actor={actor} />}
           {actual === "proveedores" && <ProveedoresAdmin actor={actor} />}
           {actual === "plantillas" && <PlantillasMensaje actor={actor} />}
           {actual === "empresa" && <DatosEmpresaAdmin actor={actor} />}

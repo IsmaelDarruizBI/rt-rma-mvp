@@ -19,6 +19,8 @@ export type SeccionConfiguracion =
   | "motivos"
   | "checklist"
   | "insumos"
+  | "categorias-insumo"
+  | "fabricantes-repuesto"
   | "proveedores"
   | "plantillas"
   | "empresa"
@@ -54,6 +56,19 @@ export const SECCIONES_CONFIGURACION: readonly DefinicionSeccion[] = [
   { id: "motivos", grupo: "Taller", titulo: "Motivos", permisos: ["MOTIVO_GESTIONAR"] },
   { id: "checklist", grupo: "Taller", titulo: "Checklist", permisos: ["CHECKLIST_GESTIONAR"] },
   { id: "insumos", grupo: "Inventario y compras", titulo: "Insumos", permisos: ["INSUMO_GESTIONAR"] },
+  // DEC-AJ-14: la clasificación de los insumos, con el mismo permiso.
+  {
+    id: "categorias-insumo",
+    grupo: "Inventario y compras",
+    titulo: "Categorías de insumos",
+    permisos: ["INSUMO_GESTIONAR"],
+  },
+  {
+    id: "fabricantes-repuesto",
+    grupo: "Inventario y compras",
+    titulo: "Fabricantes de repuestos",
+    permisos: ["INSUMO_GESTIONAR"],
+  },
   { id: "proveedores", grupo: "Inventario y compras", titulo: "Proveedores", permisos: ["PROVEEDOR_GESTIONAR"] },
   { id: "plantillas", grupo: "Comunicación", titulo: "Plantillas de WhatsApp", permisos: ["PLANTILLA_GESTIONAR"] },
   // DEC-AJ-09: Administración, con el permiso no configurable del sistema.
@@ -127,6 +142,8 @@ export const ENTIDAD_DE_SECCION: Partial<Record<SeccionConfiguracion, string>> =
   motivos: "MOTIVO",
   checklist: "CHECKLIST",
   insumos: "INSUMO",
+  "categorias-insumo": "CATEGORIA_INSUMO",
+  "fabricantes-repuesto": "FABRICANTE_REPUESTO",
   proveedores: "PROVEEDOR",
   plantillas: "PLANTILLA",
   empresa: "EMPRESA",
