@@ -129,4 +129,78 @@ Todo lo demás se regenera o se recupera iniciando sesión: dependencias, la bas
    - borrar las copias con datos personales.
 4. **Integrar en `main`** (P0-2), con un PR.
 
+## 10. Retomar los ajustes funcionales (ramas de trabajo, 24/11/2026)
+
+Los ocho bloques de ajustes funcionales están en dos ramas de trabajo publicadas, **sin integrar**: ni en `mvp-v2` ni en `main`, y sin desplegar.
+
+| Repositorio | Rama | Contenido |
+|---|---|---|
+| `rt-rma-mvp` | `feat/ajustes-funcionales-uat` | Código, 9 migraciones nuevas (`20261123000100` a `20261124000600`), pruebas, scripts de validación y documentación |
+| `rt-rma-app` | `spec/ajustes-funcionales` | DEC-AJ-01 a 14 y las reglas actualizadas; es el origen de `business/` |
+
+El estado y el próximo paso están en [`ajustes-funcionales-discovery.md`](ajustes-funcionales-discovery.md), secciones 11.1 y 12.
+
+**1. Clonar o actualizar,** en PowerShell. Las dos carpetas van una al lado de la otra:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\RepositoriosRT" | Out-Null
+Set-Location "$env:USERPROFILE\RepositoriosRT"
+# Primera vez:
+git clone https://github.com/IsmaelDarruizBI/rt-rma-mvp.git
+git clone https://github.com/IsmaelDarruizBI/rt-rma-app.git
+git -C rt-rma-mvp switch feat/ajustes-funcionales-uat
+git -C rt-rma-app switch spec/ajustes-funcionales
+# Si ya estaban clonados:
+git -C rt-rma-mvp fetch origin
+git -C rt-rma-mvp switch feat/ajustes-funcionales-uat
+git -C rt-rma-mvp pull --ff-only
+git -C rt-rma-app fetch origin
+git -C rt-rma-app switch spec/ajustes-funcionales
+git -C rt-rma-app pull --ff-only
+```
+
+**2. Dependencias:** Python 3.11, Node.js 24 y Git (sección 3). Después, desde `rt-rma-mvp`:
+
+```powershell
+npm ci
+Set-Location app\backend
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,postgres]"
+Set-Location ..\frontend
+npm ci
+Set-Location ..\..
+```
+
+El `pip install` incluye `openpyxl`, la dependencia nueva de la importación de precios.
+
+**3. PostgreSQL 17 local,** la primera vez en esa computadora, fuera del repositorio:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\pg-rma" | Out-Null
+Set-Location "$env:USERPROFILE\pg-rma"
+npm init -y
+npm install embedded-postgres@17.10.0-beta.17
+$pgbin = "$env:USERPROFILE\pg-rma\node_modules\@embedded-postgres\windows-x64\native\bin"
+& "$pgbin\initdb.exe" -D "$env:USERPROFILE\pg-rma\data" -U postgres -A trust -E UTF8 --locale=C
+```
+
+Para iniciarlo, ver [`VALIDACION_LOCAL.md`](VALIDACION_LOCAL.md), sección 2.2.
+
+**4. Base nueva, migraciones y datos ficticios:** [`VALIDACION_LOCAL.md`](VALIDACION_LOCAL.md), sección 2.
+
+- La sección 2.3 crea `rma_validacion`: aplica las 51 migraciones y las 5 cargas, y debe responder «56 archivos SQL; 80 tablas en rma».
+- La sección 2.4 levanta el backend sobre esa base.
+- La sección 2.5 carga los datos ficticios por la API.
+- La sección 2.6 levanta el frontend.
+
+**La base local no se copia:** se reconstruye con esos pasos.
+
+**5. Lo que no está en Git y no hace falta para validar:**
+- las bases locales (`rma_validacion`, `rma_dev` y las demás);
+- `%USERPROFILE%\rma-validacion-data`, con las fotos y las planillas de ejemplo, que el script de carga vuelve a generar;
+- el `.venv` y los `node_modules`;
+- los archivos `.env` o `.env.local`. No hace falta ninguno: el backend usa la autenticación de prueba y el frontend llama a `http://localhost:8000` por defecto.
+
+Lo del UAT está en la sección 7.
+
 Deuda técnica: [`DEUDA_TECNICA.md`](DEUDA_TECNICA.md).
