@@ -76,14 +76,15 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 |---|---|---|---|
 | M1 | `cliente` | `usuario` | Física o jurídica; sin borrado |
 | M1 | `documento_cliente` | `cliente`, `tipo_documento` (comp. con exige_unicidad), sí misma | Uno vigente por Cliente y tipo; número vigente único entre Clientes; solo se cierra la vigencia |
-| M1 | `modelo_equipo` | — | MOD-nnnn; marca, modelo y variante únicos |
+| M1 | `modelo_equipo` | — | MOD-nnnn generado por `siguiente_codigo('MOD')` y fijo; marca, modelo y variante únicos (DEC-AJ-12) |
+| M6 | `precio_tipo_modelo` | `tipo_reparacion`, `modelo_equipo` | Única por par; `precio >= 0`; sin borrado: un precio retirado queda inactivo (DEC-AJ-12) |
 | M1 | `equipo` | `modelo_equipo` | Capacidad en GB más el texto original |
 | M2 | `orden` | `cliente`, `equipo`, `modelo_equipo`, sí misma | Cliente según el origen; garantía con Orden de origen; cerrada no cambia |
 | M2 | `orden_detalle_origen` | `orden` (comp.), `detalle` (comp.) | El Detalle reclamado es de la Orden de origen |
 | M2 | `recepcion`, `recepcion_version`, `recepcion_nota` | `orden`, `usuario` | Una sola decisión de custodia; decidida no cambia |
 | M2 | `checkin`, `salida`, `foto` | `orden`, `usuario` | Inmutables; una salida por Orden; hasta 10 fotos |
 | M2 | `detalle` | `orden`, sí mismo, `usuario` | Código por Orden; cancelación y control completos |
-| M2 | `detalle_version` | `detalle`, `tipo_reparacion`, sí misma (comp.) | Número único por Detalle; inmutable |
+| M2 | `detalle_version` | `detalle`, `tipo_reparacion`, sí misma (comp.), `modelo_equipo`, `usuario` | Número único por Detalle; inmutable; copia del trabajo y origen del precio (DEC-AJ-12): MANUAL exige motivo, quién y cuándo; PENDIENTE vale 0 |
 | M2 | `decision_cliente`, `ajuste_garantia` | `detalle_version` o `detalle`, `usuario` | Inmutables |
 | M2 | `toma` | `orden`, `usuario`, `mesa_trabajo` | Una ACTIVA por Orden |
 | M2 | `ejecucion` | `detalle`, `detalle_version` y `toma` (comp.) | Una EN_PROGRESO por Orden; terminada no cambia |
@@ -165,6 +166,7 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 
 - **`20261124000100_ajuste_comercial_reversion.sql`** (DEC-AJ-10, bloque 5): en `descuento`, `codigo`, la evidencia (`precio_original`, `importe_aplicado`, `precio_final`), `corrige_a` y la reversión (`revertido_por`, `revertido_en`, `reversion_motivo`, todo o nada); todas admiten vacío. `descuento_validar()` reemplaza a `descuento_inmutable`: solo completa la reversión, una vez y con la Orden abierta, y `rma_backend` solo puede actualizar esas tres columnas. Una corrección apunta a un registro revertido del mismo destino. Tabla inmutable `descuento_recalculo`. `v_orden_saldo` con las mismas columnas, sin los revertidos. Equivalencia ACC-REP-072 → EV-REP-041, visible en el historial. Queda en 73 tablas y 8 vistas. Detalle: [`../ajustes-funcionales-discovery.md`](../ajustes-funcionales-discovery.md), sección 11.2.
 - **`20261124000200_stock_minimo.sql`** (DEC-AJ-11, bloque 6): `insumo.stock_minimo numeric(12,3)`, opcional (vacío: sin mínimo) y `>= 0` (`insumo_stock_minimo_no_negativo`), con comentario; `rma_backend` puede actualizarla (sigue sin poder escribir los saldos). El CHECK `solicitud_compra_origen_check` se reemplaza para admitir `STOCK_MINIMO` además de `MANUAL` y `FALTANTE`. Ningún dato cambia; sin tablas nuevas: sigue en 73 tablas y 8 vistas. Detalle: [`../ajustes-funcionales-discovery.md`](../ajustes-funcionales-discovery.md), sección 11.3.
+- **`20261124000300_precio_por_modelo.sql`** (DEC-AJ-12, bloque 7): `tipo_reparacion.precio_por_modelo` (falso en los existentes); tabla `precio_tipo_modelo` (única por par, sin borrado, `rma_backend` inserta y actualiza `precio` y `activo`); secuencia `codigo_mod_seq` y el prefijo `MOD` en `siguiente_codigo`, con el código de `modelo_equipo` fijo; en `detalle_version`, `nombre_trabajo`, `modelo_equipo_id`, `origen_precio`, `precio_motivo`, `precio_definido_por`, `precio_definido_en` y `solo_precio`, con sus CHECK; entidades `MODELO_EQUIPO` y `PRECIO_MODELO` en `cambio_configuracion`; `historial_precio` con la columna `modelo_equipo`; equivalencia ACC-REP-083 → EV-REP-026. Ningún dato cambia. Queda en 74 tablas y 8 vistas. Detalle: [`../ajustes-funcionales-discovery.md`](../ajustes-funcionales-discovery.md), sección 11.4.
 
 **Macroiteración integral (rama `feat/macro-integral`, aditivas, aplicadas solo en la base local; ninguna en Supabase):**
 

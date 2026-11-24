@@ -1808,3 +1808,154 @@ La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA inte
   - `solicitud_compra.origen` admite `MANUAL`, `FALTANTE` y `STOCK_MINIMO`.
   - `en_camino_de_compras(contexto)`, en `application/inventario.py`, es la forma de leer lo en camino dentro de una lectura. En JSON devuelve vacío.
   - `sugerencias()` recibe `minimos`. La sugerencia por faltante con la pieza elegida del bloque 8 tiene que conservar `por_faltante` y `por_minimo`.
+
+### 11.4 Bloque 7: precio por modelo (implementación)
+
+Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. Implementa la parte A del bloque 7: DEC-AJ-12 (D-12.1 a D-12.6, BF-01) con las precisiones de 11.1 (puntos 3, 4, 5, 8, 10 y 11). La importación masiva (DEC-AJ-13, BF-02) es la parte B y no está hecha. `business/` no cambia.
+
+| Commit | Qué |
+|---|---|
+| `f3a216b` | Migración, regla única del precio, precio manual y pendiente, «Definir precio», copia del trabajo, cambio de modelo, avisos, modelos y precios por modelo en Configuración, persistencia PostgreSQL y pruebas |
+| `4b21e7c` | Frontend: selectores con el precio del modelo, precio manual o aviso de pendiente, «Precio pendiente de definir», «Definir precio», Modelos de equipo y grilla de precios por modelo |
+| este | Esta sección, `docs/contratos-macro-integral.md` y `docs/postgresql/diseno-fisico.md` |
+
+#### Qué quedó
+
+- **Regla única** (`services/precio_trabajo.py`, `resolver_precio`): la usan todos los caminos que crean o redefinen un trabajo: el trabajo inicial del alta (`crear_orden` y `crear_orden_rt`), 070, 075, 127 (`aplicar_redefinicion`, también desde la evaluación 183), 128 y los adicionales de 184, en todos los Orígenes. Devuelve el precio y su origen:
+  - `OTROS`: «Otros», como hoy (BR-REP-047).
+  - `CATALOGO`: el precio único del Tipo.
+  - `CATALOGO_MODELO`: el precio del Tipo para el modelo técnico del equipo de la Orden (`equipo.modelo_tecnico_id`).
+  - `MANUAL`: el Tipo tiene precio por modelo, no hay precio para el modelo (o el equipo no tiene modelo técnico) y el actor tiene `PRECIO_MANUAL` e informa precio y motivo.
+  - `PENDIENTE`: lo mismo, sin precio manual. Nunca se usa el precio único como respaldo (D-12.1).
+  - **Rechazos:** un precio manual con precio de catálogo para la combinación («para bajarlo está el ajuste comercial»), en un Tipo de precio único, en «Otros», sin el permiso o sin motivo, o con más de dos decimales. Son 409 con el código de siempre (`PRECONDICION_INVALIDA`).
+- **Permisos nuevos:**
+  - `PRECIO_MANUAL`, «Autorizar un precio manual cuando falta el precio de catálogo», grupo Comercial, Coordinación RMA y Administración, configurable. El Técnico y Recepción no lo tienen.
+  - `MODELO_EQUIPO_GESTIONAR`, «Gestionar modelos de equipo», Configuración operativa, Administración.
+- **Precio pendiente** (punto 3 de 11.1):
+  - **Qué se guarda:** precio 0 con origen `PENDIENTE`. La base lo exige (`detalle_version_precio_pendiente`). La API lo marca con `precio_pendiente` y la pantalla muestra «Precio pendiente de definir», nunca $0.
+  - **Qué bloquea, solo en los Orígenes con autorización del cliente (Cliente Externo):** el comprobante de ingreso (`faltantes_para_ingreso` suma «definir el precio pendiente de …») y registrar la autorización (`registrar_decision_cliente` rechaza `AUTORIZADO` con el código `PRECIO_PENDIENTE`; el rechazo sí se admite). En RT_INTERNO y en las garantías no bloquea nada.
+  - **Aviso** `PRECIO_PENDIENTE` en la situación de la Orden, con la acción `DEFINIR_PRECIO` por trabajo (también en `acciones_complementarias`).
+- **«Definir precio»** (`POST /api/orders/{id}/details/{detalle}/price`, `definir_precio`):
+  - **Sin precio:** toma el precio de catálogo, que tiene que existir ahora para el modelo de la Orden. Lo puede quien edita los trabajos: la unión de `DETALLE_DEFINIR_RECEPCION`, `DETALLE_DEFINIR_TECNICO`, `DECISION_CLIENTE` y `PRECIO_MANUAL`.
+  - **Con precio y motivo:** precio manual, con `PRECIO_MANUAL`. Se rechaza si ya hay precio de catálogo.
+  - **Mecanismo:** una versión nueva del Detalle (`detalle_version`, inmutable) marcada `solo_precio`. La anterior (pendiente) queda en `definiciones_anteriores`. El historial registra `ACC-REP-083` / `DEFINIR_PRECIO_TRABAJO`; en PostgreSQL, EV-REP-026 «Detalle redefinido».
+  - **Evaluación técnica:** una versión `solo_precio` no cambia el trabajo, así que la evaluación de la definición técnica sigue valiendo (`evaluacion_vigente` mira desde la primera versión técnica igual). Una redefinición técnica la deja sin efecto, como siempre.
+  - **Autorización del cliente:** se pide sobre la versión nueva. Como el pendiente impide autorizar, nunca se pierde una autorización.
+  - **Ajustes:** si había un ajuste comercial vigente, su recálculo queda como siempre (D-10.4, causa `REDEFINICION`).
+- **Copia del trabajo** (D-12.4): cada definición nueva guarda `nombre_trabajo`, `modelo_equipo_id`, `origen_precio`, `precio_motivo`, `precio_definido_por` y `precio_definido_en`. `nombre_del_trabajo` (pantallas, bandejas, situación y comprobantes) prefiere la copia y lee el catálogo solo en los Detalles anteriores, sin copia. Un cambio del catálogo (nombre o precios) no toca las Órdenes.
+- **Cambio de modelo** (D-12.6, precisión d y punto 11):
+  - **Antes de la autorización del cliente:** al corregir el modelo con `PUT /api/orders/{id}/reception` (`registrar_recepcion`), en Cliente Externo y en los trabajos que todavía la esperan, se vuelve a resolver el precio de los que dependen del modelo (`CATALOGO_MODELO`, `MANUAL` y `PENDIENTE`). Queda una versión `solo_precio` con `REDETERMINAR_PRECIO_POR_CAMBIO_DE_MODELO`.
+  - **Un precio manual no se traslada a otro modelo:** toma el de catálogo del modelo nuevo si existe; si no, vuelve a quedar pendiente.
+  - **Después de la autorización, y en los Orígenes sin autorización del cliente:** el precio queda como se definió. El Detalle trae `precio_de_otro_modelo` y la situación el aviso `PRECIO_OTRO_MODELO` («se conserva el precio definido; para cambiarlo hay que redefinir el trabajo»).
+  - La corrección del vínculo de identidad no cambia el modelo, así que no interviene.
+- **Configuración** (solo PostgreSQL, como el resto; en JSON, de solo lectura):
+  - **Modelos de equipo** (`GET/POST/PUT /api/admin/device-models`): alta con código `MOD-NNNN` generado por la base (`siguiente_codigo('MOD')`, sigue al mayor existente: `MOD-0037` sobre la carga inicial), edición y baja por desactivación. No admite otra marca + modelo + variante igual sin distinguir mayúsculas ni espacios. Cada campo se audita (entidad `MODELO_EQUIPO`). Los modelos nuevos aparecen en la selección del ingreso (`GET /api/catalogs/device-models`).
+  - **Precio por modelo:** `precio_por_modelo` en el alta y la edición del Tipo, con `PRECIOS_GESTIONAR` y auditado. El precio único se conserva pero no se usa.
+  - **Precios por modelo** (`PUT /api/admin/repair-types/{codigo}/model-prices`): en bloque, todo o nada, con `PRECIOS_GESTIONAR`. Un precio `null` lo retira: la fila queda inactiva, no se borra. Las combinaciones sin cambios no se escriben; si no cambia ninguna, se rechaza. Cada cambio se audita como `PRECIO_MODELO`, clave «TR-001/MOD-0012», campo `precio`. `historial_precio` los incluye, con la columna `modelo_equipo`.
+  - **Lectura:** los Tipos traen `precio_por_modelo` y `precios_modelo` (código del modelo → precio vigente), en la misma consulta del catálogo.
+- **Integración con Ventas** (D-12.5, punto 8): `modelo_equipo` es el catálogo técnico de RMA. La copia de productos de Ventas (`catalogo_producto`) sigue aparte y de solo lectura; el alta de Órdenes nuevas elige del catálogo técnico, y el `tp_id` de Ventas queda solo en Órdenes anteriores. El archivo versionado (`app/datos/modelos_equipo.json` y `supabase/seeds/referencia_operativa/03_modelos_equipo.sql`) queda como carga inicial. **Una futura regeneración desde Ventas tiene que emparejar por (marca, modelo, variante)**, la clave única de la tabla, actualizar lo que ya existe sin cambiar su código y crear solo lo que falta con `siguiente_codigo('MOD')`, sin duplicar.
+- **Frontend:**
+  - **Selectores** (agregar trabajo, agregar según la revisión, evaluación, adicional, redefinición y el trabajo inicial del alta, que usa el modelo elegido en el mismo formulario): muestran el precio del modelo o «Sin precio para este modelo». Con `PRECIO_MANUAL` piden precio y motivo; sin él, avisan que quedará pendiente y qué bloquea.
+  - **Trabajos:** marcas «Precio manual» (con motivo y quién) y «Precio pendiente», «Precio de otro modelo» y el formulario «Definir precio» (tomar el de catálogo o, con el permiso, uno manual).
+  - **Configuración:** la sección «Modelos de equipo», la casilla «Precio por modelo» del Tipo y su grilla de precios.
+  - **Lógica pura:** `features/ordenes-reparacion/precioModelo.ts`.
+
+#### Migración
+
+`20261124000300_precio_por_modelo.sql`, aditiva:
+
+- **`modelo_equipo`:**
+  - secuencia `codigo_mod_seq`, iniciada en el mayor `MOD-` existente;
+  - `siguiente_codigo` (`create or replace`) suma el prefijo `MOD` y no cambia los demás;
+  - trigger `modelo_equipo_codigo_fijo`;
+  - `grant insert/update` por columna a `rma_backend`, que ya tenía permiso sobre la tabla.
+- **`tipo_reparacion.precio_por_modelo`:** `boolean not null default false`. Los existentes quedan en precio único.
+- **Tabla `precio_tipo_modelo`:**
+  - columnas `tipo_reparacion_id`, `modelo_equipo_id`, `precio numeric(14,2) >= 0`, `activo` y fechas;
+  - única por par, sin borrado;
+  - `rma_backend` inserta y actualiza `precio` y `activo`.
+- **`detalle_version`:**
+  - columnas nuevas, todas admiten vacío salvo `solo_precio`: `nombre_trabajo`, `modelo_equipo_id` (FK), `origen_precio`, `precio_motivo`, `precio_definido_por` (FK), `precio_definido_en` y `solo_precio` (`not null default false`);
+  - CHECK de los orígenes;
+  - CHECK de manual: motivo si y solo si `MANUAL`, y entonces quién y cuándo;
+  - CHECK de pendiente: precio 0;
+  - CHECK de `solo_precio`: no en la versión 1 y con origen.
+- **`cambio_configuracion`:** el CHECK de entidad suma `MODELO_EQUIPO` y `PRECIO_MODELO`.
+- **`historial_precio`:** `create or replace` con las mismas columnas y `modelo_equipo` al final.
+- **Historial:** equivalencia `ACC-REP-083` → EV-REP-026.
+- **Conteo:** 74 tablas y 8 vistas. Ningún dato existente cambia.
+
+#### Pruebas focalizadas
+
+| Qué | Resultado |
+|---|---|
+| Backend JSON: `test_precio_por_modelo.py` (nuevo, 24: cada origen y sin respaldo; precio manual rechazado con catálogo, en precio único, en «Otros», sin permiso, sin motivo y con tres decimales; 070 con la copia; pendiente que bloquea el comprobante, con aviso y acción; Recepción no fija precios; trabajo inicial con el modelo del alta; equipo sin modelo técnico; «Definir precio» manual y tomado del catálogo; autorización bloqueada y luego permitida; RT_INTERNO sin bloqueo y con aviso de otro modelo; cambio de modelo antes de autorizar, incluido el manual que pasa al catálogo; después de autorizar se conserva; redefinición 127 y adicional 128 con la misma regla; evaluación vigente con `solo_precio`; nombre por copia y por catálogo; administración solo en PostgreSQL) y los relacionados: `test_configuracion`, `test_configuracion_persistencia`, `test_politica_garantia`, `test_multidetalle`, `test_api_hp_rep_001/002/003`, `test_ingreso_inicial`, `test_ingreso_sin_trabajos`, `test_autorizacion_cliente`, `test_autorizacion_cliente_servicios`, `test_services_autorizacion`, `test_macro_v14`, `test_matriz_permisos`, `test_e3_sql_y_ajustes`, `test_roles_permisos`, `test_situacion_operativa`, `test_reparacion_otros`, `test_correccion_ingreso`, `test_exc_rep_004`, `test_api_exc_rep_004`, `test_adicional_pendiente_sector`, `test_comprobante_autorizacion`, `test_comprobantes`, `test_documentos_custodia_entrega`, `test_bandejas`, `test_ajuste_comercial_*`, `test_descuentos`, `test_e2_equivalencia`, `test_imei_no_disponible`, `test_cancelacion_heredada`, `test_iteracion1_v14`, `test_identidad_equipo`, `test_hito_habilitacion_unico` y `test_integracion_multidetalle_rt` | 801 pasan |
+| PostgreSQL local: `test_precio_por_modelo_postgres` (nuevo, 4: migración aditiva —columnas, CHECK, privilegios, `MOD-0037`, única por par, sin borrado, código fijo—; alta y edición de modelos con auditoría, duplicados y permiso; precios por modelo en bloque con retiro, historial con el modelo, rechazos y permiso; copia del trabajo guardada y releída, catálogo que cambia sin tocar la Orden, comprobante después de definir el precio y CHECK del pendiente), `test_base_local`, `test_configuracion_postgres`, `test_contrato_catalogos`, `test_codigos_automaticos_postgres`, `test_macro_v14_postgres`, `test_ordenes_postgres`, `test_garantias_tipo_postgres`, `test_ingreso_bloque3_postgres`, `test_permisos_macro_v14`, `test_permisos_operativos_postgres`, `test_permisos_rma_backend`, `test_ajuste_comercial_postgres`, `test_ux_recepcion_postgres`, `test_iteracion1_postgres` y `test_roles_permisos_postgres` | 213 pasan |
+| Backend: `ruff check .` y `ruff format --check` | Limpios |
+| Frontend: `npm run typecheck`, `npm test` (incluye `precio-modelo.test.ts`, 6 pruebas nuevas) y `npm run build` | Pasan (247 pruebas) |
+
+La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA integral.
+
+#### Tests adaptados
+
+- **`tests/postgres/test_base_local.py`:** el conteo pasa de 73 a 74 tablas por `precio_tipo_modelo`.
+- **`test_matriz_permisos.py`:** se clasifican las cinco rutas nuevas (`details/{detalle}/price` como `SERVICIO` de los cuatro permisos que pueden definir el precio; las de Configuración como `API`).
+- **Ninguna otra expectativa cambió.**
+  - `test_e3_sql_y_ajustes` no cambia: las consultas de Tipos se amplían, no se suman.
+  - El precio informado en un Tipo de catálogo sigue rechazándose con 409 `PRECONDICION_INVALIDA` y un mensaje que nombra el catálogo, como fija `test_reparacion_otros`.
+
+#### Decisiones tomadas en la implementación
+
+- **Precio pendiente = 0 con origen `PENDIENTE`:** `detalle_version.precio` no admite vacío y el saldo, la vista `v_orden_saldo` y los ajustes siguen igual. Por eso el bloqueo está en el comprobante y en la autorización, y la pantalla nunca lo muestra como importe.
+- **«Definir precio» como versión nueva:** es la única forma de cambiar el precio sin reescribir una fila inmutable, y deja la historia del trabajo (pendiente → manual) a la vista.
+- **`solo_precio` no conserva la autorización del cliente:** no hace falta, porque un pendiente no se autoriza y después de autorizar el precio no se vuelve a determinar.
+- **Por defecto nadie fija un precio manual al cargar el trabajo:**
+  - 070 y el alta son de Recepción, que no tiene `PRECIO_MANUAL`;
+  - 075, 127 y 128 son del Técnico.
+  
+  El trabajo queda pendiente y lo define Coordinación o Administración con «Definir precio». Si Administración le da `PRECIO_MANUAL` a otro rol, los formularios ya piden precio y motivo.
+- **Tomar el precio de catálogo:** no fija ningún importe, así que lo puede quien edita los trabajos. El precio manual sigue exigiendo el permiso.
+- **Precios cargados en un Tipo de precio único:** se admiten, pero no se usan hasta marcar «Precio por modelo». Así se puede preparar la grilla y activarla de una vez. La importación (parte B) los limita a los Tipos con precio por modelo.
+- **Historial:** `ACC-REP-083` es un identificador nuevo de acción transversal («definir o volver a determinar el precio de un trabajo»). Falta registrarlo en `traceability/` y en `rt-rma-app`; no se tocó `traceability/` para no reabrir la validación.
+- **Recálculo de ajustes:** al definir o volver a determinar un precio usa la causa `REDEFINICION`. No se agregó una causa nueva al CHECK de `descuento_recalculo`.
+
+#### Limitaciones y pendientes
+
+- **Cambio de modelo en Cliente Externo:** la corrección del ingreso solo se admite antes de confirmar la recepción (ABI-41), y el comprobante de ingreso confirma y autoriza a la vez. Por eso el cambio de modelo después de autorizar no se puede producir por ese camino. El aviso `PRECIO_OTRO_MODELO` aparece sobre todo en RT_INTERNO.
+- **Reportes:** agrupan por `tipo_reparacion_id`, como antes. No usan todavía el origen del precio ni el modelo de la copia.
+- **Comprobantes:** el precio pendiente no llega a ninguno, porque los bloquea. Los comprobantes no muestran el origen del precio.
+- **JSON:** los Tipos del archivo admiten `precio_por_modelo` y `precios_modelo`, pero no hay administración (DC23).
+- **Documentación:** no se actualizaron `traceability/discrepancias-baseline-v1.4.md` (DEC-AJ-12 sigue «sin implementar»), `docs/ESTADO_PROYECTO.md` ni `docs/pendientes-producto.md`.
+- **Validación manual:** pendiente, en un navegador y sobre PostgreSQL:
+  1. dar de alta un modelo;
+  2. marcar un Tipo con precio por modelo y cargar su grilla;
+  3. ingresar un equipo con y sin precio para su modelo;
+  4. ver el pendiente y el bloqueo del comprobante;
+  5. definir el precio con Coordinación;
+  6. corregir el modelo antes de autorizar.
+
+#### Para la parte B (importación, DEC-AJ-13)
+
+- **Tabla:** `rma.precio_tipo_modelo`.
+  - **Columnas:** `tipo_reparacion_id` y `modelo_equipo_id` (uuid, FK), `precio numeric(14,2) >= 0`, `activo`, `creado_en` y `modificado_en`.
+  - **Clave:** única por par.
+  - **Retiro:** `activo = false`; la fila no se borra.
+  - **`rma_backend`:** inserta y actualiza `precio` y `activo`.
+- **Escritura atómica con auditoría:** `application.configuracion.guardar_precios_modelo(contexto, usuario_id=..., precios=[PrecioTipoModelo(tipo_reparacion_id="TR-…", modelo_equipo_id="MOD-…", precio=Decimal | None)])`.
+  - **Qué valida:** `services.configuracion.cambios_de_precios_modelo` exige `PRECIOS_GESTIONAR`, que existan el Tipo y el modelo, que no sea «Otros», un importe `>= 0` con dos decimales y que no haya pares repetidos.
+  - **Qué escribe:** saltea los pares sin cambios y escribe todo en una transacción: `ConfiguracionRepository.guardar_precios_modelo(efectivos, cambios)`, que en PostgreSQL es un `INSERT … ON CONFLICT` con `unnest`, un `UPDATE` para los retiros y una fila de auditoría por cambio.
+  - **Celdas vacías:** `precio=None` **retira** el precio. La importación no debe enviar las celdas vacías (D-13.2: no modifican).
+  - **Sin cambios:** si ningún par cambia, se rechaza con «no hay cambios». La vista previa puede usar la misma función de validación antes de confirmar.
+- **Auditoría:**
+  - **Registro:** entidad `PRECIO_MODELO`, clave `"{TR}/{MOD}"` (por ejemplo `TR-001/MOD-0012`), campo `precio`, valores con dos decimales (`"60000.00"`; `None` si se retira).
+  - **Historial:** `rma.historial_precio` los muestra con la columna `modelo_equipo`.
+  - **Identificador común por importación:** no existe. Hace falta una columna aditiva en `cambio_configuracion` (o una tabla de lotes) y pasarla a `_auditar`.
+- **Permiso:** `PRECIOS_GESTIONAR` (punto 10 de 11.1).
+- **Modelos Apple:** `application.configuracion.listar_modelos_administrables(contexto)` (todos, también los inactivos) o `GET /api/admin/device-models`, filtrando `marca` Apple sin distinguir mayúsculas. Los códigos son estables (`MOD-…`).
+- **Tipos con precio por modelo:** `contexto.catalogos.listar_tipos_reparacion()` con `precio_por_modelo`. Cada uno trae `precios_modelo` (código del modelo → precio vigente): son los valores actuales para la plantilla.
+- **Lo que la importación tiene que agregar:** la restricción a marca Apple y a Tipos con `precio_por_modelo`, porque `cambios_de_precios_modelo` no la aplica; la lectura de `.xlsx` (`openpyxl`), CSV y texto con tabulaciones; los importes con formato argentino; la plantilla; y la vista previa.
+- **Guardas:**
+  - la última migración es `20261124000300`;
+  - `test_base_local` fija 74 tablas y 8 vistas;
+  - las rutas nuevas van en `test_matriz_permisos`;
+  - `test_e3_sql_y_ajustes` solo cuenta las consultas de `catalogos` y `modelos_equipo`. Las escrituras de configuración van en `storage/postgres/configuracion.py`, que no cuenta.
