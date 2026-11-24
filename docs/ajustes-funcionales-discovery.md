@@ -2221,3 +2221,154 @@ La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA inte
   - `components/SelectorInsumo.tsx`: `SelectorInsumo` acepta `modelo` (fijo: solo compatibles; `null`: equipo sin modelo, solo universales), `categoria` (fija: la del requisito), `soloVigentes`, `valor`, `onCambiar`, `etiqueta` y `opcionVacia`. Sirve para elegir o sustituir la pieza. `useClasificacionInsumos()` y `FiltrosClasificacion` también se exportan.
   - `features/inventario/clasificacion.ts`: `compatibleCon`, `filtrarInsumos`, `etiquetaInsumo`, `nombreCategoria`, `textoCompatibilidad` y `opcionesCategoria`.
   - `SituacionInsumo` (tipos) trae la clasificación y `modelos_compatibles`.
+
+### 11.7 Bloque 8: requisitos y elección de la pieza (implementación)
+
+Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. Implementa la parte B del bloque 8: DEC-AJ-14 D-14.4 (modificada), la precisión 6 y los puntos 1 y 2 de la resolución de 11.1. `business/` no cambia (BR-REP-002, 005 y 006 y PROC-REP-210 conservan su texto: lo nuevo está en BR-REP-049 y PROC-REP-080/185, ya registrados).
+
+| Commit | Qué |
+|---|---|
+| `508cbaa` | Migración, dominio, `services/piezas.py`, integración con la factibilidad, la reserva y el consumo, administración de los insumos necesarios, API, persistencia y pruebas del backend |
+| `7fc4114` | Frontend: piezas del trabajo, «Elegir pieza» / «Sustituir», aviso al iniciar, «Insumos necesarios» del tipo y trabajos sin pieza en Compras |
+| este | Esta sección, `docs/contratos-macro-integral.md` y `docs/postgresql/diseno-fisico.md` |
+
+#### Qué quedó
+
+- **Secuencia aprobada:** tipo definido → modelo conocido → insumos necesarios → pieza compatible elegida → disponibilidad → reserva al iniciar (BR-REP-006) → ejecución. El motor de reservas, movimientos y consumo no se rediseñó: la pieza elegida entra en lo previsto del Detalle (`services.inventario.insumos_previstos_del_detalle`: previstos concretos del tipo + pieza vigente de cada requisito, una línea por insumo con las cantidades sumadas). Desde ahí la usan la factibilidad, la reserva todo o nada, el impacto del override y el formulario de consumo.
+- **Requisitos por tipo** (`TipoReparacionRequisito`): categoría o subcategoría (`CAT-…`; una categoría incluye sus subcategorías) y cantidad, uno por categoría, con posición. Conviven con `tipo_reparacion_insumo` (previstos concretos), que se conserva igual.
+  - **Configuración → Tipos de reparación → «Insumos necesarios»** (`TIPO_REPARACION_GESTIONAR`, solo PostgreSQL). Edita los dos conjuntos en bloque.
+  - **Previstos concretos:** lo que se agrega tiene que ser un insumo vigente y **universal**. Una pieza que depende del modelo va como requisito. Lo que ya estaba se conserva.
+  - **Requisitos:** lo que se agrega tiene que tener la categoría vigente (y su padre). El que sigue conserva su id, el que se quita queda inactivo (nunca se borra) y el que vuelve se reactiva.
+  - **Auditoría:** entidad `TIPO_REPARACION`, campos `insumos_previstos` y `requisitos` («INS-001 x 1; …»). Sin cambios se rechaza.
+  - **Modo JSON:** archivo opcional `tipo_reparacion_requisitos.json` (sin él, ningún requisito).
+- **Pieza elegida** (`ReparacionDetail.piezas: list[EleccionPieza]`, append-only).
+  - **Cada registro:** requisito, copia del tipo, la categoría y la cantidad, pieza (`insumo_id`; vacía en una anulación), causa (`AUTOMATICA`, `ELECCION`, `SUSTITUCION`, `CAMBIO_MODELO` o `REDEFINICION`), «compatibilidad no verificada», modelo del equipo, motivo, quién, cuándo y `reemplaza_a`.
+  - **Vigente:** la última del requisito, si tiene pieza y es del tipo vigente del Detalle.
+  - Una vez elegida, el Detalle trabaja con su elección aunque el tipo cambie la cantidad o retire el requisito. Los requisitos sin elección se leen en vivo del tipo.
+- **Piezas elegibles** (`piezas_elegibles`):
+  - con modelo, las activas de la categoría compatibles con él (universales incluidas);
+  - sin modelo técnico, las universales;
+  - si no hay universales, cualquiera activa de la categoría, con motivo obligatorio y la marca «compatibilidad no verificada» (punto 2).
+- **Elección automática** (`conciliar_piezas`, causa `AUTOMATICA`, a nombre de quien hace la acción): un requisito sin pieza con una sola elegible verificada la recibe. Sin modelo y sin universales, nunca (hace falta motivo).
+  - **Cuándo corre:** al definir un trabajo (alta con trabajo inicial, 070, 075), al agregar uno (128, 183/184), al redefinir (127), al cambiar el modelo del equipo y al iniciar la Ejecución (preparación).
+  - Solo toca Detalles DEFINIDO.
+- **Elección manual** (`POST …/details/{detalle}/pieces`, permiso nuevo **`PIEZA_ELEGIR`** «Elegir o sustituir la pieza concreta de un trabajo», por defecto Técnico, Coordinación RMA y Administración, BR-REP-039):
+  - solo piezas elegibles y vigentes, con el Detalle DEFINIDO o EN_PROGRESO y la Orden abierta;
+  - `GET …/pieces/options` da las elegibles con su disponible.
+- **Sustitución antes de reservar:** un registro `SUSTITUCION` con motivo obligatorio que reemplaza al anterior. No toca el inventario.
+- **Sustitución después de reservar** (Detalle EN_PROGRESO): en una sola transacción, con la Orden y los dos insumos bloqueados por clave (DI-2).
+  - **Liberación:** LIBERACION_RESERVA de lo pendiente de la pieza anterior en el Detalle, hasta la cantidad de la elección (lo demás sigue reservado si la pieza coincidía con un previsto concreto). Referencia su RESERVA y va trazada a la Ejecución en curso, con el usuario y la observación «Sustitución de pieza: …».
+  - **Reserva nueva:** RESERVA de la pieza nueva, trazada igual.
+  - **Registro:** la elección y el paso del historial.
+  - **Sin disponible** (descontadas las reservas de las demás Órdenes): se rechaza con 409 `RECURSO_NO_DISPONIBLE` y no cambia nada. Con override vigente del Detalle reserva solo lo disponible, como al iniciar (P-06).
+  - **PROC-REP-210:** la liberación por sustitución no cuenta como inventario aplicado (`inventario.es_liberacion_por_sustitucion`). Al completar o interrumpir, el 210 consume y libera lo pendiente como siempre.
+- **No se sustituye:**
+  - una pieza con CONSUMO o DESPERDICIO en el Detalle;
+  - un Detalle COMPLETO o CANCELADO;
+  - con la Ejecución en curso, un requisito que todavía no tenía pieza («se elige antes de iniciar»).
+- **Factibilidad (PROC-REP-080)** (`piezas.faltantes_con_requisitos`):
+  - previstos concretos y piezas elegidas como siempre;
+  - un requisito sin pieza es factible si alguna pieza elegible tiene disponible suficiente (punto 1);
+  - si no, falta «Sin pieza elegida: <categoría>», que no es un ID de insumo, así que Compras no lo cuenta como demanda de un SKU.
+- **Reserva (PROC-REP-185):** no se inicia con un requisito vigente sin pieza, ni con una pieza dada de baja o que ya no sirve para el modelo.
+  - Es una precondición: 409 `PIEZA_SIN_ELEGIR`, sin reserva ni paso. No es la reserva fallida.
+  - Con todas elegidas, la reserva es la de siempre: todo o nada, con 186 y BLOQUEADO_POR_RECURSOS si falta stock; el override sigue igual.
+  - Una sola reserva por disponibilidad: el bloqueo por clave y el trigger del libro, como siempre (prueba de concurrencia de la sustitución en PostgreSQL).
+- **Consumo (PROC-REP-210):** sin cambios de reglas; el formulario lista los previstos con la pieza elegida (por SKU y lote).
+- **Cambio de modelo y redefinición** (`conciliar_piezas`, regla documentada):
+  - una pieza elegida para otro tipo (redefinición) se anula (`REDEFINICION`);
+  - una que ya no sirve para el modelo se reemplaza por la única compatible o se anula (`CAMBIO_MODELO`), y el requisito vuelve a «Pendiente de elegir»;
+  - **nunca** se toca una pieza con reserva pendiente o ya consumida en el Detalle: se conserva y la lectura la marca `compatible_con_modelo: false`, para sustituirla a mano;
+  - en la práctica no hay reservas en esos momentos: el modelo solo cambia antes de confirmar la recepción (sin custodia no se reserva) y la redefinición (127) parte de un Detalle sin Ejecución, con sus reservas cerradas por el 210. Ninguna reserva queda huérfana.
+- **Compras:** la demanda por faltante de un trabajo bloqueado es la de su pieza elegida (por SKU), sumada a `por_faltante` como en el bloque 6.
+  - Un requisito sin pieza y sin ninguna elegible en stock se informa aparte: `GET /api/purchases/suggestions/pending-pieces`, «Trabajos sin pieza elegida» en Compras. No suma demanda de ningún SKU, así que `por_faltante` y `por_minimo` siguen consistentes.
+- **Historial:** acción transversal nueva **`ACC-REP-084`** (no está en `traceability/`): `ELEGIR_PIEZA`, `ELEGIR_PIEZA_AUTOMATICA`, `SUSTITUIR_PIEZA`, `SUSTITUIR_PIEZA_RESERVADA` y `REVISAR_PIEZA`. En PostgreSQL es EV-REP-010 «Detalle definido», y la sustitución reservada EV-REP-024.
+- **Lectura** (`GET /api/orders/{id}`): cada Detalle suma `requisitos_insumo` (estado, pieza, causa, marcas, reservada, consumida, motivo, quién y cuándo) y `piezas`. `insumos_previstos` incluye las piezas (`pieza: true`).
+- **Frontend:**
+  - bloque «Piezas por categoría» del trabajo, con la visibilidad de la información técnica (`DETALLE_TECNICO_CONSULTAR`, BF-07);
+  - marcas «Pendiente de elegir», «Elegida automáticamente», «Compatibilidad no verificada», «No compatible con el modelo actual», «Reservada» y «Consumida»;
+  - ventana «Elegir pieza» / «Sustituir» con `SelectorInsumo` sobre las elegibles, su disponible y el motivo;
+  - aviso al iniciar y mensaje de `PIEZA_SIN_ELEGIR`;
+  - «· pieza elegida» en el formulario de consumo;
+  - «Insumos necesarios» en Configuración → Tipos de reparación;
+  - «Trabajos sin pieza elegida» en Compras;
+  - lógica pura en `features/ordenes-reparacion/piezas.ts` y `features/configuracion/insumosNecesarios.ts`.
+
+#### Migración
+
+`20261124000600_requisitos_pieza.sql`, aditiva:
+
+- **`tipo_reparacion_requisito`:**
+  - columnas `id` uuid, `tipo_reparacion_id`, `categoria_id`, `cantidad numeric(12,3) > 0`, `posicion`, `activo` y fechas;
+  - únicas `(tipo, categoría)` e `(id, tipo)`;
+  - tipo y categoría fijos (trigger), sin borrado;
+  - `rma_backend` inserta y actualiza `cantidad`, `posicion` y `activo`.
+- **`tipo_reparacion_insumo`:** `grant update (cantidad)` y `delete`, para editarlo desde Configuración.
+- **`detalle_pieza`:**
+  - código `PZA-…` y posición única por Detalle;
+  - FK compuesta al requisito con el tipo copiado y FK compuesta `reemplaza_a` del mismo Detalle, única;
+  - CHECK de anulación (sin pieza solo `CAMBIO_MODELO` o `REDEFINICION`), de sustitución (motivo y reemplazo) y de compatibilidad no verificada (motivo y pieza);
+  - trigger `validar_detalle_pieza`: categoría del requisito, cadena lineal (reemplaza a la última del requisito) y pieza vigente;
+  - inmutable; `rma_backend` solo inserta y lee.
+- **Historial:** equivalencias ACC-REP-084 → EV-REP-010 y `SUSTITUIR_PIEZA_RESERVADA` → EV-REP-024.
+- **Datos:** ningún tipo queda con requisitos ni ningún Detalle con piezas; no hay movimientos.
+- **Conteo:** 80 tablas y 8 vistas.
+
+#### Pruebas focalizadas
+
+| Qué | Resultado |
+|---|---|
+| Backend JSON: `test_requisitos_pieza.py` (nuevo, 44). Cubre: tipo sin requisitos como antes; elección automática con una sola compatible y sus pasos; pendiente con varias; opciones; factibilidad de un pendiente con y sin disponible; inicio rechazado sin pieza (`PIEZA_SIN_ELEGIR`, nada cambia); reserva de previstos y pieza; reserva fallida con la pieza elegida; override sin cambios; permiso (Recepción no, Técnico, Coordinación y Administración sí); compatibilidad y categoría; sustitución antes de reservar con motivo; sin modelo (universales automáticas, no verificada con motivo); sustitución reservada (una LIBERACION_RESERVA y una RESERVA, saldos, consumo de la nueva al completar); sin disponible o con la última unidad reservada por otra Orden; primera elección en curso rechazada; pieza consumida y trabajo terminado; cambio de modelo (reemplazo, anulación y pieza reservada intacta); redefinición a otro tipo (anulación y automáticas); administración solo PostgreSQL; reglas puras de «Insumos necesarios» | 44 pasan |
+| Backend JSON, relacionados: `test_inventario_operativo`, `test_inventario_global`, `test_override_reservas_ajenas`, `test_compras_reglas`, `test_exc_rep_001` a `004`, `test_api_exc_rep_001` a `004`, `test_completar_ejecucion_consistencia`, `test_integracion_multidetalle_rt`, `test_multidetalle`, `test_macro_v14`, `test_stock_minimo`, `test_precio_por_modelo` y `test_clasificacion_insumos` | 335 pasan |
+| Backend JSON, más relacionados: `test_e3_sql_y_ajustes`, `test_bandejas`, `test_configuracion`, `test_configuracion_persistencia`, `test_correccion_ingreso`, `test_matriz_permisos`, `test_insumos_admin`, `test_permisos_operativos`, `test_roles_permisos`, `test_importacion_precios`, `test_comprobantes`, `test_ajuste_comercial_dec_aj_10`, `test_autorizacion_cliente`, `test_autorizacion_cliente_servicios`, `test_comprobante_autorizacion`, `test_hito_habilitacion_unico`, `test_ingreso_inicial`, `test_iteracion1_v14`, `test_motivo_interrupcion`, `test_orden_cerrada`, `test_salidas_servicios`, `test_situacion_operativa`, `test_titularidad_toma`, `test_ingreso_sin_trabajos` (incluye las 44 nuevas) | 600 pasan |
+| PostgreSQL local: `test_requisitos_pieza_postgres.py` (nuevo, 7). Cubre: migración aditiva con sus privilegios por tabla y columna y las equivalencias; insumos necesarios por la API con auditoría, id conservado, desactivar y reactivar, universal y permiso; la base protege requisitos y piezas (inmutable, sin borrado, tipo y categoría fijos, cadena lineal, CHECK); elegir, reservar, sustituir y consumir con el libro, los saldos, `v_conciliacion_inventario` y `verificar_integridad()` conciliados, los eventos y la relectura idéntica; inicio rechazado sin pieza; dos sustituciones a la vez sobre la última unidad (una reserva y la otra se rechaza sin cambios); Compras pide la pieza elegida y lista aparte el requisito sin pieza | 7 pasan |
+| PostgreSQL local, relacionados: `test_reservas_postgres`, `test_movimientos_postgres`, `test_lotes_postgres`, `test_compras_postgres`, `test_migracion_stock_lotes`, `test_macro_v14_postgres`, `test_clasificacion_insumos_postgres`, `test_permisos_rma_backend`, `test_permisos_macro_v14`, `test_permisos_operativos_postgres`, `test_ordenes_postgres`, `test_configuracion_postgres`, `test_precio_por_modelo_postgres` | 172 pasan |
+| PostgreSQL local: `test_base_local` y `test_pruebas_sql_supabase` | 19 pasan |
+| Backend: `ruff check .` y `ruff format --check .` | Limpios |
+| Frontend: `npm run typecheck`, `npm test` (incluye `requisitos-pieza.test.ts`, 33 pruebas nuevas) y `npm run build` | Pasan (299 pruebas; el build con el aviso de siempre por el tamaño del bundle) |
+
+La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA integral.
+
+#### Tests adaptados
+
+- **`tests/postgres/test_base_local.py`:** de 78 a 80 tablas (`tipo_reparacion_requisito` y `detalle_pieza`).
+- **`supabase/tests/10_esquema.sql`:** suma las dos tablas y pasa a 80 entidades.
+- **`test_e3_sql_y_ajustes.py`:** la lectura `catalogos.tipo_reparacion_requisitos` suma una consulta de catálogos (de 17 a 18 más las del stock).
+- **`test_matriz_permisos.py`:** cinco rutas nuevas clasificadas:
+  - `POST …/pieces`: `SERVICIO("PIEZA_ELEGIR")`;
+  - `GET …/pieces/options`: `API("ORDENES_CONSULTAR")`;
+  - `GET/PUT /api/admin/repair-types/…/supplies`: `API("TIPO_REPARACION_GESTIONAR")`;
+  - `GET /api/purchases/suggestions/pending-pieces`: `API("COMPRAS_CONSULTAR")`.
+- **Ninguna otra expectativa cambió.** En el frontend no se cambió ningún test.
+
+#### Decisiones tomadas en la implementación
+
+- **Elección automática también al iniciar:** es parte de la preparación. Si el tipo ganó un requisito después de definir el trabajo y hay una sola pieza, no se bloquea en vano. Queda en el historial.
+- **Cantidad de una sustitución:** la de la elección anterior, no la del requisito vigente. El Detalle trabaja con su elección.
+- **«Consumida» = cualquier CONSUMO o DESPERDICIO de la pieza en el Detalle:** por ejemplo, una Ejecución interrumpida que la usó. Desde ahí su elección queda fija en ese Detalle. Un retrabajo la vuelve a reservar como hoy con los previstos concretos.
+- **Coincidencias:** si la pieza elegida coincide con un previsto concreto, se pide y se reserva la suma, y la sustitución libera solo la cantidad de la elección. En la pantalla, esa línea aparece en el bloque de piezas y no entre los previstos concretos.
+- **Previstos concretos universales:** se exige al agregarlos (precisión 6). Los existentes no se validan contra el modelo.
+- **Una LIBERACION_RESERVA por sustitución con usuario:** el libro exige la Ejecución en la liberación. El usuario y la observación la distinguen del 210.
+
+#### Limitaciones y pendientes
+
+- **Trazabilidad:**
+  - `ACC-REP-084` es un identificador nuevo; falta registrarlo en `traceability/` y en `rt-rma-app`, igual que ACC-REP-083;
+  - no se actualizaron `traceability/discrepancias-baseline-v1.4.md` (DEC-AJ-14 sigue «sin implementar»), `docs/ESTADO_PROYECTO.md` ni `docs/pendientes-producto.md`, como en los bloques anteriores.
+- **Etiqueta de la pieza en la Orden:** la lectura trae código y nombre, no el fabricante ni la variante (la ventana de elección sí).
+- **Sin preferida:** no hay marca de pieza preferida ni sugerencia de SKU para un requisito sin pieza en Compras (la propuesta de la sección 11 la mencionaba; la decisión aprobada no la pide).
+- **Stock mínimo:** sigue por SKU. Un mínimo por categoría y modelo queda para después.
+- **Cambio de modelo con la pieza reservada:** solo se probó en el service, porque la API no permite cambiar el modelo después de confirmar la recepción.
+- **Validación manual:** pendiente, en un navegador y sobre PostgreSQL:
+  1. cargar categorías y piezas con su compatibilidad;
+  2. definir los insumos necesarios de un tipo;
+  3. ingresar un equipo con modelo y ver la elección automática o «Pendiente de elegir»;
+  4. elegir la pieza e iniciar;
+  5. sustituirla con la Ejecución en curso y ver el inventario;
+  6. completar y ver el consumo;
+  7. equipo sin modelo con una pieza no verificada;
+  8. trabajos sin pieza en Compras.
+
+#### Para el QA integral
+
+Es el último bloque de la iteración 2. Conviene correr la suite completa del backend, `tests/postgres` completo y los E2E antes de proponer la integración. Además, revisar a mano el circuito de piezas con un técnico, Coordinación y Recepción, esta última sin `PIEZA_ELEGIR` ni la información técnica.
