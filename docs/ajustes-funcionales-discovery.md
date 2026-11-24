@@ -1716,3 +1716,95 @@ La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA inte
   - `test_base_local` fija 73 tablas y 8 vistas.
   - `test_matriz_permisos` exige que todo permiso nuevo tenga uso en el backend y que toda ruta nueva esté clasificada.
   - `test_e3_sql_y_ajustes` solo cuenta las consultas de catálogos y modelos.
+
+### 11.3 Bloque 6: implementación
+
+Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. Implementa DEC-AJ-11 (D-11.1 a D-11.3) con las precisiones de 11.1 (puntos 7 y 10). `business/` no cambia.
+
+| Commit | Qué |
+|---|---|
+| `4c523c4` | Migración, `Insumo.stock_minimo`, edición validada y auditada en Configuración → Insumos, persistencia PostgreSQL |
+| `ffec63b` | Estado de reposición, Inventario (filtro y campos), bandeja de Inicio, sugerencias de Compras hasta el mínimo y pruebas |
+| `00ab211` | Frontend: Insumos, Inventario, Inicio y Compras |
+| este | Esta sección, `docs/contratos-macro-integral.md` y `docs/postgresql/diseno-fisico.md` |
+
+#### Qué quedó
+
+- **D-11.1, estado de reposición** (`services/stock_minimo.py`, funciones puras; la única fuente de la regla):
+  - `SIN_MINIMO`: el insumo no tiene mínimo.
+  - `SUFICIENTE`: disponible ≥ mínimo.
+  - `BAJO_MINIMO`: disponible < mínimo y disponible + en camino < mínimo.
+  - `BAJO_MINIMO_REPOSICION_SOLICITADA`: disponible < mínimo, pero disponible + en camino ≥ mínimo.
+  - **Contra qué se compara:** el disponible (físico − reservado pendiente), no el físico.
+  - **Reposición solicitada:** lo que ya calcula «en camino» (punto 7 de 11.1): solicitudes `PENDIENTE` y lo que falta recibir de las órdenes de compra en borrador, confirmadas o parciales. Se corrigió el docstring de `en_camino`, que hablaba solo de confirmadas y parciales. En JSON no hay Compras: en camino es 0.
+  - **Faltante:** sigue aparte y sin cambios (`SituacionInsumo.faltante`, «Solo faltantes», `INSUMOS_NEGATIVOS`).
+  - **Alerta:** `SituacionInsumo.bajo_minimo` es un insumo vigente en cualquiera de los dos estados «bajo mínimo». Un insumo inactivo informa su estado, pero no alerta, no entra en el filtro ni en la bandeja y no se sugiere reponerlo.
+- **D-11.2, configuración:**
+  - `rma.insumo.stock_minimo` y `Insumo.stock_minimo`, opcionales. Vacío significa sin mínimo, y los insumos existentes siguen igual. En JSON se lee con ese valor por defecto; el catálogo de demostración no trae mínimos.
+  - `GET/POST/PUT /api/admin/supplies` lo reciben y devuelven. Permiso: `INSUMO_GESTIONAR` (punto 10 de 11.1); su descripción ahora nombra el stock mínimo.
+  - **Validación:** ≥ 0 y hasta tres decimales, los que guarda la base, como el stock. La API rechaza un negativo con 422; el servicio rechaza más decimales con 409.
+  - **Auditoría:** `stock_minimo` es un campo más de `CAMPOS_INSUMO` (entidad `INSUMO`). Se audita con sus decimales («2.125», sin ceros de más): `texto()` redondea a dos y habría perdido cambios.
+  - **Edición:** en el `PUT`, si el pedido no trae el campo se conserva el mínimo, para que un cliente anterior no lo borre; `null` lo quita.
+- **D-11.3, alertas:**
+  - **Inventario:** `GET /api/inventory?bajo_minimo=true` filtra; se combina con Y con `buscar` y `solo_faltantes`. Cada situación (lista, detalle y bandejas) suma `stock_minimo`, `en_camino`, `estado_reposicion` y `bajo_minimo`. En PostgreSQL, la consulta lee lo en camino en la misma lectura.
+  - **Inicio:** bandeja nueva `STOCK_BAJO_MINIMO`, «Insumos a reponer», de seguimiento, con destino Inventario, para Coordinación RMA y Administración. Lista los insumos bajo su mínimo: primero los que no tienen reposición solicitada y después en el orden del catálogo. Lo en camino se lee solo si algún insumo está debajo de su mínimo, así la lectura de Inicio no crece en el caso habitual.
+  - **`INSUMOS_NEGATIVOS`:** se mantiene sin cambios y en su lugar, a diferencia de la propuesta de la sección 11, que la reemplazaba. Su lógica sigue igual, ahora sobre la misma situación calculada.
+  - **Compras:** `sugerencias()` recibe los mínimos de los insumos vigentes.
+    - **Sin mínimo:** la fórmula de siempre, demanda − disponible − en camino, si es positiva.
+    - **Con mínimo:** `max(0, demanda + mínimo − disponible − en camino)`.
+    - **Candidatos:** la demanda de los Detalles bloqueados, el disponible negativo y los insumos vigentes con disponible < mínimo.
+    - **Cada sugerencia** suma `stock_minimo`, `por_faltante` (lo que pide la demanda sola), `por_minimo` (el resto) y `motivo`.
+    - **Origen (regla):** `motivo` es `STOCK_MINIMO` si `por_minimo > 0`, es decir, si el mínimo aporta algo a la cantidad, solo o junto con un faltante. En ese caso la solicitud se crea con origen `STOCK_MINIMO` y conserva las Órdenes del faltante, si las hay. Si el mínimo no aporta nada, el motivo es `FALTANTE`, como siempre.
+    - **Sin duplicados:** las solicitudes pendientes y las órdenes de compra abiertas se descuentan (en camino), así que lo ya pedido no se vuelve a sugerir.
+    - **Sin compras automáticas:** nunca se crea una solicitud ni una orden de compra sola.
+- **Frontend:**
+  - **Insumos:** campo «Stock mínimo (opcional)», con coma decimal y la validación de arriba, y columna en la tabla. La edición en la fila conserva el mínimo.
+  - **Inventario:** filtro «Bajo mínimo» junto a «Solo faltantes», y columnas «Mínimo» y «Reposición». El indicador distingue «Bajo mínimo» (ámbar) de «Bajo mínimo · reposición solicitada» (azul) y muestra lo en camino; el detalle del insumo también.
+  - **Inicio:** las bandejas de insumos muestran el estado, el mínimo y lo en camino. Una bandeja de insumos vacía dice «No hay insumos en esta bandeja».
+  - **Compras:** «Sugerencias de reposición», con la causa (faltante, mínimo o ambos) y la solicitud con su origen. El origen de cada solicitud se nombra: manual, por faltante o por stock mínimo.
+  - **Lógica pura:** `features/inventario/stockMinimo.ts`.
+
+#### Migración
+
+`20261124000200_stock_minimo.sql`, aditiva:
+
+- **`insumo.stock_minimo`:** `numeric(12,3)`, admite vacío, con `insumo_stock_minimo_no_negativo` (≥ 0) y comentario. `grant update (stock_minimo)` a `rma_backend`.
+- **`solicitud_compra_origen_check`:** se reemplaza por `origen in ('MANUAL', 'FALTANTE', 'STOCK_MINIMO')`, y se actualiza el comentario de la columna.
+- **Sin tablas ni vistas nuevas:** siguen 73 tablas y 8 vistas. Ningún dato cambia.
+
+#### Pruebas focalizadas
+
+| Qué | Resultado |
+|---|---|
+| Backend JSON: `test_stock_minimo.py` (nuevo, 17: los cuatro estados y sin mínimo, con y sin en camino; comparación contra el disponible y no contra el físico; insumo inactivo; cantidad a reponer por causa; sugerencias con motivo y sin duplicar lo en camino; auditoría con tres decimales, validación y permiso; Inventario con el filtro y los campos; bandeja para Coordinación y Administración y no para Recepción ni Técnico), `test_inventario_operativo`, `test_inventario_global`, `test_compras_reglas`, `test_insumos_admin`, `test_bandejas`, `test_matriz_permisos`, `test_e3_sql_y_ajustes`, `test_configuracion`, `test_configuracion_persistencia`, `test_roles_permisos`, `test_autenticacion`, `test_cancelacion_heredada`, `test_e2_equivalencia`, `test_entrega_sin_aviso`, `test_hito_habilitacion_unico`, `test_ingreso_inicial`, `test_liberacion_cruzada`, `test_motivos_retiro`, `test_prioridad_cola` y `test_reparacion_otros` | 506 pasan |
+| PostgreSQL local: `test_stock_minimo_postgres` (nuevo, 3: migración —tipo, vacío, sin datos, grant, CHECK y origen—; alta y edición por la API con permiso, decimales, conservar, quitar y auditoría; circuito sugerencia → solicitudes `STOCK_MINIMO` → orden de compra → recepción, con el estado y la bandeja en cada paso y sin sugerencias duplicadas), `test_compras_postgres`, `test_insumos_admin_postgres`, `test_reservas_postgres`, `test_base_local`, `test_configuracion_postgres`, `test_permisos_macro_v14`, `test_permisos_operativos_postgres`, `test_permisos_rma_backend`, `test_roles_permisos_postgres`, `test_lotes_postgres`, `test_consultas_postgres` y `test_bloque_a_postgres` | 112 pasan |
+| PostgreSQL local: `test_autenticacion_postgres`, `test_codigos_automaticos_postgres` y `test_idempotencia_postgres` | 36 pasan |
+| Backend: `ruff check .` y `ruff format --check` | Limpios |
+| Frontend: `npm run typecheck`, `npm test` (incluye `stock-minimo.test.ts`, 7 pruebas nuevas) y `npm run build` | Pasan (241 pruebas) |
+
+La suite completa, el resto de `tests/postgres` y los E2E quedan para el QA integral.
+
+#### Tests adaptados
+
+- **`test_bandejas.py::test_cada_rol_ve_sus_bandejas`:** fija la lista de bandejas por rol. Coordinación y Administración suman `STOCK_BAJO_MINIMO` antes de `INSUMOS_NEGATIVOS`: es el aviso en Inicio que pide D-11.3.
+- **Ninguna otra expectativa cambió.** `test_base_local` sigue en 73 tablas y 8 vistas. No hay rutas ni permisos nuevos: `test_matriz_permisos` no cambia. Las consultas SQL registradas no cambian de cantidad: `test_e3_sql_y_ajustes` no cambia.
+
+#### Limitaciones y pendientes
+
+- **Lectura de lo en camino:** en PostgreSQL, Inventario lee todas las órdenes de compra y solicitudes para calcularlo, con la misma función que Compras y sin SQL nuevo. Alcanza para el volumen del MVP. Si crece, conviene una consulta agregada.
+- **Reservas de Compras:** las sugerencias de Compras calculan el disponible con las reservas de las Órdenes abiertas, como antes, mientras que Inventario usa todas las Órdenes con reservas. Solo difieren si una Orden cerrada conserva una reserva, lo que no debería pasar.
+- **Sugerencia en el modo JSON:** no hay Compras, así que no hay sugerencia ni reposición solicitada. El estado sale con en camino 0.
+- **Documentación:** no se actualizaron `traceability/discrepancias-baseline-v1.4.md` (DEC-AJ-11 sigue «sin implementar»), `docs/ESTADO_PROYECTO.md` ni `docs/pendientes-producto.md`.
+- **Validación manual:** pendiente, en un navegador y sobre PostgreSQL:
+  1. cargar un mínimo con Administración y comprobar que Coordinación no puede;
+  2. ver el estado y el filtro en Inventario;
+  3. ver la bandeja en Inicio;
+  4. crear la solicitud sugerida y ver «reposición solicitada»;
+  5. recibir la orden de compra y ver que la alerta desaparece.
+- **Para el bloque 7:**
+  - La última migración es `20261124000200`; la siguiente va después.
+  - `test_base_local` sigue fijando 73 tablas y 8 vistas.
+  - `Insumo` ya tiene `stock_minimo`. El SELECT de insumos de `storage/postgres/catalogos.py`, `CAMPOS_INSUMO` y el `InsumoIn` de la API son los lugares que se tocan para sumar campos al insumo; el bloque 8 los va a necesitar para la clasificación.
+  - `solicitud_compra.origen` admite `MANUAL`, `FALTANTE` y `STOCK_MINIMO`.
+  - `en_camino_de_compras(contexto)`, en `application/inventario.py`, es la forma de leer lo en camino dentro de una lectura. En JSON devuelve vacío.
+  - `sugerencias()` recibe `minimos`. La sugerencia por faltante con la pieza elegida del bloque 8 tiene que conservar `por_faltante` y `por_minimo`.

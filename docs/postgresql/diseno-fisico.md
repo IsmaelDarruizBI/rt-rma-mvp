@@ -103,7 +103,7 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 | M3 | `proveedor`, `solicitud_compra`, `orden_compra`, `orden_compra_item`, `recepcion_compra`, `recepcion_compra_linea` | `insumo`, `usuario`, entre sí | Recepción ≤ pedido (trigger con bloqueo de la orden); remito único por orden; confirmada o cancelada una vez; líneas inmutables (DEC-MI-09, `20261113001000`) |
 | M6 | `tipo_equipo`, `checklist_pregunta` | entre sí | Sin borrado; al menos dos opciones por pregunta (DC12, `20261113001100`). `tipo_equipo` es la copia de solo lectura del catálogo de Ventas: código de Ventas tal cual, columna de origen y última sincronización (DEC-MI-16, `20261115000100`) |
 | M2 | `checklist_registro`, `informacion_faltante_confirmacion` | `orden`, `usuario` | Posición única por Orden; motivo desde la segunda versión; inmutables (DC12) |
-| M3 | `insumo` | — | `stock_fisico >= stock_reservado >= 0`; nace en cero |
+| M3 | `insumo` | — | `stock_fisico >= stock_reservado >= 0`; nace en cero; `stock_minimo` opcional y `>= 0` (DEC-AJ-11, `20261124000200`) |
 | M3 | `movimiento_inventario` | `insumo`, `orden`, `detalle` y `ejecucion` (comp.), sí mismo (comp.), `motivo_ajuste`, `usuario`, `accion_usuario` | Vínculos por tipo; DESPERDICIO y DEVOLUCION sin operación; inmutable; sin ON CONFLICT |
 | M3 | `override_recursos`, `override_insumo` | `detalle_version` (comp.), `insumo` | Vale para una versión; cálculo del impacto verificado |
 | M4 | `pago`, `devolucion_dinero` | `orden`, `medio_pago`, `usuario` | Solo cliente externo; importe fijo; anulación única; devolución sin superar el pago |
@@ -164,6 +164,7 @@ Las seis vistas son `v_detalle_version_vigente`, `v_reserva_pendiente`, `v_ejecu
 **Ajustes funcionales, iteración 2 (rama `feat/ajustes-funcionales-uat`, aditiva, solo local):**
 
 - **`20261124000100_ajuste_comercial_reversion.sql`** (DEC-AJ-10, bloque 5): en `descuento`, `codigo`, la evidencia (`precio_original`, `importe_aplicado`, `precio_final`), `corrige_a` y la reversión (`revertido_por`, `revertido_en`, `reversion_motivo`, todo o nada); todas admiten vacío. `descuento_validar()` reemplaza a `descuento_inmutable`: solo completa la reversión, una vez y con la Orden abierta, y `rma_backend` solo puede actualizar esas tres columnas. Una corrección apunta a un registro revertido del mismo destino. Tabla inmutable `descuento_recalculo`. `v_orden_saldo` con las mismas columnas, sin los revertidos. Equivalencia ACC-REP-072 → EV-REP-041, visible en el historial. Queda en 73 tablas y 8 vistas. Detalle: [`../ajustes-funcionales-discovery.md`](../ajustes-funcionales-discovery.md), sección 11.2.
+- **`20261124000200_stock_minimo.sql`** (DEC-AJ-11, bloque 6): `insumo.stock_minimo numeric(12,3)`, opcional (vacío: sin mínimo) y `>= 0` (`insumo_stock_minimo_no_negativo`), con comentario; `rma_backend` puede actualizarla (sigue sin poder escribir los saldos). El CHECK `solicitud_compra_origen_check` se reemplaza para admitir `STOCK_MINIMO` además de `MANUAL` y `FALTANTE`. Ningún dato cambia; sin tablas nuevas: sigue en 73 tablas y 8 vistas. Detalle: [`../ajustes-funcionales-discovery.md`](../ajustes-funcionales-discovery.md), sección 11.3.
 
 **Macroiteración integral (rama `feat/macro-integral`, aditivas, aplicadas solo en la base local; ninguna en Supabase):**
 
