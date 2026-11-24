@@ -64,6 +64,10 @@ class Insumo(BaseModel):
     control: ControlInsumo = ControlInsumo.SIN_LOTE
     # DEC-MI-09: precio que configura Administracion (sin uso automatico).
     precio: Decimal | None = None
+    # DEC-AJ-11: stock minimo opcional, comparado con el DISPONIBLE (no con
+    # el fisico). Sin minimo (None) el insumo no alerta: los existentes
+    # siguen igual.
+    stock_minimo: Decimal | None = Field(default=None, ge=0)
 
 
 class TipoReparacionInsumos(BaseModel):

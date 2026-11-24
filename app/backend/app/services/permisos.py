@@ -512,7 +512,7 @@ MOTIVO_GESTIONAR = _definir(
 )
 INSUMO_GESTIONAR = _definir(
     "INSUMO_GESTIONAR",
-    "Insumos: alta, nombre, unidad, control por lote y vigencia",
+    "Insumos: alta, nombre, unidad, control por lote, vigencia y stock mínimo",
     (ADMIN,),
     OPERATIVA,
     requiere=("INVENTARIO_CONSULTAR",),

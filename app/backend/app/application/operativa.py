@@ -202,6 +202,10 @@ def registrar_seguimiento(
     return orden
 
 
+# Un campo opcional que el pedido no informo: se conserva el valor actual.
+MANTENER = object()
+
+
 def guardar_insumo(
     contexto: ApplicationContext,
     *,
@@ -214,9 +218,14 @@ def guardar_insumo(
     nuevo: bool,
     control: ControlInsumo | None = None,
     precio: Decimal | None = None,
+    stock_minimo: Decimal | None | object = MANTENER,
 ) -> Insumo:
     """Alta o edicion de un insumo (DEC-MI-13), con auditoria. El stock de
     un insumo nuevo empieza en cero: entra con movimientos de inventario.
+
+    ``stock_minimo`` (DEC-AJ-11): ``None`` lo quita; ``MANTENER`` (no
+    informado) conserva el del insumo, asi un cliente que no lo conoce no
+    lo borra.
 
     CFG-01 (D4): en el alta el identificador y el codigo son opcionales.
     Sin identificador lo genera la base (``INS-NNN``); sin codigo se usa el
@@ -281,6 +290,11 @@ def guardar_insumo(
                 control=control
                 or (anterior.control if anterior else ControlInsumo.SIN_LOTE),
                 precio=precio,
+                stock_minimo=(
+                    (anterior.stock_minimo if anterior else None)
+                    if stock_minimo is MANTENER
+                    else stock_minimo
+                ),
             )
             if anterior is not None and insumo.control is not anterior.control:
                 # DEC-MI-10: transicion controlada del stock existente.

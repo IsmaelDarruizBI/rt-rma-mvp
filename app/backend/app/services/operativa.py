@@ -200,7 +200,39 @@ def registrar_seguimiento_retiro(
     return nueva
 
 
-CAMPOS_INSUMO = ("codigo", "nombre", "unidad", "activo", "control", "precio")
+CAMPOS_INSUMO = (
+    "codigo",
+    "nombre",
+    "unidad",
+    "activo",
+    "control",
+    "precio",
+    "stock_minimo",
+)
+
+
+def _texto_insumo(insumo: Insumo, campo: str) -> str | None:
+    """Como lo guarda la auditoria. El stock minimo con sus decimales
+    (hasta tres, sin ceros de mas): ``texto`` redondea a dos."""
+    valor = getattr(insumo, campo)
+    if campo == "stock_minimo" and valor is not None:
+        return format(valor.quantize(Decimal("0.001")).normalize(), "f")
+    return texto(valor)
+
+
+def validar_stock_minimo(stock_minimo: Decimal | None) -> None:
+    """DEC-AJ-11: opcional, mayor o igual a cero y con hasta tres decimales
+    (los que guarda la base, como el stock)."""
+    if stock_minimo is None:
+        return
+    if not stock_minimo.is_finite() or stock_minimo < 0:
+        raise PrecondicionInvalidaError(
+            "El stock minimo es un numero mayor o igual a cero."
+        )
+    if stock_minimo != stock_minimo.quantize(Decimal("0.001")):
+        raise PrecondicionInvalidaError(
+            "El stock minimo admite hasta tres decimales."
+        )
 
 
 def cambios_de_insumo(
@@ -212,7 +244,9 @@ def cambios_de_insumo(
 ) -> list[CambioConfiguracion]:
     """Alta o edicion de un insumo (DEC-MI-13). El stock no se edita aca:
     solo cambia con movimientos del inventario. El precio exige ademas
-    ``PRECIOS_GESTIONAR`` (D3) cuando se fija o cambia."""
+    ``PRECIOS_GESTIONAR`` (D3) cuando se fija o cambia. El stock minimo
+    (DEC-AJ-11) va con ``INSUMO_GESTIONAR`` y queda auditado como un campo
+    mas."""
     validar_alguno_de(usuario, permisos.INSUMO_GESTIONAR)
     if nuevo.precio is not None and nuevo.precio != nuevo.precio.quantize(
         Decimal("0.01")
@@ -224,6 +258,7 @@ def cambios_de_insumo(
         )
     if texto(anterior.precio if anterior else None) != texto(nuevo.precio):
         validar_alguno_de(usuario, permisos.PRECIOS_GESTIONAR)
+    validar_stock_minimo(nuevo.stock_minimo)
     if not nuevo.id.strip() or not nuevo.codigo.strip():
         raise PrecondicionInvalidaError(
             "El insumo necesita un identificador y un codigo."
@@ -236,9 +271,9 @@ def cambios_de_insumo(
             clave=nuevo.id,
             campo=campo,
             valor_anterior=(
-                texto(getattr(anterior, campo)) if anterior else None
+                _texto_insumo(anterior, campo) if anterior else None
             ),
-            valor_nuevo=texto(getattr(nuevo, campo)),
+            valor_nuevo=_texto_insumo(nuevo, campo),
             usuario_id=usuario.id,
             fecha=fecha,
         )
@@ -246,7 +281,7 @@ def cambios_de_insumo(
         if (anterior is None and getattr(nuevo, campo) is not None)
         or (
             anterior is not None
-            and texto(getattr(anterior, campo)) != texto(getattr(nuevo, campo))
+            and _texto_insumo(anterior, campo) != _texto_insumo(nuevo, campo)
         )
     ]
     if not cambios:

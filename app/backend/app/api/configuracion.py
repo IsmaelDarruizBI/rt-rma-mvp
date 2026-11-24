@@ -43,6 +43,7 @@ from app.application.configuracion import (
     historial_de_cambios,
 )
 from app.application.operativa import (
+    MANTENER,
     guardar_insumo,
     guardar_motivo,
     guardar_parametro,
@@ -439,6 +440,14 @@ class InsumoIn(BaseModel):
     # DEC-MI-10 y DEC-MI-09: control por lote o serie y precio.
     control: ControlInsumo | None = None
     precio: Decimal | None = Field(default=None, ge=0)
+    # DEC-AJ-11: opcional; null lo quita. En la edicion, si no se informa,
+    # se conserva el actual.
+    stock_minimo: Decimal | None = Field(default=None, ge=0)
+
+    def stock_minimo_pedido(self):
+        if "stock_minimo" in self.model_fields_set:
+            return self.stock_minimo
+        return MANTENER
 
 
 class AltaInsumoIn(InsumoIn):
@@ -470,6 +479,7 @@ def post_insumo(cuerpo: AltaInsumoIn, contexto: ContextoDep) -> dict:
         nuevo=True,
         control=cuerpo.control,
         precio=cuerpo.precio,
+        stock_minimo=cuerpo.stock_minimo,
     ).model_dump(mode="json")
 
 
@@ -486,6 +496,7 @@ def put_insumo(clave: str, cuerpo: InsumoIn, contexto: ContextoDep) -> dict:
         nuevo=False,
         control=cuerpo.control,
         precio=cuerpo.precio,
+        stock_minimo=cuerpo.stock_minimo_pedido(),
     ).model_dump(mode="json")
 
 

@@ -107,9 +107,10 @@ _INSERTAR_INSUMO = consulta(
     "operativa.insertar_insumo",
     """
     INSERT INTO rma.insumo
-        (clave, codigo, nombre, unidad, activo, control, precio)
+        (clave, codigo, nombre, unidad, activo, control, precio,
+         stock_minimo)
     VALUES (%(clave)s, %(codigo)s, %(nombre)s, %(unidad)s, %(activo)s,
-            %(control)s, %(precio)s)
+            %(control)s, %(precio)s, %(stock_minimo)s)
     ON CONFLICT DO NOTHING
     """,
     modo=ESCRITURA,
@@ -119,7 +120,8 @@ _ACTUALIZAR_INSUMO = consulta(
     """
     UPDATE rma.insumo
        SET nombre = %(nombre)s, unidad = %(unidad)s, activo = %(activo)s,
-           control = %(control)s, precio = %(precio)s
+           control = %(control)s, precio = %(precio)s,
+           stock_minimo = %(stock_minimo)s
      WHERE clave = %(clave)s
     """,
     modo=ESCRITURA,
@@ -322,6 +324,7 @@ class PostgresConfiguracionOperativa:
             "activo": insumo.activo,
             "control": insumo.control.value,
             "precio": insumo.precio,
+            "stock_minimo": insumo.stock_minimo,
         }
         if nuevo:
             if ejecutor.ejecutar(_INSERTAR_INSUMO, parametros) != 1:

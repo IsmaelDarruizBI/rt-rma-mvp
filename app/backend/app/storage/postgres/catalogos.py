@@ -90,7 +90,7 @@ _INSUMOS = consulta(
     "catalogos.insumos",
     """
     SELECT clave, codigo, nombre, unidad, stock_fisico, activo,
-           control, precio
+           control, precio, stock_minimo
     FROM rma.insumo
     ORDER BY clave COLLATE "C"
     """,
@@ -100,7 +100,7 @@ _INSUMO = consulta(
     "catalogos.insumo",
     """
     SELECT clave, codigo, nombre, unidad, stock_fisico, activo,
-           control, precio
+           control, precio, stock_minimo
     FROM rma.insumo
     WHERE clave = %(clave)s
     """,
@@ -606,6 +606,11 @@ def _insumo(f) -> Insumo:
         activo=f.activo,
         control=f.control,
         precio=None if f.precio is None else decimal_sin_ceros(f.precio),
+        stock_minimo=(
+            None
+            if f.stock_minimo is None
+            else decimal_sin_ceros(f.stock_minimo)
+        ),
     )
 
 
