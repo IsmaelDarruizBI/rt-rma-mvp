@@ -1613,6 +1613,33 @@ Son precisiones de implementación dentro del texto aprobado. Si alguna no coinc
     - las categorías y los fabricantes de insumos, `INSUMO_GESTIONAR`.
 11. **Orígenes sin autorización del cliente:** el precio queda fijo cuando se define el trabajo. Un cambio de modelo posterior solo genera un aviso.
 
+#### Estado de validación de las once precisiones (24/11/2026)
+
+Las once resoluciones de arriba las decidió la coordinación técnica para poder implementar. **No están aprobadas funcionalmente**, salvo las que solo repiten una regla ya aprobada. En la validación manual se confirman o se corrigen.
+
+| # | Precisión | Clase | Qué hay que confirmar |
+|---|---|---|---|
+| 1 | Factibilidad con un requisito sin pieza elegida: factible si alguna pieza compatible tiene disponible | **Funcional: validar** | Que una Orden no quede bloqueada por recursos solo porque nadie eligió todavía la pieza |
+| 2 | Equipo sin modelo técnico: primero las piezas universales; si no hay, cualquiera de la categoría con motivo y marca «compatibilidad no verificada» | **Funcional: validar** | Que esa vía exista, quién la usa (hoy, quien tiene «Elegir la pieza»: Técnico, Coordinación y Administración) y que el motivo alcance como control |
+| 3 | Precio faltante sin permiso de precio manual: el trabajo queda «precio pendiente»; bloquea el comprobante de ingreso y la autorización solo en Cliente Externo | **Funcional: validar** | El flujo de Recepción cuando falta el precio, y que en RT Interno y garantías no bloquee |
+| 4 | «Otros» sigue como está (BR-REP-047) | Regla vigente: sin cambio | Nada; solo saber que convive con el precio manual |
+| 5 | El precio manual vale para un trabajo y nunca cambia el catálogo; lo autorizan Coordinación y Administración | **Funcional: validar** | Los roles que pueden autorizar un precio manual |
+| 6 | Recargo: se mantiene DEC-UX-13 y se descarta la corrección propuesta | Técnica: sin cambio de comportamiento | Nada |
+| 7 | «Reposición solicitada» cuenta solicitudes pendientes y Órdenes de Compra en borrador, confirmadas o parciales | **Funcional: validar** | Si un borrador o una solicitud ya cuentan como reposición en curso |
+| 8 | El catálogo técnico de modelos es de RMA, distinto de la copia de Ventas, y se empareja por marca, modelo y variante | Técnica: arquitectura de datos | Nada en esta etapa; importa si Ventas vuelve a exportar modelos |
+| 9 | La calidad del repuesto no cambia el precio de venta | Ya aprobada (D-14.3) | Nada |
+| 10 | Permisos: importación con «Gestionar precios», mínimo y clasificación con «Gestionar insumos», modelos con un permiso nuevo; todos de Administración por defecto | **Funcional: validar** | Si Coordinación también tiene que poder editar mínimos, clasificación o modelos |
+| 11 | Orígenes sin autorización del cliente (RT Interno, garantías): el precio queda fijo al definir el trabajo; un cambio de modelo posterior solo avisa | **Funcional: validar** (impacto bajo: no se cobra) | Que alcance con el aviso |
+
+**Elecciones de implementación que también conviene validar:**
+- la elección automática de la pieza corre también al iniciar;
+- una pieza ya consumida queda fija para ese trabajo;
+- los comprobantes nuevos no imprimen el motivo del ajuste;
+- un retiro de ajuste no se revierte, se vuelve a aplicar;
+- con la configuración por defecto, Recepción y Técnico no cargan precios manuales.
+
+**Corrección del 24/11/2026:** aplicar un ajuste ahora valida los topes de todos los ajustes vigentes (`6ca558e`). Antes, un ajuste nuevo sobre un trabajo podía dejar el importe fijo de la Orden por encima de su base, y el exceso se recortaba en silencio. No es una regla nueva: es cumplir BR-REP-016, que ya decía que un ajuste no supera el importe al que se aplica.
+
 ### 11.2 Bloque 5: implementación
 
 Commits en `feat/ajustes-funcionales-uat`, sin push ni despliegue. Implementa DEC-AJ-10 (D-10.1 a D-10.5) con las precisiones de 11.1. `business/` no cambia.

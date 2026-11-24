@@ -51,3 +51,4 @@ No repetir información entre documentos: enlazar.
 | Migración del UAT a Supabase São Paulo | `docs/MIGRACION_SUPABASE_SAO_PAULO.md` |
 | Retomar el proyecto en otra computadora | `docs/CONTINUIDAD.md` |
 | API, entidades y permisos de la macroiteración integral | `docs/contratos-macro-integral.md` |
+| Validación manual local (entorno `rma_validacion` y datos ficticios) | `docs/VALIDACION_LOCAL.md` |
