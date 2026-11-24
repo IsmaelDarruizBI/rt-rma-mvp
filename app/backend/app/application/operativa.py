@@ -6,6 +6,7 @@ el plazo vigente valen en los dos modos (en JSON, los valores iniciales).
 """
 
 import re
+from collections.abc import Sequence
 from decimal import Decimal
 
 from app.domain.models import Insumo, MedioPago, OrdenReparacion
@@ -19,6 +20,11 @@ from app.domain.models.operativa import (
 )
 from app.services import permisos
 from app.services.autorizacion import validar_alguno_de
+from app.services.clasificacion_insumos import (
+    nombre_limpio,
+    normalizar_modelos,
+    validar_clasificacion,
+)
 from app.services.exceptions import (
     CodigoDuplicadoError,
     EntidadNoEncontradaError,
@@ -206,6 +212,70 @@ def registrar_seguimiento(
 MANTENER = object()
 
 
+def _codigo(valor: str | None) -> str | None:
+    return (valor or "").strip().upper() or None
+
+
+def _clasificacion_pedida(
+    anterior: Insumo | None,
+    *,
+    categoria_id,
+    fabricante_id,
+    variante,
+    codigo_fabricante,
+    modelos_compatibles,
+) -> dict:
+    """DEC-AJ-14: los campos de clasificacion del insumo editado; los no
+    informados (``MANTENER``) conservan los del insumo anterior."""
+
+    def elegir(valor, campo, limpiar):
+        if valor is MANTENER:
+            return getattr(anterior, campo) if anterior else None
+        return limpiar(valor)
+
+    return {
+        "categoria_id": elegir(categoria_id, "categoria_id", _codigo),
+        "fabricante_id": elegir(fabricante_id, "fabricante_id", _codigo),
+        "variante": elegir(variante, "variante", nombre_limpio),
+        "codigo_fabricante": elegir(
+            codigo_fabricante, "codigo_fabricante", nombre_limpio
+        ),
+        "modelos_compatibles": (
+            (anterior.modelos_compatibles if anterior else ())
+            if modelos_compatibles is MANTENER
+            else normalizar_modelos(modelos_compatibles)
+        ),
+    }
+
+
+def _validar_clasificacion(
+    contexto: ApplicationContext,
+    repositorio,
+    anterior: Insumo | None,
+    insumo: Insumo,
+) -> None:
+    """Lee solo los catalogos que hacen falta: un insumo sin clasificar no
+    suma consultas."""
+    modelos = []
+    if insumo.modelos_compatibles and contexto.modelos_equipo is not None:
+        modelos = contexto.modelos_equipo.listar_modelos()
+    validar_clasificacion(
+        anterior,
+        insumo,
+        categorias=(
+            repositorio.listar_categorias_insumo()
+            if insumo.categoria_id
+            else ()
+        ),
+        fabricantes=(
+            repositorio.listar_fabricantes_repuesto()
+            if insumo.fabricante_id
+            else ()
+        ),
+        modelos=modelos,
+    )
+
+
 def guardar_insumo(
     contexto: ApplicationContext,
     *,
@@ -219,6 +289,11 @@ def guardar_insumo(
     control: ControlInsumo | None = None,
     precio: Decimal | None = None,
     stock_minimo: Decimal | None | object = MANTENER,
+    categoria_id: str | None | object = MANTENER,
+    fabricante_id: str | None | object = MANTENER,
+    variante: str | None | object = MANTENER,
+    codigo_fabricante: str | None | object = MANTENER,
+    modelos_compatibles: Sequence[str] | object = MANTENER,
 ) -> Insumo:
     """Alta o edicion de un insumo (DEC-MI-13), con auditoria. El stock de
     un insumo nuevo empieza en cero: entra con movimientos de inventario.
@@ -226,6 +301,13 @@ def guardar_insumo(
     ``stock_minimo`` (DEC-AJ-11): ``None`` lo quita; ``MANTENER`` (no
     informado) conserva el del insumo, asi un cliente que no lo conoce no
     lo borra.
+
+    DEC-AJ-14: la clasificacion (``categoria_id`` CAT, ``fabricante_id``
+    FAB, ``variante`` y ``codigo_fabricante``) y los modelos compatibles
+    (codigos MOD; vacio: universal) siguen la misma regla: ``MANTENER``
+    conserva, ``None`` (o la lista vacia) quita. La compatibilidad
+    reemplaza al conjunto anterior, en la misma transaccion que el insumo
+    y su auditoria. Ver ``validar_clasificacion``.
 
     CFG-01 (D4): en el alta el identificador y el codigo son opcionales.
     Sin identificador lo genera la base (``INS-NNN``); sin codigo se usa el
@@ -295,7 +377,16 @@ def guardar_insumo(
                     if stock_minimo is MANTENER
                     else stock_minimo
                 ),
+                **_clasificacion_pedida(
+                    anterior,
+                    categoria_id=categoria_id,
+                    fabricante_id=fabricante_id,
+                    variante=variante,
+                    codigo_fabricante=codigo_fabricante,
+                    modelos_compatibles=modelos_compatibles,
+                ),
             )
+            _validar_clasificacion(contexto, repositorio, anterior, insumo)
             if anterior is not None and insumo.control is not anterior.control:
                 # DEC-MI-10: transicion controlada del stock existente.
                 contexto.catalogos.bloquear_insumos([anterior.id])

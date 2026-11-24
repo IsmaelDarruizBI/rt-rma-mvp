@@ -8,7 +8,9 @@ from typing import Protocol
 
 from app.domain.models import (
     CambioConfiguracion,
+    CategoriaInsumo,
     DatosEmpresa,
+    FabricanteRepuesto,
     Insumo,
     TextoLegal,
 )
@@ -26,7 +28,7 @@ class ConfiguracionOperativaRepository(Protocol):
 
     def reservar_codigo(self, prefijo: str) -> str:
         """CFG-01: el codigo siguiente libre de ``prefijo`` (CANC, INT, INS,
-        CHK) dentro de la transaccion del alta."""
+        CHK, CAT, FAB) dentro de la transaccion del alta."""
         ...
 
     def listar_motivos(
@@ -47,10 +49,34 @@ class ConfiguracionOperativaRepository(Protocol):
         self, clave: str, valor: str, cambio: CambioConfiguracion
     ) -> None: ...
 
-    # DEC-MI-13: alta y edicion de insumos (sin tocar el stock).
+    # DEC-MI-13: alta y edicion de insumos (sin tocar el stock). DEC-AJ-14:
+    # tambien su clasificacion y el conjunto de modelos compatibles, que
+    # reemplaza al anterior en la misma transaccion.
     def guardar_insumo(
         self,
         insumo: Insumo,
+        *,
+        nuevo: bool,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None: ...
+
+    # DEC-AJ-14: categorias (dos niveles) y fabricantes de repuestos. En
+    # JSON, listas vacias y de solo lectura.
+    def listar_categorias_insumo(self) -> list[CategoriaInsumo]: ...
+
+    def guardar_categoria_insumo(
+        self,
+        categoria: CategoriaInsumo,
+        *,
+        nuevo: bool,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None: ...
+
+    def listar_fabricantes_repuesto(self) -> list[FabricanteRepuesto]: ...
+
+    def guardar_fabricante_repuesto(
+        self,
+        fabricante: FabricanteRepuesto,
         *,
         nuevo: bool,
         cambios: Sequence[CambioConfiguracion],

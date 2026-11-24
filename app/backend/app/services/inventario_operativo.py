@@ -180,7 +180,8 @@ def filtrar_situaciones(
     solo_faltantes: bool = False,
     bajo_minimo: bool = False,
 ) -> list[SituacionInsumo]:
-    """Busqueda por codigo o nombre (sin distinguir mayusculas).
+    """Busqueda por codigo, nombre, codigo del fabricante o variante (sin
+    distinguir mayusculas).
 
     ``solo_faltantes``: disponible o fisico negativos. ``bajo_minimo``
     (DEC-AJ-11): insumos vigentes por debajo de su minimo, con o sin
@@ -194,6 +195,9 @@ def filtrar_situaciones(
             or texto in situacion.insumo.codigo.lower()
             or texto in situacion.insumo.nombre.lower()
             or texto in situacion.insumo.id.lower()
+            # DEC-AJ-14: tambien por el codigo del fabricante y la variante.
+            or texto in (situacion.insumo.codigo_fabricante or "").lower()
+            or texto in (situacion.insumo.variante or "").lower()
         )
         and (not solo_faltantes or situacion.faltante)
         and (not bajo_minimo or situacion.bajo_minimo)

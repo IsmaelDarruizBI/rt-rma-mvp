@@ -88,6 +88,46 @@ class Insumo(BaseModel):
     # el fisico). Sin minimo (None) el insumo no alerta: los existentes
     # siguen igual.
     stock_minimo: Decimal | None = Field(default=None, ge=0)
+    # DEC-AJ-14 (D-14.2): clasificacion opcional y gradual. ``categoria_id``
+    # es el nivel mas especifico (una subcategoria o, si no tiene, una
+    # categoria; la categoria padre se deriva del catalogo). Codigos
+    # estables: ``CAT-…``, ``FAB-…`` y ``MOD-…``.
+    categoria_id: str | None = None
+    fabricante_id: str | None = None
+    variante: str | None = None
+    # Numero de parte del fabricante o del proveedor, para buscar: no es
+    # unico y no reemplaza al codigo INS.
+    codigo_fabricante: str | None = None
+    # Modelos de equipo compatibles, ordenados. Vacio: universal (compatible
+    # con todos). Los insumos existentes (y el modo JSON) quedan asi.
+    modelos_compatibles: tuple[str, ...] = ()
+
+
+class CategoriaInsumo(BaseModel):
+    """Categoria o subcategoria de insumos (DEC-AJ-14), dos niveles fijos.
+
+    ``padre_id`` ``None``: una categoria («Baterias»). Con padre: una
+    subcategoria de esa categoria («Modulos › OLED»). El padre no cambia
+    despues del alta. No se borra: se desactiva.
+    """
+
+    id: str = Field(pattern=r"^CAT-\d{3,}$")
+    nombre: str = Field(min_length=1)
+    padre_id: str | None = None
+    activo: bool = True
+
+    @property
+    def es_subcategoria(self) -> bool:
+        return self.padre_id is not None
+
+
+class FabricanteRepuesto(BaseModel):
+    """Fabricante o marca de repuestos (DEC-AJ-14), distinto de la marca
+    del equipo. No cambia el Tipo ni el precio de venta (D-14.3)."""
+
+    id: str = Field(pattern=r"^FAB-\d{3,}$")
+    nombre: str = Field(min_length=1)
+    activo: bool = True
 
 
 class TipoReparacionInsumos(BaseModel):

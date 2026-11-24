@@ -4,6 +4,9 @@ Solo lectura. El frontend los usa para poblar selectores: tipos de
 reparacion al definir un Detalle, estaciones al tomar una Orden,
 usuarios para el selector de actor DEMO, medios de pago para cobrar o
 devolver dinero y prioridades al ingresar una Orden a la cola.
+
+DEC-AJ-14: categorias, fabricantes y modelos para nombrar, buscar y
+filtrar insumos (Inventario, Compras y la eleccion de piezas).
 """
 
 from fastapi import APIRouter
@@ -82,6 +85,16 @@ def get_motivos(
 ) -> list[MotivoOperativo]:
     """Motivos de cancelacion o interrupcion (DEC-MI-15)."""
     return listar_motivos(contexto, tipo)
+
+
+@router.get("/supply-classification")
+def get_clasificacion_insumos(contexto: ContextoDep) -> dict:
+    """Categorias (con sus subcategorias), fabricantes y modelos de equipo,
+    activos o no, para nombrar y filtrar insumos (DEC-AJ-14). En el modo
+    JSON, sin categorias ni fabricantes."""
+    from .configuracion import clasificacion_out
+
+    return clasificacion_out(contexto)
 
 
 @router.get("/checklist")

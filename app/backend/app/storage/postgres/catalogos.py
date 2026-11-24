@@ -95,23 +95,35 @@ _TIPO = consulta(
     """,
     modo=LECTURA,
 )
+# DEC-AJ-14: la clasificacion por codigo (CAT-…, FAB-…) y los modelos
+# compatibles ordenados, en la misma lectura (sin modelos: universal).
+_COLUMNAS_INSUMO = """
+    SELECT i.clave, i.codigo, i.nombre, i.unidad, i.stock_fisico, i.activo,
+           i.control, i.precio, i.stock_minimo,
+           c.codigo AS categoria, f.codigo AS fabricante, i.variante,
+           i.codigo_fabricante,
+           ARRAY(SELECT m.codigo
+                   FROM rma.insumo_compatibilidad x
+                   JOIN rma.modelo_equipo m ON m.id = x.modelo_equipo_id
+                  WHERE x.insumo_id = i.id
+                  ORDER BY m.codigo COLLATE "C") AS modelos
+    FROM rma.insumo i
+    LEFT JOIN rma.categoria_insumo c ON c.id = i.categoria_id
+    LEFT JOIN rma.fabricante_repuesto f ON f.id = i.fabricante_id
+"""
 _INSUMOS = consulta(
     "catalogos.insumos",
-    """
-    SELECT clave, codigo, nombre, unidad, stock_fisico, activo,
-           control, precio, stock_minimo
-    FROM rma.insumo
-    ORDER BY clave COLLATE "C"
+    _COLUMNAS_INSUMO
+    + """
+    ORDER BY i.clave COLLATE "C"
     """,
     modo=LECTURA,
 )
 _INSUMO = consulta(
     "catalogos.insumo",
-    """
-    SELECT clave, codigo, nombre, unidad, stock_fisico, activo,
-           control, precio, stock_minimo
-    FROM rma.insumo
-    WHERE clave = %(clave)s
+    _COLUMNAS_INSUMO
+    + """
+    WHERE i.clave = %(clave)s
     """,
     modo=LECTURA,
 )
@@ -625,6 +637,11 @@ def _insumo(f) -> Insumo:
             if f.stock_minimo is None
             else decimal_sin_ceros(f.stock_minimo)
         ),
+        categoria_id=f.categoria,
+        fabricante_id=f.fabricante,
+        variante=f.variante,
+        codigo_fabricante=f.codigo_fabricante,
+        modelos_compatibles=tuple(f.modelos or ()),
     )
 
 

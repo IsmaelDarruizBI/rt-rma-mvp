@@ -14,7 +14,20 @@ from .consultas import ESCRITURA, consulta
 from .transaccion import UnidadDeTrabajoPostgres
 
 PREFIJOS = frozenset(
-    {"TR", "CANC", "INT", "INS", "PRV", "CHK", "SC", "OC", "RGA", "MOD"}
+    {
+        "TR",
+        "CANC",
+        "INT",
+        "INS",
+        "PRV",
+        "CHK",
+        "SC",
+        "OC",
+        "RGA",
+        "MOD",
+        "CAT",
+        "FAB",
+    }
 )
 
 _SIGUIENTE = consulta(

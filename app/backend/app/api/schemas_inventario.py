@@ -111,6 +111,14 @@ class SituacionInsumoOut(BaseModel):
     en_camino: Decimal = Decimal("0")
     estado_reposicion: EstadoReposicion = EstadoReposicion.SIN_MINIMO
     bajo_minimo: bool = False
+    # DEC-AJ-14: clasificacion (codigos CAT y FAB) y modelos compatibles
+    # (vacio: universal). Los nombres salen de
+    # /api/catalogs/supply-classification.
+    categoria_id: str | None = None
+    fabricante_id: str | None = None
+    variante: str | None = None
+    codigo_fabricante: str | None = None
+    modelos_compatibles: list[str] = []
 
     @classmethod
     def desde_servicio(
@@ -135,6 +143,11 @@ class SituacionInsumoOut(BaseModel):
             en_camino=situacion.en_camino,
             estado_reposicion=situacion.estado_reposicion,
             bajo_minimo=situacion.bajo_minimo,
+            categoria_id=insumo.categoria_id,
+            fabricante_id=insumo.fabricante_id,
+            variante=insumo.variante,
+            codigo_fabricante=insumo.codigo_fabricante,
+            modelos_compatibles=list(insumo.modelos_compatibles),
         )
 
 

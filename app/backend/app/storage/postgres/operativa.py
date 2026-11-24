@@ -7,7 +7,9 @@ from decimal import Decimal
 
 from app.domain.models import (
     CambioConfiguracion,
+    CategoriaInsumo,
     DatosEmpresa,
+    FabricanteRepuesto,
     Insumo,
     TextoLegal,
 )
@@ -103,14 +105,24 @@ _ACTUALIZAR_PLANTILLA = consulta(
     modo=ESCRITURA,
 )
 
+# DEC-AJ-14: la categoria y el fabricante por su codigo (CAT-…, FAB-…). Un
+# codigo informado que no existe no se guarda vacio en silencio: el conteo
+# de filas lo detecta (el service ya lo valido).
 _INSERTAR_INSUMO = consulta(
     "operativa.insertar_insumo",
     """
     INSERT INTO rma.insumo
         (clave, codigo, nombre, unidad, activo, control, precio,
-         stock_minimo)
-    VALUES (%(clave)s, %(codigo)s, %(nombre)s, %(unidad)s, %(activo)s,
-            %(control)s, %(precio)s, %(stock_minimo)s)
+         stock_minimo, categoria_id, fabricante_id, variante,
+         codigo_fabricante)
+    SELECT %(clave)s, %(codigo)s, %(nombre)s, %(unidad)s, %(activo)s,
+           %(control)s, %(precio)s, %(stock_minimo)s, c.id, f.id,
+           %(variante)s, %(codigo_fabricante)s
+      FROM (SELECT 1) AS uno
+      LEFT JOIN rma.categoria_insumo c ON c.codigo = %(categoria)s
+      LEFT JOIN rma.fabricante_repuesto f ON f.codigo = %(fabricante)s
+     WHERE (%(categoria)s::text IS NULL OR c.id IS NOT NULL)
+       AND (%(fabricante)s::text IS NULL OR f.id IS NOT NULL)
     ON CONFLICT DO NOTHING
     """,
     modo=ESCRITURA,
@@ -121,8 +133,114 @@ _ACTUALIZAR_INSUMO = consulta(
     UPDATE rma.insumo
        SET nombre = %(nombre)s, unidad = %(unidad)s, activo = %(activo)s,
            control = %(control)s, precio = %(precio)s,
-           stock_minimo = %(stock_minimo)s
+           stock_minimo = %(stock_minimo)s,
+           categoria_id = (SELECT id FROM rma.categoria_insumo
+                            WHERE codigo = %(categoria)s),
+           fabricante_id = (SELECT id FROM rma.fabricante_repuesto
+                             WHERE codigo = %(fabricante)s),
+           variante = %(variante)s,
+           codigo_fabricante = %(codigo_fabricante)s
      WHERE clave = %(clave)s
+       AND (%(categoria)s::text IS NULL OR EXISTS (
+               SELECT 1 FROM rma.categoria_insumo
+                WHERE codigo = %(categoria)s))
+       AND (%(fabricante)s::text IS NULL OR EXISTS (
+               SELECT 1 FROM rma.fabricante_repuesto
+                WHERE codigo = %(fabricante)s))
+    """,
+    modo=ESCRITURA,
+)
+# El conjunto de modelos compatibles reemplaza al anterior (vacio:
+# universal). Se quitan los que ya no estan y se agregan los nuevos; los
+# que siguen no se tocan.
+_QUITAR_COMPATIBILIDAD = consulta(
+    "operativa.quitar_compatibilidad",
+    """
+    DELETE FROM rma.insumo_compatibilidad x
+     USING rma.insumo i, rma.modelo_equipo m
+     WHERE x.insumo_id = i.id AND x.modelo_equipo_id = m.id
+       AND i.clave = %(clave)s AND NOT (m.codigo = ANY(%(modelos)s))
+    """,
+    modo=ESCRITURA,
+)
+_AGREGAR_COMPATIBILIDAD = consulta(
+    "operativa.agregar_compatibilidad",
+    """
+    INSERT INTO rma.insumo_compatibilidad (insumo_id, modelo_equipo_id)
+    SELECT i.id, m.id
+      FROM rma.insumo i
+      JOIN rma.modelo_equipo m ON m.codigo = ANY(%(modelos)s)
+     WHERE i.clave = %(clave)s
+    ON CONFLICT DO NOTHING
+    """,
+    modo=ESCRITURA,
+)
+_CONTAR_COMPATIBILIDAD = consulta(
+    "operativa.contar_compatibilidad",
+    """
+    SELECT count(*) AS cantidad
+      FROM rma.insumo_compatibilidad x
+      JOIN rma.insumo i ON i.id = x.insumo_id
+     WHERE i.clave = %(clave)s
+    """,
+    modo=LECTURA,
+)
+
+_CATEGORIAS_INSUMO = consulta(
+    "operativa.categorias_insumo",
+    """
+    SELECT c.codigo, c.nombre, p.codigo AS padre, c.activo
+      FROM rma.categoria_insumo c
+      LEFT JOIN rma.categoria_insumo p ON p.id = c.padre_id
+     ORDER BY coalesce(p.nombre, c.nombre), p.codigo IS NOT NULL,
+              c.nombre, c.codigo COLLATE "C"
+    """,
+    modo=LECTURA,
+)
+_INSERTAR_CATEGORIA_INSUMO = consulta(
+    "operativa.insertar_categoria_insumo",
+    """
+    INSERT INTO rma.categoria_insumo (codigo, nombre, padre_id, activo)
+    SELECT %(codigo)s, %(nombre)s, p.id, %(activo)s
+      FROM (SELECT 1) AS uno
+      LEFT JOIN rma.categoria_insumo p ON p.codigo = %(padre)s
+     WHERE (%(padre)s::text IS NULL OR p.id IS NOT NULL)
+    ON CONFLICT DO NOTHING
+    """,
+    modo=ESCRITURA,
+)
+_ACTUALIZAR_CATEGORIA_INSUMO = consulta(
+    "operativa.actualizar_categoria_insumo",
+    """
+    UPDATE rma.categoria_insumo SET nombre = %(nombre)s, activo = %(activo)s
+     WHERE codigo = %(codigo)s
+    """,
+    modo=ESCRITURA,
+)
+_FABRICANTES_REPUESTO = consulta(
+    "operativa.fabricantes_repuesto",
+    """
+    SELECT codigo, nombre, activo
+      FROM rma.fabricante_repuesto
+     ORDER BY nombre, codigo COLLATE "C"
+    """,
+    modo=LECTURA,
+)
+_INSERTAR_FABRICANTE_REPUESTO = consulta(
+    "operativa.insertar_fabricante_repuesto",
+    """
+    INSERT INTO rma.fabricante_repuesto (codigo, nombre, activo)
+    VALUES (%(codigo)s, %(nombre)s, %(activo)s)
+    ON CONFLICT DO NOTHING
+    """,
+    modo=ESCRITURA,
+)
+_ACTUALIZAR_FABRICANTE_REPUESTO = consulta(
+    "operativa.actualizar_fabricante_repuesto",
+    """
+    UPDATE rma.fabricante_repuesto
+       SET nombre = %(nombre)s, activo = %(activo)s
+     WHERE codigo = %(codigo)s
     """,
     modo=ESCRITURA,
 )
@@ -238,7 +356,8 @@ class PostgresConfiguracionOperativa:
 
     def reservar_codigo(self, prefijo: str) -> str:
         """CFG-01: el codigo siguiente libre del prefijo (CANC, INT, INS,
-        CHK), generado por la base dentro de la transaccion del alta."""
+        CHK, CAT, FAB), generado por la base dentro de la transaccion del
+        alta."""
         self._exigir_transaccion()
         return reservar_codigo(self._unidad, prefijo)
 
@@ -314,6 +433,8 @@ class PostgresConfiguracionOperativa:
         nuevo: bool,
         cambios: Sequence[CambioConfiguracion],
     ) -> None:
+        """El insumo, su clasificacion y su compatibilidad (DEC-AJ-14), y
+        la auditoria, en la transaccion del comando."""
         self._exigir_transaccion()
         ejecutor = self._unidad.ejecutor()
         parametros = {
@@ -325,16 +446,118 @@ class PostgresConfiguracionOperativa:
             "control": insumo.control.value,
             "precio": insumo.precio,
             "stock_minimo": insumo.stock_minimo,
+            "categoria": insumo.categoria_id,
+            "fabricante": insumo.fabricante_id,
+            "variante": insumo.variante,
+            "codigo_fabricante": insumo.codigo_fabricante,
         }
         if nuevo:
             if ejecutor.ejecutar(_INSERTAR_INSUMO, parametros) != 1:
                 raise CodigoExistenteError(
                     f"No se pudo dar de alta el insumo {insumo.id}: el "
-                    "codigo o el identificador ya existe."
+                    "codigo o el identificador ya existe, o la categoria o "
+                    "el fabricante no existen."
                 )
         elif ejecutor.ejecutar(_ACTUALIZAR_INSUMO, parametros) != 1:
             raise EntidadPersistidaNoEncontradaError(
-                f"No existe el insumo {insumo.id}"
+                f"No existe el insumo {insumo.id}, o la categoria o el "
+                "fabricante no existen."
+            )
+        modelos = {
+            "clave": insumo.id,
+            "modelos": list(insumo.modelos_compatibles),
+        }
+        if not nuevo:
+            ejecutor.ejecutar(_QUITAR_COMPATIBILIDAD, modelos)
+        if insumo.modelos_compatibles:
+            ejecutor.ejecutar(_AGREGAR_COMPATIBILIDAD, modelos)
+        guardados = ejecutor.fila(_CONTAR_COMPATIBILIDAD, modelos).cantidad
+        if guardados != len(insumo.modelos_compatibles):
+            raise PersistenciaError(
+                f"La compatibilidad del insumo {insumo.id} no quedo como se "
+                "pidio: algun modelo no existe."
+            )
+        self._auditoria._auditar(ejecutor, cambios)
+
+    # --- Categorias y fabricantes (DEC-AJ-14) ---
+
+    def listar_categorias_insumo(self) -> list[CategoriaInsumo]:
+        with self._unidad.lectura() as lector:
+            filas = lector.filas(_CATEGORIAS_INSUMO)
+        return [
+            CategoriaInsumo(
+                id=f.codigo,
+                nombre=f.nombre,
+                padre_id=f.padre,
+                activo=f.activo,
+            )
+            for f in filas
+        ]
+
+    def guardar_categoria_insumo(
+        self,
+        categoria: CategoriaInsumo,
+        *,
+        nuevo: bool,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None:
+        self._exigir_transaccion()
+        ejecutor = self._unidad.ejecutor()
+        parametros = {
+            "codigo": categoria.id,
+            "nombre": categoria.nombre,
+            "padre": categoria.padre_id,
+            "activo": categoria.activo,
+        }
+        if nuevo:
+            if ejecutor.ejecutar(_INSERTAR_CATEGORIA_INSUMO, parametros) != 1:
+                raise CodigoExistenteError(
+                    f"No se pudo dar de alta la categoria {categoria.id}: el "
+                    "codigo o el nombre ya existen, o la categoria padre no "
+                    "existe."
+                )
+        elif ejecutor.ejecutar(_ACTUALIZAR_CATEGORIA_INSUMO, parametros) != 1:
+            raise EntidadPersistidaNoEncontradaError(
+                f"No existe la categoria {categoria.id}"
+            )
+        self._auditoria._auditar(ejecutor, cambios)
+
+    def listar_fabricantes_repuesto(self) -> list[FabricanteRepuesto]:
+        with self._unidad.lectura() as lector:
+            filas = lector.filas(_FABRICANTES_REPUESTO)
+        return [
+            FabricanteRepuesto(id=f.codigo, nombre=f.nombre, activo=f.activo)
+            for f in filas
+        ]
+
+    def guardar_fabricante_repuesto(
+        self,
+        fabricante: FabricanteRepuesto,
+        *,
+        nuevo: bool,
+        cambios: Sequence[CambioConfiguracion],
+    ) -> None:
+        self._exigir_transaccion()
+        ejecutor = self._unidad.ejecutor()
+        parametros = {
+            "codigo": fabricante.id,
+            "nombre": fabricante.nombre,
+            "activo": fabricante.activo,
+        }
+        if nuevo:
+            insertadas = ejecutor.ejecutar(
+                _INSERTAR_FABRICANTE_REPUESTO, parametros
+            )
+            if insertadas != 1:
+                raise CodigoExistenteError(
+                    f"No se pudo dar de alta el fabricante {fabricante.id}: "
+                    "el codigo o el nombre ya existen."
+                )
+        elif (
+            ejecutor.ejecutar(_ACTUALIZAR_FABRICANTE_REPUESTO, parametros) != 1
+        ):
+            raise EntidadPersistidaNoEncontradaError(
+                f"No existe el fabricante {fabricante.id}"
             )
         self._auditoria._auditar(ejecutor, cambios)
 

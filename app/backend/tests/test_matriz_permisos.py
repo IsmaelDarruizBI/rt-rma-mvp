@@ -65,6 +65,8 @@ MATRIZ = {
         "CATALOGO_EQUIPOS_SINCRONIZAR"
     ),
     ("GET", "/api/catalogs/device-models"): SESION,
+    # DEC-AJ-14: categorias, fabricantes y modelos para nombrar insumos.
+    ("GET", "/api/catalogs/supply-classification"): SESION,
     ("GET", "/api/clients/lookup"): API("CLIENTE_BUSCAR"),
     ("GET", "/api/orders"): API("ORDENES_CONSULTAR"),
     ("GET", "/api/orders/authorizations/pending"): API("ORDENES_CONSULTAR"),
@@ -304,6 +306,14 @@ MATRIZ = {
     ("GET", "/api/admin/supplies"): API("INSUMO_GESTIONAR"),
     ("POST", "/api/admin/supplies"): API("INSUMO_GESTIONAR"),
     ("PUT", "/api/admin/supplies/{clave}"): API("INSUMO_GESTIONAR"),
+    # DEC-AJ-14: categorias y fabricantes (punto 10 de la resolucion).
+    ("GET", "/api/admin/supply-classification"): API("INSUMO_GESTIONAR"),
+    ("POST", "/api/admin/supply-categories"): API("INSUMO_GESTIONAR"),
+    ("PUT", "/api/admin/supply-categories/{codigo}"): API("INSUMO_GESTIONAR"),
+    ("POST", "/api/admin/supply-manufacturers"): API("INSUMO_GESTIONAR"),
+    ("PUT", "/api/admin/supply-manufacturers/{codigo}"): API(
+        "INSUMO_GESTIONAR"
+    ),
     ("GET", "/api/admin/checklist"): API("CHECKLIST_GESTIONAR"),
     ("POST", "/api/admin/equipment-types/sync"): API("CHECKLIST_GESTIONAR"),
     ("POST", "/api/admin/checklist-questions"): API("CHECKLIST_GESTIONAR"),

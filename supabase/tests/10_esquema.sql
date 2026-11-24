@@ -13,12 +13,15 @@ declare
     'accion_usuario', 'evento_negocio', 'tipo_evento', 'equivalencia_historial', 'auditoria_tecnica', 'cambio_configuracion', 'permiso', 'reclamo_garantia', 'motivo_operativo', 'parametro', 'seguimiento_retiro', 'plantilla_mensaje', 'comunicacion_cliente', 'comunicacion_confirmacion', 'consentimiento_comunicacion', 'firma_documento', 'correccion_vinculo_equipo', 'lote_insumo', 'proveedor', 'solicitud_compra', 'orden_compra', 'orden_compra_item', 'recepcion_compra', 'recepcion_compra_linea', 'tipo_equipo', 'checklist_pregunta', 'checklist_registro', 'informacion_faltante_confirmacion',
     'sincronizacion_origen', 'catalogo_producto', 'producto_rt',
     'usuario', 'rol', 'usuario_rol', 'mesa_trabajo', 'mesa_tipo_reparacion', 'tipo_reparacion',
-    'tipo_reparacion_insumo', 'medio_pago', 'tipo_documento', 'motivo_ajuste', 'empresa', 'texto_legal'
+    'tipo_reparacion_insumo', 'medio_pago', 'tipo_documento', 'motivo_ajuste', 'empresa', 'texto_legal',
+    -- Iteración 2: DEC-AJ-10, DEC-AJ-12, DEC-AJ-13 y DEC-AJ-14.
+    'descuento_recalculo', 'precio_tipo_modelo', 'importacion_precio',
+    'categoria_insumo', 'fabricante_repuesto', 'insumo_compatibilidad'
   ];
   v_faltan text[];
   v_sobran text[];
 begin
-  perform rma_pruebas.debe_ser(cardinality(v_esperadas), 72, 'el diseño lógico tiene 72 entidades');
+  perform rma_pruebas.debe_ser(cardinality(v_esperadas), 78, 'el diseño lógico tiene 78 entidades');
   select array_agg(t) into v_faltan from unnest(v_esperadas) t
    where not exists (select 1 from information_schema.tables
                       where table_schema = 'rma' and table_name = t and table_type = 'BASE TABLE');

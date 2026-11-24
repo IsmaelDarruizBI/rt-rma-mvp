@@ -208,13 +208,30 @@ CAMPOS_INSUMO = (
     "control",
     "precio",
     "stock_minimo",
+    # DEC-AJ-14: clasificacion y compatibilidad (codigos CAT, FAB y MOD).
+    "categoria",
+    "fabricante",
+    "variante",
+    "codigo_fabricante",
+    "compatibilidad",
 )
+
+# Campo de la auditoria -> atributo del insumo, cuando difieren.
+_ATRIBUTO_INSUMO = {
+    "categoria": "categoria_id",
+    "fabricante": "fabricante_id",
+    "compatibilidad": "modelos_compatibles",
+}
 
 
 def _texto_insumo(insumo: Insumo, campo: str) -> str | None:
     """Como lo guarda la auditoria. El stock minimo con sus decimales
-    (hasta tres, sin ceros de mas): ``texto`` redondea a dos."""
-    valor = getattr(insumo, campo)
+    (hasta tres, sin ceros de mas): ``texto`` redondea a dos. La
+    compatibilidad, los codigos MOD ordenados y separados por coma; vacia
+    (universal) es ``None``."""
+    valor = getattr(insumo, _ATRIBUTO_INSUMO.get(campo, campo))
+    if campo == "compatibilidad":
+        return ", ".join(sorted(valor)) or None
     if campo == "stock_minimo" and valor is not None:
         return format(valor.quantize(Decimal("0.001")).normalize(), "f")
     return texto(valor)
@@ -278,7 +295,7 @@ def cambios_de_insumo(
             fecha=fecha,
         )
         for campo in CAMPOS_INSUMO
-        if (anterior is None and getattr(nuevo, campo) is not None)
+        if (anterior is None and _texto_insumo(nuevo, campo) is not None)
         or (
             anterior is not None
             and _texto_insumo(anterior, campo) != _texto_insumo(nuevo, campo)

@@ -30,6 +30,10 @@ class EntidadConfiguracion(str, Enum):
     # «TR-001/MOD-0012», campo «precio»).
     MODELO_EQUIPO = "MODELO_EQUIPO"
     PRECIO_MODELO = "PRECIO_MODELO"
+    # DEC-AJ-14: categorias de insumos y fabricantes de repuestos. La
+    # clasificacion y la compatibilidad de un insumo van en INSUMO.
+    CATEGORIA_INSUMO = "CATEGORIA_INSUMO"
+    FABRICANTE_REPUESTO = "FABRICANTE_REPUESTO"
 
 
 class CambioConfiguracion(BaseModel):

@@ -20,6 +20,13 @@
     PUT  /api/admin/company                   edicion, con auditoria
     GET  /api/admin/terms                     versiones de los terminos
     POST /api/admin/terms                     publica una version nueva
+    GET  /api/admin/supply-classification     categorias, fabricantes y
+                                              modelos (DEC-AJ-14)
+    POST /api/admin/supply-categories         alta de una categoria o
+                                              subcategoria (CAT-NNN)
+    PUT  /api/admin/supply-categories/{codigo}       edicion o baja
+    POST /api/admin/supply-manufacturers      alta de un fabricante (FAB-NNN)
+    PUT  /api/admin/supply-manufacturers/{codigo}    edicion o baja
 
 Solo Administracion (con sesion real, 403 para los demas roles; el caso de
 uso lo valida igual). Las escrituras exigen PostgreSQL (DC23).
@@ -34,6 +41,11 @@ from app.application.checklist import catalogo as catalogo_checklist
 from app.application.checklist import (
     guardar_pregunta,
     sincronizar_tipos_equipo,
+)
+from app.application.clasificacion_insumos import (
+    clasificacion_insumos,
+    guardar_categoria_insumo,
+    guardar_fabricante_repuesto,
 )
 from app.application.comprobantes import (
     datos_empresa,
@@ -120,6 +132,8 @@ PERMISO_DE_ENTIDAD = {
     EntidadConfiguracion.PRECIO_MODELO: (permisos.PRECIOS_GESTIONAR,),
     EntidadConfiguracion.MOTIVO: (permisos.MOTIVO_GESTIONAR,),
     EntidadConfiguracion.INSUMO: (permisos.INSUMO_GESTIONAR,),
+    EntidadConfiguracion.CATEGORIA_INSUMO: (permisos.INSUMO_GESTIONAR,),
+    EntidadConfiguracion.FABRICANTE_REPUESTO: (permisos.INSUMO_GESTIONAR,),
     EntidadConfiguracion.PLANTILLA: (permisos.PLANTILLA_GESTIONAR,),
     EntidadConfiguracion.CHECKLIST: (permisos.CHECKLIST_GESTIONAR,),
     EntidadConfiguracion.PROVEEDOR: (permisos.PROVEEDOR_GESTIONAR,),
@@ -549,11 +563,38 @@ class InsumoIn(BaseModel):
     # DEC-AJ-11: opcional; null lo quita. En la edicion, si no se informa,
     # se conserva el actual.
     stock_minimo: Decimal | None = Field(default=None, ge=0)
+    # DEC-AJ-14: clasificacion (codigos CAT y FAB) y modelos compatibles
+    # (codigos MOD; lista vacia: universal). En la edicion, el que no se
+    # informa se conserva; null (o la lista vacia) lo quita.
+    categoria_id: str | None = None
+    fabricante_id: str | None = None
+    variante: str | None = None
+    codigo_fabricante: str | None = None
+    modelos_compatibles: list[str] | None = None
+
+    def pedido(self, campo: str):
+        """El valor informado, o ``MANTENER`` si el pedido no lo trae."""
+        if campo in self.model_fields_set:
+            valor = getattr(self, campo)
+            if campo == "modelos_compatibles":
+                return valor or []
+            return valor
+        return MANTENER
 
     def stock_minimo_pedido(self):
-        if "stock_minimo" in self.model_fields_set:
-            return self.stock_minimo
-        return MANTENER
+        return self.pedido("stock_minimo")
+
+    def clasificacion_pedida(self) -> dict:
+        return {
+            campo: self.pedido(campo)
+            for campo in (
+                "categoria_id",
+                "fabricante_id",
+                "variante",
+                "codigo_fabricante",
+                "modelos_compatibles",
+            )
+        }
 
 
 class AltaInsumoIn(InsumoIn):
@@ -586,6 +627,7 @@ def post_insumo(cuerpo: AltaInsumoIn, contexto: ContextoDep) -> dict:
         control=cuerpo.control,
         precio=cuerpo.precio,
         stock_minimo=cuerpo.stock_minimo,
+        **cuerpo.clasificacion_pedida(),
     ).model_dump(mode="json")
 
 
@@ -603,6 +645,92 @@ def put_insumo(clave: str, cuerpo: InsumoIn, contexto: ContextoDep) -> dict:
         control=cuerpo.control,
         precio=cuerpo.precio,
         stock_minimo=cuerpo.stock_minimo_pedido(),
+        **cuerpo.clasificacion_pedida(),
+    ).model_dump(mode="json")
+
+
+# --- Clasificacion de insumos (DEC-AJ-14) -----------------------------------
+
+
+class CategoriaInsumoIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+    nombre: str = Field(min_length=1)
+    activo: bool = True
+    # Solo en el alta: la categoria de una subcategoria (CAT-…). Vacio: una
+    # categoria de primer nivel. No cambia despues.
+    padre_id: str | None = None
+
+
+class FabricanteRepuestoIn(BaseModel):
+    usuario_id: str = Field(min_length=1)
+    nombre: str = Field(min_length=1)
+    activo: bool = True
+
+
+def clasificacion_out(contexto) -> dict:
+    clasificacion = clasificacion_insumos(contexto)
+    return {
+        "categorias": [
+            c.model_dump(mode="json") for c in clasificacion.categorias
+        ],
+        "fabricantes": [
+            f.model_dump(mode="json") for f in clasificacion.fabricantes
+        ],
+        "modelos": [
+            {
+                "id": m.id,
+                "marca": m.marca,
+                "nombre": m.nombre,
+                "activo": m.activo,
+            }
+            for m in clasificacion.modelos
+        ],
+    }
+
+
+@router.get("/supply-classification", dependencies=_insumos)
+def get_clasificacion_admin(contexto: ContextoDep) -> dict:
+    """Categorias, fabricantes y modelos, activos o no, y si se pueden
+    editar (solo PostgreSQL)."""
+    return {
+        "editable": contexto.operativa.editable,
+        **clasificacion_out(contexto),
+    }
+
+
+@router.post("/supply-categories", dependencies=_insumos)
+def post_categoria_insumo(
+    cuerpo: CategoriaInsumoIn, contexto: ContextoDep
+) -> dict:
+    return guardar_categoria_insumo(
+        contexto, **cuerpo.model_dump(), nuevo=True
+    ).model_dump(mode="json")
+
+
+@router.put("/supply-categories/{codigo}", dependencies=_insumos)
+def put_categoria_insumo(
+    codigo: str, cuerpo: CategoriaInsumoIn, contexto: ContextoDep
+) -> dict:
+    return guardar_categoria_insumo(
+        contexto, codigo=codigo, **cuerpo.model_dump(), nuevo=False
+    ).model_dump(mode="json")
+
+
+@router.post("/supply-manufacturers", dependencies=_insumos)
+def post_fabricante_repuesto(
+    cuerpo: FabricanteRepuestoIn, contexto: ContextoDep
+) -> dict:
+    return guardar_fabricante_repuesto(
+        contexto, **cuerpo.model_dump(), nuevo=True
+    ).model_dump(mode="json")
+
+
+@router.put("/supply-manufacturers/{codigo}", dependencies=_insumos)
+def put_fabricante_repuesto(
+    codigo: str, cuerpo: FabricanteRepuestoIn, contexto: ContextoDep
+) -> dict:
+    return guardar_fabricante_repuesto(
+        contexto, codigo=codigo, **cuerpo.model_dump(), nuevo=False
     ).model_dump(mode="json")
 
 

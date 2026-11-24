@@ -39,6 +39,20 @@ class JsonConfiguracionOperativa:
     def guardar_insumo(self, insumo, *, nuevo, cambios) -> None:
         raise NotImplementedError
 
+    # DEC-AJ-14: sin clasificacion en el modo JSON (los insumos quedan sin
+    # clasificar y universales).
+    def listar_categorias_insumo(self):
+        return []
+
+    def guardar_categoria_insumo(self, categoria, *, nuevo, cambios) -> None:
+        raise NotImplementedError
+
+    def listar_fabricantes_repuesto(self):
+        return []
+
+    def guardar_fabricante_repuesto(self, fabricante, *, nuevo, cambios):
+        raise NotImplementedError
+
     def guardar_recargo_medio_pago(self, medio_id, porcentaje, cambio) -> None:
         raise NotImplementedError
 
