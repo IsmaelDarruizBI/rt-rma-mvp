@@ -1510,6 +1510,18 @@ export interface SituacionInsumo {
   fisico_negativo: boolean;
   ordenes_con_reserva: number;
   detalles_con_reserva: number;
+  /** DEC-AJ-11: mínimo opcional (null: sin mínimo). */
+  stock_minimo?: string | null;
+  /** Lo pedido y no recibido (Compras); "0" sin Compras. */
+  en_camino?: string;
+  /** Contra el disponible; no es un faltante. */
+  estado_reposicion?:
+    | "SIN_MINIMO"
+    | "SUFICIENTE"
+    | "BAJO_MINIMO"
+    | "BAJO_MINIMO_REPOSICION_SOLICITADA";
+  /** Vigente y por debajo del mínimo (con o sin reposición solicitada). */
+  bajo_minimo?: boolean;
 }
 
 export interface ReservaVigente {

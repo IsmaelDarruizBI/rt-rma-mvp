@@ -2,9 +2,11 @@
  * Inventario operativo: existencias, movimientos, ingresos, ajustes y
  * revalidación de Órdenes que esperan recursos.
  *
- * Todo cálculo (reservado, disponible, faltantes) y toda regla (rol,
- * motivo, duplicados, confirmación) vive en el backend; acá se muestra lo
- * que devuelve y se piden confirmaciones antes de enviar.
+ * Todo cálculo (reservado, disponible, faltantes, estado frente al stock
+ * mínimo) y toda regla (rol, motivo, duplicados, confirmación) vive en el
+ * backend; acá se muestra lo que devuelve y se piden confirmaciones antes
+ * de enviar. El stock mínimo (DEC-AJ-11) no es un faltante: tiene su propio
+ * filtro e indicador.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -39,6 +41,7 @@ import {
   SelectorLote,
   useSaldosLotes,
 } from "./lotes";
+import { NOMBRE_REPOSICION, tonoReposicion } from "./stockMinimo";
 
 /** Provisorio, a validar con Rosario Tecno (el backend lo exige igual). */
 const ROLES_GESTION: RolUsuario[] = ["ADMINISTRADOR", "COORDINADOR_RMA"];
@@ -100,6 +103,7 @@ export function InventarioPanel({
   const [buscar, setBuscar] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [soloFaltantes, setSoloFaltantes] = useState(false);
+  const [bajoMinimo, setBajoMinimo] = useState(false);
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<DetalleInsumo | null>(null);
   const [revalidacion, setRevalidacion] = useState<ResultadoRevalidacion | null>(null);
@@ -124,17 +128,17 @@ export function InventarioPanel({
     const lectura = ultimaLectura.current;
     try {
       const [lista, elegido] = await Promise.all([
-        api.listarInventario(busqueda || null, soloFaltantes),
+        api.listarInventario(busqueda || null, soloFaltantes, bajoMinimo),
         seleccionado ? api.obtenerInsumo(seleccionado) : null,
       ]);
-      if (!busqueda && !soloFaltantes) ultimoInventario = lista;
+      if (!busqueda && !soloFaltantes && !bajoMinimo) ultimoInventario = lista;
       if (lectura !== ultimaLectura.current) return;
       setInsumos(lista);
       if (elegido) setDetalle(elegido);
     } catch (fallo) {
       if (lectura === ultimaLectura.current) setError(mensajeDe(fallo));
     }
-  }, [busqueda, soloFaltantes, seleccionado]);
+  }, [busqueda, soloFaltantes, bajoMinimo, seleccionado]);
 
   useEffect(() => {
     void recargar();
@@ -188,6 +192,17 @@ export function InventarioPanel({
               onChange={(evento) => setSoloFaltantes(evento.target.checked)}
             />
             Solo faltantes
+          </label>
+          <label
+            style={{ display: "flex", gap: "0.35rem", alignItems: "center", fontSize: "0.85rem" }}
+            title="Disponible por debajo del stock mínimo, con o sin reposición solicitada"
+          >
+            <input
+              type="checkbox"
+              checked={bajoMinimo}
+              onChange={(evento) => setBajoMinimo(evento.target.checked)}
+            />
+            Bajo mínimo
           </label>
           <Boton
             variante="secundario"
@@ -307,7 +322,7 @@ function TablaInsumos({
   }
   return (
     <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", minWidth: 640, borderCollapse: "collapse", fontSize: "0.85rem" }}>
+      <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", fontSize: "0.85rem" }}>
         <thead>
           <tr style={{ textAlign: "left", color: colores.suave }}>
             <th style={celda}>Código</th>
@@ -317,6 +332,8 @@ function TablaInsumos({
             <th style={{ ...celda, textAlign: "right" }}>Disponible</th>
             <th style={celda}>Reservas</th>
             <th style={celda}>Estado</th>
+            <th style={{ ...celda, textAlign: "right" }}>Mínimo</th>
+            <th style={celda}>Reposición</th>
             <th style={celda} />
           </tr>
         </thead>
@@ -357,6 +374,10 @@ function TablaInsumos({
                   <Etiqueta color={colores.ok}>OK</Etiqueta>
                 )}
               </td>
+              <td style={{ ...celda, textAlign: "right" }}>{insumo.stock_minimo ?? "—"}</td>
+              <td style={celda}>
+                <IndicadorReposicion insumo={insumo} />
+              </td>
               <td style={celda}>
                 <Boton variante="secundario" onClick={() => onSeleccionar(insumo.id)}>
                   Ver
@@ -367,6 +388,40 @@ function TablaInsumos({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** DEC-AJ-11: «Bajo mínimo» (sin reposición pedida) y «reposición
+ * solicitada» se distinguen por color; lo en camino se informa. */
+function IndicadorReposicion({
+  insumo,
+  conEnCamino = true,
+}: {
+  insumo: SituacionInsumo;
+  conEnCamino?: boolean;
+}) {
+  const tono = tonoReposicion(insumo.estado_reposicion);
+  const enCamino =
+    conEnCamino && Number(insumo.en_camino ?? "0") > 0 ? insumo.en_camino : null;
+  if (tono === null) {
+    return (
+      <span style={{ color: colores.suave }}>
+        {insumo.estado_reposicion === "SUFICIENTE" ? "Suficiente" : "—"}
+        {enCamino ? ` · en camino ${enCamino}` : ""}
+      </span>
+    );
+  }
+  return (
+    <span style={{ whiteSpace: "nowrap" }}>
+      <Etiqueta color={tono === "alerta" ? colores.alerta : colores.acento}>
+        {NOMBRE_REPOSICION[insumo.estado_reposicion ?? "SIN_MINIMO"].toUpperCase()}
+      </Etiqueta>
+      {enCamino && (
+        <span style={{ marginLeft: "0.3rem", fontSize: "0.75rem", color: colores.suave }}>
+          en camino {enCamino}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -466,6 +521,15 @@ function DetalleDeInsumo({
         <Etiqueta color={insumo.disponible_negativo ? colores.error : colores.ok}>
           Disponible {insumo.disponible}
         </Etiqueta>
+        {insumo.stock_minimo != null && (
+          <Etiqueta color={colores.texto}>Mínimo {insumo.stock_minimo}</Etiqueta>
+        )}
+        {Number(insumo.en_camino ?? "0") > 0 && (
+          <Etiqueta color={colores.acento}>En camino {insumo.en_camino}</Etiqueta>
+        )}
+        {insumo.stock_minimo != null && (
+          <IndicadorReposicion insumo={insumo} conEnCamino={false} />
+        )}
       </div>
       {insumo.faltante && (
         <p

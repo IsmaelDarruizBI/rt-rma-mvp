@@ -9,6 +9,9 @@
  * - El stock no se edita acá: cambia con movimientos del inventario y un
  *   insumo nuevo empieza en cero. En la persistencia JSON es de solo
  *   lectura.
+ * - DEC-AJ-11: el stock mínimo es opcional (vacío: sin mínimo) y se edita
+ *   en la ventana, con el permiso de insumos y auditoría. Se compara con el
+ *   disponible en Inventario, Inicio y Compras.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -25,6 +28,7 @@ import { Boton, Campo, colores, estiloInput, importe } from "../../components/ui
 import { puede } from "../../lib/roles";
 import type { Usuario } from "../../types/api";
 import { type ControlInsumo, NOMBRE_CONTROL } from "../inventario/lotes";
+import { leerStockMinimo } from "../inventario/stockMinimo";
 import { conElemento, precioValido } from "./listados";
 
 interface InsumoAdmin {
@@ -36,6 +40,8 @@ interface InsumoAdmin {
   activo: boolean;
   control: ControlInsumo;
   precio: string | null;
+  /** DEC-AJ-11 (ausente en un backend anterior). */
+  stock_minimo?: string | null;
 }
 
 interface DatosInsumo {
@@ -43,9 +49,16 @@ interface DatosInsumo {
   unidad: string;
   control: ControlInsumo;
   precio: string;
+  stock_minimo: string;
 }
 
-const NUEVO: DatosInsumo = { nombre: "", unidad: "unidad", control: "SIN_LOTE", precio: "" };
+const NUEVO: DatosInsumo = {
+  nombre: "",
+  unidad: "unidad",
+  control: "SIN_LOTE",
+  precio: "",
+  stock_minimo: "",
+};
 
 export function InsumosAdmin({ actor }: { actor: Usuario }) {
   const [datos, setDatos] = useState<{ editable: boolean; insumos: InsumoAdmin[] } | null>(null);
@@ -84,6 +97,7 @@ export function InsumosAdmin({ actor }: { actor: Usuario }) {
       activo: editado.activo,
       control: editado.control,
       precio: editado.precio,
+      stock_minimo: editado.stock_minimo ?? null,
     };
   };
 
@@ -94,10 +108,12 @@ export function InsumosAdmin({ actor }: { actor: Usuario }) {
     ).then((i) => i && guardado(i, `Se guardó el insumo ${i.id}.`));
 
   const precio = ventana?.datos.precio.trim() ?? "";
+  const minimo = leerStockMinimo(ventana?.datos.stock_minimo ?? "");
   const listo =
     ventana !== null &&
     ventana.datos.nombre.trim() !== "" &&
-    (precio === "" || precioValido(precio));
+    (precio === "" || precioValido(precio)) &&
+    minimo.error === null;
 
   return (
     <section>
@@ -117,7 +133,7 @@ export function InsumosAdmin({ actor }: { actor: Usuario }) {
         <table style={{ borderCollapse: "collapse", fontSize: "0.85rem", minWidth: 620 }}>
           <thead>
             <tr>
-              {["Código", "Nombre", "Unidad", "Stock", "Control", "Precio", "Vigente", ""].map((t) => (
+              {["Código", "Nombre", "Unidad", "Stock", "Stock mínimo", "Control", "Precio", "Vigente", ""].map((t) => (
                 <th key={t} style={{ textAlign: "left", paddingRight: "0.8rem" }}>
                   {t}
                 </th>
@@ -136,6 +152,7 @@ export function InsumosAdmin({ actor }: { actor: Usuario }) {
                 <td style={{ paddingRight: "0.8rem" }}>{insumo.nombre}</td>
                 <td style={{ paddingRight: "0.8rem" }}>{insumo.unidad ?? "—"}</td>
                 <td style={{ paddingRight: "0.8rem", textAlign: "right" }}>{insumo.stock_fisico}</td>
+                <td style={{ paddingRight: "0.8rem", textAlign: "right" }}>{insumo.stock_minimo ?? "—"}</td>
                 <td style={{ paddingRight: "0.8rem" }}>
                   <select
                     value={insumo.control}
@@ -176,6 +193,7 @@ export function InsumosAdmin({ actor }: { actor: Usuario }) {
                             unidad: insumo.unidad ?? "",
                             control: insumo.control,
                             precio: insumo.precio ?? "",
+                            stock_minimo: insumo.stock_minimo ?? "",
                           },
                         })
                       }
@@ -201,6 +219,7 @@ export function InsumosAdmin({ actor }: { actor: Usuario }) {
               nombre: d.nombre.trim(),
               unidad: d.unidad.trim() || null,
               control: d.control,
+              stock_minimo: minimo.valor,
             };
             const resultado = insumo
               ? await put<InsumoAdmin>(
@@ -267,6 +286,28 @@ export function InsumosAdmin({ actor }: { actor: Usuario }) {
               style={{ ...estiloInput, background: editaPrecio ? "#fff" : colores.fondo }}
             />
           </Campo>
+          <Campo etiqueta="Stock mínimo (opcional)">
+            <input
+              inputMode="decimal"
+              value={ventana.datos.stock_minimo}
+              placeholder="Sin mínimo"
+              aria-invalid={minimo.error !== null}
+              onChange={(e) =>
+                setVentana({ ...ventana, datos: { ...ventana.datos, stock_minimo: e.target.value } })
+              }
+              style={estiloInput}
+            />
+          </Campo>
+          <p
+            style={{
+              margin: "0 0 0.6rem",
+              fontSize: "0.8rem",
+              color: minimo.error ? colores.error : colores.suave,
+            }}
+          >
+            {minimo.error ??
+              "Se compara con el disponible (físico menos reservado). Por debajo, Inventario e Inicio avisan y Compras sugiere reponer hasta el mínimo; nunca se compra solo. Vacío: sin mínimo."}
+          </p>
           {!ventana.insumo && (
             <p style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: colores.suave }}>
               El código se asigna al guardar.

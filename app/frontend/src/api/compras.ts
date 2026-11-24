@@ -28,7 +28,7 @@ export interface SolicitudCompra {
   id: string;
   insumo_id: string;
   cantidad: string;
-  origen: "MANUAL" | "FALTANTE";
+  origen: "MANUAL" | "FALTANTE" | "STOCK_MINIMO";
   motivo: string;
   ordenes: string[];
   usuario_id: string;
@@ -46,6 +46,12 @@ export interface SugerenciaCompra {
   en_camino: string;
   sugerido: string;
   ordenes: string[];
+  /** DEC-AJ-11: sugerido = por_faltante + por_minimo. */
+  stock_minimo?: string | null;
+  por_faltante?: string;
+  por_minimo?: string;
+  /** Origen con que se confirma la solicitud. */
+  motivo?: "FALTANTE" | "STOCK_MINIMO";
 }
 
 export interface ItemOrdenCompra {
@@ -123,7 +129,7 @@ export function crearSolicitud(datos: {
   insumo_id: string;
   cantidad: string;
   motivo: string;
-  origen?: "MANUAL" | "FALTANTE";
+  origen?: "MANUAL" | "FALTANTE" | "STOCK_MINIMO";
   ordenes?: string[];
 }): Promise<SolicitudCompra> {
   return post("/api/purchases/requests", datos);

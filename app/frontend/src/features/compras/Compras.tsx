@@ -35,6 +35,11 @@ import {
 } from "./recepcion";
 import type { LineaEditable } from "./recepcion";
 import type { SituacionInsumo, Usuario } from "../../types/api";
+import {
+  NOMBRE_ORIGEN,
+  causaSugerencia,
+  solicitudDeSugerencia,
+} from "../inventario/stockMinimo";
 import { useSaldosLotes } from "../inventario/lotes";
 
 const mensajeDe = (causa: unknown) =>
@@ -217,7 +222,7 @@ function Solicitudes({
     insumo_id: string;
     cantidad: string;
     motivo: string;
-    origen?: "MANUAL" | "FALTANTE";
+    origen?: "MANUAL" | "FALTANTE" | "STOCK_MINIMO";
     ordenes?: string[];
   }) => Promise<boolean>;
   onDescartar: (id: string, motivo: string) => Promise<boolean>;
@@ -230,33 +235,28 @@ function Solicitudes({
 
   return (
     <section>
-      <h3 style={{ margin: "0 0 0.4rem" }}>Sugerencias por faltante</h3>
+      <h3 style={{ margin: "0 0 0.4rem" }}>Sugerencias de reposición</h3>
       <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", color: colores.suave }}>
-        Lo que piden las Órdenes que esperan recursos, menos lo disponible y lo
-        que ya está en camino. Nada se compra solo: confirmá cada solicitud.
+        Lo que piden las Órdenes que esperan recursos y, si el insumo tiene
+        stock mínimo, lo necesario para alcanzarlo; menos lo disponible y lo
+        que ya está en camino (solicitudes pendientes y órdenes de compra
+        abiertas). Nada se compra solo: confirmá cada solicitud.
       </p>
       {sugerencias.length === 0 ? (
-        <p style={{ fontSize: "0.85rem", color: colores.suave }}>Sin faltantes.</p>
+        <p style={{ fontSize: "0.85rem", color: colores.suave }}>Nada para reponer.</p>
       ) : (
         <ul style={{ paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
           {sugerencias.map((s) => (
             <li key={s.insumo_id} style={{ marginBottom: "0.3rem" }}>
-              {nombreInsumo(s.insumo_id)}: sugerido {s.sugerido} (demanda {s.demanda_bloqueada},
-              disponible {s.disponible}, en camino {s.en_camino})
+              {nombreInsumo(s.insumo_id)}: sugerido {s.sugerido} · {causaSugerencia(s)} (demanda{" "}
+              {s.demanda_bloqueada}, disponible {s.disponible}
+              {s.stock_minimo != null ? `, mínimo ${s.stock_minimo}` : ""}, en camino {s.en_camino})
               {s.ordenes.length > 0 ? ` · ${s.ordenes.join(", ")}` : ""}{" "}
               {gestiona.solicitar && (
                 <Boton
                   variante="secundario"
                   disabled={ocupado}
-                  onClick={() =>
-                    void onCrear({
-                      insumo_id: s.insumo_id,
-                      cantidad: s.sugerido,
-                      motivo: "Faltante de Órdenes que esperan recursos.",
-                      origen: "FALTANTE",
-                      ordenes: s.ordenes,
-                    })
-                  }
+                  onClick={() => void onCrear(solicitudDeSugerencia(s))}
                 >
                   Crear solicitud
                 </Boton>
@@ -274,7 +274,7 @@ function Solicitudes({
           {solicitudes.map((s) => (
             <li key={s.id} style={{ marginBottom: "0.3rem" }}>
               <strong>{s.id}</strong> · {nombreInsumo(s.insumo_id)} · {s.cantidad} ·{" "}
-              {s.origen === "FALTANTE" ? "por faltante" : "manual"} · {s.estado}
+              {NOMBRE_ORIGEN[s.origen] ?? s.origen} · {s.estado}
               {s.orden_compra_id ? ` (${s.orden_compra_id})` : ""} · {s.motivo}
               {s.motivo_descarte ? ` · descartada: ${s.motivo_descarte}` : ""}
               <span style={{ color: colores.suave }}> · {fechaCorta(s.fecha)}</span>{" "}

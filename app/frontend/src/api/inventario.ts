@@ -25,11 +25,14 @@ function consulta(parametros: Record<string, string | null | undefined>) {
 export function listarInventario(
   buscar: string | null,
   soloFaltantes: boolean,
+  bajoMinimo = false,
 ): Promise<SituacionInsumo[]> {
   return get<SituacionInsumo[]>(
     `/api/inventory${consulta({
       buscar,
       solo_faltantes: soloFaltantes ? "true" : null,
+      // DEC-AJ-11: bajo el mínimo (con o sin reposición solicitada).
+      bajo_minimo: bajoMinimo ? "true" : null,
     })}`,
   );
 }

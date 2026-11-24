@@ -35,6 +35,11 @@ import {
   totalPendiente,
   trabajosDe,
 } from "./bandejas";
+import {
+  NOMBRE_REPOSICION,
+  lineaInsumoBandeja,
+  tonoReposicion,
+} from "../inventario/stockMinimo";
 import { ROL, hace } from "./etiquetas";
 import { colorDeSituacion, nombreDe } from "./ListadoOrdenes";
 import { hashDe } from "./rutas";
@@ -311,7 +316,9 @@ function CuerpoBandeja({
         <p style={{ margin: "0.3rem 0 0", fontSize: "0.85rem" }}>
           {bandeja.codigo === "MIS_TOMADAS"
             ? "No tenés órdenes tomadas."
-            : "No hay órdenes en esta bandeja."}
+            : bandeja.destino === "INVENTARIO"
+              ? "No hay insumos en esta bandeja."
+              : "No hay órdenes en esta bandeja."}
         </p>
       )}
       <ul style={lista}>
@@ -328,11 +335,19 @@ function CuerpoBandeja({
         ))}
         {bandeja.insumos.map((insumo) => (
           <li key={insumo.id} style={{ ...fila, padding: "0.55rem 0.2rem" }}>
-            <strong>{insumo.nombre}</strong>
-            <span style={detalle}>
-              Disponible {insumo.disponible} · en stock {insumo.stock_fisico}{" "}
-              · reservado {insumo.reservado}
-            </span>
+            <strong>{insumo.nombre}</strong>{" "}
+            {tonoReposicion(insumo.estado_reposicion) && (
+              <Etiqueta
+                color={
+                  tonoReposicion(insumo.estado_reposicion) === "alerta"
+                    ? colores.alerta
+                    : colores.acento
+                }
+              >
+                {NOMBRE_REPOSICION[insumo.estado_reposicion ?? "SIN_MINIMO"]}
+              </Etiqueta>
+            )}
+            <span style={detalle}>{lineaInsumoBandeja(insumo)}</span>
           </li>
         ))}
       </ul>
